@@ -209,6 +209,7 @@ impl VerticalReclusterSource {
         for output in outputs {
             entries.push(MutationLogEntry::AppendBlock {
                 block_meta: Arc::new(output),
+                merge_hll: false,
             });
         }
         Ok(MutationLogs {

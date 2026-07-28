@@ -311,6 +311,7 @@ impl FuseTable {
             table_schema.clone(),
             &push_downs,
             None,
+            None,
             vec![],
             bloom_index_cols,
             ngram_args,

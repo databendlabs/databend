@@ -25,6 +25,8 @@ use std::time::Instant;
 use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
+use databend_common_ast::ast::Expr as AstExpr;
+use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -105,6 +107,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
@@ -148,6 +151,7 @@ use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
 use crate::operations::load_last_snapshot_hint;
+use crate::pruning::PartitionPruningInfo;
 use crate::statistics::STATS_STRING_PREFIX_LEN;
 use crate::statistics::reduce_block_statistics;
 
@@ -621,8 +625,58 @@ impl FuseTable {
                 .is_some_and(|g| g > 0)
     }
 
+    fn partition_key_str(&self) -> Option<&str> {
+        self.table_info
+            .meta
+            .options
+            .get(OPT_KEY_PARTITION_BY)
+            .map(String::as_str)
+    }
+
+    fn resolve_partition_keys(&self) -> Option<Vec<AstExpr>> {
+        self.partition_key_str()
+            .map(|partition_key| parse_cluster_key_exprs(partition_key).unwrap())
+    }
+
+    pub fn partition_key_count(&self) -> usize {
+        self.resolve_partition_keys().map_or(0, |keys| keys.len())
+    }
+
+    /// The key used for physical Fuse layout. Partition expressions are always the
+    /// leading dimensions, followed by the user-visible linear cluster key.
+    pub fn resolve_physical_cluster_keys(&self) -> Option<Vec<AstExpr>> {
+        let mut keys = self.resolve_partition_keys().unwrap_or_default();
+        if let Some(cluster_keys) = self.resolve_cluster_keys() {
+            keys.extend(cluster_keys);
+        }
+        (!keys.is_empty()).then_some(keys)
+    }
+
+    pub fn physical_cluster_key_id(&self) -> Option<u32> {
+        self.cluster_key_id()
+            .or_else(|| self.partition_key_str().map(|_| 0))
+    }
+
+    pub fn partition_pruning_info(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Option<PartitionPruningInfo> {
+        let partition_key_count = self.partition_key_count();
+        if partition_key_count == 0 {
+            return None;
+        }
+        Some(PartitionPruningInfo {
+            cluster_key_id: self.physical_cluster_key_id().unwrap(),
+            partition_keys: self
+                .linear_cluster_keys(ctx)
+                .into_iter()
+                .take(partition_key_count)
+                .collect(),
+        })
+    }
+
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        let Some(cluster_key_exprs) = self.resolve_cluster_keys() else {
+        let Some(cluster_key_exprs) = self.resolve_physical_cluster_keys() else {
             return vec![];
         };
 
@@ -661,7 +715,7 @@ impl FuseTable {
     }
 
     pub fn cluster_key_types(&self, ctx: Arc<dyn TableContext>) -> Vec<DataType> {
-        let Some(ast_exprs) = self.resolve_cluster_keys() else {
+        let Some(ast_exprs) = self.resolve_physical_cluster_keys() else {
             return vec![];
         };
         let cluster_keys = parse_cluster_keys(ctx, Arc::new(self.clone()), ast_exprs).unwrap();
@@ -965,7 +1019,7 @@ impl FuseTable {
     pub fn enable_stream_block_write(&self, ctx: Arc<dyn TableContext>) -> Result<bool> {
         Ok(ctx.get_settings().get_enable_block_stream_write()?
             && matches!(self.storage_format, FuseStorageFormat::Parquet)
-            && self.cluster_key_meta().is_none())
+            && self.resolve_physical_cluster_keys().is_none())
     }
 
     pub fn with_schema(&self, schema: Arc<TableSchema>) -> Arc<FuseTable> {

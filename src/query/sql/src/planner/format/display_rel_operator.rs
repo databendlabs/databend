@@ -26,6 +26,8 @@ use crate::plans::Exchange;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
+use crate::plans::MaterializedCTE;
+use crate::plans::MaterializedCTERef;
 use crate::plans::Mutation;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
@@ -63,6 +65,10 @@ fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &RelOperator) -> FormatT
         RelOperator::ConstantTableScan(op) => constant_scan_to_format_tree(id_humanizer, op),
         RelOperator::UnionAll(op) => union_all_to_format_tree(id_humanizer, op),
         RelOperator::Mutation(op) => merge_into_to_format_tree(id_humanizer, op),
+        RelOperator::MaterializedCTE(op) => materialized_cte_to_format_tree(op),
+        RelOperator::MaterializedCTERef(op) => {
+            materialized_cte_ref_to_format_tree(id_humanizer, op)
+        }
         _ => FormatTreeNode::with_children(format!("{:?}", op), vec![]),
     }
 }
@@ -499,6 +505,44 @@ fn union_all_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &UnionAll) -> 
     ];
 
     FormatTreeNode::with_children(format!("{:?}", op.rel_op()), children)
+}
+
+fn materialized_cte_to_format_tree(op: &MaterializedCTE) -> FormatTreeNode {
+    FormatTreeNode::with_children("MaterializedCTE".to_string(), vec![
+        FormatTreeNode::new(format!("cte_name: {}", op.cte_name)),
+        FormatTreeNode::new(format!("ref_count: {}", op.ref_count)),
+        FormatTreeNode::new(format!("channel_size: {:?}", op.channel_size)),
+    ])
+}
+
+fn materialized_cte_ref_to_format_tree<I: IdHumanizer>(
+    id_humanizer: &I,
+    op: &MaterializedCTERef,
+) -> FormatTreeNode {
+    let output_columns = op
+        .output_columns
+        .iter()
+        .map(|idx| id_humanizer.humanize_column_id(*idx))
+        .join(", ");
+
+    let column_mapping = op
+        .column_mapping
+        .iter()
+        .sorted_by_key(|(from, to)| (**from, **to))
+        .map(|(from, to)| {
+            format!(
+                "{} -> {}",
+                id_humanizer.humanize_column_id(*from),
+                id_humanizer.humanize_column_id(*to)
+            )
+        })
+        .join(", ");
+
+    FormatTreeNode::with_children("MaterializedCTERef".to_string(), vec![
+        FormatTreeNode::new(format!("cte_name: {}", op.cte_name)),
+        FormatTreeNode::new(format!("output columns: [{}]", output_columns)),
+        FormatTreeNode::new(format!("column mapping: [{}]", column_mapping)),
+    ])
 }
 
 fn merge_into_to_format_tree<I: IdHumanizer>(

@@ -943,6 +943,7 @@ impl FuseTable {
             dal,
             table_schema.clone(),
             &push_downs,
+            self.partition_pruning_info(ctx.clone()),
             cluster_key_meta,
             cluster_keys,
             self.bloom_index_cols(),

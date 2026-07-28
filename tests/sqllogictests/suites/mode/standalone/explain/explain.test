@@ -1754,13 +1754,9 @@ EvalScalar
     │               │                           ├── estimated rows: 1.00
     │               │                           ├── EvalScalar
     │               │                           │   ├── output columns: [0 (#47), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#48), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#49)]
-    │               │                           │   ├── expressions: [0, substr(aoc10_input.i (#46), 1, CAST(locate('\n', aoc10_input.i (#46)) - 1 AS UInt64)), substr(aoc10_input.i (#46), CAST(locate('\n', aoc10_input.i (#46)) + 1 AS Int64))]
+    │               │                           │   ├── expressions: [0, '', '89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
     │               │                           │   ├── estimated rows: 1.00
-    │               │                           │   └── EvalScalar
-    │               │                           │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#46)]
-    │               │                           │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
-    │               │                           │       ├── estimated rows: 1.00
-    │               │                           │       └── DummyTableScan
+    │               │                           │   └── DummyTableScan
     │               │                           └── EvalScalar
     │               │                               ├── output columns: [y + 1::UInt64 (#53), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#54), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#55)]
     │               │                               ├── expressions: [lines.y (#50) + 1, substr(lines.rest (#52), 1, CAST(locate('\n', lines.rest (#52)) - 1 AS UInt64)), substr(lines.rest (#52), CAST(locate('\n', lines.rest (#52)) + 1 AS Int64))]
@@ -1808,13 +1804,9 @@ EvalScalar
     │                                           ├── estimated rows: 1.00
     │                                           ├── EvalScalar
     │                                           │   ├── output columns: [0 (#65), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#66), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#67)]
-    │                                           │   ├── expressions: [0, substr(aoc10_input.i (#64), 1, CAST(locate('\n', aoc10_input.i (#64)) - 1 AS UInt64)), substr(aoc10_input.i (#64), CAST(locate('\n', aoc10_input.i (#64)) + 1 AS Int64))]
+    │                                           │   ├── expressions: [0, '', '89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
     │                                           │   ├── estimated rows: 1.00
-    │                                           │   └── EvalScalar
-    │                                           │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#64)]
-    │                                           │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
-    │                                           │       ├── estimated rows: 1.00
-    │                                           │       └── DummyTableScan
+    │                                           │   └── DummyTableScan
     │                                           └── EvalScalar
     │                                               ├── output columns: [y + 1::UInt64 (#71), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#72), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#73)]
     │                                               ├── expressions: [lines.y (#68) + 1, substr(lines.rest (#70), 1, CAST(locate('\n', lines.rest (#70)) - 1 AS UInt64)), substr(lines.rest (#70), CAST(locate('\n', lines.rest (#70)) + 1 AS Int64))]
@@ -1852,7 +1844,7 @@ EvalScalar
         │               ├── estimated rows: 1.00
         │               └── Filter
         │                   ├── output columns: [x (#40), y (#41), 9 (#42), x (#43), y (#44)]
-        │                   ├── filters: [results.v (#42) = 0]
+        │                   ├── filters: [paths.v (#42) = 0]
         │                   ├── estimated rows: 0.15
         │                   └── UnionAll(recursive cte)
         │                       ├── output columns: [x (#40), y (#41), 9 (#42), x (#43), y (#44)]
@@ -1886,13 +1878,9 @@ EvalScalar
         │                       │                           ├── estimated rows: 1.00
         │                       │                           ├── EvalScalar
         │                       │                           │   ├── output columns: [0 (#1), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#2), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#3)]
-        │                       │                           │   ├── expressions: [0, substr(aoc10_input.i (#0), 1, CAST(locate('\n', aoc10_input.i (#0)) - 1 AS UInt64)), substr(aoc10_input.i (#0), CAST(locate('\n', aoc10_input.i (#0)) + 1 AS Int64))]
+        │                       │                           │   ├── expressions: [0, '', '89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
         │                       │                           │   ├── estimated rows: 1.00
-        │                       │                           │   └── EvalScalar
-        │                       │                           │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#0)]
-        │                       │                           │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
-        │                       │                           │       ├── estimated rows: 1.00
-        │                       │                           │       └── DummyTableScan
+        │                       │                           │   └── DummyTableScan
         │                       │                           └── EvalScalar
         │                       │                               ├── output columns: [y + 1::UInt64 (#7), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#8), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#9)]
         │                       │                               ├── expressions: [lines.y (#4) + 1, substr(lines.rest (#6), 1, CAST(locate('\n', lines.rest (#6)) - 1 AS UInt64)), substr(lines.rest (#6), CAST(locate('\n', lines.rest (#6)) + 1 AS Int64))]
@@ -1940,13 +1928,9 @@ EvalScalar
         │                                                   ├── estimated rows: 1.00
         │                                                   ├── EvalScalar
         │                                                   │   ├── output columns: [0 (#19), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#20), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#21)]
-        │                                                   │   ├── expressions: [0, substr(aoc10_input.i (#18), 1, CAST(locate('\n', aoc10_input.i (#18)) - 1 AS UInt64)), substr(aoc10_input.i (#18), CAST(locate('\n', aoc10_input.i (#18)) + 1 AS Int64))]
+        │                                                   │   ├── expressions: [0, '', '89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
         │                                                   │   ├── estimated rows: 1.00
-        │                                                   │   └── EvalScalar
-        │                                                   │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#18)]
-        │                                                   │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
-        │                                                   │       ├── estimated rows: 1.00
-        │                                                   │       └── DummyTableScan
+        │                                                   │   └── DummyTableScan
         │                                                   └── EvalScalar
         │                                                       ├── output columns: [y + 1::UInt64 (#25), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#26), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#27)]
         │                                                       ├── expressions: [lines.y (#22) + 1, substr(lines.rest (#24), 1, CAST(locate('\n', lines.rest (#24)) - 1 AS UInt64)), substr(lines.rest (#24), CAST(locate('\n', lines.rest (#24)) + 1 AS Int64))]

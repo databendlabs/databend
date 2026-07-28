@@ -37,6 +37,7 @@ use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi2;
+use databend_common_meta_api::MaterializedViewApi;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
@@ -69,6 +70,7 @@ use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateMaterializedViewMeta;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
@@ -115,7 +117,13 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBinding;
+use databend_common_meta_app::schema::MVSourceBindingVersion;
+use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
+use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -124,6 +132,8 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SourceTableMV;
+use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
@@ -304,6 +314,7 @@ impl SchemaApiTestSuite {
             + DatabaseApi
             + TableApi
             + GarbageCollectionApi
+            + MaterializedViewApi
             + 'static,
     {
         self.table_commit_table_meta(&b.build().await).await?;
@@ -311,6 +322,7 @@ impl SchemaApiTestSuite {
         self.database_drop_out_of_retention_time_history(&b.build().await)
             .await?;
         self.table_create_get_drop(&b.build().await).await?;
+        self.materialized_view_lifecycle(&b.build().await).await?;
         self.table_drop_without_db_id_to_name(&b.build().await)
             .await?;
         self.list_db_without_db_id_list(&b.build().await).await?;
@@ -1648,6 +1660,538 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    async fn materialized_view_lifecycle<
+        MT: kvapi::KVApi<Error = MetaError>
+            + DatabaseApi
+            + GarbageCollectionApi
+            + MaterializedViewApi
+            + TableApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let mut util =
+            DbTableHarness::new(mt, "tenant_mv_meta", "db_mv_meta", "source_table", "FUSE");
+        util.create_db().await?;
+        let (source_table_id, _) = util.create_table().await?;
+
+        let tenant = util.tenant();
+        let db_name = util.db_name();
+        let source_table_name = util.tbl_name();
+        let replacement_source_name = "replacement_source";
+        let replacement_source_table_id = {
+            let mut replacement_source = DbTableHarness::new(
+                mt,
+                tenant.tenant_name(),
+                &db_name,
+                replacement_source_name,
+                "FUSE",
+            );
+            replacement_source.create_table().await?.0
+        };
+        let mv_name = "mv_table";
+        let new_definition = |source_table_name: &str| MVDefinition {
+            original_query: format!("SELECT number FROM {source_table_name}"),
+            query: format!("SELECT number FROM default.{db_name}.{source_table_name}"),
+            logical_schema: TableSchema::empty(),
+            sync_creation: true,
+        };
+        let definition = new_definition(&source_table_name);
+        let replacement_definition = new_definition(replacement_source_name);
+        let initial_source_binding_generation = mt
+            .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
+            .await?
+            .map(|seqv| seqv.data.current_source_generation)
+            .unwrap_or(0);
+        assert!(
+            mt.get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
+                .await?
+                .is_none()
+        );
+        let new_mv_req = |name,
+                          create_option,
+                          source_table_id: u64,
+                          source_binding_generation: u64,
+                          definition: &MVDefinition| {
+            let mut table_meta = TableMeta {
+                schema: util.schema(),
+                engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+                ..TableMeta::default()
+            };
+            table_meta.options.insert(
+                OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID.to_string(),
+                source_table_id.to_string(),
+            );
+
+            CreateTableReq {
+                create_option,
+                catalog_name: None,
+                name_ident: TableNameIdent::new(&tenant, &db_name, name),
+                table_meta,
+                as_dropped: false,
+                materialized_view: Some(CreateMaterializedViewMeta {
+                    definition: definition.clone(),
+                    expected_source_generation: source_binding_generation,
+                }),
+                table_properties: None,
+                table_partition: None,
+            }
+        };
+        let source_mv_ident = |source_table_id, mv_table_id| {
+            SourceTableMVIdent::new_generic(
+                &tenant,
+                SourceTableMV::new(source_table_id, mv_table_id),
+            )
+        };
+
+        // A missing source rejects CREATE before any MV name or source index is published.
+        {
+            let missing_source_id = u64::MAX;
+            let invalid_name = "mv_missing_source";
+            let invalid_definition = new_definition("missing_source");
+            assert!(
+                mt.create_table(new_mv_req(
+                    invalid_name,
+                    CreateOption::Create,
+                    missing_source_id,
+                    0,
+                    &invalid_definition,
+                ))
+                .await
+                .is_err()
+            );
+            assert!(
+                mt.get_table(GetTableReq::new(&tenant, &db_name, invalid_name))
+                    .await
+                    .is_err()
+            );
+            assert!(
+                mt.list_valid_mvs_by_source_table_id(&tenant, missing_source_id, 0)
+                    .await?
+                    .is_empty()
+            );
+            assert!(
+                mt.get_pb(&MVSourceBindingVersionIdent::new(
+                    &tenant,
+                    missing_source_id
+                ))
+                .await?
+                .is_none()
+            );
+        }
+
+        // The legacy hidden-table CREATE path is not valid for an MV.
+        {
+            let mut hidden_req = new_mv_req(
+                "mv_hidden",
+                CreateOption::Create,
+                source_table_id,
+                initial_source_binding_generation,
+                &definition,
+            );
+            hidden_req.as_dropped = true;
+            hidden_req.table_meta.drop_on = Some(Utc::now());
+            assert!(mt.create_table(hidden_req).await.is_err());
+            assert!(
+                mt.get_table(GetTableReq::new(&tenant, &db_name, "mv_hidden"))
+                    .await
+                    .is_err()
+            );
+            assert!(
+                mt.list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    source_table_id,
+                    initial_source_binding_generation,
+                )
+                .await?
+                .is_empty()
+            );
+            assert!(
+                mt.get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
+                    .await?
+                    .is_none()
+            );
+        }
+
+        // Creating an MV publishes an empty table, its definition, and its source index atomically.
+        let created = {
+            let created = mt
+                .create_table(new_mv_req(
+                    mv_name,
+                    CreateOption::Create,
+                    source_table_id,
+                    initial_source_binding_generation,
+                    &definition,
+                ))
+                .await?;
+            assert_eq!(
+                mt.get_mv_definition(&tenant, created.table_id)
+                    .await?
+                    .expect("MV definition must exist")
+                    .data,
+                definition
+            );
+            assert_eq!(
+                mt.get_pb(&source_mv_ident(source_table_id, created.table_id))
+                    .await?
+                    .expect("MV source binding must exist")
+                    .data,
+                MVSourceBinding {
+                    bound_source_generation: initial_source_binding_generation,
+                }
+            );
+            let initialized_version = mt
+                .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
+                .await?
+                .expect("the first MV must initialize its source binding version");
+            assert!(initialized_version.seq > 0);
+            assert_eq!(initialized_version.data, MVSourceBindingVersion {
+                current_source_generation: initial_source_binding_generation,
+            });
+            created
+        };
+        let mv_id = created.table_id;
+
+        // MV membership changes do not advance the source binding version.
+        {
+            let source_binding_version = mt
+                .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
+                .await?
+                .expect("source binding version must have been initialized");
+            let source_binding_generation = source_binding_version.data.current_source_generation;
+            let concurrent_mv_name = "mv_concurrent_create";
+            let concurrent_mv = mt
+                .create_table(new_mv_req(
+                    concurrent_mv_name,
+                    CreateOption::Create,
+                    source_table_id,
+                    source_binding_generation,
+                    &definition,
+                ))
+                .await?;
+            assert_eq!(
+                mt.get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
+                    .await?,
+                Some(source_binding_version)
+            );
+
+            mt.drop_table_by_id(DropTableByIdReq {
+                if_exists: false,
+                tenant: tenant.clone(),
+                db_id: concurrent_mv.db_id,
+                table_name: concurrent_mv_name.to_string(),
+                tb_id: concurrent_mv.table_id,
+                engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+                temp_prefix: "".to_string(),
+                db_name: db_name.clone(),
+            })
+            .await?;
+            assert_eq!(
+                mt.list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    source_table_id,
+                    source_binding_generation,
+                )
+                .await?
+                .iter()
+                .map(|mv| mv.mv_id)
+                .collect::<Vec<_>>(),
+                vec![mv_id]
+            );
+
+            let next_generation = source_binding_generation + 1;
+            mt.upsert_pb(&UpsertPB::update(
+                MVSourceBindingVersionIdent::new(&tenant, source_table_id),
+                MVSourceBindingVersion {
+                    current_source_generation: next_generation,
+                },
+            ))
+            .await?;
+            assert!(
+                mt.create_table(new_mv_req(
+                    "mv_stale_source_binding",
+                    CreateOption::Create,
+                    source_table_id,
+                    source_binding_generation,
+                    &definition,
+                ))
+                .await
+                .is_err()
+            );
+            assert!(
+                mt.list_valid_mvs_by_source_table_id(&tenant, source_table_id, next_generation,)
+                    .await?
+                    .is_empty()
+            );
+            assert_eq!(
+                mt.list_mvs_by_source_table_id(&tenant, source_table_id)
+                    .await?
+                    .iter()
+                    .map(|mv| mv.mv_id)
+                    .collect::<Vec<_>>(),
+                vec![mv_id],
+                "the unfiltered list must retain invalid dependencies"
+            );
+        }
+
+        // The MV is immediately visible as an empty ordinary table.
+        {
+            let published_table = mt
+                .get_pb(&TableId::new(mv_id))
+                .await?
+                .expect("MV TableMeta must exist");
+            assert_eq!(
+                published_table.data.materialized_view_source_table_id()?,
+                source_table_id
+            );
+
+            let mvs = mt
+                .list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    source_table_id,
+                    initial_source_binding_generation,
+                )
+                .await?;
+            let [mv] = mvs.as_slice() else {
+                panic!("one complete MV must be returned");
+            };
+            assert_eq!(mv.mv_id, mv_id);
+            assert_eq!(mv.definition.data, definition);
+            assert_eq!(mv.table_meta, published_table);
+        }
+
+        // Replacing an MV removes the old definition and leaves only the new MV ID in the source index.
+        let replacement = {
+            let source_binding_generation = mt
+                .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
+                .await?
+                .map(|seqv| seqv.data.current_source_generation)
+                .unwrap_or(0);
+            let replacement = mt
+                .create_table(new_mv_req(
+                    mv_name,
+                    CreateOption::CreateOrReplace,
+                    source_table_id,
+                    source_binding_generation,
+                    &definition,
+                ))
+                .await?;
+
+            assert!(mt.get_mv_definition(&tenant, mv_id).await?.is_none());
+            assert!(
+                mt.get_pb(&source_mv_ident(source_table_id, mv_id))
+                    .await?
+                    .is_none()
+            );
+
+            let mvs = mt
+                .list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    source_table_id,
+                    source_binding_generation,
+                )
+                .await?;
+            let [mv] = mvs.as_slice() else {
+                panic!("the replacement MV must be returned");
+            };
+            assert_eq!(mv.mv_id, replacement.table_id);
+            assert_eq!(mv.definition.data, definition);
+            replacement
+        };
+
+        // Replacing with another source empties the old source index and adds the new one.
+        let new_source_replacement = {
+            let source_binding_generation = mt
+                .get_pb(&MVSourceBindingVersionIdent::new(
+                    &tenant,
+                    replacement_source_table_id,
+                ))
+                .await?
+                .map(|seqv| seqv.data.current_source_generation)
+                .unwrap_or(0);
+            let new_source_replacement = mt
+                .create_table(new_mv_req(
+                    mv_name,
+                    CreateOption::CreateOrReplace,
+                    replacement_source_table_id,
+                    source_binding_generation,
+                    &replacement_definition,
+                ))
+                .await?;
+
+            assert!(
+                mt.get_mv_definition(&tenant, replacement.table_id)
+                    .await?
+                    .is_none()
+            );
+            assert!(
+                mt.get_pb(&source_mv_ident(source_table_id, replacement.table_id))
+                    .await?
+                    .is_none()
+            );
+
+            let mvs = mt
+                .list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    replacement_source_table_id,
+                    source_binding_generation,
+                )
+                .await?;
+            let [mv] = mvs.as_slice() else {
+                panic!("the new-source replacement MV must be returned");
+            };
+            assert_eq!(mv.mv_id, new_source_replacement.table_id);
+            assert_eq!(mv.definition.data, replacement_definition);
+
+            new_source_replacement
+        };
+
+        // Explicit DROP removes the MV definition and its membership from an existing source index.
+        {
+            let explicit_drop_name = "mv_explicit_drop";
+            let source_binding_generation = mt
+                .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
+                .await?
+                .map(|seqv| seqv.data.current_source_generation)
+                .unwrap_or(0);
+            let explicit_drop = mt
+                .create_table(new_mv_req(
+                    explicit_drop_name,
+                    CreateOption::Create,
+                    source_table_id,
+                    source_binding_generation,
+                    &definition,
+                ))
+                .await?;
+
+            mt.drop_table_by_id(DropTableByIdReq {
+                if_exists: false,
+                tenant: tenant.clone(),
+                db_id: explicit_drop.db_id,
+                table_name: explicit_drop_name.to_string(),
+                tb_id: explicit_drop.table_id,
+                engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+                temp_prefix: "".to_string(),
+                db_name: db_name.clone(),
+            })
+            .await?;
+
+            assert!(
+                mt.get_mv_definition(&tenant, explicit_drop.table_id)
+                    .await?
+                    .is_none()
+            );
+            assert!(
+                mt.get_pb(&source_mv_ident(source_table_id, explicit_drop.table_id))
+                    .await?
+                    .is_none()
+            );
+        }
+
+        // Source DROP and UNDROP preserve MV relationships; source GC removes them.
+        {
+            let relationship_ident =
+                source_mv_ident(replacement_source_table_id, new_source_replacement.table_id);
+            let binding_version_ident =
+                MVSourceBindingVersionIdent::new(&tenant, replacement_source_table_id);
+            let source_binding_generation = mt
+                .get_pb(&binding_version_ident)
+                .await?
+                .expect("CREATE MV must initialize its source binding version")
+                .data
+                .current_source_generation;
+            mt.drop_table_by_id(DropTableByIdReq {
+                if_exists: false,
+                tenant: tenant.clone(),
+                db_id: new_source_replacement.db_id,
+                table_name: replacement_source_name.to_string(),
+                tb_id: replacement_source_table_id,
+                engine: util.engine(),
+                temp_prefix: "".to_string(),
+                db_name: db_name.clone(),
+            })
+            .await?;
+            assert!(mt.get_pb(&relationship_ident).await?.is_some());
+            assert!(mt.get_pb(&binding_version_ident).await?.is_some());
+
+            mt.undrop_table(UndropTableReq {
+                name_ident: TableNameIdent::new(&tenant, &db_name, replacement_source_name),
+            })
+            .await?;
+            assert_eq!(
+                mt.list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    replacement_source_table_id,
+                    source_binding_generation,
+                )
+                .await?
+                .iter()
+                .map(|mv| mv.mv_id)
+                .collect::<Vec<_>>(),
+                vec![new_source_replacement.table_id]
+            );
+
+            mt.drop_table_by_id(DropTableByIdReq {
+                if_exists: false,
+                tenant: tenant.clone(),
+                db_id: new_source_replacement.db_id,
+                table_name: replacement_source_name.to_string(),
+                tb_id: replacement_source_table_id,
+                engine: util.engine(),
+                temp_prefix: "".to_string(),
+                db_name: db_name.clone(),
+            })
+            .await?;
+            mt.gc_drop_tables(GcDroppedTableReq {
+                tenant: tenant.clone(),
+                catalog: "default".to_string(),
+                drop_ids: vec![DroppedId::new_table(
+                    new_source_replacement.db_id,
+                    replacement_source_table_id,
+                    replacement_source_name,
+                )],
+            })
+            .await?;
+            assert!(mt.get_pb(&relationship_ident).await?.is_none());
+            assert!(mt.get_pb(&binding_version_ident).await?.is_none());
+        }
+
+        // Source GC has already removed the index. DROP MV still removes its definition without recreating the index.
+        {
+            assert!(
+                mt.get_mv_definition(&tenant, new_source_replacement.table_id)
+                    .await?
+                    .is_some()
+            );
+            mt.drop_table_by_id(DropTableByIdReq {
+                if_exists: false,
+                tenant: tenant.clone(),
+                db_id: new_source_replacement.db_id,
+                table_name: mv_name.to_string(),
+                tb_id: new_source_replacement.table_id,
+                engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+                temp_prefix: "".to_string(),
+                db_name,
+            })
+            .await?;
+            assert!(
+                mt.get_mv_definition(&tenant, new_source_replacement.table_id)
+                    .await?
+                    .is_none()
+            );
+            assert!(
+                mt.get_pb(&source_mv_ident(
+                    replacement_source_table_id,
+                    new_source_replacement.table_id,
+                ))
+                .await?
+                .is_none()
+            );
+        }
+
+        Ok(())
+    }
+
     async fn table_create_get_drop<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -1694,6 +2238,7 @@ impl SchemaApiTestSuite {
 
                 table_meta: table_meta(created_on),
                 as_dropped: false,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -1811,6 +2356,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: table_meta(created_on),
                 as_dropped: false,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -2062,6 +2608,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: tbl_meta,
                 as_dropped: true,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -4361,6 +4908,7 @@ impl SchemaApiTestSuite {
             name_ident,
             table_meta: create_table_meta.clone(),
             as_dropped: false,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         };
@@ -5188,6 +5736,7 @@ impl SchemaApiTestSuite {
 
                     table_meta: table_meta(created_on),
                     as_dropped: false,
+                    materialized_view: None,
                     table_properties: None,
                     table_partition: None,
                 };
@@ -5676,6 +6225,7 @@ impl SchemaApiTestSuite {
             },
             table_meta: drop_table_meta(created_on),
             as_dropped: true,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         };
@@ -5796,6 +6346,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: table_meta(created_on),
                 as_dropped: true,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -5816,6 +6367,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: drop_table_meta(created_on),
                 as_dropped: true,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -5852,6 +6404,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: drop_table_meta(created_on),
                 as_dropped: true,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -5945,6 +6498,7 @@ impl SchemaApiTestSuite {
             },
             table_meta: drop_table_meta(created_on),
             as_dropped: true,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         };

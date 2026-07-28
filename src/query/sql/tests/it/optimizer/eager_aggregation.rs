@@ -13,6 +13,11 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
+use databend_common_sql::optimizer::optimizers::rule::RuleEagerAggregation;
+use databend_common_sql::optimizer::optimizers::rule::RuleID;
+use databend_common_sql::plans::Plan;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::open_golden_file;
@@ -79,6 +84,33 @@ GROUP BY o_orderkey",
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_eager_aggregation_keeps_decimal_product_types_in_sync() -> Result<()> {
+    let case = SqlTestCase {
+        name: "decimal_sum_multiplied_by_eager_count",
+        description: "",
+        setup_sqls: &[DECIMAL_SALES_TABLE, DATE_DIM_TABLE],
+        sql: "SELECT ss_store_sk, sum(ss_ext_sales_price)
+FROM store_sales CROSS JOIN date_dim
+GROUP BY ss_store_sk",
+    };
+    let ctx = setup_context(&case).await?;
+    let Plan::Query {
+        s_expr, metadata, ..
+    } = ctx.bind_sql(case.sql).await?
+    else {
+        unreachable!("test query should bind to Plan::Query")
+    };
+
+    let opt_ctx = OptimizerContext::new(ctx, metadata.clone());
+    let split =
+        RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate]).optimize_sync(&s_expr)?;
+    let rewritten = RuleEagerAggregation::new(metadata.clone()).optimize_sync(&split)?;
+    rewritten.validate_types(&metadata)?;
+
+    Ok(())
+}
+
 const ORDERS_TABLE: &str = "CREATE TABLE orders
 (
     o_orderkey       BIGINT not null,
@@ -110,4 +142,15 @@ const LINEITEM_TABLE: &str = "CREATE TABLE lineitem
     l_shipinstruct STRING not null,
     l_shipmode     STRING not null,
     l_comment      STRING not null
+)";
+
+const DECIMAL_SALES_TABLE: &str = "CREATE TABLE store_sales
+(
+    ss_store_sk          INTEGER,
+    ss_ext_sales_price   DECIMAL(7, 2)
+)";
+
+const DATE_DIM_TABLE: &str = "CREATE TABLE date_dim
+(
+    d_date_sk INTEGER
 )";

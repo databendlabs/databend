@@ -2674,7 +2674,12 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     );
     registry.register_1_arg::<TimestampType, TimestampType, _>(
         "to_start_of_day",
-        |_, _| FunctionDomain::Full,
+        |ctx, domain| {
+            FunctionDomain::Domain(SimpleDomain {
+                min: round_timestamp(domain.min, &ctx.tz, Round::Day),
+                max: round_timestamp(domain.max, &ctx.tz, Round::Day),
+            })
+        },
         |val, ctx| round_timestamp(val, &ctx.func_ctx.tz, Round::Day),
     );
     registry.register_1_arg::<TimestampType, TimestampType, _>(

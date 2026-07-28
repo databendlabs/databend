@@ -88,7 +88,7 @@ impl FuseTable {
 
         ctx.set_status_info("[FUSE-RECLUSTER] Starting recluster operation");
 
-        if self.cluster_key_meta().is_none() {
+        if self.physical_cluster_key_id().is_none() {
             return Ok(None);
         }
 
@@ -528,6 +528,7 @@ impl FuseTable {
             dal,
             schema.clone(),
             push_down,
+            None,
             None,
             vec![],
             BloomIndexColumns::None,

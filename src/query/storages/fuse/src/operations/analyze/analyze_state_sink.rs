@@ -550,7 +550,7 @@ impl SinkAnalyzeState {
         Option<ClusterStatistics>,
     )> {
         // 1. Read table snapshot.
-        let default_cluster_key_id = table.cluster_key_id();
+        let default_cluster_key_id = table.physical_cluster_key_id();
 
         // 2. Iterator segments and blocks to estimate statistics.
         let mut read_segment_count = 0;

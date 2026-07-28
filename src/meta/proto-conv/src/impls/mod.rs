@@ -26,6 +26,7 @@ mod index;
 mod least_visible_time;
 mod lock;
 mod mask_policy_table_id;
+mod materialized_view;
 mod owner;
 mod ownership;
 mod procedure;

@@ -75,9 +75,10 @@ impl FuseTable {
             compact_options,
             self.meta_location_generator().clone(),
             self.operator.clone(),
-            self.cluster_key_id(),
+            self.physical_cluster_key_id(),
             table_meta_timestamps,
         )?;
+        segment_compactor.partition_key_count = self.partition_key_count();
 
         if !segment_compactor.target_select().await? {
             return Ok(());
@@ -165,8 +166,9 @@ impl FuseTable {
             thresholds,
             compact_options,
             self.operator.clone(),
-            self.cluster_key_id(),
+            self.physical_cluster_key_id(),
         );
+        mutator.partition_key_count = self.partition_key_count();
 
         let partitions = mutator.target_select().await?;
         if partitions.is_empty() {

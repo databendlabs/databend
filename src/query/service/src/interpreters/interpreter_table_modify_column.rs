@@ -64,6 +64,7 @@ use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshot
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -269,6 +270,15 @@ impl ModifyTableColumnInterpreter {
                             e.message()
                         )));
                     }
+                }
+            }
+            if let Some(partition_key) = table.options().get(OPT_KEY_PARTITION_BY) {
+                let referenced = cluster_key_referenced_columns(partition_key)?;
+                if referenced.iter().any(|v| modified_cols.contains(v)) {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Cannot modify column data type because it is referenced by partition key '{}'",
+                        partition_key
+                    )));
                 }
             }
         }

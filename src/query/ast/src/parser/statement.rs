@@ -1131,6 +1131,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let create_table_partition_by = map(
+        rule! {
+            #table_option ~ PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+        },
+        |(table_options, _, _, _, exprs, _)| (table_options, exprs),
+    );
     let create_table = map_res(
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ (TEMP| TEMPORARY|TRANSIENT)? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -1138,9 +1144,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #create_table_source?
             ~ ( #engine )?
             ~ ( #uri_location )?
+            ~ #create_table_partition_by?
             ~ ( CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
-            ~ ( PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
             ~ ( PROPERTIES ~  #connection_options )?
             ~ ( AS ~ ^#query )?
         },
@@ -1154,9 +1160,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             source,
             engine,
             uri_location,
+            opt_partition_by,
             opt_cluster_by,
             opt_table_options,
-            opt_iceberg_table_partition_by,
             opt_table_properties,
             opt_as_query,
         )| {
@@ -1168,6 +1174,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 Some(TEMP) | Some(TEMPORARY) => TableType::Temporary,
                 _ => unreachable!(),
             };
+            let (mut table_options, partition_by) = opt_partition_by
+                .map(|(options, exprs)| (options, Some(exprs)))
+                .unwrap_or_default();
+            table_options.extend(opt_table_options.unwrap_or_default());
             Ok(Statement::CreateTable(CreateTableStmt {
                 create_option,
                 catalog,
@@ -1179,9 +1189,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 cluster_by: opt_cluster_by.map(|(_, _, _, _, exprs, _)| ClusterOption {
                     cluster_exprs: exprs,
                 }),
-                table_options: opt_table_options.unwrap_or_default(),
-                iceberg_table_partition: opt_iceberg_table_partition_by
-                    .map(|(_, _, _, cols, _)| cols),
+                table_options,
+                partition_by,
                 table_properties: opt_table_properties.map(|(_, properties)| properties),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 table_type,

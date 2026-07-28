@@ -104,6 +104,9 @@ impl OptimizerPipeline {
         let total_optimizers = self.optimizers.len();
         let trace_collector = self.get_trace_collector();
 
+        #[cfg(debug_assertions)]
+        current_expr.validate_types(&self.opt_ctx.get_metadata())?;
+
         for (idx, optimizer) in self.optimizers.iter_mut().enumerate() {
             // Set trace collector
             if self.opt_ctx.get_enable_trace() {
@@ -118,6 +121,9 @@ impl OptimizerPipeline {
 
             // Apply the optimizer
             current_expr = optimizer.optimize(&current_expr).await?;
+
+            #[cfg(debug_assertions)]
+            current_expr.validate_types(&self.opt_ctx.get_metadata())?;
 
             // Calculate duration
             let duration = start_time.elapsed();

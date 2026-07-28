@@ -94,8 +94,10 @@ error:
   --> SQL:1:55
   |
 1 | create table a (c1 decimal(38), c2 int) partition by ();
-  | ------                                                ^ unexpected `)`, expecting <Ident>, <LiteralString>, or `IDENTIFIER`
-  | |                                                      
+  | ------                                                ^
+  | |                                                     |
+  | |                                                     expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...
+  | |                                                     while parsing expression
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 

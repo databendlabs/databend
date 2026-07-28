@@ -172,27 +172,19 @@ query T
 explain select count(1) as c, count(b) as d, max(a) as e from t1 order by c, e, d limit 10;
 ----
 Limit
-├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
+├── output columns: [max(a) (#4), count(b) (#3), count(1) (#2)]
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 1.00
 └── Sort(Single)
-    ├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
+    ├── output columns: [max(a) (#4), count(b) (#3), count(1) (#2)]
     ├── sort keys: [count(1) ASC NULLS LAST, max(a) ASC NULLS LAST, count(b) ASC NULLS LAST]
     ├── estimated rows: 1.00
     └── EvalScalar
-        ├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
-        ├── expressions: [99]
+        ├── output columns: [max(a) (#4), count(b) (#3), count(1) (#2)]
+        ├── expressions: [99, 100, 100]
         ├── estimated rows: 1.00
-        └── EvalScalar
-            ├── output columns: [count(1) (#2), count(b) (#3)]
-            ├── expressions: [count(1) (#2)]
-            ├── estimated rows: 1.00
-            └── EvalScalar
-                ├── output columns: [count(1) (#2)]
-                ├── expressions: [100]
-                ├── estimated rows: 1.00
-                └── DummyTableScan
+        └── DummyTableScan
 
 query T
 explain select (t1.a + 1) as c,(t1.b+1) as d, (t2.a+1) as e from t1 join t2 on t1.a = t2.a order by c, d, e limit 10;
@@ -374,7 +366,7 @@ AggregateFinal
                 ├── exchange type: Hash(x.a (#2))
                 └── EvalScalar
                     ├── output columns: [a (#2)]
-                    ├── expressions: [CAST(x.a (#0) AS UInt64 NULL)]
+                    ├── expressions: [CAST(numbers.number (#0) AS UInt64 NULL)]
                     ├── estimated rows: 10.00
                     └── TableScan
                         ├── table: default.system.numbers

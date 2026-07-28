@@ -79,6 +79,7 @@ pub struct TransformSerializeBlock {
     dal: Operator,
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
+    pending_merge_hll: bool,
     pending_logical_change: (u64, u64),
 }
 
@@ -231,6 +232,7 @@ impl TransformSerializeBlock {
             dal: table.get_operator(),
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
+            pending_merge_hll: false,
             pending_logical_change: (0, 0),
         })
     }
@@ -255,6 +257,7 @@ impl TransformSerializeBlock {
         extended_block_meta: databend_storages_common_table_meta::meta::ExtendedBlockMeta,
         index: Option<BlockMetaIndex>,
     ) {
+        let merge_hll = std::mem::take(&mut self.pending_merge_hll);
         let (logical_updated_rows, logical_deleted_rows) =
             std::mem::take(&mut self.pending_logical_change);
         let bytes =
@@ -301,6 +304,7 @@ impl TransformSerializeBlock {
                 Self::mutation_logs(
                     MutationLogEntry::AppendBlock {
                         block_meta: Arc::new(extended_block_meta),
+                        merge_hll,
                     },
                     logical_updated_rows,
                     logical_deleted_rows,
@@ -407,6 +411,15 @@ impl Processor for TransformSerializeBlock {
                         };
                         Ok(Event::Sync)
                     }
+                }
+                SerializeDataMeta::SerializeAppend => {
+                    self.pending_merge_hll = true;
+                    self.state = State::NeedSerialize {
+                        block: input_data,
+                        stats_type: ClusterStatsGenType::Generally,
+                        index: None,
+                    };
+                    Ok(Event::Sync)
                 }
                 SerializeDataMeta::CompactExtras(compact_extras) => {
                     // compact extras

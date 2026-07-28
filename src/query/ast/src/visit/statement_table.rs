@@ -149,9 +149,9 @@ impl Walk for CreateTableStmt {
         if let Some(cluster_by) = &self.cluster_by {
             try_walk!(cluster_by.walk(visitor));
         }
-        if let Some(partitions) = &self.iceberg_table_partition {
-            for ident in partitions {
-                try_walk!(ident.walk(visitor));
+        if let Some(partitions) = &self.partition_by {
+            for expr in partitions {
+                try_walk!(expr.walk(visitor));
             }
         }
         if let Some(as_query) = &self.as_query {
@@ -173,9 +173,9 @@ impl WalkMut for CreateTableStmt {
         if let Some(cluster_by) = &mut self.cluster_by {
             try_walk!(cluster_by.walk_mut(visitor));
         }
-        if let Some(partitions) = &mut self.iceberg_table_partition {
-            for ident in partitions {
-                try_walk!(ident.walk_mut(visitor));
+        if let Some(partitions) = &mut self.partition_by {
+            for expr in partitions {
+                try_walk!(expr.walk_mut(visitor));
             }
         }
         if let Some(as_query) = &mut self.as_query {

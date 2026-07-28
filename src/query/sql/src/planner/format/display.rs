@@ -192,7 +192,10 @@ where
             ));
         }
 
-        if s_expr.plan.is_join() {
+        if let RelOperator::MaterializedCTERef(_) = op {
+            // MaterializedCTERef definitions are represented by their producer MaterializedCTE
+            // in the surrounding Sequence.
+        } else if s_expr.plan.is_join() {
             tree.children
                 .push(self.humanize_s_expr(s_expr.build_side_child())?);
             tree.children

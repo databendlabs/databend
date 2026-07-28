@@ -44,6 +44,7 @@ use crate::FuseTable;
 use crate::io::FuseBlockWriteOptions;
 use crate::operations::TransformBlockBuilder;
 use crate::operations::TransformBlockWriter;
+use crate::operations::TransformPartitionBy;
 use crate::operations::TransformSerializeBlock;
 use crate::operations::TransformVectorCluster;
 use crate::statistics::ClusterStatsGenerator;
@@ -57,7 +58,10 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        let enable_stream_block_write = self.enable_stream_block_write(ctx.clone())?;
+        // Stream block writing does not expose a partition-boundary split point.
+        // Use the regular append pipeline for partitioned tables.
+        let enable_stream_block_write =
+            self.partition_key_count() == 0 && self.enable_stream_block_write(ctx.clone())?;
         if enable_stream_block_write {
             let properties = FuseBlockWriteOptions::try_create(
                 ctx.clone(),
@@ -168,6 +172,24 @@ impl FuseTable {
             }
             pipeline.add_pipe(builder.finalize());
         }
+        let partition_key_indices: Arc<[_]> =
+            cluster_stats_gen.cluster_key_index[..cluster_stats_gen.partition_key_count].into();
+        if !partition_key_indices.is_empty() {
+            let mut builder = pipeline.add_transform_with_specified_len(
+                move |input, output| {
+                    Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                        input,
+                        output,
+                        TransformPartitionBy::new(partition_key_indices.clone()),
+                    )))
+                },
+                transform_len,
+            )?;
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
+            pipeline.add_pipe(builder.finalize());
+        }
         Ok(cluster_stats_gen)
     }
 
@@ -177,6 +199,27 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         block_thresholds: BlockThresholds,
         modified_schema: Option<Arc<DataSchema>>,
+    ) -> Result<ClusterStatsGenerator> {
+        self.cluster_gen_for_append_impl(ctx, pipeline, block_thresholds, modified_schema, false)
+    }
+
+    pub fn cluster_gen_for_update(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        block_thresholds: BlockThresholds,
+        modified_schema: Option<Arc<DataSchema>>,
+    ) -> Result<ClusterStatsGenerator> {
+        self.cluster_gen_for_append_impl(ctx, pipeline, block_thresholds, modified_schema, true)
+    }
+
+    fn cluster_gen_for_append_impl(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        block_thresholds: BlockThresholds,
+        modified_schema: Option<Arc<DataSchema>>,
+        rewrite_replaced_block: bool,
     ) -> Result<ClusterStatsGenerator> {
         let input_schema =
             modified_schema.unwrap_or(DataSchema::from(self.schema_with_stream()).into());
@@ -212,6 +255,19 @@ impl FuseTable {
                 move || TransformSortPartial::new(LimitType::None, sort_desc.clone())
             });
         }
+        let partition_key_indices: Arc<[_]> =
+            cluster_stats_gen.cluster_key_index[..cluster_stats_gen.partition_key_count].into();
+        if !partition_key_indices.is_empty() {
+            if rewrite_replaced_block {
+                pipeline.add_accumulating_transformer(move || {
+                    TransformPartitionBy::new_for_update(partition_key_indices.clone())
+                });
+            } else {
+                pipeline.add_accumulating_transformer(move || {
+                    TransformPartitionBy::new(partition_key_indices.clone())
+                });
+            }
+        }
         Ok(cluster_stats_gen)
     }
 
@@ -222,7 +278,7 @@ impl FuseTable {
         block_thresholds: BlockThresholds,
         input_schema: Arc<DataSchema>,
     ) -> Result<ClusterStatsGenerator> {
-        if self.cluster_key_meta().is_none() {
+        if self.physical_cluster_key_id().is_none() {
             return Ok(ClusterStatsGenerator::default());
         }
 
@@ -320,8 +376,8 @@ impl FuseTable {
             }
         }
 
-        Ok(ClusterStatsGenerator::new(
-            self.cluster_key_id().unwrap(),
+        let mut generator = ClusterStatsGenerator::new(
+            self.physical_cluster_key_id().unwrap(),
             cluster_key_index,
             extra_key_num,
             level,
@@ -330,7 +386,9 @@ impl FuseTable {
             vector_operator,
             merged,
             ctx.get_function_context()?,
-        ))
+        );
+        generator.partition_key_count = self.partition_key_count();
+        Ok(generator)
     }
 
     pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
