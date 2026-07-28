@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -210,7 +209,6 @@ fn merge_column_group_metadata(
     column_groups.push(ColumnGroupFileMeta {
         active_column_ids: update.active_column_ids,
         location: update.location.clone(),
-        format_version: update.location.1,
         file_size: update.file_size,
         uncompressed_size: update.uncompressed_size,
         leaf_column_metas: update.column_metas.clone(),
@@ -306,13 +304,7 @@ impl BlockBuilder {
         } else {
             (None, None)
         };
-        if let Some(hlls) = &column_hlls {
-            for (key, val) in hlls {
-                if let Entry::Vacant(entry) = column_distinct_count.entry(*key) {
-                    entry.insert(val.count());
-                }
-            }
-        }
+        Self::add_hll_distinct_counts(&mut column_distinct_count, &column_hlls);
 
         let mut inverted_index_states = Vec::with_capacity(self.inverted_index_builders.len());
         for inverted_index_builder in &self.inverted_index_builders {

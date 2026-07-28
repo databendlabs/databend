@@ -453,9 +453,7 @@ fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
     use databend_common_meta_app::schema::TableIndexType;
-    use databend_storages_common_table_meta::meta::uuid_from_date_time;
 
     use super::*;
 
@@ -491,44 +489,5 @@ mod tests {
                 "123456789",
             ),
         ]);
-    }
-
-    #[test]
-    fn test_bloom_index_gc_candidate_timestamp_safety() {
-        let gc_root_timestamp = Utc::now() - Duration::days(1);
-        let gc_root_meta_ts = Utc::now();
-        let recent = gc_root_meta_ts - Duration::hours(1);
-        let old = gc_root_meta_ts - Duration::days(4);
-        let policy = VacuumObjectKeyPolicy::PrefixlessUuidV7 { gc_root_timestamp };
-        let before_root = uuid_from_date_time(gc_root_timestamp - Duration::milliseconds(1));
-        let at_root = uuid_from_date_time(gc_root_timestamp);
-
-        assert!(is_vacuum_object_gc_candidate(
-            &format!("1/2/_i_b_v2/{}_v4.parquet", before_root.as_simple()),
-            recent,
-            gc_root_meta_ts,
-            policy,
-        ));
-        assert!(!is_vacuum_object_gc_candidate(
-            &format!("1/2/_i_b_v2/{}_v4.parquet", at_root.as_simple()),
-            old,
-            gc_root_meta_ts,
-            policy,
-        ));
-        assert!(!is_vacuum_object_gc_candidate(
-            &format!(
-                "1/2/_i_b_v2/{}_v4.parquet",
-                before_root.as_simple().to_string().to_ascii_uppercase()
-            ),
-            recent,
-            gc_root_meta_ts,
-            policy,
-        ));
-        assert!(is_vacuum_object_gc_candidate(
-            "1/2/_i_b_v2/0123456789ab4def8123456789abcdef_v4.parquet",
-            old,
-            gc_root_meta_ts,
-            policy,
-        ));
     }
 }

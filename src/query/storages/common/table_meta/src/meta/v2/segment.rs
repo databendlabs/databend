@@ -181,7 +181,6 @@ pub struct DraftVirtualBlockMeta {
 pub struct ColumnGroupFileMeta {
     pub active_column_ids: Vec<ColumnId>,
     pub location: Location,
-    pub format_version: FormatVersion,
     pub file_size: u64,
     pub uncompressed_size: u64,
     pub leaf_column_metas: HashMap<ColumnId, ColumnMeta>,
@@ -335,7 +334,6 @@ impl BlockMeta {
         ColumnGroupFileMeta {
             active_column_ids,
             location: self.location.clone(),
-            format_version: self.location.1,
             file_size: self.file_size,
             uncompressed_size: self.block_size,
             leaf_column_metas,
@@ -360,7 +358,6 @@ impl BlockMeta {
         let project_group =
             |active_column_ids: &[ColumnId],
              location: &Location,
-             format_version: FormatVersion,
              file_size: u64,
              uncompressed_size: u64,
              leaf_column_metas: &HashMap<ColumnId, ColumnMeta>| {
@@ -380,7 +377,6 @@ impl BlockMeta {
                 Some(ColumnGroupFileMeta {
                     active_column_ids,
                     location: location.clone(),
-                    format_version,
                     file_size,
                     uncompressed_size,
                     leaf_column_metas,
@@ -402,7 +398,6 @@ impl BlockMeta {
                 project_group(
                     &group.active_column_ids,
                     &group.location,
-                    group.format_version,
                     group.file_size,
                     group.uncompressed_size,
                     &group.leaf_column_metas,
@@ -601,7 +596,6 @@ mod tests {
         let group = ColumnGroupFileMeta {
             active_column_ids: vec![1, 3],
             location: ("group.parquet".to_string(), 4),
-            format_version: 4,
             file_size: 20,
             uncompressed_size: 40,
             leaf_column_metas: HashMap::from([
@@ -638,7 +632,6 @@ mod tests {
         struct PrePairedColumnGroupFileMeta {
             active_column_ids: Vec<ColumnId>,
             location: Location,
-            format_version: FormatVersion,
             file_size: u64,
             uncompressed_size: u64,
             leaf_column_metas: HashMap<ColumnId, ColumnMeta>,
@@ -647,7 +640,6 @@ mod tests {
         let group = PrePairedColumnGroupFileMeta {
             active_column_ids: vec![1],
             location: ("data.parquet".to_string(), 2),
-            format_version: 2,
             file_size: 10,
             uncompressed_size: 20,
             leaf_column_metas: HashMap::new(),

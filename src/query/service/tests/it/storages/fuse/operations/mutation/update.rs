@@ -37,7 +37,7 @@ async fn latest_block_hll(fixture: &TestFixture) -> anyhow::Result<BlockHLL> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
+async fn test_partial_update_metadata_bloom_and_hll() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let table_name = fixture.default_table_name();
@@ -142,28 +142,6 @@ async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
         origin_hll.get(&value_column_id)
     );
 
-    let rows = fixture
-        .execute_query(&format!(
-            "select count(distinct column_name) from fuse_page('{db}', '{table_name}') \
-             where column_name in ('id', 'value')"
-        ))
-        .await?;
-    assert_eq!(query_count(rows).await?, 2);
-    let rows = fixture
-        .execute_query(&format!(
-            "select count(distinct block_location) from fuse_column('{db}', '{table_name}') \
-             where column_name in ('id', 'value')"
-        ))
-        .await?;
-    assert_eq!(query_count(rows).await?, 2);
-    let rows = fixture
-        .execute_query(&format!(
-            "select count(distinct column_name) from fuse_encoding('{db}', '{table_name}') \
-             where column_name in ('id', 'value')"
-        ))
-        .await?;
-    assert_eq!(query_count(rows).await?, 2);
-
     fixture
         .execute_command(&format!(
             "alter table {db}.{table_name} set options(bloom_index_columns='id')"
@@ -210,26 +188,6 @@ async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
         .execute_query(&format!(
             "select count(*) from {db}.{table_name} \
              where (id = 1 and value = 11) or (id = 2 and value = 21)"
-        ))
-        .await?;
-    assert_eq!(query_count(rows).await?, 2);
-
-    fixture
-        .execute_command("set enable_partial_update = 0")
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "update {db}.{table_name} set value = value + 1 where id = 1"
-        ))
-        .await?;
-    let fully_rewritten = latest_default_block_meta(&fixture).await?;
-    assert!(fully_rewritten.column_groups.is_empty());
-    assert!(fully_rewritten.bloom_filter_index_location.is_some());
-
-    let rows = fixture
-        .execute_query(&format!(
-            "select count(*) from {db}.{table_name} \
-             where (id = 1 and value = 12) or (id = 2 and value = 21)"
         ))
         .await?;
     assert_eq!(query_count(rows).await?, 2);

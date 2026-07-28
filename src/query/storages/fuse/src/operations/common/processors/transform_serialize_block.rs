@@ -71,6 +71,7 @@ enum State {
     Serialized {
         serialized: BlockSerialization,
         index: Option<BlockMetaIndex>,
+        written_uncompressed_size: Option<u64>,
     },
 }
 
@@ -437,27 +438,47 @@ impl Processor for TransformSerializeBlock {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
 
-                let serialized = if let (Some(updated_field_indices), Some(origin_block_meta)) =
-                    (&self.updated_field_indices, origin_block_meta)
-                {
-                    self.block_builder.build_column_group(
-                        block,
-                        &origin_block_meta,
-                        updated_field_indices,
-                    )?
-                } else {
-                    self.block_builder
-                        .build(block, |block, generator| match &stats_type {
-                            ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
-                            ClusterStatsGenType::WithOrigin(origin_stats) => {
-                                let cluster_stats = generator
-                                    .gen_with_origin_stats(&block, origin_stats.clone())?;
-                                Ok((cluster_stats, block))
-                            }
-                        })?
-                };
+                let (serialized, written_uncompressed_size) =
+                    if let (Some(updated_field_indices), Some(origin_block_meta)) =
+                        (&self.updated_field_indices, origin_block_meta)
+                    {
+                        let serialized = self.block_builder.build_column_group(
+                            block,
+                            &origin_block_meta,
+                            updated_field_indices,
+                        )?;
+                        let written_uncompressed_size = serialized
+                            .block_meta
+                            .column_groups
+                            .last()
+                            .ok_or_else(|| {
+                                ErrorCode::Internal("column-group update produced no column group")
+                            })?
+                            .uncompressed_size;
+                        (serialized, Some(written_uncompressed_size))
+                    } else {
+                        let serialized =
+                            self.block_builder.build(
+                                block,
+                                |block, generator| match &stats_type {
+                                    ClusterStatsGenType::Generally => {
+                                        generator.gen_stats_for_append(block)
+                                    }
+                                    ClusterStatsGenType::WithOrigin(origin_stats) => {
+                                        let cluster_stats = generator
+                                            .gen_with_origin_stats(&block, origin_stats.clone())?;
+                                        Ok((cluster_stats, block))
+                                    }
+                                },
+                            )?;
+                        (serialized, None)
+                    };
 
-                self.state = State::Serialized { serialized, index };
+                self.state = State::Serialized {
+                    serialized,
+                    index,
+                    written_uncompressed_size,
+                };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -467,13 +488,19 @@ impl Processor for TransformSerializeBlock {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::Serialized { serialized, index } => {
+            State::Serialized {
+                serialized,
+                index,
+                written_uncompressed_size,
+            } => {
                 let merge_hll = std::mem::take(&mut self.pending_merge_hll);
                 let (logical_updated_rows, logical_deleted_rows) =
                     std::mem::take(&mut self.pending_logical_change);
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
 
-                let bytes = if let Some(draft_virtual_block_meta) =
+                let bytes = if let Some(written_uncompressed_size) = written_uncompressed_size {
+                    written_uncompressed_size as usize
+                } else if let Some(draft_virtual_block_meta) =
                     &extended_block_meta.draft_virtual_block_meta
                 {
                     (extended_block_meta.block_meta.block_size

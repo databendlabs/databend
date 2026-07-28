@@ -112,14 +112,16 @@ pub(crate) fn column_group_bloom_files(meta: &BlockMeta) -> Vec<FuseBloomIndexFi
         .collect()
 }
 
-/// Physical ordinary Bloom files referenced by a logical block.
-pub fn block_bloom_index_locations(meta: &BlockMeta) -> impl Iterator<Item = Location> + '_ {
-    let legacy = meta
-        .column_groups
+pub(crate) fn legacy_bloom_index_location(meta: &BlockMeta) -> Option<&Location> {
+    meta.column_groups
         .is_empty()
         .then_some(meta.bloom_filter_index_location.as_ref())
         .flatten()
-        .cloned();
+}
+
+/// Physical ordinary Bloom files referenced by a logical block.
+pub fn block_bloom_index_locations(meta: &BlockMeta) -> impl Iterator<Item = Location> + '_ {
+    let legacy = legacy_bloom_index_location(meta).cloned();
     legacy.into_iter().chain(
         meta.column_groups
             .iter()
@@ -130,7 +132,7 @@ pub fn block_bloom_index_locations(meta: &BlockMeta) -> impl Iterator<Item = Loc
 pub(crate) fn bloom_index_layout(meta: &BlockMeta) -> Option<BloomIndexLayout<'_>> {
     let files = column_group_bloom_files(meta);
     BloomIndexLayout::from_metadata(
-        meta.bloom_filter_index_location.as_ref(),
+        legacy_bloom_index_location(meta),
         meta.bloom_filter_index_size,
         Cow::Owned(files),
     )
@@ -156,7 +158,7 @@ pub struct FuseBlockPartInfo {
 
     pub bloom_filter_index_location: Option<Location>,
     pub bloom_filter_index_size: u64,
-    #[serde(default, alias = "bloom_index_files")]
+    #[serde(default)]
     pub column_group_bloom_files: Vec<FuseBloomIndexFileInfo>,
 
     pub create_on: Option<DateTime<Utc>>,

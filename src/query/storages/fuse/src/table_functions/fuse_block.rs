@@ -160,7 +160,7 @@ impl TableMetaFunc for FuseBlock {
                                 serde_json::json!({
                                     "active_column_ids": group.active_column_ids,
                                     "location": group.location.0,
-                                    "format_version": group.format_version,
+                                    "format_version": group.location.1,
                                     "file_size": group.file_size,
                                     "uncompressed_size": group.uncompressed_size,
                                     "bloom": group.bloom,

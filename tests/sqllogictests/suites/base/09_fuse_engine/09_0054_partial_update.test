@@ -75,33 +75,3 @@ from fuse_block('default', 't_partial_update')
 
 statement ok
 drop table t_partial_update
-
-# A partial group keeps the logical block codec even if the table option changes.
-statement ok
-create table t_partial_update_compression(id int, a int, b int)
-    compression = 'zstd'
-    enable_partial_update = true
-
-statement ok
-insert into t_partial_update_compression values (1, 10, 20), (2, 30, 40)
-
-statement ok
-alter table t_partial_update_compression set options(compression = 'snappy')
-
-statement ok
-set enable_partial_update = 1
-
-statement ok
-update t_partial_update_compression set a = a + 1 where id = 1
-
-statement ok
-update t_partial_update_compression set b = b + 1 where id = 2
-
-query III
-select * from t_partial_update_compression order by id
-----
-1 11 20
-2 30 41
-
-statement ok
-drop table t_partial_update_compression

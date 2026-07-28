@@ -88,6 +88,7 @@ use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::fuse_part::column_group_bloom_files;
+use crate::fuse_part::legacy_bloom_index_location;
 use crate::fuse_part::project_column_groups;
 use crate::io::BloomIndexRebuilder;
 use crate::pruning::BlockPruner;
@@ -1408,7 +1409,7 @@ impl FuseTable {
 
         FuseBlockPartInfo::create(
             location,
-            meta.bloom_filter_index_location.clone(),
+            legacy_bloom_index_location(meta).cloned(),
             meta.bloom_filter_index_size,
             column_group_bloom_files(meta),
             rows_count,
@@ -1465,7 +1466,7 @@ impl FuseTable {
         // not the count the rows in this partition
         FuseBlockPartInfo::create(
             location,
-            meta.bloom_filter_index_location.clone(),
+            legacy_bloom_index_location(meta).cloned(),
             meta.bloom_filter_index_size,
             column_group_bloom_files(meta),
             rows_count,
@@ -1552,11 +1553,12 @@ mod tests {
             HashMap::from([(2, active_column_2_meta.clone())])
         );
 
+        block_meta.bloom_filter_index_location = Some(("stale-bloom.parquet".to_string(), 4));
+        block_meta.bloom_filter_index_size = 10;
         block_meta.column_groups = vec![
             ColumnGroupFileMeta {
                 active_column_ids: vec![1],
                 location: ("group-1.parquet".to_string(), 2),
-                format_version: 2,
                 file_size: 10,
                 uncompressed_size: 10,
                 leaf_column_metas: HashMap::from([(1, column_1_meta), (2, stale_column_2_meta)]),
@@ -1565,7 +1567,6 @@ mod tests {
             ColumnGroupFileMeta {
                 active_column_ids: vec![2],
                 location: block_meta.location.clone(),
-                format_version: 2,
                 file_size: 12,
                 uncompressed_size: 12,
                 leaf_column_metas: HashMap::from([(2, active_column_2_meta.clone())]),
@@ -1581,5 +1582,10 @@ mod tests {
             column_groups[0].columns_meta,
             HashMap::from([(2, active_column_2_meta)])
         );
+
+        let part = FuseTable::all_columns_part(None, &None, &None, &block_meta);
+        let part = FuseBlockPartInfo::from_part(&part).unwrap();
+        assert!(part.bloom_filter_index_location.is_none());
+        assert!(part.bloom_index_layout().is_none());
     }
 }
