@@ -205,12 +205,19 @@ fn merge_column_group_metadata(
                         );
                     expected == location.0
                 });
-        if !legacy_bloom_is_ordinary_and_paired {
-            // A legacy Bloom may have an unpaired path after Ngram refresh, or a paired path but
-            // contain Ngram filters when the index existed at INSERT time. Neither file can be
-            // represented by ColumnGroupBloomMeta after the index is dropped. Drop the auxiliary
-            // reference and fail open.
-            column_groups[0].bloom = None;
+        // A legacy Bloom may have an unpaired path after Ngram refresh, or a paired path but
+        // contain Ngram filters when the index existed at INSERT time. Neither file can be
+        // represented by ColumnGroupBloomMeta after the index is dropped, so adopt only an
+        // ordinary paired file and otherwise fail open.
+        if legacy_bloom_is_ordinary_and_paired {
+            column_groups[0].bloom =
+                origin
+                    .bloom_filter_index_location
+                    .as_ref()
+                    .map(|location| ColumnGroupBloomMeta {
+                        format_version: location.1,
+                        file_size: origin.bloom_filter_index_size,
+                    });
         }
     }
     for group in &mut column_groups {

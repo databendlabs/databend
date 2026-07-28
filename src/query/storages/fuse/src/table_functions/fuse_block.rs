@@ -31,6 +31,7 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use serde::Serialize;
@@ -49,6 +50,30 @@ fn serialize_variant(value: &impl Serialize) -> Result<Vec<u8>> {
     Ok(jsonb::parse_value(&json)
         .map_err(|error| ErrorCode::Internal(error.to_string()))?
         .to_vec())
+}
+
+fn observable_bloom_and_ngram_meta(block: &BlockMeta) -> (Option<String>, u64, Option<u64>) {
+    if block.column_groups.is_empty() {
+        return (
+            block
+                .bloom_filter_index_location
+                .as_ref()
+                .map(|location| location.0.clone()),
+            block.bloom_filter_index_size,
+            block.ngram_filter_index_size,
+        );
+    }
+
+    (
+        None,
+        block
+            .column_groups
+            .iter()
+            .filter_map(|group| group.bloom.as_ref())
+            .map(|bloom| bloom.file_size)
+            .sum(),
+        None,
+    )
 }
 
 #[async_trait::async_trait]
@@ -135,27 +160,12 @@ impl TableMetaFunc for FuseBlock {
                     block_size.push(block.block_size);
                     file_size.push(block.file_size);
                     row_count.push(block.row_count);
-                    if block.column_groups.is_empty() {
-                        bloom_filter_location.push(
-                            block
-                                .bloom_filter_index_location
-                                .as_ref()
-                                .map(|s| s.0.clone()),
-                        );
-                        bloom_filter_size.push(block.bloom_filter_index_size);
-                    } else {
-                        bloom_filter_location.push(None);
-                        bloom_filter_size.push(
-                            block
-                                .column_groups
-                                .iter()
-                                .filter_map(|group| group.bloom.as_ref())
-                                .map(|bloom| bloom.file_size)
-                                .sum(),
-                        );
-                    }
+                    let (bloom_location, bloom_size, ngram_size) =
+                        observable_bloom_and_ngram_meta(block);
+                    bloom_filter_location.push(bloom_location);
+                    bloom_filter_size.push(bloom_size);
                     inverted_index_size.push(block.inverted_index_size);
-                    ngram_index_size.push(block.ngram_filter_index_size);
+                    ngram_index_size.push(ngram_size);
                     vector_index_size.push(block.vector_index_size);
                     spatial_index_size.push(block.spatial_index_size);
                     virtual_column_size.push(
@@ -207,5 +217,59 @@ impl TableMetaFunc for FuseBlock {
             ],
             num_rows,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_storages_common_table_meta::meta::ColumnGroupBloomMeta;
+    use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
+    use databend_storages_common_table_meta::meta::Compression;
+
+    use super::*;
+
+    #[test]
+    fn test_column_group_layout_hides_stale_top_level_bloom_and_ngram_meta() {
+        let mut block = BlockMeta::new(
+            0,
+            0,
+            0,
+            HashMap::new(),
+            HashMap::new(),
+            None,
+            ("data.parquet".to_string(), 1),
+            Some(("stale-bloom".to_string(), 1)),
+            11,
+            None,
+            Some(7),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Compression::Lz4Raw,
+            None,
+        );
+        assert_eq!(
+            observable_bloom_and_ngram_meta(&block),
+            (Some("stale-bloom".to_string()), 11, Some(7))
+        );
+
+        block.column_groups.push(ColumnGroupFileMeta {
+            active_column_ids: vec![],
+            location: ("data.parquet".to_string(), 1),
+            format_version: 1,
+            file_size: 0,
+            uncompressed_size: 0,
+            leaf_column_metas: HashMap::new(),
+            bloom: Some(ColumnGroupBloomMeta {
+                format_version: 1,
+                file_size: 5,
+            }),
+        });
+        assert_eq!(observable_bloom_and_ngram_meta(&block), (None, 5, None));
     }
 }

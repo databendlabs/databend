@@ -145,11 +145,7 @@ pub async fn do_vacuum2(
                     .data_file_locations()
                     .map(|location| location.0.clone()),
             );
-            gc_root_indexes.extend(
-                block_bloom_index_locations(&block)
-                    .into_iter()
-                    .map(|location| location.0),
-            );
+            gc_root_indexes.extend(block_bloom_index_locations(&block).map(|location| location.0));
         }
     }
     ctx.set_status_info(&format!(

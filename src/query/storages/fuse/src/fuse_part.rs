@@ -114,15 +114,18 @@ pub(crate) fn column_group_bloom_files(meta: &BlockMeta) -> Vec<FuseBloomIndexFi
 }
 
 /// Physical ordinary Bloom files referenced by a logical block.
-pub fn block_bloom_index_locations(meta: &BlockMeta) -> Vec<Location> {
-    if meta.column_groups.is_empty() {
-        return meta.bloom_filter_index_location.iter().cloned().collect();
-    }
-
-    meta.column_groups
-        .iter()
-        .filter_map(column_group_bloom_location)
-        .collect()
+pub fn block_bloom_index_locations(meta: &BlockMeta) -> impl Iterator<Item = Location> + '_ {
+    let legacy = meta
+        .column_groups
+        .is_empty()
+        .then_some(meta.bloom_filter_index_location.as_ref())
+        .flatten()
+        .cloned();
+    legacy.into_iter().chain(
+        meta.column_groups
+            .iter()
+            .filter_map(column_group_bloom_location),
+    )
 }
 
 pub(crate) fn bloom_index_layout(meta: &BlockMeta) -> Option<BloomIndexLayout<'_>> {

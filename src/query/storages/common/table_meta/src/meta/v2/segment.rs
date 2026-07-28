@@ -339,13 +339,7 @@ impl BlockMeta {
             file_size: self.file_size,
             uncompressed_size: self.block_size,
             leaf_column_metas,
-            bloom: self
-                .bloom_filter_index_location
-                .as_ref()
-                .map(|location| ColumnGroupBloomMeta {
-                    format_version: location.1,
-                    file_size: self.bloom_filter_index_size,
-                }),
+            bloom: None,
         }
     }
 

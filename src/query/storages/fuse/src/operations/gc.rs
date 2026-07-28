@@ -809,11 +809,8 @@ impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
                     .data_file_locations()
                     .map(|location| location.0.clone()),
             );
-            bloom_location.extend(
-                block_bloom_index_locations(&block_meta)
-                    .into_iter()
-                    .map(|location| location.0),
-            );
+            bloom_location
+                .extend(block_bloom_index_locations(&block_meta).map(|location| location.0));
         }
         if let Some(loc) = value.as_ref().summary.additional_stats_loc() {
             hll_location.insert(loc.0);
