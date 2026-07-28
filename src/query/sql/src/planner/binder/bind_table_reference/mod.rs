@@ -15,6 +15,7 @@
 mod bind;
 mod bind_asof_join;
 mod bind_cte;
+mod bind_get_lineage;
 mod bind_join;
 mod bind_location;
 mod bind_obfuscate;

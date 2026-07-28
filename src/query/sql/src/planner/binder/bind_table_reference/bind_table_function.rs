@@ -146,6 +146,10 @@ impl Binder {
             &self.subquery_executor,
         )?;
 
+        if func_name.name.eq_ignore_ascii_case("get_lineage") {
+            return self.bind_get_lineage(span, alias, &table_args);
+        }
+
         let tenant = self.ctx.get_tenant();
         let udtf_result = databend_common_base::runtime::block_on(async {
             match UserApiProvider::instance()
