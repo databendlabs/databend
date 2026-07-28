@@ -60,9 +60,9 @@ where column_name in ('id', 'value')
 ----
 2
 
-# Disabling the setting forces the next rewrite back to the single-file layout.
+# Unsetting the table option forces the next rewrite back to the single-file layout.
 statement ok
-set enable_partial_update = 0
+alter table t_partial_update unset options(enable_partial_update)
 
 statement ok
 update t_partial_update set value = value + 1 where id = 1

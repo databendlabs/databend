@@ -60,6 +60,7 @@ pub struct ChangesDesc {
     pub location: Option<String>,
     pub desc: String,
 }
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StreamBacklog {
     // Physical rows in latest-only endpoint blocks.

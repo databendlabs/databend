@@ -143,9 +143,9 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
     )? == FilterEvalResult::MustFalse)
 }
 
-pub(crate) struct MultiFileBlockFilter {
-    pub block_filter: BlockFilter,
-    pub format_version: u64,
+struct MultiFileBlockFilter {
+    block_filter: BlockFilter,
+    format_version: u64,
 }
 
 fn merged_filter_version(versions: impl IntoIterator<Item = u64>) -> Option<u64> {
