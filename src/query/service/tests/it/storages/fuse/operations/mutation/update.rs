@@ -14,6 +14,7 @@
 
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockHLL;
@@ -57,6 +58,7 @@ async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let schema = table.schema();
+    let operator = FuseTable::try_from_table(table.as_ref())?.get_operator();
     let id_column_id = schema.field(0).column_id();
     let value_column_id = schema.field(1).column_id();
     let origin = latest_default_block_meta(&fixture).await?;
@@ -110,6 +112,26 @@ async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
             .map(|bloom| bloom.file_size)
             .sum::<u64>()
     );
+
+    // Paired Bloom failures must keep the block without invoking the legacy auto-fix path.
+    let changed_bloom = changed_group.bloom.as_ref().unwrap();
+    let missing_bloom_location = TableMetaLocationGenerator::gen_bloom_index_location_with_version(
+        &changed_group.location.0,
+        changed_bloom.format_version,
+    );
+    operator.delete(&missing_bloom_location).await?;
+    fixture
+        .execute_command("set enable_auto_fix_missing_bloom_index = 1")
+        .await?;
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from {db}.{table_name} \
+             where (id = 1 and value = 11) or (id = 2 and value = 20)"
+        ))
+        .await?;
+    assert_eq!(query_count(rows).await?, 2);
+    assert!(!operator.exists(&missing_bloom_location).await?);
+
     let updated_hll = latest_block_hll(&fixture).await?;
     assert_eq!(
         updated_hll.get(&id_column_id),

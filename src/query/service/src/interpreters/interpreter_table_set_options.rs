@@ -22,6 +22,7 @@ use databend_common_ast::ast::Engine;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::OPT_KEY_SEGMENT_FORMAT;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::plans::SetOptionsPlan;
@@ -49,7 +50,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -207,7 +207,7 @@ impl Interpreter for SetOptionsInterpreter {
         }
         current_meta
             .validate_column_group_transition(&next_meta)
-            .map_err(ErrorCode::TableOptionInvalid)?;
+            .map_err(|error| ErrorCode::TableOptionInvalid(error.to_string()))?;
 
         let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
 

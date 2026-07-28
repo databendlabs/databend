@@ -135,13 +135,25 @@ impl TableMetaFunc for FuseBlock {
                     block_size.push(block.block_size);
                     file_size.push(block.file_size);
                     row_count.push(block.row_count);
-                    bloom_filter_location.push(
-                        block
-                            .bloom_filter_index_location
-                            .as_ref()
-                            .map(|s| s.0.clone()),
-                    );
-                    bloom_filter_size.push(block.bloom_filter_index_size);
+                    if block.column_groups.is_empty() {
+                        bloom_filter_location.push(
+                            block
+                                .bloom_filter_index_location
+                                .as_ref()
+                                .map(|s| s.0.clone()),
+                        );
+                        bloom_filter_size.push(block.bloom_filter_index_size);
+                    } else {
+                        bloom_filter_location.push(None);
+                        bloom_filter_size.push(
+                            block
+                                .column_groups
+                                .iter()
+                                .filter_map(|group| group.bloom.as_ref())
+                                .map(|bloom| bloom.file_size)
+                                .sum(),
+                        );
+                    }
                     inverted_index_size.push(block.inverted_index_size);
                     ngram_index_size.push(block.ngram_filter_index_size);
                     vector_index_size.push(block.vector_index_size);

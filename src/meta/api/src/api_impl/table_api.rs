@@ -202,7 +202,8 @@ fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError>
         .validate_column_group_compatibility()
         .map_err(|error| {
             KVAppError::AppError(AppError::CommitTableMetaError(CommitTableMetaError::new(
-                name, error,
+                name,
+                error.to_string(),
             )))
         })?;
     Ok(())
@@ -1232,7 +1233,7 @@ where
                 .map_err(|error| {
                     KVAppError::AppError(AppError::CommitTableMetaError(CommitTableMetaError::new(
                         req.table_id.to_string(),
-                        error,
+                        error.to_string(),
                     )))
                 })?;
 
@@ -1468,7 +1469,7 @@ where
                 .map_err(|error| {
                     AppError::CommitTableMetaError(CommitTableMetaError::new(
                         req.table_id.to_string(),
-                        error,
+                        error.to_string(),
                     ))
                 })?;
 

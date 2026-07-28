@@ -34,6 +34,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OPT_KEY_SEGMENT_FORMAT;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::parse_to_filters;
@@ -57,7 +58,6 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
 

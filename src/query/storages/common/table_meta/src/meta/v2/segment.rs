@@ -639,6 +639,34 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_pre_paired_column_group_meta() {
+        #[derive(Serialize)]
+        struct PrePairedColumnGroupFileMeta {
+            active_column_ids: Vec<ColumnId>,
+            location: Location,
+            format_version: FormatVersion,
+            file_size: u64,
+            uncompressed_size: u64,
+            leaf_column_metas: HashMap<ColumnId, ColumnMeta>,
+        }
+
+        let group = PrePairedColumnGroupFileMeta {
+            active_column_ids: vec![1],
+            location: ("data.parquet".to_string(), 2),
+            format_version: 2,
+            file_size: 10,
+            uncompressed_size: 20,
+            leaf_column_metas: HashMap::new(),
+        };
+        let bytes = rmp_serde::to_vec_named(&group).unwrap();
+        let decoded: ColumnGroupFileMeta = rmp_serde::from_slice(&bytes).unwrap();
+
+        assert_eq!(decoded.bloom, None);
+        assert_eq!(decoded.location, group.location);
+        assert_eq!(decoded.active_column_ids, group.active_column_ids);
+    }
+
+    #[test]
     fn test_deserialize_legacy_block_meta_without_column_groups() {
         let block_meta = BlockMeta::new(
             10,

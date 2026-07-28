@@ -67,6 +67,26 @@ pub enum BloomIndexLayout<'a> {
     },
 }
 
+impl<'a> BloomIndexLayout<'a> {
+    fn from_metadata(
+        has_column_groups: bool,
+        legacy_location: Option<&'a Location>,
+        legacy_file_size: u64,
+        column_group_files: Cow<'a, [FuseBloomIndexFileInfo]>,
+    ) -> Option<Self> {
+        if has_column_groups {
+            return (!column_group_files.is_empty()).then_some(Self::ColumnGroups {
+                files: column_group_files,
+            });
+        }
+
+        legacy_location.map(|location| Self::Legacy {
+            location,
+            file_size: legacy_file_size,
+        })
+    }
+}
+
 fn column_group_bloom_location(group: &ColumnGroupFileMeta) -> Option<Location> {
     group.bloom.as_ref().map(|bloom| {
         (
@@ -106,19 +126,13 @@ pub fn block_bloom_index_locations(meta: &BlockMeta) -> Vec<Location> {
 }
 
 pub(crate) fn bloom_index_layout(meta: &BlockMeta) -> Option<BloomIndexLayout<'_>> {
-    if meta.column_groups.is_empty() {
-        return meta.bloom_filter_index_location.as_ref().map(|location| {
-            BloomIndexLayout::Legacy {
-                location,
-                file_size: meta.bloom_filter_index_size,
-            }
-        });
-    }
-
     let files = column_group_bloom_files(meta);
-    (!files.is_empty()).then_some(BloomIndexLayout::ColumnGroups {
-        files: Cow::Owned(files),
-    })
+    BloomIndexLayout::from_metadata(
+        !meta.column_groups.is_empty(),
+        meta.bloom_filter_index_location.as_ref(),
+        meta.bloom_filter_index_size,
+        Cow::Owned(files),
+    )
 }
 
 pub(crate) fn project_column_groups(
@@ -180,20 +194,12 @@ impl PartInfo for FuseBlockPartInfo {
 impl FuseBlockPartInfo {
     /// Normalize optional legacy and column-group Bloom metadata into one physical-layout view.
     pub fn bloom_index_layout(&self) -> Option<BloomIndexLayout<'_>> {
-        if !self.column_groups.is_empty() {
-            return (!self.column_group_bloom_files.is_empty()).then(|| {
-                BloomIndexLayout::ColumnGroups {
-                    files: Cow::Borrowed(&self.column_group_bloom_files),
-                }
-            });
-        }
-
-        self.bloom_filter_index_location
-            .as_ref()
-            .map(|location| BloomIndexLayout::Legacy {
-                location,
-                file_size: self.bloom_filter_index_size,
-            })
+        BloomIndexLayout::from_metadata(
+            !self.column_groups.is_empty(),
+            self.bloom_filter_index_location.as_ref(),
+            self.bloom_filter_index_size,
+            Cow::Borrowed(&self.column_group_bloom_files),
+        )
     }
 
     #[allow(clippy::too_many_arguments)]

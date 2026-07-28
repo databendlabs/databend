@@ -204,8 +204,22 @@ pub struct TableMeta {
 }
 
 pub const OPT_KEY_ENABLE_PARTIAL_UPDATE: &str = "enable_partial_update";
-const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
+pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
 const COLUMN_ORIENTED_SEGMENT_FORMAT: &str = "column_oriented";
+
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum ColumnGroupCompatibilityError {
+    #[error("column-group layout requires FUSE engine, but found {0}")]
+    NonFuseEngine(String),
+    #[error("column-group layout is incompatible with column-oriented segments")]
+    ColumnOrientedSegment,
+    #[error("column-group layout is incompatible with computed columns")]
+    ComputedColumns,
+    #[error("column-group layout is incompatible with table indexes: {}", .0.join(", "))]
+    TableIndexes(Vec<String>),
+    #[error("column-group layout cannot be disabled without a full layout migration")]
+    DisableRequiresMigration,
+}
 
 impl TableMeta {
     pub fn column_group_layout_enabled(&self) -> bool {
@@ -215,14 +229,15 @@ impl TableMeta {
     }
 
     /// Validate the persisted table features that may coexist with column-group blocks.
-    pub fn validate_column_group_compatibility(&self) -> std::result::Result<(), String> {
+    pub fn validate_column_group_compatibility(
+        &self,
+    ) -> std::result::Result<(), ColumnGroupCompatibilityError> {
         if !self.column_group_layout_enabled() {
             return Ok(());
         }
         if !self.engine.eq_ignore_ascii_case("FUSE") {
-            return Err(format!(
-                "column-group layout requires FUSE engine, but found {}",
-                self.engine
+            return Err(ColumnGroupCompatibilityError::NonFuseEngine(
+                self.engine.clone(),
             ));
         }
         if self
@@ -230,7 +245,7 @@ impl TableMeta {
             .get(OPT_KEY_SEGMENT_FORMAT)
             .is_some_and(|format| format.eq_ignore_ascii_case(COLUMN_ORIENTED_SEGMENT_FORMAT))
         {
-            return Err("column-group layout is incompatible with column-oriented segments".into());
+            return Err(ColumnGroupCompatibilityError::ColumnOrientedSegment);
         }
         if self
             .schema
@@ -238,24 +253,22 @@ impl TableMeta {
             .iter()
             .any(|field| field.computed_expr().is_some())
         {
-            return Err("column-group layout is incompatible with computed columns".into());
+            return Err(ColumnGroupCompatibilityError::ComputedColumns);
         }
         if !self.indexes.is_empty() {
             let mut indexes = self.indexes.keys().cloned().collect::<Vec<_>>();
             indexes.sort();
-            return Err(format!(
-                "column-group layout is incompatible with table indexes: {}",
-                indexes.join(", ")
-            ));
+            return Err(ColumnGroupCompatibilityError::TableIndexes(indexes));
         }
         Ok(())
     }
 
-    pub fn validate_column_group_transition(&self, next: &Self) -> std::result::Result<(), String> {
+    pub fn validate_column_group_transition(
+        &self,
+        next: &Self,
+    ) -> std::result::Result<(), ColumnGroupCompatibilityError> {
         if self.column_group_layout_enabled() && !next.column_group_layout_enabled() {
-            return Err(
-                "column-group layout cannot be disabled without a full layout migration".into(),
-            );
+            return Err(ColumnGroupCompatibilityError::DisableRequiresMigration);
         }
         next.validate_column_group_compatibility()
     }
@@ -1319,6 +1332,7 @@ mod tests {
     use databend_meta_client::kvapi::StructKey;
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
+    use crate::schema::ColumnGroupCompatibilityError;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableIdToName;
     use crate::schema::TableIndex;
@@ -1345,22 +1359,20 @@ mod tests {
 
         let mut non_fuse = meta.clone();
         non_fuse.engine = "MEMORY".to_string();
-        assert!(
-            non_fuse
-                .validate_column_group_compatibility()
-                .unwrap_err()
-                .contains("requires FUSE")
+        assert_eq!(
+            non_fuse.validate_column_group_compatibility(),
+            Err(ColumnGroupCompatibilityError::NonFuseEngine(
+                "MEMORY".to_string()
+            ))
         );
 
         let mut column_oriented = meta.clone();
         column_oriented
             .options
             .insert("segment_format".to_string(), "column_oriented".to_string());
-        assert!(
-            column_oriented
-                .validate_column_group_compatibility()
-                .unwrap_err()
-                .contains("column-oriented")
+        assert_eq!(
+            column_oriented.validate_column_group_compatibility(),
+            Err(ColumnGroupCompatibilityError::ColumnOrientedSegment)
         );
 
         let mut computed = meta.clone();
@@ -1368,11 +1380,9 @@ mod tests {
             TableField::new("a", TableDataType::Number(NumberDataType::Int32))
                 .with_computed_expr(Some(ComputedExpr::Virtual("a + 1".to_string()))),
         ]));
-        assert!(
-            computed
-                .validate_column_group_compatibility()
-                .unwrap_err()
-                .contains("computed columns")
+        assert_eq!(
+            computed.validate_column_group_compatibility(),
+            Err(ColumnGroupCompatibilityError::ComputedColumns)
         );
 
         let mut indexed = meta.clone();
@@ -1384,19 +1394,18 @@ mod tests {
             version: "v1".to_string(),
             options: BTreeMap::new(),
         });
-        assert!(
-            indexed
-                .validate_column_group_compatibility()
-                .unwrap_err()
-                .contains("table indexes: idx")
+        assert_eq!(
+            indexed.validate_column_group_compatibility(),
+            Err(ColumnGroupCompatibilityError::TableIndexes(vec![
+                "idx".to_string()
+            ]))
         );
 
         let mut disabled = meta.clone();
         disabled.options.remove("enable_partial_update");
-        assert!(
-            meta.validate_column_group_transition(&disabled)
-                .unwrap_err()
-                .contains("cannot be disabled")
+        assert_eq!(
+            meta.validate_column_group_transition(&disabled),
+            Err(ColumnGroupCompatibilityError::DisableRequiresMigration)
         );
     }
 

@@ -229,13 +229,11 @@ pub async fn do_vacuum2(
             + bloom_indexes_to_gc.len(),
     );
 
-    // Bloom indexes must be removed before their data blocks. Keep the removed paths so the
-    // block-derived compatibility cleanup below does not issue duplicate deletes.
+    // Bloom indexes must be removed before their data blocks.
     if !bloom_indexes_to_gc.is_empty() {
         op.remove_file_in_batch(&bloom_indexes_to_gc).await?;
         files_to_gc.extend(bloom_indexes_to_gc.iter().cloned());
     }
-    let removed_bloom_indexes = bloom_indexes_to_gc.into_iter().collect::<HashSet<_>>();
 
     // order is important
     // indexes should be removed before their blocks, because index locations to gc are generated from block locations.
@@ -244,8 +242,6 @@ pub async fn do_vacuum2(
         &ctx,
         table_info.desc.as_str(),
         &blocks_to_gc,
-        &gc_root_indexes,
-        &removed_bloom_indexes,
         &table_agg_index_ids,
         inverted_indexes,
         &mut files_to_gc,
@@ -305,8 +301,6 @@ async fn purge_block_chunks(
     ctx: &Arc<dyn TableContext>,
     table_desc: &str,
     blocks_to_gc: &[String],
-    protected_index_paths: &HashSet<String>,
-    removed_bloom_index_paths: &HashSet<String>,
     table_agg_index_ids: &[u64],
     inverted_indexes: &BTreeMap<String, TableIndex>,
     files_to_gc: &mut Vec<String>,
@@ -325,11 +319,8 @@ async fn purge_block_chunks(
             return Err(err.with_context("failed to vacuum block chunk"));
         }
 
-        let mut indexes_to_gc =
+        let indexes_to_gc =
             collect_block_index_locations(block_chunk, table_agg_index_ids, inverted_indexes);
-        indexes_to_gc.retain(|path| {
-            !protected_index_paths.contains(path) && !removed_bloom_index_paths.contains(path)
-        });
         ctx.set_status_info(&format!(
             "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}/{}, blocks in chunk: {}, indexes_to_gc: {:?}",
             table_desc,

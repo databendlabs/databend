@@ -353,7 +353,7 @@ where
                 .map_err(|error| {
                     KVAppError::AppError(AppError::CommitTableMetaError(CommitTableMetaError::new(
                         req.table_id.to_string(),
-                        error,
+                        error.to_string(),
                     )))
                 })?;
 

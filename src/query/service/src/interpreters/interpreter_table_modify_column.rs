@@ -258,7 +258,7 @@ impl ModifyTableColumnInterpreter {
         table_info
             .meta
             .validate_column_group_transition(&next_meta)
-            .map_err(ErrorCode::TableOptionInvalid)?;
+            .map_err(|error| ErrorCode::TableOptionInvalid(error.to_string()))?;
         if !modified_cols.is_empty() {
             // Only need to validate the data types of modified columns that are referenced
             // by the cluster key. The cluster key expression itself is already validated

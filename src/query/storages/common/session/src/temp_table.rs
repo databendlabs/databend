@@ -107,7 +107,7 @@ impl TempTblMgr {
         } = req;
         table_meta
             .validate_column_group_compatibility()
-            .map_err(ErrorCode::TableOptionInvalid)?;
+            .map_err(|error| ErrorCode::TableOptionInvalid(error.to_string()))?;
         let orphan_table_name = as_dropped.then(|| format!("orphan@{}", name_ident.table_name));
 
         let Some(db_id) = table_meta.options.get(OPT_KEY_DATABASE_ID) else {
@@ -276,7 +276,7 @@ impl TempTblMgr {
             table
                 .meta
                 .validate_column_group_transition(&r.new_table_meta)
-                .map_err(ErrorCode::TableOptionInvalid)?;
+                .map_err(|error| ErrorCode::TableOptionInvalid(error.to_string()))?;
         }
         Ok(())
     }
@@ -320,7 +320,7 @@ impl TempTblMgr {
         table
             .meta
             .validate_column_group_transition(&new_meta)
-            .map_err(ErrorCode::TableOptionInvalid)?;
+            .map_err(|error| ErrorCode::TableOptionInvalid(error.to_string()))?;
         table.meta = new_meta;
         Ok(UpsertTableOptionReply {})
     }
