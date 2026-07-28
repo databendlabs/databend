@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -48,6 +47,7 @@ use md5::Digest;
 use md5::Md5 as Md5Hasher;
 use naive_cityhash::cityhash64_with_seed;
 use num_traits::AsPrimitive;
+use siphasher::sip::SipHasher13;
 use twox_hash::XxHash32;
 use twox_hash::XxHash64;
 
@@ -70,7 +70,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             NumberClass::Decimal128 => {
                 struct Siphash64;
                 impl HashFunction for Siphash64 {
-                    type Hasher = DefaultHasher;
+                    type Hasher = SipHasher13;
                     fn name() -> &'static str {
                         "siphash64"
                     }
@@ -115,9 +115,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             GenericType<0>,
             NumberType<u64>,
         >(|val, output, _| {
-            let mut hasher = DefaultHasher::default();
-            DFHash::hash(&val.to_owned(), &mut hasher);
-            output.push(hasher.finish());
+            output.push(siphash64(&val.to_owned()));
         }))
         .register();
 
@@ -231,7 +229,7 @@ fn register_bucket(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<u64>, StringType, NumberType<i32>>(
                 |buckets, value, output, ctx| {
-                    output.push(bucket(buckets, value.as_bytes(), output.len(), ctx));
+                    output.push(bucket(buckets, value, output.len(), ctx));
                 },
             ),
         );
@@ -241,7 +239,7 @@ fn register_bucket(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<u64>, DateType, NumberType<i32>>(
                 |buckets, value, output, ctx| {
-                    output.push(bucket(buckets, &value.to_le_bytes(), output.len(), ctx));
+                    output.push(bucket(buckets, &value, output.len(), ctx));
                 },
             ),
         );
@@ -256,12 +254,7 @@ fn register_bucket(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<NumberType<u64>, TimestampType, NumberType<i32>>(
             |buckets, value, output, ctx| {
-                output.push(bucket(
-                    buckets,
-                    &value.to_le_bytes(),
-                    output.len(),
-                    ctx,
-                ));
+                output.push(bucket(buckets, &value, output.len(), ctx));
             },
         ),
     );
@@ -282,13 +275,7 @@ fn register_bucket(registry: &mut FunctionRegistry) {
                         NumberType<NUM_TYPE>,
                         NumberType<i32>,
                     >(|buckets, value, output, ctx| {
-                        let value: i64 = value.as_();
-                        output.push(bucket(
-                            buckets,
-                            &value.to_le_bytes(),
-                            output.len(),
-                            ctx,
-                        ));
+                        output.push(bucket(buckets, &value, output.len(), ctx));
                     }),
                 );
             }
@@ -297,9 +284,9 @@ fn register_bucket(registry: &mut FunctionRegistry) {
     }
 }
 
-fn bucket(
+fn bucket<T: DFHash + ?Sized>(
     buckets: u64,
-    bytes: &[u8],
+    value: &T,
     row: usize,
     ctx: &mut databend_common_expression::EvalContext,
 ) -> i32 {
@@ -312,9 +299,14 @@ fn bucket(
         return 0;
     }
 
-    let mut bytes = bytes;
-    let hash = murmur3::murmur3_32(&mut bytes, 0).unwrap() as i32;
-    (hash & i32::MAX) % buckets
+    (siphash64(value) % buckets as u64) as i32
+}
+
+fn siphash64<T: DFHash + ?Sized>(value: &T) -> u64 {
+    // Keep SQL hash results independent of Rust's unspecified DefaultHasher.
+    let mut hasher = SipHasher13::new_with_keys(0, 0);
+    DFHash::hash(value, &mut hasher);
+    hasher.finish()
 }
 
 fn register_simple_domain_type_hash<T: ArgType>(registry: &mut FunctionRegistry)
@@ -327,9 +319,7 @@ where for<'a> T::ScalarRef<'a>: DFHash {
         .calc_domain(|_, _| FunctionDomain::Full)
         .vectorized(vectorize_with_builder_1_arg::<T, NumberType<u64>>(
             |val, output, _| {
-                let mut hasher = DefaultHasher::default();
-                DFHash::hash(&val, &mut hasher);
-                output.push(hasher.finish());
+                output.push(siphash64(&val));
             },
         ))
         .register();

@@ -358,7 +358,6 @@ memchr = { version = "2", default-features = false }
 micromarshal = "0.7.0"
 mlua = { version = "0.11", features = ["lua54", "vendored", "async", "serialize"] }
 mockall = "0.11.2"
-murmur3 = "0.5.2"
 mysql_async = { version = "0.34", default-features = false, features = ["native-tls-tls"] }
 naive-cityhash = "0.2.0"
 ndarray = "0.15.6"
