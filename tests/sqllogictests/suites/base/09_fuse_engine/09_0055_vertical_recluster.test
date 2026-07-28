@@ -148,6 +148,75 @@ select info:average_depth from clustering_information('db_vertical_recluster', '
 ----
 1.0
 
+# FINAL candidate selection is independent of the execution method. Both methods
+# must merge the same level-1 plus level-0 layout into one block.
+statement ok
+create table t_horizontal_final(k int, payload string) row_per_block=16 block_per_segment=2
+
+statement ok
+create table t_vertical_final(k int, payload string) row_per_block=16 block_per_segment=2
+
+statement ok
+insert into t_horizontal_final values (8,'a8'),(1,'a1'),(7,'a7'),(2,'a2'),(6,'a6'),(3,'a3'),(5,'a5'),(4,'a4')
+
+statement ok
+insert into t_vertical_final values (8,'a8'),(1,'a1'),(7,'a7'),(2,'a2'),(6,'a6'),(3,'a3'),(5,'a5'),(4,'a4')
+
+statement ok
+alter table t_horizontal_final cluster by(k)
+
+statement ok
+alter table t_vertical_final cluster by(k)
+
+statement ok
+set recluster_method = 'horizontal'
+
+statement ok
+alter table t_horizontal_final recluster final
+
+statement ok
+alter table t_vertical_final recluster final
+
+statement ok
+insert into t_horizontal_final values (0,'b0'),(2,'b2'),(3,'b3'),(5,'b5'),(6,'b6'),(7,'b7'),(8,'b8'),(9,'b9')
+
+statement ok
+insert into t_vertical_final values (0,'b0'),(2,'b2'),(3,'b3'),(5,'b5'),(6,'b6'),(7,'b7'),(8,'b8'),(9,'b9')
+
+query II
+select count(), count(distinct _block_name) from t_horizontal_final
+----
+16 2
+
+query II
+select count(), count(distinct _block_name) from t_vertical_final
+----
+16 2
+
+statement ok
+alter table t_horizontal_final recluster final
+
+statement ok
+set recluster_method = 'vertical'
+
+statement ok
+alter table t_vertical_final recluster final
+
+query II
+select count(), count(distinct _block_name) from t_horizontal_final
+----
+16 1
+
+query II
+select count(), count(distinct _block_name) from t_vertical_final
+----
+16 1
+
+query I
+select count() from ((select * from t_horizontal_final except select * from t_vertical_final) union all (select * from t_vertical_final except select * from t_horizontal_final))
+----
+0
+
 statement ok
 create table t_vertical_memory(k int, payload string) cluster by(k) row_per_block=6 block_per_segment=2
 

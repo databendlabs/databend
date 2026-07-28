@@ -102,18 +102,16 @@ impl ReclusterGroup {
     fn assign(level: i32, mode: ReclusterMode) -> ReclusterGroup {
         match mode {
             ReclusterMode::Conservative => ReclusterGroup::Level(level),
-            ReclusterMode::Aggressive if level == 0 => ReclusterGroup::Level(level),
             ReclusterMode::Aggressive => {
                 // Aggressive recluster packs blocks into fixed maturity bins so each
-                // round can pick tasks across a wider level span, letting high-overlap
-                // blocks at high levels land in the same candidate group instead of
-                // being split across narrow windows:
-                //   - {1..=3}: young-ish blocks, room for early recluster.
+                // round can pick tasks across a wider level span, letting overlapping
+                // and compactable blocks converge regardless of whether the executor
+                // uses horizontal sorting or vertical merging:
+                //   - {0..=3}: young blocks, including fresh level-0 appends.
                 //   - {4..=8}: mature blocks.
-                //   - {9..}  : high-maturity blocks (upper-bounded by MAX_RECLUSTER_LEVEL).
-                debug_assert!(level > 0);
+                //   - {9..}: high-maturity blocks (bounded by MAX_RECLUSTER_LEVEL).
                 let lo = match level {
-                    1..=3 => 1,
+                    0..=3 => 0,
                     4..=8 => 4,
                     _ => 9,
                 };
@@ -152,7 +150,7 @@ impl fmt::Display for ReclusterGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ReclusterGroup::Level(level) => write!(f, "{}", level),
-            ReclusterGroup::Range(1) => write!(f, "1-3"),
+            ReclusterGroup::Range(0) => write!(f, "0-3"),
             ReclusterGroup::Range(4) => write!(f, "4-8"),
             ReclusterGroup::Range(9) => write!(f, "9+"),
             ReclusterGroup::Range(lo) => unreachable!("unexpected FINAL bin lower bound: {lo}"),
@@ -2407,7 +2405,35 @@ fn exceeds_pack_limit(
 
 #[cfg(test)]
 mod tests {
+    use super::ReclusterGroup;
+    use super::ReclusterMode;
     use super::exceeds_pack_limit;
+
+    #[test]
+    fn test_aggressive_groups_level_zero_with_young_blocks() {
+        for level in 0..=3 {
+            assert_eq!(
+                ReclusterGroup::assign(level, ReclusterMode::Aggressive),
+                ReclusterGroup::Range(0)
+            );
+        }
+        assert_eq!(
+            ReclusterGroup::assign(4, ReclusterMode::Aggressive),
+            ReclusterGroup::Range(4)
+        );
+    }
+
+    #[test]
+    fn test_conservative_keeps_exact_level_groups() {
+        assert_eq!(
+            ReclusterGroup::assign(0, ReclusterMode::Conservative),
+            ReclusterGroup::Level(0)
+        );
+        assert_eq!(
+            ReclusterGroup::assign(1, ReclusterMode::Conservative),
+            ReclusterGroup::Level(1)
+        );
+    }
 
     #[test]
     fn test_vertical_merge_pack_limit_allows_one_output_block() {
