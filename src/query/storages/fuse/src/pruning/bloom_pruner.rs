@@ -117,8 +117,7 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
         }
         Some(BloomIndexLayout::ColumnGroups { files }) => {
             let Some(filter) =
-                read_multi_file_block_filter(dal, settings, &result.bloom_fields, &[], &files)
-                    .await?
+                read_multi_file_block_filter(dal, settings, &result.bloom_fields, &files).await?
             else {
                 return Ok(false);
             };
@@ -170,7 +169,6 @@ pub(crate) async fn read_multi_file_block_filter(
     dal: &Operator,
     settings: &ReadSettings,
     index_fields: &[TableField],
-    ngram_args: &[NgramArgs],
     index_files: &[FuseBloomIndexFileInfo],
 ) -> Result<Option<MultiFileBlockFilter>> {
     // The owning data group may contain active columns for which its Bloom file has no filter.
@@ -179,24 +177,15 @@ pub(crate) async fn read_multi_file_block_filter(
     let mut loaded_filters = Vec::new();
 
     for file in index_files {
-        let mut ordinary_fields_by_filter_name = HashMap::new();
+        let mut fields_by_filter_name = HashMap::new();
         let mut columns = Vec::new();
         for field in index_fields {
             if !file.active_column_ids.contains(&field.column_id()) {
                 continue;
             }
-            if let Some(arg) = ngram_args.iter().find(|arg| arg.field() == field) {
-                let name = BloomIndex::build_filter_ngram_name(
-                    field.column_id(),
-                    arg.gram_size(),
-                    arg.bloom_size(),
-                );
-                columns.push(name);
-            } else {
-                let physical = BloomIndex::build_filter_bloom_name(file.location.1, field)?;
-                ordinary_fields_by_filter_name.insert(physical.clone(), field.clone());
-                columns.push(physical);
-            }
+            let physical = BloomIndex::build_filter_bloom_name(file.location.1, field)?;
+            fields_by_filter_name.insert(physical.clone(), field);
+            columns.push(physical);
         }
         if columns.is_empty() {
             continue;
@@ -212,34 +201,26 @@ pub(crate) async fn read_multi_file_block_filter(
             .iter()
             .zip(filter.filters.into_iter())
         {
-            loaded_filters.push((
-                field.name().clone(),
-                ordinary_fields_by_filter_name.get(field.name()).cloned(),
-                file.location.1,
-                value,
-            ));
+            if let Some(index_field) = fields_by_filter_name.get(field.name()) {
+                loaded_filters.push((*index_field, file.location.1, value));
+            }
         }
     }
 
     if loaded_filters.is_empty() {
         return Ok(None);
     }
-    let Some(format_version) = merged_filter_version(
-        loaded_filters
-            .iter()
-            .filter_map(|(_, field, version, _)| field.as_ref().map(|_| *version)),
-    ) else {
+    let Some(format_version) =
+        merged_filter_version(loaded_filters.iter().map(|(_, version, _)| *version))
+    else {
         // V2 filters use legacy scalar encoding and cannot be evaluated together with the digest
         // encoding of newer files. Keeping the block is the safe compatibility behavior.
         return Ok(None);
     };
     let mut merged_fields = Vec::with_capacity(loaded_filters.len());
     let mut merged_filters = Vec::with_capacity(loaded_filters.len());
-    for (physical_name, bloom_field, _, filter) in loaded_filters {
-        let name = match bloom_field {
-            Some(field) => BloomIndex::build_filter_bloom_name(format_version, &field)?,
-            None => physical_name,
-        };
+    for (field, _, filter) in loaded_filters {
+        let name = BloomIndex::build_filter_bloom_name(format_version, field)?;
         merged_fields.push(TableField::new(&name, TableDataType::Binary));
         merged_filters.push(filter);
     }
@@ -458,11 +439,13 @@ impl BloomPrunerCreator {
         index_files: &[FuseBloomIndexFileInfo],
         column_stats: &StatisticsOfColumns,
     ) -> Result<bool> {
+        if !self.ngram_args.is_empty() {
+            return Ok(true);
+        }
         let maybe_filter = read_multi_file_block_filter(
             &self.dal,
             &self.settings,
             &self.index_fields,
-            &self.ngram_args,
             index_files,
         )
         .await;

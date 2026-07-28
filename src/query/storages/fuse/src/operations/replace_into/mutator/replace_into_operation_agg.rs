@@ -759,7 +759,6 @@ impl AggregationContext {
                     &self.data_accessor,
                     &self.read_settings,
                     &fields,
-                    &[],
                     &files,
                 )
                 .await?
