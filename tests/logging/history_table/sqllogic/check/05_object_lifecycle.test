@@ -1,0 +1,95 @@
+# Object lifecycle corresponds to setup/05_object_lifecycle.test.
+
+# The dropped Fuse edge and the two DataMovement column-lifecycle edges remain in history.
+query TI rowsort
+SELECT target_name, count(*)
+FROM system_history.lineage_unresolved
+WHERE target_database = 'lineage_history_lifecycle'
+GROUP BY target_name
+----
+dropped_fuse 1
+renamed_column_dst 1
+replaced_column_dst 1
+
+# A retained physical edge is inactive while its target object is dropped.
+query I
+SELECT count(*)
+FROM system_history.lineage
+WHERE target_database = 'lineage_history_lifecycle'
+  AND target_name = 'dropped_fuse'
+----
+0
+
+# UNDROP restores the same table id, so the retained edge becomes active without a rewrite.
+statement ok
+UNDROP TABLE lineage_history_lifecycle.dropped_fuse
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_lifecycle.dropped_fuse', 'TABLE', 'UPSTREAM', 1)
+----
+1 default.lineage_history_lifecycle.src default.lineage_history_lifecycle.dropped_fuse
+
+# Renaming preserves column ids, so the existing DataMovement edge resolves both current names.
+statement ok
+ALTER TABLE lineage_history_lifecycle.renamed_column_src RENAME COLUMN a TO renamed_a
+
+statement ok
+ALTER TABLE lineage_history_lifecycle.renamed_column_dst RENAME COLUMN a TO renamed_a
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage(
+    'lineage_history_lifecycle.renamed_column_dst.renamed_a',
+    'COLUMN',
+    'UPSTREAM',
+    1
+)
+----
+1 default.lineage_history_lifecycle.renamed_column_src renamed_a default.lineage_history_lifecycle.renamed_column_dst renamed_a
+
+# Dropping and adding the same name allocates a new column id. The object edge remains valid, but
+# the old column mapping must not attach itself to the replacement column.
+statement ok
+ALTER TABLE lineage_history_lifecycle.replaced_column_src DROP COLUMN a
+
+statement ok
+ALTER TABLE lineage_history_lifecycle.replaced_column_src ADD COLUMN a INT
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage(
+    'lineage_history_lifecycle.replaced_column_dst',
+    'TABLE',
+    'UPSTREAM',
+    1
+)
+----
+1 default.lineage_history_lifecycle.replaced_column_src default.lineage_history_lifecycle.replaced_column_dst
+
+query I
+SELECT count(*)
+FROM get_lineage(
+    'lineage_history_lifecycle.replaced_column_dst.a',
+    'COLUMN',
+    'UPSTREAM',
+    1
+)
+----
+0
+
+# Leave cleanup tombstones for the next history transform cycle.
+statement ok
+DROP TABLE lineage_history_lifecycle.dropped_fuse
+
+statement ok
+SET data_retention_time_in_days = 0
+
+statement ok
+VACUUM DROP TABLE FROM lineage_history_lifecycle
+
+statement ok
+UNSET data_retention_time_in_days
+
+statement ok
+DROP DATABASE lineage_history_lifecycle

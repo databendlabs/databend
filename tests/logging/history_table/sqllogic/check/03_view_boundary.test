@@ -1,0 +1,12 @@
+# View traversal corresponds to setup/03_view_boundary.test.
+
+query ITTTT rowsort
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_history_views.view_dst.z', 'COLUMN', 'UPSTREAM', 2)
+----
+1 default.lineage_history_views.src_view v default.lineage_history_views.view_dst z
+2 default.lineage_history_views.src a default.lineage_history_views.src_view v
+2 default.lineage_history_views.src b default.lineage_history_views.src_view v
+
+statement ok
+DROP DATABASE lineage_history_views

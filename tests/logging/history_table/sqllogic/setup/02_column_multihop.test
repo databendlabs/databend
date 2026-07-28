@@ -1,0 +1,25 @@
+# Column multi-hop: retain multiple mappings and extend them through another CTAS edge.
+
+statement ok
+DROP DATABASE IF EXISTS lineage_history_columns
+
+statement ok
+CREATE DATABASE lineage_history_columns
+
+statement ok
+CREATE TABLE lineage_history_columns.src(a INT, b INT)
+
+statement ok
+INSERT INTO lineage_history_columns.src VALUES (1, 2)
+
+statement ok
+CREATE TABLE lineage_history_columns.mid AS
+SELECT a AS x, b AS y FROM lineage_history_columns.src
+
+statement ok
+INSERT INTO lineage_history_columns.mid(x, y)
+SELECT b, a FROM lineage_history_columns.src
+
+statement ok
+CREATE TABLE lineage_history_columns.dst AS
+SELECT x AS z FROM lineage_history_columns.mid

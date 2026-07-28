@@ -1,0 +1,22 @@
+# Object patterns correspond to setup/01_object_patterns.test.
+
+query I
+SELECT count(*)
+FROM system_history.lineage
+WHERE source_resolved_database = 'lineage_history_objects'
+  AND target_resolved_database = 'lineage_history_objects'
+  AND source_resolved_name = 'src'
+  AND target_resolved_name = 'mid'
+  AND lineage_kind IN ('CTAS', 'DML')
+----
+2
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_objects.mid', 'TABLE', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name
+----
+1 default.lineage_history_objects.src default.lineage_history_objects.mid
+
+statement ok
+DROP DATABASE lineage_history_objects

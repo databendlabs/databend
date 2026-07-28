@@ -1,0 +1,18 @@
+# View boundary: view columns are name-addressed while the view object keeps its stable id.
+
+statement ok
+DROP DATABASE IF EXISTS lineage_history_views
+
+statement ok
+CREATE DATABASE lineage_history_views
+
+statement ok
+CREATE TABLE lineage_history_views.src(a INT, b INT)
+
+statement ok
+CREATE VIEW lineage_history_views.src_view AS
+SELECT a + b AS v FROM lineage_history_views.src
+
+statement ok
+CREATE TABLE lineage_history_views.view_dst AS
+SELECT v AS z FROM lineage_history_views.src_view

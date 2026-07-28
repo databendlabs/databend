@@ -1,0 +1,21 @@
+# Object patterns: CTAS and DML retain distinct column mappings for the same object edge.
+
+statement ok
+DROP DATABASE IF EXISTS lineage_history_objects
+
+statement ok
+CREATE DATABASE lineage_history_objects
+
+statement ok
+CREATE TABLE lineage_history_objects.src(a INT, b INT)
+
+statement ok
+INSERT INTO lineage_history_objects.src VALUES (1, 2)
+
+statement ok
+CREATE TABLE lineage_history_objects.mid AS
+SELECT a AS x, b AS y FROM lineage_history_objects.src
+
+statement ok
+INSERT INTO lineage_history_objects.mid(x, y)
+SELECT b, a FROM lineage_history_objects.src
