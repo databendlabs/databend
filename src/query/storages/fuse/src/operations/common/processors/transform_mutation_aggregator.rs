@@ -592,13 +592,13 @@ impl TableMutationAggregator {
                         .into_iter()
                         .enumerate()
                         .map(|(block_idx, block_meta)| {
-                            let hll = stats
-                                .as_ref()
-                                .and_then(|v| v.block_hlls.get(block_idx))
-                                .cloned();
-                            (block_idx, (block_meta, hll))
+                            let hll = retain_current_block_hll(
+                                stats.as_ref().and_then(|v| v.block_hlls.get(block_idx)),
+                                &current_hll_column_ids,
+                            )?;
+                            Ok((block_idx, (block_meta, hll)))
                         })
-                        .collect::<BTreeMap<usize, _>>();
+                        .collect::<Result<BTreeMap<usize, _>>>()?;
 
                     for (idx, (new_meta, new_hll)) in segment_mutation.replaced_blocks {
                         let new_hll = if let Some(updated_column_ids) = new_meta
@@ -608,14 +608,12 @@ impl TableMutationAggregator {
                         {
                             let previous_hll =
                                 block_editor.get(&idx).and_then(|(_, hll)| hll.as_ref());
-                            replace_partial_block_hll(
-                                previous_hll,
-                                new_hll,
-                                updated_column_ids,
-                                &current_hll_column_ids,
-                            )?
+                            replace_partial_block_hll(previous_hll, new_hll, updated_column_ids)?
                         } else {
                             new_hll
+                                .map(|hll| decode_column_hll(&hll))
+                                .transpose()?
+                                .flatten()
                         };
                         block_editor.insert(idx, (new_meta, new_hll));
                     }
@@ -632,7 +630,17 @@ impl TableMutationAggregator {
                     }
 
                     // assign back the mutated blocks to segment
-                    let (new_blocks, new_hlls) = block_editor.into_values().unzip();
+                    let (new_blocks, new_hlls) = block_editor
+                        .into_values()
+                        .map(|(block_meta, hll)| {
+                            Ok((
+                                block_meta,
+                                hll.map(|hll| encode_column_hll(&hll)).transpose()?,
+                            ))
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                        .into_iter()
+                        .unzip();
                     let stats = generate_segment_stats(new_hlls)?;
                     (new_blocks, stats, Some(segment_info.summary))
                 } else {
@@ -1014,17 +1022,11 @@ fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u
 }
 
 fn replace_partial_block_hll(
-    previous: Option<&RawBlockHLL>,
+    previous: Option<&BlockHLL>,
     replacement: Option<RawBlockHLL>,
     updated_column_ids: &[ColumnId],
-    current_hll_column_ids: &HashSet<ColumnId>,
-) -> Result<Option<RawBlockHLL>> {
-    let mut merged = previous
-        .map(decode_column_hll)
-        .transpose()?
-        .flatten()
-        .unwrap_or_default();
-    merged.retain(|column_id, _| current_hll_column_ids.contains(column_id));
+) -> Result<Option<BlockHLL>> {
+    let mut merged = previous.cloned().unwrap_or_default();
     for column_id in updated_column_ids {
         merged.remove(column_id);
     }
@@ -1037,6 +1039,17 @@ fn replace_partial_block_hll(
     if merged.is_empty() {
         Ok(None)
     } else {
-        Ok(Some(encode_column_hll(&merged)?))
+        Ok(Some(merged))
     }
+}
+
+fn retain_current_block_hll(
+    hll: Option<&RawBlockHLL>,
+    current_hll_column_ids: &HashSet<ColumnId>,
+) -> Result<Option<BlockHLL>> {
+    let Some(mut hll) = hll.map(decode_column_hll).transpose()?.flatten() else {
+        return Ok(None);
+    };
+    hll.retain(|column_id, _| current_hll_column_ids.contains(column_id));
+    Ok((!hll.is_empty()).then_some(hll))
 }
