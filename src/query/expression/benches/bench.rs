@@ -36,6 +36,116 @@ fn main() {
     divan::main();
 }
 
+#[divan::bench_group(max_time = 1)]
+mod escaped_like {
+    use std::borrow::Cow;
+
+    use databend_common_expression::LikePattern;
+    use databend_common_expression::generate_like_pattern;
+    use divan::counter::BytesCount;
+
+    const EXACT_PATTERN: &[u8] = br"request\_processing\%failed";
+    const PREFIX_PATTERN: &[u8] = br"request\_processing\%failed%";
+    const SUFFIX_PATTERN: &[u8] = br"%request\_processing\%failed";
+    const CONTAINS_PATTERN: &[u8] = br"%request\_processing\%failed%";
+
+    const EXACT_HIT: &[u8] = b"request_processing%failed";
+    const EXACT_MISS: &[u8] = b"request_processing-failed";
+    const PREFIX_HIT: &[u8] = b"request_processing%failed: synthetic payload after the marker";
+    const PREFIX_MISS: &[u8] = b"request_processing-failed: synthetic payload after the marker";
+    const SUFFIX_HIT: &[u8] = b"synthetic payload before the marker: request_processing%failed";
+    const SUFFIX_MISS: &[u8] = b"synthetic payload before the marker: request_processing-failed";
+    const CONTAINS_HIT: &[u8] = b"synthetic prefix: request_processing%failed: synthetic suffix";
+    const CONTAINS_MISS: &[u8] = b"synthetic prefix: request_processing-failed: synthetic suffix";
+
+    fn bench_general(bencher: divan::Bencher, pattern: &'static [u8], haystack: &'static [u8]) {
+        let matcher = LikePattern::ComplexPattern(Cow::Borrowed(pattern));
+        bencher
+            .counter(BytesCount::new(haystack.len()))
+            .bench(|| divan::black_box(matcher.compare(divan::black_box(haystack))));
+    }
+
+    fn bench_optimized(bencher: divan::Bencher, pattern: &'static [u8], haystack: &'static [u8]) {
+        let matcher = generate_like_pattern(pattern, haystack.len());
+        assert!(!matches!(matcher, LikePattern::ComplexPattern(_)));
+        bencher
+            .counter(BytesCount::new(haystack.len()))
+            .bench(|| divan::black_box(matcher.compare(divan::black_box(haystack))));
+    }
+
+    #[divan::bench(args = [false, true])]
+    fn general_exact(bencher: divan::Bencher, matched: bool) {
+        bench_general(
+            bencher,
+            EXACT_PATTERN,
+            if matched { EXACT_HIT } else { EXACT_MISS },
+        );
+    }
+
+    #[divan::bench(args = [false, true])]
+    fn optimized_exact(bencher: divan::Bencher, matched: bool) {
+        bench_optimized(
+            bencher,
+            EXACT_PATTERN,
+            if matched { EXACT_HIT } else { EXACT_MISS },
+        );
+    }
+
+    #[divan::bench(args = [false, true])]
+    fn general_prefix(bencher: divan::Bencher, matched: bool) {
+        bench_general(
+            bencher,
+            PREFIX_PATTERN,
+            if matched { PREFIX_HIT } else { PREFIX_MISS },
+        );
+    }
+
+    #[divan::bench(args = [false, true])]
+    fn optimized_prefix(bencher: divan::Bencher, matched: bool) {
+        bench_optimized(
+            bencher,
+            PREFIX_PATTERN,
+            if matched { PREFIX_HIT } else { PREFIX_MISS },
+        );
+    }
+
+    #[divan::bench(args = [false, true])]
+    fn general_suffix(bencher: divan::Bencher, matched: bool) {
+        bench_general(
+            bencher,
+            SUFFIX_PATTERN,
+            if matched { SUFFIX_HIT } else { SUFFIX_MISS },
+        );
+    }
+
+    #[divan::bench(args = [false, true])]
+    fn optimized_suffix(bencher: divan::Bencher, matched: bool) {
+        bench_optimized(
+            bencher,
+            SUFFIX_PATTERN,
+            if matched { SUFFIX_HIT } else { SUFFIX_MISS },
+        );
+    }
+
+    #[divan::bench(args = [false, true])]
+    fn general_contains(bencher: divan::Bencher, matched: bool) {
+        bench_general(
+            bencher,
+            CONTAINS_PATTERN,
+            if matched { CONTAINS_HIT } else { CONTAINS_MISS },
+        );
+    }
+
+    #[divan::bench(args = [false, true])]
+    fn optimized_contains(bencher: divan::Bencher, matched: bool) {
+        bench_optimized(
+            bencher,
+            CONTAINS_PATTERN,
+            if matched { CONTAINS_HIT } else { CONTAINS_MISS },
+        );
+    }
+}
+
 // bench                    fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ├─ concat_string_offset                │               │               │               │         │
 // │  ├─ 12                 22.58 ms      │ 31.43 ms      │ 24.05 ms      │ 24.83 ms      │ 100     │ 100
