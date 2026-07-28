@@ -2030,11 +2030,17 @@ fn variant_vectorize_like_jsonb() -> impl Fn(
 ) -> Value<BooleanType>
 + Copy
 + Sized {
-    variant_vectorize_like(|val, pattern_type| match pattern_type {
-        LikePattern::OrdinalStr(_)
-        | LikePattern::StartOfPercent(_)
-        | LikePattern::EndOfPercent(_)
-        | LikePattern::Constant(_) => {
+    variant_vectorize_like(|val, pattern_type, requires_traversal| {
+        if requires_traversal {
+            let raw_jsonb = RawJsonb::new(val);
+            match raw_jsonb.traverse_check_string(|v| pattern_type.compare(v)) {
+                Ok(res) => res,
+                Err(_) => {
+                    let s = raw_jsonb.to_string();
+                    pattern_type.compare(s.as_bytes())
+                }
+            }
+        } else {
             let raw_jsonb = RawJsonb::new(val);
             match raw_jsonb.as_str() {
                 Ok(Some(s)) => pattern_type.compare(s.as_bytes()),
@@ -2045,17 +2051,25 @@ fn variant_vectorize_like_jsonb() -> impl Fn(
                 }
             }
         }
-        _ => {
-            let raw_jsonb = RawJsonb::new(val);
-            match raw_jsonb.traverse_check_string(|v| pattern_type.compare(v)) {
-                Ok(res) => res,
-                Err(_) => {
-                    let s = raw_jsonb.to_string();
-                    pattern_type.compare(s.as_bytes())
-                }
-            }
-        }
     })
+}
+
+fn variant_like_requires_traversal(pattern: &[u8], pattern_type: &LikePattern) -> bool {
+    if !matches!(
+        pattern_type,
+        LikePattern::OrdinalStr(_)
+            | LikePattern::StartOfPercent(_)
+            | LikePattern::EndOfPercent(_)
+            | LikePattern::Constant(_)
+    ) {
+        return true;
+    }
+
+    // Escaped exact, prefix, and suffix patterns used ComplexPattern before the
+    // specialized matchers were added, so preserve their nested VARIANT traversal.
+    pattern
+        .windows(2)
+        .any(|window| window[0] == b'\\' && matches!(window[1], b'%' | b'_' | b'\\'))
 }
 
 fn vectorize_like(
@@ -2316,7 +2330,7 @@ fn ilike_any_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType
 }
 
 fn variant_vectorize_like(
-    func: impl Fn(&[u8], &LikePattern) -> bool + Copy,
+    func: impl Fn(&[u8], &LikePattern, bool) -> bool + Copy,
 ) -> impl Fn(
     Value<VariantType>,
     Value<StringType>,
@@ -2332,7 +2346,9 @@ fn variant_vectorize_like(
             (Value::Scalar(arg1), Value::Scalar(arg2)) => {
                 let pattern = convert_escape_pattern(&escape, arg2);
                 let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
-                Value::Scalar(func(&arg1, &pattern_type))
+                let requires_traversal =
+                    variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
+                Value::Scalar(func(&arg1, &pattern_type, requires_traversal))
             }
             (Value::Column(arg1), Value::Scalar(arg2)) => {
                 let arg1_iter = VariantType::iter_column(&arg1);
@@ -2340,9 +2356,11 @@ fn variant_vectorize_like(
                 let pattern = convert_escape_pattern(&escape, arg2);
                 let pattern_type =
                     generate_like_pattern(pattern.as_bytes(), arg1.total_bytes_len());
+                let requires_traversal =
+                    variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
                 let mut builder = MutableBitmap::with_capacity(arg1.len());
                 for arg1 in arg1_iter {
-                    builder.push(func(arg1, &pattern_type));
+                    builder.push(func(arg1, &pattern_type, requires_traversal));
                 }
                 Value::Column(builder.into())
             }
@@ -2352,7 +2370,9 @@ fn variant_vectorize_like(
                 for arg2 in arg2_iter {
                     let pattern = convert_escape_pattern(&escape, arg2.to_string());
                     let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
-                    builder.push(func(&arg1, &pattern_type));
+                    let requires_traversal =
+                        variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
+                    builder.push(func(&arg1, &pattern_type, requires_traversal));
                 }
                 Value::Column(builder.into())
             }
@@ -2363,7 +2383,9 @@ fn variant_vectorize_like(
                 for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
                     let pattern = convert_escape_pattern(&escape, arg2.to_string());
                     let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
-                    builder.push(func(arg1, &pattern_type));
+                    let requires_traversal =
+                        variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
+                    builder.push(func(arg1, &pattern_type, requires_traversal));
                 }
                 Value::Column(builder.into())
             }
@@ -2476,6 +2498,7 @@ fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usiz
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::FromData;
     use databend_common_expression::FunctionContext;
     use databend_common_expression::stat_distribution::BorrowedDistribution;
     use databend_common_expression::stat_distribution::NdvEstimate;
@@ -2490,6 +2513,36 @@ mod tests {
     use jsonb::OwnedJsonb;
 
     use super::*;
+
+    fn jsonb_scalar(value: &str) -> Vec<u8> {
+        value.parse::<OwnedJsonb>().unwrap().to_vec()
+    }
+
+    fn variant_column(values: &[&str]) -> <VariantType as AccessType>::Column {
+        let Column::Variant(column) = VariantType::from_data(
+            values
+                .iter()
+                .map(|value| jsonb_scalar(value))
+                .collect::<Vec<_>>(),
+        ) else {
+            unreachable!()
+        };
+        column
+    }
+
+    fn string_column(values: &[&str]) -> <StringType as AccessType>::Column {
+        let Column::String(column) = StringType::from_data(values.to_vec()) else {
+            unreachable!()
+        };
+        column
+    }
+
+    fn assert_boolean_value(value: Value<BooleanType>, expected: &[bool]) {
+        match value {
+            Value::Scalar(value) => assert_eq!(expected, &[value]),
+            Value::Column(column) => assert_eq!(column.iter().collect::<Vec<_>>(), expected),
+        }
+    }
 
     #[test]
     fn test_numeric_histogram_partial_bucket_reserves_equality_mass() {
@@ -2682,6 +2735,101 @@ mod tests {
             None,
             "empty patterns should not reuse repeated all-% folding"
         );
+    }
+
+    #[test]
+    fn test_variant_escaped_literal_like_preserves_nested_traversal() {
+        let like = variant_vectorize_like_jsonb();
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 1,
+            func_ctx: &func_ctx,
+            validity: None,
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+
+        for (value, pattern, escape, expected) in [
+            (r#"{"name":"alpha_beta"}"#, r"alpha\_beta", "", true),
+            (r#"["alpha_beta_tail"]"#, r"alpha\_beta%", "", true),
+            (r#"{"name":"head_alpha_beta"}"#, r"%alpha\_beta", "", true),
+            (
+                r#"{"name":"head_alpha_beta_tail"}"#,
+                r"%alpha\_beta%",
+                "",
+                true,
+            ),
+            (r#"{"name":"alpha%beta"}"#, r"alpha\%beta", "", true),
+            (r#"{"name":"alpha\\beta"}"#, r"alpha\\beta", "", true),
+            (r#"{"name":"alpha_beta"}"#, "alpha$_beta", "$", true),
+            (r#"{"name":"alphaXbeta"}"#, r"alpha\_beta", "", false),
+            (r#""alpha_beta""#, r"alpha\_beta", "", true),
+            (r#"{"name":"alphabeta"}"#, "alphabeta", "", false),
+            (r#"{"name":"alphabetatail"}"#, "alphabeta%", "", false),
+            (r#"{"name":"headalphabeta"}"#, "%alphabeta", "", false),
+        ] {
+            let result = like(
+                Value::<VariantType>::Scalar(jsonb_scalar(value)),
+                Value::<StringType>::Scalar(pattern.to_string()),
+                Value::<StringType>::Scalar(escape.to_string()),
+                &mut ctx,
+            );
+            assert_boolean_value(result, &[expected]);
+        }
+    }
+
+    #[test]
+    fn test_variant_escaped_literal_like_preserves_all_value_layouts() {
+        let like = variant_vectorize_like_jsonb();
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 2,
+            func_ctx: &func_ctx,
+            validity: None,
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+        let matching = r#"{"name":"alpha_beta"}"#;
+        let non_matching = r#"{"name":"alphaXbeta"}"#;
+        let pattern = "alpha$_beta";
+        let other_pattern = "other$_value";
+        let escape = Value::<StringType>::Scalar("$".to_string());
+
+        let scalar_scalar = like(
+            Value::<VariantType>::Scalar(jsonb_scalar(matching)),
+            Value::<StringType>::Scalar(pattern.to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        assert_boolean_value(scalar_scalar, &[true]);
+
+        let column_scalar = like(
+            Value::<VariantType>::Column(variant_column(&[matching, non_matching])),
+            Value::<StringType>::Scalar(pattern.to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        assert_boolean_value(column_scalar, &[true, false]);
+
+        let scalar_column = like(
+            Value::<VariantType>::Scalar(jsonb_scalar(matching)),
+            Value::<StringType>::Column(string_column(&[pattern, other_pattern])),
+            escape.clone(),
+            &mut ctx,
+        );
+        assert_boolean_value(scalar_column, &[true, false]);
+
+        let column_column = like(
+            Value::<VariantType>::Column(variant_column(&[matching, non_matching])),
+            Value::<StringType>::Column(string_column(&[pattern, pattern])),
+            escape,
+            &mut ctx,
+        );
+        assert_boolean_value(column_column, &[true, false]);
     }
 
     #[test]

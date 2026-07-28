@@ -1768,6 +1768,51 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : parse_json('{"name":"alpha_beta"}') like 'alpha\_beta'
+raw expr       : like(parse_json('{"name":"alpha_beta"}'), 'alpha\\_beta')
+checked expr   : like<Variant, String>(CAST<String>("{\"name\":\"alpha_beta\"}" AS Variant), "alpha\\_beta")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('["alpha_beta_tail"]') like 'alpha\_beta%'
+raw expr       : like(parse_json('["alpha_beta_tail"]'), 'alpha\\_beta%')
+checked expr   : like<Variant, String>(CAST<String>("[\"alpha_beta_tail\"]" AS Variant), "alpha\\_beta%")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"name":"head_alpha_beta"}') like '%alpha\_beta'
+raw expr       : like(parse_json('{"name":"head_alpha_beta"}'), '%alpha\\_beta')
+checked expr   : like<Variant, String>(CAST<String>("{\"name\":\"head_alpha_beta\"}" AS Variant), "%alpha\\_beta")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : "like"(parse_json('{"name":"alpha_beta"}'), 'alpha$_beta', '$')
+raw expr       : like(parse_json('{"name":"alpha_beta"}'), 'alpha$_beta', '$')
+checked expr   : like<Variant, String, String>(CAST<String>("{\"name\":\"alpha_beta\"}" AS Variant), "alpha$_beta", "$")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"name":"alphabeta"}') like 'alphabeta'
+raw expr       : like(parse_json('{"name":"alphabeta"}'), 'alphabeta')
+checked expr   : like<Variant, String>(CAST<String>("{\"name\":\"alphabeta\"}" AS Variant), "alphabeta")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
 ast            : parse_json(lhs) like 'a%'
 raw expr       : like(parse_json(lhs::String), 'a%')
 checked expr   : like<Variant, String>(CAST<String>(lhs AS Variant), "a%")

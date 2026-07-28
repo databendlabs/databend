@@ -515,6 +515,31 @@ fn test_like(file: &mut impl Write) {
         "parse_json('{\"k1\":\"abc\",\"k2\":\"def\"}') like '%e%'",
         &[],
     );
+    run_ast(
+        file,
+        r#"parse_json('{"name":"alpha_beta"}') like 'alpha\_beta'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('["alpha_beta_tail"]') like 'alpha\_beta%'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"name":"head_alpha_beta"}') like '%alpha\_beta'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#""like"(parse_json('{"name":"alpha_beta"}'), 'alpha$_beta', '$')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"name":"alphabeta"}') like 'alphabeta'"#,
+        &[],
+    );
 
     let columns = [(
         "lhs",
