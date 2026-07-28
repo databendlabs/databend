@@ -42,7 +42,7 @@ use super::core::RowsTypeVisitor;
 use super::core::SortKeyDescription;
 use super::core::SortedStream;
 use super::core::algorithm::HeapSort;
-use super::core::algorithm::LoserTreeSort;
+use super::core::algorithm::LoserTreeTop2Sort;
 use super::core::algorithm::SortAlgorithm;
 use super::core::select_row_type;
 
@@ -103,7 +103,7 @@ impl RowsTypeVisitor for Builder<'_> {
         R::Converter: Send + 'static,
     {
         if self.enable_loser_tree {
-            self.build::<LoserTreeSort<R>>()
+            self.build::<LoserTreeTop2Sort<R>>()
         } else {
             self.build::<HeapSort<R>>()
         }

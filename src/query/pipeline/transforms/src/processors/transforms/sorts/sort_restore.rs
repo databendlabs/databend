@@ -27,14 +27,14 @@ use super::Base;
 use super::SortBound;
 use super::SortBoundNext;
 use super::SortCollectedMeta;
-use super::core::algorithm::SortAlgorithm;
+use super::core::Rows;
 use super::sort_spill::OutputData;
 use super::sort_spill::SortSpill;
 use crate::HookTransform;
 use crate::HookTransformer;
 use crate::traits::SortSpiller;
 
-pub struct TransformSortRestore<A: SortAlgorithm, S: SortSpiller> {
+pub struct TransformSortRestore<R: Rows, S: SortSpiller> {
     input: Vec<SortCollectedMeta>,
     output: Option<DataBlock>,
 
@@ -43,12 +43,12 @@ pub struct TransformSortRestore<A: SortAlgorithm, S: SortSpiller> {
     remove_order_col: bool,
 
     base: Base<S>,
-    inner: Option<SortSpill<A, S>>,
+    inner: Option<SortSpill<R, S>>,
 }
 
-impl<A, S> TransformSortRestore<A, S>
+impl<R, S> TransformSortRestore<R, S>
 where
-    A: SortAlgorithm + Send + 'static,
+    R: Rows + Send + 'static,
     S: SortSpiller,
 {
     pub fn new(
@@ -68,10 +68,9 @@ where
 }
 
 #[async_trait::async_trait]
-impl<A, S> HookTransform for TransformSortRestore<A, S>
+impl<R, S> HookTransform for TransformSortRestore<R, S>
 where
-    A: SortAlgorithm + 'static,
-    A::Rows: 'static,
+    R: Rows + 'static,
     S: SortSpiller,
 {
     const NAME: &'static str = "TransformSortRestore";

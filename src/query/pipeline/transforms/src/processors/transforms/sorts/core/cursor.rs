@@ -17,82 +17,87 @@ use std::marker::PhantomData;
 
 use super::rows::Rows;
 
-/// A cursor point to a certain row in a data block.
-#[derive(Clone)]
-pub struct Cursor<R, O>
+/// A cursor pointing to a row in a sorted input stream.
+#[derive(Debug, Clone)]
+pub struct Cursor<'a, R, O>
 where
     R: Rows,
     O: CursorOrder<R>,
 {
     pub input_index: usize,
     pub row_index: usize,
-
+    num_rows: usize,
+    current: R::Item<'a>,
+    last: R::Item<'a>,
     _o: PhantomData<O>,
-
-    /// rows within [`Cursor`] should be monotonic.
-    rows: R,
 }
 
-impl<R, O> Cursor<R, O>
+impl<'a, R, O> Copy for Cursor<'a, R, O>
 where
     R: Rows,
     O: CursorOrder<R>,
 {
-    pub fn new(input_index: usize, rows: R) -> Self {
-        O::new_cursor(input_index, rows)
+}
+
+impl<'a, R, O> Cursor<'a, R, O>
+where
+    R: Rows,
+    O: CursorOrder<R>,
+{
+    pub fn new(
+        input_index: usize,
+        num_rows: usize,
+        current: R::Item<'a>,
+        last: R::Item<'a>,
+    ) -> Self {
+        debug_assert!(num_rows > 0);
+        Self {
+            input_index,
+            row_index: 0,
+            num_rows,
+            current,
+            last,
+            _o: PhantomData,
+        }
     }
 
-    #[inline]
-    pub fn advance(&mut self) -> usize {
-        let res = self.row_index;
-        self.row_index += 1;
-        res
+    pub fn advance(&mut self, count: usize, current: Option<R::Item<'a>>) {
+        self.row_index += count;
+        debug_assert!(self.row_index <= self.num_rows);
+        debug_assert_eq!(current.is_some(), !self.is_finished());
+        if let Some(current) = current {
+            self.current = current;
+        }
     }
 
     #[inline]
     pub fn is_finished(&self) -> bool {
-        self.rows.len() == self.row_index
+        self.num_rows == self.row_index
     }
 
     #[inline]
-    pub fn current(&self) -> R::Item<'_> {
-        self.rows.row(self.row_index)
+    pub fn current(&self) -> R::Item<'a> {
+        self.current
     }
 
     #[inline]
-    pub fn last(&self) -> R::Item<'_> {
-        self.rows.last()
+    pub fn last(&self) -> R::Item<'a> {
+        self.last
     }
 
     #[inline]
     pub fn num_rows(&self) -> usize {
-        self.rows.len()
-    }
-
-    pub fn cursor_mut(&self) -> CursorMut<'_, R, O> {
-        CursorMut {
-            row_index: self.row_index,
-            cursor: self,
-        }
+        self.num_rows
     }
 }
 
 pub trait CursorOrder<R: Rows>: Sized + Copy {
-    fn eq(a: &Cursor<R, Self>, b: &Cursor<R, Self>) -> bool;
+    fn eq<'a>(a: &Cursor<'a, R, Self>, b: &Cursor<'a, R, Self>) -> bool;
 
-    fn cmp(a: &Cursor<R, Self>, b: &Cursor<R, Self>) -> Ordering;
-
-    fn new_cursor(input_index: usize, rows: R) -> Cursor<R, Self> {
-        Cursor::<R, Self> {
-            input_index,
-            row_index: 0,
-            rows,
-            _o: PhantomData,
-        }
-    }
+    fn cmp<'a>(a: &Cursor<'a, R, Self>, b: &Cursor<'a, R, Self>) -> Ordering;
 }
 
-impl<R, O> Ord for Cursor<R, O>
+impl<R, O> Ord for Cursor<'_, R, O>
 where
     R: Rows,
     O: CursorOrder<R>,
@@ -102,7 +107,7 @@ where
     }
 }
 
-impl<R, O> PartialEq for Cursor<R, O>
+impl<R, O> PartialEq for Cursor<'_, R, O>
 where
     R: Rows,
     O: CursorOrder<R>,
@@ -112,49 +117,19 @@ where
     }
 }
 
-impl<R, O> Eq for Cursor<R, O>
+impl<R, O> Eq for Cursor<'_, R, O>
 where
     R: Rows,
     O: CursorOrder<R>,
 {
 }
 
-impl<R, O> PartialOrd for Cursor<R, O>
+impl<R, O> PartialOrd for Cursor<'_, R, O>
 where
     R: Rows,
     O: CursorOrder<R>,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-pub struct CursorMut<'a, R, O>
-where
-    R: Rows,
-    O: CursorOrder<R>,
-{
-    pub row_index: usize,
-
-    cursor: &'a Cursor<R, O>,
-}
-
-impl<'a, R, O> CursorMut<'a, R, O>
-where
-    R: Rows,
-    O: CursorOrder<R>,
-{
-    pub fn advance(&mut self) -> usize {
-        let res = self.row_index;
-        self.row_index += 1;
-        res
-    }
-
-    pub fn is_finished(&self) -> bool {
-        self.row_index == self.cursor.rows.len()
-    }
-
-    pub fn current<'b>(&'b self) -> R::Item<'a> {
-        self.cursor.rows.row(self.row_index)
     }
 }

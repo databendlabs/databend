@@ -36,10 +36,12 @@ pub struct SimpleRowsAsc<T: ValueType> {
     inner: T::Column,
 }
 
-impl<T> Rows for SimpleRowsAsc<T>
+// SAFETY: scalar references either contain copied values or point into the
+// column's heap-backed buffers, which are not relocated with the column wrapper.
+unsafe impl<T> Rows for SimpleRowsAsc<T>
 where
     T: ArgType,
-    for<'a> T::ScalarRef<'a>: Ord + Send,
+    for<'a> T::ScalarRef<'a>: Ord + Copy + Send,
 {
     const IS_ASC_COLUMN: bool = true;
     type Item<'a>
@@ -90,10 +92,12 @@ pub struct SimpleRowsDesc<T: ValueType> {
     inner: T::Column,
 }
 
-impl<T> Rows for SimpleRowsDesc<T>
+// SAFETY: Reverse only wraps the same move-stable scalar references as the
+// ascending implementation.
+unsafe impl<T> Rows for SimpleRowsDesc<T>
 where
     T: ArgType,
-    for<'a> T::ScalarRef<'a>: Ord + Send,
+    for<'a> T::ScalarRef<'a>: Ord + Copy + Send,
 {
     const IS_ASC_COLUMN: bool = false;
     type Item<'a>
@@ -150,7 +154,7 @@ pub struct SimpleRowConverter<T> {
 impl<T> RowConverter<SimpleRowsAsc<T>> for SimpleRowConverter<T>
 where
     T: ArgType,
-    for<'a> T::ScalarRef<'a>: Ord + Send,
+    for<'a> T::ScalarRef<'a>: Ord + Copy + Send,
 {
     fn new(desc: SortKeyDescription) -> Result<Self> {
         let sort_offset = desc.into_single_sort_offset(true);
@@ -172,7 +176,7 @@ where
 impl<T> RowConverter<SimpleRowsDesc<T>> for SimpleRowConverter<T>
 where
     T: ArgType,
-    for<'a> T::ScalarRef<'a>: Ord + Send,
+    for<'a> T::ScalarRef<'a>: Ord + Copy + Send,
 {
     fn new(desc: SortKeyDescription) -> Result<Self> {
         let sort_offset = desc.into_single_sort_offset(false);
