@@ -105,16 +105,6 @@ mod escaped_like {
         haystack
     }
 
-    #[divan::bench(args = [1, LARGE_COLUMN_TOTAL_BYTES])]
-    fn construct_contains_matcher(bencher: divan::Bencher, column_total_bytes: usize) {
-        bencher.bench(|| {
-            divan::black_box(generate_like_pattern(
-                divan::black_box(CONTAINS_PATTERN),
-                divan::black_box(column_total_bytes),
-            ))
-        });
-    }
-
     #[divan::bench(args = [false, true])]
     fn general_exact(bencher: divan::Bencher, matched: bool) {
         bench_general(
