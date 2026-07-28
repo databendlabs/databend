@@ -23,6 +23,7 @@ use derive_visitor::DriveMut;
 use crate::ast::CreateOption;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
+use crate::ast::ShareRef;
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_dot_separated_list;
 
@@ -90,6 +91,7 @@ impl Display for ShowCreateDatabaseStmt {
 pub struct CreateDatabaseStmt {
     pub create_option: CreateOption,
     pub database: DatabaseRef,
+    pub from_share: Option<ShareRef>,
     pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
 }
@@ -106,6 +108,10 @@ impl Display for CreateDatabaseStmt {
         }
 
         write!(f, "{}", self.database)?;
+
+        if let Some(share) = &self.from_share {
+            write!(f, " FROM SHARE {share}")?;
+        }
 
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;

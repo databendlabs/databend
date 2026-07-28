@@ -49,6 +49,7 @@ use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
+use databend_common_sql::plans::ShareGrantObject;
 use databend_common_sql::plans::TagSetObject;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::RoleCacheManager;
@@ -1256,6 +1257,7 @@ impl AccessChecker for PrivilegeAccess {
             .get_enable_experimental_sequence_privilege_check()?;
         let tenant = self.ctx.get_tenant();
         let ctl_name = self.ctx.get_current_catalog();
+        let default_catalog_name = self.ctx.get_default_catalog()?.name();
 
         match plan {
             Plan::Query {
@@ -1399,6 +1401,51 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateDatabase(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateDatabase, true, false)
                     .await?;
+            }
+            Plan::CreateDatabaseFromShare(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateDatabase, true, false)
+                    .await?;
+            }
+            Plan::CreateShare(_)
+            | Plan::DropShare(_)
+            | Plan::AlterShare(_)
+            | Plan::ShowShares(_)
+            | Plan::DescShare(_) => {}
+            Plan::GrantShare(plan) => {
+                match &plan.object {
+                    ShareGrantObject::Database { database } => {
+                        self.validate_db_access(&default_catalog_name, database, UserPrivilegeType::Usage, false).await?;
+                    }
+                    ShareGrantObject::Table { database, table } => {
+                        let current_database;
+                        let database = match database.as_deref() {
+                            Some(database) => database,
+                            None => {
+                                current_database = self.ctx.get_current_database();
+                                current_database.as_str()
+                            }
+                        };
+                        self.validate_table_access(&default_catalog_name, database, table, UserPrivilegeType::Select, false, false).await?;
+                    }
+                }
+            }
+            Plan::RevokeShare(plan) => {
+                match &plan.object {
+                    ShareGrantObject::Database { database } => {
+                        self.validate_db_access(&default_catalog_name, database, UserPrivilegeType::Usage, false).await?;
+                    }
+                    ShareGrantObject::Table { database, table } => {
+                        let current_database;
+                        let database = match database.as_deref() {
+                            Some(database) => database,
+                            None => {
+                                current_database = self.ctx.get_current_database();
+                                current_database.as_str()
+                            }
+                        };
+                        self.validate_table_access(&default_catalog_name, database, table, UserPrivilegeType::Select, false, false).await?;
+                    }
+                }
             }
             Plan::DropDatabase(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?;

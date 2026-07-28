@@ -45,6 +45,7 @@ use crate::binder::Binder;
 use crate::binder::StageResolver;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::AlterDatabasePlan;
+use crate::plans::CreateDatabaseFromSharePlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::Plan;
@@ -332,6 +333,7 @@ impl Binder {
         let CreateDatabaseStmt {
             create_option,
             database: DatabaseRef { catalog, database },
+            from_share,
             engine,
             options,
         } = stmt;
@@ -342,6 +344,35 @@ impl Binder {
             .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
+
+        if let Some(from_share) = from_share {
+            if engine.is_some() || !options.is_empty() {
+                return Err(ErrorCode::BadArguments(
+                    "CREATE DATABASE ... FROM SHARE cannot specify ENGINE or OPTIONS",
+                ));
+            }
+
+            let Some(provider_tenant) = &from_share.tenant else {
+                return Err(ErrorCode::BadArguments(
+                    "CREATE DATABASE ... FROM SHARE requires <provider_tenant>.<share>",
+                ));
+            };
+
+            return Ok(Plan::CreateDatabaseFromShare(Box::new(
+                CreateDatabaseFromSharePlan {
+                    create_option: create_option.clone().into(),
+                    tenant,
+                    catalog,
+                    database,
+                    provider_tenant: normalize_identifier(
+                        provider_tenant,
+                        &self.name_resolution_ctx,
+                    )
+                    .name,
+                    share: normalize_identifier(&from_share.share, &self.name_resolution_ctx).name,
+                },
+            )));
+        }
 
         let options = Self::normalize_db_option_name(options);
 

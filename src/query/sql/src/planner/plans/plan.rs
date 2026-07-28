@@ -43,6 +43,7 @@ use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
 use crate::plans::AlterRolePlan;
+use crate::plans::AlterSharePlan;
 use crate::plans::AlterStagePlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTaskPlan;
@@ -57,6 +58,7 @@ use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateConnectionPlan;
+use crate::plans::CreateDatabaseFromSharePlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateDynamicTablePlan;
@@ -68,6 +70,7 @@ use crate::plans::CreatePasswordPolicyPlan;
 use crate::plans::CreateProcedurePlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateSequencePlan;
+use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
 use crate::plans::CreateTableBranchPlan;
@@ -90,6 +93,7 @@ use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescProcedurePlan;
 use crate::plans::DescRowAccessPolicyPlan;
 use crate::plans::DescSequencePlan;
+use crate::plans::DescSharePlan;
 use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
@@ -108,6 +112,7 @@ use crate::plans::DropProcedurePlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropRowAccessPolicyPlan;
 use crate::plans::DropSequencePlan;
+use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::DropTableBranchPlan;
@@ -133,6 +138,7 @@ use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
+use crate::plans::GrantSharePlan;
 use crate::plans::Insert;
 use crate::plans::InsertMultiTable;
 use crate::plans::InspectWarehousePlan;
@@ -161,6 +167,7 @@ use crate::plans::ResumeWarehousePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
+use crate::plans::RevokeSharePlan;
 use crate::plans::SetObjectTagsPlan;
 use crate::plans::SetOptionsPlan;
 use crate::plans::SetPlan;
@@ -175,6 +182,7 @@ use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
 use crate::plans::ShowPublicKeysPlan;
+use crate::plans::ShowSharesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::SwapTablePlan;
@@ -279,12 +287,22 @@ pub enum Plan {
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
+    CreateDatabaseFromShare(Box<CreateDatabaseFromSharePlan>),
     DropDatabase(Box<DropDatabasePlan>),
     UndropDatabase(Box<UndropDatabasePlan>),
     RenameDatabase(Box<RenameDatabasePlan>),
     UseDatabase(Box<UseDatabasePlan>),
     RefreshDatabaseCache(Box<RefreshDatabaseCachePlan>),
     AlterDatabase(Box<AlterDatabasePlan>),
+
+    // Shares
+    CreateShare(Box<CreateSharePlan>),
+    DropShare(Box<DropSharePlan>),
+    AlterShare(Box<AlterSharePlan>),
+    GrantShare(Box<GrantSharePlan>),
+    RevokeShare(Box<RevokeSharePlan>),
+    ShowShares(Box<ShowSharesPlan>),
+    DescShare(Box<DescSharePlan>),
 
     // Tables
     ShowCreateTable(Box<ShowCreateTablePlan>),
@@ -576,6 +594,8 @@ impl Plan {
             Plan::DataMutation { schema, .. } => schema.clone(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
+            Plan::ShowShares(plan) => plan.schema(),
+            Plan::DescShare(plan) => plan.schema(),
             Plan::ShowCreateDictionary(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),

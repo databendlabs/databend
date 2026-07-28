@@ -1,0 +1,212 @@
+statement ok
+set sandbox_tenant = 'share_consumer_e2e'
+
+statement ok
+DROP DATABASE IF EXISTS consumer_shared_db
+
+statement ok
+DROP DATABASE IF EXISTS consumer_shared_db_readd
+
+statement ok
+DROP DATABASE IF EXISTS consumer_shared_db_recreated
+
+statement ok
+set sandbox_tenant = 'share_provider_e2e'
+
+statement ok
+ALTER SHARE IF EXISTS missing_share_e2e ADD ACCOUNTS = share_consumer_e2e
+
+statement ok
+CREATE OR REPLACE SHARE share_e2e COMMENT = 'share e2e'
+
+statement ok
+DROP DATABASE IF EXISTS share_provider_db_e2e
+
+statement ok
+CREATE DATABASE share_provider_db_e2e
+
+statement ok
+CREATE TABLE share_provider_db_e2e.orders(id INT, region STRING, amount INT)
+
+statement ok
+INSERT INTO share_provider_db_e2e.orders VALUES
+    (1, 'apac', 100),
+    (2, 'emea', 200)
+
+statement ok
+GRANT USAGE ON DATABASE share_provider_db_e2e TO SHARE share_e2e
+
+statement ok
+GRANT SELECT ON TABLE share_provider_db_e2e.orders TO SHARE share_e2e
+
+statement ok
+ALTER SHARE share_e2e ADD ACCOUNTS = share_consumer_e2e
+
+query TTTTTTTTT
+SHOW SHARES LIKE 'share_e2e' LIMIT 1
+----
+<slt:ignore> OUTBOUND share_provider_e2e share_e2e share_provider_db_e2e share_consumer_e2e <slt:ignore> share e2e (empty)
+
+query TTTTTTTTT
+SHOW SHARES LIKE 'share_e2_' LIMIT 1
+----
+<slt:ignore> OUTBOUND share_provider_e2e share_e2e share_provider_db_e2e share_consumer_e2e <slt:ignore> share e2e (empty)
+
+statement ok
+set sandbox_tenant = 'share_consumer_e2e'
+
+query TTTTTTTTT
+SHOW SHARES LIKE 'share_e2e' LIMIT 1
+----
+<slt:ignore> INBOUND share_provider_e2e share_e2e share_provider_db_e2e (empty) (empty) share e2e (empty)
+
+query TTT
+DESC SHARE share_provider_e2e.share_e2e
+----
+DATABASE share_provider_db_e2e <slt:ignore>
+TABLE share_provider_db_e2e.orders <slt:ignore>
+
+statement ok
+CREATE DATABASE consumer_shared_db FROM SHARE share_provider_e2e.share_e2e
+
+query T
+SHOW TABLES FROM consumer_shared_db
+----
+orders
+
+query ITI
+SELECT id, region, amount FROM consumer_shared_db.orders ORDER BY id
+----
+1 apac 100
+2 emea 200
+
+statement error (?s).*READ ONLY.*
+INSERT INTO consumer_shared_db.orders VALUES (3, 'amer', 300)
+
+statement error (?s).*READ ONLY.*
+ALTER TABLE consumer_shared_db.orders ADD COLUMN note STRING
+
+statement error (?s).*READ ONLY.*
+DROP TABLE consumer_shared_db.orders
+
+query I
+SELECT count(*) FROM consumer_shared_db.orders
+----
+2
+
+statement ok
+set sandbox_tenant = 'share_provider_e2e'
+
+statement ok
+ALTER SHARE share_e2e ADD ACCOUNTS = share_consumer_e2e
+
+statement ok
+set sandbox_tenant = 'share_consumer_e2e'
+
+query I
+SELECT count(*) FROM consumer_shared_db.orders
+----
+2
+
+statement ok
+CREATE OR REPLACE SHARE consumer_reshare_e2e
+
+statement error (?s).*Cannot grant a shared database to a share.*
+GRANT USAGE ON DATABASE consumer_shared_db TO SHARE consumer_reshare_e2e
+
+statement error (?s).*Cannot grant a shared database to a share.*
+GRANT SELECT ON TABLE consumer_shared_db.orders TO SHARE consumer_reshare_e2e
+
+statement ok
+DROP SHARE consumer_reshare_e2e
+
+statement ok
+set sandbox_tenant = 'share_provider_e2e'
+
+statement ok
+ALTER SHARE share_e2e REMOVE ACCOUNTS = share_consumer_e2e
+
+statement ok
+set sandbox_tenant = 'share_consumer_e2e'
+
+statement error (?s).*not authorized.*
+SELECT count(*) FROM consumer_shared_db.orders
+
+statement ok
+set sandbox_tenant = 'share_provider_e2e'
+
+statement ok
+ALTER SHARE share_e2e ADD ACCOUNTS = share_consumer_e2e
+
+statement ok
+set sandbox_tenant = 'share_consumer_e2e'
+
+statement error (?s).*Shared database binding is no longer valid.*consumer account was removed or re-added.*
+SELECT count(*) FROM consumer_shared_db.orders
+
+statement ok
+CREATE DATABASE consumer_shared_db_readd FROM SHARE share_provider_e2e.share_e2e
+
+query I
+SELECT count(*) FROM consumer_shared_db_readd.orders
+----
+2
+
+statement ok
+set sandbox_tenant = 'share_provider_e2e'
+
+statement ok
+DROP SHARE share_e2e
+
+statement ok
+set sandbox_tenant = 'share_consumer_e2e'
+
+statement error (?s).*Unknown share.*
+SELECT count(*) FROM consumer_shared_db_readd.orders
+
+statement ok
+set sandbox_tenant = 'share_provider_e2e'
+
+statement ok
+CREATE SHARE share_e2e COMMENT = 'share e2e recreated'
+
+statement ok
+GRANT USAGE ON DATABASE share_provider_db_e2e TO SHARE share_e2e
+
+statement ok
+GRANT SELECT ON TABLE share_provider_db_e2e.orders TO SHARE share_e2e
+
+statement ok
+ALTER SHARE share_e2e ADD ACCOUNTS = share_consumer_e2e
+
+statement ok
+set sandbox_tenant = 'share_consumer_e2e'
+
+statement error (?s).*Shared database binding is no longer valid.*share was dropped or recreated.*
+SELECT count(*) FROM consumer_shared_db_readd.orders
+
+statement ok
+CREATE DATABASE consumer_shared_db_recreated FROM SHARE share_provider_e2e.share_e2e
+
+query I
+SELECT count(*) FROM consumer_shared_db_recreated.orders
+----
+2
+
+statement ok
+DROP DATABASE IF EXISTS consumer_shared_db
+
+statement ok
+DROP DATABASE IF EXISTS consumer_shared_db_readd
+
+statement ok
+DROP DATABASE IF EXISTS consumer_shared_db_recreated
+
+statement ok
+set sandbox_tenant = 'share_provider_e2e'
+
+statement ok
+DROP SHARE share_e2e
+
+statement ok
+DROP DATABASE IF EXISTS share_provider_db_e2e
