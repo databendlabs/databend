@@ -23,6 +23,7 @@ use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
+use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_settings::Settings;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
@@ -189,6 +190,10 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
     let opt_key = opt_key.as_str();
     match engine {
         Engine::Fuse => CREATE_FUSE_OPTIONS.contains(opt_key),
+        Engine::MaterializedView => {
+            CREATE_FUSE_OPTIONS.contains(opt_key)
+                || opt_key == OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID
+        }
         Engine::Iceberg | Engine::Delta => CREATE_LAKE_OPTIONS.contains(&opt_key),
         Engine::Paimon => opt_key == OPT_KEY_ENGINE,
         Engine::Random => CREATE_RANDOM_OPTIONS.contains(&opt_key),

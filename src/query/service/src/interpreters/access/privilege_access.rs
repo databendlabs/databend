@@ -26,6 +26,7 @@ use databend_common_management::RoleApi;
 use databend_common_management::WarehouseInfo;
 use databend_common_meta_api::DatamaskApi;
 use databend_common_meta_api::RowAccessPolicyApi;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::GrantObject;
@@ -40,6 +41,8 @@ use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
+use databend_common_meta_app::schema::TableIdToName;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
 use databend_common_sql::binder::MutationType;
@@ -503,6 +506,78 @@ impl PrivilegeAccess {
         Ok(())
     }
 
+    async fn validate_table_or_materialized_view_source_access(
+        &self,
+        catalog_name: &str,
+        db_name: &str,
+        table_name: &str,
+        privilege: UserPrivilegeType,
+        if_exists: bool,
+        disable_table_info_refresh: bool,
+    ) -> Result<()> {
+        let table = match self.ctx.get_table(catalog_name, db_name, table_name).await {
+            Ok(table) => table,
+            Err(error)
+                if if_exists
+                    && matches!(
+                        error.code(),
+                        ErrorCode::UNKNOWN_DATABASE
+                            | ErrorCode::UNKNOWN_TABLE
+                            | ErrorCode::ILLEGAL_STREAM
+                            | ErrorCode::UNKNOWN_CATALOG
+                    ) =>
+            {
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        };
+
+        if !is_materialized_view_engine(table.engine()) {
+            return self
+                .validate_table_access(
+                    catalog_name,
+                    db_name,
+                    table_name,
+                    privilege,
+                    if_exists,
+                    disable_table_info_refresh,
+                )
+                .await;
+        }
+
+        let source_table_id = table
+            .get_table_info()
+            .meta
+            .materialized_view_source_table_id()?;
+        let source_name_ident = UserApiProvider::instance()
+            .get_meta_store_client()
+            .get_pb(&TableIdToName {
+                table_id: source_table_id,
+            })
+            .await
+            .map_err(meta_service_error)?
+            .ok_or_else(|| {
+                ErrorCode::InvalidMaterializedView(format!(
+                    "source table id {source_table_id} does not exist"
+                ))
+            })?;
+
+        // MV sources are restricted to persistent FUSE tables in the default catalog.
+        let source_catalog = self.ctx.get_catalog(CATALOG_DEFAULT).await?;
+        let source_db_name = source_catalog
+            .get_db_name_by_id(source_name_ident.data.db_id)
+            .await?;
+        self.validate_table_access(
+            CATALOG_DEFAULT,
+            &source_db_name,
+            &source_name_ident.data.table_name,
+            privilege,
+            false,
+            disable_table_info_refresh,
+        )
+        .await
+    }
+
     async fn validate_table_index_access(
         &self,
         catalog_name: &str,
@@ -649,6 +724,66 @@ impl PrivilegeAccess {
             }
             Err(err) => Err(err),
         }
+    }
+
+    async fn validate_query_source_table_access(
+        &self,
+        plan: &Plan,
+        enable_experimental_rbac_check: bool,
+    ) -> Result<()> {
+        let Plan::Query { metadata, .. } = plan else {
+            return Ok(());
+        };
+
+        let metadata = metadata.read().clone();
+        for table in metadata.tables() {
+            if table.is_source_of_stage() {
+                if enable_experimental_rbac_check {
+                    match table.table().get_data_source_info() {
+                        DataSourceInfo::StageSource(stage_info) => {
+                            self.validate_stage_access(
+                                &stage_info.stage_info,
+                                UserPrivilegeType::Read,
+                            )
+                            .await?;
+                        }
+                        DataSourceInfo::ParquetSource(stage_info) => {
+                            self.validate_stage_access(
+                                &stage_info.stage_info,
+                                UserPrivilegeType::Read,
+                            )
+                            .await?;
+                        }
+                        DataSourceInfo::ORCSource(stage_info) => {
+                            self.validate_stage_access(
+                                &stage_info.stage_table_info.stage_info,
+                                UserPrivilegeType::Read,
+                            )
+                            .await?;
+                        }
+                        DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
+                    }
+                }
+                continue;
+            }
+
+            if table.is_source_of_view() || table.table().is_temp() {
+                continue;
+            }
+
+            let catalog_name = table.catalog();
+            self.validate_table_access(
+                catalog_name,
+                table.database(),
+                table.name(),
+                UserPrivilegeType::Select,
+                false,
+                false,
+            )
+            .await?;
+        }
+
+        Ok(())
     }
 
     async fn validate_warehouse_ownership(
@@ -1407,7 +1542,6 @@ impl AccessChecker for PrivilegeAccess {
 
         match plan {
             Plan::Query {
-                metadata,
                 rewrite_kind,
                 s_expr,
                 ..
@@ -1504,34 +1638,8 @@ impl AccessChecker for PrivilegeAccess {
                     }
                 }
 
-                let metadata = metadata.read().clone();
-
-                for table in metadata.tables() {
-                    if enable_experimental_rbac_check && table.is_source_of_stage() {
-                        match table.table().get_data_source_info() {
-                            DataSourceInfo::StageSource(stage_info) => {
-                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
-                            }
-                            DataSourceInfo::ParquetSource(stage_info) => {
-                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
-                            }
-                            DataSourceInfo::ORCSource(stage_info) => {
-                                self.validate_stage_access(&stage_info.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
-                            }
-                            DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
-                        }
-                    }
-                    if table.is_source_of_view() || table.table().is_temp() {
-                        continue;
-                    }
-
-                    let catalog_name = table.catalog();
-                    // like this sql: copy into t from (select * from @s3); will bind a mock table with name `system.read_parquet(s3)`
-                    // this is no means to check table `system.read_parquet(s3)` privilege
-                    if !table.is_source_of_stage() {
-                        self.validate_table_access(catalog_name, table.database(), table.name(), UserPrivilegeType::Select, false, false).await?
-                    }
-                }
+                self.validate_query_source_table_access(plan, enable_experimental_rbac_check)
+                    .await?;
             }
             Plan::ExplainAnalyze { plan, .. } | Plan::Explain { plan, .. } => {
                 self.check(ctx, plan).await?
@@ -1660,10 +1768,26 @@ impl AccessChecker for PrivilegeAccess {
 
             // Table.
             Plan::ShowCreateTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Select, false, false).await?
+                self.validate_table_or_materialized_view_source_access(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    UserPrivilegeType::Select,
+                    false,
+                    false,
+                )
+                .await?
             }
             Plan::DescribeTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Select, false, false).await?
+                self.validate_table_or_materialized_view_source_access(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    UserPrivilegeType::Select,
+                    false,
+                    false,
+                )
+                .await?
             }
             Plan::CreateTable(plan) => {
                 if !plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
@@ -1672,6 +1796,16 @@ impl AccessChecker for PrivilegeAccess {
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
                 }
+            }
+            Plan::CreateMaterializedView(plan) => {
+                self.validate_db_access(
+                    &plan.table_plan.catalog,
+                    &plan.table_plan.database,
+                    UserPrivilegeType::Create,
+                    false,
+                )
+                .await?;
+                self.check(ctx, &plan.query_plan).await?;
             }
             Plan::DropTable(plan) => {
                 // For attach table
@@ -1954,6 +2088,26 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::DescribeView(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, UserPrivilegeType::Select, false, false).await?
+            }
+            Plan::ShowCreateMaterializedView(plan) => {
+                self.validate_table_or_materialized_view_source_access(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.view_name,
+                    UserPrivilegeType::Select,
+                    false,
+                    false,
+                )
+                .await?
+            }
+            Plan::DropMaterializedView(plan) => {
+                self.validate_db_access(
+                    &plan.catalog,
+                    &plan.database,
+                    UserPrivilegeType::Drop,
+                    plan.if_exists,
+                )
+                .await?
             }
             Plan::CreateStream(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?

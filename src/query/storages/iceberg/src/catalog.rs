@@ -78,6 +78,7 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -446,6 +447,26 @@ impl Catalog for IcebergMutableCatalog {
     #[async_backtrace::framed]
     async fn get_table_meta_by_id(&self, _table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         unimplemented!()
+    }
+
+    async fn get_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _mv_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        Err(ErrorCode::Unimplemented(
+            "ICEBERG catalog does not support materialized-view definitions",
+        ))
+    }
+
+    async fn get_mv_source_generation(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<u64> {
+        Err(ErrorCode::Unimplemented(
+            "ICEBERG catalog does not support materialized-view source generations",
+        ))
     }
 
     async fn mget_table_names_by_ids(

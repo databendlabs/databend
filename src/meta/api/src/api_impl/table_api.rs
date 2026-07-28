@@ -484,12 +484,13 @@ where
                             .into(),
                         ));
                     }
-                    let version_ident =
+                    let generation_ident =
                         MVSourceBindingVersionIdent::new(req.tenant(), source_table_id);
-                    let (version_seq, version) = self.get_pb_seq_and_value(&version_ident).await?;
-                    let current_source_generation = version
+                    let (generation_kv_seq, generation_record) =
+                        self.get_pb_seq_and_value(&generation_ident).await?;
+                    let current_source_generation = generation_record
                         .as_ref()
-                        .map(|version| version.current_source_generation)
+                        .map(|record| record.current_source_generation)
                         .unwrap_or(0);
                     if current_source_generation != mv.expected_source_generation {
                         return Err(KVAppError::AppError(
@@ -501,15 +502,15 @@ where
                         ));
                     }
                     txn.condition
-                        .push(txn_cond_eq_seq(&version_ident, version_seq));
-                    if version.is_none() {
+                        .push(txn_cond_eq_seq(&generation_ident, generation_kv_seq));
+                    if generation_record.is_none() {
                         // A missing version record is semantic generation 0.
                         // Initialize it in the same transaction that publishes
                         // the first MV, so a failed CREATE leaves no record.
                         // Its resulting KV seq is deliberately not the MV
                         // generation; that seq is only a transaction CAS token.
                         txn.if_then.push(txn_put_pb(
-                            &version_ident,
+                            &generation_ident,
                             &MVSourceBindingVersion::default(),
                         ));
                     }
@@ -1238,6 +1239,7 @@ where
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
+            update_mv_source_bindings,
             copied_files,
             update_stream_metas,
             deduplicated_labels,
@@ -1322,6 +1324,50 @@ where
             });
 
             new_table_meta_map.insert(req.table_id, new_table_meta);
+        }
+
+        // The query layer marks only source schema changes that invalidate existing MV bindings.
+        // Each generation increment must be committed with an update of the same source TableMeta:
+        // its exact sequence condition serializes concurrent invalidating DDL, so the generation
+        // value does not need a second CAS condition.
+        for update in &update_mv_source_bindings {
+            if !update_table_metas
+                .iter()
+                .any(|(req, _)| req.table_id == update.source_table_id)
+            {
+                // A standalone generation update would bypass the source TableMeta serialization
+                // invariant and could lose a concurrent increment.
+                return Err(KVAppError::AppError(
+                    InvalidMaterializedView::new(format!(
+                        "MV source binding update for source {} has no matching table metadata update",
+                        update.source_table_id
+                    ))
+                    .into(),
+                ));
+            }
+
+            let generation_ident =
+                MVSourceBindingVersionIdent::new(&update.tenant, update.source_table_id);
+            let next_generation = self
+                .get_pb(&generation_ident)
+                .await?
+                .map(|record| record.data.current_source_generation)
+                .unwrap_or(0)
+                .checked_add(1)
+                .ok_or_else(|| {
+                    KVAppError::AppError(
+                        InvalidMaterializedView::new(format!(
+                            "source table {} binding generation overflow",
+                            update.source_table_id
+                        ))
+                        .into(),
+                    )
+                })?;
+
+            txn.if_then
+                .push(txn_put_pb(&generation_ident, &MVSourceBindingVersion {
+                    current_source_generation: next_generation,
+                }));
         }
 
         // `remove_table_copied_files` and `upsert_table_copied_file_info`

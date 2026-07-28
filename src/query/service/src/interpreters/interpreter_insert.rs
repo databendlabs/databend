@@ -55,6 +55,7 @@ use databend_common_storages_paimon::PaimonTable;
 #[cfg(feature = "storage-stage")]
 use databend_query_storage_stage_support::build_streaming_load_pipeline;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use log::info;
 
 use crate::clusters::ClusterHelper;
@@ -313,7 +314,7 @@ impl Interpreter for InsertInterpreter {
         let mut table_constraints = Vec::new();
         // check mutability
         table.check_mutable()?;
-        let table_meta_timestamps = if table.engine() == "FUSE" {
+        let table_meta_timestamps = if is_fuse_backed_engine(table.engine()) {
             let fuse_table =
                 databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
 
@@ -373,6 +374,7 @@ impl Interpreter for InsertInterpreter {
                         &mut build_res.main_pipeline,
                         None,
                         vec![],
+                        None,
                         self.plan.overwrite,
                         None,
                         unsafe { self.ctx.get_settings().get_deduplicate_label()? },
@@ -473,6 +475,7 @@ impl Interpreter for InsertInterpreter {
                     &mut build_res.main_pipeline,
                     None,
                     update_stream_meta,
+                    None,
                     self.plan.overwrite,
                     None,
                     unsafe { self.ctx.get_settings().get_deduplicate_label()? },

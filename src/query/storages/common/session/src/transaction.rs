@@ -24,6 +24,7 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableLvtCheck;
+use databend_common_meta_app::schema::UpdateMVSourceBindingReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -66,6 +67,7 @@ pub enum TxnState {
 pub struct TxnBuffer {
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
+    update_mv_source_bindings: HashMap<u64, UpdateMVSourceBindingReq>,
     base_snapshot_location: HashMap<u64, Option<String>>,
     lvt_check: HashMap<u64, Option<TableLvtCheck>>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
@@ -104,6 +106,11 @@ impl TxnBuffer {
     }
 
     fn update_multi_table_meta(&mut self, mut req: UpdateMultiTableMetaReq) {
+        for update in req.update_mv_source_bindings {
+            self.update_mv_source_bindings
+                .insert(update.source_table_id, update);
+        }
+
         for (req, table_info) in req.update_table_metas {
             let table_id = req.table_id;
             self.table_desc_to_id
@@ -343,6 +350,12 @@ impl TxnManager {
                         info.clone(),
                     )
                 })
+                .collect(),
+            update_mv_source_bindings: self
+                .txn_buffer
+                .update_mv_source_bindings
+                .values()
+                .cloned()
                 .collect(),
             copied_files,
             update_stream_metas: self

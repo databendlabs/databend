@@ -31,6 +31,7 @@ use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use log::info;
 use tokio::time::sleep;
 
@@ -39,8 +40,6 @@ use crate::FuseTable;
 use crate::operations::set_backoff;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
-
-const FUSE_ENGINE: &str = "FUSE";
 
 pub async fn commit_with_backoff(
     ctx: Arc<dyn TableContext>,
@@ -100,7 +99,7 @@ async fn compute_table_segments_diffs(
         let tid = update_table_meta_req.table_id;
         let engine = update_table_meta_req.new_table_meta.engine.as_str();
 
-        if engine != FUSE_ENGINE {
+        if !is_fuse_backed_engine(engine) {
             log::info!(
                 "Skipping segments diff pre-compute for table {} with engine {}",
                 tid,

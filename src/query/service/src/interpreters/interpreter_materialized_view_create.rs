@@ -1,0 +1,72 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::sync::Arc;
+
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateMaterializedViewMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_sql::plans::CreateMaterializedViewPlan;
+
+use crate::interpreters::CreateTableInterpreter;
+use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
+use crate::sessions::QueryContext;
+use crate::sessions::TableContextTableAccess;
+
+pub struct CreateMaterializedViewInterpreter {
+    ctx: Arc<QueryContext>,
+    plan: CreateMaterializedViewPlan,
+}
+
+impl CreateMaterializedViewInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateMaterializedViewPlan) -> Result<Self> {
+        Ok(Self { ctx, plan })
+    }
+}
+
+#[async_trait::async_trait]
+impl Interpreter for CreateMaterializedViewInterpreter {
+    fn name(&self) -> &str {
+        "CreateMaterializedViewInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
+    #[async_backtrace::framed]
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let table_interpreter =
+            CreateTableInterpreter::try_create(self.ctx.clone(), self.plan.table_plan.clone())?;
+        table_interpreter.validate_create().await?;
+
+        let materialized_view = CreateMaterializedViewMeta {
+            definition: MVDefinition {
+                original_query: self.plan.original_query.clone(),
+                query: self.plan.query.clone(),
+                // TODO: Build this independently from the user-visible query once
+                // TableMeta.schema stores the MV's physical aggregate-state layout.
+                logical_schema: self.plan.table_plan.schema.as_ref().clone(),
+                sync_creation: self.plan.sync_creation,
+            },
+            expected_source_generation: self.plan.expected_source_generation,
+        };
+        let catalog = self.ctx.get_catalog(&self.plan.table_plan.catalog).await?;
+        let mut req = table_interpreter.build_request(None)?;
+        req.materialized_view = Some(materialized_view);
+        catalog.create_table(req).await?;
+        Ok(PipelineBuildResult::create())
+    }
+}

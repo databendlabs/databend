@@ -34,6 +34,7 @@ use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::UpdateMVSourceBindingReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline::core::Pipeline;
@@ -278,15 +279,17 @@ pub trait Table: Sync + Send {
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
+        update_mv_source_binding: Option<UpdateMVSourceBindingReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        let (_, _, _, _, _, _) = (
+        let (_, _, _, _, _, _, _) = (
             ctx,
             copied_files,
             update_stream_meta,
+            update_mv_source_binding,
             pipeline,
             overwrite,
             prev_snapshot_id,

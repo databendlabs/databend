@@ -57,7 +57,6 @@ impl Interpreter for UnsetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
-
         // check mutability
         table.check_mutable()?;
 

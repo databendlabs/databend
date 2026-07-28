@@ -21,6 +21,7 @@ pub mod database;
 mod dictionary;
 mod dynamic_table;
 pub(crate) mod index;
+mod materialized_view;
 mod network_policy;
 mod notification;
 mod password_policy;

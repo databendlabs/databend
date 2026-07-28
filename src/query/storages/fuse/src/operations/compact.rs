@@ -134,7 +134,7 @@ impl FuseTable {
                 self,
                 ctx.clone(),
                 None,
-                vec![],
+                Default::default(),
                 snapshot_gen.clone(),
                 input,
                 None,
