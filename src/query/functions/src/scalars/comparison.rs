@@ -1994,6 +1994,8 @@ fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomai
             Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
         }
         LikePattern::OrdinalStr(literal) => {
+            // Use the exact literal used by runtime matching. `pattern` may still
+            // contain LIKE escape sequences.
             let literal = String::from_utf8(literal.into_owned()).ok()?;
             Some(lhs.domain_eq(&StringDomain {
                 min: literal.clone(),
