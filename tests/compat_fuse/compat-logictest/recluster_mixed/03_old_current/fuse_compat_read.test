@@ -6,8 +6,8 @@ SELECT count(),sum(value) FROM mixed_t
 ----
 14 1875
 
-query IIT rowsort
-SELECT id,value,source FROM mixed_t
+query IIT
+SELECT id,value,source FROM mixed_t ORDER BY id, value
 ----
 0 5 new-merge-insert
 1 10 initial

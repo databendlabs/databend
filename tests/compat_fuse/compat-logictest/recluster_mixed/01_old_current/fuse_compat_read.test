@@ -12,8 +12,8 @@ SET recluster_method = 'vertical'
 statement ok
 ALTER TABLE mixed_t RECLUSTER FINAL
 
-query IIT rowsort
-SELECT id,value,source FROM mixed_t
+query IIT
+SELECT id,value,source FROM mixed_t ORDER BY id, value
 ----
 1 10 initial
 2 20 initial
