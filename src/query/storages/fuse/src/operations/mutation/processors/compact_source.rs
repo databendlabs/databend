@@ -98,7 +98,7 @@ impl PrefetchAsyncSource for CompactSource {
                                     &None,
                                 )
                                 .await?;
-                            Ok::<_, ErrorCode>((read_res, column_groups))
+                            Ok::<_, ErrorCode>((read_res, block, column_groups))
                         })
                         .await
                         .unwrap()
@@ -107,18 +107,13 @@ impl PrefetchAsyncSource for CompactSource {
 
                 let start = Instant::now();
 
-                let (read_res, column_groups) = futures::future::try_join_all(task_futures)
-                    .await?
-                    .into_iter()
-                    .unzip();
+                let blocks = futures::future::try_join_all(task_futures).await?;
                 // Perf.
                 {
                     metrics_inc_compact_block_read_milliseconds(start.elapsed().as_millis() as u64);
                 }
                 Box::new(CompactSourceMeta::Concat {
-                    read_res,
-                    metas: task.blocks.clone(),
-                    column_groups,
+                    blocks,
                     index: task.index.clone(),
                 })
             }
@@ -160,17 +155,10 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
 
     fn transform(&mut self, meta: CompactSourceMeta) -> Result<Vec<DataBlock>> {
         match meta {
-            CompactSourceMeta::Concat {
-                read_res,
-                metas,
-                column_groups,
-                index,
-            } => {
-                let blocks = read_res
+            CompactSourceMeta::Concat { blocks, index } => {
+                let blocks = blocks
                     .into_iter()
-                    .zip(metas.into_iter())
-                    .zip(column_groups.into_iter())
-                    .map(|((data, meta), column_groups)| {
+                    .map(|(data, meta, column_groups)| {
                         let chunks = data.columns_chunks()?;
                         let mut block = match self.storage_format {
                             FuseStorageFormat::Parquet => {

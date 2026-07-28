@@ -170,12 +170,6 @@ fn build_partial_update_info(
         .flat_map(ScalarExpr::used_columns)
         .chain(direct_filter.iter().flat_map(ScalarExpr::used_columns))
         .collect::<ColumnSet>();
-    for field_index in update_list.keys().copied() {
-        let Some(symbol) = find_symbol(field_index) else {
-            return Ok(None);
-        };
-        required_columns.insert(symbol);
-    }
     for (field_index, field) in schema_with_stream.fields().iter().enumerate() {
         if updated_column_ids.contains(&field.column_id()) {
             let Some(symbol) = find_symbol(field_index) else {

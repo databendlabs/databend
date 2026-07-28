@@ -84,9 +84,11 @@ impl SerializeBlock {
 
 pub enum CompactSourceMeta {
     Concat {
-        read_res: Vec<BlockReadResult>,
-        metas: Vec<Arc<BlockMeta>>,
-        column_groups: Vec<Vec<FuseColumnGroupPartInfo>>,
+        blocks: Vec<(
+            BlockReadResult,
+            Arc<BlockMeta>,
+            Vec<FuseColumnGroupPartInfo>,
+        )>,
         index: BlockMetaIndex,
     },
     Extras(CompactExtraInfo),
