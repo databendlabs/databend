@@ -280,18 +280,18 @@ impl FuseBlockWriter {
                 .map(|columns| {
                     (
                         columns.clone(),
-                        self.properties
-                            .meta_locations
-                            .block_granule_index_location(),
+                        TableMetaLocationGenerator::gen_granule_mins_location_from_block_location(
+                            &self.block_location.0,
+                        ),
                     )
                 });
             Some(GranuleWriteSettings::new(
                 rows,
                 writers,
                 mins,
-                self.properties
-                    .meta_locations
-                    .block_granule_index_location(),
+                TableMetaLocationGenerator::gen_granule_offsets_location_from_block_location(
+                    &self.block_location.0,
+                ),
             ))
         } else {
             None
@@ -720,8 +720,14 @@ impl FuseBlockWriteOptions {
                 })
                 .collect::<Result<Vec<_>>>()?;
             options.set_granule_indexes(
-                Some(self.meta_locations.block_granule_index_location()),
-                self.meta_locations.block_granule_index_location(),
+                Some(
+                    TableMetaLocationGenerator::gen_granule_mins_location_from_block_location(
+                        &block_location.0,
+                    ),
+                ),
+                TableMetaLocationGenerator::gen_granule_offsets_location_from_block_location(
+                    &block_location.0,
+                ),
                 writers,
             );
         }

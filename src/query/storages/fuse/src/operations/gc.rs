@@ -55,6 +55,9 @@ use crate::io::SegmentsIO;
 use crate::io::SnapshotLiteExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::granule_index::GranuleIndexSpec;
+use crate::io::granule_index::build_granule_index_specs;
+use crate::io::granule_index::collect_granule_index_payload_locations;
 use crate::io::read::ColumnOrientedSegmentReader;
 use crate::io::read::RowOrientedSegmentReader;
 
@@ -154,6 +157,11 @@ impl FuseTable {
             .await?;
 
         let inverted_indexes = &self.table_info.meta.indexes;
+        let granule_index_specs = build_granule_index_specs(
+            inverted_indexes,
+            self.schema().as_ref(),
+            self.bloom_index_type(),
+        )?;
 
         // 2. Read snapshot fields by chunk size.
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
@@ -240,6 +248,7 @@ impl FuseTable {
                         ts_to_be_purged,
                         snapshots_to_be_purged,
                         &table_agg_index_ids,
+                        &granule_index_specs,
                     )
                     .await?;
 
@@ -256,6 +265,7 @@ impl FuseTable {
                         snapshots_to_be_purged,
                         &table_agg_index_ids,
                         inverted_indexes,
+                        &granule_index_specs,
                     )
                     .await?;
 
@@ -296,6 +306,7 @@ impl FuseTable {
                     ts_to_be_purged,
                     snapshots_to_be_purged,
                     &table_agg_index_ids,
+                    &granule_index_specs,
                 )
                 .await?;
             } else {
@@ -308,6 +319,7 @@ impl FuseTable {
                     snapshots_to_be_purged,
                     &table_agg_index_ids,
                     inverted_indexes,
+                    &granule_index_specs,
                 )
                 .await?;
             }
@@ -330,6 +342,7 @@ impl FuseTable {
         ts_to_be_purged: HashSet<String>,
         snapshots_to_be_purged: HashSet<String>,
         table_agg_index_ids: &[u64],
+        granule_index_specs: &[Arc<dyn GranuleIndexSpec>],
     ) -> Result<()> {
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         // Purge segments&blocks by chunk size
@@ -345,6 +358,10 @@ impl FuseTable {
                 if locations_referenced_by_root.block_location.contains(loc) {
                     continue;
                 }
+                purge_files.extend(collect_granule_index_payload_locations(
+                    granule_index_specs,
+                    std::slice::from_ref(loc),
+                ));
                 purge_files.push(loc.to_string());
                 for index_id in table_agg_index_ids {
                     purge_files.push(
@@ -391,6 +408,7 @@ impl FuseTable {
         snapshots_to_be_purged: HashSet<String>,
         table_agg_index_ids: &[u64],
         inverted_indexes: &BTreeMap<String, TableIndex>,
+        granule_index_specs: &[Arc<dyn GranuleIndexSpec>],
     ) -> Result<()> {
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         // Purge segments&blocks by chunk size
@@ -446,11 +464,16 @@ impl FuseTable {
                 stats_to_be_purged.insert(loc.to_string());
             }
 
-            let granule_indexes_to_be_purged = locations
+            let mut granule_indexes_to_be_purged = locations
                 .granule_index_location
                 .difference(&locations_referenced_by_root.granule_index_location)
                 .cloned()
-                .collect();
+                .collect::<HashSet<_>>();
+            let block_locations = blocks_to_be_purged.iter().cloned().collect::<Vec<_>>();
+            granule_indexes_to_be_purged.extend(collect_granule_index_payload_locations(
+                granule_index_specs,
+                &block_locations,
+            ));
 
             let segment_locations_to_be_purged = HashSet::from_iter(
                 chunk
@@ -501,14 +524,6 @@ impl FuseTable {
         stats_to_be_purged: HashSet<String>,
         segments_to_be_purged: HashSet<String>,
     ) -> Result<()> {
-        // 1. Try to purge block file chunks.
-        let blocks_count = blocks_to_be_purged.len();
-        if blocks_count > 0 {
-            counter.blocks += blocks_count;
-            self.try_purge_location_files(ctx.clone(), blocks_to_be_purged)
-                .await?;
-        }
-
         let agg_index_count = agg_indexes_to_be_purged.len();
         if agg_index_count > 0 {
             counter.agg_indexes += agg_index_count;
@@ -554,6 +569,14 @@ impl FuseTable {
         if granule_indexes_count > 0 {
             counter.granule_indexes += granule_indexes_count;
             self.try_purge_location_files(ctx.clone(), granule_indexes_to_be_purged)
+                .await?;
+        }
+
+        // Blocks must be removed after every location derived from them.
+        let blocks_count = blocks_to_be_purged.len();
+        if blocks_count > 0 {
+            counter.blocks += blocks_count;
+            self.try_purge_location_files(ctx.clone(), blocks_to_be_purged)
                 .await?;
         }
 

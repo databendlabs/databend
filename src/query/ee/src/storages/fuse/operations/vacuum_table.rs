@@ -25,6 +25,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 
 const DRY_RUN_LIMIT: usize = 1000;
@@ -162,7 +163,7 @@ pub async fn do_gc_orphan_files(
     let block_locations_to_be_purged = get_orphan_files_to_be_purged(
         fuse_table,
         location_gen.block_location_prefix(),
-        referenced_files.blocks,
+        referenced_files.blocks.clone(),
         retention_time,
     )
     .await?;
@@ -173,17 +174,41 @@ pub async fn do_gc_orphan_files(
     );
     ctx.set_status_info(&status);
 
-    // 3.2 Delete all the orphan block files to be purged
+    // 3.2 Sweep granule-index payloads once for dropped specs and interrupted writes.
+    let granule_payloads_to_be_purged = fuse_table
+        .list_orphan_granule_index_payloads(&referenced_files.blocks, retention_time)
+        .await?;
+    let granule_payload_count = granule_payloads_to_be_purged.len();
+    fuse_table
+        .try_purge_location_files(
+            ctx.clone(),
+            HashSet::from_iter(granule_payloads_to_be_purged),
+        )
+        .await?;
+
+    // 3.3 Delete block-derived granule sidecars before their orphan blocks.
+    let granule_index_locations = block_locations_to_be_purged
+        .iter()
+        .flat_map(|location| {
+            TableMetaLocationGenerator::gen_granule_index_locations_from_block_location(location)
+        })
+        .collect::<HashSet<_>>();
+    fuse_table
+        .try_purge_location_files(ctx.clone(), granule_index_locations)
+        .await?;
+
+    // 3.4 Delete all the orphan block files to be purged.
     let purged_file_num = block_locations_to_be_purged.len();
     fuse_table
         .try_purge_location_files(
             ctx.clone(),
-            HashSet::from_iter(block_locations_to_be_purged.into_iter()),
+            HashSet::from_iter(block_locations_to_be_purged),
         )
         .await?;
     let status = format!(
-        "gc orphan: purged block files:{}, cost:{:?}",
+        "gc orphan: purged block files:{}, granule payloads:{}, cost:{:?}",
         purged_file_num,
+        granule_payload_count,
         start.elapsed()
     );
     ctx.set_status_info(&status);
@@ -296,20 +321,41 @@ pub async fn do_dry_run_orphan_files(
         return Ok(());
     }
 
-    // 3. Get purge orphan block files.
+    // 3. Get purge orphan block files and granule-index payloads.
     let block_locations_to_be_purged = get_orphan_files_to_be_purged(
         fuse_table,
         location_gen.block_location_prefix(),
-        referenced_files.blocks,
+        referenced_files.blocks.clone(),
         retention_time,
     )
     .await?;
+    let granule_payloads_to_be_purged = fuse_table
+        .list_orphan_granule_index_payloads(&referenced_files.blocks, retention_time)
+        .await?;
     let status = format!(
-        "dry_run orphan: read block_locations_to_be_purged:{}, cost:{:?}",
+        "dry_run orphan: read block_locations_to_be_purged:{}, granule_payloads_to_be_purged:{}, cost:{:?}",
         block_locations_to_be_purged.len(),
+        granule_payloads_to_be_purged.len(),
         start.elapsed()
     );
     ctx.set_status_info(&status);
+    purge_files.extend(granule_payloads_to_be_purged);
+    if purge_files.len() >= dry_run_limit {
+        return Ok(());
+    }
+    for location in &block_locations_to_be_purged {
+        for granule_index_location in
+            TableMetaLocationGenerator::gen_granule_index_locations_from_block_location(location)
+        {
+            if fuse_table
+                .get_operator()
+                .exists(&granule_index_location)
+                .await?
+            {
+                purge_files.push(granule_index_location);
+            }
+        }
+    }
     purge_files.extend(block_locations_to_be_purged);
     if purge_files.len() >= dry_run_limit {
         return Ok(());

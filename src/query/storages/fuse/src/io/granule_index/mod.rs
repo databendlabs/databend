@@ -222,6 +222,12 @@ pub trait GranuleIndexPruner: Send + Sync {
 
 /// Factory shared by granule-index write and read paths.
 pub trait GranuleIndexSpec: Send + Sync {
+    /// Return external payload object keys derived from a block location.
+    ///
+    /// Vacuum collects keys from all active specs and deletes them in batches. Implementations
+    /// must not perform I/O here; payloads from dropped specs are handled by the orphan sweep.
+    fn payload_locations(&self, block_location: &str) -> Vec<String>;
+
     /// Default writers bind stable IDs and return compressed pending payloads. Low-level writers
     /// additionally bind lazy blocking outputs and write payloads directly.
     fn new_writer(
@@ -253,6 +259,20 @@ pub trait GranuleIndexSpec: Send + Sync {
         dal: Operator,
         settings: ReadSettings,
     ) -> Result<Option<Arc<dyn GranuleIndexPruner>>>;
+}
+
+pub fn collect_granule_index_payload_locations(
+    specs: &[Arc<dyn GranuleIndexSpec>],
+    block_locations: &[String],
+) -> Vec<String> {
+    block_locations
+        .iter()
+        .flat_map(|block_location| {
+            specs
+                .iter()
+                .flat_map(|spec| spec.payload_locations(block_location))
+        })
+        .collect()
 }
 
 pub fn build_granule_index_specs(

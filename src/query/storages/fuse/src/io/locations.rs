@@ -140,6 +140,10 @@ impl TableMetaLocationGenerator {
         &self.granule_index_location_prefix
     }
 
+    pub fn block_granule_bloom_index_prefix(&self) -> String {
+        format!("{}/{}/", self.prefix, FUSE_TBL_GRANULE_BLOOM_INDEX_PREFIX)
+    }
+
     pub fn segment_location_prefix(&self) -> &str {
         &self.segment_info_location_prefix
     }
@@ -227,13 +231,40 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    pub fn block_granule_index_location(&self) -> Location {
-        let uuid = Uuid::now_v7();
+    /// Derive the sparse granule-mins location from its data block location.
+    ///
+    /// Keeping the block object key (including the vacuum2 prefix) makes the sidecar lifecycle
+    /// deterministic: block GC can remove the sidecar before removing the block without listing
+    /// the granule-index directory.
+    pub fn gen_granule_mins_location_from_block_location(loc: &str) -> Location {
+        Self::gen_granule_index_location_from_block_location(loc, "mins")
+    }
+
+    /// Derive the sparse granule-offsets location from its data block location.
+    pub fn gen_granule_offsets_location_from_block_location(loc: &str) -> Location {
+        Self::gen_granule_index_location_from_block_location(loc, "offsets")
+    }
+
+    /// Return all sparse granule sidecars whose lifetime is anchored to this block.
+    pub fn gen_granule_index_locations_from_block_location(loc: &str) -> [String; 2] {
+        [
+            Self::gen_granule_mins_location_from_block_location(loc).0,
+            Self::gen_granule_offsets_location_from_block_location(loc).0,
+        ]
+    }
+
+    fn gen_granule_index_location_from_block_location(loc: &str, kind: &str) -> Location {
+        let splits = loc.split('/').collect::<Vec<_>>();
+        let len = splits.len();
+        let prefix = splits[..len - 2].join("/");
+        let block_object_key = splits[len - 1].split('_').next().unwrap_or(splits[len - 1]);
         (
             format!(
-                "{}{}_v{}.parquet",
-                self.block_granule_index_prefix(),
-                uuid.as_simple(),
+                "{}/{}/{}_{}_v{}.parquet",
+                prefix,
+                FUSE_TBL_GRANULE_INDEX_PREFIX,
+                block_object_key,
+                kind,
                 BlockFilter::VERSION,
             ),
             BlockFilter::VERSION,
@@ -527,6 +558,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::BASE62_ALPHABET;
+    use super::TableMetaLocationGenerator;
     use super::compact_index_version;
 
     /// Decode a base-62 token back to its u128 value, so tests can assert round-trip fidelity.
@@ -537,6 +569,33 @@ mod tests {
             n = n * 62 + d;
         }
         n
+    }
+
+    #[test]
+    fn test_granule_index_locations_derive_from_block_location() {
+        let block = "1/2/_b/h0191114d30fd78b89fae8e5c88327725_v2.parquet";
+        let mins = TableMetaLocationGenerator::gen_granule_mins_location_from_block_location(block);
+        let offsets =
+            TableMetaLocationGenerator::gen_granule_offsets_location_from_block_location(block);
+
+        assert_eq!(
+            mins.0,
+            format!(
+                "1/2/_i_p/h0191114d30fd78b89fae8e5c88327725_mins_v{}.parquet",
+                mins.1
+            )
+        );
+        assert_eq!(
+            offsets.0,
+            format!(
+                "1/2/_i_p/h0191114d30fd78b89fae8e5c88327725_offsets_v{}.parquet",
+                offsets.1
+            )
+        );
+        assert_eq!(
+            TableMetaLocationGenerator::gen_granule_index_locations_from_block_location(block),
+            [mins.0, offsets.0]
+        );
     }
 
     #[test]

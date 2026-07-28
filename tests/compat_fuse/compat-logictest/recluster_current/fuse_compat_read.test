@@ -1,8 +1,8 @@
 statement ok
 USE compat_recluster_current
 
-query IIT rowsort
-SELECT id,value,source FROM horizontal_t
+query IIT
+SELECT id,value,source FROM horizontal_t ORDER BY id
 ----
 1 10 initial
 2 120 update
@@ -15,8 +15,8 @@ SELECT id,value,source FROM horizontal_t
 10 100 insert
 11 110 merge-insert
 
-query IIT rowsort
-SELECT id,value,source FROM vertical_t
+query IIT
+SELECT id,value,source FROM vertical_t ORDER BY id
 ----
 1 10 initial
 2 120 update

@@ -142,6 +142,20 @@ impl BloomGranuleIndexSpec {
 }
 
 impl GranuleIndexSpec for BloomGranuleIndexSpec {
+    fn payload_locations(&self, block_location: &str) -> Vec<String> {
+        self.column_ids
+            .iter()
+            .map(|column_id| {
+                TableMetaLocationGenerator::gen_granule_bloom_location_from_block_location(
+                    block_location,
+                    &self.index_name,
+                    &self.index_version,
+                    *column_id,
+                )
+            })
+            .collect()
+    }
+
     fn new_writer(
         &self,
         func_ctx: FunctionContext,
@@ -1177,6 +1191,32 @@ mod tests {
         let column = writer.next_column().unwrap();
         let writer = column.finish().unwrap();
         assert!(writer.finish().unwrap().marks.is_empty());
+    }
+
+    #[test]
+    fn test_payload_locations() {
+        let spec = BloomGranuleIndexSpec {
+            index_name: "idx".to_string(),
+            index_version: "0".to_string(),
+            bloom_index_type: BloomIndexType::Xor8,
+            column_ids: vec![3, 7],
+        };
+        let block_location = "1/2/_b/g0123456789abcdef0123456789abcdef_v2.parquet";
+
+        assert_eq!(spec.payload_locations(block_location), vec![
+            TableMetaLocationGenerator::gen_granule_bloom_location_from_block_location(
+                block_location,
+                "idx",
+                "0",
+                3,
+            ),
+            TableMetaLocationGenerator::gen_granule_bloom_location_from_block_location(
+                block_location,
+                "idx",
+                "0",
+                7,
+            ),
+        ]);
     }
 
     #[tokio::test(flavor = "multi_thread")]
