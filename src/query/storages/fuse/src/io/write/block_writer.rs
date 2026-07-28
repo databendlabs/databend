@@ -27,7 +27,6 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::local_block_meta_serde;
@@ -193,32 +192,14 @@ fn merge_column_group_metadata(
         .collect::<HashSet<_>>();
     let mut column_groups = origin.physical_column_groups().into_owned();
     if origin.column_groups.is_empty() {
-        let legacy_bloom_is_ordinary_and_paired = origin.ngram_filter_index_size.is_none()
-            && origin
+        column_groups[0].bloom =
+            origin
                 .bloom_filter_index_location
                 .as_ref()
-                .is_none_or(|location| {
-                    let expected =
-                        TableMetaLocationGenerator::gen_bloom_index_location_with_version(
-                            &origin.location.0,
-                            location.1,
-                        );
-                    expected == location.0
+                .map(|location| ColumnGroupBloomMeta {
+                    format_version: location.1,
+                    file_size: origin.bloom_filter_index_size,
                 });
-        // A legacy Bloom may have an unpaired path after Ngram refresh, or a paired path but
-        // contain Ngram filters when the index existed at INSERT time. Neither file can be
-        // represented by ColumnGroupBloomMeta after the index is dropped, so adopt only an
-        // ordinary paired file and otherwise fail open.
-        if legacy_bloom_is_ordinary_and_paired {
-            column_groups[0].bloom =
-                origin
-                    .bloom_filter_index_location
-                    .as_ref()
-                    .map(|location| ColumnGroupBloomMeta {
-                        format_version: location.1,
-                        file_size: origin.bloom_filter_index_size,
-                    });
-        }
     }
     for group in &mut column_groups {
         group.active_column_ids.retain(|column_id| {
@@ -259,7 +240,6 @@ fn merge_column_group_metadata(
         .filter_map(|group| group.bloom.as_ref())
         .map(|bloom| bloom.file_size)
         .sum();
-    block_meta.ngram_filter_index_size = None;
     block_meta
 }
 
@@ -534,15 +514,6 @@ impl BlockBuilder {
         let column_hlls = build_column_hlls(&updated_block, &updated_ndv_columns_map)?;
         Self::add_hll_distinct_counts(&mut column_distinct_count, &column_hlls);
 
-        let invalidate_virtual_columns = updated_field_indices.iter().any(|index| {
-            self.source_schema
-                .field(*index)
-                .data_type()
-                .remove_nullable()
-                == TableDataType::Variant
-        });
-        let virtual_column_state = None;
-
         let updated_col_stats = gen_columns_statistics(
             &updated_block,
             Some(column_distinct_count),
@@ -578,9 +549,6 @@ impl BlockBuilder {
                     }),
             });
         block_meta.create_on = Some(Utc::now());
-        if invalidate_virtual_columns {
-            block_meta.virtual_block_meta = None;
-        }
 
         let column_hlls = self.finalize_column_hlls(column_hlls)?;
 
@@ -589,7 +557,7 @@ impl BlockBuilder {
             block_meta,
             bloom_index_state,
             inverted_index_states: vec![],
-            virtual_column_state,
+            virtual_column_state: None,
             vector_index_state: None,
             spatial_index_state: None,
             column_hlls,

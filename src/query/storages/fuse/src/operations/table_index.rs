@@ -28,8 +28,9 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FieldIndex;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_meta_app::schema::TableIndex;
@@ -41,8 +42,10 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::AsyncTransform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::FilterImpl;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -52,15 +55,17 @@ use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
-use uuid::Uuid;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::index::BloomIndex;
 use crate::index::BloomIndexBuilder;
 use crate::index::NgramArgs;
+use crate::index::filters::BlockFilter;
+use crate::index::filters::Filter;
 use crate::io::BlockReader;
 use crate::io::BlockWriter;
 use crate::io::BloomIndexState;
@@ -68,6 +73,7 @@ use crate::io::MetaReaders;
 use crate::io::SpatialIndexBuilder;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VectorIndexBuilder;
+use crate::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
 use crate::io::read::bloom::block_filter_reader::load_index_meta;
 use crate::io::read::load_spatial_index_meta;
 use crate::io::read::load_vector_index_meta;
@@ -112,26 +118,13 @@ pub async fn do_refresh_table_index(
     info!("Start refresh {} index {}", index_type, index_name);
 
     let table_schema = fuse_table.schema();
-    let table_meta = &fuse_table.get_table_info().meta;
-    let index_arg = build_refresh_index_arg(
-        fuse_table,
-        &index_name,
-        &index_type,
-        table_meta,
-        &index_schema,
-        &table_schema,
-    )?;
 
-    let field_indices = match &index_arg {
-        // A refresh publishes one new current-format Bloom file. Rebuild every configured Bloom
-        // and Ngram filter from the logical row so old V2/V3 encodings are never relabeled V4.
-        RefreshIndexArg::Ngram(arg) => arg.source_field_indices.clone(),
-        RefreshIndexArg::Vector(_) | RefreshIndexArg::Spatial(_) => index_schema
-            .fields
-            .iter()
-            .map(|field| table_schema.index_of(field.name()))
-            .collect::<Result<Vec<_>>>()?,
-    };
+    // Collect field indices used by index.
+    let mut field_indices = Vec::with_capacity(index_schema.fields.len());
+    for field in &index_schema.fields {
+        let field_index = table_schema.index_of(field.name())?;
+        field_indices.push(field_index);
+    }
 
     // Read data here to keep the order of blocks in segment.
     let projection = Projection::Columns(field_indices);
@@ -139,14 +132,15 @@ pub async fn do_refresh_table_index(
     let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
 
     let meta_locations = fuse_table.meta_location_generator().clone();
-    let segment_reader =
-        MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema.clone());
+    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
 
     if snapshot.segments.is_empty() {
         return Ok(0);
     }
     let operator = fuse_table.get_operator_ref();
 
+    let table_meta = &fuse_table.get_table_info().meta;
+    let index_arg = build_refresh_index_arg(&index_name, &index_type, table_meta, &index_schema)?;
     let target_segments = segment_locs.map(|locs| locs.into_iter().collect::<HashSet<_>>());
 
     // Read the segment infos and collect the block metas that need to generate the index.
@@ -225,10 +219,10 @@ pub async fn do_refresh_table_index(
                 NgramIndexTransform::new(
                     ctx.clone(),
                     operator.clone(),
-                    ngram_index_arg.bloom_index_type,
-                    ngram_index_arg.bloom_columns_map.clone(),
-                    ngram_index_arg.ngram_args.clone(),
-                    meta_locations.clone(),
+                    settings,
+                    ngram_index_arg.index_ngram_args.clone(),
+                    ngram_index_arg.ngram_index_names.clone(),
+                    ngram_index_arg.existing_names_prefix.clone(),
                 )
             });
         }
@@ -301,17 +295,20 @@ pub async fn do_refresh_table_index(
 
 // build the index arguments used for refresh
 fn build_refresh_index_arg(
-    fuse_table: &FuseTable,
     index_name: &String,
     index_type: &TableIndexType,
     table_meta: &TableMeta,
     index_schema: &TableSchemaRef,
-    table_schema: &TableSchemaRef,
 ) -> Result<RefreshIndexArg> {
     match index_type {
         TableIndexType::Ngram => {
             let index_ngram_args =
                 FuseTable::create_ngram_index_args(&table_meta.indexes, index_schema, false)?;
+
+            let existing_names_prefix = index_ngram_args
+                .iter()
+                .map(|arg| format!("Ngram({})", arg.column_id()))
+                .collect::<Vec<_>>();
 
             let ngram_index_names = index_ngram_args
                 .iter()
@@ -324,26 +321,10 @@ fn build_refresh_index_arg(
                 })
                 .collect::<Vec<_>>();
 
-            let source_schema: TableSchemaRef =
-                table_schema.remove_virtual_computed_fields().into();
-            let source_field_indices = source_schema
-                .fields()
-                .iter()
-                .map(|field| table_schema.index_of(field.name()))
-                .collect::<Result<Vec<_>>>()?;
-
             let ngram_arg = RefreshNgramIndexArg {
+                index_ngram_args,
                 ngram_index_names,
-                source_field_indices,
-                bloom_index_type: fuse_table.bloom_index_type(),
-                bloom_columns_map: fuse_table
-                    .bloom_index_cols()
-                    .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?,
-                ngram_args: FuseTable::create_ngram_index_args(
-                    &table_meta.indexes,
-                    &source_schema,
-                    false,
-                )?,
+                existing_names_prefix,
             };
             Ok(RefreshIndexArg::Ngram(ngram_arg))
         }
@@ -438,30 +419,37 @@ async fn check_ngram_index_generated(
     stats: Option<Arc<SegmentStatistics>>,
     ngram_index_arg: &RefreshNgramIndexArg,
 ) -> Result<Option<RefreshIndexMeta>> {
-    if !block_meta.column_groups.is_empty() {
-        return Err(ErrorCode::RefreshIndexError(
-            "Ngram index is incompatible with column-group layout".to_string(),
-        ));
-    }
-    if let Some((index_path, _)) = &block_meta.bloom_filter_index_location {
-        if let Ok(content_length) = operator
-            .stat(index_path)
-            .await
-            .map(|meta| meta.content_length())
-        {
-            let bloom_index_meta =
-                load_index_meta(operator.clone(), index_path, content_length, None).await?;
+    let index_location = TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(
+        &block_meta.location.0,
+    );
+    // only generate bloom index if it is not exist.
+    let index_columns = if let Ok(content_length) = operator
+        .stat(&index_location)
+        .await
+        .map(|meta| meta.content_length())
+    {
+        let bloom_index_meta =
+            load_index_meta(operator.clone(), &index_location, content_length, None).await?;
 
-            if ngram_index_arg.ngram_index_names.iter().all(|name| {
-                bloom_index_meta
-                    .columns
-                    .iter()
-                    .any(|(column_name, _)| column_name == name)
-            }) {
-                return Ok(None);
+        let mut all_generated = true;
+        for ngram_index_name in &ngram_index_arg.ngram_index_names {
+            if !bloom_index_meta
+                .columns
+                .iter()
+                .any(|(column_name, _)| column_name == ngram_index_name)
+            {
+                all_generated = false;
+                break;
             }
         }
-    }
+        if all_generated {
+            return Ok(None);
+        }
+
+        Some(bloom_index_meta.columns.clone())
+    } else {
+        None
+    };
     let ngram_index_meta = RefreshIndexMeta {
         index: BlockMetaIndex {
             segment_idx,
@@ -472,7 +460,7 @@ async fn check_ngram_index_generated(
             .as_ref()
             .and_then(|v| v.block_hlls.get(block_idx))
             .cloned(),
-        index_columns: None,
+        index_columns,
         index_meta: None,
     };
     Ok(Some(ngram_index_meta))
@@ -695,28 +683,28 @@ impl AsyncSource for IndexSource {
 pub struct NgramIndexTransform {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
-    bloom_index_type: BloomIndexType,
-    bloom_columns_map: BTreeMap<FieldIndex, TableField>,
-    ngram_args: Vec<NgramArgs>,
-    meta_locations: TableMetaLocationGenerator,
+    settings: ReadSettings,
+    index_ngram_args: Vec<NgramArgs>,
+    ngram_index_names: Vec<String>,
+    existing_names_prefix: Vec<String>,
 }
 
 impl NgramIndexTransform {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         operator: Operator,
-        bloom_index_type: BloomIndexType,
-        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
-        ngram_args: Vec<NgramArgs>,
-        meta_locations: TableMetaLocationGenerator,
+        settings: ReadSettings,
+        index_ngram_args: Vec<NgramArgs>,
+        ngram_index_names: Vec<String>,
+        existing_names_prefix: Vec<String>,
     ) -> Self {
         Self {
             ctx,
             operator,
-            bloom_index_type,
-            bloom_columns_map,
-            ngram_args,
-            meta_locations,
+            settings,
+            index_ngram_args,
+            ngram_index_names,
+            existing_names_prefix,
         }
     }
 }
@@ -731,33 +719,94 @@ impl AsyncTransform for NgramIndexTransform {
             index,
             block_meta,
             column_hlls,
-            index_columns: _,
+            index_columns,
             index_meta: _index_meta,
         } = data_block
             .get_meta()
             .and_then(RefreshIndexMeta::downcast_ref_from)
             .unwrap();
 
+        let index_path = TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(
+            &block_meta.location.0,
+        );
+
         let mut new_block_meta = Arc::unwrap_or_clone(block_meta.clone());
+        let index_location = (index_path.clone(), BlockFilter::VERSION);
 
         let mut builder = BloomIndexBuilder::create(
             self.ctx.get_function_context()?,
-            self.bloom_index_type,
-            self.bloom_columns_map.clone(),
-            &self.ngram_args,
+            databend_storages_common_index::BloomIndexType::default(),
+            BTreeMap::new(),
+            &self.index_ngram_args,
         )?;
         builder.add_block(&data_block)?;
 
-        if let Some(bloom_index) = builder.finalize()? {
-            let index_location = self
-                .meta_locations
-                .block_bloom_index_location(&Uuid::now_v7());
+        if let Some(new_ngram_index) = builder.finalize()? {
+            let mut old_ngram_names = Vec::new();
+            let bloom_index = if let Some(old_index_columns) = index_columns {
+                let mut index_columns = Vec::with_capacity(old_index_columns.len());
+                for column in old_index_columns {
+                    let name = column.0.to_string();
+                    if self
+                        .existing_names_prefix
+                        .iter()
+                        .any(|name_prefix| name.starts_with(name_prefix))
+                    {
+                        old_ngram_names.push(name);
+                        continue;
+                    }
+                    index_columns.push(name);
+                }
+
+                let mut block_filter = load_bloom_filter_by_columns(
+                    self.operator.clone(),
+                    &self.settings,
+                    &index_columns,
+                    &index_path,
+                    block_meta.bloom_filter_index_size,
+                )
+                .await?;
+                let new_ngram_columns = new_ngram_index.serialize_to_data_block()?.take_columns();
+                for new_ngram_column in new_ngram_columns {
+                    let (new_filter, _) = FilterImpl::from_bytes(
+                        unsafe { new_ngram_column.index_unchecked(0) }
+                            .as_binary()
+                            .unwrap(),
+                    )?;
+                    block_filter.filters.push(Arc::new(new_filter));
+                }
+
+                let mut new_filter_schema = TableSchema::clone(&block_filter.filter_schema);
+                for ngram_index_name in &self.ngram_index_names {
+                    new_filter_schema
+                        .add_columns(&[TableField::new(ngram_index_name, TableDataType::Binary)])?;
+                }
+                block_filter.filter_schema = Arc::new(new_filter_schema);
+
+                BloomIndex::from_filter_block(
+                    self.ctx.get_function_context()?,
+                    block_filter.filter_schema,
+                    block_filter.filters,
+                    index_location.1,
+                )?
+            } else {
+                new_ngram_index
+            };
             let state = BloomIndexState::from_bloom_index(&bloom_index, index_location)?;
 
-            new_block_meta.bloom_filter_index_location = Some(state.location.clone());
             new_block_meta.bloom_filter_index_size = state.size();
             new_block_meta.ngram_filter_index_size = state.ngram_size();
             BlockWriter::write_down_bloom_index_state(&self.operator, Some(state)).await?;
+
+            // remove old bloom index meta and filter
+            if let Some(cache) = CacheManager::instance().get_bloom_index_meta_cache() {
+                cache.evict(&index_path);
+            }
+            if let Some(cache) = CacheManager::instance().get_bloom_index_filter_cache() {
+                for old_ngram_name in old_ngram_names {
+                    cache.evict(&format!("{index_path}-{}", old_ngram_name));
+                }
+            }
         } else {
             return Err(ErrorCode::RefreshIndexError(
                 "Refresh Ngram index failed".to_string(),
@@ -1012,11 +1061,9 @@ enum RefreshIndexArg {
 }
 
 struct RefreshNgramIndexArg {
+    index_ngram_args: Vec<NgramArgs>,
     ngram_index_names: Vec<String>,
-    source_field_indices: Vec<FieldIndex>,
-    bloom_index_type: BloomIndexType,
-    bloom_columns_map: BTreeMap<FieldIndex, TableField>,
-    ngram_args: Vec<NgramArgs>,
+    existing_names_prefix: Vec<String>,
 }
 
 struct RefreshVectorIndexArg {

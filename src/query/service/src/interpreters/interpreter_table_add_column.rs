@@ -147,10 +147,6 @@ impl Interpreter for AddTableColumnInterpreter {
         table_info
             .meta
             .add_column(&field, &self.plan.comment, index)?;
-        table_info
-            .meta
-            .validate_column_group_compatibility()
-            .map_err(|error| ErrorCode::TableOptionInvalid(error.to_string()))?;
 
         // if the new column is a stored computed field and table is non-empty,
         // need rebuild the table to generate stored computed column.

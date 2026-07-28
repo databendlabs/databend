@@ -331,7 +331,6 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         location: "test_block".to_string(),
         bloom_filter_index_location: None,
         bloom_filter_index_size: 0,
-        column_group_layout: false,
         column_group_bloom_files: vec![],
         create_on: None,
         nums_rows: num_rows,

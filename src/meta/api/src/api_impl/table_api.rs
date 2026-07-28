@@ -208,14 +208,6 @@ fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError>
             AppError::CreateAsDropTableWithoutDropTime(CreateAsDropTableWithoutDropTime::new(name)),
         ));
     }
-    req.table_meta
-        .validate_column_group_compatibility()
-        .map_err(|error| {
-            KVAppError::AppError(AppError::CommitTableMetaError(CommitTableMetaError::new(
-                name,
-                error.to_string(),
-            )))
-        })?;
     let is_mv = is_materialized_view_engine(&req.table_meta.engine);
     if is_mv != req.materialized_view.is_some() || (is_mv && req.as_dropped) {
         return Err(KVAppError::AppError(
@@ -1289,24 +1281,12 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
-        for ((req, _), (tb_meta_seq, table_meta)) in
-            update_table_metas.iter_mut().zip(tb_meta_vec.iter())
-        {
+        for ((req, _), (tb_meta_seq, _)) in update_table_metas.iter_mut().zip(tb_meta_vec.iter()) {
             let tbid = TableId {
                 table_id: req.table_id,
             };
 
             let new_table_meta = req.new_table_meta.clone();
-            table_meta
-                .as_ref()
-                .unwrap()
-                .validate_column_group_transition(&new_table_meta)
-                .map_err(|error| {
-                    KVAppError::AppError(AppError::CommitTableMetaError(CommitTableMetaError::new(
-                        req.table_id.to_string(),
-                        error.to_string(),
-                    )))
-                })?;
 
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
@@ -1522,7 +1502,6 @@ where
             }
 
             let mut table_meta = seq_meta.data;
-            let old_table_meta = table_meta.clone();
 
             for (k, opt_v) in &req.options {
                 match opt_v {
@@ -1534,15 +1513,6 @@ where
                     }
                 }
             }
-
-            old_table_meta
-                .validate_column_group_transition(&table_meta)
-                .map_err(|error| {
-                    AppError::CommitTableMetaError(CommitTableMetaError::new(
-                        req.table_id.to_string(),
-                        error.to_string(),
-                    ))
-                })?;
 
             Ok(Some(table_meta))
         })

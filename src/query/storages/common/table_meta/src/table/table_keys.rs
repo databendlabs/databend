@@ -21,7 +21,6 @@ use std::sync::LazyLock;
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
-pub use databend_common_meta_app::schema::OPT_KEY_PARTITION_BY;
 
 use crate::meta::ColumnCountMinSketch;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
@@ -31,6 +30,7 @@ pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
+pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
 pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
 pub const OPT_KEY_ENGINE: &str = "engine";
@@ -74,6 +74,9 @@ pub const OPT_KEY_RANDOM_MAX_STRING_LEN: &str = "max_string_len";
 pub const OPT_KEY_RANDOM_MAX_ARRAY_LEN: &str = "max_array_len";
 
 pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
+/// The normalized Fuse partition expressions. This is set by CREATE TABLE
+/// PARTITION BY and is not a user-settable table option.
+pub const OPT_KEY_PARTITION_BY: &str = "partition_by";
 pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";

@@ -20,8 +20,6 @@ use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_bl
 use databend_query::sessions::TableContext;
 use databend_query::storages::index::filters::BlockFilter;
 use databend_query::test_kits::TestFixture;
-use databend_query::test_kits::latest_default_block_meta;
-use databend_query::test_kits::query_count;
 use databend_storages_common_io::ReadSettings;
 use futures_util::StreamExt;
 
@@ -46,7 +44,7 @@ async fn test_fuse_do_refresh_ngram_index() -> anyhow::Result<()> {
         .execute_command("CREATE NGRAM INDEX idx2 ON default.t3(d);")
         .await?;
 
-    let block_filter_0 = get_block_filter(&fixture, "default", "t3", &[
+    let block_filter_0 = get_block_filter(&fixture, &[
         "Bloom(0)".to_string(),
         "Bloom(1)".to_string(),
         "Bloom(2)".to_string(),
@@ -59,7 +57,7 @@ async fn test_fuse_do_refresh_ngram_index() -> anyhow::Result<()> {
     fixture
         .execute_command("REFRESH NGRAM INDEX idx2 ON default.t3;")
         .await?;
-    let block_filter_1 = get_block_filter(&fixture, "default", "t3", &[
+    let block_filter_1 = get_block_filter(&fixture, &[
         "Bloom(0)".to_string(),
         "Bloom(1)".to_string(),
         "Bloom(2)".to_string(),
@@ -90,7 +88,7 @@ async fn test_fuse_do_refresh_ngram_index() -> anyhow::Result<()> {
     fixture
         .execute_command("REFRESH NGRAM INDEX idx2 ON default.t3;")
         .await?;
-    let block_filter_2 = get_block_filter(&fixture, "default", "t3", &[
+    let block_filter_2 = get_block_filter(&fixture, &[
         "Bloom(0)".to_string(),
         "Bloom(1)".to_string(),
         "Bloom(2)".to_string(),
@@ -109,156 +107,11 @@ async fn test_fuse_do_refresh_ngram_index() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_ngram_index_is_incompatible_with_partial_update() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let db = fixture.default_db_name();
-    let table_name = fixture.default_table_name();
-    fixture.create_default_database().await?;
-
-    fixture
-        .execute_command(&format!(
-            "create table {db}.{table_name} (id int, content string) engine=fuse \
-             enable_partial_update=true"
-        ))
-        .await?;
-    assert!(
-        fixture
-            .execute_command(&format!(
-                "create ngram index idx_content on {db}.{table_name}(content)"
-            ))
-            .await
-            .is_err()
-    );
-    fixture
-        .execute_command(&format!("drop table {db}.{table_name}"))
-        .await?;
-
-    fixture
-        .execute_command(&format!(
-            "create table {db}.{table_name} (id int, content string) engine=fuse"
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "insert into {db}.{table_name} values (1, 'before'), (2, 'unchanged')"
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "create ngram index idx_content on {db}.{table_name}(content)"
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "refresh ngram index idx_content on {db}.{table_name}"
-        ))
-        .await?;
-    assert!(
-        fixture
-            .execute_command(&format!(
-                "alter table {db}.{table_name} \
-                 set options(enable_partial_update=true)"
-            ))
-            .await
-            .is_err()
-    );
-    drop_ngram_enable_partial_update_and_check(&fixture, &db, &table_name).await?;
-
-    fixture
-        .execute_command(&format!("drop table {db}.{table_name}"))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "create table {db}.{table_name} (id int, content string) engine=fuse"
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "create ngram index idx_content on {db}.{table_name}(content)"
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "insert into {db}.{table_name} values (1, 'before'), (2, 'unchanged')"
-        ))
-        .await?;
-    assert!(
-        latest_default_block_meta(&fixture)
-            .await?
-            .ngram_filter_index_size
-            .is_some()
-    );
-    assert!(
-        fixture
-            .execute_command(&format!(
-                "alter table {db}.{table_name} \
-                 set options(enable_partial_update=true)"
-            ))
-            .await
-            .is_err()
-    );
-    drop_ngram_enable_partial_update_and_check(&fixture, &db, &table_name).await?;
-
-    Ok(())
-}
-
-async fn drop_ngram_enable_partial_update_and_check(
-    fixture: &TestFixture,
-    database: &str,
-    table: &str,
-) -> anyhow::Result<()> {
-    fixture
-        .execute_command(&format!(
-            "drop ngram index idx_content on {database}.{table}"
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "alter table {database}.{table} set options(enable_partial_update=true)"
-        ))
-        .await?;
-    fixture
-        .execute_command("set enable_partial_update = 1")
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "update {database}.{table} set content = 'after' where id = 1"
-        ))
-        .await?;
-
-    let block_meta = latest_default_block_meta(fixture).await?;
-    assert_eq!(block_meta.column_groups.len(), 2);
-    assert!(block_meta.bloom_filter_index_location.is_none());
-    assert_eq!(
-        block_meta
-            .column_groups
-            .iter()
-            .filter(|group| group.bloom.is_some())
-            .count(),
-        1
-    );
-    let rows = fixture
-        .execute_query(&format!(
-            "select count(*) from {database}.{table} \
-             where (id = 1 and content = 'after') or (id = 2 and content = 'unchanged')"
-        ))
-        .await?;
-    assert_eq!(query_count(rows).await?, 2);
-    Ok(())
-}
-
-async fn get_block_filter(
-    fixture: &TestFixture,
-    database: &str,
-    table: &str,
-    columns: &[String],
-) -> Result<BlockFilter> {
+async fn get_block_filter(fixture: &TestFixture, columns: &[String]) -> Result<BlockFilter> {
     let block = fixture
-        .execute_query(&format!(
-            "select bloom_filter_location, bloom_filter_size \
-             from fuse_block('{database}', '{table}')"
-        ))
+        .execute_query(
+            "select bloom_filter_location, bloom_filter_size from fuse_block('default', 't3');",
+        )
         .await?
         .next()
         .await

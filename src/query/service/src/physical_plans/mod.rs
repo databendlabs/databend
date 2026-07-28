@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::FieldIndex;
-use databend_common_expression::TableSchema;
-
 mod physical_add_stream_column;
 mod physical_aggregate_expand;
 mod physical_aggregate_final;
@@ -119,18 +116,6 @@ pub use physical_window::*;
 pub use physical_window_partition::*;
 pub use runtime_filter::PhysicalRuntimeFilter;
 pub use runtime_filter::PhysicalRuntimeFilters;
-
-pub(crate) fn physical_field_to_storage_index(
-    physical_schema: &TableSchema,
-    storage_schema: &TableSchema,
-    physical_index: FieldIndex,
-) -> Option<FieldIndex> {
-    let column_id = physical_schema.field(physical_index).column_id();
-    storage_schema
-        .fields()
-        .iter()
-        .position(|field| field.column_id() == column_id)
-}
 
 pub mod explain;
 mod format;

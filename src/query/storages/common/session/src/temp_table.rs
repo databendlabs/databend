@@ -105,9 +105,6 @@ impl TempTblMgr {
             as_dropped,
             ..
         } = req;
-        table_meta
-            .validate_column_group_compatibility()
-            .map_err(|error| ErrorCode::TableOptionInvalid(error.to_string()))?;
         let orphan_table_name = as_dropped.then(|| format!("orphan@{}", name_ident.table_name));
 
         let Some(db_id) = table_meta.options.get(OPT_KEY_DATABASE_ID) else {
@@ -268,19 +265,6 @@ impl TempTblMgr {
             .collect())
     }
 
-    pub fn validate_multi_table_meta(&self, req: &[UpdateTempTableReq]) -> Result<()> {
-        for r in req {
-            let table = self.id_to_table.get(&r.table_id).ok_or_else(|| {
-                ErrorCode::UnknownTable(format!("Temporary table id {} not found", r.table_id))
-            })?;
-            table
-                .meta
-                .validate_column_group_transition(&r.new_table_meta)
-                .map_err(|error| ErrorCode::TableOptionInvalid(error.to_string()))?;
-        }
-        Ok(())
-    }
-
     pub fn update_multi_table_meta(&mut self, req: Vec<UpdateTempTableReq>) {
         for r in req {
             let UpdateTempTableReq {
@@ -309,19 +293,13 @@ impl TempTblMgr {
                 table_id
             )));
         };
-        let mut new_meta = table.meta.clone();
         for (k, v) in options {
             if let Some(v) = v {
-                new_meta.options.insert(k, v);
+                table.meta.options.insert(k, v);
             } else {
-                new_meta.options.remove(&k);
+                table.meta.options.remove(&k);
             }
         }
-        table
-            .meta
-            .validate_column_group_transition(&new_meta)
-            .map_err(|error| ErrorCode::TableOptionInvalid(error.to_string()))?;
-        table.meta = new_meta;
         Ok(UpsertTableOptionReply {})
     }
 

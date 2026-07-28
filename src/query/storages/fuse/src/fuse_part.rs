@@ -69,13 +69,12 @@ pub enum BloomIndexLayout<'a> {
 
 impl<'a> BloomIndexLayout<'a> {
     fn from_metadata(
-        has_column_groups: bool,
         legacy_location: Option<&'a Location>,
         legacy_file_size: u64,
         column_group_files: Cow<'a, [FuseBloomIndexFileInfo]>,
     ) -> Option<Self> {
-        if has_column_groups {
-            return (!column_group_files.is_empty()).then_some(Self::ColumnGroups {
+        if !column_group_files.is_empty() {
+            return Some(Self::ColumnGroups {
                 files: column_group_files,
             });
         }
@@ -131,7 +130,6 @@ pub fn block_bloom_index_locations(meta: &BlockMeta) -> impl Iterator<Item = Loc
 pub(crate) fn bloom_index_layout(meta: &BlockMeta) -> Option<BloomIndexLayout<'_>> {
     let files = column_group_bloom_files(meta);
     BloomIndexLayout::from_metadata(
-        !meta.column_groups.is_empty(),
         meta.bloom_filter_index_location.as_ref(),
         meta.bloom_filter_index_size,
         Cow::Owned(files),
@@ -158,8 +156,6 @@ pub struct FuseBlockPartInfo {
 
     pub bloom_filter_index_location: Option<Location>,
     pub bloom_filter_index_size: u64,
-    #[serde(default)]
-    pub column_group_layout: bool,
     #[serde(default, alias = "bloom_index_files")]
     pub column_group_bloom_files: Vec<FuseBloomIndexFileInfo>,
 
@@ -200,7 +196,6 @@ impl FuseBlockPartInfo {
     /// Normalize optional legacy and column-group Bloom metadata into one physical-layout view.
     pub fn bloom_index_layout(&self) -> Option<BloomIndexLayout<'_>> {
         BloomIndexLayout::from_metadata(
-            self.column_group_layout || !self.column_group_bloom_files.is_empty(),
             self.bloom_filter_index_location.as_ref(),
             self.bloom_filter_index_size,
             Cow::Borrowed(&self.column_group_bloom_files),
@@ -212,7 +207,6 @@ impl FuseBlockPartInfo {
         location: String,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
-        column_group_layout: bool,
         column_group_bloom_files: Vec<FuseBloomIndexFileInfo>,
         rows_count: u64,
         column_groups: Vec<FuseColumnGroupPartInfo>,
@@ -226,7 +220,6 @@ impl FuseBlockPartInfo {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
-            column_group_layout,
             column_group_bloom_files,
             create_on,
             column_groups,

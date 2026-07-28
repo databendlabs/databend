@@ -216,7 +216,6 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                             location: location_path.clone(),
                             row_count,
                             col_metas: columns_meta.clone(),
-                            column_groups: vec![],
                             compression,
                             block_size,
                         };
@@ -291,7 +290,6 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         location_path,
                         bloom_filter_index_location,
                         bloom_filter_index_size,
-                        false,
                         vec![],
                         row_count,
                         column_groups,

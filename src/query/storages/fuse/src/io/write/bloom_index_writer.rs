@@ -39,7 +39,6 @@ use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Buffer;
 use opendal::Operator;
 
-use crate::FuseColumnGroupPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::BlockReader;
 
@@ -153,7 +152,11 @@ impl BloomIndexRebuilder {
         Ok(())
     }
 
-    async fn read_data_block(&self, block_read_info: &BlockReadInfo) -> Result<DataBlock> {
+    pub async fn bloom_index_state_from_block_meta(
+        &self,
+        bloom_index_location: &Location,
+        block_read_info: &BlockReadInfo,
+    ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
         let ctx = self.table_ctx.clone();
 
         let projection =
@@ -168,46 +171,20 @@ impl BloomIndexRebuilder {
         )?;
 
         let settings = ReadSettings::from_ctx(&self.table_ctx)?;
-        let column_groups = if block_read_info.column_groups.is_empty() {
-            vec![FuseColumnGroupPartInfo {
-                location: block_read_info.location.clone(),
-                columns_meta: block_read_info.col_metas.clone(),
-            }]
-        } else {
-            block_read_info
-                .column_groups
-                .iter()
-                .map(|group| FuseColumnGroupPartInfo {
-                    location: group.location.0.clone(),
-                    columns_meta: group
-                        .active_leaf_column_metas()
-                        .map(|(column_id, column_meta)| (column_id, column_meta.clone()))
-                        .collect(),
-                })
-                .collect()
-        };
-
         let merge_io_read_result = block_reader
-            .read_column_groups_data_by_merge_io(&settings, &column_groups, &None)
+            .read_columns_data_by_merge_io(
+                &settings,
+                &block_read_info.location,
+                &block_read_info.col_metas,
+                &None,
+            )
             .await?;
-        let column_chunks = merge_io_read_result.columns_chunks()?;
-        match self.storage_format {
-            FuseStorageFormat::Parquet => block_reader.deserialize_column_groups(
-                block_read_info.row_count as usize,
-                &column_groups,
-                column_chunks,
-                &block_read_info.compression,
-                None,
-            ),
-            FuseStorageFormat::Unsupported => Err(crate::unsupported_storage_format_error()),
-        }
-    }
+        let data_block = block_reader.deserialize_chunks_with_meta(
+            block_read_info,
+            &self.storage_format,
+            merge_io_read_result,
+        )?;
 
-    fn bloom_index_state_from_data_block(
-        &self,
-        bloom_index_location: &Location,
-        data_block: &DataBlock,
-    ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
         Self::validate_rebuild_version(bloom_index_location)?;
         let mut builder = BloomIndexBuilder::create(
             self.table_ctx.get_function_context()?,
@@ -215,7 +192,7 @@ impl BloomIndexRebuilder {
             self.bloom_columns_map.clone(),
             &self.ngram_args,
         )?;
-        builder.add_block(data_block)?;
+        builder.add_block(&data_block)?;
         let maybe_bloom_index = builder.finalize()?;
 
         match maybe_bloom_index {
@@ -225,15 +202,6 @@ impl BloomIndexRebuilder {
                 bloom_index,
             ))),
         }
-    }
-
-    pub async fn bloom_index_state_from_block_meta(
-        &self,
-        bloom_index_location: &Location,
-        block_read_info: &BlockReadInfo,
-    ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
-        let data_block = self.read_data_block(block_read_info).await?;
-        self.bloom_index_state_from_data_block(bloom_index_location, &data_block)
     }
 }
 

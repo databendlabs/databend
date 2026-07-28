@@ -110,15 +110,7 @@ fn build_partial_update_info(
 ) -> Result<Option<PartialUpdateInfo>> {
     if !ctx.get_settings().get_enable_partial_update()?
         || !table.get_option(FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE, false)
-        || table.is_column_oriented()
-        || table.partition_key_count() != 0
-        || !table.get_table_info().meta.indexes.is_empty()
         || update_list.is_empty()
-        || table
-            .schema()
-            .fields()
-            .iter()
-            .any(|field| field.computed_expr().is_some())
     {
         return Ok(None);
     }
@@ -146,8 +138,7 @@ fn build_partial_update_info(
         }
     }
 
-    let source_schema = schema_with_stream.remove_virtual_computed_fields();
-    let updated_field_indices = source_schema
+    let updated_field_indices = schema_with_stream
         .fields()
         .iter()
         .enumerate()
@@ -158,7 +149,7 @@ fn build_partial_update_info(
         })
         .collect::<Vec<_>>();
     if updated_field_indices.is_empty()
-        || updated_field_indices.len() >= source_schema.fields().len()
+        || updated_field_indices.len() >= schema_with_stream.fields().len()
     {
         return Ok(None);
     }
@@ -186,7 +177,7 @@ fn build_partial_update_info(
         required_columns.insert(symbol);
     }
     for (field_index, field) in schema_with_stream.fields().iter().enumerate() {
-        if updated_column_ids.contains(&field.column_id()) && field.computed_expr().is_none() {
+        if updated_column_ids.contains(&field.column_id()) {
             let Some(symbol) = find_symbol(field_index) else {
                 return Ok(None);
             };

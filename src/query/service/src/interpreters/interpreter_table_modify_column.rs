@@ -254,12 +254,6 @@ impl ModifyTableColumnInterpreter {
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let new_schema = Arc::new(new_schema);
-        let mut next_meta = table_info.meta.clone();
-        next_meta.schema = new_schema.clone();
-        table_info
-            .meta
-            .validate_column_group_transition(&next_meta)
-            .map_err(|error| ErrorCode::TableOptionInvalid(error.to_string()))?;
         if !modified_cols.is_empty() {
             // Only need to validate the data types of modified columns that are referenced
             // by the cluster key. The cluster key expression itself is already validated

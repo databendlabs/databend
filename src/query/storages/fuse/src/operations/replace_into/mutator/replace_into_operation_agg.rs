@@ -27,6 +27,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
@@ -41,7 +42,6 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndex;
-use databend_storages_common_index::filters::BlockBloomFilterIndexVersion;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_io::ReadSettings;
@@ -56,8 +56,6 @@ use opendal::Operator;
 use tokio::sync::Semaphore;
 
 use crate::FuseTable;
-use crate::fuse_part::BloomIndexLayout;
-use crate::fuse_part::bloom_index_layout;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
 use crate::io::BlockWriter;
@@ -77,14 +75,6 @@ use crate::operations::replace_into::meta::ReplaceIntoOperation;
 use crate::operations::replace_into::meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::DeletionAccumulator;
 use crate::operations::replace_into::mutator::row_hash_of_columns;
-use crate::pruning::read_multi_file_block_filter;
-
-fn replace_digest_pruning_supported(format_version: u64) -> bool {
-    matches!(
-        BlockBloomFilterIndexVersion::try_from(format_version),
-        Ok(BlockBloomFilterIndexVersion::V3(_)) | Ok(BlockBloomFilterIndexVersion::V4(_))
-    )
-}
 
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
@@ -526,13 +516,8 @@ impl AggregationContext {
                 metrics_inc_replace_row_number_totally_loaded(block_meta.row_count);
 
                 // read the remaining columns
-                let remain_columns_data = read_block(
-                    self.write_settings.storage_format,
-                    remain_columns_reader,
-                    block_meta,
-                    &self.read_settings,
-                )
-                .await?;
+                let remain_columns_data =
+                    self.read_block(remain_columns_reader, block_meta).await?;
 
                 // remove the deleted rows
                 let remain_columns_data_after_deletion =
@@ -651,6 +636,42 @@ impl AggregationContext {
         }
     }
 
+    async fn read_block(&self, reader: &BlockReader, block_meta: &BlockMeta) -> Result<DataBlock> {
+        let merged_io_read_result = reader
+            .read_columns_data_by_merge_io(
+                &self.read_settings,
+                &block_meta.location.0,
+                &block_meta.col_metas,
+                &None,
+            )
+            .await?;
+
+        // deserialize block data
+        // cpu intensive task, send them to dedicated thread pool
+        let storage_format = self.write_settings.storage_format;
+        let block_meta_ptr = block_meta.clone();
+        let reader = reader.clone();
+        GlobalIORuntime::instance()
+            .spawn(async move {
+                let column_chunks = merged_io_read_result.columns_chunks()?;
+                reader.deserialize_chunks(
+                    block_meta_ptr.location.0.as_str(),
+                    block_meta_ptr.row_count as usize,
+                    &block_meta_ptr.compression,
+                    &block_meta_ptr.col_metas,
+                    column_chunks,
+                    &storage_format,
+                )
+            })
+            .await
+            .map_err(|e| {
+                ErrorCode::Internal(
+                    "unexpected, failed to join aggregation context read block tasks for replace into.",
+                )
+                    .add_message_back(e.to_string())
+            })?
+    }
+
     // return true if the block is pruned, otherwise false
     async fn apply_bloom_pruning(
         &self,
@@ -661,122 +682,93 @@ impl AggregationContext {
         if bloom_on_conflict_field_index.is_empty() {
             return false;
         }
-        match self
-            .load_bloom_filter(block_meta, bloom_on_conflict_field_index)
-            .await
-        {
-            Ok(Some(filters)) => {
-                // the caller ensures that the input_hashes is not empty
-                let row_count = input_hashes[0].len();
+        if let Some(loc) = &block_meta.bloom_filter_index_location {
+            match self
+                .load_bloom_filter(
+                    loc,
+                    block_meta.bloom_filter_index_size,
+                    bloom_on_conflict_field_index,
+                )
+                .await
+            {
+                Ok(filters) => {
+                    // the caller ensures that the input_hashes is not empty
+                    let row_count = input_hashes[0].len();
 
-                // let assume that the target block is prunable
-                let mut block_pruned = true;
-                for row in 0..row_count {
-                    // for each row, by default, assume that columns of this row do have conflict with the target block.
-                    let mut row_not_prunable = true;
-                    for (col_idx, col_hash) in input_hashes.iter().enumerate() {
-                        // For each column of current row, check if the corresponding bloom
-                        // filter contains the digest of the column.
-                        //
-                        // Any one of the columns NOT contains by the corresponding bloom filter,
-                        // indicates that the row is prunable(thus, we do not stop on the first column that
-                        // the bloom filter contains).
+                    // let assume that the target block is prunable
+                    let mut block_pruned = true;
+                    for row in 0..row_count {
+                        // for each row, by default, assume that columns of this row do have conflict with the target block.
+                        let mut row_not_prunable = true;
+                        for (col_idx, col_hash) in input_hashes.iter().enumerate() {
+                            // For each column of current row, check if the corresponding bloom
+                            // filter contains the digest of the column.
+                            //
+                            // Any one of the columns NOT contains by the corresponding bloom filter,
+                            // indicates that the row is prunable(thus, we do not stop on the first column that
+                            // the bloom filter contains).
 
-                        // - if bloom filter presents, check if the column is contained
-                        // - if bloom filter absents, do nothing(since by default, we assume that the row is not-prunable)
-                        if let Some(col_filter) = &filters[col_idx] {
-                            let hash = col_hash[row];
-                            if hash == 0 || !col_filter.contains_digest(hash) {
-                                // - hash == 0 indicates that the column value is null, which equals nothing.
-                                // - NOT `contains_digest`, indicates that this column of row does not match
-                                row_not_prunable = false;
-                                // if one column not match, we do not need to check other columns
-                                break;
+                            // - if bloom filter presents, check if the column is contained
+                            // - if bloom filter absents, do nothing(since by default, we assume that the row is not-prunable)
+                            if let Some(col_filter) = &filters[col_idx] {
+                                let hash = col_hash[row];
+                                if hash == 0 || !col_filter.contains_digest(hash) {
+                                    // - hash == 0 indicates that the column value is null, which equals nothing.
+                                    // - NOT `contains_digest`, indicates that this column of row does not match
+                                    row_not_prunable = false;
+                                    // if one column not match, we do not need to check other columns
+                                    break;
+                                }
                             }
                         }
+                        if row_not_prunable {
+                            // any row not prunable indicates that the target block is not prunable
+                            block_pruned = false;
+                            break;
+                        }
                     }
-                    if row_not_prunable {
-                        // any row not prunable indicates that the target block is not prunable
-                        block_pruned = false;
-                        break;
-                    }
+                    block_pruned
                 }
-                block_pruned
+                Err(e) => {
+                    // broken index should not stop us:
+                    warn!("failed to build bloom index column name: {}", e);
+                    // failed to load bloom filter, do not prune
+                    false
+                }
             }
-            Ok(None) => false,
-            Err(e) => {
-                // broken index should not stop us:
-                warn!("failed to build bloom index column name: {}", e);
-                // failed to load bloom filter, do not prune
-                false
-            }
+        } else {
+            // no bloom filter, no pruning
+            false
         }
     }
 
     async fn load_bloom_filter(
         &self,
-        block_meta: &BlockMeta,
+        location: &Location,
+        index_len: u64,
         bloom_on_conflict_field_index: &[FieldIndex],
-    ) -> Result<Option<Vec<Option<Arc<FilterImpl>>>>> {
+    ) -> Result<Vec<Option<Arc<FilterImpl>>>> {
         // different block may have different version of bloom filter index
-        let (block_filter, col_names) = match bloom_index_layout(block_meta) {
-            None => return Ok(None),
-            Some(BloomIndexLayout::Legacy {
-                location,
-                file_size,
-            }) => {
-                // REPLACE carries current digest hashes instead of scalar values. V2 filters were
-                // built from legacy scalar values, so testing current digests against them can
-                // produce false negatives and incorrectly prune a conflicting block.
-                if !replace_digest_pruning_supported(location.1) {
-                    return Ok(None);
-                }
-                let col_names = bloom_on_conflict_field_index
-                    .iter()
-                    .map(|idx| {
-                        BloomIndex::build_filter_bloom_name(
-                            location.1,
-                            &self.on_conflict_fields[*idx].table_field,
-                        )
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                let block_filter = location
-                    .read_block_filter(
-                        self.data_accessor.clone(),
-                        &self.read_settings,
-                        &col_names,
-                        file_size,
-                    )
-                    .await?;
-                (block_filter, col_names)
-            }
-            Some(BloomIndexLayout::ColumnGroups { files }) => {
-                let fields = bloom_on_conflict_field_index
-                    .iter()
-                    .map(|idx| self.on_conflict_fields[*idx].table_field.clone())
-                    .collect::<Vec<_>>();
-                let Some(filter) = read_multi_file_block_filter(
-                    &self.data_accessor,
-                    &self.read_settings,
-                    &fields,
-                    &files,
-                )
-                .await?
-                else {
-                    return Ok(None);
-                };
-                // REPLACE carries current digest hashes instead of scalar values, so it cannot
-                // safely evaluate legacy V2 filters. Keep the block in that compatibility case.
-                if !replace_digest_pruning_supported(filter.format_version) {
-                    return Ok(None);
-                }
-                let col_names = fields
-                    .iter()
-                    .map(|field| BloomIndex::build_filter_bloom_name(filter.format_version, field))
-                    .collect::<Result<Vec<_>>>()?;
-                (filter.block_filter, col_names)
-            }
-        };
+        let mut col_names = Vec::with_capacity(bloom_on_conflict_field_index.len());
+
+        for idx in bloom_on_conflict_field_index {
+            let bloom_column_name = BloomIndex::build_filter_bloom_name(
+                location.1,
+                &self.on_conflict_fields[*idx].table_field,
+            )?;
+            col_names.push(bloom_column_name);
+        }
+
+        // using load_bloom_filter_by_columns is attractive,
+        // but it do not care about the version of the bloom filter index
+        let block_filter = location
+            .read_block_filter(
+                self.data_accessor.clone(),
+                &self.read_settings,
+                &col_names,
+                index_len,
+            )
+            .await?;
 
         // reorder the filter according to the order of bloom_on_conflict_field
         let mut filters = Vec::with_capacity(bloom_on_conflict_field_index.len());
@@ -788,14 +780,14 @@ impl AggregationContext {
                 Err(_) => {
                     info!(
                         "bloom filter column {} not found for block {}",
-                        filter_col_name, block_meta.location.0
+                        filter_col_name, location.0
                     );
                     filters.push(None);
                 }
             }
         }
 
-        Ok(Some(filters))
+        Ok(filters)
     }
 }
 
@@ -806,28 +798,8 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
-    use databend_storages_common_index::filters::BlockFilter;
-    use databend_storages_common_table_meta::meta::Versioned;
 
     use super::*;
-
-    #[test]
-    fn test_replace_digest_pruning_version_eligibility() {
-        assert!(
-            !replace_digest_pruning_supported(2),
-            "V2 filters contain legacy scalar hashes, not current digests"
-        );
-        assert!(
-            replace_digest_pruning_supported(3),
-            "V3 filters use the digest encoding"
-        );
-        assert!(
-            replace_digest_pruning_supported(BlockFilter::VERSION),
-            "the current filter format uses the digest encoding"
-        );
-        assert!(!replace_digest_pruning_supported(0));
-        assert!(!replace_digest_pruning_supported(u64::MAX));
-    }
 
     #[test]
     fn test_check_overlap() -> Result<()> {

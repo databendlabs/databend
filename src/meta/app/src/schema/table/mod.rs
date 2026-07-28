@@ -204,82 +204,7 @@ pub struct TableMeta {
     pub constraints: BTreeMap<String, Constraint>,
 }
 
-pub const OPT_KEY_ENABLE_PARTIAL_UPDATE: &str = "enable_partial_update";
-/// Normalized Fuse partition expressions set by `CREATE TABLE PARTITION BY`.
-pub const OPT_KEY_PARTITION_BY: &str = "partition_by";
-pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
-const COLUMN_ORIENTED_SEGMENT_FORMAT: &str = "column_oriented";
-
-#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
-pub enum ColumnGroupCompatibilityError {
-    #[error("column-group layout requires FUSE engine, but found {0}")]
-    NonFuseEngine(String),
-    #[error("column-group layout is incompatible with column-oriented segments")]
-    ColumnOrientedSegment,
-    #[error("column-group layout is incompatible with partitioned tables")]
-    PartitionedTable,
-    #[error("column-group layout is incompatible with computed columns")]
-    ComputedColumns,
-    #[error("column-group layout is incompatible with table indexes: {}", .0.join(", "))]
-    TableIndexes(Vec<String>),
-    #[error("column-group layout cannot be disabled without a full layout migration")]
-    DisableRequiresMigration,
-}
-
 impl TableMeta {
-    pub fn column_group_layout_enabled(&self) -> bool {
-        self.options
-            .get(OPT_KEY_ENABLE_PARTIAL_UPDATE)
-            .is_some_and(|value| value.eq_ignore_ascii_case("true"))
-    }
-
-    /// Validate the persisted table features that may coexist with column-group blocks.
-    pub fn validate_column_group_compatibility(
-        &self,
-    ) -> std::result::Result<(), ColumnGroupCompatibilityError> {
-        if !self.column_group_layout_enabled() {
-            return Ok(());
-        }
-        if !self.engine.eq_ignore_ascii_case("FUSE") {
-            return Err(ColumnGroupCompatibilityError::NonFuseEngine(
-                self.engine.clone(),
-            ));
-        }
-        if self
-            .options
-            .get(OPT_KEY_SEGMENT_FORMAT)
-            .is_some_and(|format| format.eq_ignore_ascii_case(COLUMN_ORIENTED_SEGMENT_FORMAT))
-        {
-            return Err(ColumnGroupCompatibilityError::ColumnOrientedSegment);
-        }
-        if self.options.contains_key(OPT_KEY_PARTITION_BY) {
-            return Err(ColumnGroupCompatibilityError::PartitionedTable);
-        }
-        if self
-            .schema
-            .fields()
-            .iter()
-            .any(|field| field.computed_expr().is_some())
-        {
-            return Err(ColumnGroupCompatibilityError::ComputedColumns);
-        }
-        if !self.indexes.is_empty() {
-            let indexes = self.indexes.keys().cloned().collect::<Vec<_>>();
-            return Err(ColumnGroupCompatibilityError::TableIndexes(indexes));
-        }
-        Ok(())
-    }
-
-    pub fn validate_column_group_transition(
-        &self,
-        next: &Self,
-    ) -> std::result::Result<(), ColumnGroupCompatibilityError> {
-        if self.column_group_layout_enabled() && !next.column_group_layout_enabled() {
-            return Err(ColumnGroupCompatibilityError::DisableRequiresMigration);
-        }
-        next.validate_column_group_compatibility()
-    }
-
     /// Returns the cluster key defined on the main branch, if any.
     pub fn cluster_key_meta(&self) -> Option<(u32, String)> {
         // - Prefer `cluster_key_v2` if present (branch-aware)
@@ -1334,103 +1259,13 @@ mod kvapi_key_impl {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-    use std::sync::Arc;
-
-    use databend_common_expression::ComputedExpr;
-    use databend_common_expression::TableDataType;
-    use databend_common_expression::TableField;
-    use databend_common_expression::TableSchema;
-    use databend_common_expression::types::NumberDataType;
     use databend_meta_client::kvapi;
     use databend_meta_client::kvapi::StructKey;
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
-    use crate::schema::ColumnGroupCompatibilityError;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableIdToName;
-    use crate::schema::TableIndex;
-    use crate::schema::TableIndexType;
     use crate::schema::TableMeta;
-
-    fn column_group_table_meta() -> TableMeta {
-        TableMeta {
-            schema: Arc::new(TableSchema::new(vec![TableField::new(
-                "a",
-                TableDataType::Number(NumberDataType::Int32),
-            )])),
-            engine: "FUSE".to_string(),
-            options: BTreeMap::from([("enable_partial_update".to_string(), "true".to_string())]),
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn test_column_group_compatibility_and_sticky_transition() {
-        let meta = column_group_table_meta();
-        assert!(meta.validate_column_group_compatibility().is_ok());
-        assert!(meta.validate_column_group_transition(&meta).is_ok());
-
-        let mut non_fuse = meta.clone();
-        non_fuse.engine = "MEMORY".to_string();
-        assert_eq!(
-            non_fuse.validate_column_group_compatibility(),
-            Err(ColumnGroupCompatibilityError::NonFuseEngine(
-                "MEMORY".to_string()
-            ))
-        );
-
-        let mut column_oriented = meta.clone();
-        column_oriented
-            .options
-            .insert("segment_format".to_string(), "column_oriented".to_string());
-        assert_eq!(
-            column_oriented.validate_column_group_compatibility(),
-            Err(ColumnGroupCompatibilityError::ColumnOrientedSegment)
-        );
-
-        let mut partitioned = meta.clone();
-        partitioned
-            .options
-            .insert("partition_by".to_string(), "a".to_string());
-        assert_eq!(
-            partitioned.validate_column_group_compatibility(),
-            Err(ColumnGroupCompatibilityError::PartitionedTable)
-        );
-
-        let mut computed = meta.clone();
-        computed.schema = Arc::new(TableSchema::new(vec![
-            TableField::new("a", TableDataType::Number(NumberDataType::Int32))
-                .with_computed_expr(Some(ComputedExpr::Virtual("a + 1".to_string()))),
-        ]));
-        assert_eq!(
-            computed.validate_column_group_compatibility(),
-            Err(ColumnGroupCompatibilityError::ComputedColumns)
-        );
-
-        let mut indexed = meta.clone();
-        indexed.indexes.insert("idx".to_string(), TableIndex {
-            index_type: TableIndexType::Inverted,
-            name: "idx".to_string(),
-            column_ids: vec![0],
-            sync_creation: false,
-            version: "v1".to_string(),
-            options: BTreeMap::new(),
-        });
-        assert_eq!(
-            indexed.validate_column_group_compatibility(),
-            Err(ColumnGroupCompatibilityError::TableIndexes(vec![
-                "idx".to_string()
-            ]))
-        );
-
-        let mut disabled = meta.clone();
-        disabled.options.remove("enable_partial_update");
-        assert_eq!(
-            meta.validate_column_group_transition(&disabled),
-            Err(ColumnGroupCompatibilityError::DisableRequiresMigration)
-        );
-    }
 
     #[test]
     fn test_table_id_to_name_key_format() {

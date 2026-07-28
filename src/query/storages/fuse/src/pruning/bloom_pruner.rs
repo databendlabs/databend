@@ -165,7 +165,7 @@ fn merged_filter_version(versions: impl IntoIterator<Item = u64>) -> Option<u64>
     }
 }
 
-pub(crate) async fn read_multi_file_block_filter(
+async fn read_multi_file_block_filter(
     dal: &Operator,
     settings: &ReadSettings,
     index_fields: &[TableField],
@@ -439,9 +439,6 @@ impl BloomPrunerCreator {
         index_files: &[FuseBloomIndexFileInfo],
         column_stats: &StatisticsOfColumns,
     ) -> Result<bool> {
-        if !self.ngram_args.is_empty() {
-            return Ok(true);
-        }
         let maybe_filter = read_multi_file_block_filter(
             &self.dal,
             &self.settings,
