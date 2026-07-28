@@ -503,6 +503,154 @@ impl PrivilegeAccess {
         Ok(())
     }
 
+    async fn validate_table_index_access(
+        &self,
+        catalog_name: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        self.access_system_history(
+            Some(catalog_name),
+            Some(db_name),
+            None,
+            UserPrivilegeType::Alter,
+        )?;
+
+        self.validate_table_index_alter_or_super_access(catalog_name, db_name, table_name)
+            .await
+    }
+
+    async fn validate_drop_table_index_access(
+        &self,
+        catalog_name: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        self.access_system_history(
+            Some(catalog_name),
+            Some(db_name),
+            None,
+            UserPrivilegeType::Drop,
+        )?;
+
+        match self
+            .validate_table_index_alter_or_super_access(catalog_name, db_name, table_name)
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {
+                match self
+                    .validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false, false)
+                    .await
+                {
+                    Ok(()) => Ok(()),
+                    Err(drop_err) if drop_err.code() == ErrorCode::PERMISSION_DENIED => Err(err),
+                    Err(drop_err) => Err(drop_err),
+                }
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn validate_table_index_alter_or_super_access(
+        &self,
+        catalog_name: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        match self
+            .validate_real_table_alter_access(catalog_name, db_name, table_name)
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {
+                match self
+                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await
+                {
+                    Ok(()) => Ok(()),
+                    Err(super_err) if super_err.code() == ErrorCode::PERMISSION_DENIED => Err(err),
+                    Err(super_err) => Err(super_err),
+                }
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn validate_real_table_alter_access(
+        &self,
+        catalog_name: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        if self.ctx.is_temp_table(catalog_name, db_name, table_name) {
+            return Ok(());
+        }
+
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+
+        match self
+            .validate_access(
+                &GrantObject::Table(
+                    catalog_name.to_string(),
+                    db_name.to_string(),
+                    table_name.to_string(),
+                ),
+                UserPrivilegeType::Alter,
+                false,
+                false,
+            )
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {
+                match self
+                    .convert_to_id(&tenant, &catalog, db_name, Some(table_name), false)
+                    .await
+                {
+                    Ok(ObjectId::Table(db_id, table_id)) => {
+                        match self
+                            .validate_access(
+                                &GrantObject::TableById(catalog_name.to_string(), db_id, table_id),
+                                UserPrivilegeType::Alter,
+                                false,
+                                false,
+                            )
+                            .await
+                        {
+                            Ok(()) => Ok(()),
+                            Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {
+                                let current_user = self.ctx.get_current_user()?;
+                                let session = self.ctx.get_current_session();
+                                let roles_name = session
+                                    .get_all_effective_roles()
+                                    .await?
+                                    .iter()
+                                    .map(|r| r.name.clone())
+                                    .collect::<Vec<_>>()
+                                    .join(",");
+                                Err(ErrorCode::PermissionDenied(format!(
+                                    "Permission denied: privilege [{:?}] is required on '{}'.'{}'.'{}' for user {} with roles [{}]",
+                                    UserPrivilegeType::Alter,
+                                    catalog_name,
+                                    db_name,
+                                    table_name,
+                                    &current_user.identity().display(),
+                                    roles_name,
+                                )))
+                            }
+                            Err(err) => Err(err),
+                        }
+                    }
+                    Ok(ObjectId::Database(_)) => unreachable!("table name is provided"),
+                    Err(err) => Err(err.add_message("error on validating table index access")),
+                }
+            }
+            Err(err) => Err(err),
+        }
+    }
+
     async fn validate_warehouse_ownership(
         &self,
         warehouse: String,
@@ -1403,11 +1551,13 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropDatabase(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?;
             }
-            Plan::UndropDatabase(_)
-            | Plan::DropIndex(_)
-            | Plan::DropTableIndex(_) => {
+            Plan::UndropDatabase(_) | Plan::DropIndex(_) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false, false)
+                    .await?;
+            }
+            Plan::DropTableIndex(plan) => {
+                self.validate_drop_table_index_access(&plan.catalog, &plan.database, &plan.table)
                     .await?;
             }
             Plan::CreateStage(_) => {
@@ -1893,10 +2043,13 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::RevertTable(_)
             | Plan::AlterUDF(_)
             | Plan::RefreshIndex(_)
-            | Plan::RefreshTableIndex(_)
             | Plan::AlterRole(_)
             | Plan::AlterUser(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
+                    .await?;
+            }
+            Plan::RefreshTableIndex(plan) => {
+                self.validate_table_index_access(&plan.catalog, &plan.database, &plan.table)
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
@@ -1998,7 +2151,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropPasswordPolicy(_)
             | Plan::DescPasswordPolicy(_)
             | Plan::CreateIndex(_)
-            | Plan::CreateTableIndex(_)
             | Plan::CreateNotification(_)
             | Plan::DropNotification(_)
             | Plan::DescNotification(_)
@@ -2016,6 +2168,10 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropWorker(_)
             | Plan::ShowWorkers => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?;
+            }
+            Plan::CreateTableIndex(plan) => {
+                self.validate_table_index_access(&plan.catalog, &plan.database, &plan.table)
                     .await?;
             }
             Plan::CreateDatamaskPolicy(_) => {
