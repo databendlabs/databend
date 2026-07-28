@@ -1,0 +1,214 @@
+# Statement coverage corresponds to setup/04_statement_coverage.test.
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements.self_insert_dst', 'TABLE', 'UPSTREAM', 1)
+----
+1 default.lineage_history_statements.src default.lineage_history_statements.self_insert_dst
+
+query ISS
+SELECT distance, source_column_name, target_column_name
+FROM get_lineage('lineage_history_statements.self_insert_dst.a', 'COLUMN', 'UPSTREAM', 1)
+----
+1 a a
+
+query I
+SELECT count(*)
+FROM system_history.lineage_unresolved
+WHERE target_database = 'lineage_history_statements'
+  AND source_lineage_key = target_lineage_key
+----
+0
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements.insert_dst', 'TABLE', 'UPSTREAM', 1)
+----
+1 default.lineage_history_statements.src default.lineage_history_statements.insert_dst
+
+query I
+SELECT count(*)
+FROM system_history.lineage_unresolved
+WHERE source_database = 'lineage_history_statements'
+  AND source_name = 'src'
+  AND target_database = 'lineage_history_statements'
+  AND target_name = 'explain_pipeline_dst'
+----
+0
+
+# Process metadata matches the selected history edge. Its timestamp is stable UTC RFC3339,
+# independent of the session timezone used to query GET_LINEAGE.
+query BBBB
+SETTINGS (timezone = 'UTC')
+WITH result AS (
+  SELECT parse_json(process) AS process
+  FROM get_lineage('lineage_history_statements.insert_dst', 'TABLE', 'UPSTREAM', 1)
+), history AS (
+  SELECT query_id, query_kind, lineage_kind, event_time
+  FROM system_history.lineage_unresolved
+  WHERE source_database = 'lineage_history_statements'
+    AND source_name = 'src'
+    AND target_database = 'lineage_history_statements'
+    AND target_name = 'insert_dst'
+  QUALIFY row_number() OVER (ORDER BY event_time DESC, query_id DESC) = 1
+)
+SELECT result.process['query_id']::STRING = history.query_id,
+       result.process['query_kind']::STRING = history.query_kind,
+       result.process['lineage_kind']::STRING = history.lineage_kind,
+       result.process['event_time']::STRING =
+         concat(replace(to_string(history.event_time), ' ', 'T'), 'Z')
+FROM result CROSS JOIN history
+----
+1 1 1 1
+
+query B
+SETTINGS (timezone = 'Asia/Shanghai')
+WITH result AS (
+  SELECT parse_json(process)['event_time']::STRING AS event_time
+  FROM get_lineage('lineage_history_statements.insert_dst', 'TABLE', 'UPSTREAM', 1)
+), history AS (
+  SELECT event_time
+  FROM system_history.lineage_unresolved
+  WHERE source_database = 'lineage_history_statements'
+    AND source_name = 'src'
+    AND target_database = 'lineage_history_statements'
+    AND target_name = 'insert_dst'
+  QUALIFY row_number() OVER (ORDER BY event_time DESC, query_id DESC) = 1
+)
+SELECT result.event_time = concat(
+         replace(to_string(convert_timezone('UTC', history.event_time)), ' ', 'T'),
+         'Z'
+       )
+FROM result CROSS JOIN history
+----
+1
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements.multi_a', 'TABLE', 'UPSTREAM', 1)
+----
+1 default.lineage_history_statements.src default.lineage_history_statements.multi_a
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements.multi_b', 'TABLE', 'UPSTREAM', 1)
+----
+1 default.lineage_history_statements.src default.lineage_history_statements.multi_b
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements.replace_dst', 'TABLE', 'UPSTREAM', 1)
+----
+1 default.lineage_history_statements.src default.lineage_history_statements.replace_dst
+
+# MERGE INTO records a single DML edge for the src -> merge_dst pair.
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements.merge_dst', 'TABLE', 'UPSTREAM', 1)
+----
+1 default.lineage_history_statements.src default.lineage_history_statements.merge_dst
+
+query T
+SELECT parse_json(process)['lineage_kind']::STRING
+FROM get_lineage('lineage_history_statements.merge_dst', 'TABLE', 'UPSTREAM', 1)
+----
+DML
+
+# Both MERGE clauses contribute column lineage: merge_dst.m comes from src.c (matched UPDATE) and
+# src.b (unmatched INSERT), while merge_dst.k and merge_dst.n come only from the unmatched INSERT.
+query ISS rowsort
+SELECT distance, source_column_name, target_column_name
+FROM get_lineage('lineage_history_statements.merge_dst.m', 'COLUMN', 'UPSTREAM', 1)
+----
+1 b m
+1 c m
+
+query ISS rowsort
+SELECT distance, source_column_name, target_column_name
+FROM get_lineage('lineage_history_statements.merge_dst.k', 'COLUMN', 'UPSTREAM', 1)
+----
+1 a k
+
+query ISS rowsort
+SELECT distance, source_column_name, target_column_name
+FROM get_lineage('lineage_history_statements.merge_dst.n', 'COLUMN', 'UPSTREAM', 1)
+----
+1 c n
+
+# Stream data lineage passes through to the backing table.
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements.stream_dst', 'TABLE', 'UPSTREAM', 1)
+----
+1 default.lineage_history_statements.stream_src default.lineage_history_statements.stream_dst
+
+query ISS
+SELECT distance, source_column_name, target_column_name
+FROM get_lineage('lineage_history_statements.stream_dst.x', 'COLUMN', 'UPSTREAM', 1)
+----
+1 a x
+
+# The Stream wrapper itself must not be persisted as a lineage endpoint.
+query I
+SELECT count(*)
+FROM system_history.lineage_unresolved
+WHERE source_database = 'lineage_history_statements'
+  AND source_name = 'src_stream'
+  AND target_database = 'lineage_history_statements'
+  AND target_name = 'stream_dst'
+----
+0
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements.copy_dst', 'TABLE', 'UPSTREAM', 2)
+ORDER BY distance, source_object_name, target_object_name
+----
+1 lineage_history_statements_stage default.lineage_history_statements.copy_dst
+2 default.lineage_history_statements.src lineage_history_statements_stage
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements_stage', 'STAGE', 'DOWNSTREAM', 1)
+ORDER BY target_object_name
+----
+1 lineage_history_statements_stage default.lineage_history_statements.copy_dst
+1 lineage_history_statements_stage default.lineage_history_statements.insert_select_stage_dst
+1 lineage_history_statements_stage default.lineage_history_statements.insert_stage_dst
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements.insert_select_stage_dst', 'TABLE', 'UPSTREAM', 1)
+----
+1 lineage_history_statements_stage default.lineage_history_statements.insert_select_stage_dst
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_history_statements.insert_stage_dst', 'TABLE', 'UPSTREAM', 1)
+----
+1 lineage_history_statements_stage default.lineage_history_statements.insert_stage_dst
+
+# Stage file fields are not stable columns, so Stage-to-table edges stay object-only.
+query I
+SELECT count(*)
+FROM get_lineage('lineage_history_statements.copy_dst.a', 'COLUMN', 'UPSTREAM', 1)
+----
+0
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_history_statements.insert_select_stage_dst.a', 'COLUMN', 'UPSTREAM', 1)
+----
+0
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_history_statements.insert_stage_dst.a', 'COLUMN', 'UPSTREAM', 1)
+----
+0
+
+statement ok
+DROP DATABASE lineage_history_statements
+
+statement ok
+DROP STAGE lineage_history_statements_stage
