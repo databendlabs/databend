@@ -98,7 +98,6 @@ impl BloomGranuleIndexSpec {
         index_name: &str,
         index: &TableIndex,
         schema: &TableSchema,
-        bloom_index_type: BloomIndexType,
     ) -> Result<Option<Self>> {
         let all_columns_valid = index.column_ids.iter().all(|column_id| {
             schema
@@ -110,6 +109,12 @@ impl BloomGranuleIndexSpec {
         if index.column_ids.is_empty() || !all_columns_valid {
             return Ok(None);
         }
+        let bloom_index_type = index
+            .options
+            .get("filter_type")
+            .map(|value| value.parse())
+            .transpose()?
+            .unwrap_or_default();
         Ok(Some(BloomGranuleIndexSpec {
             index_name: index_name.to_string(),
             index_version: index.version.clone(),
@@ -1001,6 +1006,8 @@ fn is_bloom_supported_type(data_type: &TableDataType) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use databend_common_expression::FunctionContext;
     use databend_common_expression::Scalar;
     use databend_common_expression::TableDataType;
@@ -1079,10 +1086,9 @@ mod tests {
             index_type: databend_common_meta_app::schema::TableIndexType::Bloom,
             options: Default::default(),
         };
-        let spec =
-            BloomGranuleIndexSpec::try_create("idx", &index, &table_schema, BloomIndexType::Xor8)
-                .unwrap()
-                .unwrap();
+        let spec = BloomGranuleIndexSpec::try_create("idx", &index, &table_schema)
+            .unwrap()
+            .unwrap();
 
         let physical_schema =
             TableSchema::new_from_column_ids(vec![indexed_field.clone()], Default::default(), 21);
@@ -1105,6 +1111,69 @@ mod tests {
             31,
         );
         assert_eq!(spec.low_level_blocking_writers(&unrelated_schema), 0);
+    }
+
+    #[test]
+    fn test_filter_type_from_index_options() {
+        crate::test_utils::init_test_globals().unwrap();
+
+        let field = TableField::new("a", TableDataType::Number(NumberDataType::Int64));
+        let schema = TableSchema::new(vec![field.clone()]);
+        let block = DataBlock::new_from_columns(vec![Int64Type::from_data(
+            (0..100).map(i64::from).collect(),
+        )]);
+
+        for (options, expected_type) in [
+            (Default::default(), BloomIndexType::Xor8),
+            (
+                BTreeMap::from([("filter_type".to_string(), "binary_fuse32".to_string())]),
+                BloomIndexType::BinaryFuse32,
+            ),
+        ] {
+            let index = TableIndex {
+                name: "idx".to_string(),
+                column_ids: vec![field.column_id()],
+                sync_creation: true,
+                version: "0".to_string(),
+                index_type: databend_common_meta_app::schema::TableIndexType::Bloom,
+                options,
+            };
+            let spec = BloomGranuleIndexSpec::try_create("idx", &index, &schema)
+                .unwrap()
+                .unwrap();
+            assert_eq!(spec.bloom_index_type, expected_type);
+
+            let mut writer = spec
+                .new_writer(FunctionContext::default(), &schema, "1/2/_b/block.parquet")
+                .unwrap();
+            writer.write(&block, 0..block.num_rows()).unwrap();
+            writer.finish_granule().unwrap();
+            let output = writer.finish().unwrap();
+            let offsets = output.marks[0]
+                .values
+                .clone()
+                .into_number()
+                .unwrap()
+                .into_u_int64()
+                .unwrap();
+            let lengths = output.marks[1]
+                .values
+                .clone()
+                .into_number()
+                .unwrap()
+                .into_u_int64()
+                .unwrap();
+            let payload = output.pending_payloads[0].data.to_bytes();
+            let filter =
+                decode_page(&payload[offsets[0] as usize..(offsets[0] + lengths[0]) as usize])
+                    .unwrap();
+
+            assert!(matches!(
+                (expected_type, filter),
+                (BloomIndexType::Xor8, FilterImpl::Xor(_))
+                    | (BloomIndexType::BinaryFuse32, FilterImpl::BinaryFuse32(_))
+            ));
+        }
     }
 
     #[test]

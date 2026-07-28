@@ -43,6 +43,45 @@ CREATE TABLE pb_t(a int, b string) index_granularity = 100
 statement ok
 CREATE BLOOM INDEX pb_idx ON pb_t(a)
 
+statement error 1603
+CREATE BLOOM INDEX pb_invalid_filter ON pb_t(b) filter_type = 'invalid'
+
+statement error 1603
+CREATE BLOOM INDEX pb_unknown_option ON pb_t(b) unknown = 'xor8'
+
+# Bloom filter type is an index-level option. The table-level block Bloom option must not change
+# the default granule Bloom type, which remains xor8.
+statement ok
+CREATE TABLE pb_filter_types(
+    a int,
+    b int,
+    BLOOM INDEX pb_default(a),
+    BLOOM INDEX pb_fuse(b) filter_type = 'BINARY_FUSE32'
+) bloom_index_type = 'binary_fuse32' index_granularity = 100
+
+query TT rowsort
+SELECT name, definition FROM system.indexes
+WHERE database = 'db_09_0009_06' AND table = 'pb_filter_types'
+----
+pb_default pb_filter_types(a)
+pb_fuse pb_filter_types(b)filter_type='binary_fuse32'
+
+statement ok
+INSERT INTO pb_filter_types SELECT number, number * 2 FROM numbers(10000)
+
+query II
+SELECT a, b FROM pb_filter_types WHERE a = 4242
+----
+4242 8484
+
+query II
+SELECT a, b FROM pb_filter_types WHERE b = 8484
+----
+4242 8484
+
+statement ok
+DROP TABLE pb_filter_types
+
 statement ok
 INSERT INTO pb_t SELECT number, concat('v', to_string(number)) FROM numbers(10000)
 

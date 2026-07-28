@@ -104,11 +104,8 @@ impl FuseTable {
             true,
         )?;
         let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
-        let granule_index_specs = build_granule_index_specs(
-            &self.table_info.meta.indexes,
-            &self.table_info.meta.schema,
-            self.bloom_index_type(),
-        )?;
+        let granule_index_specs =
+            build_granule_index_specs(&self.table_info.meta.indexes, &self.table_info.meta.schema)?;
         let vector_index_builder =
             VectorIndexBuilder::try_create(&self.table_info.meta.indexes, new_schema.clone(), true);
         let spatial_index_builder = SpatialIndexBuilder::try_create(

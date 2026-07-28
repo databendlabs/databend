@@ -966,11 +966,29 @@ impl Binder {
 
     pub(in crate::planner::binder) fn validate_bloom_index_options(
         &self,
-        _index_options: &BTreeMap<String, String>,
+        index_options: &BTreeMap<String, String>,
     ) -> Result<BTreeMap<String, String>> {
-        // Bloom granule index currently takes no user options; filter type defaults are applied at
-        // build time. Reserved for future tuning knobs.
-        Ok(BTreeMap::new())
+        let mut options = BTreeMap::new();
+        for (opt, val) in index_options {
+            let key = opt.to_lowercase();
+            let value = val.to_lowercase();
+            match key.as_str() {
+                "filter_type" => {
+                    if !matches!(value.as_str(), "xor8" | "binary_fuse32") {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "value `{value}` is invalid bloom index filter type, must be one of: xor8, binary_fuse32"
+                        )));
+                    }
+                    options.insert(key, value);
+                }
+                _ => {
+                    return Err(ErrorCode::IndexOptionInvalid(format!(
+                        "index option `{key}` is invalid key for create bloom index statement"
+                    )));
+                }
+            }
+        }
+        Ok(options)
     }
 
     #[async_backtrace::framed]

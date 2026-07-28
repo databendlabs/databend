@@ -29,7 +29,6 @@ use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseco
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_settings::ReclusterMethod;
 use databend_common_sql::BloomIndexColumns;
-use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
@@ -535,7 +534,6 @@ impl FuseTable {
             vec![],
             HashSet::new(),
             std::collections::BTreeMap::new(),
-            BloomIndexType::default(),
             max_concurrency,
             None,
         )?;

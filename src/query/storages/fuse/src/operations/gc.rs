@@ -157,11 +157,7 @@ impl FuseTable {
             .await?;
 
         let inverted_indexes = &self.table_info.meta.indexes;
-        let granule_index_specs = build_granule_index_specs(
-            inverted_indexes,
-            self.schema().as_ref(),
-            self.bloom_index_type(),
-        )?;
+        let granule_index_specs = build_granule_index_specs(inverted_indexes, &self.schema())?;
 
         // 2. Read snapshot fields by chunk size.
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;

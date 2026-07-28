@@ -190,11 +190,7 @@ pub async fn do_vacuum2(
         ))
         .await?;
     let inverted_indexes = &table_info.meta.indexes;
-    let granule_index_specs = build_granule_index_specs(
-        inverted_indexes,
-        fuse_table.schema().as_ref(),
-        fuse_table.bloom_index_type(),
-    )?;
+    let granule_index_specs = build_granule_index_specs(inverted_indexes, &fuse_table.schema())?;
 
     let op = Files::create(ctx.clone(), fuse_table.get_operator());
     let mut files_to_gc = Vec::with_capacity(

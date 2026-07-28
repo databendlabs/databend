@@ -950,7 +950,6 @@ impl FuseTable {
             ngram_args,
             spatial_index_columns,
             self.table_info.meta.indexes.clone(),
-            self.bloom_index_type(),
             bloom_index_builder,
         )?;
         Ok(pruner)

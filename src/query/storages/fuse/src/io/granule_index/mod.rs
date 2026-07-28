@@ -35,7 +35,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
-use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -278,16 +277,13 @@ pub fn collect_granule_index_payload_locations(
 pub fn build_granule_index_specs(
     indexes: &BTreeMap<String, TableIndex>,
     schema: &TableSchema,
-    bloom_index_type: BloomIndexType,
 ) -> Result<Vec<Arc<dyn GranuleIndexSpec>>> {
     let mut specs: Vec<Arc<dyn GranuleIndexSpec>> = Vec::new();
     for (name, index) in indexes.iter() {
-        if index.index_type == TableIndexType::Bloom {
-            if let Some(spec) =
-                bloom::BloomGranuleIndexSpec::try_create(name, index, schema, bloom_index_type)?
-            {
-                specs.push(Arc::new(spec));
-            }
+        if index.index_type == TableIndexType::Bloom
+            && let Some(spec) = bloom::BloomGranuleIndexSpec::try_create(name, index, schema)?
+        {
+            specs.push(Arc::new(spec));
         }
     }
     Ok(specs)

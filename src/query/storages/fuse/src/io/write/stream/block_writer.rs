@@ -552,7 +552,6 @@ impl FuseBlockWriteOptions {
         let granule_index_specs = build_granule_index_specs(
             &table.table_info.meta.indexes,
             &table.table_info.meta.schema,
-            table.bloom_index_type(),
         )?;
 
         let virtual_column_builder = if table.enable_virtual_column() {

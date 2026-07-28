@@ -39,7 +39,6 @@ use databend_common_sql::DefaultExprBinder;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::SegmentBlockMetasCache;
-use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::ReadSettings;
@@ -136,7 +135,6 @@ impl PruningContext {
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
         indexes: BTreeMap<String, TableIndex>,
-        bloom_index_type: BloomIndexType,
         max_concurrency: usize,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Arc<PruningContext>> {
@@ -239,7 +237,7 @@ impl PruningContext {
         let granule_index_pruners = if lightweight_pruning {
             Vec::new()
         } else {
-            let specs = build_granule_index_specs(&indexes, &table_schema, bloom_index_type)?;
+            let specs = build_granule_index_specs(&indexes, &table_schema)?;
             let mut pruners = Vec::with_capacity(specs.len());
             for spec in specs {
                 if let Some(pruner) = spec.new_pruner(
@@ -354,7 +352,6 @@ impl FusePruner {
             ngram_args,
             spatial_index_columns,
             BTreeMap::new(),
-            BloomIndexType::default(),
             bloom_index_builder,
         )
     }
@@ -373,7 +370,6 @@ impl FusePruner {
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
         indexes: BTreeMap<String, TableIndex>,
-        bloom_index_type: BloomIndexType,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
         Self::create_with_pages_and_options(
@@ -388,7 +384,6 @@ impl FusePruner {
             ngram_args,
             spatial_index_columns,
             indexes,
-            bloom_index_type,
             bloom_index_builder,
         )
     }
@@ -406,7 +401,6 @@ impl FusePruner {
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
         indexes: BTreeMap<String, TableIndex>,
-        bloom_index_type: BloomIndexType,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
         let max_concurrency = {
@@ -439,7 +433,6 @@ impl FusePruner {
             ngram_args,
             spatial_index_columns,
             indexes,
-            bloom_index_type,
             max_concurrency,
             bloom_index_builder,
         )?;
