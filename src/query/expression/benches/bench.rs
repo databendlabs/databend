@@ -49,6 +49,7 @@ mod escaped_like {
     const SUFFIX_PATTERN: &[u8] = br"%request\_processing\%failed";
     const CONTAINS_PATTERN: &[u8] = br"%request\_processing\%failed%";
     const CONTAINS_LITERAL: &[u8] = b"request_processing%failed";
+    const COLUMN_SIZE_HINT: usize = 1024 * 1024;
     const LOG_FRAGMENT: &[u8] =
         b"2026-01-01T00:00:00Z INFO synthetic_worker request processed successfully\n\
         at synthetic.module::run\n";
@@ -70,7 +71,16 @@ mod escaped_like {
     }
 
     fn bench_optimized(bencher: divan::Bencher, pattern: &'static [u8], haystack: &[u8]) {
-        let matcher = generate_like_pattern(pattern, haystack.len());
+        bench_optimized_with_hint(bencher, pattern, haystack, haystack.len());
+    }
+
+    fn bench_optimized_with_hint(
+        bencher: divan::Bencher,
+        pattern: &'static [u8],
+        haystack: &[u8],
+        haystack_size_hint: usize,
+    ) {
+        let matcher = generate_like_pattern(pattern, haystack_size_hint);
         assert!(!matches!(matcher, LikePattern::ComplexPattern(_)));
         bencher
             .counter(BytesCount::new(haystack.len()))
@@ -78,14 +88,14 @@ mod escaped_like {
     }
 
     fn synthetic_log_message(len: usize, matched: bool) -> Vec<u8> {
-        assert!(len >= CONTAINS_LITERAL.len() + 16);
+        assert!(len >= CONTAINS_LITERAL.len());
         let mut haystack = Vec::with_capacity(len);
         while haystack.len() < len {
             let remaining = len - haystack.len();
             haystack.extend_from_slice(&LOG_FRAGMENT[..remaining.min(LOG_FRAGMENT.len())]);
         }
         if matched {
-            let start = len - CONTAINS_LITERAL.len() - 16;
+            let start = (len - CONTAINS_LITERAL.len()) / 2;
             haystack[start..start + CONTAINS_LITERAL.len()].copy_from_slice(CONTAINS_LITERAL);
         }
         assert_eq!(
@@ -176,7 +186,7 @@ mod escaped_like {
     #[divan::bench(args = [1024, 4096, 16384])]
     fn optimized_contains_large_miss(bencher: divan::Bencher, len: usize) {
         let haystack = synthetic_log_message(len, false);
-        bench_optimized(bencher, CONTAINS_PATTERN, &haystack);
+        bench_optimized_with_hint(bencher, CONTAINS_PATTERN, &haystack, COLUMN_SIZE_HINT);
     }
 
     #[divan::bench(args = [1024, 4096, 16384])]
@@ -188,7 +198,7 @@ mod escaped_like {
     #[divan::bench(args = [1024, 4096, 16384])]
     fn optimized_contains_large_hit(bencher: divan::Bencher, len: usize) {
         let haystack = synthetic_log_message(len, true);
-        bench_optimized(bencher, CONTAINS_PATTERN, &haystack);
+        bench_optimized_with_hint(bencher, CONTAINS_PATTERN, &haystack, COLUMN_SIZE_HINT);
     }
 }
 
