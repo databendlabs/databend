@@ -20,12 +20,46 @@ BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../" || exit
 
+ICEBERG_COMPOSE_FILE="$PWD/tests/sqllogictests/scripts/docker-compose-iceberg-tpch.yml"
+iceberg_services_started=false
+
+stop_iceberg_services() {
+    if [ "$iceberg_services_started" = true ]; then
+        echo "Stopping Iceberg REST test services"
+        docker compose -f "$ICEBERG_COMPOSE_FILE" down || true
+    fi
+}
+
+start_iceberg_services() {
+    echo "Starting Iceberg REST test services"
+    iceberg_services_started=true
+    docker compose -f "$ICEBERG_COMPOSE_FILE" up -d rustfs mc rest
+
+    for _ in {1..60}; do
+        if curl -fsS http://127.0.0.1:9002/health/ready >/dev/null \
+            && curl -fsS http://127.0.0.1:8181/v1/config >/dev/null \
+            && docker compose -f "$ICEBERG_COMPOSE_FILE" exec -T mc \
+                /usr/bin/mc stat rustfs/iceberg-tpch >/dev/null 2>&1; then
+            echo "Iceberg REST test services are ready"
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "Iceberg REST test services did not become ready"
+    docker compose -f "$ICEBERG_COMPOSE_FILE" logs rustfs mc rest || true
+    return 1
+}
+
+trap stop_iceberg_services EXIT
+
 echo "Cleaning up previous runs"
 
 killall -9 databend-query || true
 killall -9 databend-meta || true
 killall -9 vector || true
 rm -rf ./.databend
+start_iceberg_services
 
 echo "Starting Databend Query cluster with 2 nodes enable history tables"
 
