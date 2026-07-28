@@ -144,7 +144,8 @@ async fn test_partial_update_metadata_bloom_and_hll() -> anyhow::Result<()> {
 
     fixture
         .execute_command(&format!(
-            "alter table {db}.{table_name} set options(bloom_index_columns='id')"
+            "alter table {db}.{table_name} set options(\
+             bloom_index_columns='id', approx_distinct_columns='id')"
         ))
         .await?;
 
@@ -176,6 +177,13 @@ async fn test_partial_update_metadata_bloom_and_hll() -> anyhow::Result<()> {
             .count(),
         1
     );
+
+    let updated_again_hll = latest_block_hll(&fixture).await?;
+    assert_eq!(
+        updated_again_hll.get(&id_column_id),
+        updated_hll.get(&id_column_id)
+    );
+    assert!(!updated_again_hll.contains_key(&value_column_id));
 
     let rows = fixture
         .execute_query(&format!(

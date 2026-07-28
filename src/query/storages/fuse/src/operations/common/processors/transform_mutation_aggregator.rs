@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::Instant;
@@ -36,6 +37,7 @@ use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -101,6 +103,7 @@ pub struct TableMutationAggregator {
     top_n: BlockTopN,
     logical_updated_rows: u64,
     logical_deleted_rows: u64,
+    current_hll_column_ids: Arc<HashSet<ColumnId>>,
     write_segment_ctx: WriteSegmentCtx,
 
     processed_log_entries: usize,
@@ -199,8 +202,22 @@ impl TableMutationAggregator {
         removed_statistics: Statistics,
         kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> Self {
+    ) -> Result<Self> {
         let fill_missing_cluster_stats = table.resolve_physical_cluster_keys().is_some();
+
+        let hll_schema = if matches!(kind, MutationKind::Insert | MutationKind::Replace) {
+            table.schema()
+        } else {
+            table.schema_with_stream()
+        };
+        let current_hll_column_ids = Arc::new(
+            table
+                .approx_distinct_cols()
+                .distinct_column_fields(hll_schema, RangeIndex::supported_table_type)?
+                .into_values()
+                .map(|field| field.column_id())
+                .collect(),
+        );
 
         let virtual_schema = table.table_info.meta.virtual_schema.clone();
         let cluster_key_exprs = if fill_missing_cluster_stats {
@@ -227,7 +244,7 @@ impl TableMutationAggregator {
             table_meta_timestamps,
             fill_missing_cluster_stats,
         };
-        TableMutationAggregator {
+        Ok(TableMutationAggregator {
             ctx,
             mutations: HashMap::new(),
             extended_mutations: HashMap::new(),
@@ -243,10 +260,11 @@ impl TableMutationAggregator {
             top_n: HashMap::new(),
             logical_updated_rows: 0,
             logical_deleted_rows: 0,
+            current_hll_column_ids,
             write_segment_ctx,
             processed_log_entries: 0,
             table_id: table.get_id(),
-        }
+        })
     }
 
     fn accumulate_top_n(&mut self, top_n: Option<BlockTopN>) -> Result<()> {
@@ -547,6 +565,7 @@ impl TableMutationAggregator {
             let segment_mutation = self.mutations.remove(&index).unwrap();
             let location = self.base_segments.get(index).cloned();
             let write_segment_ctx = self.write_segment_ctx.clone();
+            let current_hll_column_ids = self.current_hll_column_ids.clone();
 
             tasks.push(async move {
                 let mut force_all_blocks_perfect = false;
@@ -589,7 +608,12 @@ impl TableMutationAggregator {
                         {
                             let previous_hll =
                                 block_editor.get(&idx).and_then(|(_, hll)| hll.as_ref());
-                            replace_partial_block_hll(previous_hll, new_hll, updated_column_ids)?
+                            replace_partial_block_hll(
+                                previous_hll,
+                                new_hll,
+                                updated_column_ids,
+                                &current_hll_column_ids,
+                            )?
                         } else {
                             new_hll
                         };
@@ -993,12 +1017,14 @@ fn replace_partial_block_hll(
     previous: Option<&RawBlockHLL>,
     replacement: Option<RawBlockHLL>,
     updated_column_ids: &[ColumnId],
+    current_hll_column_ids: &HashSet<ColumnId>,
 ) -> Result<Option<RawBlockHLL>> {
     let mut merged = previous
         .map(decode_column_hll)
         .transpose()?
         .flatten()
         .unwrap_or_default();
+    merged.retain(|column_id, _| current_hll_column_ids.contains(column_id));
     for column_id in updated_column_ids {
         merged.remove(column_id);
     }

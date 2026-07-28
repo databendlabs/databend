@@ -206,7 +206,7 @@ impl IPhysicalPlan for CompactSource {
             builder.main_pipeline.try_resize(1)?;
             builder
                 .main_pipeline
-                .add_async_accumulating_transformer(|| {
+                .try_add_async_accumulating_transformer(|| {
                     TableMutationAggregator::create(
                         table,
                         builder.ctx.clone(),
@@ -217,7 +217,7 @@ impl IPhysicalPlan for CompactSource {
                         MutationKind::Compact,
                         self.table_meta_timestamps,
                     )
-                });
+                })?;
         }
         Ok(())
     }
