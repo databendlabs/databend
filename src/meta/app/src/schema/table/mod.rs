@@ -43,6 +43,7 @@ use super::MarkedDeletedIndexMeta;
 use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::schema::materialized_view::CreateMaterializedViewMeta;
+use crate::schema::materialized_view::UpdateMVSourceBindingReq;
 use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -817,6 +818,8 @@ pub struct UpdateTempTableReq {
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateMultiTableMetaReq {
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
+    /// MV source bindings to update atomically with their source table metadata.
+    pub update_mv_source_bindings: Vec<UpdateMVSourceBindingReq>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
     pub deduplicated_labels: Vec<String>,
@@ -826,6 +829,7 @@ pub struct UpdateMultiTableMetaReq {
 impl UpdateMultiTableMetaReq {
     pub fn is_empty(&self) -> bool {
         self.update_table_metas.is_empty()
+            && self.update_mv_source_bindings.is_empty()
             && self.copied_files.is_empty()
             && self.update_stream_metas.is_empty()
             && self.deduplicated_labels.is_empty()

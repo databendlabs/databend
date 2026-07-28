@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::RefreshTableCachePlan;
 
 use super::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -47,6 +48,11 @@ impl Interpreter for RefreshTableCacheInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
+        let table = self
+            .ctx
+            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .await?;
+        check_not_materialized_view(table.as_ref(), &plan.database)?;
 
         let _ = catalog
             .get_database(&plan.tenant, &plan.database)

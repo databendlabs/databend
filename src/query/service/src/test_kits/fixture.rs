@@ -925,6 +925,7 @@ impl TestFixture {
                 &mut build_res.main_pipeline,
                 None,
                 vec![],
+                None,
                 overwrite,
                 None,
                 None,

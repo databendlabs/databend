@@ -18,6 +18,7 @@ databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-paimon = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-storages-common-index = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 
 [lints]
 workspace = true

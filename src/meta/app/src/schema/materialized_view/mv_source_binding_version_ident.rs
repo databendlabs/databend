@@ -23,16 +23,17 @@ use crate::tenant_key::resource::TenantResource;
 /// nonzero KV sequence, so a relationship atomically bound to 0 would be stale
 /// immediately. The explicit generation lets the first successful CREATE MV
 /// atomically write both generation 0 and a relationship bound to generation
-/// 0. If CREATE fails, neither record is published. The KV sequence remains an
-/// internal CAS token for serializing CREATE with MV-invalidating source DDL.
+/// 0. If CREATE fails, neither record is published. CREATE uses the KV sequence
+/// as an internal CAS token, while source TableMeta CAS serializes subsequent
+/// generation increments.
 pub type MVSourceBindingVersionIdent = TIdent<MVSourceBindingVersionResource, u64>;
 
 /// Current semantic MV-binding generation of one source table.
 ///
 /// A missing record is logically generation 0. Once created, this record is
 /// retained for the lifetime of the source table to prevent generation ABA.
-/// Source DDL defined to invalidate existing MVs advances it; ADD COLUMN,
-/// table rename, and table DROP/UNDROP leave it unchanged.
+/// RENAME/DROP/MODIFY COLUMN advances it atomically with the source TableMeta;
+/// ADD COLUMN, table rename, and table DROP/UNDROP leave it unchanged.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct MVSourceBindingVersion {
     pub current_source_generation: u64,

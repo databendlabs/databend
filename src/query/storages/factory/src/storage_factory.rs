@@ -19,6 +19,7 @@ pub use databend_common_catalog::catalog::StorageDescription;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_storages_basic::MemoryTable;
@@ -31,6 +32,7 @@ use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_paimon::PaimonTable;
 use databend_common_storages_stream::stream_table::StreamTable;
+use databend_storages_common_table_meta::table::FUSE_ENGINE;
 
 use crate::Table;
 use crate::fuse::FuseTable;
@@ -112,9 +114,14 @@ pub struct StorageFactory {
 impl StorageFactory {
     pub fn with_storage_class_specs(&self, storage_class: S3StorageClass) -> Self {
         let mut new_creators = self.storages.clone();
-        new_creators.insert("FUSE".to_string(), Storage {
-            creator: Arc::new(FuseTableCreator::with_storage_class_spec(storage_class)),
+        let fuse_creator = Arc::new(FuseTableCreator::with_storage_class_spec(storage_class));
+        new_creators.insert(FUSE_ENGINE.to_string(), Storage {
+            creator: fuse_creator.clone(),
             descriptor: Arc::new(FuseTable::description),
+        });
+        new_creators.insert(MATERIALIZED_VIEW_ENGINE.to_string(), Storage {
+            creator: fuse_creator,
+            descriptor: Arc::new(materialized_view_description),
         });
 
         Self {
@@ -139,10 +146,17 @@ impl StorageFactory {
         });
 
         // Register FUSE table engine.
-        creators.insert("FUSE".to_string(), Storage {
+        let fuse_creator = Arc::new(FuseTableCreator::default());
+        creators.insert(FUSE_ENGINE.to_string(), Storage {
             // TODO should get default storage specs
-            creator: Arc::new(FuseTableCreator::default()),
+            creator: fuse_creator.clone(),
             descriptor: Arc::new(FuseTable::description),
+        });
+
+        // MATERIALIZED_VIEW is a distinct catalog object backed by Fuse storage.
+        creators.insert(MATERIALIZED_VIEW_ENGINE.to_string(), Storage {
+            creator: fuse_creator,
+            descriptor: Arc::new(materialized_view_description),
         });
 
         // Register VIEW table engine
@@ -217,5 +231,13 @@ impl StorageFactory {
             descriptors.push(entry.descriptor.description())
         }
         descriptors
+    }
+}
+
+fn materialized_view_description() -> StorageDescription {
+    StorageDescription {
+        engine_name: MATERIALIZED_VIEW_ENGINE.to_string(),
+        comment: "Materialized View (Fuse-backed)".to_string(),
+        support_cluster_key: true,
     }
 }

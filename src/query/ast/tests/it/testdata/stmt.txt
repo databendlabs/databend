@@ -1870,6 +1870,303 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+CREATE MATERIALIZED VIEW mv AS SELECT a FROM t;
+---------- Output ---------
+CREATE MATERIALIZED VIEW mv AS SELECT a FROM t
+---------- AST ------------
+CreateMaterializedView(
+    CreateMaterializedViewStmt {
+        create_option: Create,
+        sync_creation: true,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            span: Some(
+                25..27,
+            ),
+            name: "mv",
+            quote: None,
+            ident_type: None,
+        },
+        cluster_by: None,
+        origin_query: Query {
+            span: Some(
+                31..46,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        31..46,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    38..39,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                38..39,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                45..46,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        45..46,
+                                    ),
+                                    name: "t",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE SYNC MATERIALIZED VIEW mv AS SELECT a FROM t;
+---------- Output ---------
+CREATE MATERIALIZED VIEW mv AS SELECT a FROM t
+---------- AST ------------
+CreateMaterializedView(
+    CreateMaterializedViewStmt {
+        create_option: Create,
+        sync_creation: true,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            span: Some(
+                30..32,
+            ),
+            name: "mv",
+            quote: None,
+            ident_type: None,
+        },
+        cluster_by: None,
+        origin_query: Query {
+            span: Some(
+                36..51,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        36..51,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    43..44,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                43..44,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                50..51,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        50..51,
+                                    ),
+                                    name: "t",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE ASYNC MATERIALIZED VIEW mv AS SELECT a FROM t;
+---------- Output ---------
+CREATE ASYNC MATERIALIZED VIEW mv AS SELECT a FROM t
+---------- AST ------------
+CreateMaterializedView(
+    CreateMaterializedViewStmt {
+        create_option: Create,
+        sync_creation: false,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            span: Some(
+                31..33,
+            ),
+            name: "mv",
+            quote: None,
+            ident_type: None,
+        },
+        cluster_by: None,
+        origin_query: Query {
+            span: Some(
+                37..52,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        37..52,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    44..45,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                44..45,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                51..52,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        51..52,
+                                    ),
+                                    name: "t",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
 ---------- Output ---------
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b

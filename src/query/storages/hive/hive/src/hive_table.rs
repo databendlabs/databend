@@ -41,6 +41,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateMVSourceBindingReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline::core::OutputPort;
@@ -449,6 +450,7 @@ impl Table for HiveTable {
         _pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
+        _update_mv_source_binding: Option<UpdateMVSourceBindingReq>,
         _overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
