@@ -20,6 +20,7 @@ use chrono::Utc;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
+use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
@@ -555,6 +556,27 @@ fn task_part_counts(parts: &ReclusterParts) -> Vec<usize> {
         .iter()
         .map(|task| task.parts.len())
         .collect::<Vec<_>>()
+}
+
+type TaskSignature = (i32, usize, usize, Vec<String>);
+
+fn task_signatures(parts: &ReclusterParts) -> anyhow::Result<Vec<TaskSignature>> {
+    let mut signatures = parts
+        .tasks
+        .iter()
+        .map(|task| {
+            let mut locations = task
+                .parts
+                .partitions
+                .iter()
+                .map(|part| Ok(FuseBlockPartInfo::from_part(part)?.location.clone()))
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            locations.sort();
+            Ok((task.level, task.total_rows, task.total_bytes, locations))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    signatures.sort_by(|left, right| left.3.cmp(&right.3));
+    Ok(signatures)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1506,6 +1528,74 @@ async fn test_builds_multiple_peaks_in_one_window() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_horizontal_and_vertical_merge_select_same_tasks() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 10, 10, 1000);
+    let segment_locations = gen_recluster_segments(
+        &data_accessor,
+        &location_generator,
+        30,
+        10,
+        1000,
+        10,
+        10,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = test_cluster_schema();
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let compact_segments = segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        create_segment_location_vector(segment_locations, None),
+    )
+    .await?;
+    let horizontal = new_test_mutator(
+        ctx.clone(),
+        data_accessor.clone(),
+        schema.clone(),
+        thresholds,
+        cluster_key_id,
+        4,
+        ReclusterMode::Conservative,
+    );
+    let vertical = new_test_mutator(
+        ctx,
+        data_accessor,
+        schema,
+        thresholds,
+        cluster_key_id,
+        4,
+        ReclusterMode::Conservative,
+    )
+    .with_vertical_kind(Some(VerticalReclusterKind::MergeBlocks));
+
+    let mut windows = horizontal.select_segments(&compact_segments, 1000)?;
+    assert_eq!(windows.len(), 1);
+    let selected = windows.remove(0);
+    let (_, horizontal_parts) =
+        materialize_candidate_window(&horizontal, selected.clone(), 4).await?;
+    let (_, vertical_parts) = materialize_candidate_window(&vertical, selected, 4).await?;
+
+    assert_eq!(
+        task_signatures(&horizontal_parts)?,
+        task_signatures(&vertical_parts)?
+    );
+    assert_eq!(task_part_counts(&horizontal_parts), vec![100, 100, 100]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_splits_hotspot_by_memory() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -1930,8 +2020,8 @@ async fn test_fills_budget_with_next_task() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_final_groups_mature_level_bands() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    // Levels 1 and 2 share the {1-3} bin; level 0 stays isolated, so only the
-    // two mature blocks overlap and form one rewrite task.
+    // Levels 0, 1, and 2 share the {0-3} bin. FINAL chooses the majority
+    // input level for the task, with ties resolved to the lower level.
     let (block_num, parts) = materialize_segments_by_level_with_mode(
         &[(0, 1), (1, 1), (2, 1)],
         thresholds,
@@ -1940,11 +2030,10 @@ async fn test_final_groups_mature_level_bands() -> anyhow::Result<()> {
     )
     .await?;
 
-    assert_eq!(block_num, 2);
+    assert_eq!(block_num, 3);
     assert_eq!(parts.tasks.len(), 1);
-    // {1-3} bin: majority tie between level 1 and 2 picks the lower level.
-    assert_eq!(parts.tasks[0].level, 1);
-    assert_eq!(task_part_counts(&parts), vec![2]);
+    assert_eq!(parts.tasks[0].level, 0);
+    assert_eq!(task_part_counts(&parts), vec![3]);
 
     // Two high-level blocks alone do not produce rewrite tasks (both are at or
     // above MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS), but they can still be repacked

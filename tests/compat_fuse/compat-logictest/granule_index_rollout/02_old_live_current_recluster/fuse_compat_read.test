@@ -20,7 +20,7 @@ ALTER TABLE rollout_t RECLUSTER FINAL
 query III
 SELECT count(),sum(payload),count(DISTINCT _block_name) FROM rollout_t
 ----
-64 288224 4
+64 288224 1
 
 query I
 SELECT count_if(previous_k > k) FROM (SELECT k,lag(k) OVER (PARTITION BY _block_name ORDER BY _row_id) AS previous_k FROM rollout_t)

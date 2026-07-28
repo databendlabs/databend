@@ -57,15 +57,15 @@ select count() from t_vertical
 query IBBI rowsort
 select k, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t_vertical
 ----
-1 1 1 NULL
-2 1 1 NULL
-3 1 1 NULL
-4 1 1 NULL
-5 1 1 NULL
-6 1 1 NULL
-7 1 1 NULL
-8 1 1 NULL
-9 1 1 NULL
+1 0 0 0
+2 0 0 1
+3 0 0 2
+4 0 0 3
+5 0 0 4
+6 0 0 5
+7 0 0 0
+8 0 0 1
+9 0 0 2
 
 statement ok
 create table t_vertical_sort(k int, payload string, nested tuple(x int, y string)) row_per_block=6 block_per_segment=2
@@ -232,8 +232,13 @@ set recluster_method = 'vertical'
 statement ok
 set recluster_block_size = 1
 
-statement error 2411
+statement ok
 alter table t_vertical_memory recluster
+
+query I
+select count(distinct _block_name) from t_vertical_memory
+----
+2
 
 statement ok
 unset recluster_block_size

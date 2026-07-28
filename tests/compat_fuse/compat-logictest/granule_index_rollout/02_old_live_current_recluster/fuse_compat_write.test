@@ -4,12 +4,12 @@ USE compat_granule_rollout
 query III
 SELECT count(),sum(payload),count(DISTINCT _block_name) FROM rollout_t
 ----
-48 168168 3
+48 168168 1
 
 query T
 EXPLAIN SELECT payload FROM rollout_t WHERE k=103
 ----
-<slt:ignore>partitions total: 3
+<slt:ignore>partitions total: 1
 <slt:ignore>partitions scanned: 1
 <slt:ignore>
 
@@ -18,13 +18,12 @@ SELECT count(),sum(payload) FROM rollout_t WHERE k=103
 ----
 2 7008
 
-# This key is inside the table/segment min-max range [0, 207], but outside
-# every block's min-max range. Scanning zero of three partitions therefore
-# verifies that the old query used current-written block-level min-max metadata.
+# The current vertical rewrite emits one block spanning [0, 207]. Its current-written
+# bloom metadata still prunes the single partition for this absent key.
 query T
 EXPLAIN SELECT payload FROM rollout_t WHERE k=50
 ----
-<slt:ignore>partitions total: 3
+<slt:ignore>partitions total: 1
 <slt:ignore>partitions scanned: 0
 <slt:ignore>
 

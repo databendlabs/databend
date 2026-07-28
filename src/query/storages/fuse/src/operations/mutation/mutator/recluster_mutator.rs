@@ -505,6 +505,12 @@ impl ReclusterMutator {
         self
     }
 
+    /// Used for tests that compare horizontal and vertical task selection.
+    pub fn with_vertical_kind(mut self, vertical_kind: Option<VerticalReclusterKind>) -> Self {
+        self.vertical_kind = vertical_kind;
+        self
+    }
+
     #[async_backtrace::framed]
     pub async fn probe_candidate_window(
         &self,
@@ -817,9 +823,7 @@ impl ReclusterMutator {
             let fits = self
                 .block_thresholds
                 .check_for_compact(next_rows, next_bytes)
-                && next_bytes <= self.memory_threshold
-                && (self.vertical_kind != Some(VerticalReclusterKind::MergeBlocks)
-                    || next_rows <= self.block_thresholds.max_rows_per_block);
+                && next_bytes <= self.memory_threshold;
 
             if !current.is_empty() && !fits {
                 if current.len() >= 2 {
@@ -845,8 +849,6 @@ impl ReclusterMutator {
 
             if self.block_thresholds.check_for_compact(rows, bytes)
                 && bytes <= self.memory_threshold
-                && (self.vertical_kind != Some(VerticalReclusterKind::MergeBlocks)
-                    || rows <= self.block_thresholds.max_rows_per_block)
             {
                 current.push(idx);
                 current_rows = current_rows.saturating_add(rows);
@@ -1075,8 +1077,6 @@ impl ReclusterMutator {
                 .block_thresholds
                 .check_for_compact(total_rows as usize, total_bytes as usize)
             && total_bytes as usize <= self.memory_threshold
-            && (self.vertical_kind != Some(VerticalReclusterKind::MergeBlocks)
-                || total_rows as usize <= self.block_thresholds.max_rows_per_block)
         {
             // Preserve the existing compact shortcut when the optional independent
             // block-reduction selector is disabled.
@@ -2081,20 +2081,6 @@ impl ReclusterMutator {
 
         let mut candidates = Vec::new();
         let mut used_blocks = vec![false; block_count];
-        // Horizontal tasks retain the existing compressed-byte packing limit.
-        // Vertical MergeBlocks are bounded by the output row limit instead, so a
-        // source block larger than the rough byte limit is not silently discarded.
-        let is_vertical_merge = self.vertical_kind == Some(VerticalReclusterKind::MergeBlocks);
-        let task_pack_limit = if is_vertical_merge {
-            usize::MAX
-        } else {
-            self.memory_threshold
-        };
-        let task_row_limit = if is_vertical_merge {
-            self.block_thresholds.max_rows_per_block
-        } else {
-            usize::MAX
-        };
 
         for &(peak_pos, peak_depth, _) in &peaks {
             if candidates.len() >= task_budget {
@@ -2117,7 +2103,6 @@ impl ReclusterMutator {
             // Keep the peak depth from the initial sweep. Here used_blocks only
             // prevents the same block from being assigned to multiple tasks.
             let mut task_bytes = 0usize;
-            let mut task_rows = 0usize;
             let mut task_indices = Vec::new();
             for local_idx in 0..block_count {
                 if used_blocks[local_idx] {
@@ -2128,19 +2113,8 @@ impl ReclusterMutator {
                 }
                 let idx = indices[local_idx];
                 let block_size = blocks[idx].meta.block_size as usize;
-                let block_rows = blocks[idx].meta.row_count as usize;
-                if block_rows > task_row_limit {
-                    continue;
-                }
-                let should_split = exceeds_pack_limit(
-                    !task_indices.is_empty(),
-                    task_bytes,
-                    task_rows,
-                    block_size,
-                    block_rows,
-                    task_pack_limit,
-                    task_row_limit,
-                );
+                let should_split = !task_indices.is_empty()
+                    && task_bytes.saturating_add(block_size) > self.memory_threshold;
 
                 if should_split {
                     if task_indices.len() >= 2 {
@@ -2159,23 +2133,19 @@ impl ReclusterMutator {
                         task_indices.clear();
                     }
                     task_bytes = 0;
-                    task_rows = 0;
                 }
 
                 task_bytes = task_bytes.saturating_add(block_size);
-                task_rows = task_rows.saturating_add(block_rows);
                 task_indices.push(local_idx);
             }
 
             if !task_indices.is_empty()
-                && ((task_bytes < task_pack_limit && task_rows < task_row_limit)
-                    || task_indices.len() < 2)
+                && (task_bytes < self.memory_threshold || task_indices.len() < 2)
             {
                 // Fill only the last hotspot tail from the deeper adjacent side.
                 let mut left = hotspot_left;
                 let mut right = hotspot_right;
-                'fill_remaining: while (task_bytes < task_pack_limit && task_rows < task_row_limit)
-                    || task_indices.len() < 2
+                'fill_remaining: while task_bytes < self.memory_threshold || task_indices.len() < 2
                 {
                     let left_depth = if left > 0 {
                         point_depths[left - 1] as f64
@@ -2209,22 +2179,12 @@ impl ReclusterMutator {
                         }
                         let idx = indices[local_idx];
                         let block_size = blocks[idx].meta.block_size as usize;
-                        let block_rows = blocks[idx].meta.row_count as usize;
-                        if block_rows > task_row_limit
-                            || exceeds_pack_limit(
-                                !task_indices.is_empty(),
-                                task_bytes,
-                                task_rows,
-                                block_size,
-                                block_rows,
-                                task_pack_limit,
-                                task_row_limit,
-                            )
+                        if !task_indices.is_empty()
+                            && task_bytes.saturating_add(block_size) > self.memory_threshold
                         {
                             break 'fill_remaining;
                         }
                         task_bytes = task_bytes.saturating_add(block_size);
-                        task_rows = task_rows.saturating_add(block_rows);
                         task_indices.push(local_idx);
                     }
                 }
@@ -2389,25 +2349,10 @@ fn scalar_le(left: &Scalar, right: &Scalar) -> bool {
     )
 }
 
-fn exceeds_pack_limit(
-    has_rows: bool,
-    current_bytes: usize,
-    current_rows: usize,
-    next_bytes: usize,
-    next_rows: usize,
-    byte_limit: usize,
-    row_limit: usize,
-) -> bool {
-    has_rows
-        && (current_bytes.saturating_add(next_bytes) > byte_limit
-            || current_rows.saturating_add(next_rows) > row_limit)
-}
-
 #[cfg(test)]
 mod tests {
     use super::ReclusterGroup;
     use super::ReclusterMode;
-    use super::exceeds_pack_limit;
 
     #[test]
     fn test_aggressive_groups_level_zero_with_young_blocks() {
@@ -2433,30 +2378,5 @@ mod tests {
             ReclusterGroup::assign(1, ReclusterMode::Conservative),
             ReclusterGroup::Level(1)
         );
-    }
-
-    #[test]
-    fn test_vertical_merge_pack_limit_allows_one_output_block() {
-        assert!(!exceeds_pack_limit(true, 100, 3, 100, 3, usize::MAX, 6));
-        assert!(exceeds_pack_limit(true, 100, 3, 100, 4, usize::MAX, 6));
-    }
-
-    #[test]
-    fn test_horizontal_pack_limit_is_unchanged() {
-        assert!(!exceeds_pack_limit(
-            true,
-            100,
-            usize::MAX / 4,
-            100,
-            usize::MAX / 4,
-            200,
-            usize::MAX,
-        ));
-        assert!(exceeds_pack_limit(true, 100, 1, 101, 1, 200, usize::MAX,));
-    }
-
-    #[test]
-    fn test_first_source_is_not_split_before_task_has_rows() {
-        assert!(!exceeds_pack_limit(false, 0, 0, 201, 7, 200, 6));
     }
 }
