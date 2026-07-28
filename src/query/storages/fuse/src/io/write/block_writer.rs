@@ -464,16 +464,19 @@ impl BlockBuilder {
             .meta_locations
             .gen_block_location(self.table_meta_timestamps);
 
-        let updated_bloom_columns_map = updated_field_indices
-            .iter()
-            .enumerate()
-            .filter_map(|(updated_index, source_index)| {
-                self.bloom_columns_map
-                    .get(source_index)
-                    .cloned()
-                    .map(|field| (updated_index, field))
-            })
-            .collect::<BTreeMap<_, _>>();
+        let project_updated_fields = |fields: &BTreeMap<FieldIndex, TableField>| {
+            updated_field_indices
+                .iter()
+                .enumerate()
+                .filter_map(|(updated_index, source_index)| {
+                    fields
+                        .get(source_index)
+                        .cloned()
+                        .map(|field| (updated_index, field))
+                })
+                .collect::<BTreeMap<_, _>>()
+        };
+        let updated_bloom_columns_map = project_updated_fields(&self.bloom_columns_map);
         let rebuild_bloom_index = !updated_bloom_columns_map.is_empty();
         let bloom_index_state = if rebuild_bloom_index {
             let location = self.meta_locations.block_bloom_index_location(&block_id);
@@ -493,16 +496,7 @@ impl BlockBuilder {
             .as_ref()
             .map(|index| index.column_distinct_count.clone())
             .unwrap_or_default();
-        let updated_ndv_columns_map = updated_field_indices
-            .iter()
-            .enumerate()
-            .filter_map(|(updated_index, source_index)| {
-                self.ndv_columns_map
-                    .get(source_index)
-                    .cloned()
-                    .map(|field| (updated_index, field))
-            })
-            .collect::<BTreeMap<_, _>>();
+        let updated_ndv_columns_map = project_updated_fields(&self.ndv_columns_map);
         let column_hlls = build_column_hlls(&updated_block, &updated_ndv_columns_map)?;
         Self::add_hll_distinct_counts(&mut column_distinct_count, &column_hlls);
 
