@@ -1605,6 +1605,24 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : "like"('alpha_beta', 'alpha$_beta', '$')
+raw expr       : like('alpha_beta', 'alpha$_beta', '$')
+checked expr   : like<String, String, String>("alpha_beta", "alpha$_beta", "$")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : "like"('alphaXbeta', 'alpha$_beta', '$')
+raw expr       : like('alphaXbeta', 'alpha$_beta', '$')
+checked expr   : like<String, String, String>("alphaXbeta", "alpha$_beta", "$")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
 ast            : lhs like 'a%'
 raw expr       : like(lhs::String, 'a%')
 checked expr   : like<String, String>(lhs, "a%")

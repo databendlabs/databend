@@ -1993,10 +1993,13 @@ fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomai
         LikePattern::Constant(true) if is_all_percent_pattern => {
             Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
         }
-        LikePattern::OrdinalStr(_) => Some(lhs.domain_eq(&StringDomain {
-            min: pattern.clone(),
-            max: Some(pattern),
-        })),
+        LikePattern::OrdinalStr(literal) => {
+            let literal = String::from_utf8(literal.into_owned()).ok()?;
+            Some(lhs.domain_eq(&StringDomain {
+                min: literal.clone(),
+                max: Some(literal),
+            }))
+        }
         LikePattern::EndOfPercent(v) => {
             let pat_str = std::str::from_utf8(v.as_ref()).ok()?.to_string();
             let pat_len = pat_str.chars().count();
@@ -2596,6 +2599,59 @@ mod tests {
             calc_like_domain(&non_matching, "abab%".to_string()),
             "non-matching prefixes should also stay consistent"
         );
+    }
+
+    #[test]
+    fn test_calc_like_domain_exact_pattern_matches_equality_domain() {
+        let mut cases = vec![
+            ("plain".to_string(), "plain".to_string()),
+            ("%".to_string(), "\\%".to_string()),
+            ("_".to_string(), "\\_".to_string()),
+            ("\\".to_string(), "\\\\".to_string()),
+            (
+                "alpha%_\\beta".to_string(),
+                "alpha\\%\\_\\\\beta".to_string(),
+            ),
+            ("你好_100%".to_string(), "你好\\_100\\%".to_string()),
+        ];
+        cases.extend([
+            (
+                "alpha_beta".to_string(),
+                type_check::convert_escape_pattern("alpha$_beta", '$'),
+            ),
+            (
+                "100%".to_string(),
+                type_check::convert_escape_pattern("100!%", '!'),
+            ),
+            (
+                "path\\file".to_string(),
+                type_check::convert_escape_pattern("path#\\file", '#'),
+            ),
+        ]);
+
+        for (literal, pattern) in cases {
+            let literal_domain = StringDomain {
+                min: literal.clone(),
+                max: Some(literal.clone()),
+            };
+            for domain in [
+                literal_domain.clone(),
+                StringDomain {
+                    min: "different".to_string(),
+                    max: Some("different".to_string()),
+                },
+                StringDomain {
+                    min: "".to_string(),
+                    max: None,
+                },
+            ] {
+                assert_eq!(
+                    calc_like_domain(&domain, pattern.clone()),
+                    Some(domain.domain_eq(&literal_domain)),
+                    "domain {domain:?} with LIKE pattern {pattern:?}"
+                );
+            }
+        }
     }
 
     #[test]
