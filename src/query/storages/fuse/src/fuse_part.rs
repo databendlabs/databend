@@ -155,6 +155,8 @@ pub struct FuseBlockPartInfo {
 
     pub bloom_filter_index_location: Option<Location>,
     pub bloom_filter_index_size: u64,
+    #[serde(default)]
+    pub column_group_layout: bool,
     #[serde(default, alias = "bloom_index_files")]
     pub column_group_bloom_files: Vec<FuseBloomIndexFileInfo>,
 
@@ -195,7 +197,7 @@ impl FuseBlockPartInfo {
     /// Normalize optional legacy and column-group Bloom metadata into one physical-layout view.
     pub fn bloom_index_layout(&self) -> Option<BloomIndexLayout<'_>> {
         BloomIndexLayout::from_metadata(
-            !self.column_groups.is_empty(),
+            self.column_group_layout || !self.column_group_bloom_files.is_empty(),
             self.bloom_filter_index_location.as_ref(),
             self.bloom_filter_index_size,
             Cow::Borrowed(&self.column_group_bloom_files),
@@ -207,6 +209,7 @@ impl FuseBlockPartInfo {
         location: String,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
+        column_group_layout: bool,
         column_group_bloom_files: Vec<FuseBloomIndexFileInfo>,
         rows_count: u64,
         column_groups: Vec<FuseColumnGroupPartInfo>,
@@ -220,6 +223,7 @@ impl FuseBlockPartInfo {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            column_group_layout,
             column_group_bloom_files,
             create_on,
             column_groups,

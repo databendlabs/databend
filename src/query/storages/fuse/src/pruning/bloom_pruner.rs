@@ -457,7 +457,6 @@ impl BloomPrunerCreator {
         &self,
         index_files: &[FuseBloomIndexFileInfo],
         column_stats: &StatisticsOfColumns,
-        _block_meta: &BlockReadInfo,
     ) -> Result<bool> {
         let maybe_filter = read_multi_file_block_filter(
             &self.dal,
@@ -557,7 +556,7 @@ impl BloomPruner for BloomPrunerCreator {
     ) -> bool {
         match index_layout {
             Some(BloomIndexLayout::ColumnGroups { files }) => {
-                match self.apply_files(&files, column_stats, block_meta).await {
+                match self.apply_files(&files, column_stats).await {
                     Ok(value) => value,
                     Err(e) => {
                         warn!(

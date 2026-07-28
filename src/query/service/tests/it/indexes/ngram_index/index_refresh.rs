@@ -163,15 +163,59 @@ async fn test_ngram_index_is_incompatible_with_partial_update() -> anyhow::Resul
             .await
             .is_err()
     );
+    drop_ngram_enable_partial_update_and_check(&fixture, &db, &table_name).await?;
 
     fixture
+        .execute_command(&format!("drop table {db}.{table_name}"))
+        .await?;
+    fixture
         .execute_command(&format!(
-            "drop ngram index idx_content on {db}.{table_name}"
+            "create table {db}.{table_name} (id int, content string) engine=fuse"
         ))
         .await?;
     fixture
         .execute_command(&format!(
-            "alter table {db}.{table_name} set options(enable_partial_update=true)"
+            "create ngram index idx_content on {db}.{table_name}(content)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {db}.{table_name} values (1, 'before'), (2, 'unchanged')"
+        ))
+        .await?;
+    assert!(
+        latest_default_block_meta(&fixture)
+            .await?
+            .ngram_filter_index_size
+            .is_some()
+    );
+    assert!(
+        fixture
+            .execute_command(&format!(
+                "alter table {db}.{table_name} \
+                 set options(enable_partial_update=true)"
+            ))
+            .await
+            .is_err()
+    );
+    drop_ngram_enable_partial_update_and_check(&fixture, &db, &table_name).await?;
+
+    Ok(())
+}
+
+async fn drop_ngram_enable_partial_update_and_check(
+    fixture: &TestFixture,
+    database: &str,
+    table: &str,
+) -> anyhow::Result<()> {
+    fixture
+        .execute_command(&format!(
+            "drop ngram index idx_content on {database}.{table}"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "alter table {database}.{table} set options(enable_partial_update=true)"
         ))
         .await?;
     fixture
@@ -179,11 +223,11 @@ async fn test_ngram_index_is_incompatible_with_partial_update() -> anyhow::Resul
         .await?;
     fixture
         .execute_command(&format!(
-            "update {db}.{table_name} set content = 'after' where id = 1"
+            "update {database}.{table} set content = 'after' where id = 1"
         ))
         .await?;
 
-    let block_meta = latest_default_block_meta(&fixture).await?;
+    let block_meta = latest_default_block_meta(fixture).await?;
     assert_eq!(block_meta.column_groups.len(), 2);
     assert!(block_meta.bloom_filter_index_location.is_none());
     assert_eq!(
@@ -196,12 +240,11 @@ async fn test_ngram_index_is_incompatible_with_partial_update() -> anyhow::Resul
     );
     let rows = fixture
         .execute_query(&format!(
-            "select count(*) from {db}.{table_name} \
+            "select count(*) from {database}.{table} \
              where (id = 1 and content = 'after') or (id = 2 and content = 'unchanged')"
         ))
         .await?;
     assert_eq!(query_count(rows).await?, 2);
-
     Ok(())
 }
 

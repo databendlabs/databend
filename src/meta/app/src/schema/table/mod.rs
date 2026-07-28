@@ -256,8 +256,7 @@ impl TableMeta {
             return Err(ColumnGroupCompatibilityError::ComputedColumns);
         }
         if !self.indexes.is_empty() {
-            let mut indexes = self.indexes.keys().cloned().collect::<Vec<_>>();
-            indexes.sort();
+            let indexes = self.indexes.keys().cloned().collect::<Vec<_>>();
             return Err(ColumnGroupCompatibilityError::TableIndexes(indexes));
         }
         Ok(())

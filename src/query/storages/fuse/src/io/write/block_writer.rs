@@ -193,8 +193,8 @@ fn merge_column_group_metadata(
         .collect::<HashSet<_>>();
     let mut column_groups = origin.physical_column_groups().into_owned();
     if origin.column_groups.is_empty() {
-        let legacy_bloom_is_paired =
-            origin
+        let legacy_bloom_is_ordinary_and_paired = origin.ngram_filter_index_size.is_none()
+            && origin
                 .bloom_filter_index_location
                 .as_ref()
                 .is_none_or(|location| {
@@ -205,10 +205,11 @@ fn merge_column_group_metadata(
                         );
                     expected == location.0
                 });
-        if !legacy_bloom_is_paired {
-            // Ngram refresh historically wrote a new random Bloom path. After the Ngram index is
-            // dropped the table may enable column groups, but that unpaired file cannot be
-            // represented by ColumnGroupBloomMeta. Drop the auxiliary reference and fail open.
+        if !legacy_bloom_is_ordinary_and_paired {
+            // A legacy Bloom may have an unpaired path after Ngram refresh, or a paired path but
+            // contain Ngram filters when the index existed at INSERT time. Neither file can be
+            // represented by ColumnGroupBloomMeta after the index is dropped. Drop the auxiliary
+            // reference and fail open.
             column_groups[0].bloom = None;
         }
     }

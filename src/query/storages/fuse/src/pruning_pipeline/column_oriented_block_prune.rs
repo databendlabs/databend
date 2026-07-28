@@ -291,6 +291,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         location_path,
                         bloom_filter_index_location,
                         bloom_filter_index_size,
+                        false,
                         vec![],
                         row_count,
                         column_groups,
