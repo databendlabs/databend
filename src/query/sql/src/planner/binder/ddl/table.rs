@@ -35,7 +35,9 @@ use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
 use databend_common_ast::ast::Expr as AstExpr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
@@ -106,9 +108,13 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::WriteDistributionMode;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
+use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use derive_visitor::Visitor;
 use log::debug;
 use opendal::Operator;
 use parking_lot::RwLock;
@@ -177,6 +183,29 @@ use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 
 const FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
+
+#[derive(Visitor)]
+#[visitor(FunctionCall(enter))]
+struct PartitionBucketValidator {
+    invalid: bool,
+}
+
+impl PartitionBucketValidator {
+    fn enter_function_call(&mut self, func: &FunctionCall) {
+        if func.name.name.eq_ignore_ascii_case("bucket") {
+            self.invalid |= !matches!(
+                func.args.as_slice(),
+                [
+                    AstExpr::Literal {
+                        value: Literal::UInt64(buckets),
+                        ..
+                    },
+                    _
+                ] if (1..=i32::MAX as u64).contains(buckets)
+            );
+        }
+    }
+}
 
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) schema: TableSchemaRef,
@@ -964,6 +993,17 @@ impl Binder {
                 "Table engine {} does not support create constraints",
                 engine
             )));
+        }
+
+        if matches!(engine, Engine::Fuse) {
+            if let Some(mode) = options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
+                let mode = mode.parse::<WriteDistributionMode>()?;
+                if mode == WriteDistributionMode::Hash && partition_by.is_none() {
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "{OPT_KEY_WRITE_DISTRIBUTION_MODE}='hash' requires PARTITION BY"
+                    )));
+                }
+            }
         }
 
         if matches!(engine, Engine::Fuse)
@@ -2422,6 +2462,17 @@ impl Binder {
         let mut cluster_keys = Vec::with_capacity(expr_len);
         let mut vector_cluster_key_num = 0;
         for cluster_expr in cluster_exprs.iter() {
+            if !allow_vector {
+                let mut validator = PartitionBucketValidator { invalid: false };
+                cluster_expr.drive(&mut validator);
+                if validator.invalid {
+                    return Err(ErrorCode::InvalidClusterKeys(format!(
+                        "{key_name} expression `{cluster_expr:#}` must use bucket with a constant count between 1 and {}",
+                        i32::MAX
+                    )));
+                }
+            }
+
             let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(

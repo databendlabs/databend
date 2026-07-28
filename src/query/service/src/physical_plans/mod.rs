@@ -108,6 +108,7 @@ pub use physical_replace_into::ReplaceInto;
 pub use physical_row_fetch::RowFetch;
 pub use physical_sequence::*;
 pub use physical_sort::Sort;
+pub use physical_sort::SortStep;
 pub use physical_spatial_join::PhysicalSpatialJoin;
 pub use physical_table_scan::TableScan;
 pub use physical_udf::UdfFunctionDesc;
