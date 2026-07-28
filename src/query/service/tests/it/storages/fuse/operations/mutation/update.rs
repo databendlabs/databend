@@ -23,14 +23,13 @@ use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 
-async fn latest_block_metas(fixture: &TestFixture) -> anyhow::Result<Vec<Arc<BlockMeta>>> {
-    Ok(latest_default_segment(fixture).await?.block_metas()?)
-}
-
-async fn latest_block_hlls(fixture: &TestFixture) -> anyhow::Result<Vec<BlockHLL>> {
+async fn latest_blocks_with_hll(
+    fixture: &TestFixture,
+) -> anyhow::Result<Vec<(Arc<BlockMeta>, BlockHLL)>> {
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let segment = latest_default_segment(fixture).await?;
+    let blocks = segment.block_metas()?;
     let (stats_location, stats_version) = segment.summary.additional_stats_loc().unwrap();
     let stats = MetaReaders::segment_stats_reader(fuse_table.get_operator())
         .read(&LoadParams {
@@ -40,11 +39,18 @@ async fn latest_block_hlls(fixture: &TestFixture) -> anyhow::Result<Vec<BlockHLL
             put_cache: false,
         })
         .await?;
-    stats
+    let hlls = stats
         .block_hlls
         .iter()
         .map(|hll| Ok(decode_column_hll(hll)?.unwrap()))
-        .collect()
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    anyhow::ensure!(
+        blocks.len() == hlls.len(),
+        "block/HLL count mismatch: {} blocks, {} HLLs",
+        blocks.len(),
+        hlls.len()
+    );
+    Ok(blocks.into_iter().zip(hlls).collect())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -73,10 +79,8 @@ async fn test_partial_update_metadata_bloom_and_hll() -> anyhow::Result<()> {
     let operator = FuseTable::try_from_table(table.as_ref())?.get_operator();
     let id_column_id = schema.field(0).column_id();
     let value_column_id = schema.field(1).column_id();
-    let origins = latest_block_metas(&fixture).await?;
-    let origin_hlls = latest_block_hlls(&fixture).await?;
+    let origins = latest_blocks_with_hll(&fixture).await?;
     assert_eq!(origins.len(), 2);
-    assert_eq!(origin_hlls.len(), 2);
 
     fixture
         .execute_command("set enable_partial_update = 1")
@@ -88,13 +92,13 @@ async fn test_partial_update_metadata_bloom_and_hll() -> anyhow::Result<()> {
         ))
         .await?;
 
-    let updated_blocks = latest_block_metas(&fixture).await?;
+    let updated_blocks = latest_blocks_with_hll(&fixture).await?;
     let updated_index = updated_blocks
         .iter()
-        .position(|block| !block.column_groups.is_empty())
+        .position(|(block, _)| !block.column_groups.is_empty())
         .unwrap();
-    let origin = &origins[updated_index];
-    let updated = &updated_blocks[updated_index];
+    let (origin, origin_hll) = &origins[updated_index];
+    let (updated, updated_hll) = &updated_blocks[updated_index];
 
     assert_eq!(updated.column_groups.len(), 2);
     let unchanged_group = updated
@@ -152,9 +156,6 @@ async fn test_partial_update_metadata_bloom_and_hll() -> anyhow::Result<()> {
     assert_eq!(query_count(rows).await?, 2);
     assert!(!operator.exists(&missing_bloom_location).await?);
 
-    let updated_hlls = latest_block_hlls(&fixture).await?;
-    let origin_hll = &origin_hlls[updated_index];
-    let updated_hll = &updated_hlls[updated_index];
     assert_eq!(
         updated_hll.get(&id_column_id),
         origin_hll.get(&id_column_id)
@@ -176,10 +177,10 @@ async fn test_partial_update_metadata_bloom_and_hll() -> anyhow::Result<()> {
             "update {db}.{table_name} set value = value + 1 where id = 2"
         ))
         .await?;
-    let updated_again_blocks = latest_block_metas(&fixture).await?;
+    let updated_again_blocks = latest_blocks_with_hll(&fixture).await?;
     let updated_again_index = 1 - updated_index;
-    let updated_again_origin = &origins[updated_again_index];
-    let updated_again = &updated_again_blocks[updated_again_index];
+    let (updated_again_origin, _) = &origins[updated_again_index];
+    let (updated_again, _) = &updated_again_blocks[updated_again_index];
     assert_eq!(updated_again.column_groups.len(), 2);
     assert!(
         updated_again
@@ -203,9 +204,10 @@ async fn test_partial_update_metadata_bloom_and_hll() -> anyhow::Result<()> {
         1
     );
 
-    let updated_again_hlls = latest_block_hlls(&fixture).await?;
-    assert_eq!(updated_again_hlls.len(), 2);
-    for (updated_again_hll, updated_hll) in updated_again_hlls.iter().zip(&updated_hlls) {
+    assert_eq!(updated_again_blocks.len(), updated_blocks.len());
+    for ((_, updated_again_hll), (_, updated_hll)) in
+        updated_again_blocks.iter().zip(&updated_blocks)
+    {
         assert_eq!(
             updated_again_hll.get(&id_column_id),
             updated_hll.get(&id_column_id)

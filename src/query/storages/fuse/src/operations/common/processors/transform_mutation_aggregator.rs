@@ -592,7 +592,7 @@ impl TableMutationAggregator {
                         .into_iter()
                         .enumerate()
                         .map(|(block_idx, block_meta)| {
-                            let hll = retain_current_block_hll(
+                            let hll = decode_current_block_hll(
                                 stats.as_ref().and_then(|v| v.block_hlls.get(block_idx)),
                                 &current_hll_column_ids,
                             )?;
@@ -601,13 +601,12 @@ impl TableMutationAggregator {
                         .collect::<Result<BTreeMap<usize, _>>>()?;
 
                     for (idx, (new_meta, new_hll)) in segment_mutation.replaced_blocks {
+                        let previous_hll = block_editor.remove(&idx).and_then(|(_, hll)| hll);
                         let new_hll = if let Some(updated_column_ids) = new_meta
                             .column_groups
                             .last()
                             .map(|group| group.active_column_ids.as_slice())
                         {
-                            let previous_hll =
-                                block_editor.get(&idx).and_then(|(_, hll)| hll.as_ref());
                             replace_partial_block_hll(previous_hll, new_hll, updated_column_ids)?
                         } else {
                             new_hll
@@ -635,7 +634,7 @@ impl TableMutationAggregator {
                         .map(|(block_meta, hll)| {
                             Ok((
                                 block_meta,
-                                hll.map(|hll| encode_column_hll(&hll)).transpose()?,
+                                encode_current_block_hll(hll, &current_hll_column_ids)?,
                             ))
                         })
                         .collect::<Result<Vec<_>>>()?
@@ -662,7 +661,14 @@ impl TableMutationAggregator {
                         .replaced_blocks
                         .into_iter()
                         .sorted_by(|a, b| a.0.cmp(&b.0))
-                        .map(|(_, meta)| meta)
+                        .map(|(_, (block_meta, hll))| {
+                            Ok((
+                                block_meta,
+                                normalize_current_block_hll(hll, &current_hll_column_ids)?,
+                            ))
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                        .into_iter()
                         .unzip();
                     let stats = generate_segment_stats(new_hlls)?;
                     (new_blocks, stats, None)
@@ -1022,11 +1028,11 @@ fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u
 }
 
 fn replace_partial_block_hll(
-    previous: Option<&BlockHLL>,
+    previous: Option<BlockHLL>,
     replacement: Option<RawBlockHLL>,
     updated_column_ids: &[ColumnId],
 ) -> Result<Option<BlockHLL>> {
-    let mut merged = previous.cloned().unwrap_or_default();
+    let mut merged = previous.unwrap_or_default();
     for column_id in updated_column_ids {
         merged.remove(column_id);
     }
@@ -1043,13 +1049,37 @@ fn replace_partial_block_hll(
     }
 }
 
-fn retain_current_block_hll(
+fn retain_hll_columns(
+    mut hll: BlockHLL,
+    current_hll_column_ids: &HashSet<ColumnId>,
+) -> Option<BlockHLL> {
+    hll.retain(|column_id, _| current_hll_column_ids.contains(column_id));
+    (!hll.is_empty()).then_some(hll)
+}
+
+fn decode_current_block_hll(
     hll: Option<&RawBlockHLL>,
     current_hll_column_ids: &HashSet<ColumnId>,
 ) -> Result<Option<BlockHLL>> {
-    let Some(mut hll) = hll.map(decode_column_hll).transpose()?.flatten() else {
+    let Some(hll) = hll.map(decode_column_hll).transpose()?.flatten() else {
         return Ok(None);
     };
-    hll.retain(|column_id, _| current_hll_column_ids.contains(column_id));
-    Ok((!hll.is_empty()).then_some(hll))
+    Ok(retain_hll_columns(hll, current_hll_column_ids))
+}
+
+fn encode_current_block_hll(
+    hll: Option<BlockHLL>,
+    current_hll_column_ids: &HashSet<ColumnId>,
+) -> Result<Option<RawBlockHLL>> {
+    hll.and_then(|hll| retain_hll_columns(hll, current_hll_column_ids))
+        .map(|hll| encode_column_hll(&hll))
+        .transpose()
+}
+
+fn normalize_current_block_hll(
+    hll: Option<RawBlockHLL>,
+    current_hll_column_ids: &HashSet<ColumnId>,
+) -> Result<Option<RawBlockHLL>> {
+    let hll = hll.as_ref().map(decode_column_hll).transpose()?.flatten();
+    encode_current_block_hll(hll, current_hll_column_ids)
 }
