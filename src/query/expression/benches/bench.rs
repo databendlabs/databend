@@ -49,7 +49,7 @@ mod escaped_like {
     const SUFFIX_PATTERN: &[u8] = br"%request\_processing\%failed";
     const CONTAINS_PATTERN: &[u8] = br"%request\_processing\%failed%";
     const CONTAINS_LITERAL: &[u8] = b"request_processing%failed";
-    const COLUMN_SIZE_HINT: usize = 1024 * 1024;
+    const LARGE_COLUMN_TOTAL_BYTES: usize = 1024 * 1024;
     const LOG_FRAGMENT: &[u8] =
         b"2026-01-01T00:00:00Z INFO synthetic_worker request processed successfully\n\
         at synthetic.module::run\n";
@@ -103,6 +103,16 @@ mod escaped_like {
             matched
         );
         haystack
+    }
+
+    #[divan::bench(args = [1, LARGE_COLUMN_TOTAL_BYTES])]
+    fn construct_contains_matcher(bencher: divan::Bencher, column_total_bytes: usize) {
+        bencher.bench(|| {
+            divan::black_box(generate_like_pattern(
+                divan::black_box(CONTAINS_PATTERN),
+                divan::black_box(column_total_bytes),
+            ))
+        });
     }
 
     #[divan::bench(args = [false, true])]
@@ -186,7 +196,12 @@ mod escaped_like {
     #[divan::bench(args = [1024, 4096, 16384])]
     fn optimized_contains_large_miss(bencher: divan::Bencher, len: usize) {
         let haystack = synthetic_log_message(len, false);
-        bench_optimized_with_hint(bencher, CONTAINS_PATTERN, &haystack, COLUMN_SIZE_HINT);
+        bench_optimized_with_hint(
+            bencher,
+            CONTAINS_PATTERN,
+            &haystack,
+            LARGE_COLUMN_TOTAL_BYTES,
+        );
     }
 
     #[divan::bench(args = [1024, 4096, 16384])]
@@ -198,7 +213,12 @@ mod escaped_like {
     #[divan::bench(args = [1024, 4096, 16384])]
     fn optimized_contains_large_hit(bencher: divan::Bencher, len: usize) {
         let haystack = synthetic_log_message(len, true);
-        bench_optimized_with_hint(bencher, CONTAINS_PATTERN, &haystack, COLUMN_SIZE_HINT);
+        bench_optimized_with_hint(
+            bencher,
+            CONTAINS_PATTERN,
+            &haystack,
+            LARGE_COLUMN_TOTAL_BYTES,
+        );
     }
 }
 
