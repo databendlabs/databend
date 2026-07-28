@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
@@ -22,7 +21,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
@@ -39,9 +37,7 @@ use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use log::warn;
 use opendal::Operator;
 
 use crate::FuseTable;
@@ -52,7 +48,6 @@ use crate::io::SpatialIndexBuilder;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::create_inverted_index_builders;
-use crate::io::read::bloom::block_filter_reader::load_index_meta;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -69,14 +64,9 @@ struct PendingSerialization {
 #[allow(clippy::large_enum_variant)]
 enum State {
     Consume,
-    NeedLegacyBloomMeta {
-        pending: PendingSerialization,
-        origin_block_meta: Arc<BlockMeta>,
-    },
     NeedSerialize {
         pending: PendingSerialization,
         origin_block_meta: Option<Arc<BlockMeta>>,
-        legacy_bloom_column_ids: Option<Vec<ColumnId>>,
     },
     Serialized {
         serialized: BlockSerialization,
@@ -286,50 +276,6 @@ impl TransformSerializeBlock {
         self.block_builder.clone()
     }
 
-    fn needs_legacy_bloom_meta(&self, origin: &BlockMeta) -> bool {
-        self.updated_field_indices.is_some()
-            && matches!(
-                origin.bloom_index_layout(),
-                Some(BloomIndexLayout::Legacy { .. })
-            )
-    }
-
-    async fn load_legacy_bloom_column_ids(&self, origin: &BlockMeta) -> Result<Vec<ColumnId>> {
-        let Some(BloomIndexLayout::Legacy {
-            location,
-            file_size,
-        }) = origin.bloom_index_layout()
-        else {
-            return Err(ErrorCode::Internal("legacy Bloom location is missing"));
-        };
-        let meta = match load_index_meta(self.dal.clone(), &location.0, file_size, None).await {
-            Ok(meta) => meta,
-            Err(error) => {
-                warn!(
-                    "failed to load legacy Bloom metadata at {:?}; dropping its reference from the partial-update output: {}",
-                    location, error
-                );
-                return Ok(vec![]);
-            }
-        };
-        let stored_filter_names = meta
-            .columns
-            .iter()
-            .map(|(name, _)| name.as_str())
-            .collect::<HashSet<_>>();
-        let mut active_column_ids = Vec::new();
-        for field in self.block_builder.source_schema.fields() {
-            if !BloomIndex::supported_type(field.data_type()) {
-                continue;
-            }
-            let filter_name = BloomIndex::build_filter_bloom_name(location.1, field)?;
-            if stored_filter_names.contains(filter_name.as_str()) {
-                active_column_ids.push(field.column_id());
-            }
-        }
-        Ok(active_column_ids)
-    }
-
     fn mutation_logs(
         entry: MutationLogEntry,
         logical_updated_rows: u64,
@@ -355,9 +301,6 @@ impl Processor for TransformSerializeBlock {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::NeedLegacyBloomMeta { .. }) {
-            return Ok(Event::Async);
-        }
         if matches!(self.state, State::NeedSerialize { .. }) {
             return Ok(Event::Sync);
         }
@@ -424,32 +367,15 @@ impl Processor for TransformSerializeBlock {
                             serialize_block.logical_updated_rows,
                             serialize_block.logical_deleted_rows,
                         );
-                        let origin_block_meta = serialize_block.origin_block_meta;
-                        if origin_block_meta
-                            .as_deref()
-                            .is_some_and(|origin| self.needs_legacy_bloom_meta(origin))
-                        {
-                            self.state = State::NeedLegacyBloomMeta {
-                                pending: PendingSerialization {
-                                    block: input_data,
-                                    stats_type: serialize_block.stats_type,
-                                    index: Some(serialize_block.index),
-                                },
-                                origin_block_meta: origin_block_meta.unwrap(),
-                            };
-                            Ok(Event::Async)
-                        } else {
-                            self.state = State::NeedSerialize {
-                                pending: PendingSerialization {
-                                    block: input_data,
-                                    stats_type: serialize_block.stats_type,
-                                    index: Some(serialize_block.index),
-                                },
-                                origin_block_meta,
-                                legacy_bloom_column_ids: None,
-                            };
-                            Ok(Event::Sync)
-                        }
+                        self.state = State::NeedSerialize {
+                            pending: PendingSerialization {
+                                block: input_data,
+                                stats_type: serialize_block.stats_type,
+                                index: Some(serialize_block.index),
+                            },
+                            origin_block_meta: serialize_block.origin_block_meta,
+                        };
+                        Ok(Event::Sync)
                     }
                 }
                 SerializeDataMeta::CompactExtras(compact_extras) => {
@@ -478,7 +404,6 @@ impl Processor for TransformSerializeBlock {
                     index: None,
                 },
                 origin_block_meta: None,
-                legacy_bloom_column_ids: None,
             };
             Ok(Event::Sync)
         }
@@ -494,7 +419,6 @@ impl Processor for TransformSerializeBlock {
                         index,
                     },
                 origin_block_meta,
-                legacy_bloom_column_ids,
             } => {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
@@ -506,7 +430,6 @@ impl Processor for TransformSerializeBlock {
                         block,
                         &origin_block_meta,
                         updated_field_indices,
-                        legacy_bloom_column_ids.as_deref(),
                     )?
                 } else {
                     self.block_builder
@@ -530,19 +453,6 @@ impl Processor for TransformSerializeBlock {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::NeedLegacyBloomMeta {
-                pending,
-                origin_block_meta,
-            } => {
-                let legacy_bloom_column_ids = self
-                    .load_legacy_bloom_column_ids(&origin_block_meta)
-                    .await?;
-                self.state = State::NeedSerialize {
-                    pending,
-                    origin_block_meta: Some(origin_block_meta),
-                    legacy_bloom_column_ids: Some(legacy_bloom_column_ids),
-                };
-            }
             State::Serialized { serialized, index } => {
                 let (logical_updated_rows, logical_deleted_rows) =
                     std::mem::take(&mut self.pending_logical_change);

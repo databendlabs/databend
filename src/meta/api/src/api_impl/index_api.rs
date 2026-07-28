@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
 use databend_common_meta_app::app_error::UnknownTableId;
@@ -347,6 +348,14 @@ where
                 options: req.options.clone(),
             };
             indexes.insert(req.name.clone(), index);
+            table_meta
+                .validate_column_group_compatibility()
+                .map_err(|error| {
+                    KVAppError::AppError(AppError::CommitTableMetaError(CommitTableMetaError::new(
+                        req.table_id.to_string(),
+                        error,
+                    )))
+                })?;
 
             let mut txn_req = TxnRequest::new(
                 //

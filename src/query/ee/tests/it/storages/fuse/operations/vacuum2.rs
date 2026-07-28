@@ -17,6 +17,7 @@ use std::path::Path;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextTableAccess;
@@ -151,11 +152,21 @@ async fn test_vacuum2_preserves_active_partial_update_files() -> anyhow::Result<
             "update {db}.{table_name} set a = a + 1 where id = 1"
         ))
         .await?;
-    let obsolete_group = latest_default_block_meta(&fixture)
-        .await?
-        .location
-        .0
-        .clone();
+    let first_update = latest_default_block_meta(&fixture).await?;
+    let obsolete_group = first_update.location.0.clone();
+    let obsolete_bloom = first_update
+        .column_groups
+        .iter()
+        .find(|group| group.location.0 == obsolete_group)
+        .and_then(|group| {
+            group.bloom.as_ref().map(|bloom| {
+                TableMetaLocationGenerator::gen_bloom_index_location_with_version(
+                    &group.location.0,
+                    bloom.format_version,
+                )
+            })
+        })
+        .expect("updated group should have an ordinary Bloom file");
 
     fixture
         .execute_command(&format!(
@@ -185,119 +196,22 @@ async fn test_vacuum2_preserves_active_partial_update_files() -> anyhow::Result<
     let operator = fuse_table.get_operator();
     for group in &current.column_groups {
         operator.stat(&group.location.0).await?;
-    }
-    for file in &current.bloom_index_files {
-        operator.stat(&file.location.0).await?;
+        if let Some(bloom) = &group.bloom {
+            let bloom_location = TableMetaLocationGenerator::gen_bloom_index_location_with_version(
+                &group.location.0,
+                bloom.format_version,
+            );
+            operator.stat(&bloom_location).await?;
+        }
     }
     assert!(operator.stat(&obsolete_group).await.is_err());
+    assert!(operator.stat(&obsolete_bloom).await.is_err());
 
     let rows = fixture
         .execute_query(&format!(
             "select count(*) from {db}.{table_name} \
              where (id = 1 and a = 12 and b = 21) \
                 or (id = 2 and a = 30 and b = 40)"
-        ))
-        .await?;
-    assert_eq!(databend_query::test_kits::query_count(rows).await?, 2);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum2_removes_superseded_split_bloom_files() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_data_retention_time_in_days(0)?;
-    let db = fixture.default_db_name();
-    let table_name = fixture.default_table_name();
-
-    fixture.create_default_database().await?;
-    fixture
-        .execute_command(&format!(
-            "create table {db}.{table_name} (id int, a int, content string) engine=fuse \
-             bloom_index_columns='id,a' enable_partial_update=true"
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "insert into {db}.{table_name} values \
-             (1, 10, 'aaaaaaaaaa'), (2, 20, 'bbbbbbbbbb')"
-        ))
-        .await?;
-    fixture
-        .execute_command("set enable_partial_update = 1")
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "update {db}.{table_name} set a = a + 1 where id = 1"
-        ))
-        .await?;
-
-    let split_meta = latest_default_block_meta(&fixture).await?;
-    assert_eq!(split_meta.bloom_index_files.len(), 2);
-    let superseded_bloom_files = split_meta
-        .bloom_index_files
-        .iter()
-        .map(|file| file.location.0.clone())
-        .collect::<Vec<_>>();
-
-    fixture
-        .execute_command(&format!(
-            "create ngram index idx_content on {db}.{table_name}(content)"
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "refresh ngram index idx_content on {db}.{table_name}"
-        ))
-        .await?;
-
-    let current = latest_default_block_meta(&fixture).await?;
-    assert!(current.bloom_index_files.is_empty());
-    let current_bloom_file = current
-        .bloom_filter_index_location
-        .as_ref()
-        .expect("consolidated Bloom file")
-        .0
-        .clone();
-    assert!(
-        superseded_bloom_files
-            .iter()
-            .all(|path| path != &current_bloom_file)
-    );
-    let active_data_files = current
-        .data_file_locations()
-        .map(|location| location.0.clone())
-        .collect::<Vec<_>>();
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let operator = fuse_table.get_operator();
-    for path in &superseded_bloom_files {
-        operator.stat(path).await?;
-    }
-
-    fixture
-        .execute_command(&format!("call system$fuse_vacuum2('{db}', '{table_name}')"))
-        .await?;
-
-    for path in superseded_bloom_files {
-        assert!(
-            operator.stat(&path).await.is_err(),
-            "{path} was not removed"
-        );
-    }
-    operator.stat(&current_bloom_file).await?;
-    for path in active_data_files {
-        operator.stat(&path).await?;
-    }
-
-    let rows = fixture
-        .execute_query(&format!(
-            "select count(*) from {db}.{table_name} \
-             where (id = 1 and a = 11 and content = 'aaaaaaaaaa') \
-                or (id = 2 and a = 20 and content = 'bbbbbbbbbb')"
         ))
         .await?;
     assert_eq!(databend_query::test_kits::query_count(rows).await?, 2);

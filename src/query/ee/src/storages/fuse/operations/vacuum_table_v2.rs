@@ -27,6 +27,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::block_bloom_index_locations;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::VacuumObjectKeyPolicy;
@@ -145,9 +146,9 @@ pub async fn do_vacuum2(
                     .map(|location| location.0.clone()),
             );
             gc_root_indexes.extend(
-                block
-                    .bloom_index_file_locations()
-                    .map(|location| location.0.clone()),
+                block_bloom_index_locations(&block)
+                    .into_iter()
+                    .map(|location| location.0),
             );
         }
     }
@@ -192,10 +193,9 @@ pub async fn do_vacuum2(
         slice_summary(&blocks_to_gc)
     ));
 
-    // Bloom files are immutable, but their lifetime is not tied to the data file whose UUID was
-    // originally used for the index path. Ngram refresh, for example, consolidates a split Bloom
-    // layout into a fresh file while retaining the active data groups. List the Bloom directory
-    // independently so those superseded files do not leak forever.
+    // Column-group Bloom paths are derived from their owning data-group paths. The files live in a
+    // separate directory, so scan that directory and retain exactly the files referenced by the
+    // protected groups. This also removes orphan Bloom files left by interrupted writes.
     let start = std::time::Instant::now();
     let bloom_indexes_before_gc_root =
         list_bloom_indexes_before_gc_root(fuse_table, gc_root_timestamp, gc_root_meta_ts).await?;
@@ -386,7 +386,7 @@ fn collect_block_index_locations(
     inverted_indexes: &BTreeMap<String, TableIndex>,
 ) -> Vec<String> {
     let mut indexes_to_gc = Vec::with_capacity(
-        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 1),
+        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len()),
     );
     for loc in blocks_to_gc {
         for index_id in table_agg_index_ids {
@@ -405,8 +405,6 @@ fn collect_block_index_locations(
                 ),
             );
         }
-        indexes_to_gc
-            .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
     }
     indexes_to_gc
 }
@@ -499,14 +497,12 @@ mod tests {
                 "idx",
                 "123456789",
             ),
-            TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[0]),
             TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&blocks[1], 7),
             TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
                 &blocks[1],
                 "idx",
                 "123456789",
             ),
-            TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[1]),
         ]);
     }
 

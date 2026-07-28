@@ -88,11 +88,18 @@ async fn test_replace_bloom_prunes_partial_update_block() -> anyhow::Result<()> 
         ))
         .await?;
     let block_meta = latest_default_block_meta(&fixture).await?;
-    assert_eq!(block_meta.bloom_index_files.len(), 2);
+    assert_eq!(
+        block_meta
+            .column_groups
+            .iter()
+            .filter(|group| group.bloom.is_some())
+            .count(),
+        2
+    );
 
     // Make the active data files unreadable while leaving both Bloom files intact. A key that
     // might conflict must still try to read the block, proving that the missing data is visible.
-    // The absent key below can succeed only if REPLACE reads and combines the split Bloom files.
+    // The absent key below can succeed only if REPLACE reads and combines the paired Bloom files.
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let operator = fuse_table.get_operator();

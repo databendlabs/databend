@@ -49,15 +49,13 @@ use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
-use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
-use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
-use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnGroupBloomMeta;
 use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
@@ -180,14 +178,7 @@ struct ColumnGroupUpdate {
     uncompressed_size: u64,
     column_metas: HashMap<ColumnId, ColumnMeta>,
     column_stats: StatisticsOfColumns,
-}
-
-enum BloomLayoutMerge {
-    Preserve,
-    Canonical {
-        files: Vec<BloomIndexFileMeta>,
-        file_size: u64,
-    },
+    bloom: Option<ColumnGroupBloomMeta>,
 }
 
 fn merge_column_group_metadata(
@@ -201,6 +192,26 @@ fn merge_column_group_metadata(
         .copied()
         .collect::<HashSet<_>>();
     let mut column_groups = origin.physical_column_groups().into_owned();
+    if origin.column_groups.is_empty() {
+        let legacy_bloom_is_paired =
+            origin
+                .bloom_filter_index_location
+                .as_ref()
+                .is_none_or(|location| {
+                    let expected =
+                        TableMetaLocationGenerator::gen_bloom_index_location_with_version(
+                            &origin.location.0,
+                            location.1,
+                        );
+                    expected == location.0
+                });
+        if !legacy_bloom_is_paired {
+            // Ngram refresh historically wrote a new random Bloom path. After the Ngram index is
+            // dropped the table may enable column groups, but that unpaired file cannot be
+            // represented by ColumnGroupBloomMeta. Drop the auxiliary reference and fail open.
+            column_groups[0].bloom = None;
+        }
+    }
     for group in &mut column_groups {
         group.active_column_ids.retain(|column_id| {
             current_column_ids.contains(column_id) && !updated_column_ids.contains(column_id)
@@ -214,6 +225,7 @@ fn merge_column_group_metadata(
         file_size: update.file_size,
         uncompressed_size: update.uncompressed_size,
         leaf_column_metas: update.column_metas.clone(),
+        bloom: update.bloom,
     });
 
     let mut block_meta = origin.clone();
@@ -232,72 +244,15 @@ fn merge_column_group_metadata(
         .col_stats
         .retain(|column_id, _| current_column_ids.contains(column_id));
     block_meta.col_stats.extend(update.column_stats);
+    block_meta.bloom_filter_index_location = None;
+    block_meta.bloom_filter_index_size = block_meta
+        .column_groups
+        .iter()
+        .filter_map(|group| group.bloom.as_ref())
+        .map(|bloom| bloom.file_size)
+        .sum();
+    block_meta.ngram_filter_index_size = None;
     block_meta
-}
-
-fn merge_partial_update_bloom_layout(
-    origin: &BlockMeta,
-    legacy_bloom_column_ids: Option<&[ColumnId]>,
-    current_bloom_column_ids: &HashSet<ColumnId>,
-    invalidated_bloom_column_ids: &HashSet<ColumnId>,
-    updated_bloom_column_ids: &HashSet<ColumnId>,
-    bloom_index_state: Option<&BloomIndexState>,
-) -> Result<BloomLayoutMerge> {
-    let layout = origin.bloom_index_layout();
-    if matches!(layout, Some(BloomIndexLayout::Legacy { .. })) {
-        let active_column_ids = legacy_bloom_column_ids
-            .ok_or_else(|| ErrorCode::Internal("legacy Bloom file columns were not loaded"))?;
-        let keep_legacy_layout = !active_column_ids.is_empty()
-            && bloom_index_state.is_none()
-            && invalidated_bloom_column_ids.is_empty()
-            && active_column_ids
-                .iter()
-                .all(|column_id| current_bloom_column_ids.contains(column_id));
-        if keep_legacy_layout {
-            return Ok(BloomLayoutMerge::Preserve);
-        }
-    }
-
-    let mut files = match layout {
-        None => Vec::new(),
-        Some(BloomIndexLayout::Legacy {
-            location,
-            file_size,
-        }) => {
-            let active_column_ids = legacy_bloom_column_ids
-                .ok_or_else(|| ErrorCode::Internal("legacy Bloom file columns were not loaded"))?;
-            if active_column_ids.is_empty() {
-                Vec::new()
-            } else {
-                vec![BloomIndexFileMeta {
-                    active_column_ids: active_column_ids.to_vec(),
-                    location: location.clone(),
-                    format_version: location.1,
-                    file_size,
-                }]
-            }
-        }
-        Some(BloomIndexLayout::Split { files }) => files.to_vec(),
-    };
-    for file in &mut files {
-        file.active_column_ids.retain(|column_id| {
-            current_bloom_column_ids.contains(column_id)
-                && !invalidated_bloom_column_ids.contains(column_id)
-        });
-    }
-    files.retain(|file| !file.active_column_ids.is_empty());
-    if let Some(state) = bloom_index_state {
-        let mut active_column_ids = updated_bloom_column_ids.iter().copied().collect::<Vec<_>>();
-        active_column_ids.sort_unstable();
-        files.push(BloomIndexFileMeta {
-            active_column_ids,
-            location: state.location.clone(),
-            format_version: state.location.1,
-            file_size: state.size,
-        });
-    }
-    let file_size = files.iter().map(|file| file.file_size).sum();
-    Ok(BloomLayoutMerge::Canonical { files, file_size })
 }
 
 impl BlockBuilder {
@@ -450,7 +405,6 @@ impl BlockBuilder {
             cluster_stats,
             location: block_location,
             bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
-            bloom_index_files: vec![],
             bloom_filter_index_size: bloom_index_state
                 .as_ref()
                 .map(|v| v.size)
@@ -493,7 +447,6 @@ impl BlockBuilder {
         data_block: DataBlock,
         origin: &BlockMeta,
         updated_field_indices: &[FieldIndex],
-        legacy_bloom_column_ids: Option<&[ColumnId]>,
     ) -> Result<BlockSerialization> {
         if data_block.num_rows() as u64 != origin.row_count {
             return Err(ErrorCode::Internal(
@@ -541,16 +494,6 @@ impl BlockBuilder {
                     .map(|field| (updated_index, field))
             })
             .collect::<BTreeMap<_, _>>();
-        let updated_bloom_column_ids = updated_bloom_columns_map
-            .values()
-            .map(|field| field.column_id())
-            .collect::<HashSet<_>>();
-        let invalidated_bloom_column_ids = updated_field_indices
-            .iter()
-            .map(|index| self.source_schema.field(*index))
-            .filter(|field| BloomIndex::supported_type(field.data_type()))
-            .map(TableField::column_id)
-            .collect::<HashSet<_>>();
         let rebuild_bloom_index = !updated_bloom_columns_map.is_empty();
         let bloom_index_state = if rebuild_bloom_index {
             let location = self.meta_locations.block_bloom_index_location(&block_id);
@@ -619,29 +562,14 @@ impl BlockBuilder {
                 uncompressed_size,
                 column_metas: updated_col_metas,
                 column_stats: updated_col_stats,
+                bloom: bloom_index_state
+                    .as_ref()
+                    .map(|state| ColumnGroupBloomMeta {
+                        format_version: state.location.1,
+                        file_size: state.size,
+                    }),
             });
         block_meta.create_on = Some(Utc::now());
-
-        let current_bloom_column_ids = self
-            .source_schema
-            .fields()
-            .iter()
-            .filter(|field| BloomIndex::supported_type(field.data_type()))
-            .map(TableField::column_id)
-            .collect::<HashSet<_>>();
-        if let BloomLayoutMerge::Canonical { files, file_size } = merge_partial_update_bloom_layout(
-            origin,
-            legacy_bloom_column_ids,
-            &current_bloom_column_ids,
-            &invalidated_bloom_column_ids,
-            &updated_bloom_column_ids,
-            bloom_index_state.as_ref(),
-        )? {
-            block_meta.bloom_filter_index_location = None;
-            block_meta.bloom_filter_index_size = file_size;
-            block_meta.bloom_index_files = files;
-            block_meta.ngram_filter_index_size = None;
-        }
         if invalidate_virtual_columns {
             block_meta.virtual_block_meta = None;
         }

@@ -33,11 +33,11 @@ select * from t_partial_update order by id
 1 11
 2 21
 
-query BB
-select column_groups != parse_json('[]'), bloom_index_files != parse_json('[]')
+query B
+select column_groups != parse_json('[]')
 from fuse_block('default', 't_partial_update')
 ----
-1 1
+1
 
 query I
 select count(distinct column_name)
@@ -67,11 +67,15 @@ set enable_partial_update = 0
 statement ok
 update t_partial_update set value = value + 1 where id = 1
 
-query BB
-select column_groups = parse_json('[]'), bloom_index_files = parse_json('[]')
+query B
+select column_groups = parse_json('[]')
 from fuse_block('default', 't_partial_update')
 ----
-1 1
+1
+
+# The table capability is sticky; only the session setting can disable new partial writes.
+statement error
+alter table t_partial_update set options(enable_partial_update = false)
 
 statement ok
 drop table t_partial_update

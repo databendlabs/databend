@@ -13,42 +13,35 @@
 ## limitations under the License.
 
 statement ok
-create or replace database partial_update_cluster_dependency
+create or replace database partial_update_computed_column
 
 statement ok
-use partial_update_cluster_dependency
+use partial_update_computed_column
 
-# A table with a computed column must use the full-update path. The cluster key also verifies that
-# the fallback pipeline uses the persisted physical schema and refreshes its cluster statistics.
-statement ok
-create table t(
+# The incompatibility is enforced in both directions when table metadata is changed.
+statement error 2322
+create table invalid_create(
     id int,
-    a int,
-    k bigint as (a + 1) virtual
+    value int,
+    computed_value bigint as (value + 1) virtual
 ) enable_partial_update = true
 
 statement ok
-insert into t(id, a) values (1, 10), (2, 20)
+create table computed_first(
+    id int,
+    value int,
+    computed_value bigint as (value + 1) virtual
+)
+
+statement error
+alter table computed_first set options(enable_partial_update = true)
 
 statement ok
-alter table t cluster by(k)
+create table partial_update_first(id int, value int) enable_partial_update = true
+
+statement error
+alter table partial_update_first
+    add column computed_value bigint as (value + 1) virtual
 
 statement ok
-set enable_partial_update = 1
-
-statement ok
-update t set a = a + 1 where id = 1
-
-query B
-select column_groups = parse_json('[]') from fuse_block('partial_update_cluster_dependency', 't')
-----
-1
-
-query III
-select id, a, k from t order by id
-----
-1 11 12
-2 20 21
-
-statement ok
-drop database partial_update_cluster_dependency
+drop database partial_update_computed_column

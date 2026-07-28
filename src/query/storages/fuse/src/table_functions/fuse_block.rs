@@ -90,7 +90,6 @@ impl TableMetaFunc for FuseBlock {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
             TableField::new("column_groups", TableDataType::Variant),
-            TableField::new("bloom_index_files", TableDataType::Variant),
         ])
     }
 
@@ -117,7 +116,6 @@ impl TableMetaFunc for FuseBlock {
         let mut spatial_index_size = Vec::with_capacity(len);
         let mut virtual_column_size = Vec::with_capacity(len);
         let mut column_groups = Vec::with_capacity(len);
-        let mut bloom_index_files = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
@@ -165,25 +163,11 @@ impl TableMetaFunc for FuseBlock {
                                     "format_version": group.format_version,
                                     "file_size": group.file_size,
                                     "uncompressed_size": group.uncompressed_size,
+                                    "bloom": group.bloom,
                                 })
                             })
                             .collect::<Vec<_>>(),
                     )?);
-                    bloom_index_files.push(serialize_variant(
-                        &block
-                            .bloom_index_files
-                            .iter()
-                            .map(|file| {
-                                serde_json::json!({
-                                    "active_column_ids": file.active_column_ids,
-                                    "location": file.location.0,
-                                    "format_version": file.format_version,
-                                    "file_size": file.file_size,
-                                })
-                            })
-                            .collect::<Vec<_>>(),
-                    )?);
-
                     num_rows += 1;
                     if num_rows >= limit {
                         break 'FOR;
@@ -208,7 +192,6 @@ impl TableMetaFunc for FuseBlock {
                 UInt64Type::from_opt_data(spatial_index_size).into(),
                 UInt64Type::from_opt_data(virtual_column_size).into(),
                 VariantType::from_data(column_groups).into(),
-                VariantType::from_data(bloom_index_files).into(),
             ],
             num_rows,
         ))

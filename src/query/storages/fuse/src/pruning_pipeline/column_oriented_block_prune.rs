@@ -32,7 +32,6 @@ use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::RangeIndexInput;
-use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnMetaV0;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -44,6 +43,7 @@ use tokio::sync::OwnedSemaphorePermit;
 use super::PrunedColumnOrientedSegmentMeta;
 use crate::FuseBlockPartInfo;
 use crate::FuseColumnGroupPartInfo;
+use crate::fuse_part::BloomIndexLayout;
 use crate::pruning::BlockPruner;
 use crate::pruning_pipeline::RuntimeFilterPruneContext;
 
@@ -223,11 +223,12 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
                         if !bloom_pruner
                             .should_keep(
-                                BloomIndexLayout::from_metadata(
-                                    bloom_filter_index_location.as_ref(),
-                                    bloom_filter_index_size,
-                                    &[],
-                                ),
+                                bloom_filter_index_location.as_ref().map(|location| {
+                                    BloomIndexLayout::Legacy {
+                                        location,
+                                        file_size: bloom_filter_index_size,
+                                    }
+                                }),
                                 &columns_stat,
                                 column_ids.clone(),
                                 &block_read_info,

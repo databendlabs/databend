@@ -185,6 +185,9 @@ pub struct ColumnGroupFileMeta {
     pub file_size: u64,
     pub uncompressed_size: u64,
     pub leaf_column_metas: HashMap<ColumnId, ColumnMeta>,
+    /// Ordinary Bloom file paired with this data file. Its location is derived from `location`.
+    #[serde(default)]
+    pub bloom: Option<ColumnGroupBloomMeta>,
 }
 
 impl ColumnGroupFileMeta {
@@ -198,46 +201,14 @@ impl ColumnGroupFileMeta {
     }
 }
 
-/// Metadata of one physical Bloom index file referenced by a logical block.
+/// Metadata of the ordinary Bloom file paired with a physical column-group file.
 ///
-/// A file may still contain filters that are no longer active. Readers must only use the filters
-/// whose column ids are listed in [`Self::active_column_ids`].
+/// The Bloom file is self-describing. A stored filter is active only while its column id remains in
+/// the owning [`ColumnGroupFileMeta::active_column_ids`].
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
-pub struct BloomIndexFileMeta {
-    pub active_column_ids: Vec<ColumnId>,
-    pub location: Location,
+pub struct ColumnGroupBloomMeta {
     pub format_version: FormatVersion,
     pub file_size: u64,
-}
-
-/// Borrowed view of the physical Bloom-index layout used by a logical block.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BloomIndexLayout<'a> {
-    Legacy {
-        location: &'a Location,
-        file_size: u64,
-    },
-    Split {
-        files: &'a [BloomIndexFileMeta],
-    },
-}
-
-impl<'a> BloomIndexLayout<'a> {
-    /// Normalize optional legacy and split Bloom metadata into one physical-layout view.
-    pub fn from_metadata(
-        legacy_location: Option<&'a Location>,
-        legacy_file_size: u64,
-        split_files: &'a [BloomIndexFileMeta],
-    ) -> Option<Self> {
-        if split_files.is_empty() {
-            legacy_location.map(|location| Self::Legacy {
-                location,
-                file_size: legacy_file_size,
-            })
-        } else {
-            Some(Self::Split { files: split_files })
-        }
-    }
 }
 
 /// Meta information of a block
@@ -265,13 +236,6 @@ pub struct BlockMeta {
     pub location: Location,
     /// location of bloom filter index
     pub bloom_filter_index_location: Option<Location>,
-
-    /// Physical files that contain the active Bloom filters of this logical block.
-    ///
-    /// An empty vector is the legacy single-file representation described by
-    /// `bloom_filter_index_location` and `bloom_filter_index_size`.
-    #[serde(default)]
-    pub bloom_index_files: Vec<BloomIndexFileMeta>,
 
     #[serde(default)]
     pub bloom_filter_index_size: u64,
@@ -324,7 +288,6 @@ impl BlockMeta {
             cluster_stats,
             location,
             bloom_filter_index_location,
-            bloom_index_files: vec![],
             bloom_filter_index_size,
             inverted_index_size,
             ngram_filter_index_size,
@@ -343,15 +306,6 @@ impl BlockMeta {
     pub fn compression(&self) -> Compression {
         self.compression
     }
-    /// Normalize optional legacy and split Bloom metadata into one physical-layout view.
-    pub fn bloom_index_layout(&self) -> Option<BloomIndexLayout<'_>> {
-        BloomIndexLayout::from_metadata(
-            self.bloom_filter_index_location.as_ref(),
-            self.bloom_filter_index_size,
-            &self.bloom_index_files,
-        )
-    }
-
     /// Active physical data files referenced by this logical block.
     pub fn data_file_locations(&self) -> impl Iterator<Item = &Location> {
         self.column_groups
@@ -359,16 +313,6 @@ impl BlockMeta {
             .then_some(&self.location)
             .into_iter()
             .chain(self.column_groups.iter().map(|group| &group.location))
-    }
-
-    /// Active physical Bloom files referenced by this logical block.
-    pub fn bloom_index_file_locations(&self) -> impl Iterator<Item = &Location> {
-        self.bloom_index_files
-            .is_empty()
-            .then_some(self.bloom_filter_index_location.as_ref())
-            .flatten()
-            .into_iter()
-            .chain(self.bloom_index_files.iter().map(|file| &file.location))
     }
 
     fn legacy_column_group(
@@ -395,6 +339,13 @@ impl BlockMeta {
             file_size: self.file_size,
             uncompressed_size: self.block_size,
             leaf_column_metas,
+            bloom: self
+                .bloom_filter_index_location
+                .as_ref()
+                .map(|location| ColumnGroupBloomMeta {
+                    format_version: location.1,
+                    file_size: self.bloom_filter_index_size,
+                }),
         }
     }
 
@@ -439,6 +390,7 @@ impl BlockMeta {
                     file_size,
                     uncompressed_size,
                     leaf_column_metas,
+                    bloom: None,
                 })
             };
 
@@ -461,6 +413,10 @@ impl BlockMeta {
                     group.uncompressed_size,
                     &group.leaf_column_metas,
                 )
+                .map(|mut projected| {
+                    projected.bloom = group.bloom.clone();
+                    projected
+                })
             })
             .collect()
     }
@@ -581,7 +537,6 @@ impl BlockMeta {
             cluster_stats: None,
             location: (s.location.path.clone(), 0),
             bloom_filter_index_location: None,
-            bloom_index_files: vec![],
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
             inverted_index_size: None,
@@ -615,7 +570,6 @@ impl BlockMeta {
             cluster_stats: None,
             location: s.location.clone(),
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
-            bloom_index_files: vec![],
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
             inverted_index_size: None,
@@ -649,31 +603,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_bloom_index_layout_normalizes_legacy_and_split_metadata() {
-        let legacy_location = ("legacy-bloom".to_string(), 2);
-        assert_eq!(
-            BloomIndexLayout::from_metadata(Some(&legacy_location), 10, &[]),
-            Some(BloomIndexLayout::Legacy {
-                location: &legacy_location,
-                file_size: 10,
-            })
-        );
-
-        let split_files = vec![BloomIndexFileMeta {
-            active_column_ids: vec![1],
-            location: ("split-bloom".to_string(), 4),
-            format_version: 4,
-            file_size: 20,
-        }];
-        assert_eq!(
-            BloomIndexLayout::from_metadata(Some(&legacy_location), 10, &split_files),
-            Some(BloomIndexLayout::Split {
-                files: &split_files,
-            })
-        );
-    }
-
-    #[test]
     fn test_active_leaf_column_metas_excludes_inactive_and_missing_columns() {
         let group = ColumnGroupFileMeta {
             active_column_ids: vec![1, 3],
@@ -699,6 +628,7 @@ mod tests {
                     }),
                 ),
             ]),
+            bloom: None,
         };
 
         let active_metas = group
@@ -709,7 +639,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialize_legacy_block_meta_without_file_lists() {
+    fn test_deserialize_legacy_block_meta_without_column_groups() {
         let block_meta = BlockMeta::new(
             10,
             300,
@@ -740,17 +670,8 @@ mod tests {
                 .remove("column_groups")
                 .is_some()
         );
-        assert!(
-            value
-                .as_object_mut()
-                .unwrap()
-                .remove("bloom_index_files")
-                .is_some()
-        );
-
         let decoded: BlockMeta = serde_json::from_value(value).unwrap();
         assert!(decoded.column_groups.is_empty());
-        assert!(decoded.bloom_index_files.is_empty());
         assert_eq!(decoded.location, location);
     }
 }

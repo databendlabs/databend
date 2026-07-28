@@ -549,7 +549,6 @@ mod tests {
             cluster_stats: None,
             location: ("block.parquet".to_string(), 0),
             bloom_filter_index_location: None,
-            bloom_index_files: vec![],
             bloom_filter_index_size: 0,
             inverted_index_size: None,
             ngram_filter_index_size: None,

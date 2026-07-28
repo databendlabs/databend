@@ -47,7 +47,6 @@ use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
-use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -57,6 +56,8 @@ use opendal::Operator;
 use tokio::sync::Semaphore;
 
 use crate::FuseTable;
+use crate::fuse_part::BloomIndexLayout;
+use crate::fuse_part::bloom_index_layout;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
 use crate::io::BlockWriter;
@@ -718,7 +719,7 @@ impl AggregationContext {
         bloom_on_conflict_field_index: &[FieldIndex],
     ) -> Result<Option<Vec<Option<Arc<FilterImpl>>>>> {
         // different block may have different version of bloom filter index
-        let (block_filter, col_names) = match block_meta.bloom_index_layout() {
+        let (block_filter, col_names) = match bloom_index_layout(block_meta) {
             None => return Ok(None),
             Some(BloomIndexLayout::Legacy {
                 location,
@@ -749,7 +750,7 @@ impl AggregationContext {
                     .await?;
                 (block_filter, col_names)
             }
-            Some(BloomIndexLayout::Split { files }) => {
+            Some(BloomIndexLayout::ColumnGroups { files }) => {
                 let fields = bloom_on_conflict_field_index
                     .iter()
                     .map(|idx| self.on_conflict_fields[*idx].table_field.clone())
@@ -759,7 +760,7 @@ impl AggregationContext {
                     &self.read_settings,
                     &fields,
                     &[],
-                    files,
+                    &files,
                 )
                 .await?
                 else {

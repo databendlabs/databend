@@ -438,27 +438,27 @@ async fn check_ngram_index_generated(
     stats: Option<Arc<SegmentStatistics>>,
     ngram_index_arg: &RefreshNgramIndexArg,
 ) -> Result<Option<RefreshIndexMeta>> {
-    // A partial update may split active Bloom filters across several immutable files. Such a
-    // block must be consolidated when adding Ngram filters, so do not mistake the Bloom file
-    // derived from the newest data group for the complete logical index.
-    if block_meta.bloom_index_files.is_empty() {
-        if let Some((index_path, _)) = &block_meta.bloom_filter_index_location {
-            if let Ok(content_length) = operator
-                .stat(index_path)
-                .await
-                .map(|meta| meta.content_length())
-            {
-                let bloom_index_meta =
-                    load_index_meta(operator.clone(), index_path, content_length, None).await?;
+    if !block_meta.column_groups.is_empty() {
+        return Err(ErrorCode::RefreshIndexError(
+            "Ngram index is incompatible with column-group layout".to_string(),
+        ));
+    }
+    if let Some((index_path, _)) = &block_meta.bloom_filter_index_location {
+        if let Ok(content_length) = operator
+            .stat(index_path)
+            .await
+            .map(|meta| meta.content_length())
+        {
+            let bloom_index_meta =
+                load_index_meta(operator.clone(), index_path, content_length, None).await?;
 
-                if ngram_index_arg.ngram_index_names.iter().all(|name| {
-                    bloom_index_meta
-                        .columns
-                        .iter()
-                        .any(|(column_name, _)| column_name == name)
-                }) {
-                    return Ok(None);
-                }
+            if ngram_index_arg.ngram_index_names.iter().all(|name| {
+                bloom_index_meta
+                    .columns
+                    .iter()
+                    .any(|(column_name, _)| column_name == name)
+            }) {
+                return Ok(None);
             }
         }
     }
@@ -755,7 +755,6 @@ impl AsyncTransform for NgramIndexTransform {
             let state = BloomIndexState::from_bloom_index(&bloom_index, index_location)?;
 
             new_block_meta.bloom_filter_index_location = Some(state.location.clone());
-            new_block_meta.bloom_index_files.clear();
             new_block_meta.bloom_filter_index_size = state.size();
             new_block_meta.ngram_filter_index_size = state.ngram_size();
             BlockWriter::write_down_bloom_index_state(&self.operator, Some(state)).await?;

@@ -87,6 +87,7 @@ use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
+use crate::fuse_part::column_group_bloom_files;
 use crate::fuse_part::project_column_groups;
 use crate::io::BloomIndexRebuilder;
 use crate::pruning::BlockPruner;
@@ -1408,7 +1409,7 @@ impl FuseTable {
             location,
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
-            meta.bloom_index_files.clone(),
+            column_group_bloom_files(meta),
             rows_count,
             column_groups,
             Some(columns_stats),
@@ -1465,7 +1466,7 @@ impl FuseTable {
             location,
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
-            meta.bloom_index_files.clone(),
+            column_group_bloom_files(meta),
             rows_count,
             column_groups,
             Some(columns_stat),
@@ -1558,6 +1559,7 @@ mod tests {
                 file_size: 10,
                 uncompressed_size: 10,
                 leaf_column_metas: HashMap::from([(1, column_1_meta), (2, stale_column_2_meta)]),
+                bloom: None,
             },
             ColumnGroupFileMeta {
                 active_column_ids: vec![2],
@@ -1566,6 +1568,7 @@ mod tests {
                 file_size: 12,
                 uncompressed_size: 12,
                 leaf_column_metas: HashMap::from([(2, active_column_2_meta.clone())]),
+                bloom: None,
             },
         ];
 

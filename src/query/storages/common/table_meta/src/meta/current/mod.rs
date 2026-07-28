@@ -15,9 +15,8 @@
 pub use v0::ColumnMeta as SingleColumnMeta;
 pub use v2::AdditionalStatsMeta;
 pub use v2::BlockMeta;
-pub use v2::BloomIndexFileMeta;
-pub use v2::BloomIndexLayout;
 pub use v2::ClusterStatistics;
+pub use v2::ColumnGroupBloomMeta;
 pub use v2::ColumnGroupFileMeta;
 pub use v2::ColumnMeta;
 pub use v2::ColumnStatistics;

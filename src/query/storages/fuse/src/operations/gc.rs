@@ -49,6 +49,7 @@ use log::warn;
 
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::FuseTable;
+use crate::block_bloom_index_locations;
 use crate::index::InvertedIndexFile;
 use crate::io::InvertedIndexReader;
 use crate::io::SegmentsIO;
@@ -809,9 +810,9 @@ impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
                     .map(|location| location.0.clone()),
             );
             bloom_location.extend(
-                block_meta
-                    .bloom_index_file_locations()
-                    .map(|location| location.0.clone()),
+                block_bloom_index_locations(&block_meta)
+                    .into_iter()
+                    .map(|location| location.0),
             );
         }
         if let Some(loc) = value.as_ref().summary.additional_stats_loc() {

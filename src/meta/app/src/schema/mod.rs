@@ -125,6 +125,7 @@ pub use table::ListDroppedTableResp;
 pub use table::ListTableCopiedFileReply;
 pub use table::ListTableReq;
 pub use table::ListTableTagsReq;
+pub use table::OPT_KEY_ENABLE_PARTIAL_UPDATE;
 pub use table::RenameTableReply;
 pub use table::RenameTableReq;
 pub use table::SecurityPolicyColumnMap;

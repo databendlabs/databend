@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Projection;
@@ -33,7 +32,6 @@ use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_io::ReadSettings;
-use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
@@ -209,30 +207,13 @@ impl BloomIndexRebuilder {
         &self,
         bloom_index_location: &Location,
         data_block: &DataBlock,
-        active_column_ids: Option<&HashSet<ColumnId>>,
     ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
         Self::validate_rebuild_version(bloom_index_location)?;
-        let bloom_columns_map = self
-            .bloom_columns_map
-            .iter()
-            .filter(|(_, field)| {
-                active_column_ids.is_none_or(|ids| ids.contains(&field.column_id()))
-            })
-            .map(|(index, field)| (*index, field.clone()))
-            .collect();
-        let ngram_args = self
-            .ngram_args
-            .iter()
-            .filter(|arg| {
-                active_column_ids.is_none_or(|ids| ids.contains(&arg.field().column_id()))
-            })
-            .cloned()
-            .collect::<Vec<_>>();
         let mut builder = BloomIndexBuilder::create(
             self.table_ctx.get_function_context()?,
             self.bloom_index_type,
-            bloom_columns_map,
-            &ngram_args,
+            self.bloom_columns_map.clone(),
+            &self.ngram_args,
         )?;
         builder.add_block(data_block)?;
         let maybe_bloom_index = builder.finalize()?;
@@ -252,33 +233,7 @@ impl BloomIndexRebuilder {
         block_read_info: &BlockReadInfo,
     ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
         let data_block = self.read_data_block(block_read_info).await?;
-        self.bloom_index_state_from_data_block(bloom_index_location, &data_block, None)
-    }
-
-    pub(crate) async fn bloom_index_states_from_block_meta(
-        &self,
-        bloom_index_files: &[BloomIndexFileMeta],
-        block_read_info: &BlockReadInfo,
-    ) -> Result<Option<Vec<BloomIndexState>>> {
-        let data_block = self.read_data_block(block_read_info).await?;
-        let mut states = Vec::with_capacity(bloom_index_files.len());
-        for file in bloom_index_files {
-            let active_column_ids = file
-                .active_column_ids
-                .iter()
-                .copied()
-                .collect::<HashSet<_>>();
-            let Some((state, _)) = self.bloom_index_state_from_data_block(
-                &file.location,
-                &data_block,
-                Some(&active_column_ids),
-            )?
-            else {
-                return Ok(None);
-            };
-            states.push(state);
-        }
-        Ok(Some(states))
+        self.bloom_index_state_from_data_block(bloom_index_location, &data_block)
     }
 }
 

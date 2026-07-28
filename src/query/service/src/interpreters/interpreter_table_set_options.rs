@@ -191,6 +191,24 @@ impl Interpreter for SetOptionsInterpreter {
         // check enable_virtual_column
         is_valid_fuse_virtual_column_opt(&self.plan.set_options)?;
 
+        // Reject incompatible layout transitions before analyze or segment conversion writes
+        // auxiliary data. The meta service repeats this check at the atomic commit point.
+        let current_meta = &table.get_table_info().meta;
+        let mut next_meta = current_meta.clone();
+        for (key, value) in &options_map {
+            match value {
+                Some(value) => {
+                    next_meta.options.insert(key.clone(), value.clone());
+                }
+                None => {
+                    next_meta.options.remove(key);
+                }
+            }
+        }
+        current_meta
+            .validate_column_group_transition(&next_meta)
+            .map_err(ErrorCode::TableOptionInvalid)?;
+
         let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
 
         let table_version = table.get_table_info().ident.seq;
@@ -289,9 +307,11 @@ async fn set_segment_format(
                     .await?;
                 for segment in segments {
                     let segment = segment?;
-                    if segment.blocks.iter().any(|block| {
-                        !block.column_groups.is_empty() || !block.bloom_index_files.is_empty()
-                    }) {
+                    if segment
+                        .blocks
+                        .iter()
+                        .any(|block| !block.column_groups.is_empty())
+                    {
                         return Err(ErrorCode::TableOptionInvalid(
                             "cannot convert segments containing partial-update files to the column-oriented format; rewrite the blocks to the single-file layout first",
                         ));
