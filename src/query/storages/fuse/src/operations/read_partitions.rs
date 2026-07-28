@@ -87,6 +87,7 @@ use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
+use crate::fuse_part::block_bloom_index_size;
 use crate::fuse_part::column_group_bloom_files;
 use crate::fuse_part::legacy_bloom_index_location;
 use crate::fuse_part::project_column_groups;
@@ -1410,7 +1411,7 @@ impl FuseTable {
         FuseBlockPartInfo::create(
             location,
             legacy_bloom_index_location(meta).cloned(),
-            meta.bloom_filter_index_size,
+            block_bloom_index_size(meta),
             column_group_bloom_files(meta),
             rows_count,
             column_groups,
@@ -1467,7 +1468,7 @@ impl FuseTable {
         FuseBlockPartInfo::create(
             location,
             legacy_bloom_index_location(meta).cloned(),
-            meta.bloom_filter_index_size,
+            block_bloom_index_size(meta),
             column_group_bloom_files(meta),
             rows_count,
             column_groups,
@@ -1586,6 +1587,7 @@ mod tests {
         let part = FuseTable::all_columns_part(None, &None, &None, &block_meta);
         let part = FuseBlockPartInfo::from_part(&part).unwrap();
         assert!(part.bloom_filter_index_location.is_none());
+        assert_eq!(part.bloom_filter_index_size, 0);
         assert!(part.bloom_index_layout().is_none());
     }
 }

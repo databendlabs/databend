@@ -36,6 +36,8 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use serde::Serialize;
 
 use crate::FuseTable;
+use crate::fuse_part::block_bloom_index_size;
+use crate::fuse_part::legacy_bloom_index_location;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
 use crate::table_functions::TableMetaFuncTemplate;
@@ -136,12 +138,9 @@ impl TableMetaFunc for FuseBlock {
                     file_size.push(block.file_size);
                     row_count.push(block.row_count);
                     bloom_filter_location.push(
-                        block
-                            .bloom_filter_index_location
-                            .as_ref()
-                            .map(|s| s.0.clone()),
+                        legacy_bloom_index_location(block).map(|location| location.0.clone()),
                     );
-                    bloom_filter_size.push(block.bloom_filter_index_size);
+                    bloom_filter_size.push(block_bloom_index_size(block));
                     inverted_index_size.push(block.inverted_index_size);
                     ngram_index_size.push(block.ngram_filter_index_size);
                     vector_index_size.push(block.vector_index_size);

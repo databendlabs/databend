@@ -71,7 +71,7 @@ enum State {
     Serialized {
         serialized: BlockSerialization,
         index: Option<BlockMetaIndex>,
-        written_uncompressed_size: Option<u64>,
+        write_progress: ProgressValues,
     },
 }
 
@@ -438,24 +438,17 @@ impl Processor for TransformSerializeBlock {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
 
-                let (serialized, written_uncompressed_size) =
+                let (serialized, write_progress_bytes) =
                     if let (Some(updated_field_indices), Some(origin_block_meta)) =
                         (&self.updated_field_indices, origin_block_meta)
                     {
+                        let write_progress_bytes = block.estimate_block_size(block.num_columns());
                         let serialized = self.block_builder.build_column_group(
                             block,
                             &origin_block_meta,
                             updated_field_indices,
                         )?;
-                        let written_uncompressed_size = serialized
-                            .block_meta
-                            .column_groups
-                            .last()
-                            .ok_or_else(|| {
-                                ErrorCode::Internal("column-group update produced no column group")
-                            })?
-                            .uncompressed_size;
-                        (serialized, Some(written_uncompressed_size))
+                        (serialized, write_progress_bytes)
                     } else {
                         let serialized =
                             self.block_builder.build(
@@ -471,13 +464,24 @@ impl Processor for TransformSerializeBlock {
                                     }
                                 },
                             )?;
-                        (serialized, None)
+                        let virtual_column_size = serialized
+                            .virtual_column_state
+                            .as_ref()
+                            .map(|state| state.draft_virtual_block_meta.virtual_column_size)
+                            .unwrap_or_default();
+                        let write_progress_bytes =
+                            (serialized.block_meta.block_size + virtual_column_size) as usize;
+                        (serialized, write_progress_bytes)
                     };
+                let write_progress = ProgressValues {
+                    rows: serialized.block_meta.row_count as usize,
+                    bytes: write_progress_bytes,
+                };
 
                 self.state = State::Serialized {
                     serialized,
                     index,
-                    written_uncompressed_size,
+                    write_progress,
                 };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
@@ -491,31 +495,17 @@ impl Processor for TransformSerializeBlock {
             State::Serialized {
                 serialized,
                 index,
-                written_uncompressed_size,
+                write_progress,
             } => {
                 let merge_hll = std::mem::take(&mut self.pending_merge_hll);
                 let (logical_updated_rows, logical_deleted_rows) =
                     std::mem::take(&mut self.pending_logical_change);
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
 
-                let bytes = if let Some(written_uncompressed_size) = written_uncompressed_size {
-                    written_uncompressed_size as usize
-                } else if let Some(draft_virtual_block_meta) =
-                    &extended_block_meta.draft_virtual_block_meta
-                {
-                    (extended_block_meta.block_meta.block_size
-                        + draft_virtual_block_meta.virtual_column_size) as usize
-                } else {
-                    extended_block_meta.block_meta.block_size as usize
-                };
-                let progress_values = ProgressValues {
-                    rows: extended_block_meta.block_meta.row_count as usize,
-                    bytes,
-                };
                 self.block_builder
                     .ctx
                     .get_write_progress()
-                    .incr(&progress_values);
+                    .incr(&write_progress);
 
                 let mutation_log_data_block = if let Some(index) = index {
                     // we are replacing the block represented by the `index`

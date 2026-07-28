@@ -185,7 +185,6 @@ pub struct ColumnGroupFileMeta {
     pub uncompressed_size: u64,
     pub leaf_column_metas: HashMap<ColumnId, ColumnMeta>,
     /// Ordinary Bloom file paired with this data file. Its location is derived from `location`.
-    #[serde(default)]
     pub bloom: Option<ColumnGroupBloomMeta>,
 }
 
@@ -624,32 +623,6 @@ mod tests {
             .map(|(column_id, column_meta)| (column_id, column_meta.offset_length()))
             .collect::<Vec<_>>();
         assert_eq!(active_metas, vec![(1, (10, 11))]);
-    }
-
-    #[test]
-    fn test_deserialize_pre_paired_column_group_meta() {
-        #[derive(Serialize)]
-        struct PrePairedColumnGroupFileMeta {
-            active_column_ids: Vec<ColumnId>,
-            location: Location,
-            file_size: u64,
-            uncompressed_size: u64,
-            leaf_column_metas: HashMap<ColumnId, ColumnMeta>,
-        }
-
-        let group = PrePairedColumnGroupFileMeta {
-            active_column_ids: vec![1],
-            location: ("data.parquet".to_string(), 2),
-            file_size: 10,
-            uncompressed_size: 20,
-            leaf_column_metas: HashMap::new(),
-        };
-        let bytes = rmp_serde::to_vec_named(&group).unwrap();
-        let decoded: ColumnGroupFileMeta = rmp_serde::from_slice(&bytes).unwrap();
-
-        assert_eq!(decoded.bloom, None);
-        assert_eq!(decoded.location, group.location);
-        assert_eq!(decoded.active_column_ids, group.active_column_ids);
     }
 
     #[test]

@@ -119,6 +119,18 @@ pub(crate) fn legacy_bloom_index_location(meta: &BlockMeta) -> Option<&Location>
         .flatten()
 }
 
+pub(crate) fn block_bloom_index_size(meta: &BlockMeta) -> u64 {
+    if meta.column_groups.is_empty() {
+        meta.bloom_filter_index_size
+    } else {
+        meta.column_groups
+            .iter()
+            .filter_map(|group| group.bloom.as_ref())
+            .map(|bloom| bloom.file_size)
+            .sum()
+    }
+}
+
 /// Physical ordinary Bloom files referenced by a logical block.
 pub fn block_bloom_index_locations(meta: &BlockMeta) -> impl Iterator<Item = Location> + '_ {
     let legacy = legacy_bloom_index_location(meta).cloned();
@@ -133,7 +145,7 @@ pub(crate) fn bloom_index_layout(meta: &BlockMeta) -> Option<BloomIndexLayout<'_
     let files = column_group_bloom_files(meta);
     BloomIndexLayout::from_metadata(
         legacy_bloom_index_location(meta),
-        meta.bloom_filter_index_size,
+        block_bloom_index_size(meta),
         Cow::Owned(files),
     )
 }
