@@ -162,7 +162,7 @@ pub struct CreateTableStmt {
     pub uri_location: Option<UriLocation>,
     pub cluster_by: Option<ClusterOption>,
     pub table_options: BTreeMap<String, String>,
-    pub iceberg_table_partition: Option<Vec<Identifier>>,
+    pub partition_by: Option<Vec<Expr>>,
     pub table_properties: Option<BTreeMap<String, String>>,
     pub as_query: Option<Box<Query>>,
     pub table_type: TableType,
@@ -211,6 +211,12 @@ impl Display for CreateTableStmt {
             write!(f, " {uri_location}")?;
         }
 
+        if let Some(partition_by) = &self.partition_by {
+            write!(f, " PARTITION BY(")?;
+            write_comma_separated_list(f, partition_by)?;
+            write!(f, ")")?;
+        }
+
         if let Some(cluster_by) = &self.cluster_by {
             write!(f, " {cluster_by}")?;
         }
@@ -219,12 +225,6 @@ impl Display for CreateTableStmt {
         if !self.table_options.is_empty() {
             write!(f, " ")?;
             write_space_separated_string_map(f, &self.table_options)?;
-        }
-
-        if let Some(iceberg_table_partition) = &self.iceberg_table_partition {
-            write!(f, " PARTITION BY(")?;
-            write_comma_separated_list(f, iceberg_table_partition)?;
-            write!(f, ")")?;
         }
 
         if let Some(table_properties) = &self.table_properties {

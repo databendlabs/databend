@@ -306,7 +306,7 @@ impl AsyncSink for CommitMultiTableInsert {
                 *m = TransformMergeCommitMeta::merge_commit_meta(
                     m.clone(),
                     meta,
-                    table.cluster_key_id(),
+                    table.physical_cluster_key_id(),
                 )?;
             }
             None => {

@@ -913,6 +913,7 @@ impl FuseTable {
             dal,
             table_schema.clone(),
             &push_downs,
+            self.partition_pruning_info(ctx.clone()),
             self.bloom_index_cols(),
             ngram_args,
             spatial_index_columns,

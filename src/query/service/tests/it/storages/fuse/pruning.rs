@@ -69,6 +69,7 @@ async fn apply_block_pruning(
         op,
         schema,
         push_down,
+        None,
         bloom_index_cols,
         vec![],
         HashSet::new(),

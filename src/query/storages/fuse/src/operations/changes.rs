@@ -310,6 +310,7 @@ impl FuseTable {
             self.get_operator(),
             table_schema.clone(),
             &push_downs,
+            None,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,

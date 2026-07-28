@@ -74,6 +74,7 @@ async fn apply_block_pruning(
         dal,
         schema,
         push_down,
+        None,
         bloom_index_cols,
         vec![],
         spatial_index_columns,

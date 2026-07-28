@@ -74,6 +74,9 @@ pub const OPT_KEY_RANDOM_MAX_STRING_LEN: &str = "max_string_len";
 pub const OPT_KEY_RANDOM_MAX_ARRAY_LEN: &str = "max_array_len";
 
 pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
+/// The normalized Fuse partition expressions. This is set by CREATE TABLE
+/// PARTITION BY and is not a user-settable table option.
+pub const OPT_KEY_PARTITION_BY: &str = "partition_by";
 pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
@@ -87,6 +90,7 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r
 });
@@ -100,6 +104,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r
 });
