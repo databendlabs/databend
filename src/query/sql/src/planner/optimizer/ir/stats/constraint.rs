@@ -52,22 +52,10 @@ impl ValueConstraint {
         match op {
             ComparisonOp::Equal => ValueConstraint::Eq(datum),
             ComparisonOp::NotEqual => ValueConstraint::NotEq,
-            ComparisonOp::GT => ValueConstraint::Range {
-                lower: Bound::Excluded(datum),
-                upper: Bound::Unbounded,
-            },
-            ComparisonOp::GTE => ValueConstraint::Range {
-                lower: Bound::Included(datum),
-                upper: Bound::Unbounded,
-            },
-            ComparisonOp::LT => ValueConstraint::Range {
-                lower: Bound::Unbounded,
-                upper: Bound::Excluded(datum),
-            },
-            ComparisonOp::LTE => ValueConstraint::Range {
-                lower: Bound::Unbounded,
-                upper: Bound::Included(datum),
-            },
+            op => {
+                let (lower, upper) = op.range_bounds(datum).unwrap();
+                ValueConstraint::Range { lower, upper }
+            }
         }
     }
 

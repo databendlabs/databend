@@ -28,6 +28,8 @@ use databend_common_meta_app::app_error::CreateTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
 use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
+use databend_common_meta_app::app_error::InvalidMaterializedView;
+use databend_common_meta_app::app_error::MaterializedViewAlreadyExists;
 use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
@@ -65,8 +67,15 @@ use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableReq;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
+use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::MVSourceBinding;
+use databend_common_meta_app::schema::MVSourceBindingVersion;
+use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SourceTableMV;
+use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
@@ -88,6 +97,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::value_id::ValueId;
@@ -206,6 +216,12 @@ fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError>
                 error.to_string(),
             )))
         })?;
+    let is_mv = is_materialized_view_engine(&req.table_meta.engine);
+    if is_mv != req.materialized_view.is_some() || (is_mv && req.as_dropped) {
+        return Err(KVAppError::AppError(
+            InvalidMaterializedView::new("invalid materialized view create request").into(),
+        ));
+    }
     Ok(())
 }
 
@@ -228,24 +244,15 @@ where
         // Make an error if table exists.
         fn make_exists_err(req: &CreateTableReq) -> AppError {
             let name = &req.name_ident.table_name;
-            let name_ident = &req.name_ident;
+            let context = format!("create_table: {}", req.name_ident);
 
             match req.table_meta.engine.as_str() {
-                "STREAM" => {
-                    let exist_err =
-                        StreamAlreadyExists::new(name, format!("create_table: {}", name_ident));
-                    AppError::from(exist_err)
+                "STREAM" => StreamAlreadyExists::new(name, context).into(),
+                "VIEW" => ViewAlreadyExists::new(name, context).into(),
+                MATERIALIZED_VIEW_ENGINE => {
+                    MaterializedViewAlreadyExists::new(name, context).into()
                 }
-                "VIEW" => {
-                    let exist_err =
-                        ViewAlreadyExists::new(name, format!("create_table: {}", name_ident));
-                    AppError::from(exist_err)
-                }
-                _ => {
-                    let exist_err =
-                        TableAlreadyExists::new(name, format!("create_table: {}", name_ident));
-                    AppError::from(exist_err)
-                }
+                _ => TableAlreadyExists::new(name, context).into(),
             }
         }
 
@@ -439,7 +446,6 @@ where
                 // append new table_id into list
                 tb_id_list.append(table_id);
                 let dbid_tbname_seq = seq_table_id.seq;
-
                 txn.condition.extend(vec![
                     // db has not to change, i.e., no new table is created.
                     // Renaming db is OK and does not affect the seq of db_meta.
@@ -460,6 +466,71 @@ where
                     // Because this is a reverse index for db_id/table_name -> table_id, and it is unique.
                     txn_put_pb(&key_table_id_to_name, &key_dbid_tbname), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                 ]);
+
+                if let Some(ref mv) = req.materialized_view {
+                    let def_ident = MVDefinitionIdent::new(req.tenant(), table_id);
+                    txn.if_then.push(txn_put_pb(&def_ident, &mv.definition));
+
+                    let source_table_id = req.table_meta.materialized_view_source_table_id()?;
+                    let source_table_ident = TableId::new(source_table_id);
+                    let source_table_meta =
+                        self.get_pb(&source_table_ident).await?.ok_or_else(|| {
+                            KVAppError::AppError(
+                                InvalidMaterializedView::new(format!(
+                                    "source table id {} does not exist",
+                                    source_table_id
+                                ))
+                                .into(),
+                            )
+                        })?;
+                    if source_table_meta.drop_on.is_some() {
+                        return Err(KVAppError::AppError(
+                            InvalidMaterializedView::new(format!(
+                                "source table id {} is dropped",
+                                source_table_id
+                            ))
+                            .into(),
+                        ));
+                    }
+                    let version_ident =
+                        MVSourceBindingVersionIdent::new(req.tenant(), source_table_id);
+                    let (version_seq, version) = self.get_pb_seq_and_value(&version_ident).await?;
+                    let current_source_generation = version
+                        .as_ref()
+                        .map(|version| version.current_source_generation)
+                        .unwrap_or(0);
+                    if current_source_generation != mv.expected_source_generation {
+                        return Err(KVAppError::AppError(
+                            InvalidMaterializedView::new(format!(
+                                "source table binding generation changed from {} to {} while creating materialized view",
+                                mv.expected_source_generation, current_source_generation
+                            ))
+                            .into(),
+                        ));
+                    }
+                    txn.condition
+                        .push(txn_cond_eq_seq(&version_ident, version_seq));
+                    if version.is_none() {
+                        // A missing version record is semantic generation 0.
+                        // Initialize it in the same transaction that publishes
+                        // the first MV, so a failed CREATE leaves no record.
+                        // Its resulting KV seq is deliberately not the MV
+                        // generation; that seq is only a transaction CAS token.
+                        txn.if_then.push(txn_put_pb(
+                            &version_ident,
+                            &MVSourceBindingVersion::default(),
+                        ));
+                    }
+                    txn.if_then.push(txn_put_pb(
+                        &SourceTableMVIdent::new_generic(
+                            req.tenant(),
+                            SourceTableMV::new(source_table_id, table_id),
+                        ),
+                        &MVSourceBinding {
+                            bound_source_generation: mv.expected_source_generation,
+                        },
+                    ));
+                }
 
                 if req.as_dropped {
                     // To create the table in a "dropped" state,
@@ -1108,29 +1179,29 @@ where
                 }
                 tb_meta.drop_on = None;
 
-                let txn_req = TxnRequest::new(
-                    vec![
-                        // db has not to change, i.e., no new table is created.
-                        // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
-                        // still this table id
-                        txn_cond_seq(&dbid_tbname, Eq, dbid_tbname_seq),
-                        // table is not changed
-                        txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                        txn_cond_seq(&orphan_dbid_tbname_idlist, Eq, orphan_tb_id_list.seq),
-                        txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list.seq),
-                    ],
-                    vec![
-                        // Changing a table in a db has to update the seq of db_meta,
-                        // to block the batch-delete-tables when deleting a db.
-                        txn_put_pb(&DatabaseId { db_id }, &db_meta), // (db_id) -> db_meta
-                        txn_put_pb(&dbid_tbname, &TableId::new(table_id)), /* (tenant, db_id, tb_name) -> tb_id */
-                        // txn_put_pb(&dbid_tbname_idlist, &tb_id_list), // _fd_table_id_list/db_id/table_name -> tb_id_list
-                        txn_put_pb(&tbid, &tb_meta), // (tenant, db_id, tb_id) -> tb_meta
-                        txn_del(&orphan_dbid_tbname_idlist), // del orphan table idlist
-                        txn_put_pb(&dbid_tbname_idlist, &tb_id_list.data), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
-                    ],
-                );
+                let mut txn_req = TxnRequest::default();
+
+                txn_req.condition.extend([
+                    // db has not to change, i.e., no new table is created.
+                    // Renaming db is OK and does not affect the seq of db_meta.
+                    txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
+                    // still this table id
+                    txn_cond_seq(&dbid_tbname, Eq, dbid_tbname_seq),
+                    // table is not changed
+                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                    txn_cond_seq(&orphan_dbid_tbname_idlist, Eq, orphan_tb_id_list.seq),
+                    txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list.seq),
+                ]);
+                txn_req.if_then.extend([
+                    // Changing a table in a db has to update the seq of db_meta,
+                    // to block the batch-delete-tables when deleting a db.
+                    txn_put_pb(&DatabaseId { db_id }, &db_meta), // (db_id) -> db_meta
+                    txn_put_pb(&dbid_tbname, &TableId::new(table_id)), /* (tenant, db_id, tb_name) -> tb_id */
+                    // txn_put_pb(&dbid_tbname_idlist, &tb_id_list), // _fd_table_id_list/db_id/table_name -> tb_id_list
+                    txn_put_pb(&tbid, &tb_meta), // (tenant, db_id, tb_id) -> tb_meta
+                    txn_del(&orphan_dbid_tbname_idlist), // del orphan table idlist
+                    txn_put_pb(&dbid_tbname_idlist, &tb_id_list.data), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
+                ]);
 
                 let txn_response = txn_sender.send_txn(self, txn_req).await?;
                 let succ = match txn_response {

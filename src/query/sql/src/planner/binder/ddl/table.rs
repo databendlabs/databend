@@ -34,6 +34,7 @@ use databend_common_ast::ast::DescribeTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
+use databend_common_ast::ast::Expr as AstExpr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
@@ -99,6 +100,7 @@ use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
@@ -568,7 +570,7 @@ impl Binder {
             table_type,
             engine,
             uri_location,
-            iceberg_table_partition,
+            partition_by,
             table_properties,
         } = stmt;
 
@@ -676,12 +678,36 @@ impl Binder {
             None => None,
         };
 
-        let table_partition = iceberg_table_partition.as_ref().map(|partitions| {
-            partitions
-                .iter()
-                .map(|p| p.to_string())
-                .collect::<Vec<String>>()
-        });
+        if partition_by.is_some() && !matches!(engine, Engine::Fuse | Engine::Iceberg) {
+            return Err(ErrorCode::UnsupportedEngineParams(format!(
+                "PARTITION BY is not supported for engine {engine}"
+            )));
+        }
+
+        // Iceberg currently supports identity partition columns. Fuse partition expressions
+        // are normalized after the table schema has been bound below.
+        let table_partition = if matches!(engine, Engine::Iceberg) {
+            partition_by
+                .as_ref()
+                .map(|partitions| {
+                    partitions
+                        .iter()
+                        .map(|partition| match partition {
+                            AstExpr::ColumnRef { column, .. }
+                                if column.database.is_none() && column.table.is_none() =>
+                            {
+                                Ok(column.column.to_string())
+                            }
+                            _ => Err(ErrorCode::BadArguments(format!(
+                                "Iceberg PARTITION BY only supports column identifiers, got `{partition:#}`"
+                            ))),
+                        })
+                        .collect::<Result<Vec<_>>>()
+                })
+                .transpose()?
+        } else {
+            None
+        };
 
         let mut storage_params = match (uri_location_to_use.as_ref(), engine) {
             (Some(uri), Engine::Fuse) => {
@@ -938,6 +964,21 @@ impl Binder {
                 "Table engine {} does not support create constraints",
                 engine
             )));
+        }
+
+        if matches!(engine, Engine::Fuse)
+            && let Some(partition_exprs) = partition_by
+        {
+            let partition_opt = ClusterOption {
+                cluster_exprs: partition_exprs.clone(),
+            };
+            let keys = self
+                .analyze_table_keys(&partition_opt, schema.clone(), None, "PARTITION BY", false)
+                .await?;
+            options.insert(
+                OPT_KEY_PARTITION_BY.to_owned(),
+                format!("({})", keys.join(", ")),
+            );
         }
 
         let mut cluster_key = None;
@@ -2329,6 +2370,18 @@ impl Binder {
         schema: TableSchemaRef,
         table_indexes: Option<&BTreeMap<String, TableIndex>>,
     ) -> Result<Vec<String>> {
+        self.analyze_table_keys(cluster_opt, schema, table_indexes, "Cluster by", true)
+            .await
+    }
+
+    async fn analyze_table_keys(
+        &mut self,
+        cluster_opt: &ClusterOption,
+        schema: TableSchemaRef,
+        table_indexes: Option<&BTreeMap<String, TableIndex>>,
+        key_name: &str,
+        allow_vector: bool,
+    ) -> Result<Vec<String>> {
         let ClusterOption { cluster_exprs } = cluster_opt;
 
         let expr_len = cluster_exprs.len();
@@ -2372,25 +2425,22 @@ impl Binder {
             let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "Cluster by expression `{:#}` is invalid",
-                    cluster_expr
+                    "{key_name} expression `{cluster_expr:#}` is invalid"
                 )));
             }
 
             let expr = cluster_key.as_expr()?;
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "Cluster by expression `{:#}` is not deterministic",
-                    cluster_expr
+                    "{key_name} expression `{cluster_expr:#}` is not deterministic"
                 )));
             }
 
             let data_type = expr.data_type();
             let (is_valid_type, is_vector_type) = Self::valid_cluster_key_type(data_type);
-            if !is_valid_type {
+            if !is_valid_type || is_vector_type && !allow_vector {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "Unsupported data type '{}' for cluster by expression `{:#}`",
-                    data_type, cluster_expr
+                    "Unsupported data type '{data_type}' for {key_name} expression `{cluster_expr:#}`"
                 )));
             }
             if is_vector_type {
@@ -2408,8 +2458,7 @@ impl Binder {
                 };
                 let Ok(field) = schema.field_with_name(&id.column_name) else {
                     return Err(ErrorCode::InvalidClusterKeys(format!(
-                        "Cluster by expression `{:#}` is invalid",
-                        cluster_expr
+                        "{key_name} expression `{cluster_expr:#}` is invalid"
                     )));
                 };
                 let distances = table_indexes

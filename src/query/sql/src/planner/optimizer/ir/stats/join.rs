@@ -24,13 +24,15 @@ use databend_common_statistics::Histogram;
 use databend_common_statistics::UniformSampleSet;
 
 use super::ColumnStat;
+use super::ColumnStatSet;
 use crate::Symbol;
-use crate::optimizer::ir::property::Statistics;
 
 pub(crate) struct JoinStatsEstimator {
     left_cardinality: f64,
     right_cardinality: f64,
     join_card: f64,
+    left_matched_rows: f64,
+    right_matched_rows: f64,
     updated_columns: Option<JoinConditionColumns>,
     drop_null_join_keys: bool,
 }
@@ -41,10 +43,21 @@ impl JoinStatsEstimator {
         right_cardinality: f64,
         drop_null_join_keys: bool,
     ) -> Self {
+        let has_join_pairs = left_cardinality > 0.0 && right_cardinality > 0.0;
         Self {
             left_cardinality,
             right_cardinality,
             join_card: left_cardinality * right_cardinality,
+            left_matched_rows: if has_join_pairs {
+                left_cardinality
+            } else {
+                0.0
+            },
+            right_matched_rows: if has_join_pairs {
+                right_cardinality
+            } else {
+                0.0
+            },
             updated_columns: None,
             drop_null_join_keys,
         }
@@ -58,23 +71,29 @@ impl JoinStatsEstimator {
         self.updated_columns
     }
 
+    pub(crate) fn left_matched_rows(&self) -> f64 {
+        self.left_matched_rows
+    }
+
+    pub(crate) fn right_matched_rows(&self) -> f64 {
+        self.right_matched_rows
+    }
+
     pub(crate) fn apply_condition(
         &mut self,
         columns: JoinConditionColumns,
         left_type: DataType,
         right_type: DataType,
         is_null_equal: bool,
-        left_statistics: &mut Statistics,
-        right_statistics: &mut Statistics,
+        left_column_stats: &mut ColumnStatSet,
+        right_column_stats: &mut ColumnStatSet,
     ) -> Result<()> {
         let (left_cardinality, right_cardinality) = if !is_null_equal {
-            let left_null_count = left_statistics
-                .column_stats
+            let left_null_count = left_column_stats
                 .get(&columns.left)
                 .map(|stat| join_key_null_count_for_cardinality(stat, self.left_cardinality))
                 .unwrap_or(0.0);
-            let right_null_count = right_statistics
-                .column_stats
+            let right_null_count = right_column_stats
                 .get(&columns.right)
                 .map(|stat| join_key_null_count_for_cardinality(stat, self.right_cardinality))
                 .unwrap_or(0.0);
@@ -86,10 +105,10 @@ impl JoinStatsEstimator {
             (self.left_cardinality, self.right_cardinality)
         };
         if self.drop_null_join_keys && !is_null_equal {
-            if let Some(stat) = left_statistics.column_stats.get_mut(&columns.left) {
+            if let Some(stat) = left_column_stats.get_mut(&columns.left) {
                 stat.null_count = StatCount::exact(0);
             }
-            if let Some(stat) = right_statistics.column_stats.get_mut(&columns.right) {
+            if let Some(stat) = right_column_stats.get_mut(&columns.right) {
                 stat.null_count = StatCount::exact(0);
             }
         }
@@ -98,8 +117,8 @@ impl JoinStatsEstimator {
             JoinConditionEstimation {
                 left_type,
                 right_type,
-                left_col_stat: left_statistics.column_stats.get(&columns.left)?,
-                right_col_stat: right_statistics.column_stats.get(&columns.right)?,
+                left_col_stat: left_column_stats.get(&columns.left)?,
+                right_col_stat: right_column_stats.get(&columns.right)?,
                 left_cardinality,
                 right_cardinality,
             }
@@ -112,17 +131,23 @@ impl JoinStatsEstimator {
             JoinConditionStats::Skip => {}
             JoinConditionStats::NoOverlap => {
                 self.join_card = 0.0;
+                self.left_matched_rows = 0.0;
+                self.right_matched_rows = 0.0;
             }
-            JoinConditionStats::Estimated { new_stat, card } => {
-                let left_stat = left_statistics.column_stats.get_mut(&columns.left).unwrap();
-                let right_stat = right_statistics
-                    .column_stats
-                    .get_mut(&columns.right)
-                    .unwrap();
-                new_stat.apply(left_stat, right_stat);
+            JoinConditionStats::Estimated {
+                new_stat,
+                card,
+                left_matched_rows,
+                right_matched_rows,
+            } => {
+                let left_stat = left_column_stats.get_mut(&columns.left).unwrap();
+                let right_stat = right_column_stats.get_mut(&columns.right).unwrap();
+                (*new_stat).apply(left_stat, right_stat);
 
                 if card < self.join_card {
                     self.join_card = card;
+                    self.left_matched_rows = left_matched_rows;
+                    self.right_matched_rows = right_matched_rows;
                     self.updated_columns = Some(columns);
                 }
             }
@@ -169,14 +194,20 @@ impl<'a> JoinConditionEstimation<'a> {
             else {
                 return Ok(JoinConditionStats::NoOverlap);
             };
+            let JoinEstimate {
+                min,
+                max,
+                card,
+                ndv,
+                histogram,
+                left_matched_rows,
+                right_matched_rows,
+            } = estimation;
             return Ok(JoinConditionStats::Estimated {
-                new_stat: JoinKeyStatUpdate::same_type(
-                    estimation.min,
-                    estimation.max,
-                    estimation.ndv,
-                    estimation.histogram,
-                ),
-                card: estimation.card,
+                new_stat: Box::new(JoinKeyStatUpdate::same_type(min, max, ndv, histogram)),
+                card,
+                left_matched_rows,
+                right_matched_rows,
             });
         }
 
@@ -204,17 +235,28 @@ impl<'a> JoinConditionEstimation<'a> {
         else {
             return Ok(JoinConditionStats::NoOverlap);
         };
+        let JoinEstimate {
+            min,
+            max,
+            card,
+            ndv,
+            histogram,
+            left_matched_rows,
+            right_matched_rows,
+        } = estimation;
 
         Ok(JoinConditionStats::Estimated {
-            new_stat: JoinKeyStatUpdate::mixed_type(
-                estimation.min,
-                estimation.max,
+            new_stat: Box::new(JoinKeyStatUpdate::mixed_type(
+                min,
+                max,
                 self.left_col_stat,
                 self.right_col_stat,
-                estimation.ndv,
-                estimation.histogram,
-            ),
-            card: estimation.card,
+                ndv,
+                histogram,
+            )),
+            card,
+            left_matched_rows,
+            right_matched_rows,
         })
     }
 }
@@ -223,8 +265,10 @@ enum JoinConditionStats {
     Skip,
     NoOverlap,
     Estimated {
-        new_stat: JoinKeyStatUpdate,
+        new_stat: Box<JoinKeyStatUpdate>,
         card: f64,
+        left_matched_rows: f64,
+        right_matched_rows: f64,
     },
 }
 
@@ -271,6 +315,8 @@ struct JoinEstimate {
     card: f64,
     ndv: Option<NdvEstimate>,
     histogram: Option<Histogram>,
+    left_matched_rows: f64,
+    right_matched_rows: f64,
 }
 
 impl JoinEstimate {
@@ -291,12 +337,18 @@ impl JoinEstimate {
             && let Some(estimation) = left_hist.estimate_join_numeric_compatible(right_hist)?
         {
             let (min, max) = left_interval.intersection(&right_interval)?;
+            let left_matched_rows =
+                estimate_matched_rows(left_cardinality, left.ndv, estimation.ndv);
+            let right_matched_rows =
+                estimate_matched_rows(right_cardinality, right.ndv, estimation.ndv);
             return Ok(Some(Self {
                 min,
                 max,
                 card: estimation.cardinality.expected,
                 ndv: Some(estimation.ndv),
                 histogram: estimation.histogram,
+                left_matched_rows,
+                right_matched_rows,
             }));
         }
 
@@ -319,6 +371,8 @@ impl JoinEstimate {
         } else {
             left_cardinality * right_cardinality / max_ndv
         };
+        let left_matched_rows = estimate_matched_rows(left_cardinality, left.ndv, ndv);
+        let right_matched_rows = estimate_matched_rows(right_cardinality, right.ndv, ndv);
         let (min, max) = left_interval.intersection(&right_interval)?;
         Ok(Some(Self {
             min,
@@ -326,8 +380,30 @@ impl JoinEstimate {
             card,
             ndv: Some(ndv),
             histogram: None,
+            left_matched_rows,
+            right_matched_rows,
         }))
     }
+}
+
+fn estimate_matched_rows(
+    cardinality: f64,
+    input_ndv: NdvEstimate,
+    matched_ndv: NdvEstimate,
+) -> f64 {
+    // Keep the matched-row estimate consistent with the uniform-frequency and
+    // value-set-containment assumptions used by the NDV join cardinality formula.
+    // A matched value retains its input rows; join fanout is accounted for later.
+    let Some(input_ndv) = input_ndv.expected else {
+        return cardinality;
+    };
+    let Some(matched_ndv) = matched_ndv.expected else {
+        return cardinality;
+    };
+    if input_ndv <= 0.0 {
+        return 0.0;
+    }
+    (cardinality * matched_ndv / input_ndv).clamp(0.0, cardinality)
 }
 
 fn mixed_numeric_stat_kind(
@@ -471,11 +547,11 @@ impl JoinKeyStatUpdate {
     }
 
     pub(crate) fn finish_join_histograms(
-        statistics: &mut Statistics,
+        column_stats: &mut ColumnStatSet,
         joined_column: Symbol,
         keep_join_histogram: bool,
     ) -> Result<()> {
-        for (idx, stat) in statistics.column_stats.iter_mut() {
+        for (idx, stat) in column_stats.iter_mut() {
             if !keep_join_histogram || *idx != joined_column {
                 // Other columns' histograms are inaccurate after the join cardinality update.
                 stat.histogram = None;
@@ -484,8 +560,8 @@ impl JoinKeyStatUpdate {
         Ok(())
     }
 
-    fn drop_non_join_histograms(statistics: &mut Statistics, joined_column: Symbol) {
-        for (idx, stat) in statistics.column_stats.iter_mut() {
+    fn drop_non_join_histograms(column_stats: &mut ColumnStatSet, joined_column: Symbol) {
+        for (idx, stat) in column_stats.iter_mut() {
             if *idx != joined_column {
                 stat.histogram = None;
             }
@@ -493,25 +569,21 @@ impl JoinKeyStatUpdate {
     }
 
     pub(crate) fn finish_semi_join_histogram(
-        statistics: &mut Statistics,
-        original_statistics: &Statistics,
+        column_stats: &mut ColumnStatSet,
+        input_histogram: Option<&Histogram>,
         joined_column: Symbol,
         cardinality: f64,
     ) -> Result<()> {
-        Self::drop_non_join_histograms(statistics, joined_column);
+        Self::drop_non_join_histograms(column_stats, joined_column);
 
-        let Some(stat) = statistics.column_stats.get_mut(&joined_column) else {
+        let Some(stat) = column_stats.get_mut(&joined_column) else {
             return Ok(());
         };
-        let Some(original_stat) = original_statistics.column_stats.get(&joined_column) else {
-            return Ok(());
-        };
-        let Some(original_histogram) = &original_stat.histogram else {
+        let Some(input_histogram) = input_histogram else {
             return Ok(());
         };
 
-        let Some(mut histogram) = original_histogram.restrict_to_bounds(&stat.min, &stat.max)?
-        else {
+        let Some(mut histogram) = input_histogram.restrict_to_bounds(&stat.min, &stat.max)? else {
             stat.histogram = None;
             return Ok(());
         };
@@ -686,98 +758,88 @@ mod tests {
 
     #[test]
     fn test_finish_join_histograms_keeps_join_key_histogram_and_drops_others() -> Result<()> {
-        let mut statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([
-                (Symbol::new(0), ColumnStat {
-                    min: Datum::Int(5),
-                    max: Datum::Int(10),
-                    ndv: NdvEstimate::exact(5.0),
-                    null_count: StatCount::exact(0),
-                    histogram: Some(Histogram::Int(TypedHistogram {
-                        accuracy: true,
-                        row_scale: 1.0,
-                        buckets: vec![TypedHistogramBucket::new(0, 10, 1000.0, 10.0)],
-                        avg_spacing: None,
-                    })),
-                }),
-                (Symbol::new(1), ColumnStat {
-                    min: Datum::Int(0),
-                    max: Datum::Int(10),
-                    ndv: NdvEstimate::exact(10.0),
-                    null_count: StatCount::exact(0),
-                    histogram: Some(Histogram::Int(TypedHistogram {
-                        accuracy: true,
-                        row_scale: 1.0,
-                        buckets: vec![TypedHistogramBucket::new(0, 10, 1000.0, 10.0)],
-                        avg_spacing: None,
-                    })),
-                }),
-            ]),
-            top_n: Default::default(),
-            count_min_sketch: Default::default(),
-        };
+        let mut column_stats = HashMap::from([
+            (Symbol::new(0), ColumnStat {
+                min: Datum::Int(5),
+                max: Datum::Int(10),
+                ndv: NdvEstimate::exact(5.0),
+                null_count: StatCount::exact(0),
+                histogram: Some(Histogram::Int(TypedHistogram {
+                    accuracy: true,
+                    row_scale: 1.0,
+                    buckets: vec![TypedHistogramBucket::new(0, 10, 1000.0, 10.0)],
+                    avg_spacing: None,
+                })),
+            }),
+            (Symbol::new(1), ColumnStat {
+                min: Datum::Int(0),
+                max: Datum::Int(10),
+                ndv: NdvEstimate::exact(10.0),
+                null_count: StatCount::exact(0),
+                histogram: Some(Histogram::Int(TypedHistogram {
+                    accuracy: true,
+                    row_scale: 1.0,
+                    buckets: vec![TypedHistogramBucket::new(0, 10, 1000.0, 10.0)],
+                    avg_spacing: None,
+                })),
+            }),
+        ]);
 
-        JoinKeyStatUpdate::finish_join_histograms(&mut statistics, Symbol::new(0), true)?;
+        JoinKeyStatUpdate::finish_join_histograms(&mut column_stats, Symbol::new(0), true)?;
 
-        let join_histogram = statistics.column_stats[&Symbol::new(0)]
+        let join_histogram = column_stats[&Symbol::new(0)]
             .histogram
             .as_ref()
             .expect("join key histogram should be propagated");
         assert!((join_histogram.num_values() - 1000.0).abs() < 1e-9);
         assert!((join_histogram.ndv().expected.unwrap() - 10.0).abs() < 1e-9);
-        assert!(statistics.column_stats[&Symbol::new(1)].histogram.is_none());
+        assert!(column_stats[&Symbol::new(1)].histogram.is_none());
         Ok(())
     }
 
     #[test]
     fn test_finish_semi_join_histogram_drops_non_join_histograms() -> Result<()> {
-        let original_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([
-                (Symbol::new(0), ColumnStat {
-                    min: Datum::Int(1),
-                    max: Datum::Int(10),
-                    ndv: NdvEstimate::exact(10.0),
-                    null_count: StatCount::exact(0),
-                    histogram: Some(Histogram::Int(TypedHistogram {
-                        accuracy: true,
-                        row_scale: 1.0,
-                        buckets: vec![TypedHistogramBucket::new(1, 10, 10.0, 10.0)],
-                        avg_spacing: None,
-                    })),
-                }),
-                (Symbol::new(1), ColumnStat {
-                    min: Datum::Int(1),
-                    max: Datum::Int(10),
-                    ndv: NdvEstimate::exact(10.0),
-                    null_count: StatCount::exact(0),
-                    histogram: Some(Histogram::Int(TypedHistogram {
-                        accuracy: true,
-                        row_scale: 1.0,
-                        buckets: vec![TypedHistogramBucket::new(1, 10, 10.0, 10.0)],
-                        avg_spacing: None,
-                    })),
-                }),
-            ]),
-            top_n: Default::default(),
-            count_min_sketch: Default::default(),
-        };
-        let mut statistics = original_statistics.clone();
-        let join_stat = statistics.column_stats.get_mut(&Symbol::new(0)).unwrap();
+        let original_column_stats = HashMap::from([
+            (Symbol::new(0), ColumnStat {
+                min: Datum::Int(1),
+                max: Datum::Int(10),
+                ndv: NdvEstimate::exact(10.0),
+                null_count: StatCount::exact(0),
+                histogram: Some(Histogram::Int(TypedHistogram {
+                    accuracy: true,
+                    row_scale: 1.0,
+                    buckets: vec![TypedHistogramBucket::new(1, 10, 10.0, 10.0)],
+                    avg_spacing: None,
+                })),
+            }),
+            (Symbol::new(1), ColumnStat {
+                min: Datum::Int(1),
+                max: Datum::Int(10),
+                ndv: NdvEstimate::exact(10.0),
+                null_count: StatCount::exact(0),
+                histogram: Some(Histogram::Int(TypedHistogram {
+                    accuracy: true,
+                    row_scale: 1.0,
+                    buckets: vec![TypedHistogramBucket::new(1, 10, 10.0, 10.0)],
+                    avg_spacing: None,
+                })),
+            }),
+        ]);
+        let mut column_stats = original_column_stats.clone();
+        let join_stat = column_stats.get_mut(&Symbol::new(0)).unwrap();
         join_stat.min = Datum::Int(1);
         join_stat.max = Datum::Int(5);
         join_stat.ndv = NdvEstimate::exact(5.0);
 
         JoinKeyStatUpdate::finish_semi_join_histogram(
-            &mut statistics,
-            &original_statistics,
+            &mut column_stats,
+            original_column_stats[&Symbol::new(0)].histogram.as_ref(),
             Symbol::new(0),
             5.0,
         )?;
 
-        assert!(statistics.column_stats[&Symbol::new(0)].histogram.is_some());
-        assert!(statistics.column_stats[&Symbol::new(1)].histogram.is_none());
+        assert!(column_stats[&Symbol::new(0)].histogram.is_some());
+        assert!(column_stats[&Symbol::new(1)].histogram.is_none());
         Ok(())
     }
 }

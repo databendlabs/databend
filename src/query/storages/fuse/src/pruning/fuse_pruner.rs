@@ -67,6 +67,8 @@ use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
 use crate::pruning::InvertedIndexPruner;
+use crate::pruning::PartitionPruner;
+use crate::pruning::PartitionPruningInfo;
 use crate::pruning::PruningCostController;
 use crate::pruning::PruningCostKind;
 use crate::pruning::SegmentLocation;
@@ -86,6 +88,7 @@ pub struct PruningContext {
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
+    pub partition_pruner: Option<PartitionPruner>,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
@@ -102,6 +105,7 @@ impl PruningContext {
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
+        partition_pruning_info: Option<PartitionPruningInfo>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -117,6 +121,11 @@ impl PruningContext {
                 .effective_filters(&BUILTIN_FUNCTIONS)
                 .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
         });
+        let partition_pruner = PartitionPruner::try_create(
+            func_ctx.clone(),
+            filter_expr.as_ref(),
+            partition_pruning_info,
+        );
 
         // Limit pruner.
         // if there are ordering/filter clause, ignore limit, even it has been pushed down
@@ -229,6 +238,7 @@ impl PruningContext {
             limit_pruner,
             range_pruner,
             bloom_pruner,
+            partition_pruner,
             internal_column_pruner,
             inverted_index_pruner,
             virtual_column_pruner,
@@ -257,6 +267,7 @@ impl FusePruner {
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
+        partition_pruning_info: Option<PartitionPruningInfo>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -267,6 +278,7 @@ impl FusePruner {
             dal,
             table_schema,
             push_down,
+            partition_pruning_info,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
@@ -280,6 +292,7 @@ impl FusePruner {
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
+        partition_pruning_info: Option<PartitionPruningInfo>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -308,6 +321,7 @@ impl FusePruner {
             dal,
             table_schema.clone(),
             push_down,
+            partition_pruning_info,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,

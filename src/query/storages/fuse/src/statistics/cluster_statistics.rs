@@ -89,6 +89,7 @@ pub struct ClusterStatsGenerator {
     block_thresholds: BlockThresholds,
 
     pub extra_key_num: usize,
+    pub partition_key_count: usize,
     pub cluster_key_index: Vec<usize>,
     pub operators: Vec<BlockOperator>,
     pub vector_operator: Option<VectorClusterOperator>,
@@ -112,6 +113,7 @@ impl ClusterStatsGenerator {
         Self {
             cluster_key_id,
             cluster_key_index,
+            partition_key_count: 0,
             extra_key_num,
             level,
             block_thresholds,
@@ -291,6 +293,46 @@ pub fn sort_by_cluster_stats(
                 .cmp(b.max().iter().map(Scalar::as_ref))
         }
         _ => Ordering::Equal,
+    }
+}
+
+/// Returns the exact partition prefix stored in physical cluster statistics.
+/// A partitioned block/segment is valid only when every prefix dimension has
+/// identical min and max values.
+pub(crate) fn partition_values(
+    stats: Option<&ClusterStatistics>,
+    cluster_key_id: Option<u32>,
+    partition_key_count: usize,
+) -> Option<&[Scalar]> {
+    if partition_key_count == 0 {
+        return None;
+    }
+    let stats = stats?;
+    if Some(stats.cluster_key_id) != cluster_key_id
+        || stats.min.len() < partition_key_count
+        || stats.max.len() < partition_key_count
+        || stats.min[..partition_key_count] != stats.max[..partition_key_count]
+    {
+        return None;
+    }
+    Some(&stats.min[..partition_key_count])
+}
+
+pub(crate) fn same_partition(
+    left: Option<&ClusterStatistics>,
+    right: Option<&ClusterStatistics>,
+    cluster_key_id: Option<u32>,
+    partition_key_count: usize,
+) -> bool {
+    if partition_key_count == 0 {
+        return true;
+    }
+    match (
+        partition_values(left, cluster_key_id, partition_key_count),
+        partition_values(right, cluster_key_id, partition_key_count),
+    ) {
+        (Some(left), Some(right)) => left == right,
+        _ => false,
     }
 }
 
@@ -602,5 +644,61 @@ mod tests {
 
         assert_eq!(min, vec![int32_scalar(i32::MIN)]);
         assert_eq!(max, vec![int32_scalar(i32::MAX)]);
+    }
+
+    #[test]
+    fn test_partition_values_returns_none_for_missing_stats() {
+        // When segment has no cluster statistics, pruner must keep it conservatively.
+        assert_eq!(partition_values(None, Some(0), 1), None);
+    }
+
+    #[test]
+    fn test_partition_values_returns_none_for_mismatched_cluster_key_id() {
+        let stats = ClusterStatistics::new(0, vec![int32_scalar(1)], vec![int32_scalar(1)], 0);
+        // Segment was written with a different cluster key id; treat as unpartitioned.
+        assert_eq!(partition_values(Some(&stats), Some(1), 1), None);
+    }
+
+    #[test]
+    fn test_partition_values_returns_none_when_prefix_min_max_differ() {
+        // A block that spans two partition values is not a valid single-partition block.
+        let stats = ClusterStatistics::new(0, vec![int32_scalar(1)], vec![int32_scalar(2)], 0);
+        assert_eq!(partition_values(Some(&stats), Some(0), 1), None);
+    }
+
+    #[test]
+    fn test_partition_values_returns_prefix_when_valid() {
+        let stats = ClusterStatistics::new(
+            0,
+            vec![int32_scalar(3), int32_scalar(10)],
+            vec![int32_scalar(3), int32_scalar(20)],
+            0,
+        );
+        // Only the partition prefix (first dimension) is returned.
+        let values = partition_values(Some(&stats), Some(0), 1).unwrap();
+        assert_eq!(values, &[int32_scalar(3)]);
+    }
+
+    #[test]
+    fn test_same_partition_returns_false_when_either_side_has_no_stats() {
+        // Without partition metadata on either side, compact must not merge the segments.
+        let stats = ClusterStatistics::new(0, vec![int32_scalar(1)], vec![int32_scalar(1)], 0);
+        assert!(!same_partition(None, None, Some(0), 1));
+        assert!(!same_partition(Some(&stats), None, Some(0), 1));
+        assert!(!same_partition(None, Some(&stats), Some(0), 1));
+    }
+
+    #[test]
+    fn test_same_partition_returns_true_when_partition_key_count_is_zero() {
+        // Tables without PARTITION BY always treat segments as the same partition.
+        assert!(same_partition(None, None, Some(0), 0));
+    }
+
+    #[test]
+    fn test_same_partition_distinguishes_different_partition_values() {
+        let left = ClusterStatistics::new(0, vec![int32_scalar(0)], vec![int32_scalar(0)], 0);
+        let right = ClusterStatistics::new(0, vec![int32_scalar(1)], vec![int32_scalar(1)], 0);
+        assert!(!same_partition(Some(&left), Some(&right), Some(0), 1));
+        assert!(same_partition(Some(&left), Some(&left), Some(0), 1));
     }
 }

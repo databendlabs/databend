@@ -111,6 +111,7 @@ fn build_partial_update_info(
     if !ctx.get_settings().get_enable_partial_update()?
         || !table.get_option(FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE, false)
         || table.is_column_oriented()
+        || table.partition_key_count() != 0
         || !table.get_table_info().meta.indexes.is_empty()
         || update_list.is_empty()
         || table

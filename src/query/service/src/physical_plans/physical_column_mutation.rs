@@ -228,7 +228,7 @@ impl IPhysicalPlan for ColumnMutation {
                 physical_input_schema,
             )?
         } else {
-            table.cluster_gen_for_append(
+            table.cluster_gen_for_update(
                 builder.ctx.clone(),
                 &mut builder.main_pipeline,
                 block_thresholds,

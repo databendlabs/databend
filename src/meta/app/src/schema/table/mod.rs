@@ -42,6 +42,7 @@ use super::DatabaseId;
 use super::MarkedDeletedIndexMeta;
 use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::schema::materialized_view::CreateMaterializedViewMeta;
 use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -204,6 +205,8 @@ pub struct TableMeta {
 }
 
 pub const OPT_KEY_ENABLE_PARTIAL_UPDATE: &str = "enable_partial_update";
+/// Normalized Fuse partition expressions set by `CREATE TABLE PARTITION BY`.
+pub const OPT_KEY_PARTITION_BY: &str = "partition_by";
 pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
 const COLUMN_ORIENTED_SEGMENT_FORMAT: &str = "column_oriented";
 
@@ -213,6 +216,8 @@ pub enum ColumnGroupCompatibilityError {
     NonFuseEngine(String),
     #[error("column-group layout is incompatible with column-oriented segments")]
     ColumnOrientedSegment,
+    #[error("column-group layout is incompatible with partitioned tables")]
+    PartitionedTable,
     #[error("column-group layout is incompatible with computed columns")]
     ComputedColumns,
     #[error("column-group layout is incompatible with table indexes: {}", .0.join(", "))]
@@ -246,6 +251,9 @@ impl TableMeta {
             .is_some_and(|format| format.eq_ignore_ascii_case(COLUMN_ORIENTED_SEGMENT_FORMAT))
         {
             return Err(ColumnGroupCompatibilityError::ColumnOrientedSegment);
+        }
+        if self.options.contains_key(OPT_KEY_PARTITION_BY) {
+            return Err(ColumnGroupCompatibilityError::PartitionedTable);
         }
         if self
             .schema
@@ -594,6 +602,13 @@ pub struct CreateTableReq {
     ///
     /// currently used in atomic CTAS.
     pub as_dropped: bool,
+
+    /// Definition and source binding for a materialized-view table.
+    ///
+    /// `create_table` persists only the definition. The source-index sequence
+    /// validates that the definition is still bound to the source metadata
+    /// recorded in the CREATE plan. It is `None` for non-MV tables.
+    pub materialized_view: Option<CreateMaterializedViewMeta>,
 
     /// Iceberg table properties
     pub table_properties: Option<BTreeMap<String, String>>,
@@ -1372,6 +1387,15 @@ mod tests {
         assert_eq!(
             column_oriented.validate_column_group_compatibility(),
             Err(ColumnGroupCompatibilityError::ColumnOrientedSegment)
+        );
+
+        let mut partitioned = meta.clone();
+        partitioned
+            .options
+            .insert("partition_by".to_string(), "a".to_string());
+        assert_eq!(
+            partitioned.validate_column_group_compatibility(),
+            Err(ColumnGroupCompatibilityError::PartitionedTable)
         );
 
         let mut computed = meta.clone();

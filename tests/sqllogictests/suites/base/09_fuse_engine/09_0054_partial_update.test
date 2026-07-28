@@ -109,3 +109,18 @@ select * from t_partial_update_compression order by id
 
 statement ok
 drop table t_partial_update_compression
+
+# Partitioned and column-group layouts are mutually exclusive.
+statement error
+create table t_partial_update_partitioned(id int, value int)
+    partition by (id)
+    enable_partial_update = true
+
+statement ok
+create table t_partial_update_partitioned(id int, value int) partition by (id)
+
+statement error
+alter table t_partial_update_partitioned set options(enable_partial_update = true)
+
+statement ok
+drop table t_partial_update_partitioned

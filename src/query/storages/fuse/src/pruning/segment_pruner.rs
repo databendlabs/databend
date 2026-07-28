@@ -90,7 +90,11 @@ impl SegmentPruner {
                 info.summary().spatial_stats.as_ref(),
             );
             if pruning_cost.measure(PruningCostKind::SegmentsRange, || {
-                range_pruner.should_keep(&range_input, None)
+                self.pruning_ctx
+                    .partition_pruner
+                    .as_ref()
+                    .is_none_or(|pruner| pruner.should_keep(info.summary().cluster_stats.as_ref()))
+                    && range_pruner.should_keep(&range_input, None)
             }) {
                 // Perf.
                 {

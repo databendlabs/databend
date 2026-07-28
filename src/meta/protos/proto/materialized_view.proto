@@ -1,0 +1,76 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+import "metadata.proto";
+
+// Immutable SQL definition of a materialized view.
+// Identity lives on the key (tenant, table_id), not in this value.
+message MVDefinition {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // SQL text as submitted by the user, for example: SELECT * FROM t.
+  string original_query = 1;
+
+  // SQL text with object names fully qualified by Databend, for example:
+  // SELECT * FROM catalog.db.t.
+  string query = 2;
+
+  // Columns and types returned when querying the materialized view. For example,
+  // if orders.amount is a non-null Float64:
+  // SELECT AVG(amount) AS avg_amount FROM orders
+  // this logical schema is [avg_amount: Float64]. The materialized-view
+  // TableMeta.schema is [avg_amount: Tuple(Float64, UInt64)]. The Fuse table
+  // stores this mergeable AVG state (sum and count), which is finalized as
+  // avg_amount when queried.
+  DataSchema logical_schema = 3;
+
+  // Whether source-table writes maintain the MV synchronously.
+  // CREATE MATERIALIZED VIEW explicitly sets this to true; CREATE ASYNC
+  // MATERIALIZED VIEW sets it to false and scheduled tasks refresh the MV.
+  // This mode is immutable after publication; recreate the MV to change it.
+  bool sync_creation = 4;
+}
+
+// Source-table dependency recorded for one materialized view.
+// Identity lives on the key (tenant, source_table_id, mv_table_id).
+// The value is not empty because the relationship remains after invalidation;
+// its generation determines whether the dependency is currently valid.
+message MVSourceBinding {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // Semantic MV-binding generation observed when this materialized view was
+  // bound. The view is valid only while this generation equals the source
+  // table's current binding generation.
+  uint64 bound_source_generation = 1;
+}
+
+// Current semantic MV-binding generation of one source table. Source DDL that
+// invalidates existing MVs advances it; ADD COLUMN, table rename, and table
+// DROP/UNDROP leave it unchanged.
+message MVSourceBindingVersion {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // This semantic generation is stored explicitly instead of using this
+  // record's KV sequence. That lets the first successful CREATE MV initialize
+  // generation 0 and its relationship atomically; a failed CREATE publishes
+  // neither record. The KV sequence remains an internal transaction CAS token.
+  uint64 current_source_generation = 1;
+}

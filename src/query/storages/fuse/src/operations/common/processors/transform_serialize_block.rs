@@ -85,6 +85,7 @@ pub struct TransformSerializeBlock {
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
     updated_field_indices: Option<Vec<FieldIndex>>,
+    pending_merge_hll: bool,
     pending_logical_change: (u64, u64),
 }
 
@@ -257,6 +258,7 @@ impl TransformSerializeBlock {
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
             updated_field_indices,
+            pending_merge_hll: false,
             pending_logical_change: (0, 0),
         })
     }
@@ -378,6 +380,18 @@ impl Processor for TransformSerializeBlock {
                         Ok(Event::Sync)
                     }
                 }
+                SerializeDataMeta::SerializeAppend => {
+                    self.pending_merge_hll = true;
+                    self.state = State::NeedSerialize {
+                        pending: PendingSerialization {
+                            block: input_data,
+                            stats_type: ClusterStatsGenType::Generally,
+                            index: None,
+                        },
+                        origin_block_meta: None,
+                    };
+                    Ok(Event::Sync)
+                }
                 SerializeDataMeta::CompactExtras(compact_extras) => {
                     // compact extras
                     let data_block = Self::mutation_logs(
@@ -454,6 +468,7 @@ impl Processor for TransformSerializeBlock {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized { serialized, index } => {
+                let merge_hll = std::mem::take(&mut self.pending_merge_hll);
                 let (logical_updated_rows, logical_deleted_rows) =
                     std::mem::take(&mut self.pending_logical_change);
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
@@ -508,6 +523,7 @@ impl Processor for TransformSerializeBlock {
                         Self::mutation_logs(
                             MutationLogEntry::AppendBlock {
                                 block_meta: Arc::new(extended_block_meta),
+                                merge_hll,
                             },
                             logical_updated_rows,
                             logical_deleted_rows,

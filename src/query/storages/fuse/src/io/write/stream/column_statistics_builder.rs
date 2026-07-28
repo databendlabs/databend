@@ -47,10 +47,7 @@ use databend_common_expression::with_number_type;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use enum_dispatch::enum_dispatch;
 
-use crate::statistics::STATS_STRING_PREFIX_LEN;
-use crate::statistics::Trim;
-use crate::statistics::trim_string_max_with_len;
-use crate::statistics::trim_string_min_with_len;
+use crate::statistics::trim_column_min_max;
 
 pub type CommonBuilder<T> = GenericColumnStatisticsBuilder<T, CommonAdapter>;
 pub type DecimalBuilder<T> = GenericColumnStatisticsBuilder<T, DecimalAdapter>;
@@ -105,7 +102,7 @@ where
 
 pub fn create_column_stats_builder(
     data_type: &DataType,
-    string_col_len: usize,
+    string_col_len: Option<usize>,
 ) -> ColumnStatisticsBuilder {
     let inner_type = data_type.remove_nullable();
     macro_rules! match_number_type_create {
@@ -226,7 +223,7 @@ where
     null_count: usize,
     in_memory_size: usize,
     data_type: DataType,
-    string_col_len: usize,
+    string_col_len: Option<usize>,
 
     _phantom: PhantomData<(T, A)>,
 }
@@ -245,12 +242,12 @@ where
             null_count: 0,
             in_memory_size: 0,
             data_type,
-            string_col_len: STATS_STRING_PREFIX_LEN,
+            string_col_len: None,
             _phantom: PhantomData,
         }
     }
 
-    fn create_with_string_len(data_type: DataType, string_col_len: usize) -> Self {
+    fn create_with_string_len(data_type: DataType, string_col_len: Option<usize>) -> Self {
         Self {
             min: None,
             max: None,
@@ -351,47 +348,25 @@ where
     }
 
     fn finalize(self) -> Result<ColumnStatistics> {
-        let string_col_len = self.string_col_len;
-        let min = if let Some(v) = self.min {
+        let raw_min = if let Some(v) = self.min {
             let v = A::value_to_scalar(v);
-            let scalar = T::upcast_scalar_with_type(v, &self.data_type);
-            match scalar {
-                Scalar::String(s) => trim_string_min_with_len(s, string_col_len)
-                    .map(Scalar::String)
-                    .unwrap_or(Scalar::Null),
-                other => other.trim_min().unwrap_or(Scalar::Null),
-            }
+            T::upcast_scalar_with_type(v, &self.data_type)
         } else {
             Scalar::Null
         };
-        let max = if let Some(v) = self.max {
+        let raw_max = if let Some(v) = self.max {
             let v = A::value_to_scalar(v);
-            let scalar = T::upcast_scalar_with_type(v, &self.data_type);
-            match scalar {
-                Scalar::String(s) => {
-                    if let Some(v) = trim_string_max_with_len(s, string_col_len) {
-                        Scalar::String(v)
-                    } else {
-                        return Err(ErrorCode::Internal(
-                            "Unable to trim string: first chars are all replacement_point"
-                                .to_string(),
-                        ));
-                    }
-                }
-                other => {
-                    if let Some(v) = other.trim_max() {
-                        v
-                    } else {
-                        return Err(ErrorCode::Internal(
-                            "Unable to trim string: first 16 chars are all replacement_point"
-                                .to_string(),
-                        ));
-                    }
-                }
-            }
+            T::upcast_scalar_with_type(v, &self.data_type)
         } else {
             Scalar::Null
         };
+        let (min, max) =
+            trim_column_min_max(raw_min, raw_max, self.string_col_len).ok_or_else(|| {
+                ErrorCode::Internal(
+                    "Unable to trim string: retained prefix is at the end of the Unicode range"
+                        .to_string(),
+                )
+            })?;
 
         Ok(ColumnStatistics::new(
             min,

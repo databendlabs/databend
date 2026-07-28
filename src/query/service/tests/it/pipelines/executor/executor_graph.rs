@@ -19,6 +19,7 @@ use std::sync::Mutex;
 
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Event;
@@ -30,6 +31,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::PlanScope;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline::sinks::SyncSenderSink;
 use databend_common_pipeline::sources::BlocksSource;
 use databend_common_pipeline_transforms::processors::TransformDummy;
@@ -392,6 +394,46 @@ async fn test_schedule_with_two_tasks() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sync_process_observes_graph_interrupt() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let mut pipeline = Pipeline::create();
+    let output = OutputPort::create();
+    pipeline.add_pipe(Pipe::create(0, 1, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(InterruptCheckingSource)),
+        vec![],
+        vec![output],
+    )]));
+
+    let graph = RunningGraph::create(
+        pipeline,
+        1,
+        Arc::new("test-sync-process-interrupt".to_string()),
+        None,
+        vec![],
+    )?;
+    let mut queue = unsafe { graph.clone().init_schedule_queue(0)? };
+    let processor = queue
+        .sync_queue
+        .pop_front()
+        .expect("interrupt checking processor should be scheduled");
+
+    graph.interrupt();
+
+    let mut context = ExecutorWorkerContext::create(0, WorkersCondvar::create(1));
+    context.set_task(ExecutorTask::Sync(processor));
+    let error = unsafe { context.execute_task(None) }
+        .expect_err("sync process should observe the graph interrupt handle");
+
+    assert_eq!(
+        error.get_error_code().code(),
+        ErrorCode::ABORTED_QUERY,
+        "process must run with the node tracking payload installed"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_schedule_point_simple() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -588,6 +630,26 @@ fn add_memory_tracking_pipe(pipeline: &mut Pipeline, memory_records: &[(i64, i64
 struct MemoryTrackingSource {
     memory_usage: i64,
     release_memory_usage: i64,
+}
+
+struct InterruptCheckingSource;
+
+impl Processor for InterruptCheckingSource {
+    fn name(&self) -> String {
+        "InterruptCheckingSource".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        Ok(Event::Sync)
+    }
+
+    fn process(&mut self) -> Result<()> {
+        check_interrupt()
+    }
 }
 
 impl Processor for MemoryTrackingSource {

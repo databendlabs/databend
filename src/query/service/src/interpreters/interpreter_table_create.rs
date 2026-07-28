@@ -61,6 +61,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -509,7 +510,8 @@ impl CreateTableInterpreter {
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
-            if !is_valid_create_opt(&key, &self.plan.engine) {
+            // PARTITION BY is normalized and inserted by the binder as internal metadata.
+            if key != OPT_KEY_PARTITION_BY && !is_valid_create_opt(&key, &self.plan.engine) {
                 let msg = format!(
                     "table option {key} is invalid for create table statement with engine {}",
                     self.plan.engine
@@ -538,6 +540,7 @@ impl CreateTableInterpreter {
             },
             table_meta,
             as_dropped: false,
+            materialized_view: None,
             table_properties: self.plan.table_properties.clone(),
             table_partition: self.plan.table_partition.as_ref().map(|table_partition| {
                 TablePartition::Identity {

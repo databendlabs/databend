@@ -14,16 +14,13 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::hint::unlikely;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::local_block_meta_serde;
+use databend_common_pipeline::core::check_interrupt;
 
 use crate::processors::BlockMetaTransform;
 use crate::processors::UnknownMode;
@@ -49,9 +46,7 @@ local_block_meta_serde!(BlockCompactMeta);
 impl BlockMetaInfo for BlockCompactMeta {}
 
 #[derive(Default)]
-pub struct TransformCompactBlock {
-    aborting: Arc<AtomicBool>,
-}
+pub struct TransformCompactBlock;
 
 #[async_trait::async_trait]
 impl BlockMetaTransform<BlockCompactMeta> for TransformCompactBlock {
@@ -59,19 +54,12 @@ impl BlockMetaTransform<BlockCompactMeta> for TransformCompactBlock {
     const NAME: &'static str = "TransformCompactBlock";
 
     fn transform(&mut self, meta: BlockCompactMeta) -> Result<Vec<DataBlock>> {
-        if unlikely(self.aborting.load(Ordering::Relaxed)) {
-            return Err(ErrorCode::aborting());
-        }
-
+        check_interrupt()?;
         match meta {
             BlockCompactMeta::Concat(blocks) => Ok(vec![DataBlock::concat(&blocks)?]),
             BlockCompactMeta::Split { blocks, block_num } => Self::split_blocks(blocks, block_num),
             BlockCompactMeta::NoChange(blocks) => Ok(blocks),
         }
-    }
-
-    fn interrupt(&self) {
-        self.aborting.store(true, Ordering::Release);
     }
 }
 

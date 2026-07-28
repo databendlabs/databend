@@ -186,7 +186,7 @@ async fn try_rebuild_req(
             storage_class,
             table_info.desc.as_str(),
         )?;
-        let default_cluster_key_id = latest_table.cluster_key_id();
+        let default_cluster_key_id = latest_table.physical_cluster_key_id();
         let latest_snapshot = latest_table.read_table_snapshot().await?;
         let (update_table_meta_req, _) = req
             .update_table_metas
