@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::Duration;
@@ -22,21 +23,29 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::UInt64Type;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 #[cfg(feature = "storage-stage")]
 use databend_common_pipeline_transforms::columns::TransformAddConstColumns;
+use databend_common_sql::ColumnBinding;
+use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::binder::ConstraintExprBinder;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformConstraintVerify;
 #[cfg(feature = "storage-stage")]
 use databend_query_storage_stage_support::build_streaming_load_pipeline;
@@ -49,12 +58,15 @@ use crate::interpreters::InterpreterPtr;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::DistributedInsertSelect;
+use crate::physical_plans::EvalScalar;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::Sort;
+use crate::physical_plans::SortStep;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::RawValueSource;
@@ -94,6 +106,93 @@ impl InsertInterpreter {
         // check if cast needed
         let cast_needed = select_schema.as_ref() != &DataSchema::from(output_schema.as_ref());
         Ok(cast_needed)
+    }
+
+    fn build_hash_distributed_input(
+        &self,
+        input: PhysicalPlan,
+        table: &Arc<dyn Table>,
+        insert_schema: &DataSchemaRef,
+        select_column_bindings: &[ColumnBinding],
+        metadata: &MetadataRef,
+        cast_needed: bool,
+    ) -> Result<PhysicalPlan> {
+        let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) else {
+            return Ok(input);
+        };
+        if cast_needed || !fuse_table.use_hash_write_distribution() {
+            return Ok(input);
+        }
+
+        let Some(partition_info) = fuse_table.partition_pruning_info(self.ctx.clone()) else {
+            return Ok(input);
+        };
+        let input_schema = input.output_schema()?;
+        let mut partition_exprs = Vec::with_capacity(partition_info.partition_keys.len());
+        for partition_key in partition_info.partition_keys {
+            let expr = partition_key.as_expr(&BUILTIN_FUNCTIONS);
+            if expr
+                .column_refs()
+                .keys()
+                .any(|name| insert_schema.index_of(name).is_err())
+            {
+                return Ok(input);
+            }
+            partition_exprs.push(expr.project_column_ref(|name| {
+                let position = insert_schema.index_of(name)?;
+                let binding = select_column_bindings.get(position).ok_or_else(|| {
+                    ErrorCode::Internal("INSERT SELECT column binding is missing")
+                })?;
+                input_schema.index_of(&binding.index.to_string())
+            })?);
+        }
+
+        let input_columns = input_schema.num_fields();
+        let mut eval_exprs = Vec::with_capacity(partition_exprs.len());
+        let mut hash_keys = Vec::with_capacity(partition_exprs.len());
+        let mut order_by = Vec::with_capacity(partition_exprs.len());
+        for (index, expr) in partition_exprs.into_iter().enumerate() {
+            let data_type = expr.data_type().clone();
+            let display_name = format!("partition_key_{index}");
+            let symbol = metadata
+                .write()
+                .add_derived_column(display_name.clone(), data_type.clone());
+            eval_exprs.push((expr.as_remote_expr(), symbol));
+            hash_keys.push(RemoteExpr::ColumnRef {
+                span: None,
+                id: input_columns + index,
+                data_type,
+                display_name: display_name.clone(),
+            });
+            order_by.push(SortDesc {
+                asc: true,
+                nulls_first: false,
+                order_by: symbol,
+                display_name,
+            });
+        }
+
+        let projections: BTreeSet<_> = (0..input_columns + eval_exprs.len()).collect();
+        let eval = PhysicalPlan::new(EvalScalar::create(input, eval_exprs, projections, None));
+        let exchange = PhysicalPlan::new(Exchange {
+            meta: PhysicalPlanMeta::new("Exchange"),
+            input: eval,
+            kind: FragmentKind::GlobalShuffle,
+            keys: hash_keys,
+            ignore_exchange: false,
+            allow_adjust_parallelism: true,
+        });
+        Ok(PhysicalPlan::new(Sort {
+            meta: PhysicalPlanMeta::new("Sort"),
+            input: exchange,
+            order_by,
+            limit: None,
+            step: SortStep::Single,
+            pre_projection: None,
+            broadcast_id: None,
+            enable_fixed_rows: self.ctx.get_settings().get_enable_fixed_rows_sort()?,
+            stat_info: None,
+        }))
     }
 }
 
@@ -230,28 +329,47 @@ impl Interpreter for InsertInterpreter {
                         && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
                     {
                         // insert can be dispatched to different nodes if table support_distributed_insert
-                        let input = exchange.input.clone();
+                        let insert_schema = self.plan.dest_schema();
+                        let cast_needed = self.check_schema_cast(plan)?;
+                        let input = self.build_hash_distributed_input(
+                            exchange.input.clone(),
+                            &table1,
+                            &insert_schema,
+                            &select_column_bindings,
+                            metadata,
+                            cast_needed,
+                        )?;
                         exchange.derive(vec![PhysicalPlan::new(DistributedInsertSelect {
                             input,
                             table_info,
                             select_schema: plan.schema(),
                             select_column_bindings,
-                            insert_schema: self.plan.dest_schema(),
-                            cast_needed: self.check_schema_cast(plan)?,
+                            insert_schema,
+                            cast_needed,
                             table_meta_timestamps,
                             meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
                         })])
                     } else {
                         // insert should wait until all nodes finished
+                        let insert_schema = self.plan.dest_schema();
+                        let cast_needed = self.check_schema_cast(plan)?;
+                        let input = self.build_hash_distributed_input(
+                            select_plan,
+                            &table1,
+                            &insert_schema,
+                            &select_column_bindings,
+                            metadata,
+                            cast_needed,
+                        )?;
                         PhysicalPlan::new(DistributedInsertSelect {
                             // TODO: we reuse the id of other plan here,
                             // which is not correct. We should generate a new id for insert.
-                            input: select_plan,
+                            input,
                             table_info,
                             select_schema: plan.schema(),
                             select_column_bindings,
-                            insert_schema: self.plan.dest_schema(),
-                            cast_needed: self.check_schema_cast(plan)?,
+                            insert_schema,
+                            cast_needed,
                             table_meta_timestamps,
                             meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
                         })

@@ -114,6 +114,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use futures_util::TryStreamExt;
@@ -612,6 +613,15 @@ impl FuseTable {
 
     pub fn partition_key_count(&self) -> usize {
         self.resolve_partition_keys().map_or(0, |keys| keys.len())
+    }
+
+    pub fn use_hash_write_distribution(&self) -> bool {
+        self.partition_key_count() != 0
+            && self
+                .table_info
+                .options()
+                .get(OPT_KEY_WRITE_DISTRIBUTION_MODE)
+                .is_some_and(|mode| mode.eq_ignore_ascii_case("hash"))
     }
 
     /// The key used for physical Fuse layout. Partition expressions are always the

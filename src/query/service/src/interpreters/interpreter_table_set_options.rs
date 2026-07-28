@@ -53,6 +53,8 @@ use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
+use databend_storages_common_table_meta::table::WriteDistributionMode;
 use log::error;
 
 use crate::interpreters::Interpreter;
@@ -178,6 +180,17 @@ impl Interpreter for SetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
+
+        if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
+            let mode = mode.parse::<WriteDistributionMode>()?;
+            if mode == WriteDistributionMode::Hash
+                && !table.options().contains_key(OPT_KEY_PARTITION_BY)
+            {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "{OPT_KEY_WRITE_DISTRIBUTION_MODE}='hash' requires PARTITION BY"
+                )));
+            }
+        }
 
         let engine = Engine::from(table.engine());
         for table_option in self.plan.set_options.iter() {

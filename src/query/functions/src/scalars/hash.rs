@@ -102,6 +102,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         });
     }
 
+    register_bucket(registry);
+
     // Could be used in exchange
     registry
         .scalar_builder("siphash64")
@@ -220,6 +222,99 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
+}
+
+fn register_bucket(registry: &mut FunctionRegistry) {
+    registry
+        .register_passthrough_nullable_2_arg::<NumberType<u64>, StringType, NumberType<i32>, _, _>(
+            "bucket",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<NumberType<u64>, StringType, NumberType<i32>>(
+                |buckets, value, output, ctx| {
+                    output.push(bucket(buckets, value.as_bytes(), output.len(), ctx));
+                },
+            ),
+        );
+    registry
+        .register_passthrough_nullable_2_arg::<NumberType<u64>, DateType, NumberType<i32>, _, _>(
+            "bucket",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<NumberType<u64>, DateType, NumberType<i32>>(
+                |buckets, value, output, ctx| {
+                    output.push(bucket(buckets, &value.to_le_bytes(), output.len(), ctx));
+                },
+            ),
+        );
+    registry.register_passthrough_nullable_2_arg::<
+        NumberType<u64>,
+        TimestampType,
+        NumberType<i32>,
+        _,
+        _,
+    >(
+        "bucket",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<NumberType<u64>, TimestampType, NumberType<i32>>(
+            |buckets, value, output, ctx| {
+                output.push(bucket(
+                    buckets,
+                    &value.to_le_bytes(),
+                    output.len(),
+                    ctx,
+                ));
+            },
+        ),
+    );
+    for num_type in ALL_INTEGER_TYPES {
+        with_integer_mapped_type!(|NUM_TYPE| match num_type {
+            NumberDataType::NUM_TYPE => {
+                registry.register_passthrough_nullable_2_arg::<
+                    NumberType<u64>,
+                    NumberType<NUM_TYPE>,
+                    NumberType<i32>,
+                    _,
+                    _,
+                >(
+                    "bucket",
+                    |_, _, _| FunctionDomain::MayThrow,
+                    vectorize_with_builder_2_arg::<
+                        NumberType<u64>,
+                        NumberType<NUM_TYPE>,
+                        NumberType<i32>,
+                    >(|buckets, value, output, ctx| {
+                        let value: i64 = value.as_();
+                        output.push(bucket(
+                            buckets,
+                            &value.to_le_bytes(),
+                            output.len(),
+                            ctx,
+                        ));
+                    }),
+                );
+            }
+            _ => unreachable!(),
+        });
+    }
+}
+
+fn bucket(
+    buckets: u64,
+    bytes: &[u8],
+    row: usize,
+    ctx: &mut databend_common_expression::EvalContext,
+) -> i32 {
+    let Ok(buckets) = i32::try_from(buckets) else {
+        ctx.set_error(row, "bucket count must be between 1 and 2147483647");
+        return 0;
+    };
+    if buckets == 0 {
+        ctx.set_error(row, "bucket count must be greater than zero");
+        return 0;
+    }
+
+    let mut bytes = bytes;
+    let hash = murmur3::murmur3_32(&mut bytes, 0).unwrap() as i32;
+    (hash & i32::MAX) % buckets
 }
 
 fn register_simple_domain_type_hash<T: ArgType>(registry: &mut FunctionRegistry)

@@ -934,6 +934,28 @@ Functions overloads:
 1 bitmap_xor(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
 0 blake3(String) :: String
 1 blake3(String NULL) :: String NULL
+0 bucket(UInt64, String) :: Int32
+1 bucket(UInt64 NULL, String NULL) :: Int32 NULL
+2 bucket(UInt64, Date) :: Int32
+3 bucket(UInt64 NULL, Date NULL) :: Int32 NULL
+4 bucket(UInt64, Timestamp) :: Int32
+5 bucket(UInt64 NULL, Timestamp NULL) :: Int32 NULL
+6 bucket(UInt64, UInt8) :: Int32
+7 bucket(UInt64 NULL, UInt8 NULL) :: Int32 NULL
+8 bucket(UInt64, UInt16) :: Int32
+9 bucket(UInt64 NULL, UInt16 NULL) :: Int32 NULL
+10 bucket(UInt64, UInt32) :: Int32
+11 bucket(UInt64 NULL, UInt32 NULL) :: Int32 NULL
+12 bucket(UInt64, UInt64) :: Int32
+13 bucket(UInt64 NULL, UInt64 NULL) :: Int32 NULL
+14 bucket(UInt64, Int8) :: Int32
+15 bucket(UInt64 NULL, Int8 NULL) :: Int32 NULL
+16 bucket(UInt64, Int16) :: Int32
+17 bucket(UInt64 NULL, Int16 NULL) :: Int32 NULL
+18 bucket(UInt64, Int32) :: Int32
+19 bucket(UInt64 NULL, Int32 NULL) :: Int32 NULL
+20 bucket(UInt64, Int64) :: Int32
+21 bucket(UInt64 NULL, Int64 NULL) :: Int32 NULL
 0 build_bitmap(Array(UInt8 NULL)) :: Bitmap
 1 build_bitmap(Array(UInt8 NULL) NULL) :: Bitmap NULL
 2 build_bitmap(Array(UInt16 NULL)) :: Bitmap

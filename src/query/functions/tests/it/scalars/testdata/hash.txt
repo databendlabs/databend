@@ -851,3 +851,71 @@ evaluation (internal):
 +--------+----------------------------------+
 
 
+ast            : bucket(16, 34)
+raw expr       : bucket(16, 34)
+checked expr   : bucket<UInt64, UInt8>(CAST<UInt8>(16_u8 AS UInt64), 34_u8)
+optimized expr : 3_i32
+output type    : Int32
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : bucket(16, 'iceberg')
+raw expr       : bucket(16, 'iceberg')
+checked expr   : bucket<UInt64, String>(CAST<UInt8>(16_u8 AS UInt64), "iceberg")
+optimized expr : 9_i32
+output type    : Int32
+output domain  : {9..=9}
+output         : 9
+
+
+ast            : bucket(16, to_date(10000))
+raw expr       : bucket(16, to_date(10000))
+checked expr   : bucket<UInt64, Date>(CAST<UInt8>(16_u8 AS UInt64), CAST<Int64>(CAST<UInt16>(10000_u16 AS Int64) AS Date))
+optimized expr : 12_i32
+output type    : Int32
+output domain  : {12..=12}
+output         : 12
+
+
+ast            : bucket(16, to_datetime(100000))
+raw expr       : bucket(16, to_datetime(100000))
+checked expr   : bucket<UInt64, Timestamp>(CAST<UInt8>(16_u8 AS UInt64), CAST<Int64>(CAST<UInt32>(100000_u32 AS Int64) AS Timestamp))
+optimized expr : 15_i32
+output type    : Int32
+output domain  : {15..=15}
+output         : 15
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | bucket(0, 1)
+  | ^^^^^^^^^^^^ bucket count must be greater than zero while evaluating function `bucket(0, 1)` in expr `bucket(CAST(0 AS UInt64), 1)`
+
+
+
+ast            : bucket(8, a)
+raw expr       : bucket(8, a::Int64)
+checked expr   : bucket<UInt64, Int64>(CAST<UInt8>(8_u8 AS UInt64), a)
+optimized expr : bucket<UInt64, Int64>(8_u64, a)
+evaluation:
++--------+---------+---------+
+|        | a       | Output  |
++--------+---------+---------+
+| Type   | Int64   | Int32   |
+| Domain | {1..=4} | Unknown |
+| Row 0  | 1       | 4       |
+| Row 1  | 2       | 4       |
+| Row 2  | 3       | 3       |
+| Row 3  | 4       | 6       |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Int64([1, 2, 3, 4])) |
+| Output | Int32([4, 4, 3, 6])         |
++--------+-----------------------------+
+
+

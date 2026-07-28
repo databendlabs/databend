@@ -4298,6 +4298,7 @@ dependencies = [
  "libm",
  "match-template",
  "md-5",
+ "murmur3",
  "naive-cityhash",
  "num-traits",
  "proptest",

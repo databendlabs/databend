@@ -369,6 +369,54 @@ SELECT block_count FROM fuse_snapshot('db_09_0054', 'fragmented_input') LIMIT 1
 ----
 6
 
+# INSERT SELECT evaluates the physical partition transform, applies GlobalHash,
+# and sorts each receiving node before Fuse serialization.
+statement ok
+SET max_threads=4
+
+statement ok
+SET max_block_size=1000
+
+statement ok
+CREATE TABLE hash_partitioned(id BIGINT) PARTITION BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO hash_partitioned SELECT number::BIGINT FROM numbers(40000)
+
+query I
+SELECT count(*) FROM hash_partitioned
+----
+40000
+
+# Each bucket contains 2500 rows. GlobalHash plus sort should
+# keep the layout close to the intrinsic three blocks per bucket instead of one
+# fragment per incoming block. Allow partition-boundary tails.
+query I
+SELECT to_int64(block_count <= 64) FROM fuse_snapshot('db_09_0054', 'hash_partitioned') LIMIT 1
+----
+1
+
+# Other insert sources keep using the existing append path.
+statement ok
+INSERT INTO hash_partitioned VALUES (40000), (40001)
+
+query I
+SELECT count(*) FROM hash_partitioned WHERE id >= 40000
+----
+2
+
+statement error write_distribution_mode must be either 'none' or 'hash'
+CREATE TABLE invalid_write_distribution(p INT) PARTITION BY (p) WRITE_DISTRIBUTION_MODE='random'
+
+statement error write_distribution_mode='hash' requires PARTITION BY
+CREATE TABLE missing_write_partition(p INT) WRITE_DISTRIBUTION_MODE='hash'
+
+statement error must use bucket with a constant count between 1 and 2147483647
+CREATE TABLE invalid_bucket_count(id BIGINT) PARTITION BY (bucket(id, id))
+
+statement error must use bucket with a constant count between 1 and 2147483647
+CREATE TABLE zero_bucket_count(id BIGINT) PARTITION BY (bucket(0, id))
+
 # Like CLUSTER BY, each physical key expression may reference only one source
 # column. Composite partitioning is expressed as PARTITION BY (a, b).
 statement error PARTITION BY expression `a \+ b` is invalid
