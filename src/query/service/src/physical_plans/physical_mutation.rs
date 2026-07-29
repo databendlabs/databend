@@ -115,6 +115,9 @@ fn build_partial_update_info(
         return Ok(None);
     }
 
+    // Computed columns are not supported by partial updates yet. In particular, stored
+    // computed columns that depend on an updated field are not added here; supporting them
+    // requires dependency expansion or a full-rewrite fallback.
     let schema_with_stream = table.schema_with_stream();
     let mut updated_column_ids = update_list
         .keys()

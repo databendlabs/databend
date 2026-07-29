@@ -215,6 +215,9 @@ fn merge_column_group_metadata(
         bloom: update.bloom,
     });
 
+    // Partial updates do not support inverted, Ngram, vector, or spatial indexes yet. Their
+    // metadata is cloned from `origin` without rebuilding derived files for the new block
+    // anchor, so tables using those indexes must not enter this path.
     let mut block_meta = origin.clone();
     block_meta.location = update.location;
     block_meta.file_size = column_groups.iter().map(|group| group.file_size).sum();
@@ -538,6 +541,9 @@ impl BlockBuilder {
 
         let column_hlls = self.finalize_column_hlls(column_hlls)?;
 
+        // Fuse virtual columns are not supported by partial updates yet. Supporting them
+        // requires rebuilding or invalidating `origin.virtual_block_meta` when source columns
+        // change.
         Ok(BlockSerialization {
             block_raw_data: buffer,
             block_meta,
