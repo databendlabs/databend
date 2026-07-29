@@ -82,34 +82,35 @@ Generated code fails in patterns that hand-written code rarely does. Before requ
 
 Fixing these before review is the author’s job. Finding them in review is a signal the diff was not read.
 
-## Disclosure (recommended)
+## AI declaration (required)
 
-Disclosure is **recommended**, not a merge blocker by default.
+Every PR must complete the `## AI assistance` section. This declaration is a review-entry requirement:
 
-Add a short note in the PR body when AI materially helped with:
+- If AI materially helped with code, tests, docs, or the PR summary, describe the type of assistance and the affected scope
+- If no AI was involved beyond ordinary autocomplete, spell check, or linter suggestions, write `None`
+- Describe the work, not the vendor: do not include product, model, or provider names
 
-- Code generation or substantial edits
-- Tests or docs
-- PR summary text for a complex change
-
-Examples:
+A complete, valid example:
 
 ```md
 ## AI assistance
 
-- Used Claude Code for the initial storage iterator patch; I reworked error paths and added logic tests myself.
-- Used an LLM to draft the PR summary; technical claims were verified against the diff.
+- AI usage: An AI coding agent drafted the storage iterator patch; I reworked the error paths and added logic tests
+- Responsible human: @your-actual-github-id
+- [x] The responsible human has read every line of this diff and can explain each change
 ```
+
+For a PR without material AI assistance:
 
 ```md
 ## AI assistance
 
-IDE autocomplete only. No agent-generated patches.
+- AI usage: None
+- Responsible human: @your-actual-github-id
+- [x] The responsible human has read every line of this diff and can explain each change
 ```
 
-You do **not** need to disclose ordinary autocomplete, spell check, or linter suggestions.
-
-Maintainers may ask for disclosure or a walkthrough when a change is high risk (catalog/meta, storage correctness, transactions, planner semantics, security boundaries). Failure to disclose is not automatic rejection; refusal to take responsibility is.
+The declaration identifies how the change was produced; it does not reduce the responsible human’s obligations. Maintainers may also request a walkthrough for high-risk changes (catalog/meta, storage correctness, transactions, planner semantics, security boundaries).
 
 ## Quality bar for AI-assisted PRs
 
@@ -160,7 +161,7 @@ Review the change, not the tool.
 | --- | --- |
 | `AI_POLICY.md` (this file) | Community rules for AI-assisted contribution and review |
 | `AGENTS.md` + `agents/` | How coding agents should work inside this repository |
-| `.github/PULL_REQUEST_TEMPLATE.md` | PR checklist (CLA, summary, tests, change type) |
+| `.github/PULL_REQUEST_TEMPLATE.md` | PR checklist (CLA, summary, tests, change type, AI declaration) |
 | `.github/CODEOWNERS` | Domain reviewers for merge paths |
 
 If maintainer guidance for a specific PR conflicts with this document, follow the maintainer’s explicit guidance for that PR, then propose an update here if the exception should become policy.

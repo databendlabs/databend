@@ -1,4 +1,4 @@
-module.exports = async ({ context, core }) => {
+module.exports = async ({ github, context, core }) => {
   const body = context.payload.pull_request.body || "";
 
   const problems = [];
@@ -21,10 +21,35 @@ module.exports = async ({ context, core }) => {
 
     const humanLine = section.match(/^-[ \t]*Responsible human:[ \t]*(.*)$/im);
     const human = humanLine?.[1].trim();
-    if (!human || !/^@[A-Za-z0-9][A-Za-z0-9-]*/.test(human)) {
+    const usernameMatch = human?.match(/^@([A-Za-z0-9-]+)$/);
+    const username = usernameMatch?.[1];
+    const usernameIsValid =
+      username &&
+      username.length <= 39 &&
+      !username.startsWith("-") &&
+      !username.endsWith("-") &&
+      !username.includes("--") &&
+      username.toLowerCase() !== "your-github-id";
+
+    if (!usernameIsValid) {
       problems.push(
-        "`Responsible human:` must name a GitHub user, e.g. `@your-github-id`",
+        "`Responsible human:` must name a real GitHub user, e.g. `@octocat`",
       );
+    } else {
+      try {
+        const { data: account } = await github.rest.users.getByUsername({
+          username,
+        });
+        if (account.type !== "User") {
+          problems.push("`Responsible human:` must refer to a human account");
+        }
+      } catch (error) {
+        if (error.status === 404) {
+          problems.push(`Responsible human \`@${username}\` does not exist`);
+        } else {
+          throw error;
+        }
+      }
     }
 
     const readBox = section.match(

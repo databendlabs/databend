@@ -27,7 +27,7 @@ This file is the top-level guide for repository-specific working rules. Start by
 - A clean full build of the workspace can take about 20 minutes. Prefer the smallest relevant build or test step first, then scale validation up before handoff.
 
 ## Detail Index
-- [`AI_POLICY.md`](AI_POLICY.md) for AI-assisted contribution rules: human accountability, disclosure, and what gets PRs closed.
+- [`AI_POLICY.md`](AI_POLICY.md) for AI-assisted contribution rules: human accountability, declaration, and what gets PRs closed.
 - [`agents/repository-structure.md`](agents/repository-structure.md) for workspace layout and where code, tests, tooling, and fixtures live.
 - [`agents/development-commands.md`](agents/development-commands.md) for setup, build, run, test, format, and lint commands.
 - [`agents/coding-style.md`](agents/coding-style.md) for Rust, Python, shell, naming, error handling, and observability conventions.

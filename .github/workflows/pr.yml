@@ -160,7 +160,7 @@ jobs:
         with:
           script: |
             const script = require('./.github/scripts/check_pr_ai_assistance.js')
-            await script({ context, core })
+            await script({ github, context, core })
       - name: Delete Comment
         if: always() && steps.check.outputs.ai == 'valid'
         uses: everpcpc/comment-on-pr-action@v1
@@ -185,8 +185,8 @@ jobs:
             ```
             ## AI assistance
 
-            - AI usage: Claude Code drafted the patch; I reviewed and added logic tests (or "None")
-            - Responsible human: @your-github-id
+            - AI usage: An AI coding agent drafted the patch; I reviewed and added logic tests (or "None")
+            - Responsible human: @actual-github-id
             - [x] The responsible human has read every line of this diff and can explain each change
             ```
 

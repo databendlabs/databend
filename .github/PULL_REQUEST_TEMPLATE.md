@@ -34,6 +34,6 @@ can explain each change, and will answer questions during review.
 Write "None" for AI usage if no AI was involved.
 -->
 
-- AI usage: <!-- e.g. "Claude Code drafted the patch; I reviewed and added logic tests" or "None" -->
+- AI usage: <!-- Describe the assistance and affected scope without product/model/provider names, or write "None" -->
 - Responsible human: <!-- @github-id — author-side owner: has read every line, can explain each change, answers questions during review, owns follow-up fixes -->
 - [ ] The responsible human has read every line of this diff and can explain each change
