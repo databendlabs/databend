@@ -1,8 +1,32 @@
+const removeHtmlComments = (input) => {
+  let visible = "";
+  let cursor = 0;
+
+  while (cursor < input.length) {
+    const commentStart = input.indexOf("<!--", cursor);
+    if (commentStart === -1) {
+      visible += input.slice(cursor);
+      break;
+    }
+
+    visible += input.slice(cursor, commentStart);
+    const commentEnd = input.indexOf("-->", commentStart + 4);
+    if (commentEnd === -1) {
+      // GitHub hides an unterminated comment through the end of the body.
+      break;
+    }
+    cursor = commentEnd + 3;
+  }
+
+  return visible;
+};
+
 module.exports = async ({ github, context, core }) => {
   const body = context.payload.pull_request.body || "";
+  const visibleBody = removeHtmlComments(body);
 
   const problems = [];
-  const sectionMatch = body.match(
+  const sectionMatch = visibleBody.match(
     /^##\s*AI assistance\s*\n([\s\S]*?)(?=\n##\s|$(?![\s\S]))/im,
   );
 
@@ -13,7 +37,7 @@ module.exports = async ({ github, context, core }) => {
 
     const usageLine = section.match(/^-[ \t]*AI usage:[ \t]*(.*)$/im);
     const usage = usageLine?.[1].trim();
-    if (!usage || usage.startsWith("<!--")) {
+    if (!usage) {
       problems.push(
         "`AI usage:` is not filled in (write `None` if no AI was used)",
       );
