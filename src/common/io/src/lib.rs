@@ -46,7 +46,6 @@ mod stat_buffer;
 pub mod interval;
 pub mod wkb;
 
-pub use bitmap::BitmapStats;
 pub use bitmap::HYBRID_HEADER_LEN;
 pub use bitmap::HYBRID_KIND_LARGE;
 pub use bitmap::HYBRID_KIND_SMALL;
@@ -59,7 +58,6 @@ pub use bitmap::bitmap_has_all;
 pub use bitmap::bitmap_has_any;
 pub use bitmap::bitmap_max;
 pub use bitmap::bitmap_min;
-pub use bitmap::bitmap_stats;
 pub use bitmap::deserialize_bitmap;
 pub use bitmap::parse_bitmap;
 pub use decimal::display_decimal_128;
