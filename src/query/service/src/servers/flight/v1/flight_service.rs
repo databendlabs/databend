@@ -154,9 +154,10 @@ impl FlightService for DatabendQueryFlightService {
             Status::invalid_argument(format!("Failed to parse DoExchangeParams: {}", e))
         })?;
 
-        let sender = DataExchangeManager::instance().handle_do_exchange(
+        let session = DataExchangeManager::instance().handle_do_exchange(
             &params.query_id,
             &params.exchange_id,
+            &params.source_id,
             params.num_threads,
         )?;
 
@@ -165,20 +166,23 @@ impl FlightService for DatabendQueryFlightService {
 
         GlobalIORuntime::instance().spawn(async move {
             while let Some(result) = stream.next().await {
-                let Ok(flight_data) = result else {
-                    break;
+                let flight_data = match result {
+                    Ok(flight_data) => flight_data,
+                    Err(_) => break,
                 };
 
-                if sender.add_data(flight_data).await.is_err() {
-                    break; // Receiver closed
-                }
-
-                // Send pong (empty response signals readiness for next ping)
-                if let Err(_cause) = tx.try_send(Ok(FlightData::default())) {
-                    break;
+                match session.handle_frame(flight_data).await {
+                    Ok(response) => {
+                        if tx.send(Ok(response.data)).await.is_err() || response.terminal {
+                            break;
+                        }
+                    }
+                    Err(status) => {
+                        let _ = tx.send(Err(status)).await;
+                        break;
+                    }
                 }
             }
-            // sender is dropped here → closes sub-queues, notifies processors
         });
 
         Ok(RawResponse::new(Box::pin(rx)))

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub(crate) mod do_exchange_protocol;
 pub mod inbound_channel;
 pub mod inbound_quota;
 pub mod local_channel;
@@ -25,6 +26,7 @@ pub use inbound_channel::InboundChannel;
 pub use inbound_channel::NetworkInboundChannelSet;
 pub use inbound_channel::NetworkInboundReceiver;
 pub use inbound_channel::NetworkInboundSender;
+pub(crate) use inbound_channel::NetworkInboundSession;
 pub use local_channel::LocalOutboundChannel;
 pub use local_channel::create_local_channels;
 pub use outbound_buffer::ExchangeBufferConfig;
@@ -33,6 +35,9 @@ pub use outbound_channel::DummyOutboundChannel;
 pub use outbound_channel::OutboundChannel;
 pub use outbound_channel::RemoteChannel;
 pub use outbound_channel::RoundRobinChannel;
+pub(crate) use outbound_transport::DoExchangeConnection;
+pub(crate) use outbound_transport::DoExchangeConnector;
+pub(crate) use outbound_transport::DoExchangeRetryPolicy;
 pub use outbound_transport::PingPongCallback;
 pub use outbound_transport::PingPongExchange;
 pub use outbound_transport::PingPongExchangeInner;

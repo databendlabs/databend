@@ -290,6 +290,7 @@ mod tests {
     use tonic::Status;
 
     use super::*;
+    use crate::servers::flight::v1::network::do_exchange_protocol::DoExchangeFrame;
     use crate::servers::flight::v1::network::inbound_channel::deserialize_flight_data;
     use crate::servers::flight::v1::network::inbound_channel::strip_tid;
     use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
@@ -330,7 +331,11 @@ mod tests {
 
         channel.add_block(make_block(10)).await.unwrap();
 
-        let received = send_rx.recv().await.unwrap();
+        let DoExchangeFrame::Data { data: received, .. } =
+            DoExchangeFrame::try_from(send_rx.recv().await.unwrap()).unwrap()
+        else {
+            panic!("expected DATA frame");
+        };
         let meta = received.app_metadata.to_vec();
         // First 2 bytes: tid=0 as u16 LE
         assert_eq!(&meta[..2], &[0, 0]);
@@ -370,7 +375,11 @@ mod tests {
 
         channel.add_block(make_block(1)).await.unwrap();
 
-        let received = send_rx.recv().await.unwrap();
+        let DoExchangeFrame::Data { data: received, .. } =
+            DoExchangeFrame::try_from(send_rx.recv().await.unwrap()).unwrap()
+        else {
+            panic!("expected DATA frame");
+        };
         let meta = received.app_metadata.to_vec();
         // First 2 bytes: tid=5 as u16 LE
         assert_eq!(&meta[..2], &[5, 0]);
@@ -444,7 +453,12 @@ mod tests {
         channel.add_block(original.clone()).await.unwrap();
 
         // Receive, strip tid, deserialize
-        let flight_data = send_rx.recv().await.unwrap();
+        let DoExchangeFrame::Data {
+            data: flight_data, ..
+        } = DoExchangeFrame::try_from(send_rx.recv().await.unwrap()).unwrap()
+        else {
+            panic!("expected DATA frame");
+        };
         let stripped = strip_tid(flight_data);
         let schema = Arc::new(original.infer_schema());
         let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));

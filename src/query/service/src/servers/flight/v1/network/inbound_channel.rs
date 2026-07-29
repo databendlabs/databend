@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
@@ -30,8 +31,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_io::prelude::BinaryRead;
 use databend_common_io::prelude::bincode_deserialize_from_stream;
+use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
+use tonic::Status;
 
+use super::do_exchange_protocol::DoExchangeFrame;
 use super::inbound_quota::QueueItem;
 use super::inbound_quota::SubQueue;
 
@@ -81,17 +85,14 @@ impl NetworkInboundChannelSet {
     }
 }
 
-/// Network-side handle. Each do_exchange connection gets one.
-///
-/// When dropped, closes this connection's sub-queues and notifies processors.
+/// Network-side handle for one logical sender across all of its reconnects.
 pub struct NetworkInboundSender {
-    /// This connection's sub-queue in each tid's NetworkInboundChannel.
     sub_queues: Vec<Arc<SubQueue>>,
+    finished: AtomicBool,
 }
 
 impl NetworkInboundSender {
-    /// Create a new sender for a connection.
-    /// Adds a sub-queue to each NetworkInboundChannel for this connection.
+    /// Adds one sub-queue to every NetworkInboundChannel for this logical sender.
     pub fn new(channel_set: &NetworkInboundChannelSet, max_bytes_per_connection: usize) -> Self {
         let semaphore = Arc::new(Semaphore::new(max_bytes_per_connection));
         let mut sub_queues = Vec::with_capacity(channel_set.channels.len());
@@ -110,7 +111,10 @@ impl NetworkInboundSender {
             sub_queues.push(sub_queue);
         }
 
-        Self { sub_queues }
+        Self {
+            sub_queues,
+            finished: AtomicBool::new(false),
+        }
     }
 
     /// Add data to the inbound channel.
@@ -156,14 +160,151 @@ impl NetworkInboundSender {
     pub fn all_receivers_closed(&self) -> bool {
         self.sub_queues.iter().all(|q| q.sender.is_closed())
     }
-}
 
-impl Drop for NetworkInboundSender {
-    fn drop(&mut self) {
+    fn finish(&self) {
+        if self.finished.swap(true, Ordering::AcqRel) {
+            return;
+        }
+
         for sub_queue in &self.sub_queues {
             if sub_queue.sender_count.fetch_sub(1, Ordering::AcqRel) == 1 {
                 sub_queue.sender.close();
             }
+        }
+    }
+}
+
+impl Drop for NetworkInboundSender {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
+#[derive(Clone, Copy)]
+enum InboundSessionTerminal {
+    SenderFinished,
+    ReceiverFinished,
+}
+
+struct InboundSessionState {
+    next_sequence: u64,
+    terminal: Option<InboundSessionTerminal>,
+}
+
+pub(crate) struct InboundExchangeResponse {
+    pub data: FlightData,
+    pub terminal: bool,
+}
+
+/// Receiver-side state for one logical do_exchange sender.
+///
+/// The state outlives individual gRPC streams. A retried sequence is acknowledged
+/// without being delivered twice, while FINISH is the only sender-side event that
+/// completes the logical inbound channel.
+pub(crate) struct NetworkInboundSession {
+    sender: NetworkInboundSender,
+    state: Mutex<InboundSessionState>,
+}
+
+impl NetworkInboundSession {
+    pub(crate) fn new(sender: NetworkInboundSender) -> Self {
+        Self {
+            sender,
+            state: Mutex::new(InboundSessionState {
+                next_sequence: 0,
+                terminal: None,
+            }),
+        }
+    }
+
+    pub(crate) async fn handle_frame(
+        &self,
+        data: FlightData,
+    ) -> Result<InboundExchangeResponse, Status> {
+        match DoExchangeFrame::try_from(data)? {
+            DoExchangeFrame::Data { sequence, data } => {
+                let mut state = self.state.lock().await;
+
+                if state.terminal.is_some() {
+                    return Ok(InboundExchangeResponse {
+                        data: DoExchangeFrame::ReceiverFinished.into(),
+                        terminal: true,
+                    });
+                }
+
+                if sequence < state.next_sequence {
+                    // ACK may be lost, so acknowledge replays without enqueueing again.
+                    return Ok(InboundExchangeResponse {
+                        data: DoExchangeFrame::Ack { sequence }.into(),
+                        terminal: false,
+                    });
+                }
+
+                if sequence > state.next_sequence {
+                    // Only one frame is in flight, so a forward gap is invalid.
+                    return Err(Status::failed_precondition(format!(
+                        "do_exchange sequence gap: expected {}, received {}",
+                        state.next_sequence, sequence
+                    )));
+                }
+
+                if self.sender.add_data(data).await.is_err() {
+                    // LIMIT can close all receivers; report this as normal completion.
+                    self.sender.finish();
+                    state.terminal = Some(InboundSessionTerminal::ReceiverFinished);
+                    return Ok(InboundExchangeResponse {
+                        data: DoExchangeFrame::ReceiverFinished.into(),
+                        terminal: true,
+                    });
+                }
+
+                state.next_sequence += 1;
+                Ok(InboundExchangeResponse {
+                    data: DoExchangeFrame::Ack { sequence }.into(),
+                    terminal: false,
+                })
+            }
+            DoExchangeFrame::Finish { sequence } => {
+                let mut state = self.state.lock().await;
+
+                match state.terminal {
+                    Some(InboundSessionTerminal::ReceiverFinished) => {
+                        return Ok(InboundExchangeResponse {
+                            data: DoExchangeFrame::ReceiverFinished.into(),
+                            terminal: true,
+                        });
+                    }
+                    Some(InboundSessionTerminal::SenderFinished) => {
+                        // FINISH_ACK may be lost, so acknowledge a replayed FINISH again.
+                        return Ok(InboundExchangeResponse {
+                            data: DoExchangeFrame::FinishAck {
+                                sequence: state.next_sequence,
+                            }
+                            .into(),
+                            terminal: true,
+                        });
+                    }
+                    None => {}
+                }
+
+                if sequence != state.next_sequence {
+                    return Err(Status::failed_precondition(format!(
+                        "do_exchange FINISH sequence mismatch: expected {}, received {}",
+                        state.next_sequence, sequence
+                    )));
+                }
+
+                self.sender.finish();
+                state.terminal = Some(InboundSessionTerminal::SenderFinished);
+                Ok(InboundExchangeResponse {
+                    data: DoExchangeFrame::FinishAck { sequence }.into(),
+                    terminal: true,
+                })
+            }
+            frame => Err(Status::invalid_argument(format!(
+                "unexpected inbound do_exchange frame: {:?}",
+                frame
+            ))),
         }
     }
 }
@@ -371,8 +512,101 @@ mod tests {
     use bytes::BytesMut;
 
     use super::*;
+    use crate::servers::flight::v1::network::do_exchange_protocol::DoExchangeFrame;
 
     const BATCH_MARKER: u8 = 0x02;
+
+    fn session_data(tid: u16) -> FlightData {
+        let mut app_metadata = BytesMut::new();
+        app_metadata.put_u16_le(tid);
+        app_metadata.put_u8(0x01);
+        FlightData {
+            app_metadata: app_metadata.freeze(),
+            data_body: Bytes::from_static(b"data"),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_inbound_session_deduplicates_retried_sequence_and_finishes_explicitly() {
+        let channel_set = NetworkInboundChannelSet::new(1);
+        let session = NetworkInboundSession::new(NetworkInboundSender::new(&channel_set, 1024));
+
+        let response = session
+            .handle_frame(
+                DoExchangeFrame::Data {
+                    sequence: 0,
+                    data: session_data(0),
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            DoExchangeFrame::try_from(response.data).unwrap(),
+            DoExchangeFrame::Ack { sequence: 0 }
+        ));
+
+        let duplicate = session
+            .handle_frame(
+                DoExchangeFrame::Data {
+                    sequence: 0,
+                    data: session_data(0),
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            DoExchangeFrame::try_from(duplicate.data).unwrap(),
+            DoExchangeFrame::Ack { sequence: 0 }
+        ));
+        assert_eq!(
+            channel_set.channels[0].receiver.len(),
+            1,
+            "a retransmitted sequence must not be delivered twice"
+        );
+
+        let finish = session
+            .handle_frame(DoExchangeFrame::Finish { sequence: 1 }.into())
+            .await
+            .unwrap();
+        assert!(finish.terminal);
+        assert!(matches!(
+            DoExchangeFrame::try_from(finish.data).unwrap(),
+            DoExchangeFrame::FinishAck { sequence: 1 }
+        ));
+
+        let _ = channel_set.channels[0].receiver.recv().await.unwrap();
+        assert!(
+            channel_set.channels[0].receiver.recv().await.is_err(),
+            "FINISH must close the logical inbound sender"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_inbound_session_reports_receiver_finished_without_network_error() {
+        let channel_set = NetworkInboundChannelSet::new(1);
+        let session = NetworkInboundSession::new(NetworkInboundSender::new(&channel_set, 1024));
+        channel_set.channels[0].receiver.close();
+
+        let response = session
+            .handle_frame(
+                DoExchangeFrame::Data {
+                    sequence: 0,
+                    data: session_data(0),
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+
+        assert!(response.terminal);
+        assert!(matches!(
+            DoExchangeFrame::try_from(response.data).unwrap(),
+            DoExchangeFrame::ReceiverFinished
+        ));
+    }
 
     /// Build a FlightData with tid prefix in app_metadata.
     fn make_item(tid: u16, inner_meta: &[u8], header: &[u8], body: &[u8]) -> FlightData {
