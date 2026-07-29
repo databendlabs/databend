@@ -108,6 +108,11 @@ fn build_partial_update_info(
     database: Option<&str>,
     table_name: &str,
 ) -> Result<Option<PartialUpdateInfo>> {
+    // IMPORTANT REVIEW SCOPE: Partial UPDATE is an opt-in feature defined only for Fuse tables
+    // without partitioning, computed columns, column-oriented segments, derived table indexes
+    // (inverted, Ngram, vector, or spatial), or Fuse virtual columns. REPLACE INTO is also outside
+    // this feature. These exclusions are feature preconditions, intentionally not validated or
+    // handled by fallback here. Review this path assuming the preconditions hold.
     if !ctx.get_settings().get_enable_partial_update()?
         || !table.get_option(FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE, false)
         || update_list.is_empty()
@@ -115,9 +120,6 @@ fn build_partial_update_info(
         return Ok(None);
     }
 
-    // Computed columns are not supported by partial updates yet. In particular, stored
-    // computed columns that depend on an updated field are not added here; supporting them
-    // requires dependency expansion or a full-rewrite fallback.
     let schema_with_stream = table.schema_with_stream();
     let mut updated_column_ids = update_list
         .keys()

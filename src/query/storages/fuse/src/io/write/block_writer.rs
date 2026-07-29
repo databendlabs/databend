@@ -215,9 +215,6 @@ fn merge_column_group_metadata(
         bloom: update.bloom,
     });
 
-    // Partial updates do not support inverted, Ngram, vector, or spatial indexes yet. Their
-    // metadata is cloned from `origin` without rebuilding derived files for the new block
-    // anchor, so tables using those indexes must not enter this path.
     let mut block_meta = origin.clone();
     block_meta.location = update.location;
     block_meta.file_size = column_groups.iter().map(|group| group.file_size).sum();
@@ -425,6 +422,15 @@ impl BlockBuilder {
 
     /// Serialize only the fields changed by an UPDATE and merge their physical
     /// metadata back into the original logical block.
+    ///
+    /// # Supported feature scope
+    ///
+    /// IMPORTANT REVIEW SCOPE: This method is defined only for the Partial UPDATE feature domain:
+    /// no partitioning, computed columns, column-oriented segments, derived table indexes
+    /// (inverted, Ngram, vector, or spatial), or Fuse virtual columns. These exclusions are
+    /// contract preconditions, intentionally not validated or handled by fallback here. Within
+    /// that contract, this method maintains data, ordinary Bloom, HLL, and column statistics only;
+    /// handling metadata for excluded features is out of scope.
     pub fn build_column_group(
         &self,
         data_block: DataBlock,
@@ -541,9 +547,6 @@ impl BlockBuilder {
 
         let column_hlls = self.finalize_column_hlls(column_hlls)?;
 
-        // Fuse virtual columns are not supported by partial updates yet. Supporting them
-        // requires rebuilding or invalidating `origin.virtual_block_meta` when source columns
-        // change.
         Ok(BlockSerialization {
             block_raw_data: buffer,
             block_meta,
