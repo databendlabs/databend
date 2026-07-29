@@ -223,6 +223,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
 
 mod test_accessor {
     use std::future::Future;
+    use std::sync::Mutex;
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
 
@@ -378,6 +379,64 @@ mod test_accessor {
                     VecLister(vec![])
                 },
             ))
+        }
+    }
+
+    // Accessor that records the number of keys in each batch delete (flush),
+    // used to verify that `storage_delete_batch_size` controls the chunk size.
+    #[derive(Debug, Default)]
+    pub(crate) struct RecordingAccessor {
+        flush_sizes: Arc<Mutex<Vec<usize>>>,
+    }
+
+    impl RecordingAccessor {
+        pub(crate) fn flush_sizes(&self) -> Arc<Mutex<Vec<usize>>> {
+            self.flush_sizes.clone()
+        }
+    }
+
+    pub struct RecordingDeleter {
+        size: usize,
+        flush_sizes: Arc<Mutex<Vec<usize>>>,
+    }
+
+    impl oio::Delete for RecordingDeleter {
+        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
+            self.size += 1;
+            Ok(())
+        }
+
+        async fn flush(&mut self) -> opendal::Result<usize> {
+            let n = self.size;
+            if n > 0 {
+                self.flush_sizes.lock().unwrap().push(n);
+            }
+            self.size = 0;
+            Ok(n)
+        }
+    }
+
+    impl Access for RecordingAccessor {
+        type Reader = ();
+        type Writer = ();
+        type Lister = ();
+        type Deleter = RecordingDeleter;
+
+        fn info(&self) -> Arc<AccessorInfo> {
+            let info = AccessorInfo::default();
+            info.set_native_capability(opendal::Capability {
+                delete: true,
+                delete_max_size: Some(1000),
+                ..Default::default()
+            });
+            info.into()
+        }
+
+        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+            Ok((RpDelete::default(), RecordingDeleter {
+                size: 0,
+                flush_sizes: self.flush_sizes.clone(),
+            }))
         }
     }
 }
@@ -545,6 +604,40 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> anyhow::Result<()
 
     // verify that accessor.delete() was called
     assert!(faulty_accessor.hit_delete_operation());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_remove_files_in_batch_respects_delete_batch_size() -> anyhow::Result<()> {
+    // `storage_delete_batch_size` should control how many keys are sent per batch
+    // delete request, independent of `max_threads`. Regression test for the case
+    // where large `max_threads` shrank the batch into many tiny DeleteObjects calls.
+    let recording = Arc::new(test_accessor::RecordingAccessor::default());
+    let flush_sizes = recording.flush_sizes();
+    let operator = OperatorBuilder::new(recording.clone()).finish();
+
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    // A large max_threads must NOT shrink the delete batch.
+    ctx.get_settings().set_max_threads(32)?;
+    ctx.get_settings()
+        .set_setting("storage_delete_batch_size".to_string(), "1000".to_string())?;
+
+    let file_util = Files::create(ctx, operator);
+
+    // 2500 files with batch size 1000 -> chunks of [1000, 1000, 500].
+    let files: Vec<String> = (0..2500).map(|i| format!("f{i}")).collect();
+    file_util.remove_file_in_batch(&files).await?;
+
+    let mut sizes = flush_sizes.lock().unwrap().clone();
+    sizes.sort_unstable();
+    assert_eq!(
+        sizes,
+        vec![500, 1000, 1000],
+        "expected full 1000-key batches regardless of max_threads, got {sizes:?}"
+    );
 
     Ok(())
 }
