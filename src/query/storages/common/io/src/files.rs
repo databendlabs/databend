@@ -79,14 +79,33 @@ impl Files {
             );
         }
 
-        // Number of object keys deleted per batch delete request (e.g. S3 DeleteObjects,
-        // which accepts up to 1000 keys per request). Kept independent of `max_threads`:
-        // a single DeleteObjects call costs one request regardless of key count, so a larger
-        // batch means fewer requests, which is strictly better for both throughput and
-        // S3 request-rate limits. Runtime-tunable via `storage_delete_batch_size`.
+        // Number of object keys deleted per outer chunk. Kept independent of `max_threads`:
+        // a single batch-delete request (e.g. S3 DeleteObjects) costs one request regardless
+        // of key count, so a larger chunk means fewer requests, which is strictly better for
+        // both throughput and request-rate limits. Runtime-tunable via `storage_delete_batch_size`.
+        //
+        // The chunk size is capped by the backend's batch-delete capability
+        // (`delete_max_size`, e.g. S3 1000, Azure 256, GCS 100). Chunking above that limit
+        // would let opendal's `Deleter` flush backend-sized sub-batches *serially* inside a
+        // single `delete_files` future, bypassing `execute_futures_in_parallel` and losing
+        // the `permit` concurrency those backends still need. Capping at the backend limit
+        // keeps one request per chunk and preserves cross-chunk parallelism.
+        //
+        // Backends that advertise no batch-delete capability (`delete_max_size` unset, e.g.
+        // the `fs` service) delete one key per request; opendal's `Deleter` treats the missing
+        // capability as `max_size = 1`. Mirror that with `unwrap_or(1)` so such backends are
+        // chunked into single-key tasks that run at `permit` concurrency, rather than collapsing
+        // into one future that deletes serially.
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let batch_size =
-            (self.ctx.get_settings().get_storage_delete_batch_size()? as usize).clamp(1, 1000);
+        let backend_delete_limit = self
+            .operator
+            .info()
+            .full_capability()
+            .delete_max_size
+            .unwrap_or(1)
+            .max(1);
+        let batch_size = (self.ctx.get_settings().get_storage_delete_batch_size()? as usize)
+            .clamp(1, backend_delete_limit);
 
         info!(
             "remove file in batch, batch_size: {}, number of chunks {}",
