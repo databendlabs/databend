@@ -1,3 +1,5 @@
+const AI_DECLARATION_ENFORCEMENT_START = Date.parse("2026-07-29T14:33:06Z");
+
 const removeHtmlComments = (input) => {
   let visible = "";
   let cursor = 0;
@@ -56,9 +58,52 @@ const removeFencedCodeBlocks = (input) => {
   return visibleLines.join("\n");
 };
 
+const removeRawHtmlCodeBlocks = (input) => {
+  let visible = "";
+  let cursor = 0;
+  const openingTag = /<(pre|code)(?:\s[^>]*)?>/gi;
+
+  while (cursor < input.length) {
+    openingTag.lastIndex = cursor;
+    const opening = openingTag.exec(input);
+    if (!opening) {
+      visible += input.slice(cursor);
+      break;
+    }
+
+    visible += input.slice(cursor, opening.index);
+    const tag = opening[1];
+    const closingTag = new RegExp(`</${tag}\\s*>`, "gi");
+    closingTag.lastIndex = openingTag.lastIndex;
+    const closing = closingTag.exec(input);
+    const hiddenEnd = closing ? closingTag.lastIndex : input.length;
+
+    // Keep newlines so headings outside the raw code block remain on their
+    // original lines, while everything rendered as literal code is ignored.
+    visible += input.slice(opening.index, hiddenEnd).replace(/[^\n]/g, "");
+    cursor = hiddenEnd;
+  }
+
+  return visible;
+};
+
 module.exports = async ({ github, context, core }) => {
-  const body = context.payload.pull_request.body || "";
-  const visibleBody = removeFencedCodeBlocks(removeHtmlComments(body));
+  const pullRequest = context.payload.pull_request;
+  const createdAt = Date.parse(pullRequest.created_at);
+  if (
+    Number.isFinite(createdAt) &&
+    createdAt < AI_DECLARATION_ENFORCEMENT_START
+  ) {
+    // Do not retroactively block PRs created before the policy was merged.
+    core.setOutput("ai", "valid");
+    core.setOutput("migration", "legacy-pr");
+    return;
+  }
+
+  const body = pullRequest.body || "";
+  const withoutFences = removeFencedCodeBlocks(body);
+  const withoutComments = removeHtmlComments(withoutFences);
+  const visibleBody = removeRawHtmlCodeBlocks(withoutComments);
 
   const problems = [];
   const sectionMatch = visibleBody.match(
@@ -125,7 +170,7 @@ module.exports = async ({ github, context, core }) => {
     }
 
     const readBox = section.match(
-      /^-\s*\[x\]\s+The responsible human has read every line/im,
+      /^-[ \t]*\[x\][ \t]+The responsible human has read every line of this diff and can explain each change[ \t]*$/im,
     );
     if (!readBox) {
       problems.push(
