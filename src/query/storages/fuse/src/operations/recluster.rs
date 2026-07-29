@@ -65,7 +65,7 @@ impl FuseTable {
 
         ctx.set_status_info("[FUSE-RECLUSTER] Starting recluster operation");
 
-        if self.physical_cluster_key_id().is_none() {
+        if self.cluster_key_id().is_none() {
             return Ok(None);
         }
 

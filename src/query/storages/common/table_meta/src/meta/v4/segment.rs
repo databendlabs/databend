@@ -363,6 +363,7 @@ mod tests {
     use crate::meta::ColumnMeta;
     use crate::meta::ColumnStatistics;
     use crate::meta::Compression;
+    use crate::meta::PartitionStatistics;
 
     #[allow(dead_code)]
     #[derive(Serialize)]
@@ -546,6 +547,9 @@ mod tests {
             col_stats: block_col_stats,
             col_metas,
             cluster_stats: None,
+            partition_stats: Some(PartitionStatistics::new(vec![Scalar::String(
+                "partition-a".to_string(),
+            )])),
             location: ("block.parquet".to_string(), 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
@@ -570,6 +574,9 @@ mod tests {
             compressed_byte_size: 16,
             index_size: 0,
             col_stats: summary_col_stats,
+            partition_stats: Some(PartitionStatistics::new(vec![Scalar::String(
+                "partition-a".to_string(),
+            )])),
             ..Default::default()
         })
     }
@@ -586,8 +593,10 @@ mod tests {
             Scalar::String("aaa".to_string())
         );
         assert_eq!(segment.blocks.len(), 1);
+        assert!(segment.summary.partition_stats.is_none());
 
         let block = &segment.blocks[0];
+        assert!(block.partition_stats.is_none());
         assert_eq!(block.row_count, 3);
         assert_eq!(block.location.0, "block.parquet");
         assert!(block.col_metas[&1].as_parquet().is_some());
@@ -636,6 +645,14 @@ mod tests {
         );
 
         assert_eq!(segment.blocks.len(), 1);
+        assert_eq!(
+            segment.summary.partition_stats.as_ref().unwrap().values,
+            vec![Scalar::String("partition-a".to_string())]
+        );
+        assert_eq!(
+            segment.blocks[0].partition_stats.as_ref().unwrap().values,
+            vec![Scalar::String("partition-a".to_string())]
+        );
         assert_eq!(
             segment.blocks[0].col_stats[&3].max,
             Scalar::Decimal(DecimalScalar::Decimal64(
