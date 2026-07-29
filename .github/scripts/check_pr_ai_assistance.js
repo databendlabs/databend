@@ -1,10 +1,8 @@
 module.exports = async ({ context, core }) => {
   const body = context.payload.pull_request.body || "";
-  // Strip HTML comments so template placeholders don't count as content.
-  const stripped = body.replace(/<!--[\s\S]*?-->/g, "");
 
   const problems = [];
-  const sectionMatch = stripped.match(
+  const sectionMatch = body.match(
     /^##\s*AI assistance\s*\n([\s\S]*?)(?=\n##\s|$(?![\s\S]))/im,
   );
 
@@ -13,15 +11,17 @@ module.exports = async ({ context, core }) => {
   } else {
     const section = sectionMatch[1];
 
-    const usage = section.match(/^-[ \t]*AI usage:[ \t]*(\S.*)$/im);
-    if (!usage) {
+    const usageLine = section.match(/^-[ \t]*AI usage:[ \t]*(.*)$/im);
+    const usage = usageLine?.[1].trim();
+    if (!usage || usage.startsWith("<!--")) {
       problems.push(
         "`AI usage:` is not filled in (write `None` if no AI was used)",
       );
     }
 
-    const human = section.match(/^-[ \t]*Responsible human:.*@[A-Za-z0-9][A-Za-z0-9-]*/im);
-    if (!human) {
+    const humanLine = section.match(/^-[ \t]*Responsible human:[ \t]*(.*)$/im);
+    const human = humanLine?.[1].trim();
+    if (!human || !/^@[A-Za-z0-9][A-Za-z0-9-]*/.test(human)) {
       problems.push(
         "`Responsible human:` must name a GitHub user, e.g. `@your-github-id`",
       );
