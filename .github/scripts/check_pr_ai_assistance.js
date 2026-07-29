@@ -21,9 +21,44 @@ const removeHtmlComments = (input) => {
   return visible;
 };
 
+const removeFencedCodeBlocks = (input) => {
+  const lines = input.split("\n");
+  const visibleLines = [];
+  let fence = null;
+
+  for (const line of lines) {
+    const content = line.replace(/^ {0,3}/, "");
+
+    if (!fence) {
+      const opener = content.match(/^(`{3,}|~{3,})/);
+      if (opener) {
+        fence = { marker: opener[1][0], length: opener[1].length };
+        visibleLines.push("");
+      } else {
+        visibleLines.push(line);
+      }
+      continue;
+    }
+
+    let markerLength = 0;
+    while (content[markerLength] === fence.marker) {
+      markerLength += 1;
+    }
+    if (
+      markerLength >= fence.length &&
+      content.slice(markerLength).trim() === ""
+    ) {
+      fence = null;
+    }
+    visibleLines.push("");
+  }
+
+  return visibleLines.join("\n");
+};
+
 module.exports = async ({ github, context, core }) => {
   const body = context.payload.pull_request.body || "";
-  const visibleBody = removeHtmlComments(body);
+  const visibleBody = removeFencedCodeBlocks(removeHtmlComments(body));
 
   const problems = [];
   const sectionMatch = visibleBody.match(
@@ -60,6 +95,19 @@ module.exports = async ({ github, context, core }) => {
         "`Responsible human:` must name a real GitHub user, e.g. `@octocat`",
       );
     } else {
+      const prAuthor = context.payload.pull_request.user;
+      const authorIsBot =
+        prAuthor.type === "Bot" || prAuthor.login.toLowerCase().endsWith("[bot]");
+
+      if (
+        !authorIsBot &&
+        username.toLowerCase() !== prAuthor.login.toLowerCase()
+      ) {
+        problems.push(
+          `Responsible human must match the PR author \`@${prAuthor.login}\``,
+        );
+      }
+
       try {
         const { data: account } = await github.rest.users.getByUsername({
           username,

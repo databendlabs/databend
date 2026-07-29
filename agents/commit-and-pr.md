@@ -67,6 +67,12 @@ Added tests in `02_0063_function_generate_series.test` for:
 
 - [x] New feature (non-breaking change which adds functionality)
 
+## AI assistance
+
+- AI usage: An AI coding agent drafted the implementation; I reviewed the final diff and added logic tests
+- Responsible human: @your-actual-github-id
+- [x] The responsible human has read every line of this diff and can explain each change
+
 <!-- Reviewable:start -->
 
 ---
