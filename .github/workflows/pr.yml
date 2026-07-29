@@ -149,3 +149,46 @@ jobs:
           body: |
             At least one type of change must be checked in the PR description.
             @${{ github.event.pull_request.user.login }} please update it 🙏.
+
+  ai_assistance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check AI assistance section
+        uses: actions/github-script@v9
+        id: check
+        with:
+          script: |
+            const script = require('./.github/scripts/check_pr_ai_assistance.js')
+            await script({ context, core })
+      - name: Delete Comment
+        if: always() && steps.check.outputs.ai == 'valid'
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ github.token }}
+          identifier: "pr-assistant-ai-assistance"
+          delete: true
+      - name: Comment on PR
+        if: always() && steps.check.outputs.ai == 'invalid'
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ github.token }}
+          identifier: "pr-assistant-ai-assistance"
+          body: |
+            The `## AI assistance` section is incomplete. Review is blocked until it is filled in.
+            @${{ github.event.pull_request.user.login }} please update it 🙏.
+
+            ${{ steps.check.outputs.problems }}
+
+            Required format (see [AI_POLICY.md](https://github.com/databendlabs/databend/blob/main/AI_POLICY.md)):
+
+            ```
+            ## AI assistance
+
+            - AI usage: Claude Code drafted the patch; I reviewed and added logic tests (or "None")
+            - Responsible human: @your-github-id
+            - [x] The responsible human has read every line of this diff and can explain each change
+            ```
+
+            The responsible human is the author-side owner — the person who has read the diff,
+            can explain each change, and will answer questions during review.

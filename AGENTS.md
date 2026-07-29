@@ -4,6 +4,7 @@ This file is the top-level guide for repository-specific working rules. Start by
 
 ## Core Workflow
 - Build context from the codebase first. Databend is a multi-crate Rust workspace, so understand the affected module boundaries before editing.
+- Agents may open PRs directly, but every PR must name a responsible human on the author side who has read the full diff, can explain the changes, and answers review questions. Fill in the "AI assistance" section of the PR template. See [`AI_POLICY.md`](AI_POLICY.md).
 - For code issues inside the repository, default to best-effort root cause analysis. Do not stop at symptom-only fixes when the underlying cause can be found with reasonable investigation.
 - When guidance, lower-level docs, and repository practice conflict or are ambiguous, identify the specific conflict that affects the current decision instead of assuming one source is automatically correct.
 - Validate incrementally. Run the smallest relevant checks early, and scale verification to the parts that will remain in the branch and enter review.
@@ -26,6 +27,7 @@ This file is the top-level guide for repository-specific working rules. Start by
 - A clean full build of the workspace can take about 20 minutes. Prefer the smallest relevant build or test step first, then scale validation up before handoff.
 
 ## Detail Index
+- [`AI_POLICY.md`](AI_POLICY.md) for AI-assisted contribution rules: human accountability, disclosure, and what gets PRs closed.
 - [`agents/repository-structure.md`](agents/repository-structure.md) for workspace layout and where code, tests, tooling, and fixtures live.
 - [`agents/development-commands.md`](agents/development-commands.md) for setup, build, run, test, format, and lint commands.
 - [`agents/coding-style.md`](agents/coding-style.md) for Rust, Python, shell, naming, error handling, and observability conventions.

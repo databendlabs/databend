@@ -16,6 +16,8 @@
 - Call out rollout risks such as migrations, config toggles, or backfills.
 - Push the branch to your fork and create the PR into `origin`.
 - You can use `gh` tooling for the PR flow.
+- Agent-opened PRs must fill in the "AI assistance" section of the PR template, including the responsible human (`@github-id`) — the author-side owner who has read the diff and can explain the changes during review. See [`AI_POLICY.md`](../AI_POLICY.md).
+- Before opening or updating a PR, present the full diff to the responsible human for reading. Do not request review on code no human has read.
 
 ## Example PR Description
 

@@ -24,3 +24,16 @@ Briefly describe what this PR aims to solve. Include background context that wil
 - [ ] Refactoring
 - [ ] Performance Improvement
 - [ ] Other (please describe):
+
+## AI assistance
+
+<!--
+See AI_POLICY.md. Agent-opened PRs are welcome; a responsible human on the author side must own the change.
+The responsible human is NOT the reviewer — it is the submitter-side owner who has read the diff,
+can explain each change, and will answer questions during review.
+Write "None" for AI usage if no AI was involved.
+-->
+
+- AI usage: <!-- e.g. "Claude Code drafted the patch; I reviewed and added logic tests" or "None" -->
+- Responsible human: <!-- @github-id — author-side owner: has read every line, can explain each change, answers questions during review, owns follow-up fixes -->
+- [ ] The responsible human has read every line of this diff and can explain each change
