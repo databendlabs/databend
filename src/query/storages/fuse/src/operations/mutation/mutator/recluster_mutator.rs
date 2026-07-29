@@ -301,6 +301,7 @@ struct VectorReclusterSegment {
     segment: SelectedReclusterSegment,
     block_metas: Vec<Arc<BlockMeta>>,
     stats: ClusterStatistics,
+    partition: Option<Vec<Scalar>>,
 }
 
 #[derive(Clone)]
@@ -328,7 +329,7 @@ impl ReclusterMutator {
         mode: ReclusterMode,
     ) -> Result<Self> {
         let schema = table.schema_with_stream();
-        let cluster_key_id = table.physical_cluster_key_id().unwrap();
+        let cluster_key_id = table.cluster_key_id().unwrap();
         let block_thresholds = table.get_block_thresholds();
 
         let depth_threshold = table
@@ -353,7 +354,7 @@ impl ReclusterMutator {
         }
 
         // safe to unwrap
-        let cluster_keys = table.resolve_physical_cluster_keys().unwrap();
+        let cluster_keys = table.resolve_cluster_keys().unwrap();
         let full_cluster_key_exprs =
             parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
         let vector_cluster_info = vector_cluster_info_from_exprs(table, &full_cluster_key_exprs)?;
@@ -397,6 +398,7 @@ impl ReclusterMutator {
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
         cluster_key_id: u32,
+        partition_key_count: usize,
         max_tasks: usize,
         mode: ReclusterMode,
         vector_cluster_info: Option<VectorClusterInfo>,
@@ -425,7 +427,7 @@ impl ReclusterMutator {
             depth_threshold,
             block_thresholds,
             cluster_key_id,
-            partition_key_count: 0,
+            partition_key_count,
             max_tasks,
             memory_threshold,
             prepared_cluster_key_exprs,
@@ -549,7 +551,8 @@ impl ReclusterMutator {
         blocks: &[&ReclusterBlock],
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
-        let mut blocks_map: BTreeMap<(ReclusterGroup, Vec<Scalar>), Vec<usize>> = BTreeMap::new();
+        let mut blocks_map: BTreeMap<(ReclusterGroup, Option<Vec<Scalar>>), Vec<usize>> =
+            BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
             let level = block.stats().level;
             if level < 0 {
@@ -559,16 +562,16 @@ impl ReclusterMutator {
                 // Terminal-level blocks are excluded from further rewrite tasks.
                 continue;
             }
-            let partition = if self.partition_key_count == 0 {
-                Vec::new()
-            } else if let Some(partition) = partition_values(
-                Some(block.stats()),
-                Some(self.cluster_key_id),
-                self.partition_key_count,
-            ) {
-                partition.to_vec()
+            let partition = if self.partition_key_count > 0 {
+                let Some(values) = partition_values(
+                    block.meta.partition_stats.as_ref(),
+                    self.partition_key_count,
+                ) else {
+                    continue;
+                };
+                Some(values.to_vec())
             } else {
-                continue;
+                None
             };
             blocks_map
                 .entry((ReclusterGroup::assign(level, self.mode), partition))
@@ -1142,11 +1145,23 @@ impl ReclusterMutator {
 
         let mut total_blocks = 0;
         let mut segments = vec![None; compact_segments.len()];
-        let mut segment_points: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
+        // Partition is a selection boundary, not part of the cluster range.
+        let mut segment_points_by_partition = BTreeMap::new();
 
         // Phase 1: collect segment ranges for the sweep-line selection. Large
         // unclustered segments are skipped because rewriting them is not useful.
         for (i, (loc, compact_segment)) in compact_segments.iter().enumerate() {
+            let partition = if self.partition_key_count > 0 {
+                let Some(values) = partition_values(
+                    compact_segment.summary.partition_stats.as_ref(),
+                    self.partition_key_count,
+                ) else {
+                    continue;
+                };
+                Some(values.to_vec())
+            } else {
+                None
+            };
             let stats = self.build_cluster_stats_for_recluster(
                 compact_segment.summary.cluster_stats.as_ref(),
                 &compact_segment.summary.col_stats,
@@ -1158,6 +1173,8 @@ impl ReclusterMutator {
             }
 
             total_blocks += compact_segment.summary.block_count as usize;
+            let segment_points: &mut HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> =
+                segment_points_by_partition.entry(partition).or_default();
             segment_points
                 .entry(stats.min().clone())
                 .and_modify(|v| v.0.push(i))
@@ -1179,78 +1196,55 @@ impl ReclusterMutator {
         // one window (at its start point), so windows never share a segment and
         // tasks never read the same block twice. A window closes at `window_len`;
         // `prev_window` holds the last closed one so a small tail can fold into it.
-        let mut unfinished_intervals = BTreeMap::new();
-        let mut prev_window: Option<(IndexSet<usize>, usize)> = None;
-        let mut current_window: IndexSet<usize> = IndexSet::new();
-        let mut current_window_max_depth = 0usize;
-        let (keys, values): (Vec<_>, Vec<_>) = segment_points.into_iter().unzip();
-        let sorted_indices = compare_scalars(&keys, &self.cluster_key_types)?;
-        let mut previous_partition: Option<Vec<Scalar>> = None;
+        for segment_points in segment_points_by_partition.into_values() {
+            let mut unfinished_intervals = BTreeMap::new();
+            let mut prev_window: Option<(IndexSet<usize>, usize)> = None;
+            let mut current_window: IndexSet<usize> = IndexSet::new();
+            let mut current_window_max_depth = 0usize;
+            let (keys, values): (Vec<_>, Vec<_>) = segment_points.into_iter().unzip();
+            let sorted_indices = compare_scalars(&keys, &self.cluster_key_types)?;
 
-        for idx in sorted_indices {
-            let point = &keys[idx as usize];
-            let point_partition = (self.partition_key_count != 0
-                && point.len() >= self.partition_key_count)
-                .then(|| point[..self.partition_key_count].to_vec());
-            if previous_partition.is_some()
-                && (point_partition.is_none() || previous_partition != point_partition)
-            {
-                // A sweep window is never allowed to span physical partitions. In
-                // particular, this prevents the repack-only path from combining
-                // otherwise disjoint partition segments.
-                if let Some((segs, depth)) = prev_window.take() {
-                    windows.push((segs, depth));
-                }
-                if !current_window.is_empty() {
-                    windows.push((
+            for idx in sorted_indices {
+                let start = &values[idx as usize].0;
+                let end = &values[idx as usize].1;
+                let point_depth = Self::calc_point_depth(unfinished_intervals.len(), start, end);
+
+                // A window is just a contiguous run of segments, so partitioning the
+                // run keeps windows segment-disjoint without any extra bookkeeping.
+                // Depth only contributes to the window score.
+                current_window_max_depth = current_window_max_depth.max(point_depth);
+                current_window.extend(start.iter().copied());
+
+                if current_window.len() >= window_len {
+                    // Emit the previously closed window and rotate the current
+                    // window into `prev_window`.
+                    if let Some((segs, depth)) = prev_window.take() {
+                        windows.push((segs, depth));
+                    }
+                    prev_window = Some((
                         std::mem::take(&mut current_window),
                         current_window_max_depth,
                     ));
+                    current_window_max_depth = 0;
                 }
-                current_window_max_depth = 0;
-                unfinished_intervals.clear();
-            }
-            previous_partition = point_partition;
 
-            let start = &values[idx as usize].0;
-            let end = &values[idx as usize].1;
-            let point_depth = Self::calc_point_depth(unfinished_intervals.len(), start, end);
-
-            // A window is just a contiguous run of segments, so partitioning the
-            // run keeps windows segment-disjoint without any extra bookkeeping.
-            // Depth only contributes to the window score.
-            current_window_max_depth = current_window_max_depth.max(point_depth);
-            current_window.extend(start.iter().copied());
-
-            if current_window.len() >= window_len {
-                // Emit the previously closed window and rotate the current
-                // window into `prev_window`.
-                if let Some((segs, depth)) = prev_window.take() {
-                    windows.push((segs, depth));
-                }
-                prev_window = Some((
-                    std::mem::take(&mut current_window),
-                    current_window_max_depth,
-                ));
-                current_window_max_depth = 0;
+                start.iter().for_each(|&idx| {
+                    unfinished_intervals.insert(idx, point_depth);
+                });
+                end.iter().for_each(|idx| {
+                    unfinished_intervals.remove(idx);
+                });
             }
 
-            start.iter().for_each(|&idx| {
-                unfinished_intervals.insert(idx, point_depth);
-            });
-            end.iter().for_each(|idx| {
-                unfinished_intervals.remove(idx);
-            });
-        }
-
-        // Fold the trailing window into the last closed one to avoid a tiny
-        // fragment; this may push it past `window_len` (an acceptable soft
-        // overshoot under `LIMIT`).
-        if let Some((mut prev_segs, prev_depth)) = prev_window.take() {
-            prev_segs.extend(current_window);
-            windows.push((prev_segs, prev_depth.max(current_window_max_depth)));
-        } else if !current_window.is_empty() {
-            windows.push((current_window, current_window_max_depth));
+            // Fold the trailing window into the last closed one to avoid a tiny
+            // fragment; this may push it past `window_len` (an acceptable soft
+            // overshoot under `LIMIT`).
+            if let Some((mut prev_segs, prev_depth)) = prev_window.take() {
+                prev_segs.extend(current_window);
+                windows.push((prev_segs, prev_depth.max(current_window_max_depth)));
+            } else if !current_window.is_empty() {
+                windows.push((current_window, current_window_max_depth));
+            }
         }
 
         // Try the deepest windows first; for equal depth, prefer the larger
@@ -1304,6 +1298,17 @@ impl ReclusterMutator {
         let mut small_segments = IndexSet::new();
 
         for (loc, compact_segment) in compact_segments {
+            let partition = if self.partition_key_count > 0 {
+                let Some(values) = partition_values(
+                    compact_segment.summary.partition_stats.as_ref(),
+                    self.partition_key_count,
+                ) else {
+                    continue;
+                };
+                Some(values.to_vec())
+            } else {
+                None
+            };
             let stats = self.build_cluster_stats_for_recluster(
                 compact_segment.summary.cluster_stats.as_ref(),
                 &compact_segment.summary.col_stats,
@@ -1328,6 +1333,7 @@ impl ReclusterMutator {
                 segment,
                 block_metas,
                 stats,
+                partition,
             });
         }
 
@@ -1377,21 +1383,23 @@ impl ReclusterMutator {
             );
         }
 
-        let mut fallback_indices = Vec::new();
-        for idx in 0..vector_segments.len() {
+        let mut fallback_indices = BTreeMap::<Option<Vec<Scalar>>, Vec<usize>>::new();
+        for (idx, segment) in vector_segments.iter().enumerate() {
             if !covered_segments.contains(&idx) || small_segments.contains(&idx) {
-                fallback_indices.push(idx);
+                fallback_indices
+                    .entry(segment.partition.clone())
+                    .or_default()
+                    .push(idx);
             }
         }
 
-        for selected_indices in fallback_indices
-            .chunks(window_len)
-            .map(|chunk| chunk.to_vec())
-        {
-            let mut window_key = selected_indices.clone();
-            window_key.sort_unstable();
-            if seen_windows.insert(window_key) {
-                windows.push((selected_indices, 0));
+        for indices in fallback_indices.into_values() {
+            for selected_indices in indices.chunks(window_len).map(|chunk| chunk.to_vec()) {
+                let mut window_key = selected_indices.clone();
+                window_key.sort_unstable();
+                if seen_windows.insert(window_key) {
+                    windows.push((selected_indices, 0));
+                }
             }
         }
 
@@ -1436,6 +1444,8 @@ impl ReclusterMutator {
                     segment,
                     block_metas,
                     stats,
+                    // Scalar windows have already been isolated by partition.
+                    partition: None,
                 });
             }
 
@@ -1490,11 +1500,12 @@ impl ReclusterMutator {
 
         for left in 0..vector_segments.len() {
             for right in left + 1..vector_segments.len() {
-                if require_scalar_overlap
-                    && !self.scalar_cluster_stats_overlap(
-                        &vector_segments[left].stats,
-                        &vector_segments[right].stats,
-                    )
+                if vector_segments[left].partition != vector_segments[right].partition
+                    || require_scalar_overlap
+                        && !self.scalar_cluster_stats_overlap(
+                            &vector_segments[left].stats,
+                            &vector_segments[right].stats,
+                        )
                 {
                     continue;
                 }

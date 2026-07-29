@@ -331,6 +331,7 @@ fn build_test_segment_info(
         col_stats: col_stats.clone(),
         col_metas,
         cluster_stats: None,
+        partition_stats: None,
         location: block_location,
         bloom_filter_index_location: Some(location_gen.block_bloom_index_location(&block_uuid)),
         bloom_filter_index_size: 0,
@@ -368,6 +369,7 @@ fn build_test_segment_info(
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };

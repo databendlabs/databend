@@ -311,7 +311,7 @@ fn check_block_level_meta(
 }
 
 fn check_summary(block_metas: &[BlockMeta], column_oriented_segment: &ColumnOrientedSegment) {
-    let summary = reduce_block_metas(block_metas, Default::default(), Some(0));
+    let summary = reduce_block_metas(block_metas, Default::default(), Some(0)).unwrap();
     assert_eq!(summary.row_count, column_oriented_segment.summary.row_count);
     assert_eq!(
         summary.block_count,

@@ -17,6 +17,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use databend_common_base::base::OrderedFloat;
+use databend_common_exception::ErrorCode;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -78,6 +79,46 @@ pub struct ClusterStatistics {
         deserialize_with = "deserialize_index_scalar_option_vec"
     )]
     pub pages: Option<Vec<Scalar>>,
+}
+
+/// Exact values of the PARTITION BY expressions for a block or segment.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, FrozenAPI)]
+pub struct PartitionStatistics {
+    #[serde(
+        serialize_with = "serialize_index_scalar_vec",
+        deserialize_with = "deserialize_index_scalar_vec"
+    )]
+    pub values: Vec<Scalar>,
+}
+
+impl PartitionStatistics {
+    pub fn new(values: Vec<Scalar>) -> Self {
+        Self { values }
+    }
+}
+
+pub fn validate_segment_partition_statistics<'a>(
+    stats: impl IntoIterator<Item = Option<&'a PartitionStatistics>>,
+) -> databend_common_exception::Result<Option<PartitionStatistics>> {
+    let mut partition = None;
+    let mut has_unknown = false;
+    for stats in stats {
+        match (partition, stats) {
+            (Some(expected), Some(actual)) if expected != actual => {
+                return Err(ErrorCode::Internal(
+                    "segment contains blocks from different partitions",
+                ));
+            }
+            (None, Some(actual)) => partition = Some(actual),
+            (_, None) => has_unknown = true,
+            _ => {}
+        }
+    }
+    if has_unknown {
+        Ok(None)
+    } else {
+        Ok(partition.cloned())
+    }
 }
 
 /// Spatial statistics for geometry columns.
@@ -268,6 +309,8 @@ pub struct Statistics {
     pub virtual_col_stats: Option<HashMap<ColumnId, ColumnStatistics>>,
     pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
     pub cluster_stats: Option<ClusterStatistics>,
+    #[serde(default)]
+    pub partition_stats: Option<PartitionStatistics>,
     pub virtual_block_count: Option<u64>,
 
     pub additional_stats_meta: Option<AdditionalStatsMeta>,
@@ -432,6 +475,7 @@ impl Statistics {
             virtual_col_stats: None,
             spatial_stats: None,
             cluster_stats: None,
+            partition_stats: None,
             virtual_block_count: None,
             additional_stats_meta: None,
         }
@@ -662,5 +706,21 @@ mod tests {
         let decoded: ClusterStatistics = rmp_serde::from_slice(&bytes).unwrap();
 
         assert_eq!(decoded, ClusterStatistics::new(7, stats.min, stats.max, 2));
+    }
+
+    #[test]
+    fn segment_partition_statistics_rejects_different_partitions() {
+        let left = PartitionStatistics::new(vec![Scalar::Number(1_i64.into())]);
+        let right = PartitionStatistics::new(vec![Scalar::Number(2_i64.into())]);
+
+        assert_eq!(
+            validate_segment_partition_statistics([Some(&left), Some(&left)]).unwrap(),
+            Some(left.clone())
+        );
+        assert!(validate_segment_partition_statistics([Some(&left), Some(&right)]).is_err());
+        assert_eq!(
+            validate_segment_partition_statistics([None, Some(&left)]).unwrap(),
+            None
+        );
     }
 }

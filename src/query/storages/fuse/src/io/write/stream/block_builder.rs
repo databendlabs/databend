@@ -406,6 +406,7 @@ impl StreamBlockBuilder {
             // Stream block writing is only enabled for tables without a cluster key, so cluster
             // statistics cannot be produced on this path.
             cluster_stats: None,
+            partition_stats: None,
             location: block_location,
             bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
             bloom_filter_index_size: bloom_index_state

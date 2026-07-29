@@ -119,7 +119,7 @@ pub async fn generate_segments_v2(
             TestFixture::default_table_meta_timestamps(),
         )
         .await?;
-        let mut summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
+        let mut summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None)?;
         let uuid = Uuid::new_v4();
         let location = format!(
             "{}/{}/{}_v{}.json",
@@ -162,7 +162,7 @@ pub async fn generate_segments(
             table_meta_timestamps,
         )
         .await?;
-        let mut summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
+        let mut summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None)?;
         let location = if is_greater_than_v5 {
             location_generator.gen_segment_info_location(table_meta_timestamps, false)
         } else {

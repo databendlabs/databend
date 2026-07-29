@@ -172,8 +172,7 @@ impl FuseTable {
             }
             pipeline.add_pipe(builder.finalize());
         }
-        let partition_key_indices: Arc<[_]> =
-            cluster_stats_gen.cluster_key_index[..cluster_stats_gen.partition_key_count].into();
+        let partition_key_indices: Arc<[_]> = cluster_stats_gen.partition_key_index.clone().into();
         if !partition_key_indices.is_empty() {
             let mut builder = pipeline.add_transform_with_specified_len(
                 move |input, output| {
@@ -255,8 +254,7 @@ impl FuseTable {
                 move || TransformSortPartial::new(LimitType::None, sort_desc.clone())
             });
         }
-        let partition_key_indices: Arc<[_]> =
-            cluster_stats_gen.cluster_key_index[..cluster_stats_gen.partition_key_count].into();
+        let partition_key_indices: Arc<[_]> = cluster_stats_gen.partition_key_index.clone().into();
         if !partition_key_indices.is_empty() {
             if rewrite_replaced_block {
                 pipeline.add_accumulating_transformer(move || {
@@ -278,25 +276,34 @@ impl FuseTable {
         block_thresholds: BlockThresholds,
         input_schema: Arc<DataSchema>,
     ) -> Result<ClusterStatsGenerator> {
-        if self.physical_cluster_key_id().is_none() {
+        let partition_keys = self.linear_partition_keys(ctx.clone());
+        let cluster_keys = self.linear_cluster_keys(ctx.clone());
+        if partition_keys.is_empty() && cluster_keys.is_empty() {
             return Ok(ClusterStatsGenerator::default());
         }
 
         let mut merged = input_schema.fields().clone();
-
-        let cluster_keys = self.linear_cluster_keys(ctx.clone());
+        let mut partition_key_index = Vec::with_capacity(partition_keys.len());
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
 
-        let mut exprs = Vec::with_capacity(cluster_keys.len());
+        let mut exprs = Vec::with_capacity(partition_keys.len() + cluster_keys.len());
         let mut vector_cluster_info = None;
         let mut vector_column_input_offset = None;
 
-        for (key_index, remote_expr) in cluster_keys.iter().enumerate() {
+        let keys = partition_keys.iter().map(|expr| (None, expr)).chain(
+            cluster_keys
+                .iter()
+                .enumerate()
+                .map(|(index, expr)| (Some(index), expr)),
+        );
+        for (cluster_key_position, remote_expr) in keys {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
                 .project_column_ref(|name| input_schema.index_of(name))?;
-            if let DataType::Vector(vector_ty) = expr.data_type().remove_nullable() {
+            if let (Some(key_index), DataType::Vector(vector_ty)) =
+                (cluster_key_position, expr.data_type().remove_nullable())
+            {
                 let Expr::ColumnRef(ColumnRef { id, .. }) = &expr else {
                     return Err(ErrorCode::InvalidClusterKeys(
                         "Vector cluster key only supports direct column reference",
@@ -342,7 +349,11 @@ impl FuseTable {
                     offset
                 }
             };
-            cluster_key_index.push(index);
+            if cluster_key_position.is_some() {
+                cluster_key_index.push(index);
+            } else {
+                partition_key_index.push(index);
+            }
         }
 
         let operators = if exprs.is_empty() {
@@ -377,7 +388,7 @@ impl FuseTable {
         }
 
         let mut generator = ClusterStatsGenerator::new(
-            self.physical_cluster_key_id().unwrap(),
+            self.cluster_key_id().unwrap_or(0),
             cluster_key_index,
             extra_key_num,
             level,
@@ -387,7 +398,7 @@ impl FuseTable {
             merged,
             ctx.get_function_context()?,
         );
-        generator.partition_key_count = self.partition_key_count();
+        generator.partition_key_index = partition_key_index;
         Ok(generator)
     }
 

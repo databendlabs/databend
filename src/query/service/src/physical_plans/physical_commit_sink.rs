@@ -149,7 +149,7 @@ impl IPhysicalPlan for CommitSink {
             }
             CommitType::Mutation { kind, merge_meta } => {
                 if *merge_meta {
-                    let cluster_key_id = table.physical_cluster_key_id();
+                    let cluster_key_id = table.cluster_key_id();
                     builder.main_pipeline.add_accumulating_transformer(|| {
                         TransformMergeCommitMeta::create(cluster_key_id)
                     });

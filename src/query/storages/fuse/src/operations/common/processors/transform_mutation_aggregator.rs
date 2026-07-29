@@ -197,12 +197,12 @@ impl TableMutationAggregator {
         kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
-        let fill_missing_cluster_stats = table.resolve_physical_cluster_keys().is_some();
+        let fill_missing_cluster_stats = table.resolve_cluster_keys().is_some();
 
         let virtual_schema = table.table_info.meta.virtual_schema.clone();
         let cluster_key_exprs = if fill_missing_cluster_stats {
             table
-                .resolve_physical_cluster_keys()
+                .resolve_cluster_keys()
                 .map(|cluster_keys| {
                     parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)
                 })
@@ -216,7 +216,7 @@ impl TableMutationAggregator {
             dal: table.get_operator(),
             location_gen: table.meta_location_generator().clone(),
             thresholds: table.get_block_thresholds(),
-            default_cluster_key: table.physical_cluster_key_id(),
+            default_cluster_key: table.cluster_key_id(),
             partition_key_count: table.partition_key_count(),
             cluster_key_exprs: Arc::from(cluster_key_exprs.clone()),
             schema: table.schema(),
@@ -386,9 +386,8 @@ impl TableMutationAggregator {
                 .and_then(|group| group.last())
                 .is_none_or(|previous| {
                     !same_partition(
-                        previous.0.cluster_stats.as_ref(),
-                        block.0.cluster_stats.as_ref(),
-                        self.write_segment_ctx.default_cluster_key,
+                        previous.0.partition_stats.as_ref(),
+                        block.0.partition_stats.as_ref(),
                         self.write_segment_ctx.partition_key_count,
                     )
                 })
@@ -885,7 +884,7 @@ impl WriteSegmentCtx {
             .location_gen
             .gen_segment_info_location(self.table_meta_timestamps, false);
         let mut new_summary =
-            reduce_block_metas(&blocks, self.thresholds, self.default_cluster_key);
+            reduce_block_metas(&blocks, self.thresholds, self.default_cluster_key)?;
         if force_all_blocks_perfect {
             // To fix issue #13217.
             if new_summary.block_count > new_summary.perfect_block_count {
