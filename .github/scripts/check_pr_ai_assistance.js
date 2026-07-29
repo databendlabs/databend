@@ -59,32 +59,28 @@ const removeFencedCodeBlocks = (input) => {
 };
 
 const removeRawHtmlCodeBlocks = (input) => {
-  let visible = "";
-  let cursor = 0;
-  const openingTag = /<(pre|code)(?:\s[^>]*)?>/gi;
+  const lines = input.split("\n");
+  const visibleLines = [];
+  let rawTag = null;
 
-  while (cursor < input.length) {
-    openingTag.lastIndex = cursor;
-    const opening = openingTag.exec(input);
-    if (!opening) {
-      visible += input.slice(cursor);
-      break;
+  for (const line of lines) {
+    if (!rawTag) {
+      const opening = line.match(/^ {0,3}<(pre|code)(?:\s[^>]*)?>/i);
+      if (!opening) {
+        visibleLines.push(line);
+        continue;
+      }
+      rawTag = opening[1].toLowerCase();
     }
 
-    visible += input.slice(cursor, opening.index);
-    const tag = opening[1];
-    const closingTag = new RegExp(`</${tag}\\s*>`, "gi");
-    closingTag.lastIndex = openingTag.lastIndex;
-    const closing = closingTag.exec(input);
-    const hiddenEnd = closing ? closingTag.lastIndex : input.length;
-
-    // Keep newlines so headings outside the raw code block remain on their
-    // original lines, while everything rendered as literal code is ignored.
-    visible += input.slice(opening.index, hiddenEnd).replace(/[^\n]/g, "");
-    cursor = hiddenEnd;
+    const closingTag = new RegExp(`</${rawTag}\\s*>`, "i");
+    if (closingTag.test(line)) {
+      rawTag = null;
+    }
+    visibleLines.push("");
   }
 
-  return visible;
+  return visibleLines.join("\n");
 };
 
 module.exports = async ({ github, context, core }) => {
