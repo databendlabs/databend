@@ -430,7 +430,8 @@ impl BlockBuilder {
     /// (inverted, Ngram, vector, or spatial), or Fuse virtual columns. These exclusions are
     /// contract preconditions, intentionally not validated or handled by fallback here. Within
     /// that contract, this method maintains data, ordinary Bloom, HLL, and column statistics only;
-    /// handling metadata for excluded features is out of scope.
+    /// handling metadata for excluded features is out of scope. REPLACE INTO must not consume
+    /// column-group blocks produced by this method; that operation is outside the same contract.
     pub fn build_column_group(
         &self,
         data_block: DataBlock,
