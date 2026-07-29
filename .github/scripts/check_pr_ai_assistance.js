@@ -1,83 +1,94 @@
 const AI_DECLARATION_ENFORCEMENT_START = Date.parse("2026-07-29T14:33:06Z");
 
-const removeHtmlComments = (input) => {
-  let visible = "";
-  let cursor = 0;
-
-  while (cursor < input.length) {
-    const commentStart = input.indexOf("<!--", cursor);
-    if (commentStart === -1) {
-      visible += input.slice(cursor);
-      break;
-    }
-
-    visible += input.slice(cursor, commentStart);
-    const commentEnd = input.indexOf("-->", commentStart + 4);
-    if (commentEnd === -1) {
-      // GitHub hides an unterminated comment through the end of the body.
-      break;
-    }
-    cursor = commentEnd + 3;
-  }
-
-  return visible;
-};
-
-const removeFencedCodeBlocks = (input) => {
-  const lines = input.split("\n");
+const extractVisibleMarkdown = (input) => {
   const visibleLines = [];
   let fence = null;
+  let inHtmlComment = false;
+  let rawHtmlTag = null;
 
-  for (const line of lines) {
-    const content = line.replace(/^ {0,3}/, "");
+  for (const originalLine of input.split("\n")) {
+    let line = originalLine;
 
-    if (!fence) {
-      const opener = content.match(/^(`{3,}|~{3,})/);
-      if (opener) {
-        fence = { marker: opener[1][0], length: opener[1].length };
-        visibleLines.push("");
-      } else {
-        visibleLines.push(line);
+    // Syntax inside a fenced block is literal and must not change other states.
+    if (fence) {
+      const content = line.replace(/^ {0,3}/, "");
+      let markerLength = 0;
+      while (content[markerLength] === fence.marker) {
+        markerLength += 1;
       }
+      if (
+        markerLength >= fence.length &&
+        content.slice(markerLength).trim() === ""
+      ) {
+        fence = null;
+      }
+      visibleLines.push("");
       continue;
     }
 
-    let markerLength = 0;
-    while (content[markerLength] === fence.marker) {
-      markerLength += 1;
-    }
-    if (
-      markerLength >= fence.length &&
-      content.slice(markerLength).trim() === ""
-    ) {
-      fence = null;
-    }
-    visibleLines.push("");
-  }
-
-  return visibleLines.join("\n");
-};
-
-const removeRawHtmlCodeBlocks = (input) => {
-  const lines = input.split("\n");
-  const visibleLines = [];
-  let rawTag = null;
-
-  for (const line of lines) {
-    if (!rawTag) {
-      const opening = line.match(/^ {0,3}<(pre|code)(?:\s[^>]*)?>/i);
-      if (!opening) {
-        visibleLines.push(line);
-        continue;
+    // GFM raw <pre>/<code> blocks render Markdown syntax as literal code.
+    if (rawHtmlTag) {
+      if (new RegExp(`</${rawHtmlTag}\\s*>`, "i").test(line)) {
+        rawHtmlTag = null;
       }
-      rawTag = opening[1].toLowerCase();
+      visibleLines.push("");
+      continue;
     }
 
-    const closingTag = new RegExp(`</${rawTag}\\s*>`, "i");
-    if (closingTag.test(line)) {
-      rawTag = null;
+    // A fence-like line inside an HTML comment must not open a fence. Ignore
+    // the entire line that closes a multiline comment rather than re-parsing
+    // its suffix in the wrong block context.
+    if (inHtmlComment) {
+      if (line.includes("-->")) {
+        inHtmlComment = false;
+      }
+      visibleLines.push("");
+      continue;
     }
-    visibleLines.push("");
+
+    const content = line.replace(/^ {0,3}/, "");
+    const fenceOpener = content.match(/^(`{3,}|~{3,})/);
+    if (fenceOpener) {
+      fence = {
+        marker: fenceOpener[1][0],
+        length: fenceOpener[1].length,
+      };
+      visibleLines.push("");
+      continue;
+    }
+
+    // GFM recognizes these raw blocks as soon as a line starts with <pre or
+    // <code followed by whitespace, `>`, or end-of-line. The opening tag may
+    // therefore continue on a later line.
+    const rawHtmlOpener = content.match(/^<(pre|code)(?=[\s>]|$)/i);
+    if (rawHtmlOpener) {
+      const tag = rawHtmlOpener[1].toLowerCase();
+      if (!new RegExp(`</${tag}\\s*>`, "i").test(content)) {
+        rawHtmlTag = tag;
+      }
+      visibleLines.push("");
+      continue;
+    }
+
+    // Remove inline comments while preserving visible text around them.
+    let visible = "";
+    let cursor = 0;
+    while (cursor < line.length) {
+      const commentStart = line.indexOf("<!--", cursor);
+      if (commentStart === -1) {
+        visible += line.slice(cursor);
+        break;
+      }
+
+      visible += line.slice(cursor, commentStart);
+      const commentEnd = line.indexOf("-->", commentStart + 4);
+      if (commentEnd === -1) {
+        inHtmlComment = true;
+        break;
+      }
+      cursor = commentEnd + 3;
+    }
+    visibleLines.push(visible);
   }
 
   return visibleLines.join("\n");
@@ -97,9 +108,7 @@ module.exports = async ({ github, context, core }) => {
   }
 
   const body = pullRequest.body || "";
-  const withoutFences = removeFencedCodeBlocks(body);
-  const withoutComments = removeHtmlComments(withoutFences);
-  const visibleBody = removeRawHtmlCodeBlocks(withoutComments);
+  const visibleBody = extractVisibleMarkdown(body);
 
   const problems = [];
   const sectionMatch = visibleBody.match(
