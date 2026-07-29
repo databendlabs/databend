@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatInfo;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
@@ -30,6 +31,45 @@ use crate::plans::RelOperator;
 fn contains_recursive_cte(expr: &SExpr) -> bool {
     matches!(expr.plan(), RelOperator::RecursiveCteScan(_))
         || expr.children().any(contains_recursive_cte)
+}
+
+fn should_commute(join_type: JoinType, left: &StatInfo, right: &StatInfo) -> bool {
+    if left.cardinality < right.cardinality {
+        return matches!(
+            join_type,
+            JoinType::Inner
+                | JoinType::Cross
+                | JoinType::Left
+                | JoinType::Right
+                | JoinType::LeftSingle
+                | JoinType::RightSingle
+                | JoinType::LeftSemi
+                | JoinType::RightSemi
+                | JoinType::LeftAnti
+                | JoinType::RightAnti
+                | JoinType::LeftMark
+                | JoinType::RightMark
+        );
+    }
+
+    if left.cardinality != right.cardinality {
+        return false;
+    }
+
+    if left.cardinality == 0.0 && matches!(join_type, JoinType::Left | JoinType::Right) {
+        let left_proven_empty = left.statistics.precise_cardinality == Some(0);
+        let right_proven_empty = right.statistics.precise_cardinality == Some(0);
+        if left_proven_empty != right_proven_empty {
+            // The right child is the hash-build side. Prefer the input that is
+            // known to be empty over one whose zero cardinality is only estimated.
+            return left_proven_empty;
+        }
+    }
+
+    matches!(
+        join_type,
+        JoinType::Right | JoinType::RightSingle | JoinType::RightSemi | JoinType::RightAnti
+    )
 }
 
 /// Rule to apply commutativity of join operator.
@@ -79,33 +119,9 @@ impl Rule for RuleCommuteJoin {
 
         let left_rel_expr = RelExpr::with_s_expr(left_child);
         let right_rel_expr = RelExpr::with_s_expr(right_child);
-        let left_card = left_rel_expr.derive_cardinality()?.cardinality;
-        let right_card = right_rel_expr.derive_cardinality()?.cardinality;
-
-        let need_commute = if left_card < right_card {
-            matches!(
-                join.join_type,
-                JoinType::Inner
-                    | JoinType::Cross
-                    | JoinType::Left
-                    | JoinType::Right
-                    | JoinType::LeftSingle
-                    | JoinType::RightSingle
-                    | JoinType::LeftSemi
-                    | JoinType::RightSemi
-                    | JoinType::LeftAnti
-                    | JoinType::RightAnti
-                    | JoinType::LeftMark
-                    | JoinType::RightMark
-            )
-        } else if left_card == right_card {
-            matches!(
-                join.join_type,
-                JoinType::Right | JoinType::RightSingle | JoinType::RightSemi | JoinType::RightAnti
-            )
-        } else {
-            false
-        };
+        let left_stat = left_rel_expr.derive_cardinality()?;
+        let right_stat = right_rel_expr.derive_cardinality()?;
+        let need_commute = should_commute(join.join_type, &left_stat, &right_stat);
         if need_commute {
             // Swap the join conditions side
             for condition in join.equi_conditions.iter_mut() {
@@ -133,5 +149,59 @@ impl Rule for RuleCommuteJoin {
 impl Default for RuleCommuteJoin {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::optimizer::ir::Statistics;
+
+    fn empty_stat(precise: bool) -> StatInfo {
+        StatInfo {
+            cardinality: 0.0,
+            statistics: Statistics {
+                precise_cardinality: precise.then_some(0),
+                column_stats: Default::default(),
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
+            },
+        }
+    }
+
+    #[test]
+    fn test_outer_join_zero_tie_prefers_proven_empty_build_side() {
+        let proven_empty = empty_stat(true);
+        let estimated_empty = empty_stat(false);
+
+        assert!(should_commute(
+            JoinType::Left,
+            &proven_empty,
+            &estimated_empty
+        ));
+        assert!(!should_commute(
+            JoinType::Left,
+            &estimated_empty,
+            &proven_empty
+        ));
+        assert!(should_commute(
+            JoinType::Right,
+            &proven_empty,
+            &estimated_empty
+        ));
+        assert!(!should_commute(
+            JoinType::Right,
+            &estimated_empty,
+            &proven_empty
+        ));
+    }
+
+    #[test]
+    fn test_outer_join_zero_tie_preserves_existing_canonicalization() {
+        let left = empty_stat(false);
+        let right = empty_stat(false);
+
+        assert!(!should_commute(JoinType::Left, &left, &right));
+        assert!(should_commute(JoinType::Right, &left, &right));
     }
 }
