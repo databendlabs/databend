@@ -44,7 +44,7 @@ pub struct ReadDataTransform {
     output: Arc<OutputPort>,
 
     pending_output: VecDeque<DataBlock>,
-    legacy_parts: Vec<PartInfoPtr>,
+    remaining_parts: Vec<PartInfoPtr>,
     async_output: Option<DataBlock>,
 
     func_ctx: FunctionContext,
@@ -71,7 +71,7 @@ impl ReadDataTransform {
             input,
             output,
             pending_output: VecDeque::new(),
-            legacy_parts: Vec::new(),
+            remaining_parts: Vec::new(),
             async_output: None,
             func_ctx,
             block_reader,
@@ -105,24 +105,22 @@ impl ReadDataTransform {
 
     fn classify_parts(&mut self, parts: Vec<PartInfoPtr>) -> Result<()> {
         for part in parts {
-            if let Some(plan) = self
-                .read_block_context
-                .build_granule_groups_if_subset(&part)?
-            {
-                let source = ParquetDataSource::Granule(plan);
+            if let Some(groups) = self.read_block_context.granule_groups_if_subset(&part)? {
+                let source = ParquetDataSource::Granule(groups);
                 let meta = DataSourceWithMeta::create(vec![part], vec![source]);
                 self.pending_output
                     .push_back(DataBlock::empty_with_meta(meta));
             } else {
-                self.legacy_parts.push(part);
+                self.remaining_parts.push(part);
             }
         }
         Ok(())
     }
 
-    async fn read_legacy_parts(&self, parts: Vec<PartInfoPtr>) -> Result<DataBlock> {
-        let mut read_tasks = Vec::with_capacity(parts.len());
+    async fn read_remaining_parts(&self, parts: Vec<PartInfoPtr>) -> Result<DataBlock> {
         let mut parts_to_read = Vec::with_capacity(parts.len());
+        let mut sources = Vec::with_capacity(parts.len());
+        let mut full_reads = Vec::new();
         let expr_runtime_pruner = self.create_runtime_pruners()?;
 
         for part in parts {
@@ -130,20 +128,33 @@ impl ReadDataTransform {
                 continue;
             }
 
+            let index = parts_to_read.len();
+            let groups = self.read_block_context.granule_groups(&part, None)?;
             parts_to_read.push(part.clone());
-            let read_block_context = self.read_block_context.clone();
-            read_tasks.push(async move {
-                databend_common_base::runtime::spawn(async move {
-                    read_block_context.read_full_data(part).await
-                })
-                .await
-                .unwrap()
-            });
+            sources.push(groups.map(ParquetDataSource::Granule));
+            if sources[index].is_none() {
+                let read_block_context = self.read_block_context.clone();
+                full_reads.push(async move {
+                    let source = databend_common_base::runtime::spawn(async move {
+                        read_block_context.read_full_data(part).await
+                    })
+                    .await
+                    .unwrap()?;
+                    Result::<_>::Ok((index, source))
+                });
+            }
+        }
+
+        for (index, source) in futures::future::try_join_all(full_reads).await? {
+            sources[index] = Some(source);
         }
 
         Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
             parts_to_read,
-            futures::future::try_join_all(read_tasks).await?,
+            sources
+                .into_iter()
+                .map(|source| source.expect("every retained part has a data source"))
+                .collect(),
         )))
     }
 }
@@ -180,7 +191,7 @@ impl Processor for ReadDataTransform {
                 return Ok(Event::NeedConsume);
             }
 
-            if !self.legacy_parts.is_empty() {
+            if !self.remaining_parts.is_empty() {
                 return Ok(Event::Async);
             }
 
@@ -206,8 +217,8 @@ impl Processor for ReadDataTransform {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let parts = std::mem::take(&mut self.legacy_parts);
-        self.async_output = Some(self.read_legacy_parts(parts).await?);
+        let parts = std::mem::take(&mut self.remaining_parts);
+        self.async_output = Some(self.read_remaining_parts(parts).await?);
         Ok(())
     }
 }

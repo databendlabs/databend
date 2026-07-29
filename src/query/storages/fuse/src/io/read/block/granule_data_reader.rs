@@ -32,9 +32,8 @@ use opendal::Buffer;
 use super::BlockReadContext;
 use super::BlockReadResult;
 use crate::FuseBlockPartInfo;
-use crate::io::BlockReadPlan;
+use crate::io::GranuleRangeBounds;
 use crate::io::OffsetsIndex;
-use crate::operations::read::granule_group::GranuleGroupsReadPlan;
 
 struct GranuleColumnReader {
     column_id: ColumnId,
@@ -67,7 +66,7 @@ pub(crate) struct GranuleRangeRead {
 
 pub(crate) struct GranuleDataReader {
     location: String,
-    ranges: VecDeque<(Range<usize>, BlockReadPlan)>,
+    ranges: VecDeque<(Range<usize>, GranuleRangeBounds)>,
     column_readers: Vec<GranuleColumnReader>,
 }
 
@@ -76,51 +75,51 @@ impl GranuleDataReader {
         read_context: &BlockReadContext,
         settings: &ReadSettings,
         part: &FuseBlockPartInfo,
-        groups: &GranuleGroupsReadPlan,
+        groups: &[Vec<Range<usize>>],
         offsets: &OffsetsIndex,
     ) -> Result<Self> {
         let ranges = groups
-            .groups
             .iter()
-            .flat_map(|group| group.ranges.iter().cloned())
+            .flat_map(|group| group.iter().cloned())
             .collect::<Vec<_>>();
-        let plans = ranges
+        let bounds = ranges
             .iter()
             .cloned()
-            .map(|range| offsets.read_plan_for_range(&part.columns_meta, range, part.nums_rows))
+            .map(|range| offsets.ranges_for_granules(&part.columns_meta, range, part.nums_rows))
             .collect::<Result<Vec<_>>>()?;
 
         let mut column_readers = Vec::new();
         for (column_id, ..) in read_context.project_indices().values() {
-            let column_plans = plans
+            let column_bounds = bounds
                 .iter()
-                .map(|plan| {
-                    plan.columns
+                .map(|bounds| {
+                    bounds
+                        .columns
                         .iter()
                         .find(|column| column.column_id == *column_id)
                         .ok_or_else(|| {
                             ErrorCode::Internal(format!(
-                                "granule offset index has no plan for projected column {column_id}"
+                                "granule offset index has no bounds for projected column {column_id}"
                             ))
                         })
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let dictionary = column_plans[0].dict_range.clone();
-            if column_plans
+            let dictionary = column_bounds[0].dict_range.clone();
+            if column_bounds
                 .iter()
-                .any(|plan| plan.dict_range != dictionary)
+                .any(|bounds| bounds.dict_range != dictionary)
             {
                 return Err(ErrorCode::Internal(format!(
-                    "granule data plans disagree on dictionary range for column {column_id}"
+                    "granule data bounds disagree on dictionary range for column {column_id}"
                 )));
             }
 
             let mut byte_ranges: Vec<Range<u64>> =
-                Vec::with_capacity(column_plans.len() + usize::from(dictionary.is_some()));
+                Vec::with_capacity(column_bounds.len() + usize::from(dictionary.is_some()));
             if let Some(range) = &dictionary {
                 byte_ranges.push(range.clone());
             }
-            byte_ranges.extend(column_plans.iter().map(|plan| plan.data_range.clone()));
+            byte_ranges.extend(column_bounds.iter().map(|bounds| bounds.data_range.clone()));
             let total_bytes = byte_ranges
                 .iter()
                 .map(|range| range.end - range.start)
@@ -147,13 +146,13 @@ impl GranuleDataReader {
 
         Ok(Self {
             location: part.location.clone(),
-            ranges: ranges.into_iter().zip(plans).collect(),
+            ranges: ranges.into_iter().zip(bounds).collect(),
             column_readers,
         })
     }
 
     pub(crate) fn read_next(&mut self) -> Result<Option<GranuleRangeRead>> {
-        let Some((granule_range, plan)) = self.ranges.pop_front() else {
+        let Some((granule_range, bounds)) = self.ranges.pop_front() else {
             return Ok(None);
         };
 
@@ -174,7 +173,7 @@ impl GranuleDataReader {
         );
         Ok(Some(GranuleRangeRead {
             range: granule_range,
-            data: BlockReadResult::create_with_row_range(result, plan.row_range),
+            data: BlockReadResult::create_with_row_range(result, bounds.row_range),
         }))
     }
 }

@@ -155,7 +155,7 @@ impl VerticalReclusterSource {
                     (settings.get_max_block_size()? as usize).min(thresholds.max_rows_per_block);
                 let max_output_bytes =
                     (settings.get_max_block_bytes()? as usize).min(thresholds.max_bytes_per_block);
-                let output_rows = sort_output_rows(
+                let output_rows = output_rows_by_size(
                     source_rows,
                     self.task.total_bytes,
                     max_output_rows,
@@ -405,6 +405,15 @@ impl VerticalReclusterSource {
             ));
         }
 
+        let max_output_bytes = self.table.get_block_thresholds().max_bytes_per_block;
+        let output_rows = output_rows_by_size(
+            total_rows,
+            self.task.total_bytes,
+            total_rows,
+            max_output_bytes,
+        );
+        let output_ranges = ranges(total_rows, output_rows);
+
         let mapping_bytes = row_source_mapping_bytes(total_rows)?;
         let cluster_key_fields = cluster_key_exprs
             .iter()
@@ -434,7 +443,15 @@ impl VerticalReclusterSource {
             .unwrap_or(0);
         let payload_reader_bytes =
             FuseLowLevelBlockReader::retained_window_bytes(payload_leaf_count);
-        let writer_bytes = block_options.retained_index_bytes(total_rows);
+        let writer_bytes = output_ranges.iter().try_fold(0usize, |total, range| {
+            total
+                .checked_add(block_options.retained_index_bytes(range.len()))
+                .ok_or_else(|| {
+                    ErrorCode::MemoryExceedsLimit(
+                        "MergeBlocks writer retained-memory estimate overflowed usize",
+                    )
+                })
+        })?;
         let resident_rows =
             source_rows
                 .iter()
@@ -475,16 +492,17 @@ impl VerticalReclusterSource {
             ))
         })?;
 
-        let write_options = block_options.create_low_level_options(
-            self.table.get_operator(),
-            key_types.to_vec(),
-            self.table.cluster_key_id().unwrap(),
-            self.task.level + 1,
-            total_rows,
-        )?;
-
-        let block_writer = FuseLowLevelBlockWriter::create(write_options)?;
-        let mut key_writer = block_writer.write_cluster_keys()?;
+        let mut key_writers = Vec::with_capacity(output_ranges.len());
+        for range in &output_ranges {
+            let write_options = block_options.create_low_level_options(
+                self.table.get_operator(),
+                key_types.to_vec(),
+                self.table.cluster_key_id().unwrap(),
+                self.task.level + 1,
+                range.len(),
+            )?;
+            key_writers.push(FuseLowLevelBlockWriter::create(write_options)?.write_cluster_keys()?);
+        }
 
         let mut key_inputs = Vec::with_capacity(sources.len());
         for index in 0..sources.len() {
@@ -499,22 +517,50 @@ impl VerticalReclusterSource {
 
         let mut key_stream =
             MergeKeyStream::try_create(key_inputs, key_types.to_vec(), MERGE_BATCH_ROWS)?;
+        let mut output_index = 0usize;
         while let Some((key_columns, batch_row_sources)) = key_stream.next_batch()? {
-            key_writer.write_columns(&key_columns)?;
-            row_sources.extend_from_slice(&batch_row_sources);
+            let mut batch_offset = 0usize;
+            while batch_offset < batch_row_sources.len() {
+                let global_row = row_sources.len();
+                let Some(range) = output_ranges.get(output_index) else {
+                    return Err(ErrorCode::Internal(format!(
+                        "MergeBlocks key stream emitted more than {total_rows} rows"
+                    )));
+                };
+                let rows = (range.end - global_row).min(batch_row_sources.len() - batch_offset);
+                let end = batch_offset + rows;
+                let columns = key_columns
+                    .iter()
+                    .map(|column| column.slice(batch_offset..end))
+                    .collect::<Vec<_>>();
+                key_writers[output_index].write_columns(&columns)?;
+                row_sources.extend_from_slice(&batch_row_sources[batch_offset..end]);
+                batch_offset = end;
+                if row_sources.len() == range.end {
+                    output_index += 1;
+                }
+            }
         }
         key_stream.finish()?;
 
-        if row_sources.len() != total_rows {
+        if row_sources.len() != total_rows || output_index != output_ranges.len() {
             return Err(ErrorCode::Internal(format!(
-                "MergeBlocks row-source stream has {} rows, expected {total_rows}",
+                "MergeBlocks row-source stream has {} rows across {} outputs, expected {total_rows} rows across {} outputs",
                 row_sources.len(),
+                output_index,
+                output_ranges.len(),
             )));
         }
 
-        let block_writer = key_writer.finish()?;
-        let mut data_writer = block_writer.write_data()?;
+        let mut data_writers = Vec::with_capacity(key_writers.len());
+        for key_writer in key_writers {
+            data_writers.push(key_writer.finish()?.write_data()?);
+        }
+
         for field_idx in 0..schema.num_fields() {
+            // All output writers share this one set of source readers for the
+            // current column. Ranges are consumed in order, so every source
+            // Parquet column is read exactly once without seeking or reopening.
             let mut readers = Vec::with_capacity(sources.len());
             for source in &sources {
                 readers.push(
@@ -524,26 +570,33 @@ impl VerticalReclusterSource {
             }
 
             let data_type: DataType = schema.field(field_idx).data_type().into();
-            let mut column_writer = data_writer.next_column()?;
-            for batch in row_sources.chunks(MERGE_BATCH_ROWS) {
-                let output = gather_stream_batch(&mut readers, batch, &data_type)?;
-                column_writer.write(&output)?;
+            let mut next_data_writers = Vec::with_capacity(data_writers.len());
+            for (data_writer, range) in data_writers.into_iter().zip(&output_ranges) {
+                let mut column_writer = data_writer.next_column()?;
+                for batch in row_sources[range.clone()].chunks(MERGE_BATCH_ROWS) {
+                    let output = gather_stream_batch(&mut readers, batch, &data_type)?;
+                    column_writer.write(&output)?;
+                }
+                next_data_writers.push(column_writer.finish()?);
             }
+            data_writers = next_data_writers;
 
-            data_writer = column_writer.finish()?;
             for reader in readers {
                 reader.finish()?;
             }
         }
 
-        let block_writer = data_writer.finish()?;
-        let output = block_writer.finish()?;
-        Ok(vec![ExtendedBlockMeta {
-            block_meta: output.block_meta,
-            draft_virtual_block_meta: output.draft_virtual_block_meta,
-            column_hlls: output.column_hlls,
-            column_top_n: output.column_top_n,
-        }])
+        let mut outputs = Vec::with_capacity(data_writers.len());
+        for data_writer in data_writers {
+            let output = data_writer.finish()?.finish()?;
+            outputs.push(ExtendedBlockMeta {
+                block_meta: output.block_meta,
+                draft_virtual_block_meta: output.draft_virtual_block_meta,
+                column_hlls: output.column_hlls,
+                column_top_n: output.column_top_n,
+            });
+        }
+        Ok(outputs)
     }
 
     fn create_block_reader(
@@ -601,7 +654,7 @@ fn cluster_key_physical_leaf_count(
         .count()
 }
 
-fn sort_output_rows(
+fn output_rows_by_size(
     source_rows: usize,
     source_bytes: usize,
     max_output_rows: usize,
@@ -1441,25 +1494,37 @@ mod tests {
     use crate::io::WriteSettings;
 
     #[test]
-    fn test_sort_output_rows_respects_row_and_byte_limits() {
-        assert_eq!(sort_output_rows(1_000, 1_000_000, 800, 2_000_000), 800);
-        assert_eq!(sort_output_rows(1_000, 4_000_000, 2_000, 1_000_000), 250);
-        assert_eq!(sort_output_rows(1_000, 500_000, 2_000, 1_000_000), 1_000);
+    fn test_output_rows_by_size_respects_row_and_byte_limits() {
+        assert_eq!(output_rows_by_size(1_000, 1_000_000, 800, 2_000_000), 800);
+        assert_eq!(output_rows_by_size(1_000, 4_000_000, 2_000, 1_000_000), 250);
+        assert_eq!(output_rows_by_size(1_000, 500_000, 2_000, 1_000_000), 1_000);
     }
 
     #[test]
-    fn test_sort_output_rows_handles_metadata_boundaries() {
-        assert_eq!(sort_output_rows(100, 0, 80, 1_000), 80);
-        assert_eq!(sort_output_rows(100, 10_000, 100, 1), 1);
-        assert_eq!(sort_output_rows(100, 10_000, 0, 0), 1);
+    fn test_output_rows_by_size_handles_metadata_boundaries() {
+        assert_eq!(output_rows_by_size(100, 0, 80, 1_000), 80);
+        assert_eq!(output_rows_by_size(100, 10_000, 100, 1), 1);
+        assert_eq!(output_rows_by_size(100, 10_000, 0, 0), 1);
     }
 
     #[test]
-    fn test_sort_output_rows_uses_overflow_safe_arithmetic() {
+    fn test_output_rows_by_size_uses_overflow_safe_arithmetic() {
         assert_eq!(
-            sort_output_rows(usize::MAX, usize::MAX, usize::MAX, usize::MAX),
+            output_rows_by_size(usize::MAX, usize::MAX, usize::MAX, usize::MAX),
             usize::MAX
         );
+    }
+
+    #[test]
+    fn test_merge_output_ranges_follow_estimated_row_size() {
+        let output_rows = output_rows_by_size(1_000, 4_000_000, 1_000, 1_000_000);
+        assert_eq!(output_rows, 250);
+        assert_eq!(ranges(1_000, output_rows), vec![
+            0..250,
+            250..500,
+            500..750,
+            750..1_000
+        ]);
     }
 
     #[test]
@@ -1701,15 +1766,21 @@ mod tests {
             .read_column(0)
             .unwrap(),
         ];
-        let mut replayed_batches = Vec::new();
-        for row_sources in &row_source_batches {
-            let output = gather_stream_batch(&mut readers, row_sources, &key_types[0]).unwrap();
-            replayed_batches.push(output);
+        let output_ranges = ranges(expected_sources.len(), MERGE_BATCH_ROWS - 17);
+        assert!(output_ranges.len() > 2);
+        let mut replayed_outputs = Vec::with_capacity(output_ranges.len());
+        for range in &output_ranges {
+            let mut output_batches = Vec::new();
+            for row_sources in expected_sources[range.clone()].chunks(MERGE_BATCH_ROWS) {
+                output_batches
+                    .push(gather_stream_batch(&mut readers, row_sources, &key_types[0]).unwrap());
+            }
+            replayed_outputs.push(Column::concat_columns(output_batches.into_iter()).unwrap());
         }
         for reader in readers {
             reader.finish().unwrap();
         }
-        let replayed = Column::concat_columns(replayed_batches.into_iter()).unwrap();
+        let replayed = Column::concat_columns(replayed_outputs.into_iter()).unwrap();
         assert_eq!(replayed, merged);
 
         let all = Column::concat_columns([source0, source1].into_iter()).unwrap();

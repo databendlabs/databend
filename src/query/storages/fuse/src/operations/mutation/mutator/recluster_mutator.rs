@@ -666,7 +666,10 @@ impl ReclusterMutator {
                 continue;
             }
             let level = block.stats().level;
-            if !(0..MAX_RECLUSTER_LEVEL).contains(&level) {
+            if level < 0
+                || (level >= MAX_RECLUSTER_LEVEL
+                    && block.meta.block_size as usize >= self.block_thresholds.min_bytes_per_block)
+            {
                 continue;
             }
             let partition = if self.partition_key_count == 0 {

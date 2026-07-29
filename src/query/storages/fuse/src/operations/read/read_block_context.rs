@@ -22,7 +22,6 @@ use databend_storages_common_io::ReadSettings;
 use log::debug;
 
 use super::block_format::FuseParquetBlockFormat;
-use super::granule_group::GranuleGroupsReadPlan;
 use super::granule_group::build_granule_groups;
 use super::parquet_data_source::ParquetDataSource;
 use crate::FuseBlockPartInfo;
@@ -97,10 +96,39 @@ impl ReadBlockContext {
         Ok(ParquetDataSource::Normal((vec![data], virtual_source)))
     }
 
-    pub(crate) fn build_granule_groups_if_subset(
+    pub(crate) fn granule_groups_if_subset(
         &self,
         part: &PartInfoPtr,
-    ) -> Result<Option<GranuleGroupsReadPlan>> {
+    ) -> Result<Option<Vec<Vec<std::ops::Range<usize>>>>> {
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        let Some(ranges) = fuse_part
+            .block_meta_index()
+            .and_then(|index| index.granule_ranges.as_deref())
+        else {
+            return Ok(None);
+        };
+        let Some(groups) = self.granule_groups(part, Some(ranges))? else {
+            return Ok(None);
+        };
+        let granule_rows = fuse_part
+            .granule_index
+            .as_ref()
+            .expect("granule_groups checked metadata")
+            .granule_rows as usize;
+        let num_granules = crate::io::num_granules_of(fuse_part.nums_rows, granule_rows);
+        let selected = ranges.iter().try_fold(0usize, |selected, range| {
+            selected
+                .checked_add(range.end - range.start)
+                .ok_or_else(|| ErrorCode::Internal("selected granule count overflows"))
+        })?;
+        Ok((selected < num_granules).then_some(groups))
+    }
+
+    pub(crate) fn granule_groups(
+        &self,
+        part: &PartInfoPtr,
+        ranges: Option<&[std::ops::Range<usize>]>,
+    ) -> Result<Option<Vec<Vec<std::ops::Range<usize>>>>> {
         if self.index_reader.is_some() || self.virtual_reader.is_some() {
             return Ok(None);
         }
@@ -108,56 +136,21 @@ impl ReadBlockContext {
         let Some(granule_index) = fuse_part.granule_index.as_ref() else {
             return Ok(None);
         };
-        let Some(ranges) = fuse_part
-            .block_meta_index()
-            .and_then(|index| index.granule_ranges.as_ref())
-        else {
-            return Ok(None);
-        };
-        if ranges.is_empty() {
-            return Err(ErrorCode::Internal(
-                "granule-pruned part contains no ranges",
-            ));
-        }
-
-        let num_granules =
-            crate::io::num_granules_of(fuse_part.nums_rows, granule_index.granule_rows as usize);
-        let mut selected = 0usize;
-        let mut previous_end = None;
-        for range in ranges {
-            if range.start >= range.end || range.end > num_granules {
-                return Err(ErrorCode::Internal(format!(
-                    "invalid granule range {range:?} for {num_granules} granules"
-                )));
-            }
-            if previous_end.is_some_and(|end| range.start < end) {
-                return Err(ErrorCode::Internal(format!(
-                    "overlapping or unordered granule ranges near {range:?}"
-                )));
-            }
-            selected = selected
-                .checked_add(range.end - range.start)
-                .ok_or_else(|| ErrorCode::Internal("selected granule count overflows"))?;
-            previous_end = Some(range.end);
-        }
-        if selected >= num_granules {
+        if fuse_part.nums_rows == 0 {
             return Ok(None);
         }
-
-        Ok(Some(GranuleGroupsReadPlan {
-            groups: build_granule_groups(
-                ranges,
-                granule_index.granule_rows as usize,
-                fuse_part.nums_rows,
-                self.max_block_size,
-            )?,
-        }))
+        Ok(Some(build_granule_groups(
+            ranges,
+            granule_index.granule_rows as usize,
+            fuse_part.nums_rows,
+            self.max_block_size,
+        )?))
     }
 
     pub(crate) fn create_granule_data_reader(
         &self,
         part: &PartInfoPtr,
-        plan: &GranuleGroupsReadPlan,
+        groups: &[Vec<std::ops::Range<usize>>],
     ) -> Result<GranuleDataReader> {
         let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let granule_index = fuse_part
@@ -176,7 +169,7 @@ impl ReadBlockContext {
             &self.block_read_ctx,
             &self.read_settings,
             fuse_part,
-            plan,
+            groups,
             &offsets,
         )
     }

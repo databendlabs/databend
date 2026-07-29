@@ -2313,7 +2313,7 @@ async fn test_block_reduction_respects_level_guards() -> anyhow::Result<()> {
     let schema = test_cluster_schema();
     let ctx: Arc<dyn TableContext> = ctx;
 
-    for (level, block_count) in [(32, 3), (2, 2)] {
+    for (level, block_count, expected_tasks) in [(32, 3, 1), (2, 2, 0)] {
         let blocks = (0..block_count)
             .map(|idx| {
                 let key = idx * 10;
@@ -2357,7 +2357,7 @@ async fn test_block_reduction_respects_level_guards() -> anyhow::Result<()> {
                 Arc::new(Semaphore::new(4)),
             )
             .await?;
-        assert_eq!(window.task_count(), 0, "level={level}");
+        assert_eq!(window.task_count(), expected_tasks, "level={level}");
     }
 
     Ok(())

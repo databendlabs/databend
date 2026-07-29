@@ -43,8 +43,6 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use roaring::RoaringTreemap;
 
-use super::granule_group::GranuleGroup;
-use super::granule_group::GranuleGroupsReadPlan;
 use super::parquet_data_source::ParquetDataSource;
 use super::read_block_context::ReadBlockContext;
 use super::read_state::ReadState;
@@ -60,7 +58,7 @@ use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 
 struct ActiveGranuleRead {
     part: PartInfoPtr,
-    groups: VecDeque<GranuleGroup>,
+    groups: VecDeque<Vec<std::ops::Range<usize>>>,
     reader: GranuleDataReader,
 }
 
@@ -284,13 +282,17 @@ impl DeserializeDataTransform {
         Ok(())
     }
 
-    fn start_granule_read(&mut self, part: PartInfoPtr, plan: GranuleGroupsReadPlan) -> Result<()> {
+    fn start_granule_read(
+        &mut self,
+        part: PartInfoPtr,
+        groups: Vec<Vec<std::ops::Range<usize>>>,
+    ) -> Result<()> {
         let reader = self
             .read_block_context
-            .create_granule_data_reader(&part, &plan)?;
+            .create_granule_data_reader(&part, &groups)?;
         self.active_granule_read = Some(ActiveGranuleRead {
             part,
-            groups: plan.groups.into(),
+            groups: groups.into(),
             reader,
         });
         Ok(())
@@ -306,13 +308,13 @@ impl DeserializeDataTransform {
         };
         let start = Instant::now();
         let fuse_part = FuseBlockPartInfo::from_part(&active.part)?;
-        let mut decoded_ranges = Vec::with_capacity(group.ranges.len());
-        for expected_range in group.ranges {
+        let mut decoded_ranges = Vec::with_capacity(group.len());
+        for expected_range in group {
             let range_read = active.reader.read_next()?.ok_or_else(|| {
                 ErrorCode::Internal("granule data reader ended before group was complete")
             })?;
             if range_read.range != expected_range {
-                return Err(ErrorCode::Internal("granule read plan is out of sync"));
+                return Err(ErrorCode::Internal("granule read ranges are out of sync"));
             }
             decoded_ranges.push(self.decode_normal_range(fuse_part, range_read.data, None)?);
         }
@@ -434,8 +436,8 @@ impl Processor for DeserializeDataTransform {
                 ParquetDataSource::Normal((results, virtual_data)) => {
                     self.process_normal(&part, results, virtual_data)?;
                 }
-                ParquetDataSource::Granule(plan) => {
-                    self.start_granule_read(part, plan)?;
+                ParquetDataSource::Granule(groups) => {
+                    self.start_granule_read(part, groups)?;
                     self.process_granule_group()?;
                 }
             }

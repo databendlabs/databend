@@ -17,34 +17,37 @@ use std::ops::Range;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-#[derive(Debug)]
-pub(crate) struct GranuleGroupsReadPlan {
-    pub(crate) groups: Vec<GranuleGroup>,
-}
-
-#[derive(Debug)]
-pub(crate) struct GranuleGroup {
-    pub(crate) ranges: Vec<Range<usize>>,
-}
-
 pub(crate) fn build_granule_groups(
-    ranges: &[Range<usize>],
+    ranges: Option<&[Range<usize>]>,
     granule_rows: usize,
     block_rows: usize,
     max_block_rows: usize,
-) -> Result<Vec<GranuleGroup>> {
+) -> Result<Vec<Vec<Range<usize>>>> {
     if granule_rows == 0 {
         return Err(ErrorCode::Internal(
-            "granule group planner cannot use zero granule rows",
-        ));
-    }
-    if ranges.is_empty() {
-        return Err(ErrorCode::Internal(
-            "granule group planner cannot use empty ranges",
+            "granule group builder cannot use zero granule rows",
         ));
     }
 
     let num_granules = block_rows.div_ceil(granule_rows);
+    if num_granules == 0 {
+        return Ok(Vec::new());
+    }
+
+    let full_range;
+    let ranges = match ranges {
+        Some([]) => {
+            return Err(ErrorCode::Internal(
+                "granule group builder cannot use empty ranges",
+            ));
+        }
+        Some(ranges) => ranges,
+        None => {
+            full_range = 0..num_granules;
+            std::slice::from_ref(&full_range)
+        }
+    };
+
     let mut normalized: Vec<Range<usize>> = Vec::with_capacity(ranges.len());
     for range in ranges {
         if range.start >= range.end || range.end > num_granules {
@@ -95,24 +98,18 @@ pub(crate) fn build_granule_groups(
     let mut current_rows = 0;
     for (range, rows) in chunks {
         if !current_ranges.is_empty() && current_rows + rows > max_block_rows {
-            groups.push(GranuleGroup {
-                ranges: std::mem::take(&mut current_ranges),
-            });
+            groups.push(std::mem::take(&mut current_ranges));
             current_rows = 0;
         }
         current_ranges.push(range);
         current_rows += rows;
         if current_rows >= max_block_rows {
-            groups.push(GranuleGroup {
-                ranges: std::mem::take(&mut current_ranges),
-            });
+            groups.push(std::mem::take(&mut current_ranges));
             current_rows = 0;
         }
     }
     if !current_ranges.is_empty() {
-        groups.push(GranuleGroup {
-            ranges: current_ranges,
-        });
+        groups.push(current_ranges);
     }
     Ok(groups)
 }
@@ -141,38 +138,65 @@ mod tests {
 
     #[test]
     fn test_build_granule_groups_merges_splits_and_packs() {
-        let groups = build_granule_groups(&[0..2, 2..4, 6..7, 9..14], 100, 1350, 400).unwrap();
-        assert_eq!(groups.len(), 4);
-        assert_eq!(groups[0].ranges, vec![0..4]);
-        assert_eq!(groups[1].ranges, vec![6..7]);
-        assert_eq!(groups[2].ranges, vec![9..13]);
-        assert_eq!(groups[3].ranges, vec![13..14]);
+        let ranges = [0..2, 2..4, 6..7, 9..14];
+        let groups = build_granule_groups(Some(&ranges), 100, 1350, 400).unwrap();
+        assert_eq!(groups, vec![vec![0..4], vec![6..7], vec![9..13], vec![
+            13..14
+        ]]);
     }
 
     #[test]
     fn test_build_granule_groups_packs_disjoint_ranges() {
-        let groups = build_granule_groups(&[0..2, 4..5, 8..10], 100, 1000, 400).unwrap();
-        assert_eq!(groups.len(), 2);
-        assert_eq!(groups[0].ranges, vec![0..2, 4..5]);
-        assert_eq!(groups[1].ranges, vec![8..10]);
+        let ranges = [0..2, 4..5, 8..10];
+        let groups = build_granule_groups(Some(&ranges), 100, 1000, 400).unwrap();
+        assert_eq!(groups, vec![vec![0..2, 4..5], vec![8..10]]);
+    }
+
+    #[test]
+    fn test_build_granule_groups_uses_full_range() {
+        let groups = build_granule_groups(None, 100, 950, 250).unwrap();
+        assert_eq!(groups, vec![
+            vec![0..2],
+            vec![2..4],
+            vec![4..6],
+            vec![6..8],
+            vec![8..10]
+        ]);
+    }
+
+    #[test]
+    fn test_build_granule_groups_counts_partial_tail() {
+        let groups = build_granule_groups(None, 100, 250, 220).unwrap();
+        assert_eq!(groups, vec![vec![0..2], vec![2..3]]);
     }
 
     #[test]
     fn test_build_granule_groups_allows_one_oversized_granule() {
-        let ranges = std::array::from_fn::<_, 1, _>(|_| 1..3);
-        let groups = build_granule_groups(&ranges, 100, 250, 64).unwrap();
-        assert_eq!(groups.len(), 2);
-        assert_eq!(groups[0].ranges, vec![1..2]);
-        assert_eq!(groups[1].ranges, vec![2..3]);
+        let range = 1..3;
+        let groups =
+            build_granule_groups(Some(std::slice::from_ref(&range)), 100, 250, 64).unwrap();
+        assert_eq!(groups, vec![vec![1..2], vec![2..3]]);
+    }
+
+    #[test]
+    fn test_build_granule_groups_handles_empty_block() {
+        assert!(build_granule_groups(None, 100, 0, 400).unwrap().is_empty());
     }
 
     #[test]
     fn test_build_granule_groups_rejects_invalid_ranges() {
-        assert!(build_granule_groups(&[], 100, 1000, 400).is_err());
-        let empty_range = std::array::from_fn::<_, 1, _>(|_| 2..2);
-        assert!(build_granule_groups(&empty_range, 100, 1000, 400).is_err());
-        assert!(build_granule_groups(&[2..4, 3..5], 100, 1000, 400).is_err());
-        let out_of_bounds = std::array::from_fn::<_, 1, _>(|_| 9..11);
-        assert!(build_granule_groups(&out_of_bounds, 100, 1000, 400).is_err());
+        assert!(build_granule_groups(Some(&[]), 100, 1000, 400).is_err());
+        let empty_range = 2..2;
+        assert!(
+            build_granule_groups(Some(std::slice::from_ref(&empty_range)), 100, 1000, 400).is_err()
+        );
+        let overlapping = [2..4, 3..5];
+        assert!(build_granule_groups(Some(&overlapping), 100, 1000, 400).is_err());
+        let out_of_bounds = 9..11;
+        assert!(
+            build_granule_groups(Some(std::slice::from_ref(&out_of_bounds)), 100, 1000, 400,)
+                .is_err()
+        );
+        assert!(build_granule_groups(None, 0, 1000, 400).is_err());
     }
 }
