@@ -144,6 +144,17 @@ fn test_parse_sql_nested_join_conditions_without_panic() {
 }
 
 #[test]
+fn test_keyword_function_fallback() {
+    for sql in [
+        "SELECT try_cast FROM try_cast",
+        "SELECT try_cast(try_cast AS BIGINT) FROM try_cast",
+        "SELECT trim(foo)",
+    ] {
+        test_stmt_display(sql);
+    }
+}
+
+#[test]
 fn test_explain_verbose_alias_display() {
     let tokens = tokenize_sql("EXPLAIN VERBOSE SELECT * FROM t").unwrap();
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();

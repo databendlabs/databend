@@ -51,12 +51,10 @@ fn run_parser_with_dialect<P, O>(
     let src = unindent::unindent(src);
     let src = src.trim();
     let tokens = tokenize_sql(src).unwrap();
-    let backtrace = Backtrace::new();
     let input = Input {
         tokens: &tokens,
         dialect,
         mode,
-        backtrace: &backtrace,
     };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
@@ -1796,6 +1794,9 @@ fn test_expr_error() {
         r#"CAST(col1 AS foo)"#,
         r#"1 a"#,
         r#"CAST(col1)"#,
+        r#"SUBSTRING(col, 1"#,
+        r#"EXTRACT(YEAR)"#,
+        r#"TRIM(foo,"#,
         r#"a.add(b)"#,
         r#"$ abc + 3"#,
         r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,

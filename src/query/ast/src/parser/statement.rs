@@ -3154,11 +3154,7 @@ AS
         SUSPEND => rule!(#suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`").parse(i),
         INSPECT => rule!(#inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
             ).parse(i),
-    );
-    Err(nom::Err::Error(Error::from_error_kind(
-        i,
-        ErrorKind::other("expecting SQL statement"),
-    )))
+    )
 }
 
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
@@ -4249,26 +4245,27 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
 }
 
 pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
-    // *.*
-    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
-    // db.*
-    // "*": as current db or "table" with current db
-    let db = map(
-        rule! {
-            ( #ident ~ "." )? ~ "*"
-        },
-        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
-    );
+    let global_or_current_database = map(rule! { "*" ~ ( "." ~ ^"*" )? }, |(_, global)| {
+        if global.is_some() {
+            AccountMgrLevel::Global
+        } else {
+            AccountMgrLevel::Database(None)
+        }
+    });
 
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let table = map(
-        rule! {
-            ( #ident ~ "." )? ~ #parameter_to_string
-        },
-        |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+    let database_qualifier = followed_by_text(ident, ".");
+    let database = value(None, rule! { "*" });
+    let table = map(parameter_to_string, Some);
+    let qualified = map(
+        rule! { #database_qualifier ~ "." ~ ^(#database | #table) },
+        |(database, _, table)| match table {
+            None => AccountMgrLevel::Database(Some(database.name)),
+            Some(table) => AccountMgrLevel::Table(Some(database.name), table),
         },
     );
+    let table = map(parameter_to_string, |table| {
+        AccountMgrLevel::Table(None, table)
+    });
 
     let masking_policy = map(rule! { MASKING ~ POLICY ~ #ident }, |(_, _, name)| {
         AccountMgrLevel::MaskingPolicy(name.to_string())
@@ -4280,8 +4277,8 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
     );
 
     rule!(
-        #global : "*.*"
-        | #db : "<database>.*"
+        #global_or_current_database : "* | *.*"
+        | #qualified : "<database>.* | <database>.<table>"
         | #table : "<database>.<table>"
         | #masking_policy : "MASKING POLICY <policy_name>"
         | #row_access_policy : "ROW ACCESS POLICY <policy_name>"
@@ -4290,26 +4287,27 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
 }
 
 pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
-    // *.*
-    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
-    // db.*
-    // "*": as current db or "table" with current db
-    let db = map(
-        rule! {
-            ( #ident ~ "." )? ~ "*"
-        },
-        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
-    );
+    let global_or_current_database = map(rule! { "*" ~ ( "." ~ ^"*" )? }, |(_, global)| {
+        if global.is_some() {
+            AccountMgrLevel::Global
+        } else {
+            AccountMgrLevel::Database(None)
+        }
+    });
 
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let table = map(
-        rule! {
-            ( #ident ~ "." )? ~ #parameter_to_string
-        },
-        |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+    let database_qualifier = followed_by_text(ident, ".");
+    let database = value(None, rule! { "*" });
+    let table = map(parameter_to_string, Some);
+    let qualified = map(
+        rule! { #database_qualifier ~ "." ~ ^(#database | #table) },
+        |(database, _, table)| match table {
+            None => AccountMgrLevel::Database(Some(database.name)),
+            Some(table) => AccountMgrLevel::Table(Some(database.name), table),
         },
     );
+    let table = map(parameter_to_string, |table| {
+        AccountMgrLevel::Table(None, table)
+    });
 
     let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
         AccountMgrLevel::Stage(stage_name.to_string())
@@ -4319,8 +4317,8 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
         AccountMgrLevel::Warehouse(w.to_string())
     });
     rule!(
-        #global : "*.*"
-        | #db : "<database>.*"
+        #global_or_current_database : "* | *.*"
+        | #qualified : "<database>.* | <database>.<table>"
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
         | #warehouse : "WAREHOUSE <warehouse_name>"
@@ -4329,24 +4327,21 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
 }
 
 pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
-    // db.*
-    // "*": as current db or "table" with current db
-    let db = map(
-        rule! {
-            ( #grant_ident ~ "." )? ~ "*"
-        },
-        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
-    );
+    let current_database = value(AccountMgrLevel::Database(None), rule! { "*" });
 
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let table = map(
-        rule! {
-            ( #grant_ident ~ "." )? ~ #parameter_to_grant_string
-        },
-        |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+    let database_qualifier = followed_by_text(grant_ident, ".");
+    let database = value(None, rule! { "*" });
+    let table = map(parameter_to_grant_string, Some);
+    let qualified = map(
+        rule! { #database_qualifier ~ "." ~ ^(#database | #table) },
+        |(database, _, table)| match table {
+            None => AccountMgrLevel::Database(Some(database.name)),
+            Some(table) => AccountMgrLevel::Table(Some(database.name), table),
         },
     );
+    let table = map(parameter_to_grant_string, |table| {
+        AccountMgrLevel::Table(None, table)
+    });
 
     #[derive(Clone)]
     enum Object {
@@ -4395,7 +4390,8 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         },
     );
     rule!(
-        #db : "<database>.*"
+        #current_database : "*"
+        | #qualified : "<database>.* | <database>.<table>"
         | #table : "<database>.<table>"
         | #object : "STAGE | UDF | WAREHOUSE | CONNECTION | SEQUENCE <object_name>"
         | #procedure : "PROCEDURE <procedure_identity>"
@@ -4406,21 +4402,21 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
 pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
     let grant_role = map(
         rule! {
-            FOR ~ #grant_option
+            FOR ~ ^#grant_option
         },
         |(_, opt_principal)| ShowGrantOption::PrincipalIdentity(opt_principal),
     );
 
     let share_object_name = map(
         rule! {
-            ON ~ #on_object_name
+            ON ~ ^#on_object_name
         },
         |(_, object_name)| ShowGrantOption::GrantObjectName(object_name),
     );
 
     let role_granted = map(
         rule! {
-            OF ~ ROLE ~ #role_name
+            OF ~ ^ROLE ~ ^#role_name
         },
         |(_, _, role_name)| ShowGrantOption::OfRole(role_name),
     );
@@ -5878,7 +5874,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #parameter_to_string ~ ( "@" ~ "'%'" )?
+            #parameter_to_string ~ ( "@" ~ ^"'%'" )?
         },
         |(username, _)| {
             let hostname = "%".to_string();
@@ -5940,7 +5936,7 @@ pub fn udaf_state_field(i: Input) -> IResult<UDAFStateField> {
     map(
         rule! {
             #ident
-            ~ #type_name
+            ~ ^#type_name
             : "`<state name> <type>`"
         },
         |(name, type_name)| UDAFStateField { name, type_name },
@@ -5986,6 +5982,20 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         Table(Vec<(Identifier, TypeName)>),
     }
 
+    fn table_return_types(i: Input) -> IResult<Vec<(Identifier, TypeName)>> {
+        if i.tokens.first().is_some_and(|token| token.kind == RParen) {
+            return Ok((i, vec![]));
+        }
+
+        match comma_separated_list1(udtf_arg).parse(i) {
+            Err(nom::Err::Error(mut error)) if error.span.start == i.tokens[0].span.start => {
+                error.errors.push(ErrorKind::ExpectText(")"));
+                Err(nom::Err::Error(error))
+            }
+            result => result,
+        }
+    }
+
     fn return_body(i: Input) -> IResult<ReturnBody> {
         let scalar = map(
             rule! {
@@ -5995,7 +6005,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         );
         let table = map(
             rule! {
-                TABLE ~ "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+                TABLE ~ "(" ~ #table_return_types ~ ")"
             },
             |(_, _, arg_types, _)| ReturnBody::Table(arg_types),
         );
@@ -6278,7 +6288,7 @@ fn udf_args(i: Input) -> IResult<UDFArgs> {
 }
 
 fn udtf_arg(i: Input) -> IResult<(Identifier, TypeName)> {
-    map(rule! { #ident ~ ^#type_name }, |(name, ty)| (name, ty)).parse(i)
+    map(rule! { #ident ~ #type_name }, |(name, ty)| (name, ty)).parse(i)
 }
 
 fn udf_immutable(i: Input) -> IResult<bool> {
