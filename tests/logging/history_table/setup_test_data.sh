@@ -71,9 +71,10 @@ lineage_ready=false
 for _ in {1..30}; do
   lineage_response=$(execute_query "SELECT count_if(source_database IN ('lineage_history_multi_kind', 'lineage_history_columns', 'lineage_history_views', 'lineage_history_statements') OR target_database IN ('lineage_history_multi_kind', 'lineage_history_columns', 'lineage_history_views', 'lineage_history_statements')) AS captured_edges, count_if(target_database = 'lineage_history_lifecycle') AS lifecycle_edges, count_if(source_catalog = 'lineage_history_iceberg_catalog' AND source_database = 'lineage_db' AND target_database = 'lineage_history_iceberg') AS iceberg_edges, count_if(target_database = 'lineage_history_views' AND target_name IN ('src_view', 'view_dst')) AS view_edges FROM system_history.lineage_unresolved")
   if [ "$(echo "$lineage_response" | jq -r '.state')" = "Failed" ]; then
-    echo "Lineage readiness query failed"
-    echo "$lineage_response" | jq '.error'
-    exit 1
+    # The history transform creates its destination table asynchronously. Treat a missing table
+    # like any other not-ready state and report the last response if the poll eventually times out.
+    sleep 1
+    continue
   fi
   lineage_count=$(echo "$lineage_response" | jq -r '.data[0][0] // 0')
   lifecycle_count=$(echo "$lineage_response" | jq -r '.data[0][1] // 0')
