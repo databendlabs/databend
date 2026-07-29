@@ -79,10 +79,14 @@ impl Files {
             );
         }
 
-        // adjusts batch_size according to the `max_threads` settings,
-        // limits its min/max value to 1 and 1000.
+        // Number of object keys deleted per batch delete request (e.g. S3 DeleteObjects,
+        // which accepts up to 1000 keys per request). Kept independent of `max_threads`:
+        // a single DeleteObjects call costs one request regardless of key count, so a larger
+        // batch means fewer requests, which is strictly better for both throughput and
+        // S3 request-rate limits. Runtime-tunable via `storage_delete_batch_size`.
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let batch_size = (locations.len() / threads_nums).clamp(1, 1000);
+        let batch_size =
+            (self.ctx.get_settings().get_storage_delete_batch_size()? as usize).clamp(1, 1000);
 
         info!(
             "remove file in batch, batch_size: {}, number of chunks {}",
