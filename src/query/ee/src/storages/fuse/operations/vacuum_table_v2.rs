@@ -27,11 +27,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::block_bloom_index_locations;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
-use databend_common_storages_fuse::operations::VacuumObjectKeyPolicy;
-use databend_common_storages_fuse::operations::is_vacuum_object_gc_candidate;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
@@ -137,7 +134,6 @@ pub async fn do_vacuum2(
         .read_segments::<Arc<CompactSegmentInfo>>(&protected_segments, false)
         .await?;
     let mut gc_root_blocks = HashSet::new();
-    let mut gc_root_indexes = HashSet::new();
     for segment in segments {
         for block in segment?.block_metas()? {
             gc_root_blocks.extend(
@@ -145,7 +141,6 @@ pub async fn do_vacuum2(
                     .data_file_locations()
                     .map(|location| location.0.clone()),
             );
-            gc_root_indexes.extend(block_bloom_index_locations(&block).map(|location| location.0));
         }
     }
     ctx.set_status_info(&format!(
@@ -189,23 +184,6 @@ pub async fn do_vacuum2(
         slice_summary(&blocks_to_gc)
     ));
 
-    // Column-group Bloom paths are derived from their owning data-group paths. The files live in a
-    // separate directory, so scan that directory and retain exactly the files referenced by the
-    // protected groups. This also removes orphan Bloom files left by interrupted writes.
-    let start = std::time::Instant::now();
-    let bloom_indexes_before_gc_root =
-        list_bloom_indexes_before_gc_root(fuse_table, gc_root_timestamp, gc_root_meta_ts).await?;
-    let bloom_indexes_to_gc = bloom_indexes_before_gc_root
-        .into_iter()
-        .filter(|path| !gc_root_indexes.contains(path))
-        .collect::<Vec<_>>();
-    ctx.set_status_info(&format!(
-        "Filtered bloom_indexes_to_gc for table {}, elapsed: {:?}, bloom_indexes_to_gc: {:?}",
-        table_info.desc,
-        start.elapsed(),
-        slice_summary(&bloom_indexes_to_gc)
-    ));
-
     let start = std::time::Instant::now();
     let catalog = ctx.get_default_catalog()?;
     let table_agg_index_ids = catalog
@@ -221,15 +199,8 @@ pub async fn do_vacuum2(
         blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 2)
             + stats_to_gc.len()
             + segments_to_gc.len()
-            + snapshots_to_gc.len()
-            + bloom_indexes_to_gc.len(),
+            + snapshots_to_gc.len(),
     );
-
-    // Bloom indexes must be removed before their data blocks.
-    if !bloom_indexes_to_gc.is_empty() {
-        op.remove_file_in_batch(&bloom_indexes_to_gc).await?;
-        files_to_gc.extend(bloom_indexes_to_gc.iter().cloned());
-    }
 
     // order is important
     // indexes should be removed before their blocks, because index locations to gc are generated from block locations.
@@ -348,32 +319,13 @@ async fn purge_block_chunks(
     Ok(())
 }
 
-async fn list_bloom_indexes_before_gc_root(
-    fuse_table: &FuseTable,
-    gc_root_timestamp: DateTime<Utc>,
-    gc_root_meta_ts: DateTime<Utc>,
-) -> Result<Vec<String>> {
-    let key_policy = VacuumObjectKeyPolicy::PrefixlessUuidV7 { gc_root_timestamp };
-    fuse_table
-        .list_files(
-            fuse_table
-                .meta_location_generator()
-                .block_bloom_index_prefix()
-                .to_string(),
-            |path, modified| {
-                is_vacuum_object_gc_candidate(&path, modified, gc_root_meta_ts, key_policy)
-            },
-        )
-        .await
-}
-
 fn collect_block_index_locations(
     blocks_to_gc: &[String],
     table_agg_index_ids: &[u64],
     inverted_indexes: &BTreeMap<String, TableIndex>,
 ) -> Vec<String> {
     let mut indexes_to_gc = Vec::with_capacity(
-        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len()),
+        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 1),
     );
     for loc in blocks_to_gc {
         for index_id in table_agg_index_ids {
@@ -392,6 +344,8 @@ fn collect_block_index_locations(
                 ),
             );
         }
+        indexes_to_gc
+            .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
     }
     indexes_to_gc
 }
@@ -482,12 +436,14 @@ mod tests {
                 "idx",
                 "123456789",
             ),
+            TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[0]),
             TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&blocks[1], 7),
             TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
                 &blocks[1],
                 "idx",
                 "123456789",
             ),
+            TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[1]),
         ]);
     }
 }
