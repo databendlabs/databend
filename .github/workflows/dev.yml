@@ -98,7 +98,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Test AI assistance validator
-        run: node --test .github/scripts/check_pr_ai_assistance.test.js
+        run: python3 .github/scripts/test_check_pr_ai_assistance.py
 
   ready:
     if: always()
