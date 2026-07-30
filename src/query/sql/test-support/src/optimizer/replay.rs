@@ -26,7 +26,6 @@ use databend_common_statistics::Histogram;
 use serde::Deserialize;
 
 use super::HistogramStats;
-use super::histogram_from_stats;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReplayInput {
@@ -159,7 +158,8 @@ impl ReplayInput {
                             return None;
                         }
                         column.histogram.as_ref().map(|histogram| {
-                            histogram_from_stats(histogram)
+                            histogram
+                                .to_histogram()
                                 .map(|histogram| (column.column_name.clone(), histogram))
                         })
                     })

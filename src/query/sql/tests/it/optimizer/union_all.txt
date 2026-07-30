@@ -1,0 +1,217 @@
+=== lossless_coercion ===
+description: SQL binding inserts a nullable INT to BIGINT coercion and UnionAll derives statistics after the cast.
+sql: SELECT k FROM l UNION ALL SELECT k FROM r
+path: []
+node:
+UnionAll
+├── output: [k (#2)]
+├── left: [CAST(l.k (#0) AS Int64 NULL)]
+├── right: [r.k (#1)]
+├── cte_scan_names: []
+├── logical_recursive_cte_id: None
+├── Scan
+│   ├── table: default.l (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.r (#1)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cardinality: 30.000
+precise_cardinality: Some(30)
+column_stat: k (#2) min=1, max=8, ndv=~5.0[..8.0], null_count=3, histogram=none
+
+=== finite_range_reduces_union_ndv_bound ===
+description: UnionAll reduces its conservative NDV upper bound to the merged finite range before an outer cast consumes the statistics.
+sql: SELECT CAST(k AS BIGINT) AS k FROM (SELECT k FROM l UNION ALL SELECT k FROM r) AS u
+path: []
+node:
+EvalScalar
+├── scalars: [CAST(k (#2) AS Int64) AS (#3)]
+└── UnionAll
+    ├── output: [k (#2)]
+    ├── left: [l.k (#0)]
+    ├── right: [r.k (#1)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── Scan
+    │   ├── table: default.l (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.r (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+cardinality: 3.000
+precise_cardinality: Some(3)
+column_stat: k (#2) min=1, max=2, ndv=2.0, null_count=0, histogram=none
+column_stat: k (#3) min=1, max=2, ndv=2.0, null_count=0, histogram=none
+
+=== nonempty_branch_without_column_stats ===
+description: A non-empty branch with unknown column statistics makes the UnionAll output column statistics unknown.
+sql: SELECT k FROM l UNION ALL SELECT k FROM r
+path: []
+node:
+UnionAll
+├── output: [k (#2)]
+├── left: [l.k (#0)]
+├── right: [r.k (#1)]
+├── cte_scan_names: []
+├── logical_recursive_cte_id: None
+├── Scan
+│   ├── table: default.l (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.r (#1)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cardinality: 30.000
+precise_cardinality: Some(30)
+column_stats: none
+
+=== empty_branch_without_column_stats ===
+description: An exactly empty branch contributes no values, so UnionAll preserves the other branch statistics.
+sql: SELECT k FROM l UNION ALL SELECT k FROM r
+path: []
+node:
+UnionAll
+├── output: [k (#2)]
+├── left: [l.k (#0)]
+├── right: [r.k (#1)]
+├── cte_scan_names: []
+├── logical_recursive_cte_id: None
+├── Scan
+│   ├── table: default.l (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.r (#1)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cardinality: 10.000
+precise_cardinality: Some(10)
+column_stat: k (#2) min=1, max=3, ndv=3.0, null_count=1, histogram=some
+
+=== one_sided_expected_ndv ===
+description: UnionAll preserves the known expected NDV when the other branch only has an upper bound.
+sql: SELECT k FROM l UNION ALL SELECT k FROM r
+path: []
+node:
+UnionAll
+├── output: [k (#2)]
+├── left: [l.k (#0)]
+├── right: [r.k (#1)]
+├── cte_scan_names: []
+├── logical_recursive_cte_id: None
+├── Scan
+│   ├── table: default.l (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.r (#1)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cardinality: 30.000
+precise_cardinality: Some(30)
+column_stat: k (#2) min=1, max=8, ndv=~5.0[..8.0], null_count=0, histogram=none
+
+=== histogram_overlap ===
+description: Overlapping input histograms refine the merged NDV while the output histogram is dropped.
+sql: SELECT k FROM l UNION ALL SELECT k FROM r
+path: []
+node:
+UnionAll
+├── output: [k (#2)]
+├── left: [l.k (#0)]
+├── right: [r.k (#1)]
+├── cte_scan_names: []
+├── logical_recursive_cte_id: None
+├── Scan
+│   ├── table: default.l (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.r (#1)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cardinality: 200.000
+precise_cardinality: Some(200)
+column_stat: k (#2) min=0, max=14, ndv=15.0, null_count=0, histogram=none
+
+=== join_consumes_union_stats ===
+description: A join above the SQL-derived UnionAll consumes its merged output NDV instead of treating the key as unknown.
+sql: SELECT u.k FROM (SELECT k FROM l UNION ALL SELECT k FROM r) AS u JOIN j ON u.k = j.k
+path: [Left]
+node:
+Join(Inner)
+├── build keys: [k (#2)]
+├── probe keys: [j.k (#3)]
+├── other filters: []
+├── UnionAll
+│   ├── output: [k (#2)]
+│   ├── left: [l.k (#0)]
+│   ├── right: [r.k (#1)]
+│   ├── cte_scan_names: []
+│   ├── logical_recursive_cte_id: None
+│   ├── Scan
+│   │   ├── table: default.l (#0)
+│   │   ├── filters: []
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Scan
+│       ├── table: default.r (#1)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Scan
+    ├── table: default.j (#2)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cardinality: 300.000
+precise_cardinality: None
+column_stat: k (#2) min=1, max=8, ndv=8.0, null_count=0, histogram=none
+column_stat: j.k (#3) min=1, max=8, ndv=8.0, null_count=0, histogram=none
+path: [Left, Right]
+node:
+UnionAll
+├── output: [k (#2)]
+├── left: [l.k (#0)]
+├── right: [r.k (#1)]
+├── cte_scan_names: []
+├── logical_recursive_cte_id: None
+├── Scan
+│   ├── table: default.l (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.r (#1)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cardinality: 30.000
+precise_cardinality: Some(30)
+column_stat: k (#2) min=1, max=8, ndv=8.0, null_count=0, histogram=none
+

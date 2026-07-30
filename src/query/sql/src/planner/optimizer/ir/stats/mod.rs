@@ -18,9 +18,28 @@ mod join;
 mod selectivity;
 
 pub use column_stat::*;
+use databend_common_statistics::Datum;
 pub use databend_common_statistics::UniformSampleSet;
 pub(crate) use join::JoinConditionColumns;
 pub(crate) use join::JoinKeyStatUpdate;
 pub(crate) use join::JoinStatsEstimator;
 pub use selectivity::MAX_SELECTIVITY;
 pub use selectivity::SelectivityEstimator;
+
+pub(crate) fn finite_range_ndv_upper(min: &Datum, max: &Datum) -> Option<f64> {
+    if min == max {
+        return Some(1.0);
+    }
+    match (min, max) {
+        (Datum::Bool(false), Datum::Bool(true)) => Some(2.0),
+        (Datum::Int(min), Datum::Int(max)) => max
+            .checked_sub(*min)
+            .and_then(|diff| diff.checked_add(1))
+            .map(|value| value as f64),
+        (Datum::UInt(min), Datum::UInt(max)) => max
+            .checked_sub(*min)
+            .and_then(|diff| diff.checked_add(1))
+            .map(|value| value as f64),
+        _ => None,
+    }
+}
