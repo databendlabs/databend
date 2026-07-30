@@ -868,7 +868,7 @@ pub fn bitmap_contains(buf: &[u8], value: u64) -> Result<bool> {
     }
     validate_serialized_bitmap_header_and_length(buf)?;
     if let Some(roaring_buf) = as_roaring(buf) {
-        Ok(reader::bitmap_contains(roaring_buf, value)?)
+        Ok(reader::TreemapReader::new(roaring_buf)?.contains(value)?)
     } else {
         Ok(SmallReader::new(buf)?.contains(value))
     }
@@ -943,8 +943,9 @@ pub fn bitmap_has_all(lhs: &[u8], rhs: &[u8]) -> Result<bool> {
     // lhs is HybridLarge/Legacy, rhs is HybridSmall: probe
     let roaring_buf = as_roaring(lhs).unwrap();
     let rhs_small = SmallReader::new(rhs)?;
+    let tree = reader::TreemapReader::new(roaring_buf)?;
     for i in 0..rhs_small.len() {
-        if !reader::bitmap_contains(roaring_buf, rhs_small.values[i])? {
+        if !tree.contains(rhs_small.values[i])? {
             return Ok(false);
         }
     }
@@ -977,8 +978,9 @@ pub fn bitmap_has_any(lhs: &[u8], rhs: &[u8]) -> Result<bool> {
     } else {
         (as_roaring(rhs).unwrap(), SmallReader::new(lhs)?)
     };
+    let tree = reader::TreemapReader::new(roaring_buf)?;
     for i in 0..small.len() {
-        if reader::bitmap_contains(roaring_buf, small.values[i])? {
+        if tree.contains(small.values[i])? {
             return Ok(true);
         }
     }
@@ -1675,6 +1677,40 @@ mod tests {
 
         let decoded = deserialize_bitmap(&legacy).unwrap();
         assert_eq!(decoded.into_iter().collect::<Vec<_>>(), vec![1, 5, 42]);
+    }
+
+    // A corrupt large buffer paired with an empty HybridSmall must surface
+    // the decoding error, not silently return `false`/`true`. Without eager
+    // validation of the roaring side, the mixed-path loop runs zero times
+    // (small side is empty) and the corrupt large side slips through.
+    #[test]
+    fn has_any_corrupt_large_with_empty_small_is_rejected() {
+        let corrupt_large = 1u64.to_le_bytes(); // declares 1 bucket, no data
+        let empty_small = [
+            HYBRID_MAGIC[0],
+            HYBRID_MAGIC[1],
+            HYBRID_VERSION,
+            HYBRID_KIND_SMALL,
+            0, // 0 values
+        ];
+
+        assert!(bitmap_has_any(&corrupt_large, &empty_small).is_err());
+        assert!(bitmap_has_any(&empty_small, &corrupt_large).is_err());
+    }
+
+    #[test]
+    fn has_all_corrupt_large_with_empty_small_is_rejected() {
+        let corrupt_large = 1u64.to_le_bytes();
+        let empty_small = [
+            HYBRID_MAGIC[0],
+            HYBRID_MAGIC[1],
+            HYBRID_VERSION,
+            HYBRID_KIND_SMALL,
+            0,
+        ];
+
+        assert!(bitmap_has_all(&corrupt_large, &empty_small).is_err());
+        assert!(bitmap_has_all(&empty_small, &corrupt_large).is_err());
     }
 
     // Tests for minimum deserialize bitmap functions.

@@ -47,6 +47,17 @@ impl<'a> TreemapReader<'a> {
             .read_u64::<LittleEndian>()
             .map_err(|_| Error::other("fail to read size"))?;
 
+        // Validate that `size` buckets fit in `buf` and bound `buf` to the
+        // declared range, so the fast path matches `deserialize_bitmap` on
+        // corrupt input (truncation rejected, trailing data ignored).
+        let mut probe = buf;
+        for _ in 0..size {
+            let header = BitmapReader::decode(probe)?;
+            probe = &probe[header.buf.len()..];
+        }
+        let consumed = buf.len() - probe.len();
+        let buf = &buf[..consumed];
+
         Ok(Self { buf, _size: size })
     }
 
@@ -55,6 +66,26 @@ impl<'a> TreemapReader<'a> {
             buf: self.buf,
             offset: 0,
         }
+    }
+
+    pub fn contains(&self, value: u64) -> io::Result<bool> {
+        let prefix = (value >> 32) as u32;
+        let container_key = ((value >> 16) & 0xFFFF) as u16;
+        let low16 = (value & 0xFFFF) as u16;
+
+        for bitmap_result in self.iter() {
+            let bitmap = bitmap_result?;
+            if bitmap.prefix() < prefix {
+                continue;
+            }
+            if bitmap.prefix() > prefix {
+                return Ok(false);
+            }
+            return Ok(bitmap
+                .find_container(container_key)?
+                .is_some_and(|c| c.contains(low16)));
+        }
+        Ok(false)
     }
 }
 
@@ -853,27 +884,6 @@ pub(crate) fn bitmap_len_above(buf: &[u8], threshold: usize) -> io::Result<bool>
     Ok(false)
 }
 
-pub(crate) fn bitmap_contains(buf: &[u8], value: u64) -> io::Result<bool> {
-    let prefix = (value >> 32) as u32;
-    let container_key = ((value >> 16) & 0xFFFF) as u16;
-    let low16 = (value & 0xFFFF) as u16;
-
-    let tree = TreemapReader::new(buf)?;
-    for bitmap_result in tree.iter() {
-        let bitmap = bitmap_result?;
-        if bitmap.prefix() < prefix {
-            continue;
-        }
-        if bitmap.prefix() > prefix {
-            return Ok(false);
-        }
-        return Ok(bitmap
-            .find_container(container_key)?
-            .is_some_and(|c| c.contains(low16)));
-    }
-    Ok(false)
-}
-
 pub(crate) fn bitmap_min(buf: &[u8]) -> io::Result<Option<u64>> {
     let tree = TreemapReader::new(buf)?;
     for bitmap_result in tree.iter() {
@@ -989,6 +999,51 @@ mod tests {
         bitmap.serialize_into(&mut buf)?;
         assert_eq!(bitmap_len(&buf)?, 150);
 
+        Ok(())
+    }
+
+    // A declared bucket count with no bucket data must be rejected up front.
+    #[test]
+    fn test_treemap_reader_rejects_truncated_buf() -> io::Result<()> {
+        let corrupt = 1u64.to_le_bytes();
+        assert!(TreemapReader::new(&corrupt).is_err());
+        Ok(())
+    }
+
+    // Partial truncation: the first bucket is intact and non-empty, but the
+    // declared count claims more buckets than exist. Eager validation in
+    // `TreemapReader::new` catches this before any caller can early-return.
+    #[test]
+    fn test_treemap_reader_rejects_partial_truncated_buf() -> io::Result<()> {
+        let mut tree = RoaringTreemap::new();
+        tree.insert(7);
+        let mut buf = Vec::new();
+        tree.serialize_into(&mut buf)?;
+
+        // Overwrite the leading u64 to claim 2 buckets while only 1 exists.
+        buf[..8].copy_from_slice(&2u64.to_le_bytes());
+
+        assert!(TreemapReader::new(&buf).is_err());
+        Ok(())
+    }
+
+    // Trailing data after the declared buckets must be ignored, matching
+    // `deserialize_bitmap`. A buffer that declares 0 buckets but carries a
+    // valid bucket trailer must decode as an empty treemap, not as one with
+    // an undeclared bucket.
+    #[test]
+    fn test_treemap_reader_ignores_trailing_data() -> io::Result<()> {
+        let mut tree = RoaringTreemap::new();
+        tree.insert(7);
+        let mut buf = Vec::new();
+        tree.serialize_into(&mut buf)?;
+
+        // Overwrite the leading u64 to claim 0 buckets; the rest is trailing.
+        buf[..8].copy_from_slice(&0u64.to_le_bytes());
+
+        let reader = TreemapReader::new(&buf)?;
+        let count = reader.iter().filter(|r| r.is_ok()).count();
+        assert_eq!(count, 0);
         Ok(())
     }
 
@@ -1283,10 +1338,11 @@ mod tests {
     #[test]
     fn test_bitmap_contains() -> io::Result<()> {
         for_each_fixture(|name, buf, tree, miss_value| {
+            let reader = TreemapReader::new(buf).unwrap();
             // Test a known-present value (min if exists)
             if let Some(hit) = tree.min() {
                 let expected = tree.contains(hit);
-                let actual = bitmap_contains(buf, hit).unwrap();
+                let actual = reader.contains(hit).unwrap();
                 assert_eq!(
                     actual, expected,
                     "bitmap_contains hit: fixture={name}, val={hit}"
@@ -1295,7 +1351,7 @@ mod tests {
             // Test a known-absent value
             let miss = miss_value;
             let expected = tree.contains(miss);
-            let actual = bitmap_contains(buf, miss).unwrap();
+            let actual = reader.contains(miss).unwrap();
             assert_eq!(
                 actual, expected,
                 "bitmap_contains miss: fixture={name}, val={miss}"
