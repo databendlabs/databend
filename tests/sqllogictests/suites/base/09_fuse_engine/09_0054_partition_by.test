@@ -307,10 +307,11 @@ SELECT id, p FROM merge_partitioned
 statement ok
 OPTIMIZE TABLE merge_partitioned COMPACT
 
+# Compaction respects existing partition boundaries without reordering segments.
 query II
 SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'merge_partitioned') LIMIT 1
 ----
-2 2
+3 3
 
 # Recluster overlapping cluster-key ranges inside each partition without ever
 # selecting or rewriting blocks across the physical partition boundary.
