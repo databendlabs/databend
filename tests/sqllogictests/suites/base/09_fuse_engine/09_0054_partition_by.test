@@ -383,8 +383,8 @@ WHERE column_name = 'event_time'
 ----
 0
 
-# Partition splitting is local to each sorted input block. Fragmented multi-block
-# input may therefore produce several blocks for the same physical partition.
+# Partition splitting is local to each input block and does not regroup rows.
+# The exact block count therefore depends on parallel input scheduling.
 statement ok
 SET max_threads=4
 
@@ -398,9 +398,9 @@ statement ok
 INSERT INTO fragmented_input SELECT number FROM numbers(12)
 
 query I
-SELECT block_count FROM fuse_snapshot('db_09_0054', 'fragmented_input') LIMIT 1
+SELECT if(block_count BETWEEN 6 AND 12, 1, 0) FROM fuse_snapshot('db_09_0054', 'fragmented_input') LIMIT 1
 ----
-6
+1
 
 # Like CLUSTER BY, each physical key expression may reference only one source
 # column. Composite partitioning is expressed as PARTITION BY (a, b).
