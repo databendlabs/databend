@@ -487,6 +487,8 @@ fn test_like(file: &mut impl Write) {
     run_ast(file, "'h\n' like 'h_'", &[]);
     run_ast(file, r#"'%' like '\%'"#, &[]);
     run_ast(file, r#"'v%xx' like '_\%%'"#, &[]);
+    run_ast(file, r#""like"('alpha_beta', 'alpha$_beta', '$')"#, &[]);
+    run_ast(file, r#""like"('alphaXbeta', 'alpha$_beta', '$')"#, &[]);
 
     let columns = [(
         "lhs",
@@ -511,6 +513,31 @@ fn test_like(file: &mut impl Write) {
     run_ast(
         file,
         "parse_json('{\"k1\":\"abc\",\"k2\":\"def\"}') like '%e%'",
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"name":"alpha_beta"}') like 'alpha\_beta'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('["alpha_beta_tail"]') like 'alpha\_beta%'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"name":"head_alpha_beta"}') like '%alpha\_beta'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#""like"(parse_json('{"name":"alpha_beta"}'), 'alpha$_beta', '$')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"name":"alphabeta"}') like 'alphabeta'"#,
         &[],
     );
 

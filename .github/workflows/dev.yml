@@ -93,10 +93,18 @@ jobs:
         with:
           target: aarch64-unknown-linux-gnu
 
+  ai_assistance_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test AI assistance validator
+        run: python3 .github/scripts/test_check_pr_ai_assistance.py
+
   ready:
     if: always()
     runs-on: ubuntu-latest
     needs:
+      - ai_assistance_test
       - changes
       - linux
       - mac_check
@@ -105,6 +113,7 @@ jobs:
       - name: Check Ready to Merge
         uses: actions/github-script@v9
         env:
+          AI_ASSISTANCE_TEST_RESULT: ${{ needs.ai_assistance_test.result }}
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
           BENDPY_CHANGED: ${{ needs.changes.outputs.bendpy_changed }}
           LINUX_BUILD_RESULT: ${{ needs.linux.result }}
@@ -112,6 +121,10 @@ jobs:
           BENDPY_RESULT: ${{ needs.test_bendpy.result }}
         with:
           script: |
+            if (process.env.AI_ASSISTANCE_TEST_RESULT != 'success') {
+              core.setFailed(`AI assistance validator tests did not complete successfully (${process.env.AI_ASSISTANCE_TEST_RESULT}), not ready to merge`);
+              return;
+            }
             if (process.env.SRC_CHANGED == 'false' && process.env.BENDPY_CHANGED == 'false') {
               core.info('No source file changes detected, skipping');
               return;

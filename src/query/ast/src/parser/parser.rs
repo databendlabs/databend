@@ -17,7 +17,6 @@ use nom::Parser;
 use crate::ParseError;
 use crate::Result;
 use crate::ast::*;
-use crate::parser::Backtrace;
 use crate::parser::common::IResult;
 use crate::parser::common::comma_separated_list0;
 use crate::parser::common::comma_separated_list1;
@@ -164,12 +163,10 @@ pub fn run_parser<O>(
     allow_partial: bool,
     mut parser: impl FnMut(Input) -> IResult<O>,
 ) -> Result<O> {
-    let backtrace = Backtrace::disabled();
     let input = Input {
         tokens,
         dialect,
         mode,
-        backtrace: &backtrace,
     };
     match parser(input) {
         Ok((rest, res)) => {
@@ -188,18 +185,6 @@ pub fn run_parser<O>(
         }
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
             let source = tokens[0].source;
-            let backtrace = Backtrace::new();
-            let input = Input {
-                tokens,
-                dialect,
-                mode,
-                backtrace: &backtrace,
-            };
-            let err = match parser(input) {
-                Err(nom::Err::Error(err) | nom::Err::Failure(err)) => err,
-                Ok(_) => err,
-                Err(nom::Err::Incomplete(_)) => unreachable!(),
-            };
             Err(ParseError(None, display_parser_error(err, source)))
         }
         Err(nom::Err::Incomplete(_)) => unreachable!(),
