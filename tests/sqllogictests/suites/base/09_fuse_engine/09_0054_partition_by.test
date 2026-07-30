@@ -384,21 +384,23 @@ statement ok
 CREATE TABLE hash_partitioned_none(id INT) PARTITION BY (bucket(16, id)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
 
 statement ok
-INSERT INTO hash_partitioned SELECT number::BIGINT FROM numbers(40000)
+INSERT INTO hash_partitioned SELECT number::BIGINT FROM numbers(9600)
 
 statement ok
-INSERT INTO hash_partitioned_none SELECT number::BIGINT FROM numbers(40000)
+INSERT INTO hash_partitioned_none SELECT number::BIGINT FROM numbers(9600)
 
 query I
 SELECT count(*) FROM hash_partitioned
 ----
-40000
+9600
 
-# Both tables receive identical interleaved bucket data. Hash write layout should
-# stay close to the intrinsic three blocks per bucket and produce fewer blocks
-# than the normal block-local partition split. Allow partition-boundary tails.
+# The base suite also runs against a three-node cluster. Each bucket has about
+# 600 rows, below ROW_PER_BLOCK. GlobalShuffle routes every bucket to one writer
+# before the node-local full sort, keeping the total below 32 after allowing
+# sort block-boundary tails. Without the shuffle, all three writers retain tails
+# for all 16 buckets. The none table also verifies the block-local baseline.
 query II
-SELECT to_int64(h.block_count <= 64), to_int64(h.block_count < n.block_count)
+SELECT to_int64(h.block_count <= 32), to_int64(h.block_count < n.block_count)
 FROM fuse_snapshot('db_09_0054', 'hash_partitioned') AS h
 CROSS JOIN fuse_snapshot('db_09_0054', 'hash_partitioned_none') AS n
 LIMIT 1
