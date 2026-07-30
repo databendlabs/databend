@@ -753,66 +753,43 @@ fn as_roaring(buf: &[u8]) -> Option<&[u8]> {
     }
 }
 
-struct SmallReader<'a> {
-    len: usize,
-    values: &'a [u8],
+struct SmallReader {
+    values: SmallBitmap,
 }
 
-impl<'a> SmallReader<'a> {
-    fn new(buf: &'a [u8]) -> Result<Self> {
+impl SmallReader {
+    // decode_small_payload returns raw bytes which may contain duplicates or be
+    // unsorted; decode_small_values deduplicates and sorts via small_insert, so
+    // that binary-search and two-pointer merge agree with deserialize_bitmap.
+    fn new(buf: &[u8]) -> Result<Self> {
         let payload = &buf[HYBRID_HEADER_LEN..];
-        let (len, bytes) = decode_small_payload(payload)?;
-        Ok(Self { len, values: bytes })
+        Ok(Self {
+            values: decode_small_values(payload)?,
+        })
     }
 
     fn len(&self) -> usize {
-        self.len
-    }
-
-    fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    fn get(&self, i: usize) -> u64 {
-        read_u64_le(&self.values[i * 8..i * 8 + 8])
+        self.values.len()
     }
 
     fn first(&self) -> Option<u64> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self.get(0))
-        }
+        self.values.first().copied()
     }
 
     fn last(&self) -> Option<u64> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self.get(self.len - 1))
-        }
+        self.values.last().copied()
     }
 
     fn contains(&self, value: u64) -> bool {
-        let mut lo = 0;
-        let mut hi = self.len;
-        while lo < hi {
-            let mid = lo + (hi - lo) / 2;
-            match self.get(mid).cmp(&value) {
-                std::cmp::Ordering::Less => lo = mid + 1,
-                std::cmp::Ordering::Greater => hi = mid,
-                std::cmp::Ordering::Equal => return true,
-            }
-        }
-        false
+        self.values.binary_search(&value).is_ok()
     }
 
     fn has_any_with(&self, other: &SmallReader) -> bool {
         let mut i = 0;
         let mut j = 0;
-        while i < self.len && j < other.len {
-            let lv = self.get(i);
-            let rv = other.get(j);
+        while i < self.len() && j < other.len() {
+            let lv = self.values[i];
+            let rv = other.values[j];
             if lv < rv {
                 i += 1;
             } else if rv < lv {
@@ -825,17 +802,17 @@ impl<'a> SmallReader<'a> {
     }
 
     fn has_all_with(&self, other: &SmallReader) -> bool {
-        if self.len < other.len {
+        if self.len() < other.len() {
             return false;
         }
         let mut i = 0;
         let mut j = 0;
-        while j < other.len {
-            if i >= self.len {
+        while j < other.len() {
+            if i >= self.len() {
                 return false;
             }
-            let lv = self.get(i);
-            let rv = other.get(j);
+            let lv = self.values[i];
+            let rv = other.values[j];
             if lv < rv {
                 i += 1;
             } else if lv == rv {
@@ -947,13 +924,14 @@ pub fn bitmap_has_all(lhs: &[u8], rhs: &[u8]) -> Result<bool> {
         return Ok(lhs.has_all_with(&rhs));
     }
 
-    // Fast path: HybridSmall lhs, Legacy rhs — cardinality check
-    // We need to check cardinality here because: (1) it might be a legacy tree and (2) sometimes
-    // we don't try demote HybridBitmap after reduce its cardinality immediately.
+    // Fast path: HybridSmall lhs, HybridLarge or Legacy rhs cardinality check
+    // We need to check cardinality here because: (1) it might be a legacy tree,
+    // and (2) we don't always demote HybridBitmap after reducing its cardinality immediately.
     if as_roaring(lhs).is_none() && as_roaring(rhs).is_some() {
         let lhs_small = SmallReader::new(lhs)?;
+        let rhs_roaring = as_roaring(rhs).unwrap();
         // Fast path: rhs has more values than lhs, impossible to contain
-        if reader::bitmap_len_above(rhs, lhs_small.len())? {
+        if reader::bitmap_len_above(rhs_roaring, lhs_small.len())? {
             return Ok(false);
         }
         // rhs has <= lhs_small.len() values, but still need to check containment
@@ -966,7 +944,7 @@ pub fn bitmap_has_all(lhs: &[u8], rhs: &[u8]) -> Result<bool> {
     let roaring_buf = as_roaring(lhs).unwrap();
     let rhs_small = SmallReader::new(rhs)?;
     for i in 0..rhs_small.len() {
-        if !reader::bitmap_contains(roaring_buf, rhs_small.get(i))? {
+        if !reader::bitmap_contains(roaring_buf, rhs_small.values[i])? {
             return Ok(false);
         }
     }
@@ -1000,7 +978,7 @@ pub fn bitmap_has_any(lhs: &[u8], rhs: &[u8]) -> Result<bool> {
         (as_roaring(rhs).unwrap(), SmallReader::new(lhs)?)
     };
     for i in 0..small.len() {
-        if reader::bitmap_contains(roaring_buf, small.get(i))? {
+        if reader::bitmap_contains(roaring_buf, small.values[i])? {
             return Ok(true);
         }
     }
