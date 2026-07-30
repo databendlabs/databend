@@ -87,7 +87,7 @@ impl EvalScalar {
         Ok(used_columns)
     }
 
-    fn derive_item_stat(
+    pub(crate) fn derive_item_stat(
         scalar: &ScalarExpr,
         input_statistics: &Statistics,
         cardinality: StatCardinality,

@@ -21,6 +21,7 @@ use databend_common_statistics::HistogramRangeBounds;
 use databend_common_statistics::NdvEstimate;
 use databend_common_statistics::StatCount;
 
+use super::finite_range_ndv_upper;
 use crate::optimizer::ir::ColumnStat;
 use crate::plans::ComparisonOp;
 
@@ -136,24 +137,6 @@ fn apply_range_bounds(column_stat: &mut ColumnStat, new_min: Datum, new_max: Dat
     }
 
     Ok(())
-}
-
-fn finite_range_ndv_upper(min: &Datum, max: &Datum) -> Option<f64> {
-    if min == max {
-        return Some(1.0);
-    }
-    match (min, max) {
-        (Datum::Bool(false), Datum::Bool(true)) => Some(2.0),
-        (Datum::Int(min), Datum::Int(max)) => max
-            .checked_sub(*min)
-            .and_then(|diff| diff.checked_add(1))
-            .map(|value| value as f64),
-        (Datum::UInt(min), Datum::UInt(max)) => max
-            .checked_sub(*min)
-            .and_then(|diff| diff.checked_add(1))
-            .map(|value| value as f64),
-        _ => None,
-    }
 }
 
 pub(super) fn clear_for_empty_result(column_stat: &mut ColumnStat) {
