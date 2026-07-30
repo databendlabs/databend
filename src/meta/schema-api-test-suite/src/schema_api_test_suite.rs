@@ -2583,6 +2583,76 @@ impl SchemaApiTestSuite {
             let ret_table_name_ident: DBIdTableName =
                 get_kv_data(mt, &key_table_id_to_name).await?;
             assert_eq!(ret_table_name_ident, key_dbid_tbname);
+
+            // Engine names are case-insensitive.
+            let (_, replaced_meta) = util
+                .create_table_with(
+                    |mut meta| {
+                        meta.engine = "json".to_string();
+                        meta
+                    },
+                    |mut req| {
+                        req.create_option = CreateOption::CreateOrReplace;
+                        req.name_ident.table_name = table.to_string();
+                        req
+                    },
+                )
+                .await?;
+            assert_eq!("json", replaced_meta.engine);
+
+            // Restore the upper-case engine for the mismatch cases below.
+            let (table_id, _) = util
+                .create_table_with(
+                    |mut meta| {
+                        meta.engine = "JSON".to_string();
+                        meta
+                    },
+                    |mut req| {
+                        req.create_option = CreateOption::CreateOrReplace;
+                        req.name_ident.table_name = table.to_string();
+                        req
+                    },
+                )
+                .await?;
+
+            // Replacing a table with a different engine must fail without changing
+            // the existing table or its name mapping.
+            let mismatched_req = CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                catalog_name: Some("default".to_string()),
+                name_ident: TableNameIdent {
+                    tenant: tenant.clone(),
+                    db_name: db_name.to_string(),
+                    table_name: table.to_string(),
+                },
+                table_meta: TableMeta {
+                    engine: "STREAM".to_string(),
+                    ..Default::default()
+                },
+                as_dropped: false,
+                materialized_view: None,
+                table_properties: None,
+                table_partition: None,
+            };
+            let err = mt.create_table(mismatched_req.clone()).await.unwrap_err();
+            assert!(matches!(
+                err,
+                KVAppError::AppError(AppError::TableEngineMismatch(_))
+            ));
+            assert_eq!(table_id, get_kv_u64_data(mt, &key_dbid_tbname).await?);
+            assert_eq!("JSON", util.get_table_by_name(table).await?.meta.engine);
+
+            // The same validation applies when CTAS creates its replacement as a
+            // hidden dropped table.
+            let mut as_dropped_req = mismatched_req;
+            as_dropped_req.as_dropped = true;
+            as_dropped_req.table_meta.drop_on = Some(Utc::now());
+            let err = mt.create_table(as_dropped_req).await.unwrap_err();
+            assert!(matches!(
+                err,
+                KVAppError::AppError(AppError::TableEngineMismatch(_))
+            ));
+            assert_eq!(table_id, get_kv_u64_data(mt, &key_dbid_tbname).await?);
         }
 
         {

@@ -21,6 +21,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
+use databend_common_meta_app::app_error::TableEngineMismatch;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableRetentionGuard;
@@ -177,6 +178,7 @@ pub async fn construct_drop_table_txn_operations(
     tenant: &Tenant,
     catalog_name: Option<String>,
     table_id: u64,
+    expected_engine: Option<&str>,
     db_id: u64,
     if_exists: bool,
     if_delete: bool,
@@ -233,6 +235,13 @@ pub async fn construct_drop_table_txn_operations(
     );
 
     let mut tb_meta = tb_meta.unwrap();
+    if let Some(expected_engine) = expected_engine {
+        if !tb_meta.engine.eq_ignore_ascii_case(expected_engine) {
+            return Err(KVAppError::AppError(
+                TableEngineMismatch::new(table_name, &tb_meta.engine, expected_engine).into(),
+            ));
+        }
+    }
     // drop a table with drop_on time
     if tb_meta.drop_on.is_some() {
         return if if_exists {

@@ -19,6 +19,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::TableEngineMismatch;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
@@ -117,15 +119,34 @@ impl TempTblMgr {
         let desc = Self::temp_table_desc(&name_ident.db_name, &name_ident.table_name);
         let engine = table_meta.engine.to_string();
         let table_id = self.next_id;
-        let new_table = match (self.name_to_id.contains_key(&desc), create_option) {
-            (true, CreateOption::Create) => {
+        let new_table = match (self.name_to_id.get(&desc).copied(), create_option) {
+            (Some(_), CreateOption::Create) => {
                 return Err(ErrorCode::TableAlreadyExists(format!(
                     "Temporary table {} already exists",
                     desc
                 )));
             }
-            (true, CreateOption::CreateIfNotExists) => false,
-            _ => {
+            (Some(_), CreateOption::CreateIfNotExists) => false,
+            (existing_id, _) => {
+                if let Some(existing_id) = existing_id {
+                    let existing_table = self.id_to_table.get(&existing_id).ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Got temporary table id {existing_id}, but its metadata was not found"
+                        ))
+                    })?;
+                    if !existing_table
+                        .meta
+                        .engine
+                        .eq_ignore_ascii_case(&table_meta.engine)
+                    {
+                        return Err(ErrorCode::from(AppError::from(TableEngineMismatch::new(
+                            &name_ident.table_name,
+                            &existing_table.meta.engine,
+                            &table_meta.engine,
+                        ))));
+                    }
+                }
+
                 let desc = orphan_table_name
                     .as_ref()
                     .map(|o| Self::temp_table_desc(&name_ident.db_name, o))

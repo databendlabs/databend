@@ -34,6 +34,7 @@ use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
+use databend_common_meta_app::app_error::TableEngineMismatch;
 use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
@@ -362,6 +363,37 @@ where
                         }
                         CreateOption::CreateOrReplace => {
                             if req.as_dropped {
+                                // CTAS does not call construct_drop_table_txn_operations(),
+                                // so validate its existing table here.
+                                let existing_meta =
+                                    self.get_pb(&TableId::new(*id.data)).await?.ok_or_else(|| {
+                                        KVAppError::AppError(AppError::UnknownTableId(
+                                            UnknownTableId::new(
+                                                *id.data,
+                                                "create or replace failed to find existing table meta",
+                                            ),
+                                        ))
+                                    })?;
+                                if !existing_meta
+                                    .engine
+                                    .eq_ignore_ascii_case(&req.table_meta.engine)
+                                {
+                                    return Err(KVAppError::AppError(
+                                        TableEngineMismatch::new(
+                                            req.table_name(),
+                                            &existing_meta.engine,
+                                            &req.table_meta.engine,
+                                        )
+                                        .into(),
+                                    ));
+                                }
+
+                                // Guard the engine check against a concurrent metadata update.
+                                txn.condition.push(txn_cond_seq(
+                                    &TableId::new(*id.data),
+                                    Eq,
+                                    existing_meta.seq,
+                                ));
                                 // If the table is being created as a dropped table, we do not
                                 // need to combine with drop_table_txn operations, just return
                                 // the sequence number associated with the value part of
@@ -369,12 +401,15 @@ where
 
                                 SeqV::new(id.seq, *id.data)
                             } else {
+                                // The drop helper validates the engine against the metadata
+                                // sequence used by the replacement transaction.
                                 let (seq, id) = construct_drop_table_txn_operations(
                                     self,
                                     req.name_ident.table_name.clone(),
                                     &req.name_ident.tenant,
                                     req.catalog_name.clone(),
                                     *id.data,
+                                    Some(&req.table_meta.engine),
                                     *seq_db_id.data,
                                     true,
                                     false,
@@ -611,6 +646,7 @@ where
                 &req.tenant,
                 None,
                 table_id,
+                None,
                 req.db_id,
                 req.if_exists,
                 true,
