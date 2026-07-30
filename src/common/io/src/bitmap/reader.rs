@@ -47,6 +47,31 @@ impl<'a> TreemapReader<'a> {
             .read_u64::<LittleEndian>()
             .map_err(|_| Error::other("fail to read size"))?;
 
+        // Validate that `size` buckets fit in `buf` before returning.
+        //
+        // Without this check, the fast path diverges from `deserialize_bitmap`
+        // on corrupt input. Consider `bitmap_has_all(lhs, corrupt_rhs)` where
+        // `corrupt_rhs` declares buckets but carries no bucket data. The fast
+        // path would treat `corrupt_rhs` as empty and return `true`, while
+        // `deserialize_bitmap(corrupt_rhs)` rejects the same buffer as
+        // BadBytes.
+        //
+        // A lazy check in `TreeMapIter::next` cannot close this gap. It fires
+        // only when `next` is called. Early-return callers such as
+        // `bitmap_min` (stops at the first non-empty container) stop calling
+        // `next` before they ever reach a missing trailing bucket. The check
+        // must run before iteration begins.
+        //
+        // `BitmapReader::decode` reads only the cookie, the last container
+        // description, and the last offset, then seeks over container bodies.
+        // This cost is paid to keep consistent with `deserialize_bitmap` on
+        // corrupted buffers.
+        let mut probe = buf;
+        for _ in 0..size {
+            let header = BitmapReader::decode(probe)?;
+            probe = &probe[header.buf.len()..];
+        }
+
         Ok(Self { buf, _size: size })
     }
 
@@ -989,6 +1014,31 @@ mod tests {
         bitmap.serialize_into(&mut buf)?;
         assert_eq!(bitmap_len(&buf)?, 150);
 
+        Ok(())
+    }
+
+    // A declared bucket count with no bucket data must be rejected up front.
+    #[test]
+    fn test_treemap_reader_rejects_truncated_buf() -> io::Result<()> {
+        let corrupt = 1u64.to_le_bytes();
+        assert!(TreemapReader::new(&corrupt).is_err());
+        Ok(())
+    }
+
+    // Partial truncation: the first bucket is intact and non-empty, but the
+    // declared count claims more buckets than exist. Eager validation in
+    // `TreemapReader::new` catches this before any caller can early-return.
+    #[test]
+    fn test_treemap_reader_rejects_partial_truncated_buf() -> io::Result<()> {
+        let mut tree = RoaringTreemap::new();
+        tree.insert(7);
+        let mut buf = Vec::new();
+        tree.serialize_into(&mut buf)?;
+
+        // Overwrite the leading u64 to claim 2 buckets while only 1 exists.
+        buf[..8].copy_from_slice(&2u64.to_le_bytes());
+
+        assert!(TreemapReader::new(&buf).is_err());
         Ok(())
     }
 
