@@ -55,7 +55,7 @@ impl<'a> VolnitskyBase<'a> {
         let hash = if !fallback {
             let mut hash = Box::new([0; HASH_SIZE]);
             for i in (0..=needle_size - mem::size_of::<NGram>()).rev() {
-                let ngram = Self::to_ngram(&needle[i..i + 1]);
+                let ngram = Self::to_ngram(&needle[i..i + mem::size_of::<NGram>()]);
                 Self::put_ngram(hash.as_mut(), ngram, i as u8 + 1);
             }
             Some(hash)
