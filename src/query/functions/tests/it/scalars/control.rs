@@ -63,6 +63,36 @@ fn test_if(file: &mut impl Write) {
             Int64Type::from_data_with_validity(vec![5i64, 6, 7, 8], vec![true, true, false, false]),
         ),
     ]);
+    // Cover the non-nullable numeric fast path for a binary `if`.
+    run_ast(file, "if(cond_a, expr_true, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, false, true, false]),
+        ),
+        ("expr_true", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+        ("expr_else", Int64Type::from_data(vec![5i64, 6, 7, 8])),
+    ]);
+    // Cover the decimal fast path while preserving precision and scale.
+    run_ast(file, "if(cond_a, expr_true, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, false, true, false]),
+        ),
+        (
+            "expr_true",
+            Decimal64Type::from_data_with_size(
+                [100i64, 200, 300, 400],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            ),
+        ),
+        (
+            "expr_else",
+            Decimal64Type::from_data_with_size(
+                [500i64, 600, 700, 800],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            ),
+        ),
+    ]);
     run_ast(file, "if(cond_a, expr_a, cond_b, expr_b, expr_else)", &[
         (
             "cond_a",
