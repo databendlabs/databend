@@ -312,9 +312,10 @@ impl InsertInterpreter {
         metadata: &MetadataRef,
         cast_needed: bool,
     ) -> Result<(PhysicalPlan, bool)> {
-        let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) else {
+        if table.engine() != "FUSE" {
             return Ok((input, false));
-        };
+        }
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         if !fuse_table.use_hash_write_distribution() {
             return Ok((input, false));
         }

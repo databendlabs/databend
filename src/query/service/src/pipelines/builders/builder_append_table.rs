@@ -45,9 +45,10 @@ impl PipelineBuilder {
         pipeline: &mut Pipeline,
         table: Arc<dyn Table>,
     ) -> Result<()> {
-        let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) else {
+        if table.engine() != "FUSE" {
             return Ok(());
-        };
+        }
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         if !fuse_table.use_hash_write_distribution() {
             return Ok(());
         }
