@@ -19,6 +19,7 @@ use std::ops::Range;
 use std::time::Duration;
 use std::time::Instant;
 
+use bytes::Buf;
 use bytes::Bytes;
 use bytes::BytesMut;
 use databend_common_base::rangemap::RangeMerger;
@@ -27,6 +28,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::*;
 use databend_storages_common_blocks::BlockingWrite;
+use futures::TryStreamExt;
 use opendal::Buffer;
 use opendal::Operator;
 
@@ -269,6 +271,126 @@ struct MergedRangeRead {
     io_thread: std::thread::ThreadId,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct StreamRangeGroup {
+    range: Range<u64>,
+    merged_range_indices: Range<usize>,
+}
+
+fn group_contiguous_ranges(ranges: &[Range<u64>]) -> Vec<StreamRangeGroup> {
+    let Some(first) = ranges.first() else {
+        return Vec::new();
+    };
+
+    let mut groups = Vec::new();
+    let mut group_start = 0;
+    let mut group_range = first.clone();
+    for (index, range) in ranges.iter().enumerate().skip(1) {
+        if group_range.end == range.start {
+            group_range.end = range.end;
+        } else {
+            groups.push(StreamRangeGroup {
+                range: group_range,
+                merged_range_indices: group_start..index,
+            });
+            group_start = index;
+            group_range = range.clone();
+        }
+    }
+    groups.push(StreamRangeGroup {
+        range: group_range,
+        merged_range_indices: group_start..ranges.len(),
+    });
+    groups
+}
+
+fn take_transport_bytes(input: &mut Buffer, output: &mut Vec<Bytes>, remaining: &mut usize) {
+    while *remaining > 0 && input.has_remaining() {
+        let current = input.current();
+        let take = current.len().min(*remaining);
+        output.push(current.slice(..take));
+        input.advance(take);
+        *remaining -= take;
+    }
+}
+
+async fn read_stream_groups(
+    op: Operator,
+    path: String,
+    merged_ranges: Vec<Range<u64>>,
+    stream_groups: Vec<StreamRangeGroup>,
+    sender: async_channel::Sender<Result<MergedRangeRead>>,
+) -> Result<()> {
+    for group in stream_groups {
+        let reader = op.reader(&path).await?;
+        let mut stream = reader.into_stream(group.range.clone()).await?;
+        let last_index = group.merged_range_indices.end - 1;
+        let mut transport = Buffer::new();
+        let mut io_time = Duration::ZERO;
+
+        for index in group.merged_range_indices {
+            let range = &merged_ranges[index];
+            let mut remaining = usize::try_from(range.end - range.start).map_err(|_| {
+                ErrorCode::Internal(format!(
+                    "merged range {range:?} length does not fit usize for {path}"
+                ))
+            })?;
+            let expected = remaining;
+            let mut output = Vec::new();
+
+            while remaining > 0 {
+                take_transport_bytes(&mut transport, &mut output, &mut remaining);
+                if remaining == 0 {
+                    break;
+                }
+
+                let start = Instant::now();
+                let next = stream.try_next().await;
+                io_time += start.elapsed();
+                transport = next?.ok_or_else(|| {
+                    ErrorCode::StorageOther(format!(
+                        "OpenDAL range stream for {path} ended after {} of {expected} bytes for merged range {range:?}",
+                        expected - remaining
+                    ))
+                })?;
+            }
+
+            let data = Buffer::from(output);
+            if index == last_index {
+                if !transport.is_empty() {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "OpenDAL range stream for {path} returned more data than requested for {:?}",
+                        group.range
+                    )));
+                }
+                let start = Instant::now();
+                let trailing = stream.try_next().await;
+                io_time += start.elapsed();
+                if let Some(trailing) = trailing?
+                    && !trailing.is_empty()
+                {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "OpenDAL range stream for {path} returned more data than requested for {:?}",
+                        group.range
+                    )));
+                }
+            }
+
+            let read = MergedRangeRead {
+                index,
+                data,
+                io_time: std::mem::take(&mut io_time),
+                #[cfg(test)]
+                io_thread: std::thread::current().id(),
+            };
+            if sender.send(Ok(read)).await.is_err() {
+                return Ok(());
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Reads merged OpenDAL ranges and returns buffers in the original input order.
 /// Empty ranges return empty buffers without I/O.
 pub struct OperatorRangeReader {
@@ -292,6 +414,7 @@ impl OperatorRangeReader {
             settings.max_range_size,
         );
         let merged_ranges = range_merger.ranges();
+        let stream_groups = group_contiguous_ranges(&merged_ranges);
         let mut chunks_by_io = vec![Vec::new(); merged_ranges.len()];
         let mut chunks = std::iter::repeat_with(|| None)
             .take(ranges.len())
@@ -312,30 +435,17 @@ impl OperatorRangeReader {
                     ..(range.end - merged_range.start) as usize,
             ));
         }
-        for range in &merged_ranges {
+        for group in &stream_groups {
             metrics_inc_remote_io_seeks_after_merged(1);
-            metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
+            metrics_inc_remote_io_read_bytes_after_merged(group.range.end - group.range.start);
         }
 
         let (sender, receiver) = async_channel::bounded(max_prefetch.max(1));
         GlobalIORuntime::instance().spawn(async move {
-            for (index, range) in merged_ranges.into_iter().enumerate() {
-                let start = Instant::now();
-                let result = op
-                    .read_with(&path)
-                    .range(range)
-                    .await
-                    .map(|data| MergedRangeRead {
-                        index,
-                        data,
-                        io_time: start.elapsed(),
-                        #[cfg(test)]
-                        io_thread: std::thread::current().id(),
-                    });
-                let failed = result.is_err();
-                if sender.send(result.map_err(Into::into)).await.is_err() || failed {
-                    break;
-                }
+            let result =
+                read_stream_groups(op, path, merged_ranges, stream_groups, sender.clone()).await;
+            if let Err(error) = result {
+                let _ = sender.send(Err(error)).await;
             }
         });
 
@@ -403,12 +513,71 @@ pub(crate) fn init_test_runtime() {
 #[cfg(test)]
 mod tests {
     use std::io::Write;
+    use std::sync::Arc;
+    use std::sync::Mutex;
     use std::thread;
     use std::time::Duration;
 
+    use opendal::OperatorBuilder;
+    use opendal::raw::Access;
+    use opendal::raw::AccessorInfo;
+    use opendal::raw::OpRead;
+    use opendal::raw::RpRead;
     use opendal::services::Memory;
 
     use super::*;
+
+    #[derive(Debug)]
+    struct RecordingReadAccessor {
+        content: Bytes,
+        read_ranges: Mutex<Vec<Range<u64>>>,
+        short_response: bool,
+    }
+
+    impl RecordingReadAccessor {
+        fn new(content: &'static [u8], short_response: bool) -> Arc<Self> {
+            Arc::new(Self {
+                content: Bytes::from_static(content),
+                read_ranges: Mutex::new(Vec::new()),
+                short_response,
+            })
+        }
+
+        fn read_ranges(&self) -> Vec<Range<u64>> {
+            self.read_ranges.lock().unwrap().clone()
+        }
+    }
+
+    impl Access for RecordingReadAccessor {
+        type Reader = Buffer;
+        type Writer = ();
+        type Lister = ();
+        type Deleter = ();
+
+        fn info(&self) -> Arc<AccessorInfo> {
+            let info = AccessorInfo::default();
+            info.set_native_capability(opendal::Capability {
+                read: true,
+                ..Default::default()
+            });
+            info.into()
+        }
+
+        async fn read(&self, _path: &str, args: OpRead) -> opendal::Result<(RpRead, Self::Reader)> {
+            let range = args.range();
+            let start = range.offset();
+            let requested = range.size().unwrap_or(self.content.len() as u64 - start);
+            let end = start + requested;
+            self.read_ranges.lock().unwrap().push(start..end);
+
+            let mut actual_end = end.min(self.content.len() as u64);
+            if self.short_response && actual_end > start {
+                actual_end -= 1;
+            }
+            let data = self.content.slice(start as usize..actual_end as usize);
+            Ok((RpRead::new(), Buffer::from(data)))
+        }
+    }
 
     fn memory_operator() -> Operator {
         Operator::new(Memory::default()).unwrap().finish()
@@ -420,6 +589,124 @@ mod tests {
             max_range_size: 1024,
             parquet_fast_read_bytes: 0,
         }
+    }
+
+    #[test]
+    fn test_group_contiguous_merged_ranges_without_crossing_gaps() {
+        assert_eq!(
+            group_contiguous_ranges(&[0..4, 4..8, 8..10, 12..16, 16..20]),
+            vec![
+                StreamRangeGroup {
+                    range: 0..10,
+                    merged_range_indices: 0..3,
+                },
+                StreamRangeGroup {
+                    range: 12..20,
+                    merged_range_indices: 3..5,
+                },
+            ]
+        );
+        assert!(group_contiguous_ranges(&[]).is_empty());
+    }
+
+    #[test]
+    fn test_take_transport_bytes_spans_transport_buffers() {
+        let mut output = Vec::new();
+        let mut remaining = 5;
+        let mut first = Buffer::from(vec![Bytes::from_static(b"ab"), Bytes::from_static(b"cd")]);
+        take_transport_bytes(&mut first, &mut output, &mut remaining);
+        assert_eq!(remaining, 1);
+        assert!(first.is_empty());
+
+        let mut second = Buffer::from(Bytes::from_static(b"efgh"));
+        take_transport_bytes(&mut second, &mut output, &mut remaining);
+        assert_eq!(remaining, 0);
+        assert_eq!(Buffer::from(output).to_bytes().as_ref(), b"abcde");
+        assert_eq!(second.to_bytes().as_ref(), b"fgh");
+    }
+
+    #[test]
+    fn test_contiguous_merged_ranges_keep_channel_boundaries() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(b"0123456789", false);
+        let op = OperatorBuilder::new(accessor.clone()).finish();
+        let split_settings = ReadSettings {
+            max_gap_size: 0,
+            max_range_size: 4,
+            parquet_fast_read_bytes: 0,
+        };
+        let reader = OperatorRangeReader::create(
+            &split_settings,
+            op,
+            "stream-group".to_string(),
+            &[0..4, 4..8, 8..10],
+            3,
+        )
+        .unwrap();
+
+        assert_eq!(reader.chunks_by_io.len(), 3);
+        let reads = (0..3)
+            .map(|_| reader.receiver.recv_blocking().unwrap().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(reads.iter().map(|read| read.index).collect::<Vec<_>>(), [
+            0, 1, 2
+        ]);
+        assert_eq!(reads[0].data.to_bytes().as_ref(), b"0123");
+        assert_eq!(reads[1].data.to_bytes().as_ref(), b"4567");
+        assert_eq!(reads[2].data.to_bytes().as_ref(), b"89");
+        assert_eq!(accessor.read_ranges(), vec![0..10]);
+    }
+
+    #[test]
+    fn test_non_contiguous_merged_ranges_use_separate_streams() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(b"0123456789", false);
+        let op = OperatorBuilder::new(accessor.clone()).finish();
+        let split_settings = ReadSettings {
+            max_gap_size: 0,
+            max_range_size: 4,
+            parquet_fast_read_bytes: 0,
+        };
+        let mut reader = OperatorRangeReader::create(
+            &split_settings,
+            op,
+            "stream-gaps".to_string(),
+            &[0..4, 6..10],
+            2,
+        )
+        .unwrap();
+
+        assert_eq!(reader.read().unwrap().to_bytes().as_ref(), b"0123");
+        assert_eq!(reader.read().unwrap().to_bytes().as_ref(), b"6789");
+        assert_eq!(accessor.read_ranges(), vec![0..4, 6..10]);
+    }
+
+    #[test]
+    fn test_short_stream_does_not_emit_incomplete_merged_range() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(b"01234567", true);
+        let op = OperatorBuilder::new(accessor.clone()).finish();
+        let split_settings = ReadSettings {
+            max_gap_size: 0,
+            max_range_size: 4,
+            parquet_fast_read_bytes: 0,
+        };
+        let mut reader = OperatorRangeReader::create(
+            &split_settings,
+            op,
+            "short-stream".to_string(),
+            &[0..4, 4..8],
+            2,
+        )
+        .unwrap();
+
+        assert_eq!(reader.read().unwrap().to_bytes().as_ref(), b"0123");
+        let error = reader.read().unwrap_err();
+        assert!(
+            error.message().contains("reader got too little data"),
+            "unexpected short-stream error: {error:?}"
+        );
+        assert_eq!(accessor.read_ranges(), vec![0..8]);
     }
 
     #[test]
