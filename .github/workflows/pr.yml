@@ -155,12 +155,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Check AI assistance section
-        uses: actions/github-script@v9
         id: check
-        with:
-          script: |
-            const script = require('./.github/scripts/check_pr_ai_assistance.js')
-            await script({ github, context, core })
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/check_pr_ai_assistance.py
       - name: Delete Comment
         if: always() && steps.check.outputs.ai == 'valid'
         uses: everpcpc/comment-on-pr-action@v1
