@@ -947,12 +947,9 @@ pub fn bitmap_has_all(lhs: &[u8], rhs: &[u8]) -> Result<bool> {
         return Ok(lhs.has_all_with(&rhs));
     }
 
-    // Fast path: HybridSmall lhs cannot contain HybridLarge rhs
-    if as_roaring(lhs).is_none() && is_hybrid_large(rhs) {
-        return Ok(false);
-    }
-
     // Fast path: HybridSmall lhs, Legacy rhs — cardinality check
+    // We need to check cardinality here because: (1) it might be a legacy tree and (2) sometimes
+    // we don't try demote HybridBitmap after reduce its cardinality immediately.
     if as_roaring(lhs).is_none() && as_roaring(rhs).is_some() {
         let lhs_small = SmallReader::new(lhs)?;
         // Fast path: rhs has more values than lhs, impossible to contain
