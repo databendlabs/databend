@@ -48,7 +48,6 @@ use databend_common_sql::Visibility;
 use databend_common_sql::binder::ConstraintExprBinder;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
@@ -74,14 +73,12 @@ use crate::physical_plans::EvalScalar;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PAIMON_ROUTE_KEY_NAME;
-use crate::physical_plans::PaimonWritePrepare;
 use crate::physical_plans::PaimonWriteRoute;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanMeta;
-use crate::physical_plans::Sort;
-use crate::physical_plans::SortStep;
+use crate::physical_plans::TableWritePrepare;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::RawValueSource;
@@ -131,6 +128,25 @@ fn wrap_paimon_write_distribution(
     }))
 }
 
+fn prepare_table_write_input(
+    input: PhysicalPlan,
+    table: &Arc<dyn Table>,
+    select_schema: DataSchemaRef,
+    select_column_bindings: Vec<ColumnBinding>,
+    insert_schema: DataSchemaRef,
+    cast_needed: bool,
+) -> PhysicalPlan {
+    PhysicalPlan::new(TableWritePrepare {
+        meta: PhysicalPlanMeta::new("TableWritePrepare"),
+        input,
+        table_info: table.get_table_info().clone(),
+        insert_schema,
+        select_schema,
+        select_column_bindings,
+        cast_needed,
+    })
+}
+
 /// Build the INSERT SELECT physical plan (including Paimon route/exchange when needed).
 pub fn build_insert_select_physical_plan(
     select_plan: PhysicalPlan,
@@ -139,6 +155,7 @@ pub fn build_insert_select_physical_plan(
     insert_schema: DataSchemaRef,
     table: Arc<dyn Table>,
     cast_needed: bool,
+    input_prepared: bool,
     table_meta_timestamps: TableMetaTimestamps,
     distributed: bool,
 ) -> Result<PhysicalPlan> {
@@ -146,17 +163,17 @@ pub fn build_insert_select_physical_plan(
     let needs_pk_route = is_fixed_bucket_primary_key(&table)?;
 
     let prepare_and_route = |input: PhysicalPlan| -> Result<PhysicalPlan> {
-        let prepared = PhysicalPlan::new(PaimonWritePrepare {
-            meta: PhysicalPlanMeta::new("PaimonWritePrepare"),
+        let prepared = prepare_table_write_input(
             input,
-            table_info: table_info.clone(),
-            insert_schema: insert_schema.clone(),
-            select_schema: select_schema.clone(),
-            select_column_bindings: select_column_bindings.clone(),
+            &table,
+            select_schema.clone(),
+            select_column_bindings.clone(),
+            insert_schema.clone(),
             cast_needed,
-        });
+        );
         wrap_paimon_write_distribution(prepared, table.clone())
     };
+    let input_prepared = input_prepared || needs_pk_route;
 
     if table.support_distributed_insert()
         && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
@@ -173,7 +190,7 @@ pub fn build_insert_select_physical_plan(
             select_column_bindings,
             insert_schema,
             cast_needed,
-            input_prepared: needs_pk_route,
+            input_prepared,
             table_meta_timestamps,
             meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
         });
@@ -198,12 +215,12 @@ pub fn build_insert_select_physical_plan(
             select_column_bindings,
             insert_schema,
             cast_needed,
-            input_prepared: needs_pk_route,
+            input_prepared,
             table_meta_timestamps,
             meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
         });
-        // VALUES / local select has no top Merge; synthesize one for PK so commit metas gather.
-        if needs_pk_route && distributed {
+        // VALUES / local select has no top Merge; synthesize one so commit metas gather.
+        if input_prepared && distributed {
             Ok(PhysicalPlan::new(Exchange {
                 input: insert,
                 kind: FragmentKind::Merge,
@@ -289,45 +306,40 @@ impl InsertInterpreter {
         &self,
         input: PhysicalPlan,
         table: &Arc<dyn Table>,
+        select_schema: &DataSchemaRef,
         insert_schema: &DataSchemaRef,
         select_column_bindings: &[ColumnBinding],
         metadata: &MetadataRef,
         cast_needed: bool,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<(PhysicalPlan, bool)> {
         let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) else {
-            return Ok(input);
+            return Ok((input, false));
         };
-        if cast_needed || !fuse_table.use_hash_write_distribution() {
-            return Ok(input);
+        if !fuse_table.use_hash_write_distribution() {
+            return Ok((input, false));
         }
 
         let Some(partition_info) = fuse_table.partition_pruning_info(self.ctx.clone()) else {
-            return Ok(input);
+            return Ok((input, false));
         };
+        let input = prepare_table_write_input(
+            input,
+            table,
+            select_schema.clone(),
+            select_column_bindings.to_vec(),
+            insert_schema.clone(),
+            cast_needed,
+        );
         let input_schema = input.output_schema()?;
         let mut partition_exprs = Vec::with_capacity(partition_info.partition_keys.len());
         for partition_key in partition_info.partition_keys {
             let expr = partition_key.as_expr(&BUILTIN_FUNCTIONS);
-            if expr
-                .column_refs()
-                .keys()
-                .any(|name| insert_schema.index_of(name).is_err())
-            {
-                return Ok(input);
-            }
-            partition_exprs.push(expr.project_column_ref(|name| {
-                let position = insert_schema.index_of(name)?;
-                let binding = select_column_bindings.get(position).ok_or_else(|| {
-                    ErrorCode::Internal("INSERT SELECT column binding is missing")
-                })?;
-                input_schema.index_of(&binding.index.to_string())
-            })?);
+            partition_exprs.push(expr.project_column_ref(|name| input_schema.index_of(name))?);
         }
 
         let input_columns = input_schema.num_fields();
         let mut eval_exprs = Vec::with_capacity(partition_exprs.len());
         let mut hash_keys = Vec::with_capacity(partition_exprs.len());
-        let mut order_by = Vec::with_capacity(partition_exprs.len());
         for (index, expr) in partition_exprs.into_iter().enumerate() {
             let data_type = expr.data_type().clone();
             let display_name = format!("partition_key_{index}");
@@ -341,12 +353,6 @@ impl InsertInterpreter {
                 data_type,
                 display_name: display_name.clone(),
             });
-            order_by.push(SortDesc {
-                asc: true,
-                nulls_first: false,
-                order_by: symbol,
-                display_name,
-            });
         }
 
         let projections: BTreeSet<_> = (0..input_columns + eval_exprs.len()).collect();
@@ -359,17 +365,7 @@ impl InsertInterpreter {
             ignore_exchange: false,
             allow_adjust_parallelism: true,
         });
-        Ok(PhysicalPlan::new(Sort {
-            meta: PhysicalPlanMeta::new("Sort"),
-            input: exchange,
-            order_by,
-            limit: None,
-            step: SortStep::Single,
-            pre_projection: None,
-            broadcast_id: None,
-            enable_fixed_rows: self.ctx.get_settings().get_enable_fixed_rows_sort()?,
-            stat_info: None,
-        }))
+        Ok((exchange, true))
     }
 }
 
@@ -454,6 +450,7 @@ impl Interpreter for InsertInterpreter {
                         bindings,
                         insert_schema,
                         table.clone(),
+                        false,
                         false,
                         table_meta_timestamps,
                         self.ctx.get_cluster().get_nodes().len() > 1,
@@ -547,39 +544,48 @@ impl Interpreter for InsertInterpreter {
 
                 let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
 
+                let select_schema = plan.schema();
                 let insert_schema = self.plan.dest_schema();
                 let cast_needed = self.check_schema_cast(plan)?;
-                let select_plan = if table1.support_distributed_insert()
-                    && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
-                {
-                    let input = self.build_hash_distributed_input(
-                        exchange.input.clone(),
-                        &table1,
-                        &insert_schema,
-                        &select_column_bindings,
-                        metadata,
-                        cast_needed,
-                    )?;
-                    exchange.derive(vec![input])
+                let distributed = self.ctx.get_cluster().get_nodes().len() > 1;
+                let (select_plan, input_prepared) = if distributed {
+                    if table1.support_distributed_insert()
+                        && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
+                    {
+                        let (input, input_prepared) = self.build_hash_distributed_input(
+                            exchange.input.clone(),
+                            &table1,
+                            &select_schema,
+                            &insert_schema,
+                            &select_column_bindings,
+                            metadata,
+                            cast_needed,
+                        )?;
+                        (exchange.derive(vec![input]), input_prepared)
+                    } else {
+                        self.build_hash_distributed_input(
+                            select_plan,
+                            &table1,
+                            &select_schema,
+                            &insert_schema,
+                            &select_column_bindings,
+                            metadata,
+                            cast_needed,
+                        )?
+                    }
                 } else {
-                    self.build_hash_distributed_input(
-                        select_plan,
-                        &table1,
-                        &insert_schema,
-                        &select_column_bindings,
-                        metadata,
-                        cast_needed,
-                    )?
+                    (select_plan, false)
                 };
                 let mut insert_select_plan = build_insert_select_physical_plan(
                     select_plan,
-                    plan.schema(),
+                    select_schema,
                     select_column_bindings,
                     insert_schema,
                     table1,
                     cast_needed,
+                    input_prepared,
                     table_meta_timestamps,
-                    self.ctx.get_cluster().get_nodes().len() > 1,
+                    distributed,
                 )?;
 
                 insert_select_plan.adjust_plan_id(&mut 0);

@@ -369,8 +369,8 @@ SELECT block_count FROM fuse_snapshot('db_09_0054', 'fragmented_input') LIMIT 1
 ----
 6
 
-# INSERT SELECT evaluates the physical partition transform, applies GlobalHash,
-# and sorts each receiving node before Fuse serialization.
+# The common write layout prepares the INT table row from a BIGINT input and
+# full-sorts by the physical partition transform before Fuse serialization.
 statement ok
 SET max_threads=4
 
@@ -378,25 +378,34 @@ statement ok
 SET max_block_size=1000
 
 statement ok
-CREATE TABLE hash_partitioned(id BIGINT) PARTITION BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+CREATE TABLE hash_partitioned(id INT) PARTITION BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+CREATE TABLE hash_partitioned_none(id INT) PARTITION BY (bucket(16, id)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
 
 statement ok
 INSERT INTO hash_partitioned SELECT number::BIGINT FROM numbers(40000)
+
+statement ok
+INSERT INTO hash_partitioned_none SELECT number::BIGINT FROM numbers(40000)
 
 query I
 SELECT count(*) FROM hash_partitioned
 ----
 40000
 
-# Each bucket contains 2500 rows. GlobalHash plus sort should
-# keep the layout close to the intrinsic three blocks per bucket instead of one
-# fragment per incoming block. Allow partition-boundary tails.
-query I
-SELECT to_int64(block_count <= 64) FROM fuse_snapshot('db_09_0054', 'hash_partitioned') LIMIT 1
+# Both tables receive identical interleaved bucket data. Hash write layout should
+# stay close to the intrinsic three blocks per bucket and produce fewer blocks
+# than the normal block-local partition split. Allow partition-boundary tails.
+query II
+SELECT to_int64(h.block_count <= 64), to_int64(h.block_count < n.block_count)
+FROM fuse_snapshot('db_09_0054', 'hash_partitioned') AS h
+CROSS JOIN fuse_snapshot('db_09_0054', 'hash_partitioned_none') AS n
+LIMIT 1
 ----
-1
+1 1
 
-# Other insert sources keep using the existing append path.
+# VALUES reaches the same common write layout without a dedicated physical path.
 statement ok
 INSERT INTO hash_partitioned VALUES (40000), (40001)
 
