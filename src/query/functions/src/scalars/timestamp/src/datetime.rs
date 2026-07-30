@@ -2214,11 +2214,34 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
     );
 }
 
+fn date_to_u32_domain<T: DateToNumber<u32>>(
+    ctx: &FunctionContext,
+    domain: &SimpleDomain<i32>,
+) -> FunctionDomain<UInt32Type> {
+    match (
+        ToNumberImpl::eval_date::<T, _>(domain.min, &ctx.tz),
+        ToNumberImpl::eval_date::<T, _>(domain.max, &ctx.tz),
+    ) {
+        (Ok(min), Ok(max)) => FunctionDomain::Domain(SimpleDomain { min, max }),
+        _ => FunctionDomain::MayThrow,
+    }
+}
+
+fn timestamp_to_u32_domain<T: ToNumber<u32>>(
+    ctx: &FunctionContext,
+    domain: &SimpleDomain<i64>,
+) -> FunctionDomain<UInt32Type> {
+    FunctionDomain::Domain(SimpleDomain {
+        min: ToNumberImpl::eval_timestamp::<T, _>(domain.min, &ctx.tz),
+        max: ToNumberImpl::eval_timestamp::<T, _>(domain.max, &ctx.tz),
+    })
+}
+
 fn register_to_number_functions(registry: &mut FunctionRegistry) {
     // date
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _>(
         "to_yyyymm",
-        |_, _| FunctionDomain::Full,
+        date_to_u32_domain::<ToYYYYMM>,
         vectorize_with_builder_1_arg::<DateType, UInt32Type>(|val, output, ctx| {
             match ToNumberImpl::eval_date::<ToYYYYMM, _>(val, &ctx.func_ctx.tz) {
                 Ok(t) => output.push(t),
@@ -2231,7 +2254,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _>(
         "to_yyyymmdd",
-        |_, _| FunctionDomain::Full,
+        date_to_u32_domain::<ToYYYYMMDD>,
         vectorize_with_builder_1_arg::<DateType, UInt32Type>(|val, output, ctx| {
             match ToNumberImpl::eval_date::<ToYYYYMMDD, _>(val, &ctx.func_ctx.tz) {
                 Ok(t) => output.push(t),
@@ -2390,12 +2413,12 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     // timestamp
     registry.register_1_arg::<TimestampType, UInt32Type, _>(
         "to_yyyymm",
-        |_, _| FunctionDomain::Full,
+        timestamp_to_u32_domain::<ToYYYYMM>,
         |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMM, _>(val, &ctx.func_ctx.tz),
     );
     registry.register_1_arg::<TimestampType, UInt32Type, _>(
         "to_yyyymmdd",
-        |_, _| FunctionDomain::Full,
+        timestamp_to_u32_domain::<ToYYYYMMDD>,
         |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMMDD, _>(val, &ctx.func_ctx.tz),
     );
     registry.register_1_arg::<TimestampType, UInt64Type, _>(
@@ -2641,6 +2664,20 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
 }
 
 fn register_rounder_functions(registry: &mut FunctionRegistry) {
+    for name in [
+        "to_start_of_day",
+        "to_monday",
+        "to_start_of_week",
+        "to_start_of_month",
+        "to_start_of_quarter",
+        "to_start_of_year",
+        "to_start_of_iso_year",
+    ] {
+        registry
+            .properties
+            .insert(name.to_string(), FunctionProperty::default().monotonicity());
+    }
+
     // timestamp -> timestamp
     registry.register_1_arg::<TimestampType, TimestampType, _>(
         "to_start_of_second",

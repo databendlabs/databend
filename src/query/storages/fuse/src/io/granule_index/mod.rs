@@ -42,6 +42,47 @@ use opendal::Buffer;
 use opendal::Operator;
 
 use crate::io::GranulePruningReadContext;
+use crate::statistics::ClusterStatsGenerator;
+
+/// Materialize the scalar cluster-key columns used by the sparse granule-min index without
+/// changing the physical block written to storage. Expression keys may have been removed after
+/// cluster statistics were generated, or may never have been present on mutation rewrite paths.
+pub fn materialize_cluster_key_columns(
+    block: &DataBlock,
+    generator: &ClusterStatsGenerator,
+    offsets: Option<Vec<usize>>,
+) -> Result<Option<Vec<Column>>> {
+    let Some(offsets) = offsets else {
+        return Ok(None);
+    };
+
+    let evaluated;
+    let block = if offsets.iter().all(|offset| *offset < block.num_columns()) {
+        block
+    } else {
+        evaluated = generator
+            .operators
+            .iter()
+            .try_fold(block.clone(), |input, operator| {
+                operator.execute(&generator.func_ctx, input)
+            })?;
+        &evaluated
+    };
+
+    offsets
+        .into_iter()
+        .map(|offset| {
+            if offset >= block.num_columns() {
+                return Err(ErrorCode::Internal(format!(
+                    "cluster-key column offset {offset} is out of bounds for granule index block with {} columns",
+                    block.num_columns()
+                )));
+            }
+            Ok(block.get_by_offset(offset).to_column())
+        })
+        .collect::<Result<Vec<_>>>()
+        .map(Some)
+}
 
 pub struct GranuleMark {
     pub field: TableField,
@@ -287,4 +328,73 @@ pub fn build_granule_index_specs(
         }
     }
     Ok(specs)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::BlockThresholds;
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::Constant;
+    use databend_common_expression::DataField;
+    use databend_common_expression::Expr;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberType;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+    use databend_common_sql::evaluator::BlockOperator;
+
+    use super::*;
+
+    fn int64(value: i64) -> Expr {
+        Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(value.into()),
+            data_type: DataType::Number(NumberDataType::Int64),
+        })
+    }
+
+    #[test]
+    fn test_materialize_expression_cluster_key_columns() {
+        let column = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "a".to_string(),
+        });
+        let key =
+            check_function(None, "modulo", &[], &[column, int64(3)], &BUILTIN_FUNCTIONS).unwrap();
+        let generator = ClusterStatsGenerator::new(
+            0,
+            vec![1],
+            1,
+            0,
+            BlockThresholds::default(),
+            vec![BlockOperator::Map {
+                exprs: vec![key],
+                projections: None,
+            }],
+            None,
+            vec![
+                DataField::new("a", DataType::Number(NumberDataType::Int64)),
+                DataField::new("a % 3", DataType::Number(NumberDataType::Int64)),
+            ],
+            FunctionContext::default(),
+        );
+        let source = NumberType::<i64>::from_data(vec![1, 2, 3, 4]);
+        let block = DataBlock::new_from_columns(vec![source.clone()]);
+
+        let expression_columns = materialize_cluster_key_columns(&block, &generator, Some(vec![1]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(expression_columns, vec![NumberType::<i64>::from_data(
+            vec![1, 2, 0, 1]
+        )]);
+
+        let direct_columns = materialize_cluster_key_columns(&block, &generator, Some(vec![0]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(direct_columns, vec![source]);
+    }
 }

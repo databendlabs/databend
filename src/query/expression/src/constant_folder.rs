@@ -1043,6 +1043,29 @@ fn tighten_upper_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, in
     }
 }
 
+fn constant_behind_nullable_cast<Index: ColumnIndex>(expr: &Expr<Index>) -> Option<&Constant> {
+    if let Expr::Constant(constant) = expr {
+        return Some(constant);
+    }
+
+    let Expr::Cast(Cast {
+        is_try: false,
+        expr,
+        dest_type,
+        ..
+    }) = expr
+    else {
+        return None;
+    };
+    let Expr::Constant(constant) = expr.as_ref() else {
+        return None;
+    };
+    (dest_type.is_nullable()
+        && !constant.data_type.is_nullable()
+        && dest_type.remove_nullable() == constant.data_type)
+        .then_some(constant)
+}
+
 /// Represents a range constraint extracted from a comparison expression
 #[derive(Debug, Clone)]
 pub struct RangeConstraint<Index> {
@@ -1074,8 +1097,10 @@ impl<Index: ColumnIndex> RangeConstraint<Index> {
             return None;
         }
 
-        if let (Some(column_ref), Some(constant)) = (args[0].as_column_ref(), args[1].as_constant())
-        {
+        if let (Some(column_ref), Some(constant)) = (
+            args[0].as_column_ref(),
+            constant_behind_nullable_cast(&args[1]),
+        ) {
             return Some(Self {
                 column_id: column_ref.id.clone(),
                 data_type: column_ref.data_type.clone(),
@@ -1085,8 +1110,10 @@ impl<Index: ColumnIndex> RangeConstraint<Index> {
             });
         }
 
-        let (Some(constant), Some(column_ref)) = (args[0].as_constant(), args[1].as_column_ref())
-        else {
+        let (Some(constant), Some(column_ref)) = (
+            constant_behind_nullable_cast(&args[0]),
+            args[1].as_column_ref(),
+        ) else {
             return None;
         };
         let operator = match op {

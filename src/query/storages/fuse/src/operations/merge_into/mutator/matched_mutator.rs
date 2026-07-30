@@ -78,6 +78,18 @@ pub(crate) struct AggregationContext {
 type UpdateOffset = HashSet<usize>;
 type DeleteOffset = HashSet<usize>;
 
+fn validate_matched_mutation_log(
+    target_build_optimization: bool,
+    logs: &MutationLogs,
+) -> Result<()> {
+    if !target_build_optimization || !logs.entries.is_empty() || logs.logical_deleted_rows != 0 {
+        return Err(ErrorCode::Internal(
+            "unexpected mutation log in matched aggregator",
+        ));
+    }
+    Ok(())
+}
+
 struct MatchedMutationBatch {
     remaining: AtomicUsize,
     started: Instant,
@@ -342,8 +354,8 @@ impl MatchedAggregator {
         // don't add MutationStatus here.
         if data_block.get_meta().is_some() && data_block.is_empty() {
             if let Some(logs) = MutationLogs::downcast_ref_from(data_block.get_meta().unwrap()) {
+                validate_matched_mutation_log(self.target_build_optimization, logs)?;
                 self.logical_updated_rows += logs.logical_updated_rows;
-                self.logical_deleted_rows += logs.logical_deleted_rows;
                 return Ok(());
             }
             if let Some(meta_index) =
@@ -593,5 +605,35 @@ impl AggregationContext {
             logical_updated_rows,
             logical_deleted_rows,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_matched_mutation_log() {
+        let valid = MutationLogs {
+            entries: vec![],
+            logical_updated_rows: 3,
+            logical_deleted_rows: 0,
+        };
+        assert!(validate_matched_mutation_log(true, &valid).is_ok());
+        assert!(validate_matched_mutation_log(false, &valid).is_err());
+
+        let with_entries = MutationLogs {
+            entries: vec![MutationLogEntry::DoNothing],
+            logical_updated_rows: 3,
+            logical_deleted_rows: 0,
+        };
+        assert!(validate_matched_mutation_log(true, &with_entries).is_err());
+
+        let with_deletes = MutationLogs {
+            entries: vec![],
+            logical_updated_rows: 0,
+            logical_deleted_rows: 1,
+        };
+        assert!(validate_matched_mutation_log(true, &with_deletes).is_err());
     }
 }

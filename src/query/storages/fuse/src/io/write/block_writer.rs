@@ -64,6 +64,7 @@ use super::parquet_block_writer::ParquetBlockWriter;
 use crate::FuseStorageFormat;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::granule_index::GranuleIndexSpec;
+use crate::io::granule_index::materialize_cluster_key_columns;
 use crate::io::write::GranuleIndexState;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::SpatialIndexBuilder;
@@ -211,16 +212,15 @@ impl BlockBuilder {
         ) -> Result<(Option<ClusterStatistics>, DataBlock, Option<Vec<usize>>)> {
         let (cluster_stats, data_block, granule_cluster_key_offsets) =
             f(data_block, &self.cluster_stats_gen)?;
-        let granule_cluster_columns = self
-            .write_settings
-            .index_granularity
-            .zip(granule_cluster_key_offsets)
-            .map(|(_, offsets)| {
-                offsets
-                    .into_iter()
-                    .map(|offset| data_block.get_by_offset(offset).to_column())
-                    .collect()
-            });
+        let granule_cluster_columns = if self.write_settings.index_granularity.is_some() {
+            materialize_cluster_key_columns(
+                &data_block,
+                &self.cluster_stats_gen,
+                granule_cluster_key_offsets,
+            )?
+        } else {
+            None
+        };
         let options = FuseBlockWriteOptions::from_block_builder_parts(
             self.ctx.clone(),
             self.meta_locations.clone(),

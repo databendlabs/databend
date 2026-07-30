@@ -27,6 +27,7 @@ use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp_tz;
 use databend_common_expression::utils::auto_detect_datetime::parse_epoch_str;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 use jiff::Timestamp;
 use jiff::Unit;
@@ -1176,6 +1177,40 @@ fn test_auto_detect_timestamp_tz_unit() {
     // No offset — should use session tz (UTC → 0)
     let ts_tz = auto_detect_timestamp_tz("17-DEC-1980 10:30:00", &tz).unwrap();
     assert_eq!(ts_tz.seconds_offset(), 0);
+}
+
+#[test]
+fn test_rounder_monotonicity_properties() {
+    for name in [
+        "to_start_of_day",
+        "to_monday",
+        "to_start_of_week",
+        "to_start_of_month",
+        "to_start_of_quarter",
+        "to_start_of_year",
+        "to_start_of_iso_year",
+    ] {
+        assert!(
+            BUILTIN_FUNCTIONS.get_property(name).unwrap().monotonicity,
+            "calendar rounder should be available for monotonic domain projection"
+        );
+    }
+
+    // Reconstructing a local wall-clock time is not globally monotonic across a DST fallback.
+    // These functions must therefore fail open during expression-key pruning.
+    for name in [
+        "to_start_of_second",
+        "to_start_of_minute",
+        "to_start_of_five_minutes",
+        "to_start_of_ten_minutes",
+        "to_start_of_fifteen_minutes",
+        "to_start_of_hour",
+    ] {
+        assert!(
+            !BUILTIN_FUNCTIONS.get_property(name).unwrap().monotonicity,
+            "sub-day rounder must not be exposed as globally monotonic"
+        );
+    }
 }
 
 #[test]

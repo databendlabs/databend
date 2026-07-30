@@ -77,6 +77,13 @@ SELECT count(*) FROM spi_t WHERE (a >= 100 AND a < 200) OR (a >= 9000 AND a < 91
 statement ok
 SET max_block_size = 128
 
+# The cluster-key predicate selects every indexed granule. It must still use bounded granule groups
+# rather than falling back to one complete-block read.
+query II
+SELECT count(*), sum(a) FROM spi_t WHERE a >= 0
+----
+10000 49995000
+
 query I
 SELECT count(*) FROM spi_t WHERE a >= 1234 AND a <= 5678
 ----
@@ -250,7 +257,7 @@ statement ok
 CREATE TABLE spi_nocluster(a int, b string) index_granularity = 100
 
 statement ok
-INSERT INTO spi_nocluster SELECT number, concat('v', to_string(number)) FROM numbers(10000)
+INSERT INTO spi_nocluster SELECT number, concat('v', to_string(number)) FROM numbers(10050)
 
 query IT
 SELECT * FROM spi_nocluster WHERE a = 4242
@@ -260,7 +267,7 @@ SELECT * FROM spi_nocluster WHERE a = 4242
 query II
 SELECT count(*), sum(a) FROM spi_nocluster
 ----
-10000 49995000
+10050 50496225
 
 query I
 SELECT count(*) FROM spi_nocluster WHERE a >= 1234 AND a <= 5678
@@ -269,6 +276,36 @@ SELECT count(*) FROM spi_nocluster WHERE a >= 1234 AND a <= 5678
 
 statement ok
 SET max_block_size = 128
+
+# With no pruning ranges, the complete indexed block is read as bounded granule groups. The final
+# 50 rows exercise a partial tail granule.
+query II
+SELECT count(*), sum(a) FROM spi_nocluster
+----
+10050 50496225
+
+# Repeat the full scan so partial granule arrays cannot corrupt the complete-column cache key.
+query II
+SELECT count(*), sum(a) FROM spi_nocluster
+----
+10050 50496225
+
+# A predicate whose granule selection covers the full block must use the same bounded read path.
+query II
+SELECT count(*), sum(a) FROM spi_nocluster WHERE a >= 0
+----
+10050 50496225
+
+# Projection and internal row identifiers must remain correct across emitted groups.
+query II
+SELECT count(*), sum(a) FROM (SELECT a FROM spi_nocluster)
+----
+10050 50496225
+
+query II
+SELECT count(DISTINCT _row_id), count(*) FROM spi_nocluster
+----
+10050 10050
 
 query I
 SELECT count(*) FROM spi_nocluster WHERE a >= 1234 AND a <= 5678

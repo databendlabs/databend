@@ -26,9 +26,11 @@ use databend_common_expression::FunctionID;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::RangeConstraint;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::domain_evaluator;
+use databend_common_expression::expr::Cast;
 use databend_common_expression::expr::ColumnRef;
 use databend_common_expression::expr::Constant;
 use databend_common_expression::expr::Expr;
@@ -246,6 +248,56 @@ fn test_monotonic_nullable_domain_rejects_boundary_probe() {
 
     assert_eq!(folded, expr);
     assert_eq!(output_domain, None);
+}
+
+#[test]
+fn test_range_constraint_unwraps_only_nullable_constant_cast() {
+    let data_type = DataType::Number(NumberDataType::UInt64);
+    let nullable_type = data_type.clone().wrap_nullable();
+    let column = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: 0,
+        data_type: nullable_type.clone(),
+        display_name: "a".to_string(),
+    });
+    let constant = uint_constant(7);
+    let nullable_constant = Expr::Cast(Cast {
+        span: None,
+        is_try: false,
+        expr: Box::new(constant.clone()),
+        dest_type: nullable_type,
+    });
+
+    let constraint =
+        RangeConstraint::try_from_expr(&comparison_expr("gte", column.clone(), nullable_constant))
+            .unwrap();
+    assert_eq!(constraint.column_id, 0);
+    assert_eq!(constraint.operator, "gte");
+    assert_eq!(constraint.constant, Scalar::Number(NumberScalar::UInt64(7)));
+
+    let converted_constant = Expr::Cast(Cast {
+        span: None,
+        is_try: false,
+        expr: Box::new(constant.clone()),
+        dest_type: DataType::Number(NumberDataType::Int64).wrap_nullable(),
+    });
+    assert!(
+        RangeConstraint::try_from_expr(
+            &comparison_expr("gte", column.clone(), converted_constant,)
+        )
+        .is_none()
+    );
+
+    let try_cast_constant = Expr::Cast(Cast {
+        span: None,
+        is_try: true,
+        expr: Box::new(constant),
+        dest_type: data_type.wrap_nullable(),
+    });
+    assert!(
+        RangeConstraint::try_from_expr(&comparison_expr("gte", column, try_cast_constant))
+            .is_none()
+    );
 }
 
 #[test]

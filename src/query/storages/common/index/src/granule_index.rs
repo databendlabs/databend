@@ -154,7 +154,7 @@ impl GranuleIndex {
         for (idx, (min, max)) in min_value.iter().zip(max_value.iter()).enumerate() {
             let f = &self.cluster_key_fields[idx];
             if self.column_refs.contains_key(f.name()) {
-                let stat = ColumnStatistics::new(min.clone(), max.clone(), 1, 0, None);
+                let stat = ColumnStatistics::new(min.clone(), max.clone(), 0, 0, None);
                 let domain = statistics_to_domain(vec![&stat], f.data_type());
                 input_domains.insert(f.name().clone(), domain);
             }

@@ -535,6 +535,15 @@ impl BlockPruner {
 
         #[allow(clippy::single_range_in_vec_init)]
         let mut survivors = input_ranges.unwrap_or_else(|| vec![0..num_granules]);
+        let selected_granules = |ranges: &[Range<usize>]| {
+            ranges
+                .iter()
+                .map(|range| range.end - range.start)
+                .sum::<usize>() as u64
+        };
+        pruning_ctx
+            .pruning_stats
+            .add_granules_pruning_before(selected_granules(&survivors));
         let pruning_cost = &pruning_ctx.pruning_cost;
 
         if let Some(pruner) = sparse_pruner {
@@ -548,6 +557,7 @@ impl BlockPruner {
                 ),
             }
             if survivors.is_empty() {
+                pruning_ctx.pruning_stats.add_granules_pruning_after(0);
                 return GranulePruneOutcome {
                     granule_ranges: Some(survivors),
                     granule_bloom_applied: false,
@@ -574,6 +584,9 @@ impl BlockPruner {
                         "[FUSE-PRUNER] granule marks load failed for {}, preserving input ranges: {e}",
                         block_meta.location.0
                     );
+                    pruning_ctx
+                        .pruning_stats
+                        .add_granules_pruning_after(selected_granules(&survivors));
                     return GranulePruneOutcome {
                         granule_ranges: Some(survivors),
                         granule_bloom_applied: false,
@@ -601,6 +614,9 @@ impl BlockPruner {
             }
         }
 
+        pruning_ctx
+            .pruning_stats
+            .add_granules_pruning_after(selected_granules(&survivors));
         GranulePruneOutcome {
             granule_ranges: Some(survivors),
             granule_bloom_applied,

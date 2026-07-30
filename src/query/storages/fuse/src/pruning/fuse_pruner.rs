@@ -806,6 +806,9 @@ impl FusePruner {
         let blocks_range_pruning_after = stats.get_blocks_range_pruning_after() as usize;
         let blocks_range_pruning_cost = stats.get_blocks_range_pruning_cost();
 
+        let granules_pruning_before = stats.get_granules_pruning_before() as usize;
+        let granules_pruning_after = stats.get_granules_pruning_after() as usize;
+
         let blocks_bloom_pruning_before = stats.get_blocks_bloom_pruning_before() as usize;
         let blocks_bloom_pruning_after = stats.get_blocks_bloom_pruning_after() as usize;
         let blocks_bloom_pruning_cost = stats.get_blocks_bloom_pruning_cost();
@@ -842,6 +845,8 @@ impl FusePruner {
             blocks_range_pruning_before,
             blocks_range_pruning_after,
             blocks_range_pruning_cost,
+            granules_pruning_before,
+            granules_pruning_after,
             blocks_bloom_pruning_before,
             blocks_bloom_pruning_after,
             blocks_bloom_pruning_cost,
