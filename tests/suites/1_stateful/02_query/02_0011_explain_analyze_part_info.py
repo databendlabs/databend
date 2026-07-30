@@ -30,9 +30,11 @@ with NativeClient(name="client1>") as client1:
 
     for sql in prepare_sqls:
         mycursor.execute(sql)
+        res = mycursor.fetchall()
 
     for i in range(10):
         mycursor.execute(f"insert into test_explain_analyze_0011_1 values ({i})")
+        res = mycursor.fetchall()
 
     def explain_output(res):
         cnt = 0
