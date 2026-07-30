@@ -126,7 +126,7 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
             ~ #hint?
             ~ INTO ~ #file_location
             ~ ^FROM ~ ^#copy_into_location_source
-            ~ (PARTITION ~ BY ~ "(" ~ #expr ~ ")")?
+            ~ (PARTITION ~ ^BY ~ ^"(" ~ ^#expr ~ ^")")?
             ~ #copy_into_location_option*
         },
         |(with, _copy, opt_hints, _into, dst, _from, src, partition_by, opts)| {
