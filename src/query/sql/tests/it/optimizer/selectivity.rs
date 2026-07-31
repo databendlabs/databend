@@ -1198,6 +1198,39 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
 
     write_case_title(
         &mut file,
+        "missing_stats_logical_predicates",
+        "Boolean predicates should use an equal true/false distribution, while numeric estimates should take priority over AND fallbacks.",
+    )?;
+    let partial_stats = ColumnStatSet::from_iter([(Symbol::new(1), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(3),
+        ndv: NdvEstimate::exact(4.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    let partial_columns = [
+        ("flag", BooleanType::data_type()),
+        ("number", UInt64Type::data_type()),
+        ("missing", UInt64Type::data_type()),
+        ("nullable_missing", UInt64Type::data_type().wrap_nullable()),
+        ("nullable_flag", BooleanType::data_type().wrap_nullable()),
+    ];
+    for expr in [
+        "and_filters(flag, number = 1)",
+        "and_filters(flag = true, number = 1)",
+        "or_filters(flag, number = 1)",
+        "or_filters(flag = true, number = 1)",
+        "flag > true",
+        "flag >= false",
+        "nullable_flag >= false",
+        "and_filters(missing = 1, number = 1)",
+        "and_filters(is_not_null(nullable_missing), number = 1)",
+    ] {
+        run_case(&mut file, expr, &partial_columns, partial_stats.clone())?;
+    }
+
+    write_case_title(
+        &mut file,
         "histogram_logical_predicates",
         "AND constraints should be visible to later predicates, while OR and NOT should only affect final selectivity.",
     )?;

@@ -52,6 +52,7 @@ use crate::plans::ScalarExpr;
 pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 5f64;
 pub const UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND: f64 = 0.5_f64;
 pub const MAX_SELECTIVITY: f64 = 1f64;
+const BOOLEAN_VALUE_SELECTIVITY: f64 = 0.5;
 const HISTOGRAM_ROW_COUNT_TOLERANCE: f64 = 1e-9;
 
 /// Some constants for like predicate selectivity estimation.
@@ -633,14 +634,23 @@ impl SelectivityVisitor<'_> {
             (Expr::ColumnRef(column_ref), Expr::Constant(constant))
             | (Expr::Constant(constant), Expr::ColumnRef(column_ref)) => {
                 let column_index = column_ref.id.index;
+                let op = if left.is_constant() { op.reverse() } else { op };
                 if !self.column_stats.contains_key(&column_index) {
+                    if matches!(column_ref.data_type.remove_nullable(), DataType::Boolean)
+                        && let Scalar::Boolean(value) = constant.scalar
+                    {
+                        return if column_ref.data_type.is_nullable() {
+                            Ok(Selectivity::Unknown)
+                        } else {
+                            Ok(boolean_comparison_selectivity(op, value))
+                        };
+                    }
                     // The column is derived column, give a small selectivity currently.
                     // Need to improve it later.
                     // Another case: column is from system table, such as numbers. We shouldn't use numbers() table to test cardinality estimation.
                     return Ok(Selectivity::LowerBound);
                 }
                 let column_stat = &self.column_stats[&column_index];
-                let op = if left.is_constant() { op.reverse() } else { op };
 
                 let can_apply_constant_constraint = {
                     use DataType::*;
@@ -972,8 +982,13 @@ impl SelectivityVisitor<'_> {
                     .unwrap_or(Selectivity::Unknown);
                 Ok(())
             }
-            Expr::ColumnRef(_) => {
-                self.selectivity = Selectivity::LowerBound;
+            Expr::ColumnRef(column_ref) => {
+                self.selectivity =
+                    if matches!(column_ref.data_type.remove_nullable(), DataType::Boolean) {
+                        Selectivity::N(BOOLEAN_VALUE_SELECTIVITY)
+                    } else {
+                        Selectivity::LowerBound
+                    };
                 Ok(())
             }
             Expr::Cast(cast) => self.visit_expr(&cast.expr),
@@ -1029,16 +1044,14 @@ impl SelectivityVisitor<'_> {
 
                 self.selectivity = if has_zero {
                     Selectivity::Zero
-                } else if !has_unknown && !has_lower_bound && !has_n {
-                    Selectivity::All
-                } else if (!has_unknown && !has_lower_bound) || acc < DEFAULT_SELECTIVITY {
+                } else if has_n {
                     Selectivity::N(acc)
                 } else if has_unknown {
                     Selectivity::Unknown
                 } else if has_lower_bound {
                     Selectivity::LowerBound
                 } else {
-                    Selectivity::Unknown
+                    Selectivity::All
                 };
             }
 
@@ -1123,4 +1136,17 @@ impl SelectivityVisitor<'_> {
 
         Ok(())
     }
+}
+
+fn boolean_comparison_selectivity(op: ComparisonOp, constant: bool) -> Selectivity {
+    let selectivity = match (op, constant) {
+        (ComparisonOp::Equal | ComparisonOp::NotEqual, _) => BOOLEAN_VALUE_SELECTIVITY,
+        (ComparisonOp::GT, false)
+        | (ComparisonOp::LT, true)
+        | (ComparisonOp::GTE, true)
+        | (ComparisonOp::LTE, false) => BOOLEAN_VALUE_SELECTIVITY,
+        (ComparisonOp::GT, true) | (ComparisonOp::LT, false) => 0.0,
+        (ComparisonOp::GTE, false) | (ComparisonOp::LTE, true) => MAX_SELECTIVITY,
+    };
+    Selectivity::N(selectivity)
 }
