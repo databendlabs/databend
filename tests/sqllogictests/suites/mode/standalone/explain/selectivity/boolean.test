@@ -1,0 +1,33 @@
+statement ok
+settings (ddl_column_type_nullable=0) CREATE OR REPLACE TABLE t1 AS
+SELECT
+    number % 5 AS c39,
+    number % 2 = 0 AS c13,
+    if(number % 40 = 0, NULL, number % 40) AS c40,
+    number AS c45
+FROM numbers(1000)
+
+statement ok
+ANALYZE TABLE t1
+
+query T
+EXPLAIN SELECT c39, c13, c40, c45
+FROM t1
+WHERE c39 != 0
+  AND c13 = FALSE
+  AND (c40 = 1 OR c40 IS NULL OR c40 = 2);
+----
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [c39 (#0), c13 (#1), c40 (#2), c45 (#3)]
+├── read rows: 1000
+├── read size: 1.91 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <read cost: 1 ms, decompress cost: 1 ms, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom index read cost: 35 ms, bloom pruning: 1 to 1 cost: 37 ms>]
+├── push downs: [filters: [t1.c39 (#0) <> 0 and t1.c13 (#1) = false and (t1.c40 (#2) = 1 or NOT is_not_null(t1.c40 (#2)) or t1.c40 (#2) = 2)], limit: NONE]
+└── estimated rows: 73.14
+
+statement ok
+DROP TABLE t1
