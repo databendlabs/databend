@@ -1,5 +1,5 @@
 === lossless_coercion ===
-description: SQL binding inserts a nullable INT to BIGINT coercion and UnionAll derives statistics after the cast.
+description: SQL binding inserts a nullable INT to BIGINT coercion; after the cast drops the histogram, disjoint ranges still make the union NDV additive.
 sql: SELECT k FROM l UNION ALL SELECT k FROM r
 path: []
 node:
@@ -22,7 +22,7 @@ UnionAll
 
 cardinality: 30.000
 precise_cardinality: Some(30)
-column_stat: k (#2) min=1, max=8, ndv=~5.0[..8.0], null_count=3, histogram=none
+column_stat: k (#2) min=1, max=8, ndv=8.0, null_count=3, histogram=none
 
 === finite_range_reduces_union_ndv_bound ===
 description: UnionAll reduces its conservative NDV upper bound to the merged finite range before an outer cast consumes the statistics.
