@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering as CmpOrdering;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -20,6 +21,8 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use databend_common_expression::Expr;
+use databend_common_expression::Scalar;
+use parking_lot::RwLock;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
 use tokio::sync::watch::Sender;
@@ -27,6 +30,90 @@ use tokio::sync::watch::Sender;
 use crate::sbbf::Sbbf;
 
 pub type RuntimeBloomFilter = Arc<Sbbf>;
+
+/// A monotonic TopN boundary shared by all local scan and PartialTopN processors
+/// for one scan. The boundary is absent until a partial candidate set is full.
+///
+/// A plain `RwLock` is sufficient here: readers touch the boundary once per
+/// pruned block/partition, and publishers call [`Self::update`] only when
+/// their local boundary tightens, so contention is negligible.
+pub struct RuntimeTopNFilter {
+    column_id: u32,
+    asc: bool,
+    boundary: RwLock<Option<Scalar>>,
+}
+
+impl RuntimeTopNFilter {
+    pub fn new(column_id: u32, asc: bool) -> Self {
+        Self {
+            column_id,
+            asc,
+            boundary: RwLock::new(None),
+        }
+    }
+
+    pub fn column_id(&self) -> u32 {
+        self.column_id
+    }
+
+    pub fn asc(&self) -> bool {
+        self.asc
+    }
+
+    pub fn boundary(&self) -> Option<Scalar> {
+        self.boundary.read().clone()
+    }
+
+    /// Whether `candidate` is strictly tighter than `current`.
+    fn tighter(&self, candidate: &Scalar, current: Option<&Scalar>) -> bool {
+        match current {
+            None => true,
+            Some(old) => match candidate.partial_cmp(old) {
+                Some(CmpOrdering::Less) => self.asc,
+                Some(CmpOrdering::Greater) => !self.asc,
+                _ => false,
+            },
+        }
+    }
+
+    /// Publish a per-stream boundary. ASC boundaries can only decrease and DESC
+    /// boundaries can only increase, so readers never observe a weaker filter.
+    pub fn update(&self, boundary: &Scalar) {
+        if matches!(boundary, Scalar::Null) {
+            return;
+        }
+
+        // Fast path: skip the write lock when another stream has already
+        // published an equal or tighter boundary.
+        if !self.tighter(boundary, self.boundary.read().as_ref()) {
+            return;
+        }
+
+        let mut current = self.boundary.write();
+        // Re-check under the write lock: a concurrent update may have won.
+        if self.tighter(boundary, current.as_ref()) {
+            *current = Some(boundary.clone());
+        }
+    }
+
+    /// Return true only when every non-null value in a block is strictly worse
+    /// than the current boundary. Equal values are retained for tie safety.
+    pub fn should_prune(&self, min: &Scalar, max: &Scalar) -> bool {
+        if matches!(min, Scalar::Null) || matches!(max, Scalar::Null) {
+            return false;
+        }
+        let boundary = self.boundary.read();
+        let Some(boundary) = boundary.as_ref() else {
+            return false;
+        };
+
+        if self.asc {
+            min.partial_cmp(boundary) == Some(CmpOrdering::Greater)
+        } else {
+            max.partial_cmp(boundary) == Some(CmpOrdering::Less)
+        }
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct RuntimeFilterInfo {
@@ -197,8 +284,68 @@ mod tests {
     use databend_common_expression::Expr;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
 
     use super::*;
+
+    fn int64(value: i64) -> Scalar {
+        Scalar::Number(NumberScalar::Int64(value))
+    }
+
+    #[test]
+    fn runtime_top_n_filter_is_monotonic_and_tie_safe() {
+        let asc = RuntimeTopNFilter::new(7, true);
+        assert!(!asc.should_prune(&int64(11), &int64(20)));
+
+        asc.update(&int64(10));
+        assert_eq!(asc.boundary(), Some(int64(10)));
+        assert!(asc.should_prune(&int64(11), &int64(20)));
+        assert!(!asc.should_prune(&int64(10), &int64(20)));
+
+        // A weaker local boundary must not loosen the shared filter.
+        asc.update(&int64(12));
+        assert_eq!(asc.boundary(), Some(int64(10)));
+        asc.update(&int64(8));
+        assert_eq!(asc.boundary(), Some(int64(8)));
+
+        let desc = RuntimeTopNFilter::new(7, false);
+        desc.update(&int64(10));
+        assert!(desc.should_prune(&int64(1), &int64(9)));
+        assert!(!desc.should_prune(&int64(1), &int64(10)));
+        desc.update(&int64(8));
+        assert_eq!(desc.boundary(), Some(int64(10)));
+        desc.update(&int64(12));
+        assert_eq!(desc.boundary(), Some(int64(12)));
+
+        desc.update(&Scalar::Null);
+        assert_eq!(desc.boundary(), Some(int64(12)));
+    }
+
+    #[test]
+    fn runtime_top_n_filter_concurrent_updates_keep_tightest() {
+        let filter = Arc::new(RuntimeTopNFilter::new(1, true));
+        let threads: Vec<_> = (0..4)
+            .map(|t| {
+                let filter = filter.clone();
+                std::thread::spawn(move || {
+                    // Race tightening publishes against lock-free reads.
+                    for v in (0..500).rev() {
+                        filter.update(&int64(v * 4 + t));
+                        let _ = filter.should_prune(&int64(1), &int64(2));
+                        let _ = filter.boundary();
+                    }
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().unwrap();
+        }
+
+        // The global minimum wins regardless of interleaving.
+        assert_eq!(filter.boundary(), Some(int64(0)));
+        assert!(filter.should_prune(&int64(1), &int64(5)));
+        assert!(!filter.should_prune(&int64(0), &int64(5)));
+    }
 
     #[test]
     fn runtime_filter_ready_tracks_statistics_probe_columns() {

@@ -25,6 +25,7 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -44,6 +45,9 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use parking_lot::Mutex;
 
 use crate::FuseTable;
+use crate::fuse_part::runtime_top_n_order_key;
+use crate::fuse_part::should_prune_by_runtime_top_n;
+use crate::fuse_part::sort_by_runtime_top_n_order;
 use crate::pruning::FusePruner;
 use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 
@@ -132,6 +136,7 @@ pub struct SendPartInfoSink {
     partitions: Partitions,
     statistics: PartStatistics,
     send_part_state: Arc<SendPartState>,
+    runtime_top_n_filters: Vec<Arc<RuntimeTopNFilter>>,
     enable_cache: bool,
 }
 
@@ -143,8 +148,10 @@ impl SendPartInfoSink {
         top_k: Option<(TopK, Scalar)>,
         schema: TableSchemaRef,
         send_part_state: Arc<SendPartState>,
+        runtime_top_n_filters: Vec<Arc<RuntimeTopNFilter>>,
         enable_cache: bool,
     ) -> Result<ProcessorPtr> {
+        debug_assert!(runtime_top_n_filters.is_empty() || !enable_cache);
         let partitions = Partitions::default();
         let statistics = PartStatistics::default();
         Ok(ProcessorPtr::create(AsyncSinker::create(
@@ -157,6 +164,7 @@ impl SendPartInfoSink {
                 partitions,
                 statistics,
                 send_part_state,
+                runtime_top_n_filters,
                 enable_cache,
             },
         )))
@@ -179,7 +187,15 @@ impl AsyncSink for SendPartInfoSink {
             if let Some(data) = BlockPruneResult::downcast_from(meta) {
                 let arrow_schema = self.schema.as_ref().into();
                 let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
-                let block_metas = &data.block_metas;
+                let mut block_metas = data.block_metas;
+                if let Some(filter) = self.runtime_top_n_filters.first() {
+                    // Send the most promising blocks first so the shared TopN
+                    // boundary converges early and prunes later batches.
+                    sort_by_runtime_top_n_order(&mut block_metas, filter, |(_, meta)| {
+                        runtime_top_n_order_key(Some(&meta.col_stats), filter)
+                    });
+                }
+                let block_metas = &block_metas;
                 self.statistics.partitions_scanned += block_metas.len();
                 let info_ptr = match self.push_downs.clone() {
                     None => self.all_columns_partitions(block_metas),
@@ -227,6 +243,13 @@ impl SendPartInfoSink {
         let mut parts = Vec::with_capacity(block_metas.len());
 
         for (block_meta_index, block_meta) in block_metas.iter() {
+            if should_prune_by_runtime_top_n(
+                Some(&block_meta.col_stats),
+                &self.runtime_top_n_filters,
+            ) {
+                continue;
+            }
+
             let rows = block_meta.row_count as usize;
             let previous_limit = self.send_part_state.limit.fetch_sub(
                 rows.min(self.send_part_state.limit.load(Ordering::SeqCst)),
@@ -274,6 +297,13 @@ impl SendPartInfoSink {
         };
 
         for (block_meta_index, block_meta) in block_metas.iter() {
+            if should_prune_by_runtime_top_n(
+                Some(&block_meta.col_stats),
+                &self.runtime_top_n_filters,
+            ) {
+                continue;
+            }
+
             let rows = block_meta.row_count as usize;
             let previous_limit = self.send_part_state.limit.fetch_sub(
                 rows.min(self.send_part_state.limit.load(Ordering::SeqCst)),

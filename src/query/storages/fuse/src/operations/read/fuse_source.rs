@@ -32,6 +32,7 @@ use super::block_format::FuseParquetBlockFormat;
 use super::read_block_context::ReadBlockContext;
 use super::read_data_transform::ReadDataTransform;
 use crate::FuseStorageFormat;
+use crate::fuse_part::sort_parts_by_runtime_top_n;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
@@ -176,6 +177,11 @@ pub fn dispatch_partitions(
     if partitions.is_empty() {
         return results;
     }
+
+    // Under runtime TopN (`enable_top_n`), read the most promising blocks
+    // first so the shared boundary converges early and prunes the rest.
+    let runtime_top_n_filters = ctx.get_runtime_top_n_filters(plan.scan_id);
+    sort_parts_by_runtime_top_n(&mut partitions, &runtime_top_n_filters);
 
     for (i, part) in partitions.iter().enumerate() {
         results[i % max_streams].push_back(part.clone());

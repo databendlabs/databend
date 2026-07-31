@@ -96,6 +96,7 @@ macro_rules! impl_match_rel_op {
             RelOperator::Aggregate($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Sort($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Limit($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::TopN($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Exchange($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::UnionAll($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::DummyTableScan($rel_op) => $rel_op.$method($($arg),*),

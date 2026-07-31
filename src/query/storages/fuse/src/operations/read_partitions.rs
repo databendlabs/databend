@@ -735,8 +735,10 @@ impl FuseTable {
             .as_ref()
             .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit);
-        let enable_prune_cache =
-            enable_prune_cache_for_query(&ctx)? && runtime_filter_prune_context.is_none();
+        let runtime_top_n_filters = ctx.get_runtime_top_n_filters(scan_id);
+        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?
+            && runtime_filter_prune_context.is_none()
+            && runtime_top_n_filters.is_empty();
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
             limit,
@@ -752,6 +754,7 @@ impl FuseTable {
                 top_k.clone(),
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
+                runtime_top_n_filters.clone(),
                 enable_prune_cache,
             )
         })?;
@@ -840,6 +843,12 @@ impl FuseTable {
                 }
             }
         }
+        let runtime_top_n_filters = ctx.get_runtime_top_n_filters(scan_id);
+        for filter in &runtime_top_n_filters {
+            if !block_prune_column_ids.contains(&filter.column_id()) {
+                block_prune_column_ids.push(filter.column_id());
+            }
+        }
 
         let mut segment_column_projection = HashSet::new();
         for column_id in projection_column_ids.iter() {
@@ -885,6 +894,7 @@ impl FuseTable {
                 part_info_tx.clone(),
                 block_prune_column_ids.clone(),
                 runtime_filter_prune_context.clone(),
+                runtime_top_n_filters.clone(),
             )
         })?;
         // TODO(Sky): populate prune cache , deal with topn prune

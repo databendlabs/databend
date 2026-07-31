@@ -23,6 +23,7 @@ mod materialized_cte;
 mod new_hash_join;
 pub(crate) mod range_join;
 pub mod sort;
+pub mod top_n;
 mod transform_async_function;
 mod transform_branched_async_function;
 mod transform_cache_scan;

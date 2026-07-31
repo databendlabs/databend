@@ -35,6 +35,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Sort;
+use crate::plans::TopN;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
@@ -61,6 +62,7 @@ fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &RelOperator) -> FormatT
         RelOperator::AsyncFunction(op) => async_func_to_format_tree(id_humanizer, op),
         RelOperator::Sort(op) => sort_to_format_tree(id_humanizer, op),
         RelOperator::Limit(op) => limit_to_format_tree(id_humanizer, op),
+        RelOperator::TopN(op) => top_n_to_format_tree(id_humanizer, op),
         RelOperator::Exchange(op) => exchange_to_format_tree(id_humanizer, op),
         RelOperator::ConstantTableScan(op) => constant_scan_to_format_tree(id_humanizer, op),
         RelOperator::UnionAll(op) => union_all_to_format_tree(id_humanizer, op),
@@ -436,6 +438,28 @@ fn limit_to_format_tree<I: IdHumanizer>(_: &I, op: &Limit) -> FormatTreeNode {
     let limit = op.limit.unwrap_or_default();
     FormatTreeNode::with_children("Limit".to_string(), vec![
         FormatTreeNode::new(format!("limit: [{}]", limit)),
+        FormatTreeNode::new(format!("offset: [{}]", op.offset)),
+    ])
+}
+
+fn top_n_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &TopN) -> FormatTreeNode {
+    let scalars = op
+        .items
+        .iter()
+        .map(|item| {
+            format!(
+                "{} {} NULLS {}",
+                id_humanizer.humanize_column_id(item.index),
+                if item.asc { "ASC" } else { "DESC" },
+                if item.nulls_first { "FIRST" } else { "LAST" }
+            )
+        })
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    FormatTreeNode::with_children("TopN".to_string(), vec![
+        FormatTreeNode::new(format!("sort keys: [{}]", scalars)),
+        FormatTreeNode::new(format!("limit: [{}]", op.limit)),
         FormatTreeNode::new(format!("offset: [{}]", op.offset)),
     ])
 }

@@ -217,6 +217,18 @@ impl TableContextRuntimeFilter for QueryContext {
         self.shared.runtime_filter_state.clear();
     }
 
+    fn register_runtime_top_n_filter(&self, scan_id: usize, filter: Arc<RuntimeTopNFilter>) {
+        self.shared
+            .runtime_filter_state
+            .register_runtime_top_n_filter(scan_id, filter);
+    }
+
+    fn get_runtime_top_n_filters(&self, scan_id: usize) -> Vec<Arc<RuntimeTopNFilter>> {
+        self.shared
+            .runtime_filter_state
+            .get_runtime_top_n_filters(scan_id)
+    }
+
     fn assert_no_runtime_filter_state(&self) -> Result<()> {
         self.shared
             .runtime_filter_state

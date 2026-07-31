@@ -71,6 +71,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStatsSnapshot;
+use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;

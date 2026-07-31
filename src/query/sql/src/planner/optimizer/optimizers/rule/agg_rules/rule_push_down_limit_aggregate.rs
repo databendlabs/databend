@@ -27,10 +27,12 @@ use crate::plans::Aggregate;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::Sort;
 use crate::plans::SortItem;
+use crate::plans::TopN;
 
-/// Input:  Limit | Sort
+/// Input:  Limit | Sort | TopN
 ///           \
 ///          Aggregate
 ///             \
@@ -53,6 +55,8 @@ impl RulePushDownRankLimitAggregate {
                 match_op!(Limit -> Aggregate -> *),
                 match_op!(Sort -> Aggregate -> *),
                 match_op!(Sort -> EvalScalar -> Aggregate -> *),
+                match_op!(TopN -> Aggregate -> *),
+                match_op!(TopN -> EvalScalar -> Aggregate -> *),
             ],
             max_limit,
         }
@@ -134,7 +138,14 @@ impl RulePushDownRankLimitAggregate {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let (order_items, order_limit): (Vec<SortItem>, Option<usize>) = match s_expr.plan() {
+            RelOperator::Sort(sort) => (sort.items.clone(), sort.limit),
+            RelOperator::TopN(top_n) => {
+                let top_n: TopN = top_n.clone();
+                (top_n.items.clone(), Some(top_n.candidate_count()))
+            }
+            _ => return Ok(()),
+        };
         let mut has_eval_scalar = false;
         let agg_limit_expr = match s_expr.child(0)?.plan().rel_op() {
             RelOp::Aggregate => s_expr.child(0)?,
@@ -145,14 +156,13 @@ impl RulePushDownRankLimitAggregate {
             _ => return Ok(()),
         };
 
-        let Some(limit) = sort.limit else {
+        let Some(limit) = order_limit else {
             return Ok(());
         };
 
         let mut agg_limit: Aggregate = agg_limit_expr.plan().clone().try_into()?;
 
-        let is_order_subset = sort
-            .items
+        let is_order_subset = order_items
             .iter()
             .all(|k| agg_limit.group_items.iter().any(|g| g.index == k.index));
         if !is_order_subset {
@@ -163,7 +173,7 @@ impl RulePushDownRankLimitAggregate {
         let mut not_found_sort_items = vec![];
         for i in 0..agg_limit.group_items.len() {
             let group_item = &agg_limit.group_items[i];
-            if let Some(sort_item) = sort.items.iter().find(|k| k.index == group_item.index) {
+            if let Some(sort_item) = order_items.iter().find(|k| k.index == group_item.index) {
                 sort_items.push(SortItem {
                     index: group_item.index,
                     asc: sort_item.asc,
@@ -216,7 +226,7 @@ impl Rule for RulePushDownRankLimitAggregate {
     ) -> Result<(), ErrorCode> {
         match i {
             0 => self.apply_limit(s_expr, state),
-            1 | 2 => self.apply_sort(s_expr, state),
+            1..=4 => self.apply_sort(s_expr, state),
             _ => unreachable!(),
         }
     }

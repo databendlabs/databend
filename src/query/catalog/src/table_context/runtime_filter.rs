@@ -23,6 +23,7 @@ use crate::runtime_filter_info::RuntimeFilterEntry;
 use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::runtime_filter_info::RuntimeFilterReady;
 use crate::runtime_filter_info::RuntimeFilterReport;
+use crate::runtime_filter_info::RuntimeTopNFilter;
 
 pub trait TableContextRuntimeFilter: Send + Sync {
     fn set_runtime_filter(&self, _filters: HashMap<usize, RuntimeFilterInfo>) {
@@ -34,6 +35,12 @@ pub trait TableContextRuntimeFilter: Send + Sync {
     fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>>;
 
     fn clear_runtime_filter(&self);
+
+    fn register_runtime_top_n_filter(&self, _scan_id: usize, _filter: Arc<RuntimeTopNFilter>) {}
+
+    fn get_runtime_top_n_filters(&self, _scan_id: usize) -> Vec<Arc<RuntimeTopNFilter>> {
+        Vec::new()
+    }
 
     fn assert_no_runtime_filter_state(&self) -> Result<()> {
         unimplemented!()

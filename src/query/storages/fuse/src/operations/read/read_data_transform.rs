@@ -33,6 +33,7 @@ use databend_common_sql::IndexType;
 
 use super::parquet_data_source::ParquetDataSource;
 use super::read_block_context::ReadBlockContext;
+use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
@@ -104,7 +105,13 @@ impl ReadDataTransform {
     }
 
     fn classify_parts(&mut self, parts: Vec<PartInfoPtr>) -> Result<()> {
+        let runtime_top_n_filters = self.context.get_runtime_top_n_filters(self.scan_id);
         for part in parts {
+            if FuseBlockPartInfo::from_part(&part)?
+                .should_prune_by_runtime_top_n(&runtime_top_n_filters)
+            {
+                continue;
+            }
             if let Some(groups) = self.read_block_context.granule_groups_if_subset(&part)? {
                 let source = ParquetDataSource::Granule(groups);
                 let meta = DataSourceWithMeta::create(vec![part], vec![source]);
@@ -122,9 +129,15 @@ impl ReadDataTransform {
         let mut sources = Vec::with_capacity(parts.len());
         let mut full_reads = Vec::new();
         let expr_runtime_pruner = self.create_runtime_pruners()?;
+        let runtime_top_n_filters = self.context.get_runtime_top_n_filters(self.scan_id);
 
         for part in parts {
-            if expr_runtime_pruner.prune(&part).await? {
+            // The boundary may have tightened since this partition was first
+            // classified, so check it again immediately before scheduling I/O.
+            if FuseBlockPartInfo::from_part(&part)?
+                .should_prune_by_runtime_top_n(&runtime_top_n_filters)
+                || expr_runtime_pruner.prune(&part).await?
+            {
                 continue;
             }
 
