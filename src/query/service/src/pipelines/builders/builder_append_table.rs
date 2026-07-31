@@ -160,6 +160,9 @@ impl PipelineBuilder {
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
+        // This layout is local to each writer. Distributed COPY does not yet route
+        // partition keys across nodes, so one partition may retain a tail block
+        // from each worker.
         Self::build_table_write_layout(ctx.clone(), main_pipeline, table.clone())?;
 
         table.append_data(ctx, main_pipeline, table_meta_timestamps)?;
