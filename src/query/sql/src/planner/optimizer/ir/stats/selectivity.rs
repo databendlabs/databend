@@ -1035,7 +1035,9 @@ impl SelectivityVisitor<'_> {
                             // the original input rows. Multiplying estimates
                             // for predicates on different columns would assume
                             // those columns are independent; without that proof,
-                            // keep the narrowest single estimate.
+                            // keep the narrowest single estimate. It takes
+                            // priority over fallbacks only when it is below
+                            // the lower-bound selectivity threshold.
                             acc = acc.min(n);
                         }
                     }
@@ -1044,12 +1046,14 @@ impl SelectivityVisitor<'_> {
 
                 self.selectivity = if has_zero {
                     Selectivity::Zero
-                } else if has_n {
+                } else if has_n && acc < UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND {
                     Selectivity::N(acc)
                 } else if has_unknown {
                     Selectivity::Unknown
                 } else if has_lower_bound {
                     Selectivity::LowerBound
+                } else if has_n {
+                    Selectivity::N(acc)
                 } else {
                     Selectivity::All
                 };

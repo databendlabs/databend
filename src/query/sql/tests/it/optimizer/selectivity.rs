@@ -1199,7 +1199,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
     write_case_title(
         &mut file,
         "missing_stats_logical_predicates",
-        "Boolean predicates should use an equal true/false distribution, while numeric estimates should take priority over AND fallbacks.",
+        "Boolean predicates should use an equal true/false distribution, while numeric estimates below the lower-bound threshold should take priority over AND fallbacks.",
     )?;
     let partial_stats = ColumnStatSet::from_iter([(Symbol::new(1), ColumnStat {
         min: Datum::UInt(0),
@@ -1225,6 +1225,9 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         "nullable_flag >= false",
         "and_filters(missing = 1, number = 1)",
         "and_filters(is_not_null(nullable_missing), number = 1)",
+        "and_filters(flag, is_not_null(nullable_missing))",
+        "and_filters(missing = 1, number != 1)",
+        "and_filters(is_not_null(nullable_missing), number != 1)",
     ] {
         run_case(&mut file, expr, &partial_columns, partial_stats.clone())?;
     }

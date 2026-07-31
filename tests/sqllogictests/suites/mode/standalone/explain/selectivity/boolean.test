@@ -25,7 +25,7 @@ TableScan
 ├── read size: 1.91 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
-├── pruning stats: [segments: <read cost: 1 ms, decompress cost: 1 ms, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom index read cost: 35 ms, bloom pruning: 1 to 1 cost: 37 ms>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [t1.c39 (#0) <> 0 and t1.c13 (#1) = false and (t1.c40 (#2) = 1 or NOT is_not_null(t1.c40 (#2)) or t1.c40 (#2) = 2)], limit: NONE]
 └── estimated rows: 73.14
 
