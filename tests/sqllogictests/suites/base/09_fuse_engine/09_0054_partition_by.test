@@ -448,11 +448,14 @@ SELECT count(*) FROM bucket_cluster_only
 statement error write_distribution_mode='hash' requires PARTITION BY
 CREATE TABLE bucket_cluster_hash(id INT) CLUSTER BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash'
 
-statement error must use bucket with a constant count between 1 and 2147483647
+statement error must use bucket with a constant count between 1 and 4294967295
 CREATE TABLE invalid_bucket_count(id BIGINT) PARTITION BY (bucket(id, id))
 
-statement error must use bucket with a constant count between 1 and 2147483647
+statement error must use bucket with a constant count between 1 and 4294967295
 CREATE TABLE zero_bucket_count(id BIGINT) PARTITION BY (bucket(0, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE excessive_bucket_count(id BIGINT) PARTITION BY (bucket(4294967296, id))
 
 # Like CLUSTER BY, each physical key expression may reference only one source
 # column. Composite partitioning is expressed as PARTITION BY (a, b).

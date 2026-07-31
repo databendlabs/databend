@@ -224,20 +224,20 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 fn register_bucket(registry: &mut FunctionRegistry) {
     registry
-        .register_passthrough_nullable_2_arg::<NumberType<u64>, StringType, NumberType<i32>, _, _>(
+        .register_passthrough_nullable_2_arg::<NumberType<u64>, StringType, NumberType<u32>, _, _>(
             "bucket",
             |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<NumberType<u64>, StringType, NumberType<i32>>(
+            vectorize_with_builder_2_arg::<NumberType<u64>, StringType, NumberType<u32>>(
                 |buckets, value, output, ctx| {
                     output.push(bucket(buckets, value, output.len(), ctx));
                 },
             ),
         );
     registry
-        .register_passthrough_nullable_2_arg::<NumberType<u64>, DateType, NumberType<i32>, _, _>(
+        .register_passthrough_nullable_2_arg::<NumberType<u64>, DateType, NumberType<u32>, _, _>(
             "bucket",
             |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<NumberType<u64>, DateType, NumberType<i32>>(
+            vectorize_with_builder_2_arg::<NumberType<u64>, DateType, NumberType<u32>>(
                 |buckets, value, output, ctx| {
                     output.push(bucket(buckets, &value, output.len(), ctx));
                 },
@@ -246,13 +246,13 @@ fn register_bucket(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<
         NumberType<u64>,
         TimestampType,
-        NumberType<i32>,
+        NumberType<u32>,
         _,
         _,
     >(
         "bucket",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<NumberType<u64>, TimestampType, NumberType<i32>>(
+        vectorize_with_builder_2_arg::<NumberType<u64>, TimestampType, NumberType<u32>>(
             |buckets, value, output, ctx| {
                 output.push(bucket(buckets, &value, output.len(), ctx));
             },
@@ -264,7 +264,7 @@ fn register_bucket(registry: &mut FunctionRegistry) {
                 registry.register_passthrough_nullable_2_arg::<
                     NumberType<u64>,
                     NumberType<NUM_TYPE>,
-                    NumberType<i32>,
+                    NumberType<u32>,
                     _,
                     _,
                 >(
@@ -273,7 +273,7 @@ fn register_bucket(registry: &mut FunctionRegistry) {
                     vectorize_with_builder_2_arg::<
                         NumberType<u64>,
                         NumberType<NUM_TYPE>,
-                        NumberType<i32>,
+                        NumberType<u32>,
                     >(|buckets, value, output, ctx| {
                         output.push(bucket(buckets, &value, output.len(), ctx));
                     }),
@@ -289,9 +289,9 @@ fn bucket<T: DFHash + ?Sized>(
     value: &T,
     row: usize,
     ctx: &mut databend_common_expression::EvalContext,
-) -> i32 {
-    let Ok(buckets) = i32::try_from(buckets) else {
-        ctx.set_error(row, "bucket count must be between 1 and 2147483647");
+) -> u32 {
+    let Ok(buckets) = u32::try_from(buckets) else {
+        ctx.set_error(row, "bucket count must be between 1 and 4294967295");
         return 0;
     };
     if buckets == 0 {
@@ -299,7 +299,7 @@ fn bucket<T: DFHash + ?Sized>(
         return 0;
     }
 
-    (siphash64(value) % buckets as u64) as i32
+    (siphash64(value) % buckets as u64) as u32
 }
 
 fn siphash64<T: DFHash + ?Sized>(value: &T) -> u64 {

@@ -201,7 +201,7 @@ impl PartitionBucketValidator {
                         ..
                     },
                     _
-                ] if (1..=i32::MAX as u64).contains(buckets)
+                ] if (1..=u32::MAX as u64).contains(buckets)
             );
         }
     }
@@ -2468,7 +2468,7 @@ impl Binder {
                 if validator.invalid {
                     return Err(ErrorCode::InvalidClusterKeys(format!(
                         "{key_name} expression `{cluster_expr:#}` must use bucket with a constant count between 1 and {}",
-                        i32::MAX
+                        u32::MAX
                     )));
                 }
             }

@@ -854,8 +854,8 @@ evaluation (internal):
 ast            : bucket(16, 34)
 raw expr       : bucket(16, 34)
 checked expr   : bucket<UInt64, UInt8>(CAST<UInt8>(16_u8 AS UInt64), 34_u8)
-optimized expr : 5_i32
-output type    : Int32
+optimized expr : 5_u32
+output type    : UInt32
 output domain  : {5..=5}
 output         : 5
 
@@ -863,8 +863,8 @@ output         : 5
 ast            : bucket(16, 'iceberg')
 raw expr       : bucket(16, 'iceberg')
 checked expr   : bucket<UInt64, String>(CAST<UInt8>(16_u8 AS UInt64), "iceberg")
-optimized expr : 6_i32
-output type    : Int32
+optimized expr : 6_u32
+output type    : UInt32
 output domain  : {6..=6}
 output         : 6
 
@@ -872,8 +872,8 @@ output         : 6
 ast            : bucket(16, to_date(10000))
 raw expr       : bucket(16, to_date(10000))
 checked expr   : bucket<UInt64, Date>(CAST<UInt8>(16_u8 AS UInt64), CAST<Int64>(CAST<UInt16>(10000_u16 AS Int64) AS Date))
-optimized expr : 0_i32
-output type    : Int32
+optimized expr : 0_u32
+output type    : UInt32
 output domain  : {0..=0}
 output         : 0
 
@@ -881,8 +881,8 @@ output         : 0
 ast            : bucket(16, to_datetime(100000))
 raw expr       : bucket(16, to_datetime(100000))
 checked expr   : bucket<UInt64, Timestamp>(CAST<UInt8>(16_u8 AS UInt64), CAST<Int64>(CAST<UInt32>(100000_u32 AS Int64) AS Timestamp))
-optimized expr : 11_i32
-output type    : Int32
+optimized expr : 11_u32
+output type    : UInt32
 output domain  : {11..=11}
 output         : 11
 
@@ -903,7 +903,7 @@ evaluation:
 +--------+---------+---------+
 |        | a       | Output  |
 +--------+---------+---------+
-| Type   | Int64   | Int32   |
+| Type   | Int64   | UInt32  |
 | Domain | {1..=4} | Unknown |
 | Row 0  | 1       | 1       |
 | Row 1  | 2       | 6       |
@@ -915,7 +915,6 @@ evaluation (internal):
 | Column | Data                        |
 +--------+-----------------------------+
 | a      | Column(Int64([1, 2, 3, 4])) |
-| Output | Int32([1, 6, 2, 1])         |
+| Output | UInt32([1, 6, 2, 1])        |
 +--------+-----------------------------+
-
 
