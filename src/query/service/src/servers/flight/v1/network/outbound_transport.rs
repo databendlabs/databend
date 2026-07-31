@@ -190,32 +190,43 @@ impl PingPongExchange {
 
         let inner = self.inner.clone();
         Ok(runtime.spawn(async move {
+            enum Event {
+                Shutdown,
+                Response(Option<Result<FlightData, Status>>),
+            }
+
             let mut finished = false;
-            let mut shutdown_fut = Box::pin(inner.shutdown.notified());
 
             loop {
                 if finished && !callback.has_pending() {
                     inner.send_tx.close();
                 }
 
-                match select(shutdown_fut, stream.next()).await {
-                    Either::Left(_) => {
-                        finished = true;
-                        shutdown_fut = Box::pin(inner.shutdown.notified());
+                let event = if finished {
+                    // WatchNotify is sticky; calling notified() again would spin forever.
+                    Event::Response(stream.next().await)
+                } else {
+                    let shutdown_fut = Box::pin(inner.shutdown.notified());
+                    match select(shutdown_fut, stream.next()).await {
+                        Either::Left(_) => Event::Shutdown,
+                        Either::Right((response, _)) => Event::Response(response),
                     }
-                    Either::Right((None, _)) => {
+                };
+
+                match event {
+                    Event::Shutdown => finished = true,
+                    Event::Response(None) => {
                         callback.on_closed();
                         break;
                     }
-                    Either::Right((Some(Ok(data)), next_shutdown)) => {
-                        shutdown_fut = next_shutdown;
+                    Event::Response(Some(Ok(data))) => {
                         let rtt = inner.get_rtt();
                         callback.on_response(PingPongResponse {
                             data: Ok(data),
                             rtt,
                         });
                     }
-                    Either::Right((Some(Err(status)), _)) => {
+                    Event::Response(Some(Err(status))) => {
                         let rtt = inner.get_rtt();
                         callback.on_response(PingPongResponse {
                             data: Err(status),
@@ -235,6 +246,18 @@ mod tests {
     use tonic::Status;
 
     use super::*;
+
+    struct NoPendingCallback;
+
+    impl PingPongCallback for NoPendingCallback {
+        fn has_pending(&self) -> bool {
+            false
+        }
+
+        fn on_response(&self, _response: PingPongResponse) {}
+
+        fn on_closed(&self) {}
+    }
 
     fn create_mock_exchange(
         num_threads: usize,
@@ -313,5 +336,38 @@ mod tests {
         let status = result.expect_err("closed request channel should abort the exchange");
         assert_eq!(status.code(), tonic::Code::Aborted);
         assert_eq!(status.message(), REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE);
+    }
+
+    // Regression test for https://github.com/databendlabs/databend/issues/20228.
+    #[tokio::test]
+    async fn test_ping_pong_shutdown_finishes_after_response_stream_closes() {
+        let runtime = Runtime::with_worker_threads(1, None).unwrap();
+        let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
+        let mut handle = exchange
+            .start(Arc::new(NoPendingCallback), &runtime)
+            .unwrap();
+
+        drop(exchange);
+
+        let send_result = tokio::time::timeout(Duration::from_secs(2), send_rx.recv()).await;
+        if send_result.is_err() {
+            handle.abort();
+        }
+        assert!(
+            send_result
+                .expect("shutdown should close the request stream")
+                .is_err(),
+            "request stream should be closed without sending data"
+        );
+
+        drop(pong_tx);
+
+        let join_result = tokio::time::timeout(Duration::from_secs(2), &mut handle).await;
+        if join_result.is_err() {
+            handle.abort();
+        }
+        join_result
+            .expect("receiver task should finish after the response stream closes")
+            .expect("receiver task should not panic");
     }
 }
