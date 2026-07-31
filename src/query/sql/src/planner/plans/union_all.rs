@@ -133,6 +133,9 @@ impl UnionAll {
                         {
                             return Ok(Some((output, right)));
                         }
+                        // TODO: Distinguish all-NULL column statistics from unknown statistics so
+                        // a non-empty all-NULL branch can contribute its NULL count without
+                        // discarding the other branch's value statistics.
                         _ => return Ok(None),
                     };
                     let mut ndv = Self::merge_ndv(&left, &right)?;
@@ -179,6 +182,14 @@ impl UnionAll {
 
     fn merge_ndv(left: &ColumnStat, right: &ColumnStat) -> Result<NdvEstimate> {
         let ndv_upper = left.ndv.upper + right.ndv.upper;
+        let ranges_disjoint = left.max.compare(&right.min)? == Ordering::Less
+            || right.max.compare(&left.min)? == Ordering::Less;
+        if ranges_disjoint
+            && let (Some(left), Some(right)) = (left.ndv.expected, right.ndv.expected)
+        {
+            return Ok(NdvEstimate::new(left + right, ndv_upper));
+        }
+
         if left.min.is_numeric()
             && let (Some(left), Some(left_ndv)) = (&left.histogram, left.ndv.expected)
             && let (Some(right), Some(right_ndv)) = (&right.histogram, right.ndv.expected)

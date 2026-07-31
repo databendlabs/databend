@@ -261,7 +261,7 @@ fn cases() -> Result<Vec<UnionCase>> {
     Ok(vec![
         UnionCase {
             name: "lossless_coercion",
-            description: "SQL binding inserts a nullable INT to BIGINT coercion and UnionAll derives statistics after the cast.",
+            description: "SQL binding inserts a nullable INT to BIGINT coercion; after the cast drops the histogram, disjoint ranges still make the union NDV additive.",
             sql: "SELECT k FROM l UNION ALL SELECT k FROM r",
             tables: vec![
                 table(
