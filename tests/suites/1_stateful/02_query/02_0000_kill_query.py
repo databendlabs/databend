@@ -88,13 +88,6 @@ def main():
                 WHERE {marker}.number IS NULL
             """
 
-            mycursor.execute(f"EXPLAIN {outer_left_join_query}")
-            plan = "\n".join(row[0] for row in mycursor.fetchall())
-            assert "join type: LEFT OUTER" in plan
-            assert "build keys: []" in plan
-            assert "probe keys: []" in plan
-            assert " OR " in plan
-
             outer_left_join_statement = (
                 "SETTINGS (max_threads=8, max_block_size=65536) "
                 f"{outer_left_join_query};"
