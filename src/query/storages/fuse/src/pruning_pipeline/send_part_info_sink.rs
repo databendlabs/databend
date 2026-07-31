@@ -45,7 +45,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use parking_lot::Mutex;
 
 use crate::FuseTable;
-use crate::fuse_part::runtime_top_n_order_key;
+use crate::fuse_part::runtime_top_n_rank;
 use crate::fuse_part::should_prune_by_runtime_top_n;
 use crate::fuse_part::sort_by_runtime_top_n_order;
 use crate::pruning::FusePruner;
@@ -188,15 +188,24 @@ impl AsyncSink for SendPartInfoSink {
                 let arrow_schema = self.schema.as_ref().into();
                 let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
                 let mut block_metas = data.block_metas;
-                if let Some(filter) = self.runtime_top_n_filters.first() {
-                    // Send the most promising blocks first so the shared TopN
-                    // boundary converges early and prunes later batches.
-                    sort_by_runtime_top_n_order(&mut block_metas, filter, |(_, meta)| {
-                        runtime_top_n_order_key(Some(&meta.col_stats), filter)
+                self.statistics.partitions_scanned += block_metas.len();
+                if !self.runtime_top_n_filters.is_empty() {
+                    // Filter first: drop blocks the boundary already proves
+                    // useless, then order the survivors so the most promising
+                    // ones are read first and tighten the boundary further.
+                    block_metas.retain(|(_, meta)| {
+                        !should_prune_by_runtime_top_n(
+                            Some(&meta.col_stats),
+                            &self.runtime_top_n_filters,
+                        )
                     });
+                    if let Some(filter) = self.runtime_top_n_filters.first() {
+                        sort_by_runtime_top_n_order(&mut block_metas, filter, |(_, meta)| {
+                            runtime_top_n_rank(Some(&meta.col_stats), filter).cloned()
+                        });
+                    }
                 }
                 let block_metas = &block_metas;
-                self.statistics.partitions_scanned += block_metas.len();
                 let info_ptr = match self.push_downs.clone() {
                     None => self.all_columns_partitions(block_metas),
                     Some(extras) => match &extras.projection {

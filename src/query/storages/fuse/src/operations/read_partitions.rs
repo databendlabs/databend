@@ -35,6 +35,7 @@ use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::plan::TopK;
+use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table::ReusablePrunedMetas;
@@ -42,6 +43,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
@@ -102,8 +104,10 @@ use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
 use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
+use crate::pruning_pipeline::PrunedSegmentMeta;
 use crate::pruning_pipeline::RangeAndGranulePruneTransform;
 use crate::pruning_pipeline::RuntimeFilterPruneContext;
+use crate::pruning_pipeline::RuntimeTopNSegmentReorder;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
 use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
@@ -625,6 +629,15 @@ impl FuseTable {
             )
         })?;
 
+        // Under runtime TopN (`enable_top_n`), schedule the most promising
+        // segments first so the shared boundary converges early.
+        let runtime_top_n_filters = ctx.get_runtime_top_n_filters(scan_id);
+        Self::add_runtime_top_n_segment_reorder::<PrunedCompactSegmentMeta>(
+            prune_pipeline,
+            &runtime_top_n_filters,
+            max_threads,
+        )?;
+
         let pruning_cost = pruner.pruning_ctx.pruning_cost.clone();
         prune_pipeline.add_transform(|input, output| {
             ExtractSegmentTransform::create(input, output, true, pruning_cost.clone())
@@ -680,16 +693,22 @@ impl FuseTable {
         }
 
         let push_down = pruner.push_down.clone();
+        // The static TopN pruner accumulates every surviving block meta
+        // behind a single-stream barrier before emitting a minimal cover.
+        // The runtime TopN boundary subsumes its value-statistics branch
+        // (skip it to keep the pipeline streaming), but not the
+        // inverted-index based limit prune. Plan-time (eager) pruning always
+        // keeps it: filters are only registered at pipeline build.
         if push_down
             .as_ref()
             .filter(|p| {
-                (!p.order_by.is_empty()
+                let value_top_n = !p.order_by.is_empty()
                     && p.limit.is_some()
                     && p.filters.is_none()
-                    && p.secure_filters.is_none())
-                    || (p.limit.is_some()
-                        && p.secure_filters.is_none()
-                        && p.filter_only_use_index())
+                    && p.secure_filters.is_none();
+                let index_limit =
+                    p.limit.is_some() && p.secure_filters.is_none() && p.filter_only_use_index();
+                (value_top_n && runtime_top_n_filters.is_empty()) || index_limit
             })
             .is_some()
         {
@@ -735,7 +754,6 @@ impl FuseTable {
             .as_ref()
             .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit);
-        let runtime_top_n_filters = ctx.get_runtime_top_n_filters(scan_id);
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?
             && runtime_filter_prune_context.is_none()
             && runtime_top_n_filters.is_empty();
@@ -773,6 +791,26 @@ impl FuseTable {
         });
 
         Ok(())
+    }
+
+    /// Insert a bounded reorder stage so the segments most likely to contain
+    /// TopN rows are block-pruned and read first. No-op without an active
+    /// runtime TopN filter.
+    fn add_runtime_top_n_segment_reorder<M: PrunedSegmentMeta + BlockMetaInfo>(
+        prune_pipeline: &mut Pipeline,
+        runtime_top_n_filters: &[Arc<RuntimeTopNFilter>],
+        max_threads: usize,
+    ) -> Result<()> {
+        let Some(filter) = runtime_top_n_filters.first() else {
+            return Ok(());
+        };
+        let window = (max_threads * 8).clamp(64, 1024);
+        let filter = filter.clone();
+        prune_pipeline.resize(1, false)?;
+        prune_pipeline.add_transform(|input, output| {
+            RuntimeTopNSegmentReorder::<M>::create(input, output, filter.clone(), window)
+        })?;
+        prune_pipeline.try_resize(max_threads)
     }
 
     pub fn prune_column_oriented_segments_with_pipeline(
@@ -886,6 +924,12 @@ impl FuseTable {
                 pruner.pruning_ctx.clone(),
             )
         })?;
+        // Same segment scheduling as the row-oriented path.
+        Self::add_runtime_top_n_segment_reorder::<PrunedColumnOrientedSegmentMeta>(
+            prune_pipeline,
+            &runtime_top_n_filters,
+            max_threads,
+        )?;
         // TODO(Sky): deal with sample
         prune_pipeline.add_sink(|input| {
             ColumnOrientedBlockPruneSink::create(

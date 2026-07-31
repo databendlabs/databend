@@ -33,6 +33,9 @@ async fn execute_rows(ctx: Arc<QueryContext>, sql: &str) -> Result<Vec<Vec<Scala
         .await?
         .try_collect::<Vec<DataBlock>>()
         .await?;
+    if blocks.is_empty() {
+        return Ok(vec![]);
+    }
     let block = DataBlock::concat(&blocks)?;
     let mut rows = Vec::with_capacity(block.num_rows());
     for row in 0..block.num_rows() {
@@ -252,6 +255,68 @@ async fn test_top_n_preserves_lazy_row_fetch() -> Result<()> {
     settings.set_setting("max_push_down_limit".into(), "0".into())?;
     let sort_limit_rows = execute_rows(ctx, &query).await?;
     assert_eq!(top_n_rows, sort_limit_rows);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_top_n_runtime_boundary_on_nullable_key_over_multi_block_fuse() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{}.top_n_nullable", db);
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {table} (id UInt64 NULL) ENGINE=FUSE ROW_PER_BLOCK=5"
+        ))
+        .await?;
+    // Two inserts create two segments, so the scan takes the lazy pruning
+    // pipeline and exercises the segment reorder stage as well.
+    fixture
+        .execute_command(&format!(
+            "INSERT INTO {table} SELECT number FROM numbers(20)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "INSERT INTO {table} SELECT if(number + 20 >= 35, null, number + 20) FROM numbers(20)"
+        ))
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let settings = ctx.get_settings();
+    settings.set_max_threads(4)?;
+    settings.set_setting("max_push_down_limit".into(), "10000".into())?;
+    settings.set_setting("enable_top_n".into(), "1".into())?;
+
+    // Nullable keys go through the row-converter path: the boundary must be
+    // published from the source column and respect the null ordering.
+    let nulls_last = format!("SELECT id FROM {table} ORDER BY id DESC NULLS LAST LIMIT 3");
+    let top_n_rows = execute_rows(ctx.clone(), &nulls_last).await?;
+    assert_eq!(top_n_rows, vec![
+        vec![Scalar::Number(NumberScalar::UInt64(34))],
+        vec![Scalar::Number(NumberScalar::UInt64(33))],
+        vec![Scalar::Number(NumberScalar::UInt64(32))],
+    ]);
+
+    let nulls_first = format!("SELECT id FROM {table} ORDER BY id ASC NULLS FIRST LIMIT 7");
+    let top_n_rows_nulls_first = execute_rows(ctx.clone(), &nulls_first).await?;
+    assert_eq!(top_n_rows_nulls_first, vec![
+        vec![Scalar::Null],
+        vec![Scalar::Null],
+        vec![Scalar::Null],
+        vec![Scalar::Null],
+        vec![Scalar::Null],
+        vec![Scalar::Number(NumberScalar::UInt64(0))],
+        vec![Scalar::Number(NumberScalar::UInt64(1))],
+    ]);
+
+    // The Sort + Limit path is the differential oracle.
+    settings.set_setting("enable_top_n".into(), "0".into())?;
+    assert_eq!(top_n_rows, execute_rows(ctx.clone(), &nulls_last).await?);
+    assert_eq!(
+        top_n_rows_nulls_first,
+        execute_rows(ctx, &nulls_first).await?
+    );
     Ok(())
 }
 

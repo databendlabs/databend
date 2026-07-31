@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Borrow;
 use std::cmp::Ordering as CmpOrdering;
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
@@ -145,66 +146,138 @@ pub(crate) fn should_prune_by_runtime_top_n(
     filters.iter().any(|filter| {
         columns_stat
             .get(&filter.column_id())
-            .is_some_and(|stat| stat.null_count == 0 && filter.should_prune(stat.min(), stat.max()))
+            .is_some_and(|stat| filter.should_prune(stat.min(), stat.max(), stat.null_count))
     })
 }
 
-/// The scheduling rank of a block for runtime TopN reads: its best possible
-/// sort value (min for ASC, max for DESC), or `None` when unknown.
-pub(crate) fn runtime_top_n_order_key(
-    columns_stat: Option<&HashMap<ColumnId, ColumnStatistics>>,
+/// The scheduling rank of a block for runtime TopN reads: `Best` holds rows
+/// sorting before every value (nulls under NULLS FIRST — never prunable, read
+/// first), `Value` ranks by the best possible sort value (min for ASC, max
+/// for DESC), `Unknown` (no usable statistics) schedules last.
+pub(crate) enum RuntimeTopNRank<S> {
+    Best,
+    Value(S),
+    Unknown,
+}
+
+impl RuntimeTopNRank<&Scalar> {
+    pub(crate) fn cloned(self) -> RuntimeTopNRank<Scalar> {
+        match self {
+            RuntimeTopNRank::Best => RuntimeTopNRank::Best,
+            RuntimeTopNRank::Value(value) => RuntimeTopNRank::Value(value.clone()),
+            RuntimeTopNRank::Unknown => RuntimeTopNRank::Unknown,
+        }
+    }
+}
+
+pub(crate) fn runtime_top_n_rank<'a>(
+    columns_stat: Option<&'a HashMap<ColumnId, ColumnStatistics>>,
     filter: &RuntimeTopNFilter,
-) -> Option<Scalar> {
-    let stat = columns_stat?.get(&filter.column_id())?;
+) -> RuntimeTopNRank<&'a Scalar> {
+    runtime_top_n_rank_from_stat(
+        columns_stat.and_then(|stats| stats.get(&filter.column_id())),
+        filter,
+    )
+}
+
+pub(crate) fn runtime_top_n_rank_from_stat<'a>(
+    stat: Option<&'a ColumnStatistics>,
+    filter: &RuntimeTopNFilter,
+) -> RuntimeTopNRank<&'a Scalar> {
+    let Some(stat) = stat else {
+        return RuntimeTopNRank::Unknown;
+    };
+    // Under NULLS FIRST null rows sort before every value: blocks holding
+    // nulls are the most promising ones (and are never prunable).
+    if filter.nulls_first() && stat.null_count > 0 {
+        return RuntimeTopNRank::Best;
+    }
     let key = if filter.asc() { stat.min() } else { stat.max() };
     if matches!(key, Scalar::Null) {
-        return None;
+        return RuntimeTopNRank::Unknown;
     }
-    Some(key.clone())
+    RuntimeTopNRank::Value(key)
+}
+
+/// Compare two scheduling ranks: better-ranked blocks (more likely to hold
+/// top rows) first.
+pub(crate) fn compare_runtime_top_n_ranks<S: Borrow<Scalar>>(
+    a: &RuntimeTopNRank<S>,
+    b: &RuntimeTopNRank<S>,
+    asc: bool,
+) -> CmpOrdering {
+    match (a, b) {
+        (RuntimeTopNRank::Best, RuntimeTopNRank::Best) => CmpOrdering::Equal,
+        (RuntimeTopNRank::Best, _) => CmpOrdering::Less,
+        (_, RuntimeTopNRank::Best) => CmpOrdering::Greater,
+        (RuntimeTopNRank::Value(a), RuntimeTopNRank::Value(b)) => {
+            if asc {
+                a.borrow().cmp(b.borrow())
+            } else {
+                b.borrow().cmp(a.borrow())
+            }
+        }
+        (RuntimeTopNRank::Value(_), RuntimeTopNRank::Unknown) => CmpOrdering::Less,
+        (RuntimeTopNRank::Unknown, RuntimeTopNRank::Value(_)) => CmpOrdering::Greater,
+        (RuntimeTopNRank::Unknown, RuntimeTopNRank::Unknown) => CmpOrdering::Equal,
+    }
 }
 
 /// Reorder items so the blocks most likely to contain top rows are read
-/// first: the shared TopN boundary then converges early and the remaining
-/// blocks are pruned by `should_prune_by_runtime_top_n`. Items with unknown
-/// statistics keep their relative order at the end.
+/// first. Stable: items with equal or unknown ranks keep their relative
+/// order. Meant for bounded batches (e.g. one segment's surviving blocks);
+/// unbounded part lists should use [`front_load_parts_for_runtime_top_n`].
 pub(crate) fn sort_by_runtime_top_n_order<T>(
     items: &mut Vec<T>,
     filter: &RuntimeTopNFilter,
-    key: impl Fn(&T) -> Option<Scalar>,
+    key: impl Fn(&T) -> RuntimeTopNRank<Scalar>,
 ) {
     let asc = filter.asc();
-    let mut decorated: Vec<(Option<Scalar>, T)> = std::mem::take(items)
+    let mut decorated: Vec<(RuntimeTopNRank<Scalar>, T)> = std::mem::take(items)
         .into_iter()
         .map(|item| (key(&item), item))
         .collect();
-    decorated.sort_by(|(a, _), (b, _)| match (a, b) {
-        (Some(a), Some(b)) => {
-            if asc {
-                a.cmp(b)
-            } else {
-                b.cmp(a)
-            }
-        }
-        (Some(_), None) => CmpOrdering::Less,
-        (None, Some(_)) => CmpOrdering::Greater,
-        (None, None) => CmpOrdering::Equal,
-    });
+    decorated.sort_by(|(a, _), (b, _)| compare_runtime_top_n_ranks(a, b, asc));
     items.extend(decorated.into_iter().map(|(_, item)| item));
 }
 
-/// Node-local ordering of fuse parts for runtime TopN scheduling.
-pub(crate) fn sort_parts_by_runtime_top_n(
-    parts: &mut Vec<PartInfoPtr>,
+fn runtime_top_n_part_rank<'a>(
+    part: &'a PartInfoPtr,
+    filter: &RuntimeTopNFilter,
+) -> RuntimeTopNRank<&'a Scalar> {
+    let columns_stat = FuseBlockPartInfo::from_part(part)
+        .ok()
+        .and_then(|info| info.columns_stat.as_ref());
+    runtime_top_n_rank(columns_stat, filter)
+}
+
+/// Move the `head` most promising parts to the front (sorted) so they are
+/// read first. The tail is left unordered on purpose: once the head blocks
+/// tighten the shared boundary, tail blocks are pruned at read time anyway,
+/// so an O(n log n) sort over a potentially huge part list is avoided.
+pub(crate) fn front_load_parts_for_runtime_top_n(
+    parts: &mut [PartInfoPtr],
     filters: &[Arc<RuntimeTopNFilter>],
+    head: usize,
 ) {
     let Some(filter) = filters.first() else {
         return;
     };
-    sort_by_runtime_top_n_order(parts, filter, |part| {
-        FuseBlockPartInfo::from_part(part)
-            .ok()
-            .and_then(|info| runtime_top_n_order_key(info.columns_stat.as_ref(), filter))
-    });
+    let head = head.max(1);
+    let compare = |a: &PartInfoPtr, b: &PartInfoPtr| {
+        compare_runtime_top_n_ranks(
+            &runtime_top_n_part_rank(a, filter),
+            &runtime_top_n_part_rank(b, filter),
+            filter.asc(),
+        )
+    };
+
+    if parts.len() > head {
+        parts.select_nth_unstable_by(head - 1, compare);
+        parts[..head].sort_unstable_by(compare);
+    } else {
+        parts.sort_unstable_by(compare);
+    }
 }
 
 #[cfg(test)]
@@ -222,8 +295,8 @@ mod tests {
     }
 
     #[test]
-    fn test_runtime_top_n_prunes_only_strictly_worse_non_null_blocks() {
-        let asc = Arc::new(RuntimeTopNFilter::new(3, true));
+    fn test_runtime_top_n_prunes_only_strictly_worse_blocks() {
+        let asc = Arc::new(RuntimeTopNFilter::new(3, true, false));
         asc.update(&int64(10));
 
         let mut columns = HashMap::from([(3, stats(11, 20, 0))]);
@@ -232,26 +305,45 @@ mod tests {
             std::slice::from_ref(&asc)
         ));
 
-        // Boundary ties and nullable statistics must be retained.
+        // Boundary ties must be retained.
         columns.insert(3, stats(10, 20, 0));
         assert!(!should_prune_by_runtime_top_n(
             Some(&columns),
             std::slice::from_ref(&asc)
         ));
+        // Under NULLS LAST the null rows of a strictly worse block are worse too.
         columns.insert(3, stats(11, 20, 1));
-        assert!(!should_prune_by_runtime_top_n(
+        assert!(should_prune_by_runtime_top_n(
             Some(&columns),
             std::slice::from_ref(&asc)
         ));
-        assert!(!should_prune_by_runtime_top_n(None, &[asc]));
+        assert!(!should_prune_by_runtime_top_n(
+            None,
+            std::slice::from_ref(&asc)
+        ));
 
-        let desc = Arc::new(RuntimeTopNFilter::new(3, false));
+        // Under NULLS FIRST null rows are always candidates.
+        let nulls_first = Arc::new(RuntimeTopNFilter::new(3, true, true));
+        nulls_first.update(&int64(10));
+        assert!(!should_prune_by_runtime_top_n(
+            Some(&columns),
+            std::slice::from_ref(&nulls_first)
+        ));
+
+        let desc = Arc::new(RuntimeTopNFilter::new(3, false, false));
         desc.update(&int64(10));
         columns.insert(3, stats(1, 9, 0));
         assert!(should_prune_by_runtime_top_n(Some(&columns), &[desc]));
     }
 
     fn part_with_stats(location: &str, min_max: Option<(i64, i64)>) -> PartInfoPtr {
+        part_with_nullable_stats(location, min_max.map(|(min, max)| (min, max, 0)))
+    }
+
+    fn part_with_nullable_stats(
+        location: &str,
+        min_max_nulls: Option<(i64, i64, u64)>,
+    ) -> PartInfoPtr {
         FuseBlockPartInfo::create(
             location.to_string(),
             None,
@@ -259,7 +351,7 @@ mod tests {
             None,
             1,
             HashMap::new(),
-            min_max.map(|(min, max)| HashMap::from([(3, stats(min, max, 0))])),
+            min_max_nulls.map(|(min, max, nulls)| HashMap::from([(3, stats(min, max, nulls))])),
             Compression::Lz4Raw,
             None,
             None,
@@ -280,7 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sort_parts_by_runtime_top_n_schedules_promising_blocks_first() {
+    fn test_front_load_parts_schedules_promising_blocks_first() {
         let mut parts = vec![
             part_with_stats("mid", Some((4, 40))),
             part_with_stats("no_stats", None),
@@ -289,23 +381,59 @@ mod tests {
         ];
 
         // Without a filter the order is untouched.
-        sort_parts_by_runtime_top_n(&mut parts, &[]);
+        front_load_parts_for_runtime_top_n(&mut parts, &[], 1024);
         assert_eq!(part_locations(&parts), vec![
             "mid", "no_stats", "high", "low"
         ]);
 
         // ASC reads the smallest mins first; unknown statistics go last.
-        let asc = Arc::new(RuntimeTopNFilter::new(3, true));
-        sort_parts_by_runtime_top_n(&mut parts, std::slice::from_ref(&asc));
+        let asc = Arc::new(RuntimeTopNFilter::new(3, true, false));
+        front_load_parts_for_runtime_top_n(&mut parts, std::slice::from_ref(&asc), 1024);
         assert_eq!(part_locations(&parts), vec![
             "low", "mid", "high", "no_stats"
         ]);
 
         // DESC reads the largest maxes first.
-        let desc = Arc::new(RuntimeTopNFilter::new(3, false));
-        sort_parts_by_runtime_top_n(&mut parts, std::slice::from_ref(&desc));
+        let desc = Arc::new(RuntimeTopNFilter::new(3, false, false));
+        front_load_parts_for_runtime_top_n(&mut parts, std::slice::from_ref(&desc), 1024);
         assert_eq!(part_locations(&parts), vec![
             "high", "mid", "low", "no_stats"
+        ]);
+
+        // A bounded head only orders the front; the tail keeps all remaining
+        // parts in some order.
+        front_load_parts_for_runtime_top_n(&mut parts, std::slice::from_ref(&asc), 2);
+        assert_eq!(part_locations(&parts)[..2], ["low", "mid"]);
+        let mut tail = part_locations(&parts)[2..].to_vec();
+        tail.sort_unstable();
+        assert_eq!(tail, vec!["high", "no_stats"]);
+    }
+
+    #[test]
+    fn test_front_load_ranks_null_bearing_blocks_best_under_nulls_first() {
+        let nulls_first = Arc::new(RuntimeTopNFilter::new(3, true, true));
+        let mut parts = vec![
+            part_with_stats("low", Some((1, 10))),
+            part_with_nullable_stats("with_nulls", Some((50, 60, 2))),
+            part_with_stats("no_stats", None),
+        ];
+
+        // Null-bearing blocks hold the globally best rows under NULLS FIRST
+        // and can never be pruned: schedule them before any value rank.
+        front_load_parts_for_runtime_top_n(&mut parts, std::slice::from_ref(&nulls_first), 1024);
+        assert_eq!(part_locations(&parts), vec![
+            "with_nulls",
+            "low",
+            "no_stats"
+        ]);
+
+        // NULLS LAST keeps the plain value ranking.
+        let nulls_last = Arc::new(RuntimeTopNFilter::new(3, true, false));
+        front_load_parts_for_runtime_top_n(&mut parts, std::slice::from_ref(&nulls_last), 1024);
+        assert_eq!(part_locations(&parts), vec![
+            "low",
+            "with_nulls",
+            "no_stats"
         ]);
     }
 }

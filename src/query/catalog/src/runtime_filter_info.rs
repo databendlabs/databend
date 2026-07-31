@@ -40,14 +40,16 @@ pub type RuntimeBloomFilter = Arc<Sbbf>;
 pub struct RuntimeTopNFilter {
     column_id: u32,
     asc: bool,
+    nulls_first: bool,
     boundary: RwLock<Option<Scalar>>,
 }
 
 impl RuntimeTopNFilter {
-    pub fn new(column_id: u32, asc: bool) -> Self {
+    pub fn new(column_id: u32, asc: bool, nulls_first: bool) -> Self {
         Self {
             column_id,
             asc,
+            nulls_first,
             boundary: RwLock::new(None),
         }
     }
@@ -58,6 +60,10 @@ impl RuntimeTopNFilter {
 
     pub fn asc(&self) -> bool {
         self.asc
+    }
+
+    pub fn nulls_first(&self) -> bool {
+        self.nulls_first
     }
 
     pub fn boundary(&self) -> Option<Scalar> {
@@ -96,16 +102,29 @@ impl RuntimeTopNFilter {
         }
     }
 
-    /// Return true only when every non-null value in a block is strictly worse
-    /// than the current boundary. Equal values are retained for tie safety.
-    pub fn should_prune(&self, min: &Scalar, max: &Scalar) -> bool {
-        if matches!(min, Scalar::Null) || matches!(max, Scalar::Null) {
-            return false;
-        }
+    /// Return true only when every row in a block is strictly worse than the
+    /// current boundary. Equal values are retained for tie safety.
+    ///
+    /// `min`/`max` describe the non-null values of the block and `null_count`
+    /// its null rows; boundaries are never null, so null rows rank by
+    /// `nulls_first` alone.
+    pub fn should_prune(&self, min: &Scalar, max: &Scalar, null_count: u64) -> bool {
         let boundary = self.boundary.read();
         let Some(boundary) = boundary.as_ref() else {
             return false;
         };
+
+        // Under NULLS FIRST null rows sort before the boundary and stay
+        // candidates forever.
+        if self.nulls_first && null_count > 0 {
+            return false;
+        }
+
+        // Blocks without non-null values have null min/max statistics. Under
+        // NULLS LAST every such row sorts after the non-null boundary.
+        if matches!(min, Scalar::Null) || matches!(max, Scalar::Null) {
+            return !self.nulls_first && null_count > 0;
+        }
 
         if self.asc {
             min.partial_cmp(boundary) == Some(CmpOrdering::Greater)
@@ -294,13 +313,13 @@ mod tests {
 
     #[test]
     fn runtime_top_n_filter_is_monotonic_and_tie_safe() {
-        let asc = RuntimeTopNFilter::new(7, true);
-        assert!(!asc.should_prune(&int64(11), &int64(20)));
+        let asc = RuntimeTopNFilter::new(7, true, false);
+        assert!(!asc.should_prune(&int64(11), &int64(20), 0));
 
         asc.update(&int64(10));
         assert_eq!(asc.boundary(), Some(int64(10)));
-        assert!(asc.should_prune(&int64(11), &int64(20)));
-        assert!(!asc.should_prune(&int64(10), &int64(20)));
+        assert!(asc.should_prune(&int64(11), &int64(20), 0));
+        assert!(!asc.should_prune(&int64(10), &int64(20), 0));
 
         // A weaker local boundary must not loosen the shared filter.
         asc.update(&int64(12));
@@ -308,10 +327,10 @@ mod tests {
         asc.update(&int64(8));
         assert_eq!(asc.boundary(), Some(int64(8)));
 
-        let desc = RuntimeTopNFilter::new(7, false);
+        let desc = RuntimeTopNFilter::new(7, false, false);
         desc.update(&int64(10));
-        assert!(desc.should_prune(&int64(1), &int64(9)));
-        assert!(!desc.should_prune(&int64(1), &int64(10)));
+        assert!(desc.should_prune(&int64(1), &int64(9), 0));
+        assert!(!desc.should_prune(&int64(1), &int64(10), 0));
         desc.update(&int64(8));
         assert_eq!(desc.boundary(), Some(int64(10)));
         desc.update(&int64(12));
@@ -322,8 +341,26 @@ mod tests {
     }
 
     #[test]
+    fn runtime_top_n_filter_ranks_nulls_by_ordering() {
+        let nulls_last = RuntimeTopNFilter::new(1, true, false);
+        nulls_last.update(&int64(10));
+        // Nulls sort after the boundary, so null rows are prunable too.
+        assert!(nulls_last.should_prune(&int64(11), &int64(20), 5));
+        // All-null blocks sort entirely after the boundary.
+        assert!(nulls_last.should_prune(&Scalar::Null, &Scalar::Null, 7));
+        assert!(!nulls_last.should_prune(&int64(9), &int64(20), 5));
+
+        let nulls_first = RuntimeTopNFilter::new(1, true, true);
+        nulls_first.update(&int64(10));
+        // Null rows are always candidates under NULLS FIRST.
+        assert!(!nulls_first.should_prune(&int64(11), &int64(20), 1));
+        assert!(nulls_first.should_prune(&int64(11), &int64(20), 0));
+        assert!(!nulls_first.should_prune(&Scalar::Null, &Scalar::Null, 7));
+    }
+
+    #[test]
     fn runtime_top_n_filter_concurrent_updates_keep_tightest() {
-        let filter = Arc::new(RuntimeTopNFilter::new(1, true));
+        let filter = Arc::new(RuntimeTopNFilter::new(1, true, false));
         let threads: Vec<_> = (0..4)
             .map(|t| {
                 let filter = filter.clone();
@@ -331,7 +368,7 @@ mod tests {
                     // Race tightening publishes against lock-free reads.
                     for v in (0..500).rev() {
                         filter.update(&int64(v * 4 + t));
-                        let _ = filter.should_prune(&int64(1), &int64(2));
+                        let _ = filter.should_prune(&int64(1), &int64(2), 0);
                         let _ = filter.boundary();
                     }
                 })
@@ -343,8 +380,8 @@ mod tests {
 
         // The global minimum wins regardless of interleaving.
         assert_eq!(filter.boundary(), Some(int64(0)));
-        assert!(filter.should_prune(&int64(1), &int64(5)));
-        assert!(!filter.should_prune(&int64(0), &int64(5)));
+        assert!(filter.should_prune(&int64(1), &int64(5), 0));
+        assert!(!filter.should_prune(&int64(0), &int64(5), 0));
     }
 
     #[test]

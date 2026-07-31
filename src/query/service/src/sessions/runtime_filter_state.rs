@@ -81,6 +81,18 @@ impl RuntimeFilterState {
             .push(filter);
     }
 
+    /// Remove one registered filter. Tolerates the filter being absent, e.g.
+    /// when `clear` ran in between.
+    pub fn unregister_runtime_top_n_filter(&self, scan_id: usize, filter: &Arc<RuntimeTopNFilter>) {
+        let mut filters = self.runtime_top_n_filters.write();
+        if let Some(list) = filters.get_mut(&scan_id) {
+            list.retain(|entry| !Arc::ptr_eq(entry, filter));
+            if list.is_empty() {
+                filters.remove(&scan_id);
+            }
+        }
+    }
+
     pub fn get_runtime_top_n_filters(&self, scan_id: usize) -> Vec<Arc<RuntimeTopNFilter>> {
         self.runtime_top_n_filters
             .read()

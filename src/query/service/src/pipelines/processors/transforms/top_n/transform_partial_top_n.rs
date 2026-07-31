@@ -64,7 +64,9 @@ pub struct TransformPartialTopN<R: Rows> {
     read_settings: ReadSettings,
     spilled: Vec<SpilledCandidates>,
     ctx: Arc<QueryContext>,
-    runtime_top_n_filter: Option<Arc<RuntimeTopNFilter>>,
+    /// The shared boundary filter and the payload offset of the (single)
+    /// source sort column, from which boundary values are published.
+    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
 }
 
 impl<R: Rows> TransformPartialTopN<R> {
@@ -79,12 +81,8 @@ impl<R: Rows> TransformPartialTopN<R> {
         spill_schema: DataSchemaRef,
         writer_pool_bytes: usize,
         read_settings: ReadSettings,
-        runtime_top_n_filter: Option<Arc<RuntimeTopNFilter>>,
+        runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
     ) -> Self {
-        // The shared filter's boundary lives in the source-column domain, so
-        // it may only be wired up when the order column is the source column
-        // (i.e. no row converter is involved).
-        debug_assert!(runtime_top_n_filter.is_none() || row_converter.is_none());
         Self {
             candidates: TopNCandidates::new(capacity, sort_row_offset),
             row_converter,
@@ -102,24 +100,32 @@ impl<R: Rows> TransformPartialTopN<R> {
     }
 
     fn publish_runtime_top_n_boundary(&mut self) {
-        let Some(filter) = &self.runtime_top_n_filter else {
+        let Some((source_offset, filter)) = &self.runtime_top_n_filter else {
             return;
         };
-        // Publish only when the local boundary actually tightened, so the
-        // shared filter is written at most once per tightening instead of
-        // once per input block.
-        if let Some(boundary) = self.candidates.take_tightened_boundary() {
-            filter.update(boundary);
+        // The value is read from the source sort column of the boundary row,
+        // keeping it in the raw column domain even when the order column is a
+        // row encoding. `update` ignores null boundary values.
+        let Some((block, row)) = self.candidates.take_tightened_boundary_row() else {
+            return;
+        };
+        if let Some(value) = block.get_by_offset(*source_offset).index(row) {
+            filter.update(&value.to_owned());
         }
     }
 
     /// Pull the tightest boundary published by any local stream, so row
     /// filtering benefits from other streams' progress as well.
     fn absorb_runtime_top_n_boundary(&mut self) {
+        // Absorbed scalars enter the order-column domain, which matches the
+        // source column only when no row converter is involved.
+        if self.row_converter.is_some() {
+            return;
+        }
         if let Some(bound) = self
             .runtime_top_n_filter
             .as_ref()
-            .and_then(|filter| filter.boundary())
+            .and_then(|(_, filter)| filter.boundary())
         {
             self.candidates.tighten_boundary(bound);
         }

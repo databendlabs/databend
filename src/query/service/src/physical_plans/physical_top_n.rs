@@ -26,6 +26,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::types::DataType;
+use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -109,7 +110,8 @@ fn runtime_top_n_data_source(plan: &PhysicalPlan) -> Option<&DataSourcePlan> {
 
 impl PartialTopNPlan {
     /// Runtime block pruning is only safe when this TopN is ordered by one
-    /// non-null primitive Fuse column and the scan has the exact same pushdown.
+    /// Fuse column with orderable statistics and the scan has the exact same
+    /// pushdown. Returns the scan id and the shared filter.
     fn runtime_top_n_filter(&self) -> Option<(usize, Arc<RuntimeTopNFilter>)> {
         if self.candidate_count == 0 || self.order_by.len() != 1 {
             return None;
@@ -120,6 +122,12 @@ impl PartialTopNPlan {
             return None;
         };
         if table_info.engine() != "FUSE" {
+            return None;
+        }
+
+        // Cost gate: boundary-based pruning and scheduling only pay off when
+        // the scan is substantially larger than the candidate set.
+        if source.statistics.read_rows < self.candidate_count.saturating_mul(2) {
             return None;
         }
 
@@ -135,10 +143,17 @@ impl PartialTopNPlan {
         let RemoteExpr::ColumnRef { id, data_type, .. } = expr else {
             return None;
         };
+        // The types Fuse maintains orderable min/max statistics for, and whose
+        // `Scalar` ordering matches the sort ordering. Boolean and TimestampTz
+        // have no usable statistics and are excluded.
         if id != &desc.display_name
             || !matches!(
-                data_type,
-                DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
+                data_type.remove_nullable(),
+                DataType::Number(_)
+                    | DataType::Decimal(_)
+                    | DataType::Date
+                    | DataType::Timestamp
+                    | DataType::String
             )
         {
             return None;
@@ -146,7 +161,7 @@ impl PartialTopNPlan {
 
         let schema = source.source_info.schema();
         let field = schema.field_with_name(id).ok()?;
-        if field.is_nullable() || DataType::from(field.data_type()) != *data_type {
+        if DataType::from(field.data_type()) != *data_type {
             return None;
         }
         let column_ids = field.leaf_column_ids();
@@ -156,7 +171,11 @@ impl PartialTopNPlan {
 
         Some((
             source.scan_id,
-            Arc::new(RuntimeTopNFilter::new(*column_id, desc.asc)),
+            Arc::new(RuntimeTopNFilter::new(
+                *column_id,
+                desc.asc,
+                desc.nulls_first,
+            )),
         ))
     }
 }
@@ -238,6 +257,19 @@ impl IPhysicalPlan for PartialTopNPlan {
             builder
                 .ctx
                 .register_runtime_top_n_filter(*scan_id, filter.clone());
+
+            // Scope the filter to this pipeline: a later plan reusing the
+            // same QueryContext with a colliding scan id must not observe a
+            // stale boundary.
+            let ctx = builder.ctx.clone();
+            let scan_id = *scan_id;
+            let filter = filter.clone();
+            builder
+                .main_pipeline
+                .set_on_finished(move |_info: &ExecutionInfo| {
+                    ctx.unregister_runtime_top_n_filter(scan_id, &filter);
+                    Ok(())
+                });
         }
 
         self.input.build_pipeline(builder)?;
@@ -264,7 +296,10 @@ impl IPhysicalPlan for PartialTopNPlan {
         let ctx = builder.ctx.clone();
         let candidate_count = self.candidate_count;
         let enable_fixed_rows = self.enable_fixed_rows;
-        let runtime_top_n_filter = runtime_top_n_filter.map(|(_, filter)| filter);
+        // Boundary rows are published from the source sort column, so pass its
+        // payload offset along with the filter.
+        let runtime_top_n_filter =
+            runtime_top_n_filter.map(|(_, filter)| (key_desc.sort_column_desc()[0].offset, filter));
 
         builder.main_pipeline.add_transform(|input, output| {
             create_partial_top_n_processor(
@@ -440,7 +475,7 @@ fn create_partial_top_n_processor(
     writer_pool_bytes: usize,
     read_settings: ReadSettings,
     enable_fixed_rows: bool,
-    runtime_top_n_filter: Option<Arc<RuntimeTopNFilter>>,
+    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
 ) -> Result<ProcessorPtr> {
     struct PartialTopNRowsVisitor {
         input: Arc<InputPort>,
@@ -453,7 +488,7 @@ fn create_partial_top_n_processor(
         spill_schema: DataSchemaRef,
         writer_pool_bytes: usize,
         read_settings: ReadSettings,
-        runtime_top_n_filter: Option<Arc<RuntimeTopNFilter>>,
+        runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
     }
 
     impl RowsTypeVisitor for PartialTopNRowsVisitor {
@@ -654,26 +689,35 @@ impl PhysicalPlanBuilder {
 mod tests {
     use databend_common_catalog::plan::PartStatistics;
     use databend_common_catalog::plan::Partitions;
+    use databend_common_catalog::plan::PushDownInfo;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_meta_app::schema::TableInfo;
 
     use super::*;
     use crate::physical_plans::WindowPartition;
 
-    fn table_scan(scan_id: usize) -> PhysicalPlan {
-        let schema = Arc::new(TableSchema::empty());
+    fn table_scan_with(
+        scan_id: usize,
+        schema: Arc<TableSchema>,
+        push_downs: Option<PushDownInfo>,
+        read_rows: usize,
+    ) -> PhysicalPlan {
+        let mut table_info = TableInfo::simple("default", "top_n_source", schema.clone());
+        table_info.meta.engine = "FUSE".to_string();
         let source = DataSourcePlan {
-            source_info: DataSourceInfo::TableSource(TableInfo::simple(
-                "default",
-                "top_n_source",
-                schema.clone(),
-            )),
+            source_info: DataSourceInfo::TableSource(table_info),
             output_schema: schema,
             parts: Partitions::default(),
-            statistics: PartStatistics::default(),
+            statistics: PartStatistics {
+                read_rows,
+                ..PartStatistics::default()
+            },
             description: String::new(),
             tbl_args: None,
-            push_downs: None,
+            push_downs,
             internal_columns: None,
             base_block_ids: None,
             block_meta_options: Default::default(),
@@ -688,6 +732,65 @@ mod tests {
             None,
             None,
         )
+    }
+
+    fn table_scan(scan_id: usize) -> PhysicalPlan {
+        table_scan_with(scan_id, Arc::new(TableSchema::empty()), None, 0)
+    }
+
+    fn partial_top_n(input: PhysicalPlan, candidate_count: usize) -> PartialTopNPlan {
+        PartialTopNPlan {
+            meta: PhysicalPlanMeta::new("PartialTopN"),
+            input,
+            order_by: vec![SortDesc {
+                asc: false,
+                nulls_first: false,
+                order_by: databend_common_expression::Symbol::new(0),
+                display_name: "a".to_string(),
+            }],
+            candidate_count,
+            enable_fixed_rows: false,
+            stat_info: None,
+        }
+    }
+
+    fn nullable_int_pushdown() -> (Arc<TableSchema>, PushDownInfo) {
+        let data_type = DataType::Number(NumberDataType::Int32).wrap_nullable();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
+        )]));
+        let push_downs = PushDownInfo {
+            order_by: vec![(
+                RemoteExpr::ColumnRef {
+                    span: None,
+                    id: "a".to_string(),
+                    data_type,
+                    display_name: "a".to_string(),
+                },
+                false,
+                false,
+            )],
+            ..PushDownInfo::default()
+        };
+        (schema, push_downs)
+    }
+
+    #[test]
+    fn runtime_top_n_filter_supports_nullable_keys_behind_a_cost_gate() {
+        let (schema, push_downs) = nullable_int_pushdown();
+
+        // Nullable sort keys are eligible, and the ordering is carried over.
+        let scan = table_scan_with(3, schema.clone(), Some(push_downs.clone()), 1000);
+        let (scan_id, filter) = partial_top_n(scan, 5).runtime_top_n_filter().unwrap();
+        assert_eq!(scan_id, 3);
+        assert!(!filter.asc());
+        assert!(!filter.nulls_first());
+
+        // The cost gate rejects scans not substantially larger than the
+        // candidate set.
+        let scan = table_scan_with(3, schema, Some(push_downs), 9);
+        assert!(partial_top_n(scan, 5).runtime_top_n_filter().is_none());
     }
 
     #[test]

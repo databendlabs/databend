@@ -204,5 +204,98 @@ unset force_sort_data_spill;
 statement ok
 drop table t_top_n;
 
+# Runtime TopN over a multi-block FUSE table: `row_per_block` forces many
+# small blocks so the shared-boundary block pruning, per-node scheduling and
+# row-level filtering paths are all exercised. Results must match the plain
+# Sort + Limit path regardless of which blocks get pruned.
+statement ok
+create or replace table t_top_n_fuse (
+    k int not null,
+    v int null,
+    s string not null,
+    d decimal(10, 2) not null
+) row_per_block = 7;
+
+statement ok
+insert into t_top_n_fuse
+select number,
+       if(number >= 190, null, number),
+       to_string(10000 + number),
+       cast(number * 0.01 as decimal(10, 2))
+from numbers(100);
+
+statement ok
+insert into t_top_n_fuse
+select number + 100,
+       if(number + 100 >= 190, null, number + 100),
+       to_string(10100 + number),
+       cast((number + 100) * 0.01 as decimal(10, 2))
+from numbers(100);
+
+# Non-null integer key, both directions and with offset.
+query I
+select k from t_top_n_fuse order by k desc limit 4
+----
+199
+198
+197
+196
+
+query I
+select k from t_top_n_fuse order by k asc limit 3 offset 2
+----
+2
+3
+4
+
+# The Sort + Limit path is the differential oracle.
+query I
+settings (enable_top_n = 0) select k from t_top_n_fuse order by k desc limit 4
+----
+199
+198
+197
+196
+
+# Nullable key with NULLS LAST: blocks holding only worse values (including
+# the all-null tail) are prunable, and the results stay correct.
+query II
+select v, k from t_top_n_fuse order by v desc nulls last, k desc limit 3
+----
+189 189
+188 188
+187 187
+
+# Nullable key with NULLS FIRST: null rows always stay candidates.
+query II
+select v, k from t_top_n_fuse order by v asc nulls first, k asc limit 3
+----
+NULL 190
+NULL 191
+NULL 192
+
+# String and decimal keys are eligible for the runtime boundary as well;
+# both columns increase with k, so projecting k keeps results exact.
+query I
+select k from t_top_n_fuse order by s desc limit 2
+----
+199
+198
+
+query I
+select k from t_top_n_fuse order by d desc limit 2
+----
+199
+198
+
+query I
+select k from t_top_n_fuse order by d asc limit 2 offset 1
+----
+1
+2
+
+statement ok
+drop table t_top_n_fuse;
+
 statement ok
 unset enable_top_n;

@@ -163,21 +163,22 @@ impl<R: Rows> TopNCandidates<R> {
         self.current.take()
     }
 
-    /// The boundary if it has tightened since the last call. Publishing only
-    /// on change keeps shared state (e.g. `RuntimeTopNFilter`) uncontended:
-    /// after the candidate set warms up, updates become rare.
-    pub fn take_tightened_boundary(&mut self) -> Option<&Scalar> {
+    /// When the boundary tightened since the last call, return the candidate
+    /// block and the row index holding the boundary (its last row), so shared
+    /// state is only written on change.
+    pub fn take_tightened_boundary_row(&mut self) -> Option<(&DataBlock, usize)> {
         if !self.boundary_tightened {
             return None;
         }
         self.boundary_tightened = false;
-        self.boundary.as_ref()
+        let (block, rows) = self.current.as_ref()?;
+        debug_assert_eq!(rows.len(), self.capacity);
+        Some((block, rows.len() - 1))
     }
 
-    /// Absorb an externally shared boundary (e.g. the tightest bound published
-    /// by any stream via `RuntimeTopNFilter`), so sifting also filters with
-    /// other streams' progress. External boundaries are already shared, so
-    /// they are not marked as tightened for re-publication.
+    /// Absorb an externally shared boundary (the tightest bound published by
+    /// any stream). It is already shared, so it is not marked as tightened
+    /// for re-publication.
     pub fn tighten_boundary(&mut self, bound: Scalar) {
         debug_assert!(!matches!(bound, Scalar::Null));
         let tighter = match &self.boundary {
@@ -315,7 +316,7 @@ mod tests {
         let mut candidates = TopNCandidates::<SimpleRowsAsc<Int32Type>>::new(3, 0);
         candidates.tighten_boundary(Scalar::Number(NumberScalar::Int32(5)));
         // External boundaries are not publishable changes.
-        assert!(candidates.take_tightened_boundary().is_none());
+        assert!(candidates.take_tightened_boundary_row().is_none());
 
         // Rows beyond the absorbed boundary are filtered out.
         let (block, rows) = candidate_block(vec![7, 1, 6, 2])?;
@@ -346,29 +347,29 @@ mod tests {
         // Not full yet: no boundary to publish.
         let (block, rows) = candidate_block(vec![5])?;
         candidates.sift_unsorted(block, rows)?;
-        assert!(candidates.take_tightened_boundary().is_none());
+        assert!(candidates.take_tightened_boundary_row().is_none());
 
         // Reaching capacity establishes the boundary exactly once.
         let (block, rows) = candidate_block(vec![9, 7])?;
         candidates.sift_unsorted(block, rows)?;
-        assert_eq!(
-            candidates.take_tightened_boundary(),
-            Some(&Scalar::Number(NumberScalar::Int32(7)))
-        );
-        assert!(candidates.take_tightened_boundary().is_none());
+        {
+            let (block, row) = candidates.take_tightened_boundary_row().unwrap();
+            assert_eq!(int32_values(block)[row], 7);
+        }
+        assert!(candidates.take_tightened_boundary_row().is_none());
 
         // A block that cannot tighten the boundary reports no change.
         let (block, rows) = candidate_block(vec![8])?;
         candidates.sift_unsorted(block, rows)?;
-        assert!(candidates.take_tightened_boundary().is_none());
+        assert!(candidates.take_tightened_boundary_row().is_none());
 
         // A better row tightens the boundary again.
         let (block, rows) = candidate_block(vec![1])?;
         candidates.sift_unsorted(block, rows)?;
-        assert_eq!(
-            candidates.take_tightened_boundary(),
-            Some(&Scalar::Number(NumberScalar::Int32(5)))
-        );
+        {
+            let (block, row) = candidates.take_tightened_boundary_row().unwrap();
+            assert_eq!(int32_values(block)[row], 5);
+        }
         Ok(())
     }
 

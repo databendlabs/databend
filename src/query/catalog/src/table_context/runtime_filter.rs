@@ -38,6 +38,8 @@ pub trait TableContextRuntimeFilter: Send + Sync {
 
     fn register_runtime_top_n_filter(&self, _scan_id: usize, _filter: Arc<RuntimeTopNFilter>) {}
 
+    fn unregister_runtime_top_n_filter(&self, _scan_id: usize, _filter: &Arc<RuntimeTopNFilter>) {}
+
     fn get_runtime_top_n_filters(&self, _scan_id: usize) -> Vec<Arc<RuntimeTopNFilter>> {
         Vec::new()
     }
