@@ -416,11 +416,37 @@ SELECT count(*) FROM hash_partitioned WHERE id >= 40000
 ----
 2
 
+# In a cluster, a constant SELECT has no original top Merge. Its synthesized
+# hash shuffle must remain below the distributed writer.
+statement ok
+INSERT INTO hash_partitioned SELECT 40002::INT
+
+query I
+SELECT count(*) FROM hash_partitioned WHERE id >= 40000
+----
+3
+
 statement error write_distribution_mode must be either 'none' or 'hash'
 CREATE TABLE invalid_write_distribution(p INT) PARTITION BY (p) WRITE_DISTRIBUTION_MODE='random'
 
 statement error write_distribution_mode='hash' requires PARTITION BY
 CREATE TABLE missing_write_partition(p INT) WRITE_DISTRIBUTION_MODE='hash'
+
+# bucket remains a valid cluster expression without physical partitioning.
+statement ok
+CREATE TABLE bucket_cluster_only(id INT) CLUSTER BY (bucket(16, id))
+
+statement ok
+INSERT INTO bucket_cluster_only SELECT number FROM numbers(100)
+
+query I
+SELECT count(*) FROM bucket_cluster_only
+----
+100
+
+# A bucket cluster key does not substitute for a PARTITION BY declaration.
+statement error write_distribution_mode='hash' requires PARTITION BY
+CREATE TABLE bucket_cluster_hash(id INT) CLUSTER BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash'
 
 statement error must use bucket with a constant count between 1 and 2147483647
 CREATE TABLE invalid_bucket_count(id BIGINT) PARTITION BY (bucket(id, id))

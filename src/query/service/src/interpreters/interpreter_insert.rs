@@ -177,6 +177,7 @@ pub fn build_insert_select_physical_plan(
 
     if table.support_distributed_insert()
         && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
+        && exchange.kind == FragmentKind::Merge
     {
         let input = if needs_pk_route {
             prepare_and_route(exchange.input.clone())?
