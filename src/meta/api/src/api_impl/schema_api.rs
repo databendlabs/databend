@@ -235,6 +235,9 @@ pub async fn construct_drop_table_txn_operations(
     );
 
     let mut tb_meta = tb_meta.unwrap();
+    // CREATE OR REPLACE passes `expected_engine` to prevent replacing an existing
+    // table with a different engine. Reject the mismatch before this helper marks
+    // the existing table as dropped; ordinary DROP operations pass `None`.
     if let Some(expected_engine) = expected_engine {
         if !tb_meta.engine.eq_ignore_ascii_case(expected_engine) {
             return Err(KVAppError::AppError(

@@ -363,10 +363,12 @@ where
                         }
                         CreateOption::CreateOrReplace => {
                             if req.as_dropped {
-                                // Atomic CTAS keeps the existing table visible while the insert
-                                // pipeline runs, so it cannot use the drop helper. Validate the
-                                // engine here; `commit_table_meta()` publishes the replacement
-                                // after the insert succeeds.
+                                // CREATE OR REPLACE must not replace an existing table with a
+                                // different engine. Atomic CTAS keeps the existing table visible
+                                // while the insert pipeline runs, so it cannot use the drop helper
+                                // that normally enforces this rule. Validate the engine here;
+                                // `commit_table_meta()` publishes the replacement after the insert
+                                // succeeds.
                                 let existing_meta =
                                     self.get_pb(&TableId::new(*id.data)).await?.ok_or_else(|| {
                                         KVAppError::AppError(AppError::UnknownTableId(
