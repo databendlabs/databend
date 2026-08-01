@@ -364,8 +364,8 @@ mod tests {
         let threads: Vec<_> = (0..4)
             .map(|t| {
                 let filter = filter.clone();
-                std::thread::spawn(move || {
-                    // Race tightening publishes against lock-free reads.
+                databend_common_base::runtime::Thread::spawn(move || {
+                    // Race tightening publishes against reads.
                     for v in (0..500).rev() {
                         filter.update(&int64(v * 4 + t));
                         let _ = filter.should_prune(&int64(1), &int64(2), 0);
