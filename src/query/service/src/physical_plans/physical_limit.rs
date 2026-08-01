@@ -14,8 +14,12 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::runtime_filter_info::RuntimeLimitFilter;
+use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -36,6 +40,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanCast;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::physical_plan::runtime_scan_data_source;
 use crate::physical_plans::physical_row_fetch::RowFetch;
 use crate::pipelines::PipelineBuilder;
 
@@ -111,20 +116,37 @@ impl IPhysicalPlan for Limit {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let runtime_limit_filter = match &self.limit {
+            None => None,
+            Some(_) => match runtime_scan_data_source(&self.input) {
+                None => None,
+                Some(source) => match &source.source_info {
+                    DataSourceInfo::TableSource(table_info) if table_info.engine() == "FUSE" => {
+                        let ctx = &builder.ctx;
+                        let scan_id = source.scan_id;
+                        let limit_filter = Arc::new(RuntimeLimitFilter::new());
+                        ctx.register_runtime_scan_filter(scan_id, limit_filter.clone());
+                        Some(limit_filter)
+                    }
+                    _ => None,
+                },
+            },
+        };
+
         self.input.build_pipeline(builder)?;
 
         if self.limit.is_some() || self.offset != 0 {
             builder.main_pipeline.try_resize(1)?;
-            return builder.main_pipeline.add_transform(|input, output| {
+            builder.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(TransformLimit::try_create(
                     self.limit,
                     self.offset,
                     input,
                     output,
+                    runtime_limit_filter.clone(),
                 )?))
-            });
+            })?;
         }
-
         Ok(())
     }
 }

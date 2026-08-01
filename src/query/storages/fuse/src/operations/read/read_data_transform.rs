@@ -14,9 +14,15 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 
+use databend_common_base::JoinHandle;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,6 +46,32 @@ use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
 
+struct AbortOnDrop<T> {
+    task: JoinHandle<T>,
+}
+
+impl<T> AbortOnDrop<T> {
+    fn new(task: JoinHandle<T>) -> Self {
+        Self { task }
+    }
+}
+
+impl<T> Unpin for AbortOnDrop<T> {}
+
+impl<T> Future for AbortOnDrop<T> {
+    type Output = std::result::Result<T, tokio::task::JoinError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        Pin::new(&mut self.task).poll(cx)
+    }
+}
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
 pub struct ReadDataTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -54,6 +86,7 @@ pub struct ReadDataTransform {
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
     context: Arc<dyn TableContext>,
+    runtime_scan_filters: RuntimeScanFilters,
 }
 
 impl ReadDataTransform {
@@ -68,6 +101,7 @@ impl ReadDataTransform {
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
+        let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
         Ok(ProcessorPtr::create(Box::new(Self {
             input,
             output,
@@ -80,46 +114,49 @@ impl ReadDataTransform {
             table_schema,
             scan_id,
             context: ctx,
+            runtime_scan_filters,
         })))
     }
 
     fn create_runtime_pruners(&self) -> Result<ExprRuntimePruner> {
         let read_settings = self.read_block_context.read_settings();
-        let inlist_bloom_prune_threshold =
-            self.context
-                .get_settings()
-                .get_inlist_runtime_bloom_prune_threshold()? as usize;
+        let settings = self.context.get_settings();
+        let threshold = settings.get_inlist_runtime_bloom_prune_threshold()? as usize;
         let runtime_filters = self.context.get_runtime_filters(self.scan_id);
+        let mut filter_exprs = Vec::new();
+        for filter in &runtime_filters {
+            filter_exprs.extend(RuntimeFilterExpr::from_entry(filter));
+        }
 
         Ok(ExprRuntimePruner::new(
             self.func_ctx.clone(),
             self.table_schema.clone(),
             self.block_reader.operator(),
             read_settings,
-            inlist_bloom_prune_threshold,
-            runtime_filters
-                .iter()
-                .flat_map(RuntimeFilterExpr::from_entry)
-                .collect(),
+            threshold,
+            filter_exprs,
         ))
     }
 
     fn classify_parts(&mut self, parts: Vec<PartInfoPtr>) -> Result<()> {
-        let runtime_top_n_filters = self.context.get_runtime_top_n_filters(self.scan_id);
         for part in parts {
-            if FuseBlockPartInfo::from_part(&part)?
-                .should_prune_by_runtime_top_n(&runtime_top_n_filters)
-            {
+            let part_info = FuseBlockPartInfo::from_part(&part)?;
+            let columns_stat = part_info.columns_stat.as_ref();
+
+            if self.runtime_scan_filters.should_prune(columns_stat) {
                 continue;
             }
-            if let Some(groups) = self.read_block_context.granule_groups_if_subset(&part)? {
-                let source = ParquetDataSource::Granule(groups);
-                let meta = DataSourceWithMeta::create(vec![part], vec![source]);
-                self.pending_output
-                    .push_back(DataBlock::empty_with_meta(meta));
-            } else {
+
+            let Some(groups) = self.read_block_context.granule_groups_if_subset(&part)? else {
                 self.remaining_parts.push(part);
-            }
+                continue;
+            };
+
+            self.pending_output
+                .push_back(DataBlock::empty_with_meta(DataSourceWithMeta::create(
+                    vec![part],
+                    vec![ParquetDataSource::Granule(groups)],
+                )));
         }
         Ok(())
     }
@@ -129,46 +166,85 @@ impl ReadDataTransform {
         let mut sources = Vec::with_capacity(parts.len());
         let mut full_reads = Vec::new();
         let expr_runtime_pruner = self.create_runtime_pruners()?;
-        let runtime_top_n_filters = self.context.get_runtime_top_n_filters(self.scan_id);
 
         for part in parts {
-            // The boundary may have tightened since this partition was first
-            // classified, so check it again immediately before scheduling I/O.
-            if FuseBlockPartInfo::from_part(&part)?
-                .should_prune_by_runtime_top_n(&runtime_top_n_filters)
-                || expr_runtime_pruner.prune(&part).await?
             {
+                let part_info = FuseBlockPartInfo::from_part(&part)?;
+                let columns_stat = part_info.columns_stat.as_ref();
+
+                if self.runtime_scan_filters.should_prune(columns_stat) {
+                    continue;
+                }
+            }
+
+            if expr_runtime_pruner.prune(&part).await? {
                 continue;
             }
 
             let index = parts_to_read.len();
             let groups = self.read_block_context.granule_groups(&part, None)?;
+
             parts_to_read.push(part.clone());
             sources.push(groups.map(ParquetDataSource::Granule));
+
             if sources[index].is_none() {
+                let filters = self.runtime_scan_filters.clone();
                 let read_block_context = self.read_block_context.clone();
+
                 full_reads.push(async move {
-                    let source = databend_common_base::runtime::spawn(async move {
-                        read_block_context.read_full_data(part).await
-                    })
-                    .await
-                    .unwrap()?;
-                    Result::<_>::Ok((index, source))
+                    let read_part = part.clone();
+                    let task = databend_common_base::runtime::spawn(async move {
+                        read_block_context.read_full_data(read_part).await
+                    });
+                    let mut read = AbortOnDrop::new(task);
+
+                    if filters.is_empty() {
+                        let source = read.await.map_err(|error| {
+                            ErrorCode::TokioError(format!("block read task failed: {error}"))
+                        })??;
+                        return Ok::<_, ErrorCode>((index, Some(source)));
+                    }
+
+                    loop {
+                        // Subscribe before checking to avoid missing an update.
+                        let rechecks = filters.recheck_notified();
+                        // `select_all` panics on empty input.
+                        debug_assert!(!rechecks.is_empty());
+                        let part_info = FuseBlockPartInfo::from_part(&part)?;
+                        if filters.should_prune(part_info.columns_stat.as_ref()) {
+                            return Ok::<_, ErrorCode>((index, None));
+                        }
+
+                        tokio::select! {
+                            result = &mut read => {
+                                let source = result.map_err(|error| {
+                                    ErrorCode::TokioError(format!("block read task failed: {error}"))
+                                })??;
+                                return Ok::<_, ErrorCode>((index, Some(source)));
+                            }
+                            _ = futures::future::select_all(rechecks) => {}
+                        }
+                    }
                 });
             }
         }
 
-        for (index, source) in futures::future::try_join_all(full_reads).await? {
-            sources[index] = Some(source);
+        let completed_reads = futures::future::try_join_all(full_reads).await?;
+        for (index, source) in completed_reads {
+            sources[index] = source;
         }
 
-        Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
-            parts_to_read,
-            sources
-                .into_iter()
-                .map(|source| source.expect("every retained part has a data source"))
-                .collect(),
-        )))
+        let mut retained_parts = Vec::with_capacity(parts_to_read.len());
+        let mut retained_sources = Vec::with_capacity(sources.len());
+        for (part, source) in parts_to_read.into_iter().zip(sources) {
+            if let Some(source) = source {
+                retained_parts.push(part);
+                retained_sources.push(source);
+            }
+        }
+
+        let meta = DataSourceWithMeta::create(retained_parts, retained_sources);
+        Ok(DataBlock::empty_with_meta(meta))
     }
 }
 
@@ -186,6 +262,15 @@ impl Processor for ReadDataTransform {
         loop {
             if self.output.is_finished() {
                 self.input.finish();
+                return Ok(Event::Finished);
+            }
+
+            if self.runtime_scan_filters.is_finished() {
+                self.remaining_parts.clear();
+                self.pending_output.clear();
+                self.async_output = None;
+                self.input.finish();
+                self.output.finish();
                 return Ok(Event::Finished);
             }
 

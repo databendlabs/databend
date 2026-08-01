@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::Result;
@@ -26,7 +27,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::types::DataType;
-use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -43,10 +43,7 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_storages_parquet::ReadSettings;
 use itertools::Itertools;
 
-use crate::physical_plans::EvalScalar;
-use crate::physical_plans::Filter;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::physical_plans::TableScan;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::FinalTopNFormatter;
 use crate::physical_plans::format::PartialTopNFormatter;
@@ -54,6 +51,7 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::physical_plan::runtime_scan_data_source;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::top_n::TransformFinalTopN;
@@ -89,25 +87,6 @@ pub struct FinalTopNPlan {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-/// Find the scan eligible for runtime TopN pruning.
-///
-/// Only row-preserving operators may sit between the partial TopN and the scan.
-/// The generic `try_find_single_data_source` traversal is intentionally not used
-/// here because operators such as Limit, Window, Sort, UDF, and ProjectSet also
-/// expose their input source but may change which rows are eligible for TopN.
-fn runtime_top_n_data_source(plan: &PhysicalPlan) -> Option<&DataSourcePlan> {
-    if let Some(scan) = plan.as_any().downcast_ref::<TableScan>() {
-        return Some(&scan.source);
-    }
-    if let Some(filter) = plan.as_any().downcast_ref::<Filter>() {
-        return runtime_top_n_data_source(&filter.input);
-    }
-    if let Some(eval_scalar) = plan.as_any().downcast_ref::<EvalScalar>() {
-        return runtime_top_n_data_source(&eval_scalar.input);
-    }
-    None
-}
-
 impl PartialTopNPlan {
     /// Runtime block pruning is only safe when this TopN is ordered by one
     /// Fuse column with orderable statistics and the scan has the exact same
@@ -117,7 +96,7 @@ impl PartialTopNPlan {
             return None;
         }
 
-        let source = runtime_top_n_data_source(&self.input)?;
+        let source = runtime_scan_data_source(&self.input)?;
         let DataSourceInfo::TableSource(table_info) = &source.source_info else {
             return None;
         };
@@ -250,26 +229,10 @@ impl IPhysicalPlan for PartialTopNPlan {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        // Register before building the scan pipeline so every Fuse partition
-        // producer/reader can retain the same live boundary handle.
         let runtime_top_n_filter = self.runtime_top_n_filter();
         if let Some((scan_id, filter)) = &runtime_top_n_filter {
-            builder
-                .ctx
-                .register_runtime_top_n_filter(*scan_id, filter.clone());
-
-            // Scope the filter to this pipeline: a later plan reusing the
-            // same QueryContext with a colliding scan id must not observe a
-            // stale boundary.
-            let ctx = builder.ctx.clone();
-            let scan_id = *scan_id;
-            let filter = filter.clone();
-            builder
-                .main_pipeline
-                .set_on_finished(move |_info: &ExecutionInfo| {
-                    ctx.unregister_runtime_top_n_filter(scan_id, &filter);
-                    Ok(())
-                });
+            let query_ctx = &builder.ctx;
+            query_ctx.register_runtime_scan_filter(*scan_id, filter.clone());
         }
 
         self.input.build_pipeline(builder)?;
@@ -296,10 +259,10 @@ impl IPhysicalPlan for PartialTopNPlan {
         let ctx = builder.ctx.clone();
         let candidate_count = self.candidate_count;
         let enable_fixed_rows = self.enable_fixed_rows;
-        // Boundary rows are published from the source sort column, so pass its
-        // payload offset along with the filter.
-        let runtime_top_n_filter =
-            runtime_top_n_filter.map(|(_, filter)| (key_desc.sort_column_desc()[0].offset, filter));
+        let filter = match runtime_top_n_filter {
+            None => None,
+            Some((_, filter)) => Some((key_desc.sort_column_desc()[0].offset, filter)),
+        };
 
         builder.main_pipeline.add_transform(|input, output| {
             create_partial_top_n_processor(
@@ -314,7 +277,7 @@ impl IPhysicalPlan for PartialTopNPlan {
                 writer_pool_bytes,
                 read_settings,
                 enable_fixed_rows,
-                runtime_top_n_filter.clone(),
+                filter.clone(),
             )
         })
     }
@@ -697,7 +660,12 @@ mod tests {
     use databend_common_meta_app::schema::TableInfo;
 
     use super::*;
+    use crate::physical_plans::EvalScalar;
+    use crate::physical_plans::Filter;
+    use crate::physical_plans::Sort;
+    use crate::physical_plans::TableScan;
     use crate::physical_plans::WindowPartition;
+    use crate::physical_plans::physical_sort::SortStep;
 
     fn table_scan_with(
         scan_id: usize,
@@ -784,8 +752,9 @@ mod tests {
         let scan = table_scan_with(3, schema.clone(), Some(push_downs.clone()), 1000);
         let (scan_id, filter) = partial_top_n(scan, 5).runtime_top_n_filter().unwrap();
         assert_eq!(scan_id, 3);
-        assert!(!filter.asc());
-        assert!(!filter.nulls_first());
+        let order = filter.preferred_order().unwrap();
+        assert!(!order.asc);
+        assert!(!order.nulls_first);
 
         // The cost gate rejects scans not substantially larger than the
         // candidate set.
@@ -794,7 +763,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_top_n_source_only_crosses_row_preserving_wrappers() {
+    fn runtime_scan_data_source_only_crosses_row_preserving_wrappers() {
         let scan = table_scan(7);
         let filter = PhysicalPlan::new(Filter {
             meta: PhysicalPlanMeta::new("Filter"),
@@ -808,19 +777,35 @@ mod tests {
             PhysicalPlan::new(EvalScalar::create(filter, vec![], Default::default(), None));
 
         assert_eq!(
-            runtime_top_n_data_source(&eval_scalar).map(|source| source.scan_id),
+            runtime_scan_data_source(&eval_scalar).map(|source| source.scan_id),
             Some(7)
         );
 
         let window = PhysicalPlan::new(WindowPartition {
             meta: PhysicalPlanMeta::new("WindowPartition"),
-            input: scan,
+            input: scan.clone(),
             partition_by: vec![],
             order_by: vec![],
             top_n: None,
             stat_info: None,
         });
         assert!(window.try_find_single_data_source().is_some());
-        assert!(runtime_top_n_data_source(&window).is_none());
+        assert!(runtime_scan_data_source(&window).is_none());
+
+        // A blocking operator needs every scan row even after the operator
+        // above it stops pulling: it must reject the traversal.
+        let sort = PhysicalPlan::new(Sort {
+            meta: PhysicalPlanMeta::new("Sort"),
+            input: scan,
+            order_by: vec![],
+            limit: None,
+            step: SortStep::Single,
+            pre_projection: None,
+            broadcast_id: None,
+            enable_fixed_rows: false,
+            stat_info: None,
+        });
+        assert!(sort.try_find_single_data_source().is_some());
+        assert!(runtime_scan_data_source(&sort).is_none());
     }
 }

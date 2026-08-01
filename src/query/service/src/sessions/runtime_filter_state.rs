@@ -23,9 +23,8 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
-use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilter;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_expression::Expr;
 use parking_lot::RwLock;
 
@@ -33,7 +32,7 @@ use parking_lot::RwLock;
 pub struct RuntimeFilterState {
     runtime_filters: RwLock<HashMap<usize, RuntimeFilterInfo>>,
     runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
-    runtime_top_n_filters: RwLock<HashMap<usize, Vec<Arc<RuntimeTopNFilter>>>>,
+    runtime_scan_filters: RwLock<HashMap<usize, RuntimeScanFilters>>,
     runtime_filter_logged: AtomicBool,
 }
 
@@ -45,60 +44,18 @@ impl RuntimeFilterState {
     pub fn clear(&self) {
         self.runtime_filters.write().clear();
         self.runtime_filter_ready.write().clear();
-        self.runtime_top_n_filters.write().clear();
+        self.runtime_scan_filters.write().clear();
         self.runtime_filter_logged.store(false, Ordering::SeqCst);
     }
 
-    pub fn assert_empty(&self, query_id: &str) -> Result<()> {
-        if !self.runtime_filters.read().is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filters should be empty for query {query_id}"
-            )));
-        }
-        if !self.runtime_filter_ready.read().is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filter ready set should be empty for query {query_id}"
-            )));
-        }
-        if !self.runtime_top_n_filters.read().is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime TopN filters should be empty for query {query_id}"
-            )));
-        }
-        if self.runtime_filter_logged.load(Ordering::Relaxed) {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filter logged flag should be reset for query {query_id}"
-            )));
-        }
-        Ok(())
+    pub fn register_runtime_scan_filter(&self, scan_id: usize, filter: Arc<dyn RuntimeScanFilter>) {
+        let mut filters = self.runtime_scan_filters.write();
+        filters.entry(scan_id).or_default().push(filter);
     }
 
-    pub fn register_runtime_top_n_filter(&self, scan_id: usize, filter: Arc<RuntimeTopNFilter>) {
-        self.runtime_top_n_filters
-            .write()
-            .entry(scan_id)
-            .or_default()
-            .push(filter);
-    }
-
-    /// Remove one registered filter. Tolerates the filter being absent, e.g.
-    /// when `clear` ran in between.
-    pub fn unregister_runtime_top_n_filter(&self, scan_id: usize, filter: &Arc<RuntimeTopNFilter>) {
-        let mut filters = self.runtime_top_n_filters.write();
-        if let Some(list) = filters.get_mut(&scan_id) {
-            list.retain(|entry| !Arc::ptr_eq(entry, filter));
-            if list.is_empty() {
-                filters.remove(&scan_id);
-            }
-        }
-    }
-
-    pub fn get_runtime_top_n_filters(&self, scan_id: usize) -> Vec<Arc<RuntimeTopNFilter>> {
-        self.runtime_top_n_filters
-            .read()
-            .get(&scan_id)
-            .cloned()
-            .unwrap_or_default()
+    pub fn get_runtime_scan_filters(&self, scan_id: usize) -> RuntimeScanFilters {
+        let filters = self.runtime_scan_filters.read();
+        filters.get(&scan_id).cloned().unwrap_or_default()
     }
 
     pub fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {

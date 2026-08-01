@@ -14,13 +14,17 @@
 
 use std::cmp::Ordering as CmpOrdering;
 use std::collections::BinaryHeap;
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilter;
+use databend_common_catalog::runtime_filter_info::RuntimeScanOrder;
+use databend_common_catalog::runtime_filter_info::RuntimeTopNRank;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_pipeline::core::InputPort;
@@ -31,19 +35,13 @@ use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 
-use crate::fuse_part::RuntimeTopNRank;
-use crate::fuse_part::compare_runtime_top_n_ranks;
-use crate::fuse_part::runtime_top_n_rank_from_stat;
 use crate::pruning_pipeline::pruned_segment_meta::PrunedSegmentMeta;
 
 /// One buffered segment, ordered so the most promising segment is the
 /// greatest entry (`BinaryHeap` pops the greatest first).
 struct Entry {
     rank: RuntimeTopNRank<Scalar>,
-    /// The filter column's segment-level statistics, kept for boundary
-    /// re-checks at emission time.
-    stat: Option<ColumnStatistics>,
-    asc: bool,
+    order: RuntimeScanOrder,
     block: DataBlock,
 }
 
@@ -63,9 +61,9 @@ impl PartialOrd for Entry {
 
 impl Ord for Entry {
     fn cmp(&self, other: &Self) -> CmpOrdering {
-        // `compare_runtime_top_n_ranks` puts better-ranked entries first
-        // (`Less`); reverse it so they become the heap maximum.
-        compare_runtime_top_n_ranks(&self.rank, &other.rank, self.asc).reverse()
+        // `compare_ranks` puts better-ranked entries first (`Less`); reverse
+        // it so they become the heap maximum.
+        self.order.compare_ranks(&self.rank, &other.rank).reverse()
     }
 }
 
@@ -78,7 +76,8 @@ impl Ord for Entry {
 /// O(window) segment metas and avoids a full pipeline barrier: once the
 /// window is full, every incoming segment releases the best buffered one.
 pub struct RuntimeTopNSegmentReorder<M: PrunedSegmentMeta + BlockMetaInfo> {
-    filter: Arc<RuntimeTopNFilter>,
+    filter: Arc<dyn RuntimeScanFilter>,
+    order: RuntimeScanOrder,
     window: usize,
     buffered: BinaryHeap<Entry>,
     _phantom: PhantomData<M>,
@@ -88,30 +87,36 @@ impl<M: PrunedSegmentMeta + BlockMetaInfo> RuntimeTopNSegmentReorder<M> {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        filter: Arc<RuntimeTopNFilter>,
+        filter: Arc<dyn RuntimeScanFilter>,
+        order: RuntimeScanOrder,
         window: usize,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AccumulatingTransformer::create(
             input,
             output,
-            Self::new(filter, window),
+            Self::new(filter, order, window),
         )))
     }
 
-    fn new(filter: Arc<RuntimeTopNFilter>, window: usize) -> Self {
+    fn new(filter: Arc<dyn RuntimeScanFilter>, order: RuntimeScanOrder, window: usize) -> Self {
         Self {
             filter,
+            order,
             window: window.max(1),
             buffered: BinaryHeap::new(),
             _phantom: PhantomData,
         }
     }
 
-    fn should_prune(&self, stat: &Option<ColumnStatistics>) -> bool {
-        stat.as_ref().is_some_and(|stat| {
-            self.filter
-                .should_prune(stat.min(), stat.max(), stat.null_count)
-        })
+    fn column_stats(block: &DataBlock) -> Option<&HashMap<ColumnId, ColumnStatistics>> {
+        let meta = block.get_meta()?;
+        let meta = M::downcast_ref_from(meta)?;
+        Some(&meta.segment().summary().col_stats)
+    }
+
+    fn should_prune(&self, block: &DataBlock) -> bool {
+        let stats = Self::column_stats(block);
+        self.filter.should_prune(stats)
     }
 }
 
@@ -119,34 +124,20 @@ impl<M: PrunedSegmentMeta + BlockMetaInfo> AccumulatingTransform for RuntimeTopN
     const NAME: &'static str = "RuntimeTopNSegmentReorder";
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
-        let stat = block
-            .get_meta()
-            .and_then(M::downcast_ref_from)
-            .and_then(|meta| {
-                meta.segment()
-                    .summary()
-                    .col_stats
-                    .get(&self.filter.column_id())
-                    .cloned()
-            });
-
-        // Drop segments the boundary already excludes.
-        if self.should_prune(&stat) {
+        if self.should_prune(&block) {
             return Ok(vec![]);
         }
 
-        let rank = runtime_top_n_rank_from_stat(stat.as_ref(), &self.filter).cloned();
+        let rank = self.order.rank(Self::column_stats(&block)).cloned();
         self.buffered.push(Entry {
             rank,
-            stat,
-            asc: self.filter.asc(),
+            order: self.order,
             block,
         });
 
         if self.buffered.len() > self.window {
-            // The boundary may have tightened while segments were buffered.
             while let Some(entry) = self.buffered.pop() {
-                if !self.should_prune(&entry.stat) {
+                if !self.should_prune(&entry.block) {
                     return Ok(vec![entry.block]);
                 }
             }
@@ -160,7 +151,7 @@ impl<M: PrunedSegmentMeta + BlockMetaInfo> AccumulatingTransform for RuntimeTopN
         }
         let mut blocks = Vec::with_capacity(self.buffered.len());
         while let Some(entry) = self.buffered.pop() {
-            if !self.should_prune(&entry.stat) {
+            if !self.should_prune(&entry.block) {
                 blocks.push(entry.block);
             }
         }
@@ -172,6 +163,7 @@ impl<M: PrunedSegmentMeta + BlockMetaInfo> AccumulatingTransform for RuntimeTopN
 mod tests {
     use std::collections::HashMap;
 
+    use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
     use databend_common_expression::types::NumberScalar;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -227,7 +219,9 @@ mod tests {
     #[test]
     fn test_window_releases_most_promising_segment_first() -> Result<()> {
         let filter = Arc::new(RuntimeTopNFilter::new(3, true, false));
-        let mut reorder = RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter, 2);
+        let order = filter.preferred_order().unwrap();
+        let mut reorder =
+            RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter, order, 2);
 
         // The window buffers the first two segments.
         assert!(reorder.transform(segment_block("mid", 20, 29))?.is_empty());
@@ -246,7 +240,9 @@ mod tests {
     #[test]
     fn test_nulls_first_ranks_null_bearing_segments_best() -> Result<()> {
         let filter = Arc::new(RuntimeTopNFilter::new(3, true, true));
-        let mut reorder = RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter, 1);
+        let order = filter.preferred_order().unwrap();
+        let mut reorder =
+            RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter, order, 1);
 
         assert!(reorder.transform(segment_block("low", 10, 19))?.is_empty());
         // Under NULLS FIRST a null-bearing segment outranks any value, even a
@@ -262,8 +258,9 @@ mod tests {
     #[test]
     fn test_boundary_prunes_segments_at_entry_and_emission() -> Result<()> {
         let filter = Arc::new(RuntimeTopNFilter::new(3, true, false));
+        let order = filter.preferred_order().unwrap();
         let mut reorder =
-            RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter.clone(), 8);
+            RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter.clone(), order, 8);
 
         assert!(reorder.transform(segment_block("keep", 1, 9))?.is_empty());
         assert!(

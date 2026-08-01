@@ -12,16 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
 use std::cmp::Ordering as CmpOrdering;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use parking_lot::RwLock;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
@@ -30,6 +37,169 @@ use tokio::sync::watch::Sender;
 use crate::sbbf::Sbbf;
 
 pub type RuntimeBloomFilter = Arc<Sbbf>;
+pub type RuntimeScanFilterFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RuntimeScanOrder {
+    pub column_id: ColumnId,
+    pub asc: bool,
+    pub nulls_first: bool,
+}
+
+impl RuntimeScanOrder {
+    /// Rank column statistics for scheduling: parts more likely to hold top
+    /// rows under this order rank first.
+    pub fn rank<'a>(
+        &self,
+        stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>,
+    ) -> RuntimeTopNRank<&'a Scalar> {
+        let Some(stat) = stats.and_then(|stats| stats.get(&self.column_id)) else {
+            return RuntimeTopNRank::Unknown;
+        };
+        // Under NULLS FIRST null rows sort before every value: parts holding
+        // nulls are the most promising ones (and are never prunable).
+        if self.nulls_first && stat.null_count > 0 {
+            return RuntimeTopNRank::Best;
+        }
+        let key = if self.asc { stat.min() } else { stat.max() };
+        if matches!(key, Scalar::Null) {
+            return RuntimeTopNRank::Unknown;
+        }
+        RuntimeTopNRank::Value(key)
+    }
+
+    /// Compare two scheduling ranks under this order: better-ranked parts
+    /// (more likely to hold top rows) first.
+    pub fn compare_ranks<S: Borrow<Scalar>>(
+        &self,
+        a: &RuntimeTopNRank<S>,
+        b: &RuntimeTopNRank<S>,
+    ) -> CmpOrdering {
+        match (a, b) {
+            (RuntimeTopNRank::Best, RuntimeTopNRank::Best) => CmpOrdering::Equal,
+            (RuntimeTopNRank::Best, _) => CmpOrdering::Less,
+            (_, RuntimeTopNRank::Best) => CmpOrdering::Greater,
+            (RuntimeTopNRank::Value(a), RuntimeTopNRank::Value(b)) => {
+                if self.asc {
+                    a.borrow().cmp(b.borrow())
+                } else {
+                    b.borrow().cmp(a.borrow())
+                }
+            }
+            (RuntimeTopNRank::Value(_), RuntimeTopNRank::Unknown) => CmpOrdering::Less,
+            (RuntimeTopNRank::Unknown, RuntimeTopNRank::Value(_)) => CmpOrdering::Greater,
+            (RuntimeTopNRank::Unknown, RuntimeTopNRank::Unknown) => CmpOrdering::Equal,
+        }
+    }
+}
+
+/// The scheduling rank of a block or segment for runtime TopN reads: `Best`
+/// holds rows sorting before every value (nulls under NULLS FIRST — never
+/// prunable, read first), `Value` ranks by the best possible sort value (min
+/// for ASC, max for DESC), `Unknown` (no usable statistics) schedules last.
+pub enum RuntimeTopNRank<S> {
+    Best,
+    Value(S),
+    Unknown,
+}
+
+impl RuntimeTopNRank<&Scalar> {
+    pub fn cloned(self) -> RuntimeTopNRank<Scalar> {
+        match self {
+            RuntimeTopNRank::Best => RuntimeTopNRank::Best,
+            RuntimeTopNRank::Value(value) => RuntimeTopNRank::Value(value.clone()),
+            RuntimeTopNRank::Unknown => RuntimeTopNRank::Unknown,
+        }
+    }
+}
+
+pub trait RuntimeScanFilter: Send + Sync {
+    fn finished(&self) -> bool {
+        false
+    }
+
+    fn should_prune(&self, stats: Option<&HashMap<ColumnId, ColumnStatistics>>) -> bool;
+
+    fn recheck_notified(&self) -> RuntimeScanFilterFuture;
+
+    fn preferred_order(&self) -> Option<RuntimeScanOrder> {
+        None
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct RuntimeScanFilters {
+    filters: Vec<Arc<dyn RuntimeScanFilter>>,
+}
+
+impl RuntimeScanFilters {
+    pub fn is_empty(&self) -> bool {
+        self.filters.is_empty()
+    }
+
+    pub fn push(&mut self, filter: Arc<dyn RuntimeScanFilter>) {
+        self.filters.push(filter);
+    }
+
+    pub fn should_prune(&self, stats: Option<&HashMap<ColumnId, ColumnStatistics>>) -> bool {
+        for filter in &self.filters {
+            if filter.should_prune(stats) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn is_finished(&self) -> bool {
+        for filter in &self.filters {
+            if filter.finished() {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn recheck_notified(&self) -> Vec<RuntimeScanFilterFuture> {
+        let mut notifications = Vec::with_capacity(self.filters.len());
+        for filter in &self.filters {
+            notifications.push(filter.recheck_notified());
+        }
+        notifications
+    }
+
+    pub fn preferred_filter(&self) -> Option<(Arc<dyn RuntimeScanFilter>, RuntimeScanOrder)> {
+        for filter in &self.filters {
+            if let Some(order) = filter.preferred_order() {
+                return Some((filter.clone(), order));
+            }
+        }
+        None
+    }
+}
+
+struct RuntimeFilterNotify {
+    tx: watch::Sender<u64>,
+}
+
+impl RuntimeFilterNotify {
+    fn new() -> Self {
+        let (tx, _) = watch::channel(0);
+        Self { tx }
+    }
+
+    fn notify(&self) {
+        self.tx.send_modify(|generation| *generation += 1);
+    }
+
+    fn notified(&self) -> RuntimeScanFilterFuture {
+        // Subscribe synchronously so a change between arming and polling the
+        // returned future is observed.
+        let mut rx = self.tx.subscribe();
+        Box::pin(async move {
+            let _ = rx.changed().await;
+        })
+    }
+}
 
 /// A monotonic TopN boundary shared by all local scan and PartialTopN processors
 /// for one scan. The boundary is absent until a partial candidate set is full.
@@ -42,6 +212,7 @@ pub struct RuntimeTopNFilter {
     asc: bool,
     nulls_first: bool,
     boundary: RwLock<Option<Scalar>>,
+    recheck: RuntimeFilterNotify,
 }
 
 impl RuntimeTopNFilter {
@@ -51,19 +222,8 @@ impl RuntimeTopNFilter {
             asc,
             nulls_first,
             boundary: RwLock::new(None),
+            recheck: RuntimeFilterNotify::new(),
         }
-    }
-
-    pub fn column_id(&self) -> u32 {
-        self.column_id
-    }
-
-    pub fn asc(&self) -> bool {
-        self.asc
-    }
-
-    pub fn nulls_first(&self) -> bool {
-        self.nulls_first
     }
 
     pub fn boundary(&self) -> Option<Scalar> {
@@ -99,6 +259,8 @@ impl RuntimeTopNFilter {
         // Re-check under the write lock: a concurrent update may have won.
         if self.tighter(boundary, current.as_ref()) {
             *current = Some(boundary.clone());
+            drop(current);
+            self.recheck.notify();
         }
     }
 
@@ -108,7 +270,7 @@ impl RuntimeTopNFilter {
     /// `min`/`max` describe the non-null values of the block and `null_count`
     /// its null rows; boundaries are never null, so null rows rank by
     /// `nulls_first` alone.
-    pub fn should_prune(&self, min: &Scalar, max: &Scalar, null_count: u64) -> bool {
+    pub fn boundary_excludes(&self, min: &Scalar, max: &Scalar, null_count: u64) -> bool {
         let boundary = self.boundary.read();
         let Some(boundary) = boundary.as_ref() else {
             return false;
@@ -131,6 +293,72 @@ impl RuntimeTopNFilter {
         } else {
             max.partial_cmp(boundary) == Some(CmpOrdering::Less)
         }
+    }
+}
+
+impl RuntimeScanFilter for RuntimeTopNFilter {
+    fn should_prune(&self, stats: Option<&HashMap<ColumnId, ColumnStatistics>>) -> bool {
+        let Some(stats) = stats else {
+            return false;
+        };
+
+        let Some(stat) = stats.get(&self.column_id) else {
+            return false;
+        };
+
+        self.boundary_excludes(stat.min(), stat.max(), stat.null_count)
+    }
+
+    fn recheck_notified(&self) -> RuntimeScanFilterFuture {
+        self.recheck.notified()
+    }
+
+    fn preferred_order(&self) -> Option<RuntimeScanOrder> {
+        Some(RuntimeScanOrder {
+            column_id: self.column_id,
+            asc: self.asc,
+            nulls_first: self.nulls_first,
+        })
+    }
+}
+
+pub struct RuntimeLimitFilter {
+    finished: AtomicBool,
+    recheck: RuntimeFilterNotify,
+}
+
+impl RuntimeLimitFilter {
+    pub fn new() -> Self {
+        Self {
+            finished: AtomicBool::new(false),
+            recheck: RuntimeFilterNotify::new(),
+        }
+    }
+
+    pub fn finish(&self) {
+        if !self.finished.swap(true, Ordering::AcqRel) {
+            self.recheck.notify();
+        }
+    }
+}
+
+impl Default for RuntimeLimitFilter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RuntimeScanFilter for RuntimeLimitFilter {
+    fn finished(&self) -> bool {
+        self.finished.load(Ordering::Acquire)
+    }
+
+    fn should_prune(&self, _stats: Option<&HashMap<ColumnId, ColumnStatistics>>) -> bool {
+        self.finished()
+    }
+
+    fn recheck_notified(&self) -> RuntimeScanFilterFuture {
+        self.recheck.notified()
     }
 }
 
@@ -304,6 +532,8 @@ mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
+    use tokio::time::Duration;
+    use tokio::time::timeout;
 
     use super::*;
 
@@ -314,12 +544,12 @@ mod tests {
     #[test]
     fn runtime_top_n_filter_is_monotonic_and_tie_safe() {
         let asc = RuntimeTopNFilter::new(7, true, false);
-        assert!(!asc.should_prune(&int64(11), &int64(20), 0));
+        assert!(!asc.boundary_excludes(&int64(11), &int64(20), 0));
 
         asc.update(&int64(10));
         assert_eq!(asc.boundary(), Some(int64(10)));
-        assert!(asc.should_prune(&int64(11), &int64(20), 0));
-        assert!(!asc.should_prune(&int64(10), &int64(20), 0));
+        assert!(asc.boundary_excludes(&int64(11), &int64(20), 0));
+        assert!(!asc.boundary_excludes(&int64(10), &int64(20), 0));
 
         // A weaker local boundary must not loosen the shared filter.
         asc.update(&int64(12));
@@ -329,8 +559,8 @@ mod tests {
 
         let desc = RuntimeTopNFilter::new(7, false, false);
         desc.update(&int64(10));
-        assert!(desc.should_prune(&int64(1), &int64(9), 0));
-        assert!(!desc.should_prune(&int64(1), &int64(10), 0));
+        assert!(desc.boundary_excludes(&int64(1), &int64(9), 0));
+        assert!(!desc.boundary_excludes(&int64(1), &int64(10), 0));
         desc.update(&int64(8));
         assert_eq!(desc.boundary(), Some(int64(10)));
         desc.update(&int64(12));
@@ -345,17 +575,17 @@ mod tests {
         let nulls_last = RuntimeTopNFilter::new(1, true, false);
         nulls_last.update(&int64(10));
         // Nulls sort after the boundary, so null rows are prunable too.
-        assert!(nulls_last.should_prune(&int64(11), &int64(20), 5));
+        assert!(nulls_last.boundary_excludes(&int64(11), &int64(20), 5));
         // All-null blocks sort entirely after the boundary.
-        assert!(nulls_last.should_prune(&Scalar::Null, &Scalar::Null, 7));
-        assert!(!nulls_last.should_prune(&int64(9), &int64(20), 5));
+        assert!(nulls_last.boundary_excludes(&Scalar::Null, &Scalar::Null, 7));
+        assert!(!nulls_last.boundary_excludes(&int64(9), &int64(20), 5));
 
         let nulls_first = RuntimeTopNFilter::new(1, true, true);
         nulls_first.update(&int64(10));
         // Null rows are always candidates under NULLS FIRST.
-        assert!(!nulls_first.should_prune(&int64(11), &int64(20), 1));
-        assert!(nulls_first.should_prune(&int64(11), &int64(20), 0));
-        assert!(!nulls_first.should_prune(&Scalar::Null, &Scalar::Null, 7));
+        assert!(!nulls_first.boundary_excludes(&int64(11), &int64(20), 1));
+        assert!(nulls_first.boundary_excludes(&int64(11), &int64(20), 0));
+        assert!(!nulls_first.boundary_excludes(&Scalar::Null, &Scalar::Null, 7));
     }
 
     #[test]
@@ -368,7 +598,7 @@ mod tests {
                     // Race tightening publishes against reads.
                     for v in (0..500).rev() {
                         filter.update(&int64(v * 4 + t));
-                        let _ = filter.should_prune(&int64(1), &int64(2), 0);
+                        let _ = filter.boundary_excludes(&int64(1), &int64(2), 0);
                         let _ = filter.boundary();
                     }
                 })
@@ -380,8 +610,103 @@ mod tests {
 
         // The global minimum wins regardless of interleaving.
         assert_eq!(filter.boundary(), Some(int64(0)));
-        assert!(filter.should_prune(&int64(1), &int64(5), 0));
-        assert!(!filter.should_prune(&int64(0), &int64(5), 0));
+        assert!(filter.boundary_excludes(&int64(1), &int64(5), 0));
+        assert!(!filter.boundary_excludes(&int64(0), &int64(5), 0));
+    }
+
+    #[tokio::test]
+    async fn runtime_scan_filter_notifications_are_repeatable() {
+        let filter = RuntimeTopNFilter::new(1, true, false);
+
+        let first = filter.recheck_notified();
+        filter.update(&int64(10));
+        timeout(Duration::from_secs(1), first).await.unwrap();
+
+        let unchanged = filter.recheck_notified();
+        filter.update(&int64(12));
+        assert!(timeout(Duration::from_millis(10), unchanged).await.is_err());
+
+        let second = filter.recheck_notified();
+        filter.update(&int64(8));
+        timeout(Duration::from_secs(1), second).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn runtime_limit_filter_finishes_and_notifies_once() {
+        let filter = RuntimeLimitFilter::new();
+        assert!(!filter.finished());
+
+        let notified = filter.recheck_notified();
+        filter.finish();
+        timeout(Duration::from_secs(1), notified).await.unwrap();
+        assert!(filter.finished());
+        assert!(filter.should_prune(None));
+
+        let unchanged = filter.recheck_notified();
+        filter.finish();
+        assert!(timeout(Duration::from_millis(10), unchanged).await.is_err());
+    }
+
+    #[test]
+    fn runtime_scan_filters_combine_filters() {
+        let top_n = Arc::new(RuntimeTopNFilter::new(1, true, false));
+        top_n.update(&int64(10));
+        let limit = Arc::new(RuntimeLimitFilter::new());
+
+        let mut filters = RuntimeScanFilters::default();
+        filters.push(top_n.clone());
+        filters.push(limit.clone());
+
+        let order = filters.preferred_filter().unwrap().1;
+        assert_eq!(order.column_id, 1);
+        assert_eq!(filters.recheck_notified().len(), 2);
+        assert!(!filters.is_finished());
+
+        let kept = HashMap::from([(1, ColumnStatistics::new(int64(9), int64(20), 0, 0, None))]);
+        let pruned = HashMap::from([(1, ColumnStatistics::new(int64(11), int64(20), 0, 0, None))]);
+        assert!(!filters.should_prune(Some(&kept)));
+        assert!(filters.should_prune(Some(&pruned)));
+
+        limit.finish();
+        assert!(filters.is_finished());
+        assert!(filters.should_prune(None));
+    }
+
+    fn column_stats(min: i64, max: i64, null_count: u64) -> ColumnStatistics {
+        ColumnStatistics::new(int64(min), int64(max), null_count, 0, None)
+    }
+
+    #[test]
+    fn runtime_scan_filters_prune_by_column_stats() {
+        let asc_filter = Arc::new(RuntimeTopNFilter::new(3, true, false));
+        asc_filter.update(&int64(10));
+        let mut asc = RuntimeScanFilters::default();
+        asc.push(asc_filter);
+
+        let mut columns = HashMap::from([(3, column_stats(11, 20, 0))]);
+        assert!(asc.should_prune(Some(&columns)));
+
+        // Boundary ties must be retained.
+        columns.insert(3, column_stats(10, 20, 0));
+        assert!(!asc.should_prune(Some(&columns)));
+        // Under NULLS LAST the null rows of a strictly worse block are worse too.
+        columns.insert(3, column_stats(11, 20, 1));
+        assert!(asc.should_prune(Some(&columns)));
+        assert!(!asc.should_prune(None));
+
+        // Under NULLS FIRST null rows are always candidates.
+        let nulls_first_filter = Arc::new(RuntimeTopNFilter::new(3, true, true));
+        nulls_first_filter.update(&int64(10));
+        let mut nulls_first = RuntimeScanFilters::default();
+        nulls_first.push(nulls_first_filter);
+        assert!(!nulls_first.should_prune(Some(&columns)));
+
+        let desc_filter = Arc::new(RuntimeTopNFilter::new(3, false, false));
+        desc_filter.update(&int64(10));
+        let mut desc = RuntimeScanFilters::default();
+        desc.push(desc_filter);
+        columns.insert(3, column_stats(1, 9, 0));
+        assert!(desc.should_prune(Some(&columns)));
     }
 
     #[test]

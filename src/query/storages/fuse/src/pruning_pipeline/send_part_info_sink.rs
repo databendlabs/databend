@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
@@ -25,12 +26,13 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
-use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -45,9 +47,6 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use parking_lot::Mutex;
 
 use crate::FuseTable;
-use crate::fuse_part::runtime_top_n_rank;
-use crate::fuse_part::should_prune_by_runtime_top_n;
-use crate::fuse_part::sort_by_runtime_top_n_order;
 use crate::pruning::FusePruner;
 use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 
@@ -61,6 +60,7 @@ pub struct SendPartCache {
 pub struct SendPartState {
     cache: Mutex<SendPartCache>,
     limit: AtomicUsize,
+    incomplete: AtomicBool,
     data_metrics: Arc<StorageMetrics>,
 }
 
@@ -82,6 +82,7 @@ impl SendPartState {
                 fuse_pruner,
             }),
             limit: AtomicUsize::new(limit.unwrap_or(usize::MAX)),
+            incomplete: AtomicBool::new(false),
             data_metrics,
         }
     }
@@ -94,6 +95,10 @@ impl SendPartState {
     }
 
     pub fn populating_cache(&self) {
+        if self.incomplete.load(Ordering::Acquire) {
+            return;
+        }
+
         type CacheItem = (PartStatistics, Partitions);
         let send_part_cache = self.cache.lock();
         if let Some(cache_key) = &send_part_cache.derterministic_cache_key {
@@ -136,7 +141,7 @@ pub struct SendPartInfoSink {
     partitions: Partitions,
     statistics: PartStatistics,
     send_part_state: Arc<SendPartState>,
-    runtime_top_n_filters: Vec<Arc<RuntimeTopNFilter>>,
+    runtime_scan_filters: RuntimeScanFilters,
     enable_cache: bool,
 }
 
@@ -148,10 +153,10 @@ impl SendPartInfoSink {
         top_k: Option<(TopK, Scalar)>,
         schema: TableSchemaRef,
         send_part_state: Arc<SendPartState>,
-        runtime_top_n_filters: Vec<Arc<RuntimeTopNFilter>>,
+        runtime_scan_filters: RuntimeScanFilters,
         enable_cache: bool,
     ) -> Result<ProcessorPtr> {
-        debug_assert!(runtime_top_n_filters.is_empty() || !enable_cache);
+        debug_assert!(runtime_scan_filters.is_empty() || !enable_cache);
         let partitions = Partitions::default();
         let statistics = PartStatistics::default();
         Ok(ProcessorPtr::create(AsyncSinker::create(
@@ -164,7 +169,7 @@ impl SendPartInfoSink {
                 partitions,
                 statistics,
                 send_part_state,
-                runtime_top_n_filters,
+                runtime_scan_filters,
                 enable_cache,
             },
         )))
@@ -183,60 +188,90 @@ impl AsyncSink for SendPartInfoSink {
     }
 
     async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
-        if let Some(meta) = data_block.take_meta() {
-            if let Some(data) = BlockPruneResult::downcast_from(meta) {
-                let arrow_schema = self.schema.as_ref().into();
-                let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
-                let mut block_metas = data.block_metas;
-                self.statistics.partitions_scanned += block_metas.len();
-                if !self.runtime_top_n_filters.is_empty() {
-                    // Filter first: drop blocks the boundary already proves
-                    // useless, then order the survivors so the most promising
-                    // ones are read first and tighten the boundary further.
-                    block_metas.retain(|(_, meta)| {
-                        !should_prune_by_runtime_top_n(
-                            Some(&meta.col_stats),
-                            &self.runtime_top_n_filters,
-                        )
-                    });
-                    if let Some(filter) = self.runtime_top_n_filters.first() {
-                        sort_by_runtime_top_n_order(&mut block_metas, filter, |(_, meta)| {
-                            runtime_top_n_rank(Some(&meta.col_stats), filter).cloned()
-                        });
-                    }
-                }
-                let block_metas = &block_metas;
-                let info_ptr = match self.push_downs.clone() {
-                    None => self.all_columns_partitions(block_metas),
-                    Some(extras) => match &extras.projection {
-                        None => self.all_columns_partitions(block_metas),
-                        Some(projection) => self.projection_partitions(
-                            block_metas,
-                            projection,
-                            &column_nodes,
-                            &extras.output_columns,
-                            &extras.virtual_column,
-                        ),
-                    },
-                };
-                if self.enable_cache {
-                    self.partitions.partitions.extend(info_ptr.clone());
+        let Some(meta) = data_block.take_meta() else {
+            return Err(ErrorCode::Internal(
+                "Cannot downcast data block meta to BlockPruneResult".to_string(),
+            ));
+        };
+
+        let Some(data) = BlockPruneResult::downcast_from(meta) else {
+            return Err(ErrorCode::Internal(
+                "Cannot downcast data block meta to BlockPruneResult".to_string(),
+            ));
+        };
+
+        if self.send_part_state.limit.load(Ordering::Acquire) == 0 {
+            return Ok(true);
+        }
+
+        if self.runtime_scan_filters.is_finished() {
+            return Ok(true);
+        }
+
+        if self.sender.as_ref().is_none_or(Sender::is_closed) {
+            self.send_part_state
+                .incomplete
+                .store(true, Ordering::Release);
+            return Ok(true);
+        }
+
+        let table_schema: &TableSchema = &self.schema;
+        let arrow_schema = table_schema.into();
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
+        let mut block_metas = data.block_metas;
+        self.statistics.partitions_scanned += block_metas.len();
+        if !self.runtime_scan_filters.is_empty() {
+            let filters = &self.runtime_scan_filters;
+            block_metas.retain(|(_, meta)| !filters.should_prune(Some(&meta.col_stats)));
+
+            if let Some((_, order)) = filters.preferred_filter() {
+                let mut ranked = Vec::with_capacity(block_metas.len());
+                for block_meta in block_metas.drain(..) {
+                    let rank = order.rank(Some(&block_meta.1.col_stats)).cloned();
+                    ranked.push((rank, block_meta));
                 }
 
-                for info in info_ptr {
-                    if let Some(sender) = &self.sender {
-                        if let Err(_e) = sender.send(Ok(info)).await {
-                            break;
-                        }
-                    }
-                }
+                ranked.sort_by(|(left, _), (right, _)| order.compare_ranks(left, right));
 
-                return Ok(false);
+                for (_, block_meta) in ranked {
+                    block_metas.push(block_meta);
+                }
             }
         }
-        Err(ErrorCode::Internal(
-            "Cannot downcast data block meta to BlockPruneResult".to_string(),
-        ))
+
+        let block_metas = &block_metas;
+        let info_ptr = match self.push_downs.clone() {
+            None => self.all_columns_partitions(block_metas),
+            Some(extras) => match &extras.projection {
+                None => self.all_columns_partitions(block_metas),
+                Some(projection) => self.projection_partitions(
+                    block_metas,
+                    projection,
+                    &column_nodes,
+                    &extras.output_columns,
+                    &extras.virtual_column,
+                ),
+            },
+        };
+
+        if self.enable_cache {
+            self.partitions.partitions.extend(info_ptr.clone());
+        }
+
+        for info in info_ptr {
+            let Some(sender) = &self.sender else {
+                break;
+            };
+
+            if sender.send(Ok(info)).await.is_err() {
+                self.send_part_state
+                    .incomplete
+                    .store(true, Ordering::Release);
+                return Ok(true);
+            }
+        }
+
+        Ok(self.send_part_state.limit.load(Ordering::Acquire) == 0)
     }
 }
 
@@ -252,10 +287,8 @@ impl SendPartInfoSink {
         let mut parts = Vec::with_capacity(block_metas.len());
 
         for (block_meta_index, block_meta) in block_metas.iter() {
-            if should_prune_by_runtime_top_n(
-                Some(&block_meta.col_stats),
-                &self.runtime_top_n_filters,
-            ) {
+            let stats = Some(&block_meta.col_stats);
+            if self.runtime_scan_filters.should_prune(stats) {
                 continue;
             }
 
@@ -306,10 +339,8 @@ impl SendPartInfoSink {
         };
 
         for (block_meta_index, block_meta) in block_metas.iter() {
-            if should_prune_by_runtime_top_n(
-                Some(&block_meta.col_stats),
-                &self.runtime_top_n_filters,
-            ) {
+            let stats = Some(&block_meta.col_stats);
+            if self.runtime_scan_filters.should_prune(stats) {
                 continue;
             }
 
