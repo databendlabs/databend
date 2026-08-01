@@ -233,6 +233,10 @@ impl Settings {
         self.try_get_u64("max_vacuum_threads")
     }
 
+    pub fn get_storage_delete_batch_size(&self) -> Result<u64> {
+        self.try_get_u64("storage_delete_batch_size")
+    }
+
     // Get storage_fetch_part_num.
     pub fn get_storage_fetch_part_num(&self) -> Result<u64> {
         match self.try_get_u64("storage_fetch_part_num")? {
