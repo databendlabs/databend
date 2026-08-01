@@ -47,6 +47,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -500,6 +501,7 @@ impl CreateTableInterpreter {
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
         // check enable auto analyze.
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE)?;
+        is_valid_option_of_type::<bool>(&table_meta.options, FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE)?;
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER)?;
         is_valid_option_of_type::<u64>(
             &table_meta.options,

@@ -1297,6 +1297,7 @@ mod tests {
             file_size: 0,
             col_stats: Default::default(),
             col_metas: Default::default(),
+            column_groups: vec![],
             cluster_stats: None,
             location: ("".to_string(), 0),
             bloom_filter_index_location: None,

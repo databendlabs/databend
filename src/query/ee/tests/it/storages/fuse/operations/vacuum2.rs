@@ -16,10 +16,13 @@ use std::path::Path;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::latest_default_block_meta;
 use databend_storages_common_io::dedup_file_locations;
 
 // TODO investigate this
@@ -114,6 +117,104 @@ async fn test_vacuum2_all() -> anyhow::Result<()> {
 
     check_files_left(&ctx, storage_root, "db1", "t1").await?;
     check_files_left(&ctx, storage_root, "default", "t1").await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_preserves_active_partial_update_files() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    let db = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command(&format!(
+            "create table {db}.{table_name} (id int, a int, b int) engine=fuse \
+             bloom_index_columns='id,a,b' enable_partial_update=true"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {db}.{table_name} values (1, 10, 20), (2, 30, 40)"
+        ))
+        .await?;
+    fixture
+        .execute_command("set enable_partial_update = 1")
+        .await?;
+
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set a = a + 1 where id = 1"
+        ))
+        .await?;
+    let first_update = latest_default_block_meta(&fixture).await?;
+    let obsolete_group = first_update.location.0.clone();
+    let obsolete_bloom = first_update
+        .column_groups
+        .iter()
+        .find(|group| group.location.0 == obsolete_group)
+        .and_then(|group| {
+            group.bloom.as_ref().map(|bloom| {
+                TableMetaLocationGenerator::gen_bloom_index_location_with_version(
+                    &group.location.0,
+                    bloom.format_version,
+                )
+            })
+        })
+        .expect("updated group should have an ordinary Bloom file");
+
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set a = a + 1 where id = 1"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set b = b + 1 where id = 1"
+        ))
+        .await?;
+
+    let current = latest_default_block_meta(&fixture).await?;
+    assert!(
+        current
+            .column_groups
+            .iter()
+            .all(|group| group.location.0 != obsolete_group)
+    );
+
+    fixture
+        .execute_command(&format!("call system$fuse_vacuum2('{db}', '{table_name}')"))
+        .await?;
+
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let operator = fuse_table.get_operator();
+    for group in &current.column_groups {
+        operator.stat(&group.location.0).await?;
+        if let Some(bloom) = &group.bloom {
+            let bloom_location = TableMetaLocationGenerator::gen_bloom_index_location_with_version(
+                &group.location.0,
+                bloom.format_version,
+            );
+            operator.stat(&bloom_location).await?;
+        }
+    }
+    assert!(operator.stat(&obsolete_group).await.is_err());
+    assert!(operator.stat(&obsolete_bloom).await.is_err());
+
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from {db}.{table_name} \
+             where (id = 1 and a = 12 and b = 21) \
+                or (id = 2 and a = 30 and b = 40)"
+        ))
+        .await?;
+    assert_eq!(databend_query::test_kits::query_count(rows).await?, 2);
 
     Ok(())
 }

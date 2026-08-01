@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
@@ -29,6 +30,7 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::ColumnMutationFormatter;
@@ -51,6 +53,8 @@ pub struct ColumnMutation {
     pub has_filter_column: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
     pub udf_col_num: usize,
+    /// Field indices written by a partial update.
+    pub partial_update_fields: Option<Vec<FieldIndex>>,
 }
 
 #[typetag::serde]
@@ -98,6 +102,7 @@ impl IPhysicalPlan for ColumnMutation {
             has_filter_column: self.has_filter_column,
             table_meta_timestamps: self.table_meta_timestamps,
             udf_col_num: self.udf_col_num,
+            partial_update_fields: self.partial_update_fields.clone(),
         })
     }
 
@@ -166,12 +171,26 @@ impl IPhysicalPlan for ColumnMutation {
             // Keep only table fields in their schema order. Mutation input may
             // carry derived UDF argument/result columns that must not be
             // serialized back into the table.
-            let mut projection = field_id_to_schema_index.iter().collect::<Vec<_>>();
-            projection.sort_by_key(|(field_id, _)| *field_id);
-            let projection = projection
-                .into_iter()
-                .map(|(_, schema_index)| *schema_index)
-                .collect::<Vec<_>>();
+            let projection = if let Some(updated_fields) = &self.partial_update_fields {
+                updated_fields
+                    .iter()
+                    .map(|field_id| {
+                        field_id_to_schema_index
+                            .get(field_id)
+                            .copied()
+                            .ok_or_else(|| {
+                                ErrorCode::Internal("updated field is not in mutation output")
+                            })
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            } else {
+                let mut projection = field_id_to_schema_index.iter().collect::<Vec<_>>();
+                projection.sort_by_key(|(field_id, _)| *field_id);
+                projection
+                    .into_iter()
+                    .map(|(_, schema_index)| *schema_index)
+                    .collect::<Vec<_>>()
+            };
             block_operators.push(BlockOperator::Project { projection });
 
             builder.main_pipeline.add_transformer(|| {
@@ -188,8 +207,12 @@ impl IPhysicalPlan for ColumnMutation {
             .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
+        let write_column_group = self.partial_update_fields.is_some();
+
         let block_thresholds = table.get_block_thresholds();
-        let cluster_stats_gen = if matches!(self.mutation_kind, MutationKind::Delete) {
+        let cluster_stats_gen = if write_column_group {
+            ClusterStatsGenerator::default()
+        } else if matches!(self.mutation_kind, MutationKind::Delete) {
             let input_schema = DataSchema::from(table.schema_with_stream()).into();
             table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?
         } else {
@@ -202,15 +225,27 @@ impl IPhysicalPlan for ColumnMutation {
         };
 
         builder.main_pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeBlock::try_create(
-                builder.ctx.clone(),
-                input,
-                output,
-                table,
-                cluster_stats_gen.clone(),
-                self.mutation_kind,
-                self.table_meta_timestamps,
-            )?;
+            let proc = if write_column_group {
+                TransformSerializeBlock::try_create_for_update(
+                    builder.ctx.clone(),
+                    input,
+                    output,
+                    table,
+                    cluster_stats_gen.clone(),
+                    self.partial_update_fields.clone().unwrap(),
+                    self.table_meta_timestamps,
+                )?
+            } else {
+                TransformSerializeBlock::try_create(
+                    builder.ctx.clone(),
+                    input,
+                    output,
+                    table,
+                    cluster_stats_gen.clone(),
+                    self.mutation_kind,
+                    self.table_meta_timestamps,
+                )?
+            };
             proc.into_processor()
         })
     }

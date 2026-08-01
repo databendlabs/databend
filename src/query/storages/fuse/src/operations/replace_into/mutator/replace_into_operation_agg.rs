@@ -637,6 +637,9 @@ impl AggregationContext {
     }
 
     async fn read_block(&self, reader: &BlockReader, block_meta: &BlockMeta) -> Result<DataBlock> {
+        // REPLACE INTO is outside the Partial UPDATE feature contract. This method is defined only
+        // for legacy single-file blocks and intentionally does not read `block_meta.column_groups`;
+        // behavior for column-group blocks is outside its contract.
         let merged_io_read_result = reader
             .read_columns_data_by_merge_io(
                 &self.read_settings,

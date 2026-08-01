@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline::core::Event;
@@ -35,6 +36,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
@@ -53,17 +55,23 @@ use crate::operations::mutation::ClusterStatsGenType;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::statistics::ClusterStatsGenerator;
 
+struct PendingSerialization {
+    block: DataBlock,
+    stats_type: ClusterStatsGenType,
+    index: Option<BlockMetaIndex>,
+}
+
 #[allow(clippy::large_enum_variant)]
 enum State {
     Consume,
     NeedSerialize {
-        block: DataBlock,
-        stats_type: ClusterStatsGenType,
-        index: Option<BlockMetaIndex>,
+        pending: PendingSerialization,
+        origin_block_meta: Option<Arc<BlockMeta>>,
     },
     Serialized {
         serialized: BlockSerialization,
         index: Option<BlockMetaIndex>,
+        write_progress: ProgressValues,
     },
 }
 
@@ -77,6 +85,7 @@ pub struct TransformSerializeBlock {
     dal: Operator,
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
+    updated_field_indices: Option<Vec<FieldIndex>>,
     pending_merge_hll: bool,
     pending_logical_change: (u64, u64),
 }
@@ -99,6 +108,7 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             kind,
             false,
+            None,
             table_meta_timestamps,
         )
     }
@@ -120,6 +130,30 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             kind,
             true,
+            None,
+            table_meta_timestamps,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_create_for_update(
+        ctx: Arc<dyn TableContext>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        table: &FuseTable,
+        cluster_stats_gen: ClusterStatsGenerator,
+        updated_field_indices: Vec<FieldIndex>,
+        table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<Self> {
+        Self::do_create(
+            ctx,
+            input,
+            output,
+            table,
+            cluster_stats_gen,
+            MutationKind::Update,
+            false,
+            Some(updated_field_indices),
             table_meta_timestamps,
         )
     }
@@ -132,6 +166,7 @@ impl TransformSerializeBlock {
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
         with_tid: bool,
+        updated_field_indices: Option<Vec<FieldIndex>>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         let schema = table.schema();
@@ -223,6 +258,7 @@ impl TransformSerializeBlock {
             dal: table.get_operator(),
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
+            updated_field_indices,
             pending_merge_hll: false,
             pending_logical_change: (0, 0),
         })
@@ -335,9 +371,12 @@ impl Processor for TransformSerializeBlock {
                             serialize_block.logical_deleted_rows,
                         );
                         self.state = State::NeedSerialize {
-                            block: input_data,
-                            stats_type: serialize_block.stats_type,
-                            index: Some(serialize_block.index),
+                            pending: PendingSerialization {
+                                block: input_data,
+                                stats_type: serialize_block.stats_type,
+                                index: Some(serialize_block.index),
+                            },
+                            origin_block_meta: serialize_block.origin_block_meta,
                         };
                         Ok(Event::Sync)
                     }
@@ -345,9 +384,12 @@ impl Processor for TransformSerializeBlock {
                 SerializeDataMeta::SerializeAppend => {
                     self.pending_merge_hll = true;
                     self.state = State::NeedSerialize {
-                        block: input_data,
-                        stats_type: ClusterStatsGenType::Generally,
-                        index: None,
+                        pending: PendingSerialization {
+                            block: input_data,
+                            stats_type: ClusterStatsGenType::Generally,
+                            index: None,
+                        },
+                        origin_block_meta: None,
                     };
                     Ok(Event::Sync)
                 }
@@ -371,9 +413,12 @@ impl Processor for TransformSerializeBlock {
             Ok(Event::NeedConsume)
         } else {
             self.state = State::NeedSerialize {
-                block: input_data,
-                stats_type: ClusterStatsGenType::Generally,
-                index: None,
+                pending: PendingSerialization {
+                    block: input_data,
+                    stats_type: ClusterStatsGenType::Generally,
+                    index: None,
+                },
+                origin_block_meta: None,
             };
             Ok(Event::Sync)
         }
@@ -382,25 +427,62 @@ impl Processor for TransformSerializeBlock {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::NeedSerialize {
-                block,
-                stats_type,
-                index,
+                pending:
+                    PendingSerialization {
+                        block,
+                        stats_type,
+                        index,
+                    },
+                origin_block_meta,
             } => {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
 
-                let serialized =
-                    self.block_builder
-                        .build(block, |block, generator| match &stats_type {
-                            ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
-                            ClusterStatsGenType::WithOrigin(origin_stats) => {
-                                let cluster_stats = generator
-                                    .gen_with_origin_stats(&block, origin_stats.clone())?;
-                                Ok((cluster_stats, block))
-                            }
-                        })?;
+                let (serialized, write_progress_bytes) =
+                    if let (Some(updated_field_indices), Some(origin_block_meta)) =
+                        (&self.updated_field_indices, origin_block_meta)
+                    {
+                        let write_progress_bytes = block.estimate_block_size(block.num_columns());
+                        let serialized = self.block_builder.build_column_group(
+                            block,
+                            &origin_block_meta,
+                            updated_field_indices,
+                        )?;
+                        (serialized, write_progress_bytes)
+                    } else {
+                        let serialized =
+                            self.block_builder.build(
+                                block,
+                                |block, generator| match &stats_type {
+                                    ClusterStatsGenType::Generally => {
+                                        generator.gen_stats_for_append(block)
+                                    }
+                                    ClusterStatsGenType::WithOrigin(origin_stats) => {
+                                        let cluster_stats = generator
+                                            .gen_with_origin_stats(&block, origin_stats.clone())?;
+                                        Ok((cluster_stats, block))
+                                    }
+                                },
+                            )?;
+                        let virtual_column_size = serialized
+                            .virtual_column_state
+                            .as_ref()
+                            .map(|state| state.draft_virtual_block_meta.virtual_column_size)
+                            .unwrap_or_default();
+                        let write_progress_bytes =
+                            (serialized.block_meta.block_size + virtual_column_size) as usize;
+                        (serialized, write_progress_bytes)
+                    };
+                let write_progress = ProgressValues {
+                    rows: serialized.block_meta.row_count as usize,
+                    bytes: write_progress_bytes,
+                };
 
-                self.state = State::Serialized { serialized, index };
+                self.state = State::Serialized {
+                    serialized,
+                    index,
+                    write_progress,
+                };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -410,28 +492,20 @@ impl Processor for TransformSerializeBlock {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::Serialized { serialized, index } => {
+            State::Serialized {
+                serialized,
+                index,
+                write_progress,
+            } => {
                 let merge_hll = std::mem::take(&mut self.pending_merge_hll);
                 let (logical_updated_rows, logical_deleted_rows) =
                     std::mem::take(&mut self.pending_logical_change);
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
 
-                let bytes = if let Some(draft_virtual_block_meta) =
-                    &extended_block_meta.draft_virtual_block_meta
-                {
-                    (extended_block_meta.block_meta.block_size
-                        + draft_virtual_block_meta.virtual_column_size) as usize
-                } else {
-                    extended_block_meta.block_meta.block_size as usize
-                };
-                let progress_values = ProgressValues {
-                    rows: extended_block_meta.block_meta.row_count as usize,
-                    bytes,
-                };
                 self.block_builder
                     .ctx
                     .get_write_progress()
-                    .incr(&progress_values);
+                    .incr(&write_progress);
 
                 let mutation_log_data_block = if let Some(index) = index {
                     // we are replacing the block represented by the `index`

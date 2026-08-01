@@ -247,6 +247,7 @@ mod tests {
             ClusterStatsGenType::Generally,
             2,
             0,
+            None,
         ));
         let block = DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![0, 0, 1, 1, 2]),
@@ -283,6 +284,7 @@ mod tests {
             ClusterStatsGenType::Generally,
             1,
             0,
+            None,
         ));
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1])])
             .add_meta(Some(Box::new(meta)))?;

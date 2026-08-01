@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::Instant;
@@ -26,6 +27,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
@@ -35,6 +37,7 @@ use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -49,6 +52,8 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
+use databend_storages_common_table_meta::meta::decode_column_hll;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use itertools::Itertools;
@@ -98,6 +103,7 @@ pub struct TableMutationAggregator {
     top_n: BlockTopN,
     logical_updated_rows: u64,
     logical_deleted_rows: u64,
+    current_hll_column_ids: Arc<HashSet<ColumnId>>,
     write_segment_ctx: WriteSegmentCtx,
 
     processed_log_entries: usize,
@@ -196,8 +202,22 @@ impl TableMutationAggregator {
         removed_statistics: Statistics,
         kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> Self {
+    ) -> Result<Self> {
         let fill_missing_cluster_stats = table.resolve_physical_cluster_keys().is_some();
+
+        let hll_schema = if matches!(kind, MutationKind::Insert | MutationKind::Replace) {
+            table.schema()
+        } else {
+            table.schema_with_stream()
+        };
+        let current_hll_column_ids = Arc::new(
+            table
+                .approx_distinct_cols()
+                .distinct_column_fields(hll_schema, RangeIndex::supported_table_type)?
+                .into_values()
+                .map(|field| field.column_id())
+                .collect(),
+        );
 
         let virtual_schema = table.table_info.meta.virtual_schema.clone();
         let cluster_key_exprs = if fill_missing_cluster_stats {
@@ -224,7 +244,7 @@ impl TableMutationAggregator {
             table_meta_timestamps,
             fill_missing_cluster_stats,
         };
-        TableMutationAggregator {
+        Ok(TableMutationAggregator {
             ctx,
             mutations: HashMap::new(),
             extended_mutations: HashMap::new(),
@@ -240,10 +260,11 @@ impl TableMutationAggregator {
             top_n: HashMap::new(),
             logical_updated_rows: 0,
             logical_deleted_rows: 0,
+            current_hll_column_ids,
             write_segment_ctx,
             processed_log_entries: 0,
             table_id: table.get_id(),
-        }
+        })
     }
 
     fn accumulate_top_n(&mut self, top_n: Option<BlockTopN>) -> Result<()> {
@@ -544,6 +565,7 @@ impl TableMutationAggregator {
             let segment_mutation = self.mutations.remove(&index).unwrap();
             let location = self.base_segments.get(index).cloned();
             let write_segment_ctx = self.write_segment_ctx.clone();
+            let current_hll_column_ids = self.current_hll_column_ids.clone();
 
             tasks.push(async move {
                 let mut force_all_blocks_perfect = false;
@@ -570,16 +592,29 @@ impl TableMutationAggregator {
                         .into_iter()
                         .enumerate()
                         .map(|(block_idx, block_meta)| {
-                            let hll = stats
-                                .as_ref()
-                                .and_then(|v| v.block_hlls.get(block_idx))
-                                .cloned();
-                            (block_idx, (block_meta, hll))
+                            let hll = decode_current_block_hll(
+                                stats.as_ref().and_then(|v| v.block_hlls.get(block_idx)),
+                                &current_hll_column_ids,
+                            )?;
+                            Ok((block_idx, (block_meta, hll)))
                         })
-                        .collect::<BTreeMap<usize, _>>();
+                        .collect::<Result<BTreeMap<usize, _>>>()?;
 
-                    for (idx, new_meta) in segment_mutation.replaced_blocks {
-                        block_editor.insert(idx, new_meta);
+                    for (idx, (new_meta, new_hll)) in segment_mutation.replaced_blocks {
+                        let previous_hll = block_editor.remove(&idx).and_then(|(_, hll)| hll);
+                        let new_hll = if let Some(updated_column_ids) = new_meta
+                            .column_groups
+                            .last()
+                            .map(|group| group.active_column_ids.as_slice())
+                        {
+                            replace_partial_block_hll(previous_hll, new_hll, updated_column_ids)?
+                        } else {
+                            new_hll
+                                .map(|hll| decode_column_hll(&hll))
+                                .transpose()?
+                                .flatten()
+                        };
+                        block_editor.insert(idx, (new_meta, new_hll));
                     }
                     for idx in segment_mutation.deleted_blocks {
                         block_editor.remove(&idx);
@@ -594,7 +629,17 @@ impl TableMutationAggregator {
                     }
 
                     // assign back the mutated blocks to segment
-                    let (new_blocks, new_hlls) = block_editor.into_values().unzip();
+                    let (new_blocks, new_hlls) = block_editor
+                        .into_values()
+                        .map(|(block_meta, hll)| {
+                            Ok((
+                                block_meta,
+                                encode_current_block_hll(hll, &current_hll_column_ids)?,
+                            ))
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                        .into_iter()
+                        .unzip();
                     let stats = generate_segment_stats(new_hlls)?;
                     (new_blocks, stats, Some(segment_info.summary))
                 } else {
@@ -616,7 +661,14 @@ impl TableMutationAggregator {
                         .replaced_blocks
                         .into_iter()
                         .sorted_by(|a, b| a.0.cmp(&b.0))
-                        .map(|(_, meta)| meta)
+                        .map(|(_, (block_meta, hll))| {
+                            Ok((
+                                block_meta,
+                                normalize_current_block_hll(hll, &current_hll_column_ids)?,
+                            ))
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                        .into_iter()
                         .unzip();
                     let stats = generate_segment_stats(new_hlls)?;
                     (new_blocks, stats, None)
@@ -973,4 +1025,61 @@ fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u
         let data = SegmentStatistics::new(blocks, Vec::new()).to_bytes()?;
         Ok(Some(data))
     }
+}
+
+fn replace_partial_block_hll(
+    previous: Option<BlockHLL>,
+    replacement: Option<RawBlockHLL>,
+    updated_column_ids: &[ColumnId],
+) -> Result<Option<BlockHLL>> {
+    let mut merged = previous.unwrap_or_default();
+    for column_id in updated_column_ids {
+        merged.remove(column_id);
+    }
+    if let Some(replacement) = replacement {
+        if let Some(replacement) = decode_column_hll(&replacement)? {
+            merged.extend(replacement);
+        }
+    }
+
+    if merged.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(merged))
+    }
+}
+
+fn retain_hll_columns(
+    mut hll: BlockHLL,
+    current_hll_column_ids: &HashSet<ColumnId>,
+) -> Option<BlockHLL> {
+    hll.retain(|column_id, _| current_hll_column_ids.contains(column_id));
+    (!hll.is_empty()).then_some(hll)
+}
+
+fn decode_current_block_hll(
+    hll: Option<&RawBlockHLL>,
+    current_hll_column_ids: &HashSet<ColumnId>,
+) -> Result<Option<BlockHLL>> {
+    let Some(hll) = hll.map(decode_column_hll).transpose()?.flatten() else {
+        return Ok(None);
+    };
+    Ok(retain_hll_columns(hll, current_hll_column_ids))
+}
+
+fn encode_current_block_hll(
+    hll: Option<BlockHLL>,
+    current_hll_column_ids: &HashSet<ColumnId>,
+) -> Result<Option<RawBlockHLL>> {
+    hll.and_then(|hll| retain_hll_columns(hll, current_hll_column_ids))
+        .map(|hll| encode_column_hll(&hll))
+        .transpose()
+}
+
+fn normalize_current_block_hll(
+    hll: Option<RawBlockHLL>,
+    current_hll_column_ids: &HashSet<ColumnId>,
+) -> Result<Option<RawBlockHLL>> {
+    let hll = hll.as_ref().map(decode_column_hll).transpose()?.flatten();
+    encode_current_block_hll(hll, current_hll_column_ids)
 }

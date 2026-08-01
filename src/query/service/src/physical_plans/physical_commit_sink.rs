@@ -156,7 +156,7 @@ impl IPhysicalPlan for CommitSink {
                 } else {
                     builder
                         .main_pipeline
-                        .add_async_accumulating_transformer(|| {
+                        .try_add_async_accumulating_transformer(|| {
                             let base_segments = if matches!(
                                 kind,
                                 MutationKind::Compact
@@ -194,7 +194,7 @@ impl IPhysicalPlan for CommitSink {
                                 *kind,
                                 self.table_meta_timestamps,
                             )
-                        });
+                        })?;
                 }
 
                 let snapshot_gen = MutationGenerator::new(self.snapshot.clone(), *kind);

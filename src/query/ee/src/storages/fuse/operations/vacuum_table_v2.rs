@@ -135,7 +135,13 @@ pub async fn do_vacuum2(
         .await?;
     let mut gc_root_blocks = HashSet::new();
     for segment in segments {
-        gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
+        for block in segment?.block_metas()? {
+            gc_root_blocks.extend(
+                block
+                    .data_file_locations()
+                    .map(|location| location.0.clone()),
+            );
+        }
     }
     ctx.set_status_info(&format!(
         "Read segments for table {}, elapsed: {:?}, total protected blocks: {}",

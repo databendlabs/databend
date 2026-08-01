@@ -29,6 +29,12 @@ pub trait AbstractBlockMeta: Send + Sync + 'static + Sized {
     fn row_count(&self) -> u64;
     fn location_path(&self) -> String;
     fn col_metas(&self, col_ids: &HashSet<ColumnId>) -> HashMap<ColumnId, ColumnMeta>;
+    fn col_metas_by_location(
+        &self,
+        col_ids: &HashSet<ColumnId>,
+    ) -> Vec<(String, HashMap<ColumnId, ColumnMeta>)> {
+        vec![(self.location_path(), self.col_metas(col_ids))]
+    }
     fn virtual_block_meta(&self) -> Option<VirtualBlockMeta>;
 }
 
@@ -52,6 +58,16 @@ impl AbstractBlockMeta for BlockMeta {
             }
         }
         col_metas
+    }
+
+    fn col_metas_by_location(
+        &self,
+        col_ids: &HashSet<ColumnId>,
+    ) -> Vec<(String, HashMap<ColumnId, ColumnMeta>)> {
+        BlockMeta::project_column_groups(self, col_ids)
+            .into_iter()
+            .map(|group| (group.location.0, group.leaf_column_metas))
+            .collect()
     }
 
     fn location_path(&self) -> String {

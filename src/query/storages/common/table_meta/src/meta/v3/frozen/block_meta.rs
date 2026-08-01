@@ -57,6 +57,7 @@ impl From<BlockMeta> for crate::meta::BlockMeta {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            column_groups: vec![],
             cluster_stats: value.cluster_stats.map(|v| v.into()),
             location: value.location,
             bloom_filter_index_location: value.bloom_filter_index_location,

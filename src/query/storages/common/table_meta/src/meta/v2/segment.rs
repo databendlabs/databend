@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -171,6 +173,42 @@ pub struct DraftVirtualBlockMeta {
     pub virtual_location: Location,
 }
 
+/// Metadata of one physical column-group file in a logical block.
+///
+/// A file may still contain column chunks that are no longer active. Readers must only use the
+/// chunks listed in [`Self::active_column_ids`].
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct ColumnGroupFileMeta {
+    pub active_column_ids: Vec<ColumnId>,
+    pub location: Location,
+    pub file_size: u64,
+    pub uncompressed_size: u64,
+    pub leaf_column_metas: HashMap<ColumnId, ColumnMeta>,
+    /// Ordinary Bloom file paired with this data file. Its location is derived from `location`.
+    pub bloom: Option<ColumnGroupBloomMeta>,
+}
+
+impl ColumnGroupFileMeta {
+    /// Active leaf metadata in this physical file.
+    pub fn active_leaf_column_metas(&self) -> impl Iterator<Item = (ColumnId, &ColumnMeta)> {
+        self.active_column_ids.iter().filter_map(|column_id| {
+            self.leaf_column_metas
+                .get(column_id)
+                .map(|column_meta| (*column_id, column_meta))
+        })
+    }
+}
+
+/// Metadata of the ordinary Bloom file paired with a physical column-group file.
+///
+/// The Bloom file is self-describing. A stored filter is active only while its column id remains in
+/// the owning [`ColumnGroupFileMeta::active_column_ids`].
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct ColumnGroupBloomMeta {
+    pub format_version: FormatVersion,
+    pub file_size: u64,
+}
+
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
@@ -181,8 +219,18 @@ pub struct BlockMeta {
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
+    /// Physical files that contain the active columns of this logical block.
+    ///
+    /// An empty vector is the legacy single-file representation described by `location`,
+    /// `file_size`, `block_size`, and `col_metas`.
+    #[serde(default)]
+    pub column_groups: Vec<ColumnGroupFileMeta>,
     pub cluster_stats: Option<ClusterStatistics>,
-    /// location of data block
+    /// Compatibility anchor for this logical block's data.
+    ///
+    /// In the legacy layout this is the only data-file location. In a split layout it identifies
+    /// the newest column-group file and does not cover the other active files; use
+    /// [`Self::physical_column_groups`] or [`Self::data_file_locations`] for physical reads.
     pub location: Location,
     /// location of bloom filter index
     pub bloom_filter_index_location: Option<Location>,
@@ -234,6 +282,7 @@ impl BlockMeta {
             file_size,
             col_stats,
             col_metas,
+            column_groups: vec![],
             cluster_stats,
             location,
             bloom_filter_index_location,
@@ -254,6 +303,110 @@ impl BlockMeta {
 
     pub fn compression(&self) -> Compression {
         self.compression
+    }
+    /// Active physical data files referenced by this logical block.
+    pub fn data_file_locations(&self) -> impl Iterator<Item = &Location> {
+        self.column_groups
+            .is_empty()
+            .then_some(&self.location)
+            .into_iter()
+            .chain(self.column_groups.iter().map(|group| &group.location))
+    }
+
+    fn legacy_column_group(
+        &self,
+        projected_column_ids: Option<&HashSet<ColumnId>>,
+    ) -> ColumnGroupFileMeta {
+        let mut active_column_ids = self
+            .col_metas
+            .keys()
+            .filter(|column_id| {
+                projected_column_ids.is_none_or(|projected| projected.contains(column_id))
+            })
+            .copied()
+            .collect::<Vec<_>>();
+        active_column_ids.sort_unstable();
+        let leaf_column_metas = active_column_ids
+            .iter()
+            .map(|column_id| (*column_id, self.col_metas[column_id].clone()))
+            .collect();
+        ColumnGroupFileMeta {
+            active_column_ids,
+            location: self.location.clone(),
+            file_size: self.file_size,
+            uncompressed_size: self.block_size,
+            leaf_column_metas,
+            bloom: None,
+        }
+    }
+
+    /// Normalize legacy and split layouts to the active physical data-file view.
+    pub fn physical_column_groups(&self) -> Cow<'_, [ColumnGroupFileMeta]> {
+        if !self.column_groups.is_empty() {
+            return Cow::Borrowed(&self.column_groups);
+        }
+
+        Cow::Owned(vec![self.legacy_column_group(None)])
+    }
+
+    /// Project active leaf metadata while preserving each owning physical file.
+    pub fn project_column_groups(
+        &self,
+        projected_column_ids: &HashSet<ColumnId>,
+    ) -> Vec<ColumnGroupFileMeta> {
+        let project_group =
+            |active_column_ids: &[ColumnId],
+             location: &Location,
+             file_size: u64,
+             uncompressed_size: u64,
+             leaf_column_metas: &HashMap<ColumnId, ColumnMeta>| {
+                let active_column_ids = active_column_ids
+                    .iter()
+                    .filter(|column_id| projected_column_ids.contains(column_id))
+                    .filter(|column_id| leaf_column_metas.contains_key(column_id))
+                    .copied()
+                    .collect::<Vec<_>>();
+                if active_column_ids.is_empty() {
+                    return None;
+                }
+                let leaf_column_metas = active_column_ids
+                    .iter()
+                    .map(|column_id| (*column_id, leaf_column_metas[column_id].clone()))
+                    .collect();
+                Some(ColumnGroupFileMeta {
+                    active_column_ids,
+                    location: location.clone(),
+                    file_size,
+                    uncompressed_size,
+                    leaf_column_metas,
+                    bloom: None,
+                })
+            };
+
+        if self.column_groups.is_empty() {
+            let group = self.legacy_column_group(Some(projected_column_ids));
+            return (!group.active_column_ids.is_empty())
+                .then_some(group)
+                .into_iter()
+                .collect();
+        }
+
+        self.column_groups
+            .iter()
+            .filter_map(|group| {
+                project_group(
+                    &group.active_column_ids,
+                    &group.location,
+                    group.file_size,
+                    group.uncompressed_size,
+                    &group.leaf_column_metas,
+                )
+                .map(|mut projected| {
+                    projected.bloom = group.bloom.clone();
+                    projected
+                })
+            })
+            .collect()
     }
 }
 
@@ -368,6 +521,7 @@ impl BlockMeta {
             file_size: s.file_size,
             col_stats,
             col_metas,
+            column_groups: vec![],
             cluster_stats: None,
             location: (s.location.path.clone(), 0),
             bloom_filter_index_location: None,
@@ -400,6 +554,7 @@ impl BlockMeta {
             file_size: s.file_size,
             col_stats,
             col_metas,
+            column_groups: vec![],
             cluster_stats: None,
             location: s.location.clone(),
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
@@ -428,5 +583,82 @@ impl From<(v1::SegmentInfo, &[TableField])> for SegmentInfo {
 impl From<(v0::SegmentInfo, &[TableField])> for SegmentInfo {
     fn from((v, fields): (v0::SegmentInfo, &[TableField])) -> Self {
         SegmentInfo::from_v0(v, fields)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_active_leaf_column_metas_excludes_inactive_and_missing_columns() {
+        let group = ColumnGroupFileMeta {
+            active_column_ids: vec![1, 3],
+            location: ("group.parquet".to_string(), 4),
+            file_size: 20,
+            uncompressed_size: 40,
+            leaf_column_metas: HashMap::from([
+                (
+                    1,
+                    ColumnMeta::Parquet(v0::ColumnMeta {
+                        offset: 10,
+                        len: 11,
+                        num_values: 12,
+                    }),
+                ),
+                (
+                    2,
+                    ColumnMeta::Parquet(v0::ColumnMeta {
+                        offset: 20,
+                        len: 21,
+                        num_values: 22,
+                    }),
+                ),
+            ]),
+            bloom: None,
+        };
+
+        let active_metas = group
+            .active_leaf_column_metas()
+            .map(|(column_id, column_meta)| (column_id, column_meta.offset_length()))
+            .collect::<Vec<_>>();
+        assert_eq!(active_metas, vec![(1, (10, 11))]);
+    }
+
+    #[test]
+    fn test_deserialize_legacy_block_meta_without_column_groups() {
+        let block_meta = BlockMeta::new(
+            10,
+            300,
+            30,
+            HashMap::new(),
+            HashMap::new(),
+            None,
+            ("old.parquet".to_string(), 2),
+            None,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Compression::Zstd,
+            None,
+        );
+        let location = block_meta.location.clone();
+        let mut value = serde_json::to_value(block_meta).unwrap();
+        assert!(
+            value
+                .as_object_mut()
+                .unwrap()
+                .remove("column_groups")
+                .is_some()
+        );
+        let decoded: BlockMeta = serde_json::from_value(value).unwrap();
+        assert!(decoded.column_groups.is_empty());
+        assert_eq!(decoded.location, location);
     }
 }

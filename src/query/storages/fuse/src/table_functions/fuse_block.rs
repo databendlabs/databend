@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -28,11 +29,15 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use serde::Serialize;
 
 use crate::FuseTable;
+use crate::fuse_part::block_bloom_index_size;
+use crate::fuse_part::legacy_bloom_index_location;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
 use crate::table_functions::TableMetaFuncTemplate;
@@ -40,6 +45,13 @@ use crate::table_functions::function_template::TableMetaFunc;
 
 pub struct FuseBlock;
 pub type FuseBlockFunc = TableMetaFuncTemplate<FuseBlock>;
+
+fn serialize_variant(value: &impl Serialize) -> Result<Vec<u8>> {
+    let json = serde_json::to_vec(value)?;
+    Ok(jsonb::parse_value(&json)
+        .map_err(|error| ErrorCode::Internal(error.to_string()))?
+        .to_vec())
+}
 
 #[async_trait::async_trait]
 impl TableMetaFunc for FuseBlock {
@@ -79,6 +91,7 @@ impl TableMetaFunc for FuseBlock {
                 "virtual_column_size",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
+            TableField::new("column_groups", TableDataType::Variant),
         ])
     }
 
@@ -104,6 +117,7 @@ impl TableMetaFunc for FuseBlock {
         let mut vector_index_size = Vec::with_capacity(len);
         let mut spatial_index_size = Vec::with_capacity(len);
         let mut virtual_column_size = Vec::with_capacity(len);
+        let mut column_groups = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
@@ -124,12 +138,9 @@ impl TableMetaFunc for FuseBlock {
                     file_size.push(block.file_size);
                     row_count.push(block.row_count);
                     bloom_filter_location.push(
-                        block
-                            .bloom_filter_index_location
-                            .as_ref()
-                            .map(|s| s.0.clone()),
+                        legacy_bloom_index_location(block).map(|location| location.0.clone()),
                     );
-                    bloom_filter_size.push(block.bloom_filter_index_size);
+                    bloom_filter_size.push(block_bloom_index_size(block));
                     inverted_index_size.push(block.inverted_index_size);
                     ngram_index_size.push(block.ngram_filter_index_size);
                     vector_index_size.push(block.vector_index_size);
@@ -140,7 +151,22 @@ impl TableMetaFunc for FuseBlock {
                             .as_ref()
                             .map(|m| m.virtual_column_size),
                     );
-
+                    column_groups.push(serialize_variant(
+                        &block
+                            .column_groups
+                            .iter()
+                            .map(|group| {
+                                serde_json::json!({
+                                    "active_column_ids": group.active_column_ids,
+                                    "location": group.location.0,
+                                    "format_version": group.location.1,
+                                    "file_size": group.file_size,
+                                    "uncompressed_size": group.uncompressed_size,
+                                    "bloom": group.bloom,
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                    )?);
                     num_rows += 1;
                     if num_rows >= limit {
                         break 'FOR;
@@ -164,6 +190,7 @@ impl TableMetaFunc for FuseBlock {
                 UInt64Type::from_opt_data(vector_index_size).into(),
                 UInt64Type::from_opt_data(spatial_index_size).into(),
                 UInt64Type::from_opt_data(virtual_column_size).into(),
+                VariantType::from_data(column_groups).into(),
             ],
             num_rows,
         ))

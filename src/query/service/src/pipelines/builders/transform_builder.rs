@@ -172,7 +172,7 @@ impl PipelineBuilder {
                 Statistics::default(),
                 MutationKind::Insert,
                 table_meta_timestamps,
-            );
+            )?;
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
             )))

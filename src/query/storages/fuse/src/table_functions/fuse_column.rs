@@ -130,27 +130,29 @@ impl FuseColumn {
             for segment in segments {
                 let segment = segment?;
                 for block in segment.block_metas()? {
-                    for (id, column) in block.col_metas(&col_ids).iter() {
-                        if let Some(f) = leaf_fields.iter().find(|f| f.column_id == *id) {
-                            block_location.put_and_commit(block.location_path());
-                            block_size.push(block.block_size());
-                            file_size.push(block.file_size());
-                            row_count.push(column.total_rows() as u64);
+                    for (location, col_metas) in block.col_metas_by_location(&col_ids) {
+                        for (id, column) in &col_metas {
+                            if let Some(f) = leaf_fields.iter().find(|f| f.column_id == *id) {
+                                block_location.put_and_commit(&location);
+                                block_size.push(block.block_size());
+                                file_size.push(block.file_size());
+                                row_count.push(column.total_rows() as u64);
 
-                            column_name.put_and_commit(&f.name);
+                                column_name.put_and_commit(&f.name);
 
-                            column_type.put_and_commit(f.data_type.to_string());
+                                column_type.put_and_commit(f.data_type.to_string());
 
-                            column_id.push(*id);
+                                column_id.push(*id);
 
-                            let (offset, length) = column.offset_length();
-                            block_offset.push(offset);
-                            bytes_compressed.push(length);
+                                let (offset, length) = column.offset_length();
+                                block_offset.push(offset);
+                                bytes_compressed.push(length);
 
-                            num_rows += 1;
+                                num_rows += 1;
 
-                            if num_rows >= limit {
-                                break 'FOR;
+                                if num_rows >= limit {
+                                    break 'FOR;
+                                }
                             }
                         }
                     }

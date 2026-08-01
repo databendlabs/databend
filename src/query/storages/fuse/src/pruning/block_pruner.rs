@@ -33,6 +33,7 @@ use log::debug;
 use tokio::sync::OwnedSemaphorePermit;
 
 use super::SegmentLocation;
+use crate::fuse_part::bloom_index_layout;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostKind;
 use crate::pruning::RuntimeStatsPruner;
@@ -339,8 +340,7 @@ impl BlockPruner {
                     .measure_async(
                         PruningCostKind::BlocksBloom,
                         bloom_pruner.should_keep(
-                            &block_meta.bloom_filter_index_location,
-                            block_meta.bloom_filter_index_size,
+                            bloom_index_layout(&block_meta),
                             &block_meta.col_stats,
                             column_ids,
                             &block_meta.as_ref().into(),

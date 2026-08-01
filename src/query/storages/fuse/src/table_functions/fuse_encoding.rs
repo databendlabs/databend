@@ -48,6 +48,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures::stream;
@@ -306,7 +307,7 @@ impl<'a> FuseEncodingImpl<'a> {
         storage_format: FuseStorageFormat,
         table_name: Arc<String>,
         fields: Arc<Vec<TableField>>,
-        column_id_to_index: Arc<HashMap<ColumnId, usize>>,
+        column_metas: Arc<HashMap<ColumnId, ColumnMeta>>,
         column_name_filter: Arc<Option<String>>,
     ) -> Result<Vec<EncodingRow>> {
         let file_meta = read_thrift_file_metadata(operator, &location, Some(file_size)).await?;
@@ -319,6 +320,14 @@ impl<'a> FuseEncodingImpl<'a> {
         }
         let row_group = &file_meta.row_groups()[0];
         let columns = row_group.columns();
+        let mut columns_by_range = HashMap::with_capacity(columns.len());
+        for column in columns {
+            // Keep the first match to preserve the previous `iter().find()` behavior for
+            // malformed metadata containing duplicate byte ranges.
+            columns_by_range
+                .entry(column.byte_range())
+                .or_insert(column);
+        }
         let mut block_rows = Vec::new();
 
         for field in fields.iter() {
@@ -329,11 +338,11 @@ impl<'a> FuseEncodingImpl<'a> {
                 continue;
             }
             let column_id = field.column_id;
-            let Some(column_idx) = column_id_to_index.get(&column_id) else {
+            let Some(column_meta) = column_metas.get(&column_id) else {
                 continue;
             };
-            let Some(column_chunk) = columns.get(*column_idx) else {
-                // Missing column caused by schema evolutions
+            let column_range = column_meta.offset_length();
+            let Some(column_chunk) = columns_by_range.get(&column_range).copied() else {
                 continue;
             };
             let compressed_size = u64::try_from(column_chunk.compressed_size()).map_err(|_| {
@@ -381,14 +390,6 @@ impl<'a> FuseEncodingImpl<'a> {
     ) -> Result<()> {
         let schema = table.schema();
         let fields = Arc::new(schema.fields().clone());
-        let column_id_to_index: Arc<HashMap<ColumnId, usize>> = Arc::new(
-            schema
-                .to_leaf_column_ids()
-                .into_iter()
-                .enumerate()
-                .map(|(idx, id)| (id, idx))
-                .collect(),
-        );
         let column_name_filter = Arc::new(self.column_name_filter.clone());
         let table_name = Arc::new(table.name().to_string());
         let storage_format = table.storage_format;
@@ -401,28 +402,36 @@ impl<'a> FuseEncodingImpl<'a> {
             let segments = segments_io
                 .read_segments::<SegmentInfo>(chunk, false)
                 .await?;
-            let mut block_locations = Vec::new();
+            let mut block_groups = Vec::new();
             for segment in segments {
                 let segment = segment?;
                 for block in segment.blocks.iter() {
-                    block_locations.push((block.location.0.clone(), block.file_size));
+                    for group in block.physical_column_groups().iter() {
+                        let column_metas = group
+                            .active_leaf_column_metas()
+                            .map(|(column_id, column_meta)| (column_id, column_meta.clone()))
+                            .collect();
+                        block_groups.push((
+                            group.location.0.clone(),
+                            group.file_size,
+                            Arc::new(column_metas),
+                        ));
+                    }
                 }
             }
 
-            if block_locations.is_empty() {
+            if block_groups.is_empty() {
                 continue;
             }
 
             let table_operator = table.operator.clone();
             let fields_arc = fields.clone();
-            let column_id_to_index_arc = column_id_to_index.clone();
             let table_name_arc = table_name.clone();
             let column_name_filter_arc = column_name_filter.clone();
-            let mut block_stream = stream::iter(block_locations.into_iter().map(
-                move |(location, file_size)| {
+            let mut block_stream = stream::iter(block_groups.into_iter().map(
+                move |(location, file_size, column_metas)| {
                     let operator = table_operator.clone();
                     let fields = fields_arc.clone();
-                    let column_id_to_index = column_id_to_index_arc.clone();
                     let table_name = table_name_arc.clone();
                     let column_name_filter = column_name_filter_arc.clone();
                     async move {
@@ -433,7 +442,7 @@ impl<'a> FuseEncodingImpl<'a> {
                             storage_format,
                             table_name,
                             fields,
-                            column_id_to_index,
+                            column_metas,
                             column_name_filter,
                         )
                         .await

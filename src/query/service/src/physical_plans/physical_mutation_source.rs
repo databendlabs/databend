@@ -28,6 +28,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
@@ -73,6 +74,10 @@ pub struct MutationSource {
     pub output_schema: DataSchemaRef,
     pub input_type: MutationType,
     pub read_partition_columns: ColumnSet,
+    /// Table schema projection used by partial updates. Metadata Symbols remain in
+    /// `read_partition_columns` for expression and output naming.
+    #[serde(default)]
+    pub partial_update_projection: Option<Vec<FieldIndex>>,
     pub truncate_table: bool,
 
     pub partitions: Partitions,
@@ -117,6 +122,7 @@ impl IPhysicalPlan for MutationSource {
             output_schema: self.output_schema.clone(),
             input_type: self.input_type.clone(),
             read_partition_columns: self.read_partition_columns.clone(),
+            partial_update_projection: self.partial_update_projection.clone(),
             truncate_table: self.truncate_table,
             partitions: self.partitions.clone(),
             statistics: self.statistics.clone(),
@@ -154,11 +160,18 @@ impl IPhysicalPlan for MutationSource {
             );
         }
 
-        let read_partition_columns: Vec<usize> = self
-            .read_partition_columns
-            .iter()
-            .map(|idx| idx.as_field_index())
-            .collect();
+        let partial_update = self.partial_update_projection.is_some();
+        let read_partition_field_indices: Vec<FieldIndex> =
+            self.partial_update_projection.clone().unwrap_or_else(|| {
+                self.read_partition_columns
+                    .iter()
+                    .map(|idx| idx.as_field_index())
+                    .collect()
+            });
+        let stream_projection = self
+            .partial_update_projection
+            .as_deref()
+            .unwrap_or(&read_partition_field_indices);
 
         let is_lazy = self.partitions.partitions_type() == PartInfoType::LazyLevel && is_delete;
         if is_lazy {
@@ -166,7 +179,7 @@ impl IPhysicalPlan for MutationSource {
             let table_clone = table.clone();
             let ctx_clone = builder.ctx.clone();
             let filters_clone = self.filters.clone();
-            let projection = Projection::Columns(read_partition_columns.clone());
+            let projection = Projection::Columns(read_partition_field_indices.clone());
             let mut segment_locations = Vec::with_capacity(self.partitions.partitions.len());
             for part in &self.partitions.partitions {
                 // Safe to downcast because we know the partition is lazy
@@ -205,29 +218,36 @@ impl IPhysicalPlan for MutationSource {
         } else {
             MutationAction::Update
         };
-        let col_indices = self
-            .read_partition_columns
-            .iter()
-            .map(|idx| idx.as_field_index())
-            .collect();
         let update_mutation_with_filter =
             self.input_type == MutationType::Update && filter.is_some();
         table.add_mutation_source(
             builder.ctx.clone(),
             filter,
-            col_indices,
+            read_partition_field_indices.clone(),
             &mut builder.main_pipeline,
             mutation_action,
+            partial_update,
         )?;
 
         if table.change_tracking_enabled() {
-            let stream_ctx = StreamContext::try_create(
-                builder.ctx.get_function_context()?,
-                table.schema_with_stream(),
-                table.get_table_info().ident.seq,
-                is_delete,
-                update_mutation_with_filter,
-            )?;
+            let stream_ctx = if partial_update {
+                StreamContext::try_create_projected(
+                    builder.ctx.get_function_context()?,
+                    table.schema_with_stream(),
+                    stream_projection,
+                    table.get_table_info().ident.seq,
+                    is_delete,
+                    update_mutation_with_filter,
+                )?
+            } else {
+                StreamContext::try_create(
+                    builder.ctx.get_function_context()?,
+                    table.schema_with_stream(),
+                    table.get_table_info().ident.seq,
+                    is_delete,
+                    update_mutation_with_filter,
+                )?
+            };
             builder
                 .main_pipeline
                 .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
@@ -241,6 +261,7 @@ impl PhysicalPlanBuilder {
     pub async fn build_mutation_source(
         &mut self,
         mutation_source: &databend_common_sql::plans::MutationSource,
+        required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         let all_predicates: Vec<ScalarExpr> = mutation_source
             .secure_predicates
@@ -266,9 +287,21 @@ impl PhysicalPlanBuilder {
         };
         let mutation_info = self.mutation_build_info.as_ref().unwrap();
 
+        let partial_update = self
+            .mutation_build_info
+            .as_ref()
+            .is_some_and(|info| info.partial_update);
         let metadata = self.metadata.read();
         let mut fields = Vec::with_capacity(mutation_source.columns.len());
         for column_index in mutation_source.columns.iter() {
+            if partial_update
+                && !required.contains(column_index)
+                && !mutation_source
+                    .read_partition_columns
+                    .contains(column_index)
+            {
+                continue;
+            }
             let column = metadata.column(*column_index);
             // Ignore virtual computed columns.
             if let Ok(column_id) = mutation_source.schema.index_of(&column.name()) {
@@ -276,6 +309,19 @@ impl PhysicalPlanBuilder {
             }
         }
         fields.sort_by_key(|(_, _, id)| *id);
+
+        let partial_update_projection = partial_update.then(|| {
+            fields
+                .iter()
+                .map(|(_, _, field_index)| *field_index)
+                .collect::<Vec<_>>()
+        });
+
+        let read_partition_columns = if partial_update {
+            fields.iter().map(|(_, index, _)| *index).collect()
+        } else {
+            mutation_source.read_partition_columns.clone()
+        };
 
         let mut fields = fields
             .into_iter()
@@ -304,7 +350,8 @@ impl PhysicalPlanBuilder {
             display_filters,
             has_hidden_secure_filters: !mutation_source.secure_predicates.is_empty(),
             input_type: mutation_source.mutation_type.clone(),
-            read_partition_columns: mutation_source.read_partition_columns.clone(),
+            read_partition_columns,
+            partial_update_projection,
             truncate_table,
             meta: PhysicalPlanMeta::new("MutationSource"),
             partitions: mutation_info.partitions.clone(),

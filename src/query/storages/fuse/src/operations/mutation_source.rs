@@ -56,14 +56,17 @@ impl FuseTable {
         col_indices: Vec<FieldIndex>,
         pipeline: &mut Pipeline,
         mutation_action: MutationAction,
+        partial_update: bool,
     ) -> Result<()> {
         let all_column_indices = self.all_column_indices();
-        let col_indices =
+        let mut col_indices =
             if matches!(mutation_action, MutationAction::Deletion) || !col_indices.is_empty() {
                 col_indices
             } else {
                 all_column_indices.clone()
             };
+        col_indices.sort_unstable();
+        col_indices.dedup();
         let projection = Projection::Columns(col_indices.clone());
         let update_stream_columns = self.change_tracking_enabled();
         let block_reader = self.create_block_reader(ctx.clone(), projection, false)?;
@@ -76,10 +79,14 @@ impl FuseTable {
         }));
 
         let num_column_indices = self.schema_with_stream().fields().len();
-        let remain_column_indices: Vec<usize> = all_column_indices
-            .into_iter()
-            .filter(|index| !col_indices.contains(index))
-            .collect();
+        let remain_column_indices: Vec<usize> = if partial_update {
+            vec![]
+        } else {
+            all_column_indices
+                .into_iter()
+                .filter(|index| !col_indices.contains(index))
+                .collect()
+        };
         let mut source_col_indices = col_indices;
         if matches!(mutation_action, MutationAction::Deletion) && update_stream_columns
             || matches!(mutation_action, MutationAction::Update) && filter_expr.is_some()
@@ -261,13 +268,12 @@ impl FuseTable {
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
                 .map(|((index, block_meta), inner_part)| {
-                    let cluster_stats = block_meta.cluster_stats.clone();
                     let key = (index.segment_idx, index.block_idx);
                     let whole_block_mutation = whole_block_deletions.contains(&key);
                     let part_info_ptr: PartInfoPtr =
                         Arc::new(Box::new(Mutation::MutationPartInfo(MutationPartInfo {
                             index,
-                            cluster_stats,
+                            block_meta,
                             inner_part,
                             whole_block_mutation,
                         })));

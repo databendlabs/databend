@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -30,10 +32,136 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
+
+use crate::io::TableMetaLocationGenerator;
+
+/// Projected column chunks to read from one physical column-group file.
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+pub struct FuseColumnGroupPartInfo {
+    pub location: String,
+    pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+}
+
+/// Runtime description of a Bloom file paired with one physical data group.
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+pub struct FuseBloomIndexFileInfo {
+    pub active_column_ids: Vec<ColumnId>,
+    pub location: Location,
+    pub file_size: u64,
+}
+
+#[derive(Clone, Debug)]
+pub enum BloomIndexLayout<'a> {
+    Legacy {
+        location: &'a Location,
+        file_size: u64,
+    },
+    ColumnGroups {
+        files: Cow<'a, [FuseBloomIndexFileInfo]>,
+    },
+}
+
+impl<'a> BloomIndexLayout<'a> {
+    fn from_metadata(
+        legacy_location: Option<&'a Location>,
+        legacy_file_size: u64,
+        column_group_files: Cow<'a, [FuseBloomIndexFileInfo]>,
+    ) -> Option<Self> {
+        if !column_group_files.is_empty() {
+            return Some(Self::ColumnGroups {
+                files: column_group_files,
+            });
+        }
+
+        legacy_location.map(|location| Self::Legacy {
+            location,
+            file_size: legacy_file_size,
+        })
+    }
+}
+
+fn column_group_bloom_location(group: &ColumnGroupFileMeta) -> Option<Location> {
+    group.bloom.as_ref().map(|bloom| {
+        (
+            TableMetaLocationGenerator::gen_bloom_index_location_with_version(
+                &group.location.0,
+                bloom.format_version,
+            ),
+            bloom.format_version,
+        )
+    })
+}
+
+pub(crate) fn column_group_bloom_files(meta: &BlockMeta) -> Vec<FuseBloomIndexFileInfo> {
+    meta.column_groups
+        .iter()
+        .filter_map(|group| {
+            let bloom = group.bloom.as_ref()?;
+            Some(FuseBloomIndexFileInfo {
+                active_column_ids: group.active_column_ids.clone(),
+                location: column_group_bloom_location(group)?,
+                file_size: bloom.file_size,
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn legacy_bloom_index_location(meta: &BlockMeta) -> Option<&Location> {
+    meta.column_groups
+        .is_empty()
+        .then_some(meta.bloom_filter_index_location.as_ref())
+        .flatten()
+}
+
+pub(crate) fn block_bloom_index_size(meta: &BlockMeta) -> u64 {
+    if meta.column_groups.is_empty() {
+        meta.bloom_filter_index_size
+    } else {
+        meta.column_groups
+            .iter()
+            .filter_map(|group| group.bloom.as_ref())
+            .map(|bloom| bloom.file_size)
+            .sum()
+    }
+}
+
+/// Physical ordinary Bloom files referenced by a logical block.
+pub fn block_bloom_index_locations(meta: &BlockMeta) -> impl Iterator<Item = Location> + '_ {
+    let legacy = legacy_bloom_index_location(meta).cloned();
+    legacy.into_iter().chain(
+        meta.column_groups
+            .iter()
+            .filter_map(column_group_bloom_location),
+    )
+}
+
+pub(crate) fn bloom_index_layout(meta: &BlockMeta) -> Option<BloomIndexLayout<'_>> {
+    let files = column_group_bloom_files(meta);
+    BloomIndexLayout::from_metadata(
+        legacy_bloom_index_location(meta),
+        block_bloom_index_size(meta),
+        Cow::Owned(files),
+    )
+}
+
+pub(crate) fn project_column_groups(
+    meta: &BlockMeta,
+    projected_column_ids: &HashSet<ColumnId>,
+) -> Vec<FuseColumnGroupPartInfo> {
+    meta.project_column_groups(projected_column_ids)
+        .into_iter()
+        .map(|group| FuseColumnGroupPartInfo {
+            location: group.location.0,
+            columns_meta: group.leaf_column_metas,
+        })
+        .collect()
+}
 
 /// Fuse table partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
@@ -42,10 +170,12 @@ pub struct FuseBlockPartInfo {
 
     pub bloom_filter_index_location: Option<Location>,
     pub bloom_filter_index_size: u64,
+    #[serde(default)]
+    pub column_group_bloom_files: Vec<FuseBloomIndexFileInfo>,
 
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
-    pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub column_groups: Vec<FuseColumnGroupPartInfo>,
     pub columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
     pub compression: Compression,
 
@@ -77,13 +207,23 @@ impl PartInfo for FuseBlockPartInfo {
 }
 
 impl FuseBlockPartInfo {
+    /// Normalize optional legacy and column-group Bloom metadata into one physical-layout view.
+    pub fn bloom_index_layout(&self) -> Option<BloomIndexLayout<'_>> {
+        BloomIndexLayout::from_metadata(
+            self.bloom_filter_index_location.as_ref(),
+            self.bloom_filter_index_size,
+            Cow::Borrowed(&self.column_group_bloom_files),
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         location: String,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
+        column_group_bloom_files: Vec<FuseBloomIndexFileInfo>,
         rows_count: u64,
-        columns_meta: HashMap<ColumnId, ColumnMeta>,
+        column_groups: Vec<FuseColumnGroupPartInfo>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
@@ -94,8 +234,9 @@ impl FuseBlockPartInfo {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            column_group_bloom_files,
             create_on,
-            columns_meta,
+            column_groups,
             nums_rows: rows_count as usize,
             compression,
             sort_min_max,

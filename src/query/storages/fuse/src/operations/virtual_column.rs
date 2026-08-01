@@ -367,7 +367,7 @@ pub async fn commit_refresh_virtual_column(
 
     let table_meta_timestamps =
         ctx.get_table_meta_timestamps(fuse_table, Some(latest_snapshot.clone()))?;
-    pipeline.add_async_accumulating_transformer(|| {
+    pipeline.try_add_async_accumulating_transformer(|| {
         TableMutationAggregator::create(
             fuse_table,
             ctx.clone(),
@@ -378,7 +378,7 @@ pub async fn commit_refresh_virtual_column(
             MutationKind::Refresh,
             table_meta_timestamps,
         )
-    });
+    })?;
 
     let snapshot_gen = MutationGenerator::new(Some(latest_snapshot), MutationKind::Refresh);
     pipeline.add_sink(|input| {
@@ -444,7 +444,7 @@ pub async fn do_vacuum_virtual_column(
 
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(fuse_table, Some(latest_snapshot.clone()))?;
-        pipeline.add_async_accumulating_transformer(|| {
+        pipeline.try_add_async_accumulating_transformer(|| {
             TableMutationAggregator::create(
                 fuse_table,
                 ctx.clone(),
@@ -455,7 +455,7 @@ pub async fn do_vacuum_virtual_column(
                 MutationKind::Refresh,
                 table_meta_timestamps,
             )
-        });
+        })?;
 
         let prev_snapshot_id = latest_snapshot.snapshot_id;
         let snapshot_gen = MutationGenerator::new(Some(latest_snapshot), MutationKind::Refresh);

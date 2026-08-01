@@ -16,13 +16,14 @@ use std::any::Any;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Statistics;
 
 use crate::operations::mutation::SegmentIndex;
@@ -82,7 +83,7 @@ impl DeletedSegmentInfo {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct MutationPartInfo {
     pub index: BlockMetaIndex,
-    pub cluster_stats: Option<ClusterStatistics>,
+    pub block_meta: Arc<BlockMeta>,
     pub inner_part: PartInfoPtr,
     pub whole_block_mutation: bool,
 }

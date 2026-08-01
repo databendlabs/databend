@@ -57,11 +57,13 @@ use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::parse_computed_field_index_expr;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::TruncateMode;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_storages_common_table_meta::meta::Location;
@@ -90,6 +92,105 @@ use crate::sessions::TableContext;
 
 // The predicate column symbol should not conflict with update expr column bindings.
 pub const PREDICATE_COLUMN_INDEX: Symbol = Symbol::DUMMY_COLUMN;
+
+struct PartialUpdateInfo {
+    required_columns: ColumnSet,
+    updated_field_indices: Vec<FieldIndex>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_partial_update_info(
+    ctx: Arc<dyn TableContext>,
+    table: &FuseTable,
+    bind_context: &BindContext,
+    update_list: &HashMap<FieldIndex, ScalarExpr>,
+    direct_filter: &[ScalarExpr],
+    database: Option<&str>,
+    table_name: &str,
+) -> Result<Option<PartialUpdateInfo>> {
+    // Partial UPDATE is an opt-in feature defined only for Fuse tables without partitioning,
+    // computed columns, column-oriented segments, derived table indexes (inverted, Ngram, vector,
+    // or spatial), or Fuse virtual columns. REPLACE INTO is also outside this feature. These
+    // exclusions are user-enforced preconditions, intentionally not validated or handled by
+    // fallback here; behavior after violating them is outside the feature contract.
+    if !ctx.get_settings().get_enable_partial_update()?
+        || !table.get_option(FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE, false)
+        || update_list.is_empty()
+    {
+        return Ok(None);
+    }
+
+    let schema_with_stream = table.schema_with_stream();
+    // Computed columns are deliberately omitted because a schema containing one is outside the
+    // Partial UPDATE feature contract.
+    let mut updated_column_ids = update_list
+        .keys()
+        .map(|index| schema_with_stream.field(*index).column_id())
+        .collect::<BTreeSet<_>>();
+
+    for stream_column in table.stream_columns() {
+        updated_column_ids.insert(stream_column.column_id());
+    }
+
+    if let Some(cluster_keys) = table.resolve_cluster_keys() {
+        let cluster_exprs = parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
+        let updates_cluster_key = cluster_exprs
+            .iter()
+            .flat_map(|expr| expr.column_refs())
+            .any(|(index, _)| {
+                updated_column_ids.contains(&schema_with_stream.field(index).column_id())
+            });
+        if updates_cluster_key {
+            return Ok(None);
+        }
+    }
+
+    let updated_field_indices = schema_with_stream
+        .fields()
+        .iter()
+        .enumerate()
+        .filter_map(|(index, field)| {
+            updated_column_ids
+                .contains(&field.column_id())
+                .then_some(index)
+        })
+        .collect::<Vec<_>>();
+    if updated_field_indices.is_empty()
+        || updated_field_indices.len() >= schema_with_stream.fields().len()
+    {
+        return Ok(None);
+    }
+
+    let find_symbol = |field_index: FieldIndex| {
+        let field = schema_with_stream.field(field_index);
+        bind_context
+            .columns
+            .iter()
+            .find(|binding| {
+                BindContext::match_column_binding(database, Some(table_name), field.name(), binding)
+            })
+            .map(|binding| binding.index)
+    };
+
+    let mut required_columns = update_list
+        .values()
+        .flat_map(ScalarExpr::used_columns)
+        .chain(direct_filter.iter().flat_map(ScalarExpr::used_columns))
+        .collect::<ColumnSet>();
+    for (field_index, field) in schema_with_stream.fields().iter().enumerate() {
+        if updated_column_ids.contains(&field.column_id()) {
+            let Some(symbol) = find_symbol(field_index) else {
+                return Ok(None);
+            };
+            required_columns.insert(symbol);
+        }
+    }
+
+    Ok(Some(PartialUpdateInfo {
+        required_columns,
+        updated_field_indices,
+    }))
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Mutation {
@@ -269,6 +370,41 @@ impl PhysicalPlanBuilder {
             ..
         } = mutation;
 
+        let table = self
+            .ctx
+            .get_table(catalog_name, database_name, table_name)
+            .await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let partial_table_name = table_name_alias
+            .as_ref()
+            .map(|name| name.to_lowercase())
+            .unwrap_or_else(|| table_name.clone());
+        let partial_database = table_name_alias.is_none().then_some(database_name.as_str());
+        let partial_update = if *strategy == MutationStrategy::Direct {
+            matched_evaluators
+                .first()
+                .and_then(|evaluator| evaluator.update.as_ref())
+                .map(|update_list| {
+                    build_partial_update_info(
+                        self.ctx.clone(),
+                        fuse_table,
+                        bind_context,
+                        update_list,
+                        direct_filter,
+                        partial_database,
+                        &partial_table_name,
+                    )
+                })
+                .transpose()?
+                .flatten()
+        } else {
+            None
+        };
+        if let Some(info) = &partial_update {
+            required = info.required_columns.clone();
+        }
+        self.mutation_build_info.as_mut().unwrap().partial_update = partial_update.is_some();
+
         let mut maybe_udfs = BTreeSet::new();
         for matched_evaluator in matched_evaluators {
             if let Some(condition) = &matched_evaluator.condition {
@@ -308,10 +444,6 @@ impl PhysicalPlanBuilder {
             return Ok(plan);
         }
 
-        let table = self
-            .ctx
-            .get_table(catalog_name, database_name, table_name)
-            .await?;
         let table_info = table.get_table_info();
         let table_name = table_name.clone();
 
@@ -399,6 +531,7 @@ impl PhysicalPlanBuilder {
                 has_filter_column: predicate_column_index.is_some(),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
                 udf_col_num,
+                partial_update_fields: partial_update.map(|info| info.updated_field_indices),
             });
 
             if *distributed {
@@ -1069,10 +1202,10 @@ fn build_field_id_to_schema_index(
                 column_binding,
             ) {
                 let column_index = column_binding.index;
-                let schema_index = mutation_input_schema
-                    .index_of(&column_index.to_string())
-                    .unwrap();
-                field_id_to_schema_index.insert(field_id, schema_index);
+                if let Ok(schema_index) = mutation_input_schema.index_of(&column_index.to_string())
+                {
+                    field_id_to_schema_index.insert(field_id, schema_index);
+                }
                 break;
             }
         }
