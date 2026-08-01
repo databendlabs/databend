@@ -363,8 +363,10 @@ where
                         }
                         CreateOption::CreateOrReplace => {
                             if req.as_dropped {
-                                // CTAS does not call construct_drop_table_txn_operations(),
-                                // so validate its existing table here.
+                                // Atomic CTAS keeps the existing table visible while the insert
+                                // pipeline runs, so it cannot use the drop helper. Validate the
+                                // engine here; `commit_table_meta()` publishes the replacement
+                                // after the insert succeeds.
                                 let existing_meta =
                                     self.get_pb(&TableId::new(*id.data)).await?.ok_or_else(|| {
                                         KVAppError::AppError(AppError::UnknownTableId(
@@ -388,21 +390,18 @@ where
                                     ));
                                 }
 
-                                // Guard the engine check against a concurrent metadata update.
-                                txn.condition.push(txn_cond_seq(
-                                    &TableId::new(*id.data),
-                                    Eq,
-                                    existing_meta.seq,
-                                ));
+                                // No TableMeta seq condition is needed: the engine is immutable
+                                // for a table id, and the `key_dbid_tbname` condition below ensures
+                                // that the name still refers to this table id.
+
                                 // If the table is being created as a dropped table, we do not
                                 // need to combine with drop_table_txn operations, just return
                                 // the sequence number associated with the value part of
                                 // the key-value pair (key_dbid_tbname, table_id).
-
                                 SeqV::new(id.seq, *id.data)
                             } else {
-                                // The drop helper validates the engine against the metadata
-                                // sequence used by the replacement transaction.
+                                // The drop helper rejects a mismatched engine before it
+                                // marks the existing table as dropped.
                                 let (seq, id) = construct_drop_table_txn_operations(
                                     self,
                                     req.name_ident.table_name.clone(),
