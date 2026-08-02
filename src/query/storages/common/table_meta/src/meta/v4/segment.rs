@@ -545,6 +545,7 @@ mod tests {
             file_size: 16,
             col_stats: block_col_stats,
             col_metas,
+            column_groups: vec![],
             cluster_stats: None,
             location: ("block.parquet".to_string(), 0),
             bloom_filter_index_location: None,

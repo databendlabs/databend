@@ -403,6 +403,7 @@ impl StreamBlockBuilder {
             file_size: file_size as u64,
             col_stats,
             col_metas,
+            column_groups: vec![],
             // Stream block writing is only enabled for tables without a cluster key, so cluster
             // statistics cannot be produced on this path.
             cluster_stats: None,
