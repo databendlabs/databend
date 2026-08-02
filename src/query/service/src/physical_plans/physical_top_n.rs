@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::runtime_filter_info::RuntimeScanFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::Result;
@@ -259,10 +258,8 @@ impl IPhysicalPlan for PartialTopNPlan {
         let ctx = builder.ctx.clone();
         let candidate_count = self.candidate_count;
         let enable_fixed_rows = self.enable_fixed_rows;
-        let filter = match runtime_top_n_filter {
-            None => None,
-            Some((_, filter)) => Some((key_desc.sort_column_desc()[0].offset, filter)),
-        };
+        let filter =
+            runtime_top_n_filter.map(|(_, filter)| (key_desc.sort_column_desc()[0].offset, filter));
 
         builder.main_pipeline.add_transform(|input, output| {
             create_partial_top_n_processor(
@@ -653,6 +650,7 @@ mod tests {
     use databend_common_catalog::plan::PartStatistics;
     use databend_common_catalog::plan::Partitions;
     use databend_common_catalog::plan::PushDownInfo;
+    use databend_common_catalog::runtime_filter_info::RuntimeScanFilter;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;

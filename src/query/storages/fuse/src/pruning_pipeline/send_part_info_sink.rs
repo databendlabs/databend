@@ -200,10 +200,6 @@ impl AsyncSink for SendPartInfoSink {
             ));
         };
 
-        if self.send_part_state.limit.load(Ordering::Acquire) == 0 {
-            return Ok(true);
-        }
-
         if self.runtime_scan_filters.is_finished() {
             return Ok(true);
         }
@@ -271,7 +267,7 @@ impl AsyncSink for SendPartInfoSink {
             }
         }
 
-        Ok(self.send_part_state.limit.load(Ordering::Acquire) == 0)
+        Ok(false)
     }
 }
 
