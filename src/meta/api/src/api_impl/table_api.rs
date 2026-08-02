@@ -1113,7 +1113,8 @@ where
                 table_name: tenant_dbname_tbname.table_name.clone(),
             };
 
-            let (dbid_tbname_seq, _table_id) = self.get_pb_seq_and_value(&dbid_tbname).await?;
+            let (dbid_tbname_seq, visible_table_id) =
+                self.get_pb_seq_and_value(&dbid_tbname).await?;
 
             // get table id list from _fd_table_id_list/db_id/table_name
 
@@ -1205,11 +1206,10 @@ where
                     )))
                 })?;
 
-                if let Some(prev_table_id) = req.prev_table_id {
-                    let prev_tbid = TableId::new(prev_table_id);
-                    let previous = self.get_pb(&prev_tbid).await?.ok_or_else(|| {
+                if let Some(visible_table_id) = visible_table_id {
+                    let previous = self.get_pb(&visible_table_id).await?.ok_or_else(|| {
                         KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
-                            prev_table_id,
+                            visible_table_id.table_id,
                             "commit_table_meta previous table",
                         )))
                     })?;
@@ -1223,7 +1223,7 @@ where
 
                     txn_req
                         .condition
-                        .push(txn_cond_seq(&prev_tbid, Eq, previous.seq));
+                        .push(txn_cond_seq(&visible_table_id, Eq, previous.seq));
                 }
 
                 // undrop a table with no drop_on time
