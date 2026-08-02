@@ -30,6 +30,9 @@ CREATE STREAM target ON TABLE source
 statement error 1302
 CREATE OR REPLACE TABLE target(a INT)
 
+statement error 1302
+CREATE OR REPLACE TABLE target AS SELECT 1 AS a
+
 query TT
 SHOW CREATE TABLE target
 ----

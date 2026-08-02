@@ -217,6 +217,14 @@ impl TableEngineMismatch {
             new_engine: new_engine.into(),
         }
     }
+
+    pub fn ensure(table_name: &str, existing_engine: &str, new_engine: &str) -> Result<(), Self> {
+        if existing_engine.eq_ignore_ascii_case(new_engine) {
+            return Ok(());
+        }
+
+        Err(Self::new(table_name, existing_engine, new_engine))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

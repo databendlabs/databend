@@ -117,9 +117,10 @@ impl TempTblMgr {
         let db_id = db_id.parse::<u64>()?;
 
         let desc = Self::temp_table_desc(&name_ident.db_name, &name_ident.table_name);
+        let existing_id = self.name_to_id.get(&desc).copied();
         let engine = table_meta.engine.to_string();
         let table_id = self.next_id;
-        let new_table = match (self.name_to_id.get(&desc).copied(), create_option) {
+        let new_table = match (existing_id, create_option) {
             (Some(_), CreateOption::Create) => {
                 return Err(ErrorCode::TableAlreadyExists(format!(
                     "Temporary table {} already exists",
@@ -134,17 +135,12 @@ impl TempTblMgr {
                             "Got temporary table id {existing_id}, but its metadata was not found"
                         ))
                     })?;
-                    if !existing_table
-                        .meta
-                        .engine
-                        .eq_ignore_ascii_case(&table_meta.engine)
-                    {
-                        return Err(ErrorCode::from(AppError::from(TableEngineMismatch::new(
-                            &name_ident.table_name,
-                            &existing_table.meta.engine,
-                            &table_meta.engine,
-                        ))));
-                    }
+                    TableEngineMismatch::ensure(
+                        &name_ident.table_name,
+                        &existing_table.meta.engine,
+                        &table_meta.engine,
+                    )
+                    .map_err(|e| ErrorCode::from(AppError::from(e)))?;
                 }
 
                 let desc = orphan_table_name
@@ -175,7 +171,7 @@ impl TempTblMgr {
             table_id_seq: Some(0),
             db_id,
             new_table,
-            prev_table_id: None,
+            prev_table_id: as_dropped.then_some(existing_id).flatten(),
             orphan_table_name,
         })
     }
@@ -186,22 +182,44 @@ impl TempTblMgr {
             req.orphan_table_name.as_ref().unwrap(),
         );
         let desc = Self::temp_table_desc(&req.name_ident.db_name, &req.name_ident.table_name);
-        match self.name_to_id.remove(&orphan_desc) {
-            Some(id) => {
-                if let Some(old_id) = self.name_to_id.insert(desc, id) {
-                    self.id_to_table.remove(&old_id);
-                }
-                let table = self.id_to_table.get_mut(&id).unwrap();
-                table.db_name = req.name_ident.db_name.clone();
-                table.table_name = req.name_ident.table_name.clone();
+        let orphan_id = self
+            .name_to_id
+            .get(&orphan_desc)
+            .copied()
+            .ok_or_else(|| ErrorCode::UnknownTable(orphan_desc.clone()))?;
 
-                Ok(CommitTableMetaReply {})
-            }
-            None => Err(ErrorCode::UnknownTable(format!(
-                "Temporary table {}.{} not found",
-                req.name_ident.db_name, req.name_ident.table_name
-            ))),
+        let current_id = self.name_to_id.get(&desc).copied();
+        if current_id != req.prev_table_id {
+            return Err(ErrorCode::TableVersionMismatched(format!(
+                "Temporary table {desc} changed while CTAS was running"
+            )));
         }
+
+        if let Some(current_id) = current_id {
+            let current = self.id_to_table.get(&current_id).ok_or_else(|| {
+                ErrorCode::Internal(format!("Missing temporary table metadata for {current_id}"))
+            })?;
+            let replacement = self.id_to_table.get(&orphan_id).ok_or_else(|| {
+                ErrorCode::Internal(format!("Missing temporary table metadata for {orphan_id}"))
+            })?;
+
+            TableEngineMismatch::ensure(
+                &req.name_ident.table_name,
+                &current.meta.engine,
+                &replacement.meta.engine,
+            )
+            .map_err(|e| ErrorCode::from(AppError::from(e)))?;
+        }
+
+        self.name_to_id.remove(&orphan_desc);
+        if let Some(old_id) = self.name_to_id.insert(desc, orphan_id) {
+            self.id_to_table.remove(&old_id);
+        }
+        let table = self.id_to_table.get_mut(&orphan_id).unwrap();
+        table.db_name = req.name_ident.db_name.clone();
+        table.table_name = req.name_ident.table_name.clone();
+
+        Ok(CommitTableMetaReply {})
     }
 
     pub fn rename_table(&mut self, req: &RenameTableReq) -> Result<Option<RenameTableReply>> {
@@ -534,3 +552,120 @@ pub async fn drop_all_temp_tables(
 }
 
 pub type TempTblMgrRef = Arc<Mutex<TempTblMgr>>;
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::schema::TableNameIdent;
+    use databend_common_meta_app::tenant::Tenant;
+
+    use super::*;
+
+    fn create_table_req(
+        table_name: &str,
+        engine: &str,
+        create_option: CreateOption,
+        as_dropped: bool,
+    ) -> CreateTableReq {
+        let mut table_meta = TableMeta {
+            engine: engine.to_string(),
+            ..Default::default()
+        };
+        table_meta
+            .options
+            .insert(OPT_KEY_DATABASE_ID.to_string(), "1".to_string());
+
+        CreateTableReq {
+            create_option,
+            catalog_name: None,
+            name_ident: TableNameIdent {
+                tenant: Tenant::new_literal("tenant"),
+                db_name: "db".to_string(),
+                table_name: table_name.to_string(),
+            },
+            table_meta,
+            as_dropped,
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        }
+    }
+
+    #[test]
+    fn test_commit_cross_engine_ctas_preserves_temporary_tables() {
+        let mut mgr = TempTblMgr {
+            name_to_id: HashMap::new(),
+            id_to_table: HashMap::new(),
+            next_id: TEMP_TBL_ID_BEGIN,
+        };
+        let table_name = "t";
+        let desc = TempTblMgr::temp_table_desc("db", table_name);
+
+        let visible = mgr
+            .create_table(
+                create_table_req(table_name, "FUSE", CreateOption::Create, false),
+                "session".to_string(),
+            )
+            .unwrap();
+        let replacement = mgr
+            .create_table(
+                create_table_req(table_name, "FUSE", CreateOption::CreateOrReplace, true),
+                "session".to_string(),
+            )
+            .unwrap();
+        assert_eq!(replacement.prev_table_id, Some(visible.table_id));
+
+        mgr.name_to_id.remove(&desc);
+        mgr.id_to_table.remove(&visible.table_id);
+        let current = mgr
+            .create_table(
+                create_table_req(table_name, "MEMORY", CreateOption::Create, false),
+                "session".to_string(),
+            )
+            .unwrap();
+
+        let orphan_desc =
+            TempTblMgr::temp_table_desc("db", replacement.orphan_table_name.as_ref().unwrap());
+        let current_meta = mgr.id_to_table.get(&current.table_id).unwrap().meta.clone();
+        let replacement_meta = mgr
+            .id_to_table
+            .get(&replacement.table_id)
+            .unwrap()
+            .meta
+            .clone();
+
+        let err = mgr
+            .commit_table_meta(&CommitTableMetaReq {
+                name_ident: TableNameIdent {
+                    tenant: Tenant::new_literal("tenant"),
+                    db_name: "db".to_string(),
+                    table_name: table_name.to_string(),
+                },
+                db_id: replacement.db_id,
+                table_id: replacement.table_id,
+                prev_table_id: replacement.prev_table_id,
+                orphan_table_name: replacement.orphan_table_name,
+            })
+            .unwrap_err();
+        let expected = ErrorCode::TableVersionMismatched(format!(
+            "Temporary table {desc} changed while CTAS was running"
+        ));
+        assert_eq!(
+            (err.code(), err.message()),
+            (expected.code(), expected.message())
+        );
+
+        assert_eq!(mgr.name_to_id.get(&desc), Some(&current.table_id));
+        assert_eq!(
+            mgr.name_to_id.get(&orphan_desc),
+            Some(&replacement.table_id)
+        );
+        assert_eq!(
+            mgr.id_to_table.get(&current.table_id).unwrap().meta,
+            current_meta
+        );
+        assert_eq!(
+            mgr.id_to_table.get(&replacement.table_id).unwrap().meta,
+            replacement_meta
+        );
+    }
+}

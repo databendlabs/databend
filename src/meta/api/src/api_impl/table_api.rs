@@ -129,6 +129,7 @@ use super::database_api::DatabaseApi;
 use super::database_util::get_db_or_err;
 use super::garbage_collection_api::ORPHAN_POSTFIX;
 use super::garbage_collection_api::get_history_tables_for_gc;
+use super::schema_api::VersionedTable;
 use super::schema_api::build_upsert_table_deduplicated_label;
 use super::schema_api::construct_drop_table_txn_operations;
 use super::schema_api::get_db_by_id_or_err;
@@ -373,19 +374,12 @@ where
                                     "create or replace failed to find existing table meta",
                                 )))
                             })?;
-                            if !existing_table_meta
-                                .engine
-                                .eq_ignore_ascii_case(&req.table_meta.engine)
-                            {
-                                return Err(KVAppError::AppError(
-                                    TableEngineMismatch::new(
-                                        req.table_name(),
-                                        &existing_table_meta.engine,
-                                        &req.table_meta.engine,
-                                    )
-                                    .into(),
-                                ));
-                            }
+                            TableEngineMismatch::ensure(
+                                req.table_name(),
+                                &existing_table_meta.engine,
+                                &req.table_meta.engine,
+                            )
+                            .map_err(|e| KVAppError::AppError(e.into()))?;
 
                             if req.as_dropped {
                                 // If the table is being created as a dropped table, we do not
@@ -395,15 +389,16 @@ where
 
                                 SeqV::new(id.seq, *id.data)
                             } else {
-                                // Reuse the metadata loaded for the engine check when marking the
-                                // existing table as dropped.
+                                let existing = VersionedTable {
+                                    id: TableId::new(*id.data),
+                                    meta: existing_table_meta,
+                                };
                                 let (seq, id) = construct_drop_table_txn_operations(
                                     self,
                                     req.name_ident.table_name.clone(),
                                     &req.name_ident.tenant,
                                     req.catalog_name.clone(),
-                                    *id.data,
-                                    Some(existing_table_meta),
+                                    existing,
                                     *seq_db_id.data,
                                     true,
                                     false,
@@ -634,13 +629,23 @@ where
 
             let mut txn = TxnRequest::default();
 
+            let tbid = TableId::new(table_id);
+            let table_meta = self.get_pb(&tbid).await?.ok_or_else(|| {
+                KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                    table_id,
+                    "drop_table_by_id failed to find valid tb_meta",
+                )))
+            })?;
+            let existing = VersionedTable {
+                id: tbid,
+                meta: table_meta,
+            };
             let opt = construct_drop_table_txn_operations(
                 self,
                 req.table_name.clone(),
                 &req.tenant,
                 None,
-                table_id,
-                None,
+                existing,
                 req.db_id,
                 req.if_exists,
                 true,
@@ -1192,7 +1197,35 @@ where
 
             {
                 // reset drop on time
-                let mut tb_meta = tb_meta.unwrap();
+                let mut txn_req = TxnRequest::default();
+                let mut tb_meta = tb_meta.ok_or_else(|| {
+                    KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                        table_id,
+                        "commit_table_meta",
+                    )))
+                })?;
+
+                if let Some(prev_table_id) = req.prev_table_id {
+                    let prev_tbid = TableId::new(prev_table_id);
+                    let previous = self.get_pb(&prev_tbid).await?.ok_or_else(|| {
+                        KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                            prev_table_id,
+                            "commit_table_meta previous table",
+                        )))
+                    })?;
+
+                    TableEngineMismatch::ensure(
+                        req.name_ident.table_name.as_str(),
+                        &previous.engine,
+                        &tb_meta.engine,
+                    )
+                    .map_err(|e| KVAppError::AppError(e.into()))?;
+
+                    txn_req
+                        .condition
+                        .push(txn_cond_seq(&prev_tbid, Eq, previous.seq));
+                }
+
                 // undrop a table with no drop_on time
                 if tb_meta.drop_on.is_none() {
                     return Err(KVAppError::AppError(AppError::UndropTableWithNoDropTime(
@@ -1200,8 +1233,6 @@ where
                     )));
                 }
                 tb_meta.drop_on = None;
-
-                let mut txn_req = TxnRequest::default();
 
                 txn_req.condition.extend([
                     // db has not to change, i.e., no new table is created.

@@ -171,33 +171,26 @@ pub async fn get_history_table_metas(
     Ok(tb_metas)
 }
 
-pub async fn construct_drop_table_txn_operations(
+pub(crate) struct VersionedTable {
+    pub id: TableId,
+    pub meta: SeqV<TableMeta>,
+}
+
+pub(crate) async fn construct_drop_table_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_name: String,
     tenant: &Tenant,
     catalog_name: Option<String>,
-    table_id: u64,
-    preloaded_table_meta: Option<SeqV<TableMeta>>,
+    existing: VersionedTable,
     db_id: u64,
     if_exists: bool,
     if_delete: bool,
     txn: &mut TxnRequest,
 ) -> Result<(u64, u64), KVAppError> {
-    let tbid = TableId { table_id };
-
-    // Reuse metadata already loaded by CREATE OR REPLACE; ordinary DROP callers
-    // do not have it and load it here. A preloaded value must belong to `table_id`.
-    let (tb_meta_seq, tb_meta) = if let Some(preloaded_table_meta) = preloaded_table_meta {
-        (preloaded_table_meta.seq, Some(preloaded_table_meta.data))
-    } else {
-        kv_api.get_pb_seq_and_value(&tbid).await?
-    };
-    // Check if table exists.
-    if tb_meta_seq == 0 {
-        return Err(KVAppError::AppError(AppError::UnknownTableId(
-            UnknownTableId::new(table_id, "drop_table_by_id failed to find valid tb_meta"),
-        )));
-    }
+    let VersionedTable { id: tbid, meta } = existing;
+    let table_id = tbid.table_id;
+    let tb_meta_seq = meta.seq;
+    let mut tb_meta = meta.data;
 
     // Get db name, tenant name and related info for tx.
     let table_id_to_name = TableIdToName { table_id };
@@ -239,7 +232,6 @@ pub async fn construct_drop_table_txn_operations(
         "drop table by id"
     );
 
-    let mut tb_meta = tb_meta.unwrap();
     // drop a table with drop_on time
     if tb_meta.drop_on.is_some() {
         return if if_exists {
