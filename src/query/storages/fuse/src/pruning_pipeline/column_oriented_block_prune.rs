@@ -52,6 +52,10 @@ pub struct ColumnOrientedBlockPruneSink {
     sender: Option<Sender<Result<PartInfoPtr>>>,
     runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
     runtime_scan_filters: RuntimeScanFilters,
+    /// An EXPLAIN-style dry run prunes without any part consumer: the pruning
+    /// statistics are the product, so pruning must run to completion instead
+    /// of stopping when the receiver disconnects.
+    dry_run: bool,
 }
 
 impl ColumnOrientedBlockPruneSink {
@@ -62,6 +66,7 @@ impl ColumnOrientedBlockPruneSink {
         column_ids: Vec<ColumnId>,
         runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
         runtime_scan_filters: RuntimeScanFilters,
+        dry_run: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(
             input,
@@ -71,6 +76,7 @@ impl ColumnOrientedBlockPruneSink {
                 sender: Some(sender),
                 runtime_filter_prune_context,
                 runtime_scan_filters,
+                dry_run,
             },
         )))
     }
@@ -90,7 +96,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             return Ok(true);
         }
 
-        if self.sender.as_ref().is_none_or(Sender::is_closed) {
+        if !self.dry_run && self.sender.as_ref().is_none_or(Sender::is_closed) {
             return Ok(true);
         }
 

@@ -142,6 +142,10 @@ pub struct SendPartInfoSink {
     statistics: PartStatistics,
     send_part_state: Arc<SendPartState>,
     runtime_scan_filters: RuntimeScanFilters,
+    /// An EXPLAIN-style dry run prunes without any part consumer: the
+    /// statistics are the product, so pruning must run to completion instead
+    /// of stopping when the receiver disconnects.
+    dry_run: bool,
     enable_cache: bool,
 }
 
@@ -154,6 +158,7 @@ impl SendPartInfoSink {
         schema: TableSchemaRef,
         send_part_state: Arc<SendPartState>,
         runtime_scan_filters: RuntimeScanFilters,
+        dry_run: bool,
         enable_cache: bool,
     ) -> Result<ProcessorPtr> {
         debug_assert!(runtime_scan_filters.is_empty() || !enable_cache);
@@ -170,6 +175,7 @@ impl SendPartInfoSink {
                 statistics,
                 send_part_state,
                 runtime_scan_filters,
+                dry_run,
                 enable_cache,
             },
         )))
@@ -204,7 +210,7 @@ impl AsyncSink for SendPartInfoSink {
             return Ok(true);
         }
 
-        if self.sender.as_ref().is_none_or(Sender::is_closed) {
+        if !self.dry_run && self.sender.as_ref().is_none_or(Sender::is_closed) {
             self.send_part_state
                 .incomplete
                 .store(true, Ordering::Release);
@@ -260,6 +266,9 @@ impl AsyncSink for SendPartInfoSink {
             };
 
             if sender.send(Ok(info)).await.is_err() {
+                if self.dry_run {
+                    break;
+                }
                 self.send_part_state
                     .incomplete
                     .store(true, Ordering::Release);

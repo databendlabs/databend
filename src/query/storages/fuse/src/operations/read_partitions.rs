@@ -757,6 +757,7 @@ impl FuseTable {
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?
             && runtime_filter_prune_context.is_none()
             && runtime_scan_filters.is_empty();
+        let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
             limit,
@@ -773,6 +774,7 @@ impl FuseTable {
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
                 runtime_scan_filters.clone(),
+                dry_run,
                 enable_prune_cache,
             )
         })?;
@@ -928,6 +930,7 @@ impl FuseTable {
             max_threads,
         )?;
         // TODO(Sky): deal with sample
+        let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
         prune_pipeline.add_sink(|input| {
             ColumnOrientedBlockPruneSink::create(
                 input,
@@ -936,6 +939,7 @@ impl FuseTable {
                 block_prune_column_ids.clone(),
                 runtime_filter_prune_context.clone(),
                 runtime_scan_filters.clone(),
+                dry_run,
             )
         })?;
         // TODO(Sky): populate prune cache , deal with topn prune
