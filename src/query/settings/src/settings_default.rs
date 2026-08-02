@@ -188,6 +188,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=3)),
                 }),
+                ("storage_delete_batch_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Sets the number of object keys deleted per batch delete request (e.g. S3 DeleteObjects). Larger values reduce request count; defaults to the S3 batch limit of 1000.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=1000)),
+                }),
                 ("max_memory_usage", DefaultSettingValue {
                     value: UserSettingValue::UInt64(max_memory_usage),
                     desc: "Sets the maximum memory usage in bytes for processing a single query.",
