@@ -217,10 +217,14 @@ impl TableContextRuntimeFilter for QueryContext {
         self.shared.runtime_filter_state.clear();
     }
 
-    fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        self.shared
-            .runtime_filter_state
-            .assert_empty(&self.get_id())
+    fn register_runtime_scan_filter(&self, scan_id: usize, filter: Arc<dyn RuntimeScanFilter>) {
+        let state = &self.shared.runtime_filter_state;
+        state.register_runtime_scan_filter(scan_id, filter);
+    }
+
+    fn get_runtime_scan_filters(&self, scan_id: usize) -> RuntimeScanFilters {
+        let state = &self.shared.runtime_filter_state;
+        state.get_runtime_scan_filters(scan_id)
     }
 
     fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {

@@ -1,0 +1,301 @@
+# Correctness tests for the fused TopN operator (`enable_top_n`).
+# Every query here must return exactly the same rows as the Sort + Limit path;
+# queries are written so the expected rows are fully determined by the ORDER BY
+# (unique tiebreaker, or only order keys projected), keeping results stable in
+# both standalone and cluster mode.
+
+statement ok
+set enable_top_n = 1;
+
+# Basic descending TopN over unsorted input.
+query I
+select number from numbers(1000) order by number desc limit 5
+----
+999
+998
+997
+996
+995
+
+# Offset is applied at the final stage.
+query I
+select number from numbers(1000) order by number desc limit 5 offset 3
+----
+996
+995
+994
+993
+992
+
+# The same query with TopN disabled is the differential oracle.
+query I
+settings (enable_top_n = 0) select number from numbers(1000) order by number desc limit 5 offset 3
+----
+996
+995
+994
+993
+992
+
+# Multi-key ordering with NULLS FIRST and a unique tiebreaker.
+query II
+select if(number % 7 = 0, null, number % 3) as k, number from numbers(20) order by k asc nulls first, number desc limit 6
+----
+NULL 14
+NULL 7
+NULL 0
+0 18
+0 15
+0 12
+
+# Offset crossing the NULL group boundary.
+query II
+select if(number % 7 = 0, null, number % 3) as k, number from numbers(20) order by k asc nulls first, number desc limit 4 offset 2
+----
+NULL 0
+0 18
+0 15
+0 12
+
+# Ties at the cutoff: only the order key is projected, so any winner set
+# renders the same rows.
+query I
+select number % 4 as k from numbers(100) order by k desc limit 5
+----
+3
+3
+3
+3
+3
+
+# LIMIT 0 returns an empty result.
+query I
+select number from numbers(10) order by number limit 0
+----
+
+# Offset beyond the input returns an empty result.
+query I
+select number from numbers(5) order by number limit 3 offset 10
+----
+
+# ORDER BY an expression that is not in the projection.
+query I
+select number from numbers(100) order by number % 10 asc, number desc limit 3
+----
+90
+80
+70
+
+# TopN above an aggregation (rank limit pushdown interplay).
+query II
+select number % 5 as k, count(*) as c from numbers(1000) group by k order by k desc limit 3
+----
+4 200
+3 200
+2 200
+
+# TopN above UNION ALL.
+query I
+select * from (select number from numbers(10) union all select number + 5 from numbers(10)) as t order by number desc limit 4
+----
+14
+13
+12
+11
+
+# TopN inside a correlated scalar subquery.
+query II
+select t.a, (select x from (select number as x from numbers(5)) as s where x > t.a order by x limit 1 offset 1) as picked from (select number as a from numbers(3)) as t order by t.a
+----
+0 2
+1 3
+2 4
+
+# Fuse table spanning multiple blocks and segments, with NULL keys.
+statement ok
+create or replace table t_top_n (a int null, b string not null) row_per_block=3;
+
+statement ok
+insert into t_top_n values (5,'a'), (3,'b'), (8,'c'), (null,'d');
+
+statement ok
+insert into t_top_n values (1,'e'), (9,'f'), (null,'g'), (2,'h');
+
+query IT
+select a, b from t_top_n order by a asc nulls last, b asc limit 3
+----
+1 e
+2 h
+3 b
+
+query IT
+select a, b from t_top_n order by a desc nulls first, b desc limit 4
+----
+NULL g
+NULL d
+9 f
+8 c
+
+query IT
+select a, b from t_top_n order by a asc nulls first, b asc limit 2 offset 3
+----
+2 h
+3 b
+
+# String order key.
+query IT
+select a, b from t_top_n order by b desc limit 2
+----
+2 h
+NULL g
+
+# Lazy materialization path (RowFetch above TopN).
+query IT
+select a, b from t_top_n order by a desc limit 2
+----
+9 f
+8 c
+
+# Fixed-rows sort encoding must not change results.
+statement ok
+set enable_fixed_rows_sort = 1;
+
+query IT
+select a, b from t_top_n order by a desc nulls first, b desc limit 4
+----
+NULL g
+NULL d
+9 f
+8 c
+
+query I
+select number from numbers(1000) order by number desc limit 5 offset 3
+----
+996
+995
+994
+993
+992
+
+statement ok
+unset enable_fixed_rows_sort;
+
+# Forced spill exercises the spill + restore path of the partial stage.
+statement ok
+set force_sort_data_spill = 1;
+
+query I
+select number from numbers(10000) order by number desc limit 3 offset 2
+----
+9997
+9996
+9995
+
+query IT
+select a, b from t_top_n order by a asc nulls last, b asc limit 3
+----
+1 e
+2 h
+3 b
+
+statement ok
+unset force_sort_data_spill;
+
+statement ok
+drop table t_top_n;
+
+# Runtime TopN over a multi-block FUSE table: `row_per_block` forces many
+# small blocks so the shared-boundary block pruning, per-node scheduling and
+# row-level filtering paths are all exercised. Results must match the plain
+# Sort + Limit path regardless of which blocks get pruned.
+statement ok
+create or replace table t_top_n_fuse (
+    k int not null,
+    v int null,
+    s string not null,
+    d decimal(10, 2) not null
+) row_per_block = 7;
+
+statement ok
+insert into t_top_n_fuse
+select number,
+       if(number >= 190, null, number),
+       to_string(10000 + number),
+       cast(number * 0.01 as decimal(10, 2))
+from numbers(100);
+
+statement ok
+insert into t_top_n_fuse
+select number + 100,
+       if(number + 100 >= 190, null, number + 100),
+       to_string(10100 + number),
+       cast((number + 100) * 0.01 as decimal(10, 2))
+from numbers(100);
+
+# Non-null integer key, both directions and with offset.
+query I
+select k from t_top_n_fuse order by k desc limit 4
+----
+199
+198
+197
+196
+
+query I
+select k from t_top_n_fuse order by k asc limit 3 offset 2
+----
+2
+3
+4
+
+# The Sort + Limit path is the differential oracle.
+query I
+settings (enable_top_n = 0) select k from t_top_n_fuse order by k desc limit 4
+----
+199
+198
+197
+196
+
+# Nullable key with NULLS LAST: blocks holding only worse values (including
+# the all-null tail) are prunable, and the results stay correct.
+query II
+select v, k from t_top_n_fuse order by v desc nulls last, k desc limit 3
+----
+189 189
+188 188
+187 187
+
+# Nullable key with NULLS FIRST: null rows always stay candidates.
+query II
+select v, k from t_top_n_fuse order by v asc nulls first, k asc limit 3
+----
+NULL 190
+NULL 191
+NULL 192
+
+# String and decimal keys are eligible for the runtime boundary as well;
+# both columns increase with k, so projecting k keeps results exact.
+query I
+select k from t_top_n_fuse order by s desc limit 2
+----
+199
+198
+
+query I
+select k from t_top_n_fuse order by d desc limit 2
+----
+199
+198
+
+query I
+select k from t_top_n_fuse order by d asc limit 2 offset 1
+----
+1
+2
+
+statement ok
+drop table t_top_n_fuse;
+
+statement ok
+unset enable_top_n;

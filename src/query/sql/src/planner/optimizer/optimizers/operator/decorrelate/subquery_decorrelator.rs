@@ -341,6 +341,7 @@ impl SubqueryDecorrelatorOptimizer {
             )),
 
             RelOperator::Limit(_)
+            | RelOperator::TopN(_)
             | RelOperator::Udf(_)
             | RelOperator::AsyncFunction(_)
             | RelOperator::MaterializedCTE(_) => Ok(self

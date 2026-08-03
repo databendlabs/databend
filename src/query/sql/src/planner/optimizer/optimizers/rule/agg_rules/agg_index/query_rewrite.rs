@@ -137,6 +137,9 @@ impl QueryInfo {
                     RelOperator::Sort(sort) => {
                         sort_items = Some(sort.items.clone());
                     }
+                    RelOperator::TopN(top_n) => {
+                        sort_items = Some(top_n.items.clone());
+                    }
                     RelOperator::Filter(filter) => {
                         predicates = Some(filter.predicates.as_ref());
                     }

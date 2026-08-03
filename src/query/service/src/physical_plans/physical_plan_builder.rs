@@ -138,6 +138,7 @@ impl PhysicalPlanBuilder {
                     .await
             }
             RelOperator::Sort(sort) => self.build_sort(s_expr, sort, required, stat_info).await,
+            RelOperator::TopN(top_n) => self.build_top_n(s_expr, top_n, required, stat_info).await,
             RelOperator::Limit(limit) => self.build_limit(s_expr, limit, required, stat_info).await,
             RelOperator::Exchange(exchange) => {
                 self.build_exchange(s_expr, exchange, required).await
@@ -282,6 +283,12 @@ impl PhysicalPlanBuilder {
             RelOperator::Sort(sort) => {
                 let req = &mut child_required[0];
                 for item in &sort.items {
+                    req.insert(item.index);
+                }
+            }
+            RelOperator::TopN(top_n) => {
+                let req = &mut child_required[0];
+                for item in &top_n.items {
                     req.insert(item.index);
                 }
             }
