@@ -38,8 +38,6 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
-use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContextSession;
 use databend_common_catalog::table_context::TableContextSettings;
@@ -53,6 +51,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::MaterializedViewChecker;
 use databend_common_sql::Planner;
+use databend_common_sql::parse_materialized_view_query;
 use databend_common_sql::plans::RefreshMaterializedViewPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ChangesDesc;
@@ -545,12 +544,7 @@ impl<'a> MaterializedViewRefresh<'a> {
     }
 
     fn parse_query(&self, sql: &str, error: &str) -> Result<Query> {
-        let tokens = tokenize_sql(sql)?;
-        let (statement, _) = parse_sql(&tokens, self.ctx.get_settings().get_sql_dialect()?)?;
-        let Statement::Query(query) = statement else {
-            return Err(ErrorCode::InvalidMaterializedView(error));
-        };
-        Ok(*query)
+        parse_materialized_view_query(sql, self.ctx.get_settings().get_sql_dialect()?, error)
     }
 
     #[allow(clippy::too_many_arguments)]

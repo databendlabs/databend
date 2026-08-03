@@ -54,6 +54,7 @@ impl Interpreter for CreateMaterializedViewInterpreter {
 
         let materialized_view = CreateMaterializedViewMeta {
             definition: self.plan.mv_definition.clone(),
+            // TODO
             expected_source_generation: 0,
         };
 

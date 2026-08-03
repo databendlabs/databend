@@ -222,9 +222,9 @@ impl IPhysicalPlan for TableScan {
         projection.sort();
 
         // if projection is sequential, no need to add projection
-        let num_input_columns = self.source.schema().num_fields();
-        if projection != (0..num_input_columns).collect::<Vec<usize>>() {
+        if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
             let ops = vec![BlockOperator::Project { projection }];
+            let num_input_columns = schema.num_fields();
             builder.main_pipeline.add_transformer(|| {
                 CompoundBlockOperator::new(ops.clone(), builder.func_ctx.clone(), num_input_columns)
             });
@@ -435,6 +435,7 @@ impl PhysicalPlanBuilder {
             project_virtual_columns,
             has_inner_column,
         )?;
+
         // Generate secure cache key extra for Row Access Policy predicates.
         // Constant-fold so session-dependent functions (e.g. GETVARIABLE)
         // resolve to concrete values. Include scan.table_index so that two

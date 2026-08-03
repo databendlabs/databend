@@ -38,6 +38,7 @@ pub use grouping_check::GroupingChecker;
 pub use lowering::*;
 pub use materialized_view_rewriter::MaterializedViewChecker;
 pub use materialized_view_rewriter::MaterializedViewRewriter;
+pub use materialized_view_rewriter::parse_materialized_view_query;
 pub use name_resolution::ClusterKeyNormalizer;
 pub use name_resolution::IdentifierNormalizer;
 pub use name_resolution::NameResolutionContext;

@@ -189,12 +189,6 @@ impl Binder {
             || table_meta.has_changes_source()
         {
             let change_type = get_change_type(&table_name_alias);
-            if table_meta.has_changes_source() && change_type.is_none() {
-                return Err(ErrorCode::Internal(format!(
-                    "CHANGE_TRACKING source '{}' is missing a valid changes alias",
-                    table_name
-                )));
-            }
             if change_type.is_some() {
                 let table_index = self.metadata.write().add_table(
                     catalog,

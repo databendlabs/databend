@@ -30,7 +30,11 @@ use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::parser::Dialect;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::visit::VisitControl;
 use databend_common_ast::visit::VisitResult;
 use databend_common_ast::visit::Visitor;
@@ -46,6 +50,20 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
+
+/// Parse persisted materialized-view SQL and require a query statement.
+pub fn parse_materialized_view_query(
+    sql: &str,
+    dialect: Dialect,
+    error: impl Into<String>,
+) -> Result<Query> {
+    let tokens = tokenize_sql(sql)?;
+    let (statement, _) = parse_sql(&tokens, dialect)?;
+    let Statement::Query(query) = statement else {
+        return Err(ErrorCode::InvalidMaterializedView(error.into()));
+    };
+    Ok(*query)
+}
 
 /// Rewrites a user MV definition into its physical storage query and records
 /// physical names and logical definition expressions in their schema order.
@@ -609,10 +627,7 @@ impl VisitorMut for MaterializedViewRewriter {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_ast::ast::Statement;
     use databend_common_ast::parser::Dialect;
-    use databend_common_ast::parser::parse_sql;
-    use databend_common_ast::parser::tokenize_sql;
 
     use super::*;
 
@@ -620,16 +635,16 @@ mod tests {
         sql: &str,
         columns: Vec<String>,
     ) -> Result<(Query, MaterializedViewRewriter)> {
-        let tokens = tokenize_sql(sql)?;
-        let (statement, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
-        let Statement::Query(mut query) = statement else {
-            unreachable!()
-        };
+        let mut query = parse_materialized_view_query(
+            sql,
+            Dialect::PostgreSQL,
+            "test materialized view query must be a query",
+        )?;
         let checker = MaterializedViewChecker::check_query(&query);
         let mut rewriter =
             MaterializedViewRewriter::new(checker.is_aggregating(), "default", columns);
         rewriter.rewrite_query(&mut query)?;
-        Ok((*query, rewriter))
+        Ok((query, rewriter))
     }
 
     fn rewrite(sql: &str) -> Result<(Query, MaterializedViewRewriter)> {
@@ -637,11 +652,11 @@ mod tests {
     }
 
     fn check_query(sql: &str) -> Result<MaterializedViewChecker> {
-        let tokens = tokenize_sql(sql)?;
-        let (statement, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
-        let Statement::Query(query) = statement else {
-            unreachable!()
-        };
+        let query = parse_materialized_view_query(
+            sql,
+            Dialect::PostgreSQL,
+            "test materialized view query must be a query",
+        )?;
         Ok(MaterializedViewChecker::check_query(&query))
     }
 

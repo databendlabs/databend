@@ -15,10 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::SampleConfig;
-use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::parser::parse_expr;
-use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
@@ -37,6 +35,7 @@ use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::binder::ddl::materialized_view::find_materialized_view_aggregate;
 use crate::optimizer::ir::SExpr;
+use crate::parse_materialized_view_query;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarItem;
 
@@ -65,17 +64,15 @@ impl Binder {
         table_name: &str,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        let tokens = tokenize_sql(&mv_definition.original_query)?;
-        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-        let Statement::Query(query) = &stmt else {
-            return Err(ErrorCode::Internal(
-                "Invalid materialized view logical query",
-            ));
-        };
+        let query = parse_materialized_view_query(
+            &mv_definition.original_query,
+            self.dialect,
+            "invalid materialized view logical query",
+        )?;
 
         // Bind with the current binder so the source table enters this query's metadata.
         let mut definition_context = BindContext::with_parent(bind_context.clone())?;
-        let (s_expr, mut logical_context) = self.bind_query(&mut definition_context, query)?;
+        let (s_expr, mut logical_context) = self.bind_query(&mut definition_context, &query)?;
         if logical_context.columns.len() != mv_definition.logical_schema.num_fields() {
             return Err(ErrorCode::Internal(format!(
                 "materialized view logical query has {} columns, expected {}",
@@ -231,11 +228,11 @@ impl Binder {
         // cluster nodes needs an explicit distributed plan boundary, which is deferred to a follow-up
         // change. Until then, aggregate MVs always execute their persisted logical definition against
         // the source table, even when their storage checkpoint is fresh.
-        let tokens = tokenize_sql(&mv_definition.data.query)?;
-        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-        let Statement::Query(query) = &stmt else {
-            return Err(ErrorCode::Internal("Invalid materialized view query"));
-        };
+        let query = parse_materialized_view_query(
+            &mv_definition.data.query,
+            self.dialect,
+            "invalid materialized view physical query",
+        )?;
         let mut definition_binder = Binder::new(
             self.ctx.clone(),
             self.catalogs.clone(),
@@ -244,7 +241,7 @@ impl Binder {
         )
         .with_subquery_executor(self.subquery_executor.clone());
         let mut definition_context = BindContext::new();
-        let (definition_expr, _) = definition_binder.bind_query(&mut definition_context, query)?;
+        let (definition_expr, _) = definition_binder.bind_query(&mut definition_context, &query)?;
         if find_materialized_view_aggregate(&definition_expr)
             .is_some_and(|aggregate| !aggregate.aggregate_functions.is_empty())
         {
