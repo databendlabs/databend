@@ -107,26 +107,6 @@ impl Display for RefreshMaterializedViewStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
-pub struct DescribeMaterializedViewStmt {
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub view: Identifier,
-}
-
-impl Display for DescribeMaterializedViewStmt {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "DESCRIBE MATERIALIZED VIEW ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.view)),
-        )
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowMaterializedViewsStmt {
     pub catalog: Option<Identifier>,

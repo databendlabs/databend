@@ -223,7 +223,6 @@ pub enum Statement {
     CreateMaterializedView(CreateMaterializedViewStmt),
     DropMaterializedView(DropMaterializedViewStmt),
     RefreshMaterializedView(RefreshMaterializedViewStmt),
-    DescribeMaterializedView(DescribeMaterializedViewStmt),
     ShowMaterializedViews(ShowMaterializedViewsStmt),
 
     // Streams
@@ -562,7 +561,6 @@ impl Statement {
             | Statement::ShowViews(..)
             | Statement::DescribeView(..)
             | Statement::ShowMaterializedViews(..)
-            | Statement::DescribeMaterializedView(..)
             | Statement::ShowStreams(..)
             | Statement::DescribeStream(..)
             | Statement::RefreshIndex(..)
@@ -947,7 +945,6 @@ impl Display for Statement {
             Statement::CreateMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::DropMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshMaterializedView(stmt) => write!(f, "{stmt}")?,
-            Statement::DescribeMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::ShowMaterializedViews(stmt) => write!(f, "{stmt}")?,
             Statement::CreateStream(stmt) => write!(f, "{stmt}")?,
             Statement::DropStream(stmt) => write!(f, "{stmt}")?,

@@ -257,10 +257,8 @@ impl Binder {
             );
         }
 
-        if !Self::is_materialized_view_fresh(
-            table_meta.as_ref(),
-            source_snapshot_location.as_ref(),
-        ) {
+        if !Self::is_materialized_view_fresh(table_meta.as_ref(), source_snapshot_location.as_ref())
+        {
             info!(
                 "materialized view {} is stale (source_snapshot={:?}, base_snapshot={:?}); fallback to live compute",
                 table_meta.name(),

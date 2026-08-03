@@ -356,10 +356,6 @@ impl Binder {
             Statement::RefreshMaterializedView(stmt) => {
                 self.bind_refresh_materialized_view(stmt).await?
             }
-            Statement::DescribeMaterializedView(stmt) => {
-                self.bind_describe_materialized_view(bind_context, stmt)
-                    .await?
-            }
             Statement::ShowMaterializedViews(stmt) => {
                 self.bind_show_materialized_views(bind_context, stmt)
                     .await?

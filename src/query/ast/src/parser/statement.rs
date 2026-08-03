@@ -1672,18 +1672,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
-    let describe_materialized_view = map(
-        rule! {
-            ( DESC | DESCRIBE ) ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3
-        },
-        |(_, _, _, (catalog, database, view))| {
-            Statement::DescribeMaterializedView(DescribeMaterializedViewStmt {
-                catalog,
-                database,
-                view,
-            })
-        },
-    );
     let show_materialized_views = map(
         rule! {
             SHOW ~ MATERIALIZED ~ ^VIEWS ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
@@ -3106,7 +3094,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         DESC | DESCRIBE => rule!(
             #desc_task : "`DESC | DESCRIBE TASK <name>`"
             | #describe_view : "`DESCRIBE VIEW [<database>.]<view>`"
-            | #describe_materialized_view : "`DESCRIBE MATERIALIZED VIEW [<database>.]<view>`"
             | #describe_user: "`DESCRIBE USER <user_name>`"
             | #describe_row_access : "`DESC[RIBE] ROW ACCESS POLICY <name>`"
             | #desc_stage: "`DESC STAGE <stage_name>`"

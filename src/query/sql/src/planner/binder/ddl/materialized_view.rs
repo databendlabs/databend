@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::CreateMaterializedViewStmt;
-use databend_common_ast::ast::DescribeMaterializedViewStmt;
 use databend_common_ast::ast::DropMaterializedViewStmt;
 use databend_common_ast::ast::RefreshMaterializedViewStmt;
 use databend_common_ast::ast::ShowLimit;
@@ -399,17 +398,6 @@ impl Binder {
                 view_name,
             },
         )))
-    }
-
-    #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_describe_materialized_view(
-        &mut self,
-        _bind_context: &mut BindContext,
-        _stmt: &DescribeMaterializedViewStmt,
-    ) -> Result<Plan> {
-        Err(ErrorCode::Unimplemented(
-            "DESCRIBE MATERIALIZED VIEW is not supported yet",
-        ))
     }
 
     #[async_backtrace::framed]
