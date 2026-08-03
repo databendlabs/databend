@@ -137,6 +137,7 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AlterTablePartitionByPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTableTagPlan;
@@ -969,11 +970,8 @@ impl Binder {
         if matches!(engine, Engine::Fuse)
             && let Some(partition_exprs) = partition_by
         {
-            let partition_opt = ClusterOption {
-                cluster_exprs: partition_exprs.clone(),
-            };
             let keys = self
-                .analyze_table_keys(&partition_opt, schema.clone(), None, "PARTITION BY", false)
+                .analyze_table_keys(partition_exprs, schema.clone(), None, "PARTITION BY", false)
                 .await?;
             options.insert(
                 OPT_KEY_PARTITION_BY.to_owned(),
@@ -1438,6 +1436,28 @@ impl Binder {
                         table,
                         branch,
                         cluster_keys,
+                    },
+                )))
+            }
+            AlterTableAction::AlterTablePartitionBy { partition_by } => {
+                let tbl = self.ctx.get_table(&catalog, &database, &table).await?;
+                let engine = Engine::from(tbl.engine());
+                if !matches!(engine, Engine::Fuse) {
+                    return Err(ErrorCode::UnsupportedEngineParams(format!(
+                        "ALTER TABLE PARTITION BY is not supported for engine {engine}"
+                    )));
+                }
+
+                let partition_keys = self
+                    .analyze_table_keys(partition_by, tbl.schema(), None, "PARTITION BY", false)
+                    .await?;
+
+                Ok(Plan::AlterTablePartitionBy(Box::new(
+                    AlterTablePartitionByPlan {
+                        catalog,
+                        database,
+                        table,
+                        partition_keys,
                     },
                 )))
             }
@@ -2370,21 +2390,25 @@ impl Binder {
         schema: TableSchemaRef,
         table_indexes: Option<&BTreeMap<String, TableIndex>>,
     ) -> Result<Vec<String>> {
-        self.analyze_table_keys(cluster_opt, schema, table_indexes, "Cluster by", true)
-            .await
+        self.analyze_table_keys(
+            &cluster_opt.cluster_exprs,
+            schema,
+            table_indexes,
+            "Cluster by",
+            true,
+        )
+        .await
     }
 
     async fn analyze_table_keys(
         &mut self,
-        cluster_opt: &ClusterOption,
+        key_exprs: &[AstExpr],
         schema: TableSchemaRef,
         table_indexes: Option<&BTreeMap<String, TableIndex>>,
         key_name: &str,
         allow_vector: bool,
     ) -> Result<Vec<String>> {
-        let ClusterOption { cluster_exprs } = cluster_opt;
-
-        let expr_len = cluster_exprs.len();
+        let expr_len = key_exprs.len();
 
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
@@ -2410,7 +2434,7 @@ impl Binder {
             metadata,
             &[],
         );
-        // cluster keys cannot be a udf expression.
+        // Table keys cannot be a UDF expression.
         scalar_binder.forbid_udf();
 
         let mut normalizer = ClusterKeyNormalizer {
@@ -2419,20 +2443,20 @@ impl Binder {
             quoted_ident_case_sensitive: self.name_resolution_ctx.quoted_ident_case_sensitive,
             sql_dialect: self.dialect,
         };
-        let mut cluster_keys = Vec::with_capacity(expr_len);
+        let mut table_keys = Vec::with_capacity(expr_len);
         let mut vector_cluster_key_num = 0;
-        for cluster_expr in cluster_exprs.iter() {
-            let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
-            if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
+        for key_expr in key_exprs {
+            let (table_key, _) = scalar_binder.bind(key_expr)?;
+            if table_key.used_columns().len() != 1 || !table_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "{key_name} expression `{cluster_expr:#}` is invalid"
+                    "{key_name} expression `{key_expr:#}` is invalid"
                 )));
             }
 
-            let expr = cluster_key.as_expr()?;
+            let expr = table_key.as_expr()?;
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "{key_name} expression `{cluster_expr:#}` is not deterministic"
+                    "{key_name} expression `{key_expr:#}` is not deterministic"
                 )));
             }
 
@@ -2440,7 +2464,7 @@ impl Binder {
             let (is_valid_type, is_vector_type) = Self::valid_cluster_key_type(data_type);
             if !is_valid_type || is_vector_type && !allow_vector {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "Unsupported data type '{data_type}' for {key_name} expression `{cluster_expr:#}`"
+                    "Unsupported data type '{data_type}' for {key_name} expression `{key_expr:#}`"
                 )));
             }
             if is_vector_type {
@@ -2458,7 +2482,7 @@ impl Binder {
                 };
                 let Ok(field) = schema.field_with_name(&id.column_name) else {
                     return Err(ErrorCode::InvalidClusterKeys(format!(
-                        "{key_name} expression `{cluster_expr:#}` is invalid"
+                        "{key_name} expression `{key_expr:#}` is invalid"
                     )));
                 };
                 let distances = table_indexes
@@ -2472,12 +2496,12 @@ impl Binder {
                 VectorDistanceType::from_index_options(field.name(), distances)?;
             }
 
-            let mut cluster_expr = cluster_expr.clone();
-            cluster_expr.drive_mut(&mut normalizer);
-            cluster_keys.push(format!("{:#}", &cluster_expr));
+            let mut key_expr = key_expr.clone();
+            key_expr.drive_mut(&mut normalizer);
+            table_keys.push(format!("{key_expr:#}"));
         }
 
-        Ok(cluster_keys)
+        Ok(table_keys)
     }
 
     pub(crate) fn valid_cluster_key_type(data_type: &DataType) -> (bool, bool) {

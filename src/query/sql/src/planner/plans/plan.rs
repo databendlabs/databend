@@ -45,6 +45,7 @@ use crate::plans::AlterPasswordPolicyPlan;
 use crate::plans::AlterRolePlan;
 use crate::plans::AlterStagePlan;
 use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AlterTablePartitionByPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
@@ -302,6 +303,7 @@ pub enum Plan {
     AddTableConstraint(Box<AddTableConstraintPlan>),
     DropTableConstraint(Box<DropTableConstraintPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
+    AlterTablePartitionBy(Box<AlterTablePartitionByPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable(Box<ReclusterPlan>),
     RevertTable(Box<RevertTablePlan>),

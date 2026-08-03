@@ -426,6 +426,12 @@ impl InterpreterFactory {
             Plan::AlterTableClusterKey(alter_table_cluster_key) => Ok(Arc::new(
                 AlterTableClusterKeyInterpreter::try_create(ctx, *alter_table_cluster_key.clone())?,
             )),
+            Plan::AlterTablePartitionBy(alter_table_partition_by) => {
+                Ok(Arc::new(AlterTablePartitionByInterpreter::try_create(
+                    ctx,
+                    *alter_table_partition_by.clone(),
+                )?))
+            }
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),

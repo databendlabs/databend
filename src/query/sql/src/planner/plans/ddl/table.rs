@@ -545,6 +545,20 @@ impl AlterTableClusterKeyPlan {
 }
 
 #[derive(Clone, Debug)]
+pub struct AlterTablePartitionByPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub partition_keys: Vec<String>,
+}
+
+impl AlterTablePartitionByPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct DropTableClusterKeyPlan {
     pub tenant: Tenant,
     pub catalog: String,

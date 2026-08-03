@@ -4962,6 +4962,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
+    let alter_table_partition_by = map(
+        rule! {
+            PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+        },
+        |(_, _, _, partition_by, _)| AlterTableAction::AlterTablePartitionBy { partition_by },
+    );
+
     let drop_table_cluster_key = map(
         rule! {
             DROP ~ CLUSTER ~ KEY
@@ -5063,6 +5070,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #create_table_tag
             | #drop_table_branch
             | #drop_table_tag
+            | #alter_table_partition_by
             | #alter_table_cluster_key
             | #drop_table_cluster_key
             | #drop_constraint
