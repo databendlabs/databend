@@ -46,7 +46,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::columns::TransformAddInternalColumns;
@@ -56,7 +55,6 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_sql::DerivedColumn;
 use databend_common_sql::IndexType;
-use databend_common_sql::MaterializedViewScanInfo;
 use databend_common_sql::Metadata;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
@@ -69,8 +67,6 @@ use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::operations::MaterializedViewStateMergePlan;
-use databend_common_storages_fuse::operations::TransformMaterializedViewStateMerge;
 use databend_common_storages_fuse::operations::need_reserve_block_info;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
@@ -98,7 +94,6 @@ pub struct TableScan {
     pub name_mapping: BTreeMap<String, String>,
     pub source: Box<DataSourcePlan>,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
-    pub materialized_view: Option<MaterializedViewScanInfo>,
 
     pub table_index: Option<IndexType>,
     pub stat_info: Option<PlanStatsInfo>,
@@ -119,16 +114,7 @@ impl IPhysicalPlan for TableScan {
 
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
-        match &self.materialized_view {
-            Some(info) => Self::materialized_view_output_fields(
-                self.source.schema(),
-                &self.name_mapping,
-                info,
-            )
-            .map(DataSchema::new_ref),
-            None => Self::output_fields(self.source.schema(), &self.name_mapping)
-                .map(DataSchema::new_ref),
-        }
+        Self::output_fields(self.source.schema(), &self.name_mapping).map(DataSchema::new_ref)
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
@@ -193,7 +179,6 @@ impl IPhysicalPlan for TableScan {
             name_mapping: self.name_mapping.clone(),
             source: self.source.clone(),
             internal_column: self.internal_column.clone(),
-            materialized_view: self.materialized_view.clone(),
             table_index: self.table_index,
             stat_info: self.stat_info.clone(),
         })
@@ -221,31 +206,6 @@ impl IPhysicalPlan for TableScan {
             true,
         )?;
 
-        if let Some(info) = &self.materialized_view {
-            let aggregate_functions = info
-                .aggregate_functions
-                .iter()
-                .map(|aggregate| {
-                    AggregateFunctionFactory::instance().get(
-                        &aggregate.name,
-                        aggregate.params.clone(),
-                        aggregate.argument_types.clone(),
-                        vec![],
-                    )
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let merge_plan = MaterializedViewStateMergePlan {
-                aggregate_functions,
-                group_data_types: info.group_data_types.clone(),
-                physical_data_types: info.physical_data_types.clone(),
-                final_data_types: info.final_data_types.clone(),
-            };
-            builder.main_pipeline.try_resize(1)?;
-            builder.main_pipeline.add_accumulating_transformer(|| {
-                TransformMaterializedViewStateMerge::create(merge_plan.clone())
-            });
-        }
-
         // Fill internal columns if needed.
         if let Some(internal_columns) = &self.internal_column {
             builder
@@ -253,28 +213,13 @@ impl IPhysicalPlan for TableScan {
                 .add_transformer(|| TransformAddInternalColumns::new(internal_columns.clone()));
         }
 
-        let projection = match &self.materialized_view {
-            Some(_) => {
-                let schema = self.source.schema();
-                let mut projection = self
-                    .name_mapping
-                    .keys()
-                    .map(|name| schema.index_of(name))
-                    .collect::<Result<Vec<_>>>()?;
-                projection.sort_unstable();
-                projection
-            }
-            None => {
-                let schema = self.source.schema();
-                let mut projection = self
-                    .name_mapping
-                    .keys()
-                    .map(|name| schema.index_of(name.as_str()))
-                    .collect::<Result<Vec<usize>>>()?;
-                projection.sort();
-                projection
-            }
-        };
+        let schema = self.source.schema();
+        let mut projection = self
+            .name_mapping
+            .keys()
+            .map(|name| schema.index_of(name.as_str()))
+            .collect::<Result<Vec<usize>>>()?;
+        projection.sort();
 
         // if projection is sequential, no need to add projection
         let num_input_columns = self.source.schema().num_fields();
@@ -297,7 +242,6 @@ impl TableScan {
         table_index: Option<IndexType>,
         stat_info: Option<PlanStatsInfo>,
         internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
-        materialized_view: Option<MaterializedViewScanInfo>,
     ) -> PhysicalPlan {
         let name = match &source.source_info {
             DataSourceInfo::TableSource(_) => "TableScan".to_string(),
@@ -315,34 +259,7 @@ impl TableScan {
             table_index,
             stat_info,
             internal_column,
-            materialized_view,
         })
-    }
-
-    fn materialized_view_output_fields(
-        schema: TableSchemaRef,
-        name_mapping: &BTreeMap<String, String>,
-        info: &MaterializedViewScanInfo,
-    ) -> Result<Vec<DataField>> {
-        if info.final_data_types.len() != schema.num_fields() {
-            return Err(ErrorCode::Internal(format!(
-                "materialized view has {} finalized storage types for a {}-column physical schema",
-                info.final_data_types.len(),
-                schema.num_fields()
-            )));
-        }
-        let mut fields = name_mapping
-            .iter()
-            .map(|(name, id)| {
-                let offset = schema.index_of(name)?;
-                Ok((
-                    offset,
-                    DataField::new(id, info.final_data_types[offset].clone()),
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        fields.sort_by_key(|(offset, _)| *offset);
-        Ok(fields.into_iter().map(|(_, field)| field).collect())
     }
 
     pub fn output_fields(
@@ -494,7 +411,6 @@ impl PhysicalPlanBuilder {
 
         let table_entry = metadata.table(scan.table_index);
         let table = table_entry.table();
-        let materialized_view = metadata.materialized_view_scan(scan.table_index).cloned();
 
         if !table.result_can_be_cached() {
             self.ctx.result_cache_state().set_cacheable(false);
@@ -513,34 +429,12 @@ impl PhysicalPlanBuilder {
             table_schema = Arc::new(schema);
         }
 
-        let mut push_downs = self.push_downs(
+        let push_downs = self.push_downs(
             &scan,
             &table_schema,
             project_virtual_columns,
             has_inner_column,
         )?;
-        // Aggregate MV storage contains serialized states that may have multiple physical rows for
-        // the same group. Filters, ordering, and limits on finalized logical values must therefore
-        // run after all states have been merged. The current state-merge transform also expects the
-        // complete `[aggregate states..., group keys...]` physical layout, so disable column pruning
-        // and other pushdowns here as a correctness fallback.
-        //
-        // TODO: Model state merge/finalization as an explicit optimizer boundary. Push down only
-        // predicates that are safe on physical group keys, and derive a minimal projection together
-        // with a correspondingly pruned MaterializedViewStateMergePlan instead of reading every
-        // physical state and clearing pushdowns in the physical plan builder.
-        if materialized_view.is_some() {
-            push_downs.projection = Some(Projection::Columns(
-                (0..table_schema.num_fields()).collect(),
-            ));
-            push_downs.output_columns = None;
-            push_downs.filters = None;
-            push_downs.prewhere = None;
-            push_downs.limit = None;
-            push_downs.order_by.clear();
-            push_downs.lazy_materialization = false;
-        }
-
         // Generate secure cache key extra for Row Access Policy predicates.
         // Constant-fold so session-dependent functions (e.g. GETVARIABLE)
         // resolve to concrete values. Include scan.table_index so that two
@@ -641,7 +535,6 @@ impl PhysicalPlanBuilder {
             Some(scan.table_index),
             Some(stat_info.clone()),
             internal_column,
-            materialized_view,
         );
 
         // Update stream columns if needed.
@@ -778,7 +671,6 @@ impl PhysicalPlanBuilder {
             Some(PlanStatsInfo {
                 estimated_rows: 1.0,
             }),
-            None,
             None,
         ))
     }

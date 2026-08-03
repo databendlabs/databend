@@ -29,12 +29,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
-use databend_common_expression::Scalar;
-pub use databend_common_expression::Symbol;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::display::display_tuple_field_name;
-use databend_common_expression::infer_schema_type;
 use databend_common_expression::is_stream_column_id;
 use databend_common_expression::types::DataType;
 use jsonb::keypath::OwnedKeyPaths;
@@ -42,7 +39,9 @@ use parking_lot::RwLock;
 
 use crate::optimizer::ir::SExpr;
 
-/// Planner use [`usize`] as it's index type.
+pub use databend_common_expression::Symbol;
+
+/// Planner use [`usize`] as its index type.
 ///
 /// This type will be used across the whole planner.
 pub type IndexType = usize;
@@ -52,25 +51,6 @@ pub const DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
 
 /// ColumnSet represents a set of columns identified by `Symbol`.
 pub type ColumnSet = BTreeSet<Symbol>;
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct MaterializedViewAggregateDesc {
-    pub name: String,
-    pub params: Vec<Scalar>,
-    pub argument_types: Vec<DataType>,
-}
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct MaterializedViewScanInfo {
-    pub aggregate_functions: Vec<MaterializedViewAggregateDesc>,
-    /// Physical types stored in the Fuse-backed MV, in canonical
-    /// `[aggregate states..., group keys...]` order.
-    pub physical_data_types: Vec<DataType>,
-    /// Finalized storage-query aggregate results followed by group keys. This is still the
-    /// storage-query schema; conversion to the logical MV schema is a separate projection phase.
-    pub final_data_types: Vec<DataType>,
-    pub group_data_types: Vec<DataType>,
-}
 
 /// A Send & Send version of [`Metadata`].
 ///
@@ -99,7 +79,6 @@ pub struct Metadata {
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, Symbol>,
     agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>,
-    materialized_view_scans: HashMap<IndexType, MaterializedViewScanInfo>,
     max_column_position: usize, // for CSV
     has_column_name_ref: bool,  // for schema inference from stage files
 
@@ -123,21 +102,6 @@ impl Metadata {
 
     pub fn table(&self, index: IndexType) -> &TableEntry {
         self.tables.get(index).expect("metadata must contain table")
-    }
-
-    pub fn set_materialized_view_scan(
-        &mut self,
-        table_index: IndexType,
-        info: MaterializedViewScanInfo,
-    ) {
-        self.materialized_view_scans.insert(table_index, info);
-    }
-
-    pub fn materialized_view_scan(
-        &self,
-        table_index: IndexType,
-    ) -> Option<&MaterializedViewScanInfo> {
-        self.materialized_view_scans.get(&table_index)
     }
 
     pub fn tables(&self) -> &[TableEntry] {
@@ -529,50 +493,6 @@ impl Metadata {
         }
 
         table_index
-    }
-
-    pub fn set_materialized_view_column_types(
-        &mut self,
-        table_index: IndexType,
-        final_data_types: &[DataType],
-    ) -> Result<()> {
-        let final_table_types = final_data_types
-            .iter()
-            .map(infer_schema_type)
-            .collect::<Result<Vec<_>>>()?;
-        let column_indexes = self
-            .columns
-            .iter()
-            .enumerate()
-            .filter_map(|(index, column)| match column {
-                ColumnEntry::BaseTableColumn(BaseTableColumn {
-                    table_index: column_table_index,
-                    path_indices: None,
-                    column_id,
-                    virtual_expr: None,
-                    ..
-                }) if *column_table_index == table_index && !is_stream_column_id(*column_id) => {
-                    Some(index)
-                }
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-
-        if column_indexes.len() != final_table_types.len() {
-            return Err(ErrorCode::Internal(format!(
-                "materialized view table {table_index} has {} top-level columns, but its finalized schema has {} columns",
-                column_indexes.len(),
-                final_table_types.len()
-            )));
-        }
-
-        for (column_index, data_type) in column_indexes.into_iter().zip(final_table_types) {
-            let ColumnEntry::BaseTableColumn(column) = &mut self.columns[column_index] else {
-                unreachable!("materialized view column indexes were validated")
-            };
-            column.data_type = data_type;
-        }
-        Ok(())
     }
 
     pub fn change_derived_column_alias(&mut self, index: Symbol, alias: String) {

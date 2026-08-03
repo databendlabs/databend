@@ -24,17 +24,13 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::info;
 
 use crate::BindContext;
-use crate::MaterializedViewAggregateDesc;
-use crate::MaterializedViewScanInfo;
 use crate::Metadata;
-use crate::ScalarExpr;
 use crate::Visibility;
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
@@ -111,91 +107,6 @@ impl Binder {
             }
         }
         Ok((s_expr, logical_context))
-    }
-
-    fn build_materialized_view_scan_info(
-        &self,
-        s_expr: &SExpr,
-        physical_schema: &databend_common_expression::TableSchema,
-    ) -> Result<Option<MaterializedViewScanInfo>> {
-        let Some(aggregate) = find_materialized_view_aggregate(s_expr) else {
-            return Ok(None);
-        };
-        if aggregate.aggregate_functions.is_empty() && aggregate.group_items.is_empty() {
-            return Ok(None);
-        }
-
-        let aggregate_functions = aggregate
-            .aggregate_functions
-            .iter()
-            .map(|item| {
-                let ScalarExpr::AggregateFunction(function) = &item.scalar else {
-                    return Err(ErrorCode::Unimplemented(
-                        "materialized view read only supports built-in aggregate functions",
-                    ));
-                };
-                let argument_types = function
-                    .args
-                    .iter()
-                    .map(ScalarExpr::data_type)
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(MaterializedViewAggregateDesc {
-                    name: function
-                        .func_name
-                        .strip_suffix("_state")
-                        .unwrap_or(&function.func_name)
-                        .to_string(),
-                    params: function.params.clone(),
-                    argument_types,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let num_aggregates = aggregate_functions.len();
-        let num_groups = aggregate.group_items.len();
-        if physical_schema.num_fields() != num_aggregates + num_groups {
-            return Err(ErrorCode::Internal(format!(
-                "materialized view state schema has {} columns, expected {} aggregate states and {} group columns",
-                physical_schema.num_fields(),
-                num_aggregates,
-                num_groups
-            )));
-        }
-
-        let physical_data_types = physical_schema
-            .fields()
-            .iter()
-            .map(|field| DataType::from(field.data_type()))
-            .collect::<Vec<_>>();
-        let group_data_types = physical_data_types[num_aggregates..].to_vec();
-
-        let mut final_data_types = aggregate_functions
-            .iter()
-            .enumerate()
-            .map(|(offset, aggregate)| {
-                let result_type = AggregateFunctionFactory::instance()
-                    .get(
-                        &aggregate.name,
-                        aggregate.params.clone(),
-                        aggregate.argument_types.clone(),
-                        vec![],
-                    )?
-                    .return_type()?;
-                if physical_data_types[offset].is_nullable() && !result_type.is_nullable() {
-                    Ok(result_type.wrap_nullable())
-                } else {
-                    Ok(result_type)
-                }
-            })
-            .collect::<Result<Vec<_>>>()?;
-        final_data_types.extend(group_data_types.iter().cloned());
-
-        Ok(Some(MaterializedViewScanInfo {
-            aggregate_functions,
-            physical_data_types,
-            final_data_types,
-            group_data_types,
-        }))
     }
 
     fn build_materialized_view_final_projection(
@@ -315,6 +226,36 @@ impl Binder {
                 Ok::<_, ErrorCode>((mv_definition, source_snapshot_location))
             })?;
 
+        // Aggregate MV storage contains serialized states. Reading and merging those states across
+        // cluster nodes needs an explicit distributed plan boundary, which is deferred to a follow-up
+        // change. Until then, aggregate MVs always execute their persisted logical definition against
+        // the source table, even when their storage checkpoint is fresh.
+        let tokens = tokenize_sql(&mv_definition.data.query)?;
+        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+        let Statement::Query(query) = &stmt else {
+            return Err(ErrorCode::Internal("Invalid materialized view query"));
+        };
+        let mut definition_binder = Binder::new(
+            self.ctx.clone(),
+            self.catalogs.clone(),
+            self.name_resolution_ctx.clone(),
+            Metadata::default_ref(),
+        )
+        .with_subquery_executor(self.subquery_executor.clone());
+        let mut definition_context = BindContext::new();
+        let (definition_expr, _) = definition_binder.bind_query(&mut definition_context, query)?;
+        if find_materialized_view_aggregate(&definition_expr)
+            .is_some_and(|aggregate| !aggregate.aggregate_functions.is_empty())
+        {
+            return self.bind_materialized_view_fallback(
+                bind_context,
+                &mv_definition.data,
+                database,
+                table_name,
+                alias,
+            );
+        }
+
         if !Self::is_materialized_view_fresh(table_meta.as_ref(), source_snapshot_location.as_ref())
         {
             info!(
@@ -334,23 +275,6 @@ impl Binder {
             );
         }
 
-        let tokens = tokenize_sql(&mv_definition.data.query)?;
-        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-        let Statement::Query(query) = &stmt else {
-            return Err(ErrorCode::Internal("Invalid materialized view query"));
-        };
-        let mut definition_binder = Binder::new(
-            self.ctx.clone(),
-            self.catalogs.clone(),
-            self.name_resolution_ctx.clone(),
-            Metadata::default_ref(),
-        )
-        .with_subquery_executor(self.subquery_executor.clone());
-        let mut definition_context = BindContext::new();
-        let (definition_expr, _) = definition_binder.bind_query(&mut definition_context, query)?;
-        let storage_scan_info = definition_binder
-            .build_materialized_view_scan_info(&definition_expr, table_meta.schema().as_ref())?;
-
         let table_index = self.metadata.write().add_table(
             catalog_name.to_string(),
             database.to_string(),
@@ -362,12 +286,6 @@ impl Binder {
             false,
             cte_suffix_name,
         );
-        if let Some(scan_info) = storage_scan_info {
-            let mut metadata = self.metadata.write();
-            metadata
-                .set_materialized_view_column_types(table_index, &scan_info.final_data_types)?;
-            metadata.set_materialized_view_scan(table_index, scan_info);
-        }
 
         let (s_expr, physical_context) =
             self.bind_base_table(bind_context, database, table_index, None, sample, false)?;
