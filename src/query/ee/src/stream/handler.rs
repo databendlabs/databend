@@ -86,7 +86,8 @@ impl StreamHandler for RealStreamHandler {
         let table_id = table_info.ident.table_id;
         if !table.change_tracking_enabled() {
             let table_seq = table_info.ident.seq;
-            // enable change tracking.
+            // Enabling change tracking is independent of whether the subsequent
+            // stream creation succeeds and is not rolled back if it fails.
             let req = UpsertTableOptionReq {
                 table_id,
                 seq: MatchSeq::Exact(table_seq),
