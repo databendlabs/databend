@@ -15,8 +15,6 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
-use databend_common_expression::Domain;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
@@ -89,16 +87,6 @@ pub const ALL_STRING_FUNC_NAMES: &[&str] = &[
 /// Functions that works with all strings, allow other types to be casted to string.
 pub const PURE_STRING_FUNC_NAMES: &[&str] = &["concat", "concat_ws"];
 
-fn substr_prefix_monotonicity(_ctx: &FunctionContext, args: &[Domain]) -> Option<usize> {
-    if !(2..=3).contains(&args.len())
-        || args[1].as_singleton() != Some(Scalar::Number(1_i64.into()))
-        || (args.len() == 3 && args[2].as_singleton().is_none())
-    {
-        return None;
-    }
-    Some(0)
-}
-
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_string", &["to_varchar", "to_text"]);
     registry.register_aliases("upper", &["ucase"]);
@@ -116,7 +104,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     ]);
     registry.properties.insert(
         "substr".to_string(),
-        FunctionProperty::default().monotonicity_check(substr_prefix_monotonicity),
+        FunctionProperty::default().monotonicity_check(|_, args| {
+            let start = match args {
+                [_, start] => start,
+                [_, start, end] if end.as_singleton().is_some() => start,
+                _ => return None,
+            };
+            (start.as_singleton() == Some(Scalar::Number(1_i64.into()))).then_some(0)
+        }),
     );
 
     registry

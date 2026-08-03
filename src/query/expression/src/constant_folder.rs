@@ -440,13 +440,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 }
 
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
-                let is_monotonicity = self.is_monotonic(&function.signature.name, &args_expr);
-                let monotonicity_check = self
-                    .fn_registry
-                    .properties
-                    .get(&function.signature.name)
-                    .and_then(|p| p.monotonicity_check)
-                    .filter(|_| args_expr.len() == 1);
 
                 // Check for mutually exclusive ranges in AND function
                 if function.signature.name == "and"
@@ -491,16 +484,17 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 let func_domain = args_domain.and_then(|domains: Vec<Domain>| {
                     let res = calc_domain.domain_eval(self.func_ctx, &domains);
-                    // Range-sensitive checks complement the static flags: they may prove
-                    // monotonicity for this specific argument range and context only.
-                    let is_monotonic = is_monotonicity
-                        || monotonicity_check
-                            .is_some_and(|check| check(self.func_ctx, &domains) == Some(0));
-                    match (res, is_monotonic) {
-                        (FunctionDomain::MayThrow | FunctionDomain::Full, true) => self
+                    let monotonicity_arg = self.monotonicity_argument(
+                        &function.signature.name,
+                        &function.signature.args_type,
+                        &domains,
+                    );
+                    match (res, monotonicity_arg) {
+                        (FunctionDomain::MayThrow | FunctionDomain::Full, Some(argument)) => self
                             .calculate_monotonicity_domain(
                                 return_type,
-                                domains.first().unwrap(),
+                                &domains,
+                                argument,
                                 generics,
                                 eval.as_ref(),
                             ),
@@ -990,28 +984,18 @@ fn tighten_upper_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, in
 }
 
 fn constant_behind_nullable_cast<Index: ColumnIndex>(expr: &Expr<Index>) -> Option<&Constant> {
-    if let Expr::Constant(constant) = expr {
-        return Some(constant);
+    match expr {
+        Expr::Constant(constant) => Some(constant),
+        Expr::Cast(Cast {
+            is_try: false,
+            expr: box Expr::Constant(constant),
+            dest_type: DataType::Nullable(box dest_type),
+            ..
+        }) if !constant.data_type.is_nullable() && dest_type == &constant.data_type => {
+            Some(constant)
+        }
+        _ => None,
     }
-
-    let Expr::Cast(Cast {
-        is_try: false,
-        expr,
-        dest_type,
-        ..
-    }) = expr
-    else {
-        return None;
-    };
-
-    let Expr::Constant(constant) = expr.as_ref() else {
-        return None;
-    };
-
-    (dest_type.is_nullable()
-        && !constant.data_type.is_nullable()
-        && dest_type.remove_nullable() == constant.data_type)
-        .then_some(constant)
 }
 
 /// Represents a range constraint extracted from a comparison expression
