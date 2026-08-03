@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 use super::agg_index;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::match_op;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
@@ -34,96 +35,14 @@ pub struct RuleTryApplyAggIndex {
 impl RuleTryApplyAggIndex {
     fn sorted_matchers() -> Vec<Matcher> {
         vec![
-            // Expression
-            //     |
-            //    Sort
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Scan,
-                        children: vec![],
-                    }],
-                }],
-            },
-            // Expression
-            //     |
-            //    Sort
-            //     |
-            //   Filter
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Filter,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Scan,
-                            children: vec![],
-                        }],
-                    }],
-                }],
-            },
-            // Expression
-            //     |
-            //    Sort
-            //     |
-            // Aggregation
-            //     |
-            // Expression
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::EvalScalar,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Scan,
-                                children: vec![],
-                            }],
-                        }],
-                    }],
-                }],
-            },
-            // Expression
-            //     |
-            //    Sort
-            //     |
-            // Aggregation
-            //     |
-            // Expression
-            //     |
-            //   Filter
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::EvalScalar,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Filter,
-                                children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::Scan,
-                                    children: vec![],
-                                }],
-                            }],
-                        }],
-                    }],
-                }],
-            },
+            match_op!(EvalScalar -> Sort -> Scan),
+            match_op!(EvalScalar -> Sort -> Filter -> Scan),
+            match_op!(EvalScalar -> Sort -> Aggregate -> EvalScalar -> Scan),
+            match_op!(EvalScalar -> Sort -> Aggregate -> EvalScalar -> Filter -> Scan),
+            match_op!(EvalScalar -> TopN -> Scan),
+            match_op!(EvalScalar -> TopN -> Filter -> Scan),
+            match_op!(EvalScalar -> TopN -> Aggregate -> EvalScalar -> Scan),
+            match_op!(EvalScalar -> TopN -> Aggregate -> EvalScalar -> Filter -> Scan),
         ]
     }
 

@@ -171,14 +171,17 @@ EvalScalar
 query T
 explain select count(1) as c, count(b) as d, max(a) as e from t1 order by c, e, d limit 10;
 ----
-Limit
+TopN(Final)
 ├── output columns: [max(a) (#4), count(b) (#3), count(1) (#2)]
+├── sort keys: [count(1) ASC NULLS LAST, max(a) ASC NULLS LAST, count(b) ASC NULLS LAST]
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 1.00
-└── Sort(Single)
-    ├── output columns: [max(a) (#4), count(b) (#3), count(1) (#2)]
+└── TopN(Partial)
+    ├── output columns: [max(a) (#4), count(b) (#3), count(1) (#2), #_order_col]
     ├── sort keys: [count(1) ASC NULLS LAST, max(a) ASC NULLS LAST, count(b) ASC NULLS LAST]
+    ├── limit: 10
+    ├── offset: 0
     ├── estimated rows: 1.00
     └── EvalScalar
         ├── output columns: [max(a) (#4), count(b) (#3), count(1) (#2)]
@@ -189,62 +192,61 @@ Limit
 query T
 explain select (t1.a + 1) as c,(t1.b+1) as d, (t2.a+1) as e from t1 join t2 on t1.a = t2.a order by c, d, e limit 10;
 ----
-Limit
+TopN(Final)
 ├── output columns: [c (#4), d (#5), e (#6)]
+├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 10.00
-└── Sort(Final)
-    ├── output columns: [c (#4), d (#5), e (#6)]
-    ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
-    ├── estimated rows: 100.00
-    └── Exchange
+└── Exchange
+    ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
+    ├── exchange type: Merge
+    └── TopN(Partial)
         ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
-        ├── exchange type: Merge
-        └── Sort(Partial)
-            ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
-            ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
+        ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
+        ├── limit: 10
+        ├── offset: 0
+        ├── estimated rows: 10.00
+        └── EvalScalar
+            ├── output columns: [c (#4), d (#5), e (#6)]
+            ├── expressions: [t1.a (#0) + 1, t1.b (#1) + 1, t2.a (#2) + 1]
             ├── estimated rows: 100.00
-            └── EvalScalar
-                ├── output columns: [c (#4), d (#5), e (#6)]
-                ├── expressions: [t1.a (#0) + 1, t1.b (#1) + 1, t2.a (#2) + 1]
+            └── HashJoin
+                ├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2)]
+                ├── join type: INNER
+                ├── build keys: [t2.a (#2)]
+                ├── probe keys: [t1.a (#0)]
+                ├── keys is null equal: [false]
+                ├── filters: []
+                ├── build join filters:
+                │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
                 ├── estimated rows: 100.00
-                └── HashJoin
-                    ├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2)]
-                    ├── join type: INNER
-                    ├── build keys: [t2.a (#2)]
-                    ├── probe keys: [t1.a (#0)]
-                    ├── keys is null equal: [false]
-                    ├── filters: []
-                    ├── build join filters:
-                    │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
-                    ├── estimated rows: 100.00
-                    ├── Exchange(Build)
-                    │   ├── output columns: [t2.a (#2)]
-                    │   ├── exchange type: Broadcast
-                    │   └── TableScan
-                    │       ├── table: default.default.t2
-                    │       ├── scan id: 1
-                    │       ├── output columns: [a (#2)]
-                    │       ├── read rows: 100
-                    │       ├── read size: < 1 KiB
-                    │       ├── partitions total: 3
-                    │       ├── partitions scanned: 3
-                    │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-                    │       ├── push downs: [filters: [], limit: NONE]
-                    │       └── estimated rows: 100.00
-                    └── TableScan(Probe)
-                        ├── table: default.default.t1
-                        ├── scan id: 0
-                        ├── output columns: [a (#0), b (#1)]
-                        ├── read rows: 100
-                        ├── read size: < 1 KiB
-                        ├── partitions total: 3
-                        ├── partitions scanned: 3
-                        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-                        ├── push downs: [filters: [], limit: NONE]
-                        ├── apply join filters: [#0]
-                        └── estimated rows: 100.00
+                ├── Exchange(Build)
+                │   ├── output columns: [t2.a (#2)]
+                │   ├── exchange type: Broadcast
+                │   └── TableScan
+                │       ├── table: default.default.t2
+                │       ├── scan id: 1
+                │       ├── output columns: [a (#2)]
+                │       ├── read rows: 100
+                │       ├── read size: < 1 KiB
+                │       ├── partitions total: 3
+                │       ├── partitions scanned: 3
+                │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+                │       ├── push downs: [filters: [], limit: NONE]
+                │       └── estimated rows: 100.00
+                └── TableScan(Probe)
+                    ├── table: default.default.t1
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1)]
+                    ├── read rows: 100
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 3
+                    ├── partitions scanned: 3
+                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    ├── apply join filters: [#0]
+                    └── estimated rows: 100.00
 
 statement ok
 set prefer_broadcast_join = 1;
@@ -298,32 +300,31 @@ set prefer_broadcast_join = 0;
 query T
 explain select * from (SELECT number AS a FROM numbers(10)) x  order by x.a limit 3;
 ----
-Limit
+TopN(Final)
 ├── output columns: [numbers.number (#0)]
+├── sort keys: [number ASC NULLS LAST]
 ├── limit: 3
 ├── offset: 0
 ├── estimated rows: 3.00
-└── Sort(Final)
+└── Exchange
     ├── output columns: [numbers.number (#0)]
-    ├── sort keys: [number ASC NULLS LAST]
-    ├── estimated rows: 10.00
-    └── Exchange
+    ├── exchange type: Merge
+    └── TopN(Partial)
         ├── output columns: [numbers.number (#0)]
-        ├── exchange type: Merge
-        └── Sort(Partial)
-            ├── output columns: [numbers.number (#0)]
-            ├── sort keys: [number ASC NULLS LAST]
-            ├── estimated rows: 10.00
-            └── TableScan
-                ├── table: default.system.numbers
-                ├── scan id: 0
-                ├── output columns: [number (#0)]
-                ├── read rows: 10
-                ├── read size: < 1 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── push downs: [filters: [], limit: 3]
-                └── estimated rows: 10.00
+        ├── sort keys: [number ASC NULLS LAST]
+        ├── limit: 3
+        ├── offset: 0
+        ├── estimated rows: 3.00
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── scan id: 0
+            ├── output columns: [number (#0)]
+            ├── read rows: 10
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: 3]
+            └── estimated rows: 10.00
 
 query T
 explain select sum(a) from (SELECT number AS a FROM numbers(10)) x right join (SELECT number AS a FROM numbers(5)) y using(a);

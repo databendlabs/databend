@@ -55,15 +55,18 @@ RowFetch
 ├── output columns: [t1.id (#0), t1._row_id (#3), t1.content (#1)]
 ├── columns to fetch: [content]
 ├── estimated rows: 1.00
-└── Limit
+└── TopN(Final)
     ├── output columns: [t1.id (#0), t1._row_id (#3)]
+    ├── sort keys: [id ASC NULLS LAST]
     ├── limit: 1
     ├── offset: 0
     ├── estimated rows: 1.00
-    └── Sort(Single)
-        ├── output columns: [t1.id (#0), t1._row_id (#3)]
+    └── TopN(Partial)
+        ├── output columns: [t1.id (#0), t1._row_id (#3), #_order_col]
         ├── sort keys: [id ASC NULLS LAST]
-        ├── estimated rows: 5.00
+        ├── limit: 1
+        ├── offset: 0
+        ├── estimated rows: 1.00
         └── Filter
             ├── output columns: [t1.id (#0), t1._row_id (#3)]
             ├── filters: [t1._search_matched (#2)]
@@ -87,15 +90,18 @@ RowFetch
 ├── output columns: [t1._search_score (#3), t1._row_id (#4), t1.id (#0), t1.content (#1)]
 ├── columns to fetch: [id, content]
 ├── estimated rows: 1.00
-└── Limit
+└── TopN(Final)
     ├── output columns: [t1._search_score (#3), t1._row_id (#4)]
+    ├── sort keys: [_search_score ASC NULLS LAST]
     ├── limit: 1
     ├── offset: 0
     ├── estimated rows: 1.00
-    └── Sort(Single)
+    └── TopN(Partial)
         ├── output columns: [t1._search_score (#3), t1._row_id (#4)]
         ├── sort keys: [_search_score ASC NULLS LAST]
-        ├── estimated rows: 5.00
+        ├── limit: 1
+        ├── offset: 0
+        ├── estimated rows: 1.00
         └── Filter
             ├── output columns: [t1._search_score (#3), t1._row_id (#4)]
             ├── filters: [t1._search_matched (#2)]

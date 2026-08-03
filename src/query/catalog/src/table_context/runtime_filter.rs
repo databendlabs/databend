@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_exception::Result;
 use databend_common_expression::Expr;
 
 use crate::runtime_filter_info::RuntimeBloomFilter;
@@ -23,6 +22,8 @@ use crate::runtime_filter_info::RuntimeFilterEntry;
 use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::runtime_filter_info::RuntimeFilterReady;
 use crate::runtime_filter_info::RuntimeFilterReport;
+use crate::runtime_filter_info::RuntimeScanFilter;
+use crate::runtime_filter_info::RuntimeScanFilters;
 
 pub trait TableContextRuntimeFilter: Send + Sync {
     fn set_runtime_filter(&self, _filters: HashMap<usize, RuntimeFilterInfo>) {
@@ -35,8 +36,17 @@ pub trait TableContextRuntimeFilter: Send + Sync {
 
     fn clear_runtime_filter(&self);
 
-    fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        unimplemented!()
+    /// Register a scan filter (runtime TopN boundary, limit early-stop, ...)
+    /// for `scan_id`. Registered filters share the lifecycle of join runtime
+    /// filters: they stay in the context until `clear_runtime_filter`. Scan
+    /// ids are only unique within one physical plan, so any site that reuses
+    /// a QueryContext to build another plan must call `clear_runtime_filter`
+    /// first (as the recursive CTE source and the nested query executors do),
+    /// otherwise a colliding scan id would observe a stale filter.
+    fn register_runtime_scan_filter(&self, _scan_id: usize, _filter: Arc<dyn RuntimeScanFilter>) {}
+
+    fn get_runtime_scan_filters(&self, _scan_id: usize) -> RuntimeScanFilters {
+        RuntimeScanFilters::default()
     }
 
     fn get_runtime_filters(&self, id: usize) -> Vec<RuntimeFilterEntry>;

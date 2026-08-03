@@ -61,6 +61,7 @@ pub trait PrunedSegmentMeta: Send + Sync + 'static {
     type Segment: AbstractSegment;
     type SegmentReader: SegmentReader<CompactSegment = Self::Segment>;
     fn create(segments: (SegmentLocation, Arc<Self::Segment>)) -> BlockMetaInfoPtr;
+    fn segment(&self) -> &Arc<Self::Segment>;
 }
 
 impl PrunedSegmentMeta for PrunedCompactSegmentMeta {
@@ -69,6 +70,10 @@ impl PrunedSegmentMeta for PrunedCompactSegmentMeta {
     fn create(segments: (SegmentLocation, Arc<CompactSegmentInfo>)) -> BlockMetaInfoPtr {
         Box::new(PrunedCompactSegmentMeta { segments })
     }
+
+    fn segment(&self) -> &Arc<CompactSegmentInfo> {
+        &self.segments.1
+    }
 }
 
 impl PrunedSegmentMeta for PrunedColumnOrientedSegmentMeta {
@@ -76,5 +81,9 @@ impl PrunedSegmentMeta for PrunedColumnOrientedSegmentMeta {
     type SegmentReader = ColumnOrientedSegmentReader;
     fn create(segments: (SegmentLocation, Arc<ColumnOrientedSegment>)) -> BlockMetaInfoPtr {
         Box::new(PrunedColumnOrientedSegmentMeta { segments })
+    }
+
+    fn segment(&self) -> &Arc<ColumnOrientedSegment> {
+        &self.segments.1
     }
 }
