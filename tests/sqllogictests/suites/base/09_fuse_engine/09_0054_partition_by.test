@@ -269,6 +269,10 @@ CREATE TABLE alter_invalid_partition(a INT, b INT)
 statement error PARTITION BY expression `a \+ b` is invalid
 ALTER TABLE alter_invalid_partition PARTITION BY (a + b)
 
+# IF EXISTS must skip partition-key binding when the table is absent.
+statement ok
+ALTER TABLE IF EXISTS alter_missing_partition PARTITION BY (missing_column)
+
 # Moving a row to another partition must preserve physical partition boundaries.
 statement ok
 OPTIMIZE TABLE t COMPACT

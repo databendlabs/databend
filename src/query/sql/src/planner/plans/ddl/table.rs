@@ -546,10 +546,12 @@ impl AlterTableClusterKeyPlan {
 
 #[derive(Clone, Debug)]
 pub struct AlterTablePartitionByPlan {
+    pub if_exists: bool,
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub partition_keys: Vec<String>,
+    /// `None` when `IF EXISTS` resolves a missing table during binding.
+    pub partition_keys: Option<Vec<String>>,
 }
 
 impl AlterTablePartitionByPlan {

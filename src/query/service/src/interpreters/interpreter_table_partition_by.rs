@@ -29,6 +29,13 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
 
+fn is_missing_table_error(error: &ErrorCode) -> bool {
+    matches!(
+        error.code(),
+        ErrorCode::UNKNOWN_CATALOG | ErrorCode::UNKNOWN_DATABASE | ErrorCode::UNKNOWN_TABLE
+    )
+}
+
 pub struct AlterTablePartitionByInterpreter {
     ctx: Arc<QueryContext>,
     plan: AlterTablePartitionByPlan,
@@ -53,14 +60,24 @@ impl Interpreter for AlterTablePartitionByInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
-        let catalog = self.ctx.get_catalog(&plan.catalog).await?;
-        let table = catalog
-            .get_table(&self.ctx.get_tenant(), &plan.database, &plan.table)
-            .await?;
+        let Some(partition_keys) = &plan.partition_keys else {
+            return Ok(PipelineBuildResult::create());
+        };
+        let table = match self
+            .ctx
+            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .await
+        {
+            Ok(table) => table,
+            Err(e) if plan.if_exists && is_missing_table_error(&e) => {
+                return Ok(PipelineBuildResult::create());
+            }
+            Err(e) => return Err(e),
+        };
         table.check_mutable()?;
         FuseTable::try_from_table(table.as_ref())?;
 
-        let partition_by = format!("({})", plan.partition_keys.join(", "));
+        let partition_by = format!("({})", partition_keys.join(", "));
         if let Some(current) = table.options().get(OPT_KEY_PARTITION_BY) {
             if current == &partition_by {
                 return Ok(PipelineBuildResult::create());
@@ -75,6 +92,7 @@ impl Interpreter for AlterTablePartitionByInterpreter {
             seq: MatchSeq::Exact(table.get_table_info().ident.seq),
             options: HashMap::from([(OPT_KEY_PARTITION_BY.to_owned(), Some(partition_by))]),
         };
+        let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         catalog
             .upsert_table_option(&self.ctx.get_tenant(), &plan.database, req)
             .await?;

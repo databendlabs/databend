@@ -1440,7 +1440,30 @@ impl Binder {
                 )))
             }
             AlterTableAction::AlterTablePartitionBy { partition_by } => {
-                let tbl = self.ctx.get_table(&catalog, &database, &table).await?;
+                let tbl = match self.ctx.get_table(&catalog, &database, &table).await {
+                    Ok(tbl) => tbl,
+                    Err(e)
+                        if *if_exists
+                            && matches!(
+                                e.code(),
+                                ErrorCode::UNKNOWN_CATALOG
+                                    | ErrorCode::UNKNOWN_DATABASE
+                                    | ErrorCode::UNKNOWN_TABLE
+                            ) =>
+                    {
+                        return Ok(Plan::AlterTablePartitionBy(Box::new(
+                            AlterTablePartitionByPlan {
+                                if_exists: true,
+                                catalog,
+                                database,
+                                table,
+                                partition_keys: None,
+                            },
+                        )));
+                    }
+                    Err(e) => return Err(e),
+                };
+
                 let engine = Engine::from(tbl.engine());
                 if !matches!(engine, Engine::Fuse) {
                     return Err(ErrorCode::UnsupportedEngineParams(format!(
@@ -1454,10 +1477,11 @@ impl Binder {
 
                 Ok(Plan::AlterTablePartitionBy(Box::new(
                     AlterTablePartitionByPlan {
+                        if_exists: *if_exists,
                         catalog,
                         database,
                         table,
-                        partition_keys,
+                        partition_keys: Some(partition_keys),
                     },
                 )))
             }
