@@ -42,6 +42,7 @@ pub use deserialize::column_chunks_to_record_batch;
 pub use row_selection::RowSelection;
 
 use crate::FuseBlockPartInfo;
+use crate::FuseColumnGroupPartInfo;
 use crate::io::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 
@@ -52,12 +53,35 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
-        self.deserialize_parquet_chunks(
+        self.deserialize_column_groups(
             part.nums_rows,
-            &part.columns_meta,
+            &part.column_groups,
             column_chunks,
             &part.compression,
-            &part.location,
+            selection,
+        )
+    }
+
+    pub(crate) fn deserialize_column_groups(
+        &self,
+        num_rows: usize,
+        column_groups: &[FuseColumnGroupPartInfo],
+        column_chunks: HashMap<ColumnId, DataItem>,
+        compression: &Compression,
+        selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks_with_cache_key(
+            num_rows,
+            column_chunks,
+            compression,
+            |column_id| {
+                column_groups.iter().find_map(|group| {
+                    group.columns_meta.get(&column_id).map(|column_meta| {
+                        let (offset, len) = column_meta.offset_length();
+                        TableDataCacheKey::new(&group.location, column_id, offset, len)
+                    })
+                })
+            },
             selection,
         )
     }
@@ -71,6 +95,31 @@ impl BlockReader {
         block_path: &str,
         selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks_with_cache_key(
+            num_rows,
+            column_chunks,
+            compression,
+            |column_id| {
+                column_metas.get(&column_id).map(|column_meta| {
+                    let (offset, len) = column_meta.offset_length();
+                    TableDataCacheKey::new(block_path, column_id, offset, len)
+                })
+            },
+            selection,
+        )
+    }
+
+    fn deserialize_parquet_chunks_with_cache_key<F>(
+        &self,
+        num_rows: usize,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        compression: &Compression,
+        cache_key_for_column: F,
+        selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock>
+    where
+        F: Fn(ColumnId) -> Option<TableDataCacheKey>,
+    {
         let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
         // If projection is empty, return a DataBlock with the appropriate row count but no columns
         if self.projected_schema.fields.is_empty() {
@@ -128,10 +177,7 @@ impl BlockReader {
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
                     if !column_node.is_nested {
                         if let Some(cache) = &array_cache {
-                            let meta = column_metas.get(&field.column_id).unwrap();
-                            let (offset, len) = meta.offset_length();
-                            let key =
-                                TableDataCacheKey::new(block_path, field.column_id, offset, len);
+                            let key = cache_key_for_column(field.column_id).unwrap();
                             let array_memory_size = arrow_array.get_array_memory_size();
                             cache.insert(key.into(), (arrow_array.clone(), array_memory_size));
                         }

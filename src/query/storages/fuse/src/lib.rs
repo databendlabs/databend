@@ -72,6 +72,7 @@ use databend_common_catalog::table::TableStatistics;
 pub use databend_common_catalog::table_context::TableContext;
 pub use fuse_column::FuseTableColumnStatisticsProvider;
 pub use fuse_part::FuseBlockPartInfo;
+pub use fuse_part::FuseColumnGroupPartInfo;
 pub use fuse_part::FuseLazyPartInfo;
 pub use fuse_table::FuseTable;
 pub use fuse_table::RetentionPolicy;
