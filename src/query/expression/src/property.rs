@@ -17,6 +17,7 @@ use databend_common_column::types::timestamp_tz;
 use enum_as_inner::EnumAsInner;
 
 use crate::ColumnBuilder;
+use crate::FunctionContext;
 use crate::Scalar;
 use crate::types::AccessType;
 use crate::types::AnyType;
@@ -49,8 +50,9 @@ use crate::with_decimal_type;
 use crate::with_number_type;
 
 /// Returns the argument for which a function is monotonically increasing under the given
-/// argument domains. `None` means monotonicity cannot be proven for that range.
-pub type MonotonicityCheck = fn(&[Domain]) -> Option<usize>;
+/// argument domains and function context (e.g. the session time zone). `None` means
+/// monotonicity cannot be proven for that range.
+pub type MonotonicityCheck = fn(&FunctionContext, &[Domain]) -> Option<usize>;
 
 #[derive(Debug, Clone)]
 pub struct FunctionProperty {

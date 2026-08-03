@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
@@ -37,6 +38,7 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::PartitionStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 use log::warn;
@@ -89,7 +91,7 @@ pub struct ClusterStatsGenerator {
     block_thresholds: BlockThresholds,
 
     pub extra_key_num: usize,
-    pub partition_key_count: usize,
+    pub partition_key_index: Vec<usize>,
     pub cluster_key_index: Vec<usize>,
     pub operators: Vec<BlockOperator>,
     pub vector_operator: Option<VectorClusterOperator>,
@@ -113,7 +115,7 @@ impl ClusterStatsGenerator {
         Self {
             cluster_key_id,
             cluster_key_index,
-            partition_key_count: 0,
+            partition_key_index: Vec::new(),
             extra_key_num,
             level,
             block_thresholds,
@@ -179,6 +181,63 @@ impl ClusterStatsGenerator {
         let cluster_stats = self.clusters_statistics(&data_block, self.level)?;
         data_block.pop_columns(self.extra_key_num);
         Ok((cluster_stats, data_block))
+    }
+
+    pub fn extract_partition_stats(
+        &self,
+        data_block: &DataBlock,
+    ) -> Result<Option<PartitionStatistics>> {
+        if self.partition_key_index.is_empty() {
+            return Ok(None);
+        }
+        if data_block.is_empty() {
+            return Err(ErrorCode::Internal(
+                "cannot extract partition statistics from an empty block",
+            ));
+        }
+
+        // Append blocks already contain evaluated key expressions. Mutation paths may
+        // serialize source columns directly, so evaluate the key operators on demand.
+        let evaluated_block = if self
+            .partition_key_index
+            .iter()
+            .any(|index| *index >= data_block.num_columns())
+        {
+            Some(
+                self.operators
+                    .iter()
+                    .try_fold(data_block.clone(), |block, operator| {
+                        operator.execute(&self.func_ctx, block)
+                    })?,
+            )
+        } else {
+            None
+        };
+        let data_block = evaluated_block.as_ref().unwrap_or(data_block);
+        if self
+            .partition_key_index
+            .iter()
+            .any(|index| *index >= data_block.num_columns())
+        {
+            return Err(ErrorCode::Internal(
+                "partition key columns are missing before block serialization",
+            ));
+        }
+
+        let mut values = Vec::with_capacity(self.partition_key_index.len());
+        for index in &self.partition_key_index {
+            let entry = data_block.get_by_offset(*index);
+            let value = entry
+                .index(0)
+                .ok_or_else(|| ErrorCode::Internal("partition key is missing from block"))?;
+            if (1..data_block.num_rows()).any(|row| entry.index(row).as_ref() != Some(&value)) {
+                return Err(ErrorCode::Internal(
+                    "serialized block contains more than one partition",
+                ));
+            }
+            values.push(value.to_owned());
+        }
+        Ok(Some(PartitionStatistics::new(values)))
     }
 
     // This can be used in deletion, for an existing block.
@@ -321,40 +380,26 @@ pub fn sort_by_cluster_stats(
     }
 }
 
-/// Returns the exact partition prefix stored in physical cluster statistics.
-/// A partitioned block/segment is valid only when every prefix dimension has
-/// identical min and max values.
 pub(crate) fn partition_values(
-    stats: Option<&ClusterStatistics>,
-    cluster_key_id: Option<u32>,
+    stats: Option<&PartitionStatistics>,
     partition_key_count: usize,
 ) -> Option<&[Scalar]> {
-    if partition_key_count == 0 {
-        return None;
-    }
-    let stats = stats?;
-    if Some(stats.cluster_key_id) != cluster_key_id
-        || stats.min.len() < partition_key_count
-        || stats.max.len() < partition_key_count
-        || stats.min[..partition_key_count] != stats.max[..partition_key_count]
-    {
-        return None;
-    }
-    Some(&stats.min[..partition_key_count])
+    stats
+        .map(|stats| stats.values.as_slice())
+        .filter(|values| values.len() == partition_key_count)
 }
 
 pub(crate) fn same_partition(
-    left: Option<&ClusterStatistics>,
-    right: Option<&ClusterStatistics>,
-    cluster_key_id: Option<u32>,
+    left: Option<&PartitionStatistics>,
+    right: Option<&PartitionStatistics>,
     partition_key_count: usize,
 ) -> bool {
     if partition_key_count == 0 {
         return true;
     }
     match (
-        partition_values(left, cluster_key_id, partition_key_count),
-        partition_values(right, cluster_key_id, partition_key_count),
+        partition_values(left, partition_key_count),
+        partition_values(right, partition_key_count),
     ) {
         (Some(left), Some(right)) => left == right,
         _ => false,
@@ -585,8 +630,12 @@ pub(crate) fn get_min_max_stats(
 #[cfg(test)]
 mod tests {
     use databend_common_expression::ColumnRef;
+    use databend_common_expression::FromData;
+    use databend_common_expression::RawExpr;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
+    use databend_common_expression::type_check::check;
+    use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::number::NumberScalar;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -673,57 +722,91 @@ mod tests {
 
     #[test]
     fn test_partition_values_returns_none_for_missing_stats() {
-        // When segment has no cluster statistics, pruner must keep it conservatively.
-        assert_eq!(partition_values(None, Some(0), 1), None);
+        assert_eq!(partition_values(None, 1), None);
     }
 
     #[test]
-    fn test_partition_values_returns_none_for_mismatched_cluster_key_id() {
-        let stats = ClusterStatistics::new(0, vec![int32_scalar(1)], vec![int32_scalar(1)], 0);
-        // Segment was written with a different cluster key id; treat as unpartitioned.
-        assert_eq!(partition_values(Some(&stats), Some(1), 1), None);
-    }
-
-    #[test]
-    fn test_partition_values_returns_none_when_prefix_min_max_differ() {
-        // A block that spans two partition values is not a valid single-partition block.
-        let stats = ClusterStatistics::new(0, vec![int32_scalar(1)], vec![int32_scalar(2)], 0);
-        assert_eq!(partition_values(Some(&stats), Some(0), 1), None);
-    }
-
-    #[test]
-    fn test_partition_values_returns_prefix_when_valid() {
-        let stats = ClusterStatistics::new(
-            0,
-            vec![int32_scalar(3), int32_scalar(10)],
-            vec![int32_scalar(3), int32_scalar(20)],
-            0,
-        );
-        // Only the partition prefix (first dimension) is returned.
-        let values = partition_values(Some(&stats), Some(0), 1).unwrap();
+    fn test_partition_values_returns_exact_values() {
+        let stats = PartitionStatistics::new(vec![int32_scalar(3)]);
+        let values = partition_values(Some(&stats), 1).unwrap();
         assert_eq!(values, &[int32_scalar(3)]);
+        assert_eq!(partition_values(Some(&stats), 2), None);
+    }
+
+    #[test]
+    fn test_partition_and_cluster_statistics_are_independent() -> Result<()> {
+        let block = DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![6, 6]),
+            Int32Type::from_data(vec![1, 2]),
+        ]);
+        let partition_expr = check(
+            &RawExpr::FunctionCall {
+                span: None,
+                name: "plus".to_string(),
+                params: vec![],
+                args: vec![
+                    RawExpr::ColumnRef {
+                        span: None,
+                        id: 0,
+                        data_type: DataType::Number(NumberDataType::Int32),
+                        display_name: "p".to_string(),
+                    },
+                    RawExpr::Constant {
+                        span: None,
+                        scalar: int32_scalar(1),
+                        data_type: None,
+                    },
+                ],
+            },
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let mut generator = ClusterStatsGenerator::new(
+            3,
+            vec![1],
+            1,
+            0,
+            BlockThresholds::default(),
+            vec![BlockOperator::Map {
+                exprs: vec![partition_expr],
+                projections: None,
+            }],
+            None,
+            vec![],
+            FunctionContext::default(),
+        );
+        generator.partition_key_index = vec![2];
+
+        let partition_stats = generator.extract_partition_stats(&block)?.unwrap();
+        let cluster_stats = generator.clusters_statistics(&block, 0)?.unwrap();
+
+        assert_eq!(partition_stats.values, vec![Scalar::Number(
+            NumberScalar::Int64(7)
+        )]);
+        assert_eq!(cluster_stats.min, vec![int32_scalar(1)]);
+        assert_eq!(cluster_stats.max, vec![int32_scalar(2)]);
+        Ok(())
     }
 
     #[test]
     fn test_same_partition_returns_false_when_either_side_has_no_stats() {
         // Without partition metadata on either side, compact must not merge the segments.
-        let stats = ClusterStatistics::new(0, vec![int32_scalar(1)], vec![int32_scalar(1)], 0);
-        assert!(!same_partition(None, None, Some(0), 1));
-        assert!(!same_partition(Some(&stats), None, Some(0), 1));
-        assert!(!same_partition(None, Some(&stats), Some(0), 1));
+        let stats = PartitionStatistics::new(vec![int32_scalar(1)]);
+        assert!(!same_partition(None, None, 1));
+        assert!(!same_partition(Some(&stats), None, 1));
+        assert!(!same_partition(None, Some(&stats), 1));
     }
 
     #[test]
     fn test_same_partition_returns_true_when_partition_key_count_is_zero() {
         // Tables without PARTITION BY always treat segments as the same partition.
-        assert!(same_partition(None, None, Some(0), 0));
+        assert!(same_partition(None, None, 0));
     }
 
     #[test]
     fn test_same_partition_distinguishes_different_partition_values() {
-        let left = ClusterStatistics::new(0, vec![int32_scalar(0)], vec![int32_scalar(0)], 0);
-        let right = ClusterStatistics::new(0, vec![int32_scalar(1)], vec![int32_scalar(1)], 0);
-        assert!(!same_partition(Some(&left), Some(&right), Some(0), 1));
-        assert!(same_partition(Some(&left), Some(&left), Some(0), 1));
+        let left = PartitionStatistics::new(vec![int32_scalar(0)]);
+        let right = PartitionStatistics::new(vec![int32_scalar(1)]);
+        assert!(!same_partition(Some(&left), Some(&right), 1));
+        assert!(same_partition(Some(&left), Some(&left), 1));
     }
 }

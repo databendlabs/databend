@@ -105,6 +105,7 @@ fn test_resolvable_delete_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };
@@ -133,6 +134,7 @@ fn test_resolvable_delete_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };
@@ -154,6 +156,7 @@ fn test_resolvable_delete_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };
@@ -175,6 +178,7 @@ fn test_resolvable_delete_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };
@@ -219,6 +223,7 @@ fn test_resolvable_delete_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };
@@ -260,6 +265,7 @@ fn test_resolvable_replace_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };
@@ -288,6 +294,7 @@ fn test_resolvable_replace_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };
@@ -309,6 +316,7 @@ fn test_resolvable_replace_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };
@@ -330,6 +338,7 @@ fn test_resolvable_replace_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };
@@ -379,6 +388,7 @@ fn test_resolvable_replace_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };

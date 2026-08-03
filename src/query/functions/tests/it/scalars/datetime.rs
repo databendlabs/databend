@@ -1180,7 +1180,29 @@ fn test_auto_detect_timestamp_tz_unit() {
 }
 
 #[test]
-fn test_rounder_monotonicity_properties() {
+fn test_calendar_monotonicity_check() {
+    // America/St_Johns fell back at 2009-11-01 00:01 NDT to 10-31 23:01 NST
+    // (02:31 UTC): a range straddling that transition sees the wall clock
+    // rewind across a day (and month) boundary.
+    let st_johns = FunctionContext {
+        tz: TimeZone::get("America/St_Johns").unwrap(),
+        ..FunctionContext::default()
+    };
+    let utc = FunctionContext::default();
+
+    // [2009-11-01T02:00Z, 2009-11-01T03:00Z] straddles the fallback.
+    let crossing = Domain::Timestamp(SimpleDomain {
+        min: 1_257_040_800_000_000,
+        max: 1_257_044_400_000_000,
+    });
+    // [2009-11-01T03:00Z, 2009-11-01T04:00Z] lies inside one offset segment.
+    let clear = Domain::Timestamp(SimpleDomain {
+        min: 1_257_044_400_000_000,
+        max: 1_257_048_000_000_000,
+    });
+    // Date inputs ignore the session time zone entirely.
+    let dates = Domain::Date(SimpleDomain { min: 0, max: 20000 });
+
     for name in [
         "to_start_of_day",
         "to_monday",
@@ -1189,15 +1211,29 @@ fn test_rounder_monotonicity_properties() {
         "to_start_of_quarter",
         "to_start_of_year",
         "to_start_of_iso_year",
+        "to_yyyymm",
+        "to_yyyymmdd",
     ] {
+        let property = BUILTIN_FUNCTIONS.get_property(name).unwrap();
         assert!(
-            BUILTIN_FUNCTIONS.get_property(name).unwrap().monotonicity,
-            "calendar rounder should be available for monotonic domain projection"
+            !property.monotonicity,
+            "{name}: time-zone-sensitive monotonicity must not be a global flag"
         );
+        let check = property
+            .monotonicity_check
+            .unwrap_or_else(|| panic!("{name}: expected a monotonicity check"));
+        assert_eq!(check(&utc, std::slice::from_ref(&crossing)), Some(0));
+        assert_eq!(
+            check(&st_johns, std::slice::from_ref(&crossing)),
+            None,
+            "{name}: must fail open when the range crosses a DST fallback"
+        );
+        assert_eq!(check(&st_johns, std::slice::from_ref(&clear)), Some(0));
+        assert_eq!(check(&st_johns, std::slice::from_ref(&dates)), Some(0));
     }
 
-    // Reconstructing a local wall-clock time is not globally monotonic across a DST fallback.
-    // These functions must therefore fail open during expression-key pruning.
+    // Sub-day rounders rebuild a local wall-clock time inside the day; every
+    // DST fallback breaks them, so they expose no monotonicity at all.
     for name in [
         "to_start_of_second",
         "to_start_of_minute",
@@ -1206,9 +1242,68 @@ fn test_rounder_monotonicity_properties() {
         "to_start_of_fifteen_minutes",
         "to_start_of_hour",
     ] {
+        let property = BUILTIN_FUNCTIONS.get_property(name).unwrap();
         assert!(
-            !BUILTIN_FUNCTIONS.get_property(name).unwrap().monotonicity,
-            "sub-day rounder must not be exposed as globally monotonic"
+            !property.monotonicity && property.monotonicity_check.is_none(),
+            "{name}: sub-day rounder must not be exposed as monotonic"
+        );
+    }
+}
+
+#[test]
+fn test_calendar_domain_fails_open_across_tz_fallback() {
+    use std::collections::HashMap;
+
+    use databend_common_expression::ConstantFolder;
+    use databend_common_expression::expr::ColumnRef;
+    use databend_common_expression::expr::Expr;
+    use databend_common_expression::type_check::check_function;
+
+    let st_johns = FunctionContext {
+        tz: TimeZone::get("America/St_Johns").unwrap(),
+        ..FunctionContext::default()
+    };
+    let utc = FunctionContext::default();
+    let crossing = Domain::Timestamp(SimpleDomain {
+        min: 1_257_040_800_000_000, // 2009-11-01T02:00Z = 10-31 23:30 NDT
+        max: 1_257_044_400_000_000, // 2009-11-01T03:00Z = 10-31 23:30 NST
+    });
+
+    for (name, return_type) in [
+        // Exact `calc_domain`, guarded by the session time zone.
+        ("to_yyyymmdd", DataType::Number(NumberDataType::UInt32)),
+        // `Full` calc_domain: exercises the fold's monotonic end-point path,
+        // which consumes `monotonicity_check`.
+        ("to_start_of_day", DataType::Timestamp),
+    ] {
+        let expr = check_function(
+            None,
+            name,
+            &[],
+            &[Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 0,
+                data_type: DataType::Timestamp,
+                display_name: "ts".to_string(),
+            })],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let input = HashMap::from([(0, crossing.clone())]);
+
+        // Both end points map to October 31, but the range internally touches
+        // November 1: any domain narrower than `Full` would exclude reachable
+        // outputs and let pruning drop live rows.
+        let (_, domain) =
+            ConstantFolder::fold_with_domain(&expr, &input, &st_johns, &BUILTIN_FUNCTIONS);
+        assert_eq!(domain, Some(Domain::full(&return_type)), "{name}");
+
+        // Under a fixed offset the same range is a single segment: the
+        // projection collapses to one day and folds to a constant.
+        let (folded, _) = ConstantFolder::fold_with_domain(&expr, &input, &utc, &BUILTIN_FUNCTIONS);
+        assert!(
+            matches!(folded, Expr::Constant(_)),
+            "{name}: expected constant fold under UTC, got {folded:?}"
         );
     }
 }

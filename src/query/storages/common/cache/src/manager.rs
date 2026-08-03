@@ -1298,6 +1298,7 @@ mod tests {
             col_stats: Default::default(),
             col_metas: Default::default(),
             cluster_stats: None,
+            partition_stats: None,
             location: ("".to_string(), 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,

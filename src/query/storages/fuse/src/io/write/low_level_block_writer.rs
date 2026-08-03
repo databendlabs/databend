@@ -641,6 +641,10 @@ impl FuseLowLevelBlockWriter {
             col_stats: data.col_stats,
             col_metas: data.col_metas,
             cluster_stats,
+            // The low-level writer streams columns without a whole DataBlock to extract
+            // PARTITION BY values from; recluster groups tasks per partition, so consumers
+            // treat a missing value as "unknown" (segment-level pruning degrades only).
+            partition_stats: None,
             location: self.options.block_location,
             bloom_filter_index_location: data.bloom_index_location,
             bloom_filter_index_size: data.bloom_index_size,

@@ -762,7 +762,7 @@ impl IPhysicalPlan for ChunkAppendData {
                 sort_builders.push(Box::new(builder.dummy_transform_builder()));
             }
             let partition_key_indices: Arc<[_]> =
-                cluster_stats_gen.cluster_key_index[..cluster_stats_gen.partition_key_count].into();
+                cluster_stats_gen.partition_key_index.clone().into();
             if !partition_key_indices.is_empty() {
                 partition_builders.push(Box::new(move |input, output| {
                     Ok(ProcessorPtr::create(AccumulatingTransformer::create(

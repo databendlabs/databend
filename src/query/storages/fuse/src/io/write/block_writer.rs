@@ -210,6 +210,9 @@ impl BlockBuilder {
             DataBlock,
             &ClusterStatsGenerator,
         ) -> Result<(Option<ClusterStatistics>, DataBlock, Option<Vec<usize>>)> {
+        let partition_stats = self
+            .cluster_stats_gen
+            .extract_partition_stats(&data_block)?;
         let (cluster_stats, data_block, granule_cluster_key_offsets) =
             f(data_block, &self.cluster_stats_gen)?;
         let granule_cluster_columns = if self.write_settings.index_granularity.is_some() {
@@ -240,6 +243,7 @@ impl BlockBuilder {
             self.table_meta_timestamps,
             self.serialize_hll,
             cluster_stats,
+            partition_stats,
         )?;
         let mut writer = FuseBlockWriter::create(options)?;
         writer.write(data_block)?;

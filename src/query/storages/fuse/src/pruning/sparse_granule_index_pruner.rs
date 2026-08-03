@@ -449,7 +449,7 @@ fn is_monotonic_key_expr(
             };
             let monotonic_arg = property
                 .monotonicity_check
-                .and_then(|check| check(&input_domains))
+                .and_then(|check| check(func_ctx, &input_domains))
                 .or_else(|| {
                     (call.args.len() == 1
                         && (property.monotonicity

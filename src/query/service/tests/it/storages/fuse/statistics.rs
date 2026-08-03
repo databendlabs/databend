@@ -883,7 +883,7 @@ fn char_len(value: &str) -> usize {
 fn test_reduce_block_meta() -> anyhow::Result<()> {
     // case 1: empty input should return the default statistics
     let block_metas: Vec<BlockMeta> = vec![];
-    let reduced = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
+    let reduced = reduce_block_metas(&block_metas, BlockThresholds::default(), None)?;
     assert_eq!(Statistics::default(), reduced);
 
     // case 2: accumulated variants of size index should be as expected
@@ -950,7 +950,7 @@ fn test_reduce_block_meta() -> anyhow::Result<()> {
         blocks.push(block_meta);
     }
 
-    let stats = reduce_block_metas(&blocks, BlockThresholds::default(), None);
+    let stats = reduce_block_metas(&blocks, BlockThresholds::default(), None)?;
 
     assert_eq!(acc_row_count, stats.row_count);
     assert_eq!(acc_block_size, stats.uncompressed_byte_size);

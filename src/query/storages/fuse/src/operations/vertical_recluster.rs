@@ -232,6 +232,9 @@ impl VerticalReclusterSource {
                 col_stats: part.columns_stat.clone().unwrap_or_default(),
                 col_metas: part.columns_meta.clone(),
                 cluster_stats: None,
+                // Reconstructed only for reading source blocks; FuseBlockPartInfo does not
+                // carry PARTITION BY values.
+                partition_stats: None,
                 location: (part.location.clone(), DataBlock::VERSION),
                 bloom_filter_index_location: part.bloom_filter_index_location.clone(),
                 bloom_filter_index_size: part.bloom_filter_index_size,

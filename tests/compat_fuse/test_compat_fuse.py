@@ -535,6 +535,34 @@ def download_and_run_group(group: list[dict]) -> None:
         ctx.run_test(clean_data=index == 0, install_license=True)
 
 
+def download_and_run_group(group: list[dict]) -> None:
+    """Run complete compatibility cases in order while preserving data."""
+    query_versions = []
+    meta_versions = []
+    for case in group:
+        for version in (case["writer"], case["reader"]):
+            if version not in query_versions:
+                query_versions.append(version)
+        for version in case["meta"]:
+            if version not in meta_versions:
+                meta_versions.append(version)
+
+    for version in query_versions:
+        download_query_config(version)
+        download_binary(version)
+    for version in meta_versions:
+        download_binary(version)
+
+    for index, case in enumerate(group):
+        print(
+            f" === Shared-data case {index + 1}/{len(group)}: "
+            f"writer={case['writer']} reader={case['reader']} "
+            f"meta={case['meta']} suite={case['suite']}"
+        )
+        ctx = TestContext(case["writer"], case["reader"], case["meta"], case["suite"])
+        ctx.run_test(clean_data=index == 0, install_license=True)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Assert that latest query is compatible with an old version query on fuse-table format"

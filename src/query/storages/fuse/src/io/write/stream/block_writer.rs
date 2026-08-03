@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::PartitionStatistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use opendal::Buffer;
@@ -407,6 +408,7 @@ impl FuseBlockWriter {
             col_stats,
             col_metas,
             cluster_stats,
+            partition_stats: self.properties.partition_stats_override.clone(),
             location: block_location,
             bloom_filter_index_location,
             bloom_filter_index_size,
@@ -498,6 +500,9 @@ pub struct FuseBlockWriteOptions {
     granule_cluster_keys: Option<Vec<Column>>,
     serialize_hll: bool,
     cluster_stats_override: Option<ClusterStatistics>,
+    // Exact PARTITION BY values for the block being written; extracted by the caller
+    // before serialization since all rows of one block share one partition.
+    partition_stats_override: Option<PartitionStatistics>,
 }
 
 impl FuseBlockWriteOptions {
@@ -608,6 +613,7 @@ impl FuseBlockWriteOptions {
             granule_cluster_keys: None,
             serialize_hll: false,
             cluster_stats_override: None,
+            partition_stats_override: None,
         }))
     }
 
@@ -754,6 +760,7 @@ impl FuseBlockWriteOptions {
         table_meta_timestamps: TableMetaTimestamps,
         serialize_hll: bool,
         cluster_stats_override: Option<ClusterStatistics>,
+        partition_stats_override: Option<PartitionStatistics>,
     ) -> Result<Arc<Self>> {
         let bloom_ndv_columns = bloom_columns_map
             .values()
@@ -801,6 +808,7 @@ impl FuseBlockWriteOptions {
             },
             serialize_hll,
             cluster_stats_override,
+            partition_stats_override,
         }))
     }
 }

@@ -63,7 +63,7 @@ impl SegmentBuilder for RowOrientedSegmentBuilder {
     ) -> Result<Self::Segment> {
         let builder = std::mem::take(self);
         let mut stat =
-            super::reduce_block_metas(&builder.blocks_metas, thresholds, default_cluster_key_id);
+            super::reduce_block_metas(&builder.blocks_metas, thresholds, default_cluster_key_id)?;
         stat.additional_stats_meta = additional_stats_meta;
         Ok(SegmentInfo::new(builder.blocks_metas, stat))
     }

@@ -38,6 +38,7 @@ use crate::meta::ColumnStatistics;
 use crate::meta::Compression;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
+use crate::meta::PartitionStatistics;
 use crate::meta::SpatialStatistics;
 use crate::meta::Statistics;
 use crate::meta::StatisticsOfVectorColumns;
@@ -182,6 +183,8 @@ pub struct BlockMeta {
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
     pub cluster_stats: Option<ClusterStatistics>,
+    #[serde(default)]
+    pub partition_stats: Option<PartitionStatistics>,
     /// location of data block
     pub location: Location,
     /// location of bloom filter index
@@ -270,6 +273,7 @@ impl BlockMeta {
             col_stats,
             col_metas,
             cluster_stats,
+            partition_stats: None,
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
@@ -408,6 +412,7 @@ impl BlockMeta {
             col_stats,
             col_metas,
             cluster_stats: None,
+            partition_stats: None,
             location: (s.location.path.clone(), 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
@@ -444,6 +449,7 @@ impl BlockMeta {
             col_stats,
             col_metas,
             cluster_stats: None,
+            partition_stats: None,
             location: s.location.clone(),
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
             bloom_filter_index_size: s.bloom_filter_index_size,

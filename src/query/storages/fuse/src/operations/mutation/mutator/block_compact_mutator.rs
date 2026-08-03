@@ -397,9 +397,8 @@ impl SegmentCompactChecker {
         let mut output = Vec::new();
         if let Some((_, previous)) = self.segments.last()
             && !same_partition(
-                previous.summary.cluster_stats.as_ref(),
-                segment.summary.cluster_stats.as_ref(),
-                self.cluster_key_id,
+                previous.summary.partition_stats.as_ref(),
+                segment.summary.partition_stats.as_ref(),
                 self.partition_key_count,
             )
         {
@@ -679,8 +678,7 @@ impl CompactTaskBuilder {
         let mut seen_block = false;
         for (block_meta, hlls) in blocks.iter() {
             let current_partition = partition_values(
-                block_meta.cluster_stats.as_ref(),
-                self.cluster_key_id,
+                block_meta.partition_stats.as_ref(),
                 self.partition_key_count,
             );
             if seen_block
