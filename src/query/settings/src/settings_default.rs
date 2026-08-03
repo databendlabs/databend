@@ -478,7 +478,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_top_n", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables the fused TopN algorithm for ORDER BY with LIMIT.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
