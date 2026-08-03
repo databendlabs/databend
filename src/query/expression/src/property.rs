@@ -17,6 +17,7 @@ use databend_common_column::types::timestamp_tz;
 use enum_as_inner::EnumAsInner;
 
 use crate::ColumnBuilder;
+use crate::FunctionContext;
 use crate::Scalar;
 use crate::types::AccessType;
 use crate::types::AnyType;
@@ -48,6 +49,11 @@ use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
 use crate::with_number_type;
 
+/// Returns the argument for which a function is monotonically increasing under the given
+/// argument domains and function context (e.g. the session time zone). `None` means
+/// monotonicity cannot be proven for that range.
+pub type MonotonicityCheck = fn(&FunctionContext, &[Domain]) -> Option<usize>;
+
 #[derive(Debug, Clone)]
 pub struct FunctionProperty {
     pub non_deterministic: bool,
@@ -58,6 +64,9 @@ pub struct FunctionProperty {
     pub monotonicity: bool,
     // will be monotonicity if arg is one of `monotonicity_by_type`
     pub monotonicity_by_type: Vec<DataType>,
+    // Range-sensitive monotonicity for functions with constant or constrained arguments.
+    // This is consumed by index pruning and does not change scalar evaluation semantics.
+    pub monotonicity_check: Option<MonotonicityCheck>,
 }
 
 impl FunctionProperty {
@@ -76,6 +85,11 @@ impl FunctionProperty {
         self
     }
 
+    pub fn monotonicity_check(mut self, check: MonotonicityCheck) -> Self {
+        self.monotonicity_check = Some(check);
+        self
+    }
+
     pub fn kind(mut self, kind: FunctionKind) -> Self {
         self.kind = kind;
         self
@@ -88,6 +102,7 @@ impl Default for FunctionProperty {
             non_deterministic: false,
             monotonicity: false,
             monotonicity_by_type: vec![],
+            monotonicity_check: None,
             kind: FunctionKind::Scalar,
         }
     }
