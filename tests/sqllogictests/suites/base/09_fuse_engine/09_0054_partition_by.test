@@ -39,10 +39,42 @@ INSERT INTO t VALUES (0, 30, 'a0'), (1, 20, 'a1'), (2, 10, 'a2')
 statement ok
 INSERT INTO t VALUES (3, 31, 'b0'), (4, 21, 'b1'), (5, 11, 'b2')
 
+# PARTITION BY is not an implicit prefix of the user-visible cluster key.
+query T
+SELECT cluster_key FROM clustering_information('db_09_0054', 't')
+----
+(c)
+
 query II
 SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 't') LIMIT 1
 ----
 6 6
+
+# A partition expression may also be a cluster-key expression. Sorting by
+# (c, p % 2) produces partition runs 1, 0, 1 for this input, whereas an implicit
+# partition prefix would produce only the runs 0, 1.
+statement ok
+SET max_threads=1
+
+statement ok
+CREATE TABLE overlapping_keys(p INT, c INT) PARTITION BY (p % 2) CLUSTER BY (c, p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO overlapping_keys VALUES (0, 30), (1, 10), (2, 20), (3, 40)
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'overlapping_keys') LIMIT 1
+----
+3 3
+
+# The three cluster-ordered runs still carry exact partition metadata.
+query T
+EXPLAIN SELECT p, c FROM overlapping_keys WHERE p % 2 = 0
+----
+<slt:ignore>partitions total: 3<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 3 to 1<slt:ignore>
+
+statement ok
+UNSET max_threads
 
 # Segment compaction may combine metadata only inside one physical partition.
 statement ok
@@ -63,8 +95,8 @@ SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 't') LIMIT 1
 ----
 3 3
 
-# The exact partition expression is evaluated against the partition prefix in
-# Segment ClusterStatistics before BlockMeta is read.
+# The exact partition expression is evaluated against independent segment
+# partition statistics before BlockMeta is read.
 query T
 EXPLAIN SELECT p, c, v FROM t WHERE p % 3 = 1
 ----
@@ -225,7 +257,7 @@ INSERT INTO partition_only VALUES (0, 'a'), (1, 'b'), (2, 'c'), (3, 'd')
 query II
 SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'partition_only') LIMIT 1
 ----
-2 2
+4 4
 
 query II rowsort
 SELECT p, length(v) FROM partition_only
@@ -241,12 +273,12 @@ CREATE TABLE replace_partitioned(id INT, p INT) PARTITION BY (p % 2) ROW_PER_BLO
 statement ok
 REPLACE INTO replace_partitioned ON(id) VALUES (1, 0), (2, 1), (3, 2), (4, 3)
 
-# REPLACE INTO is sorted and split before serialization, so a mixed input block
-# produces one block and segment per physical partition.
+# REPLACE INTO does not regroup partition-only input, so interleaved partition
+# values produce one block and segment per adjacent partition run.
 query II
 SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'replace_partitioned') LIMIT 1
 ----
-2 2
+4 4
 
 query II rowsort
 SELECT id, p FROM replace_partitioned
@@ -275,10 +307,11 @@ SELECT id, p FROM merge_partitioned
 statement ok
 OPTIMIZE TABLE merge_partitioned COMPACT
 
+# Compaction respects existing partition boundaries without reordering segments.
 query II
 SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'merge_partitioned') LIMIT 1
 ----
-2 2
+3 3
 
 # Recluster overlapping cluster-key ranges inside each partition without ever
 # selecting or rewriting blocks across the physical partition boundary.
@@ -294,7 +327,7 @@ INSERT INTO recluster_partitioned VALUES (4, 31), (5, 31), (6, 11), (7, 11)
 query II
 SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'recluster_partitioned') LIMIT 1
 ----
-4 4
+8 8
 
 statement ok
 ALTER TABLE recluster_partitioned RECLUSTER FINAL
@@ -350,8 +383,8 @@ WHERE column_name = 'event_time'
 ----
 0
 
-# Partition splitting is local to each sorted input block. Fragmented multi-block
-# input may therefore produce several blocks for the same physical partition.
+# Partition splitting is local to each input block and does not regroup rows.
+# The exact block count therefore depends on parallel input scheduling.
 statement ok
 SET max_threads=4
 
@@ -365,9 +398,9 @@ statement ok
 INSERT INTO fragmented_input SELECT number FROM numbers(12)
 
 query I
-SELECT block_count FROM fuse_snapshot('db_09_0054', 'fragmented_input') LIMIT 1
+SELECT if(block_count BETWEEN 6 AND 12, 1, 0) FROM fuse_snapshot('db_09_0054', 'fragmented_input') LIMIT 1
 ----
-6
+1
 
 # Like CLUSTER BY, each physical key expression may reference only one source
 # column. Composite partitioning is expressed as PARTITION BY (a, b).
@@ -416,7 +449,7 @@ INSERT INTO delete_partitioned VALUES (0, 'a'), (1, 'b'), (2, 'c'), (3, 'd')
 query II
 SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'delete_partitioned') LIMIT 1
 ----
-2 2
+4 4
 
 statement ok
 DELETE FROM delete_partitioned WHERE v = 'b'

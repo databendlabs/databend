@@ -95,7 +95,7 @@ impl TableMetaFunc for ClusteringStatistics {
             return Ok(DataBlock::empty_with_schema(&Self::schema().into()));
         }
 
-        let cluster_keys = tbl.resolve_physical_cluster_keys().unwrap();
+        let cluster_keys = tbl.resolve_cluster_keys().unwrap();
         let exprs = parse_cluster_keys(ctx.clone(), Arc::new(tbl.clone()), cluster_keys)?;
         let scalar_exprs = exprs
             .into_iter()

@@ -330,9 +330,8 @@ impl<'a> SegmentCompactor<'a> {
 
         if let Some((_, previous, _)) = self.fragmented_segments.last()
             && !same_partition(
-                previous.summary.cluster_stats.as_ref(),
-                segment_info.summary.cluster_stats.as_ref(),
-                self.default_cluster_key_id,
+                previous.summary.partition_stats.as_ref(),
+                segment_info.summary.partition_stats.as_ref(),
                 self.partition_key_count,
             )
         {

@@ -167,6 +167,9 @@ impl BlockBuilder {
     pub fn build<F>(&self, data_block: DataBlock, f: F) -> Result<BlockSerialization>
     where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>
     {
+        let partition_stats = self
+            .cluster_stats_gen
+            .extract_partition_stats(&data_block)?;
         let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
         let (block_location, block_id) = self
             .meta_locations
@@ -285,6 +288,7 @@ impl BlockBuilder {
             col_stats,
             col_metas,
             cluster_stats,
+            partition_stats,
             location: block_location,
             bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
             bloom_filter_index_size: bloom_index_state

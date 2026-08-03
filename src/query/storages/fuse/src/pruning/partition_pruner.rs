@@ -32,18 +32,16 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::plans::ComparisonOp;
 use databend_common_statistics::HistogramBounds;
 use databend_common_statistics::HistogramRangeBounds;
-use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::PartitionStatistics;
 
 use crate::statistics::partition_values;
 
 #[derive(Clone)]
 pub struct PartitionPruningInfo {
-    pub cluster_key_id: u32,
     pub partition_keys: Vec<RemoteExpr<String>>,
 }
 
 pub struct PartitionPruner {
-    cluster_key_id: u32,
     partition_keys: Vec<Expr<String>>,
     filter: Expr<String>,
     func_ctx: FunctionContext,
@@ -75,17 +73,14 @@ impl PartitionPruner {
             .collect();
 
         Some(Self {
-            cluster_key_id: info.cluster_key_id,
             partition_keys,
             filter,
             func_ctx,
         })
     }
 
-    pub fn should_keep(&self, stats: Option<&ClusterStatistics>) -> bool {
-        let Some(values) =
-            partition_values(stats, Some(self.cluster_key_id), self.partition_keys.len())
-        else {
+    pub fn should_keep(&self, stats: Option<&PartitionStatistics>) -> bool {
+        let Some(values) = partition_values(stats, self.partition_keys.len()) else {
             return true;
         };
 
@@ -534,13 +529,12 @@ mod tests {
         }]);
 
         let pruner = PartitionPruner {
-            cluster_key_id: 0,
             partition_keys: vec![partition_expr],
             filter,
             func_ctx: FunctionContext::default(),
         };
 
-        // No cluster stats at all — must keep the segment.
+        // No partition stats at all — must keep the segment.
         assert!(pruner.should_keep(None));
     }
 }

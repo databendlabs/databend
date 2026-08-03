@@ -28,11 +28,10 @@ use databend_common_pipeline_transforms::AccumulatingTransform;
 
 use crate::operations::mutation::SerializeDataMeta;
 
-/// Splits a block that is already sorted by the physical Fuse key into blocks
-/// whose partition-key prefix is constant.
+/// Splits a block whenever adjacent partition-key values differ.
 ///
-/// This is a per-block boundary invariant; fragments of the same partition from
-/// different input blocks are not merged here.
+/// It does not reorder rows or merge non-contiguous fragments of the same
+/// partition. Higher-level compaction is responsible for normalizing them.
 pub struct TransformPartitionBy {
     partition_key_indices: Arc<[usize]>,
     rewrite_replaced_block: bool,
@@ -56,15 +55,13 @@ impl TransformPartitionBy {
     }
 }
 
-fn partition_boundaries(block: &DataBlock, indices: &[usize]) -> Vec<usize> {
+fn partition_boundaries(block: &DataBlock, indices: &[usize]) -> impl Iterator<Item = usize> {
     let rows = block.num_rows();
-    if rows <= 1 || indices.is_empty() {
-        return Vec::new();
-    }
-
     let mut changed = vec![false; rows];
-    for index in indices {
-        mark_column_boundaries(block.get_by_offset(*index), &mut changed);
+    if rows > 1 {
+        for index in indices {
+            mark_column_boundaries(block.get_by_offset(*index), &mut changed);
+        }
     }
 
     changed
@@ -72,7 +69,6 @@ fn partition_boundaries(block: &DataBlock, indices: &[usize]) -> Vec<usize> {
         .enumerate()
         .skip(1)
         .filter_map(|(row, changed)| changed.then_some(row))
-        .collect()
 }
 
 fn mark_column_boundaries(entry: &BlockEntry, changed: &mut [bool]) {
@@ -162,10 +158,9 @@ impl AccumulatingTransform for TransformPartitionBy {
         } else {
             None
         };
-        let boundaries = partition_boundaries(&block, &self.partition_key_indices);
-        let mut blocks = Vec::with_capacity(boundaries.len() + 1);
+        let mut blocks = Vec::new();
         let mut start = 0;
-        for end in boundaries {
+        for end in partition_boundaries(&block, &self.partition_key_indices) {
             blocks.push(block.slice(start..end));
             start = end;
         }
@@ -211,7 +206,10 @@ mod tests {
             Int32Type::from_data(vec![0, 0, 1, 1, 1]),
             StringType::from_data(vec!["a", "a", "a", "b", "b"]),
         ]);
-        assert_eq!(partition_boundaries(&block, &[0, 1]), vec![2, 3]);
+        assert_eq!(
+            partition_boundaries(&block, &[0, 1]).collect::<Vec<_>>(),
+            vec![2, 3]
+        );
 
         let block = DataBlock::new_from_columns(vec![Int32Type::from_opt_data(vec![
             None,
@@ -220,22 +218,25 @@ mod tests {
             Some(1),
             Some(2),
         ])]);
-        assert_eq!(partition_boundaries(&block, &[0]), vec![2, 4]);
+        assert_eq!(
+            partition_boundaries(&block, &[0]).collect::<Vec<_>>(),
+            vec![2, 4]
+        );
     }
 
     #[test]
-    fn test_split_sorted_block_by_partition_prefix() -> Result<()> {
+    fn test_split_block_without_regrouping() -> Result<()> {
         let block = DataBlock::new_from_columns(vec![
-            Int32Type::from_data(vec![0, 0, 1, 1, 2]),
-            Int32Type::from_data(vec![1, 2, 1, 2, 1]),
+            Int32Type::from_data(vec![0, 1, 0, 1, 2]),
+            Int32Type::from_data(vec![1, 1, 2, 2, 3]),
         ]);
         let mut transform = TransformPartitionBy::new(Arc::from([0]));
         let blocks = transform.transform(block)?;
 
-        assert_eq!(blocks.len(), 3);
+        assert_eq!(blocks.len(), 5);
         assert_eq!(
             blocks.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
-            vec![2, 2, 1]
+            vec![1, 1, 1, 1, 1]
         );
         Ok(())
     }

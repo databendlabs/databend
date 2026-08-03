@@ -112,7 +112,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
         let virtual_column_accumulator =
             VirtualColumnAccumulator::try_create(&table_meta.schema, &table_meta.virtual_schema);
 
-        let default_cluster_key_id = table.physical_cluster_key_id();
+        let default_cluster_key_id = table.cluster_key_id();
 
         let block_top_n_template =
             table
@@ -264,13 +264,17 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             };
 
             let next_partition = partition_values(
-                extended_block_meta.block_meta.cluster_stats.as_ref(),
-                self.default_cluster_key_id,
+                extended_block_meta.block_meta.partition_stats.as_ref(),
                 self.partition_key_count,
             );
+            if self.partition_key_count != 0 && next_partition.is_none() {
+                return Err(ErrorCode::Internal(
+                    "partitioned block is missing valid partition statistics",
+                ));
+            }
             if self.segment_builder.block_count() != 0
                 && self.partition_key_count != 0
-                && (next_partition.is_none() || self.current_partition.as_deref() != next_partition)
+                && self.current_partition.as_deref() != next_partition
             {
                 self.pending_block = Some(extended_block_meta);
                 self.state = State::GenerateSegment;
