@@ -1765,11 +1765,11 @@ impl SchemaApiTestSuite {
                     .await
                     .is_err()
             );
-            assert!(
-                mt.list_valid_mvs_by_source_table_id(&tenant, missing_source_id, 0)
-                    .await?
-                    .is_empty()
-            );
+            let snapshot = mt
+                .get_mv_source_binding_snapshot(&tenant, missing_source_id)
+                .await?;
+            assert_eq!(snapshot.generation, 0);
+            assert!(snapshot.materialized_views.is_empty());
             assert!(
                 mt.get_pb(&MVSourceBindingVersionIdent::new(
                     &tenant,
@@ -1798,13 +1798,10 @@ impl SchemaApiTestSuite {
                     .is_err()
             );
             assert!(
-                mt.list_valid_mvs_by_source_table_id(
-                    &tenant,
-                    source_table_id,
-                    initial_source_binding_generation,
-                )
-                .await?
-                .is_empty()
+                mt.get_mv_source_binding_snapshot(&tenant, source_table_id)
+                    .await?
+                    .materialized_views
+                    .is_empty()
             );
             assert!(
                 mt.get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
@@ -1851,6 +1848,18 @@ impl SchemaApiTestSuite {
             created
         };
         let mv_id = created.table_id;
+        let snapshot = mt
+            .get_mv_source_binding_snapshot(&tenant, source_table_id)
+            .await?;
+        assert_eq!(snapshot.generation, initial_source_binding_generation);
+        assert_eq!(
+            snapshot
+                .materialized_views
+                .iter()
+                .map(|mv| mv.mv_id)
+                .collect::<Vec<_>>(),
+            vec![mv_id]
+        );
 
         // MV membership changes do not advance the source binding version.
         {
@@ -1886,16 +1895,16 @@ impl SchemaApiTestSuite {
                 db_name: db_name.clone(),
             })
             .await?;
+            let snapshot = mt
+                .get_mv_source_binding_snapshot(&tenant, source_table_id)
+                .await?;
+            assert_eq!(snapshot.generation, source_binding_generation);
             assert_eq!(
-                mt.list_valid_mvs_by_source_table_id(
-                    &tenant,
-                    source_table_id,
-                    source_binding_generation,
-                )
-                .await?
-                .iter()
-                .map(|mv| mv.mv_id)
-                .collect::<Vec<_>>(),
+                snapshot
+                    .materialized_views
+                    .iter()
+                    .map(|mv| mv.mv_id)
+                    .collect::<Vec<_>>(),
                 vec![mv_id]
             );
 
@@ -1918,11 +1927,11 @@ impl SchemaApiTestSuite {
                 .await
                 .is_err()
             );
-            assert!(
-                mt.list_valid_mvs_by_source_table_id(&tenant, source_table_id, next_generation,)
-                    .await?
-                    .is_empty()
-            );
+            let snapshot = mt
+                .get_mv_source_binding_snapshot(&tenant, source_table_id)
+                .await?;
+            assert_eq!(snapshot.generation, next_generation);
+            assert!(snapshot.materialized_views.is_empty());
             assert_eq!(
                 mt.list_mvs_by_source_table_id(&tenant, source_table_id)
                     .await?
@@ -1946,11 +1955,7 @@ impl SchemaApiTestSuite {
             );
 
             let mvs = mt
-                .list_valid_mvs_by_source_table_id(
-                    &tenant,
-                    source_table_id,
-                    initial_source_binding_generation,
-                )
+                .list_mvs_by_source_table_id(&tenant, source_table_id)
                 .await?;
             let [mv] = mvs.as_slice() else {
                 panic!("one complete MV must be returned");
@@ -1984,13 +1989,11 @@ impl SchemaApiTestSuite {
                     .is_none()
             );
 
-            let mvs = mt
-                .list_valid_mvs_by_source_table_id(
-                    &tenant,
-                    source_table_id,
-                    source_binding_generation,
-                )
+            let snapshot = mt
+                .get_mv_source_binding_snapshot(&tenant, source_table_id)
                 .await?;
+            assert_eq!(snapshot.generation, source_binding_generation);
+            let mvs = snapshot.materialized_views;
             let [mv] = mvs.as_slice() else {
                 panic!("the replacement MV must be returned");
             };
@@ -2030,13 +2033,11 @@ impl SchemaApiTestSuite {
                     .is_none()
             );
 
-            let mvs = mt
-                .list_valid_mvs_by_source_table_id(
-                    &tenant,
-                    replacement_source_table_id,
-                    source_binding_generation,
-                )
+            let snapshot = mt
+                .get_mv_source_binding_snapshot(&tenant, replacement_source_table_id)
                 .await?;
+            assert_eq!(snapshot.generation, source_binding_generation);
+            let mvs = snapshot.materialized_views;
             let [mv] = mvs.as_slice() else {
                 panic!("the new-source replacement MV must be returned");
             };
@@ -2118,16 +2119,16 @@ impl SchemaApiTestSuite {
                 name_ident: TableNameIdent::new(&tenant, &db_name, replacement_source_name),
             })
             .await?;
+            let snapshot = mt
+                .get_mv_source_binding_snapshot(&tenant, replacement_source_table_id)
+                .await?;
+            assert_eq!(snapshot.generation, source_binding_generation);
             assert_eq!(
-                mt.list_valid_mvs_by_source_table_id(
-                    &tenant,
-                    replacement_source_table_id,
-                    source_binding_generation,
-                )
-                .await?
-                .iter()
-                .map(|mv| mv.mv_id)
-                .collect::<Vec<_>>(),
+                snapshot
+                    .materialized_views
+                    .iter()
+                    .map(|mv| mv.mv_id)
+                    .collect::<Vec<_>>(),
                 vec![new_source_replacement.table_id]
             );
 

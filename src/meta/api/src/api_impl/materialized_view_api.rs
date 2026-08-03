@@ -47,8 +47,8 @@
 //!
 //! - [`MaterializedViewApi::list_mvs_by_source_table_id`] returns every edge,
 //!   including invalid ones, for management and lifecycle operations.
-//! - [`MaterializedViewApi::list_valid_mvs_by_source_table_id`] filters edges by
-//!   the expected generation obtained with the caller's stable source binding.
+//! - [`MaterializedViewApi::get_mv_source_binding_snapshot`] reads the source
+//!   generation before and after collecting matching edges.
 //!
 //! `CreateMaterializedViewMeta::expected_source_generation` provides the same
 //! fence for CREATE. `create_table` compares it with the current value and uses
@@ -125,6 +125,7 @@
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::MVInfo;
+use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::TableId;
@@ -142,6 +143,15 @@ use log::warn;
 
 use crate::deserialize_struct_get_response;
 use crate::kv_pb_api::KVPbApi;
+
+/// A generation-consistent view of active MV bindings for one source table.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MVSourceBindingSnapshot {
+    /// Source binding generation at which `materialized_views` was collected.
+    pub generation: u64,
+    /// Empty when the generation changed while MV metadata was being collected.
+    pub materialized_views: Vec<MVInfo>,
+}
 
 /// APIs for metadata that belongs exclusively to materialized views.
 #[async_trait::async_trait]
@@ -165,7 +175,7 @@ where
     ///
     /// This unfiltered view is intended for management, SHOW, GC, and refresh
     /// discovery. SELECT optimization and source-table maintenance must use
-    /// [`MaterializedViewApi::list_valid_mvs_by_source_table_id`] instead.
+    /// [`MaterializedViewApi::get_mv_source_binding_snapshot`] instead.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn list_mvs_by_source_table_id(
@@ -176,38 +186,54 @@ where
         list_mvs_by_source_table_id_impl(self, tenant, source_table_id, None).await
     }
 
-    /// List MVs valid for the caller's stable source binding.
+    /// Get MVs valid at a stable source binding generation.
     ///
-    /// ```text
-    /// list SourceTableMVIdent(tenant, source_table_id, *) -> mv_table_ids
-    /// filter relationship.bound_source_generation == expected_source_generation
-    /// mget MVDefinitionIdent(mv_table_id) + TableId(mv_table_id) -> MVInfo
-    /// ```
-    ///
-    /// The result contains both maintenance modes.
-    /// INSERT selects `MVDefinition::sync_creation = true`; scheduled refresh
-    /// selects `false`.
-    /// No collection version is returned. An MV created after the relationship
-    /// list is a new empty table, so the current INSERT does not write it. An MV
-    /// dropped after the list may still receive the current INSERT while its
-    /// dropped `TableMeta` is retained for GC. A definition or `TableMeta`
-    /// missing between the list and mget is omitted with a warning.
+    /// The generation is read before and after collecting MV metadata. If it
+    /// changes during collection, the returned MV list is empty and
+    /// `generation` contains the final observed value. A caller that later
+    /// writes data must still compare this generation when committing.
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn list_valid_mvs_by_source_table_id(
+    async fn get_mv_source_binding_snapshot(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
-        expected_source_generation: u64,
-    ) -> Result<Vec<MVInfo>, MetaError> {
-        list_mvs_by_source_table_id_impl(
+    ) -> Result<MVSourceBindingSnapshot, MetaError> {
+        let generation_before = get_mv_source_generation(self, tenant, source_table_id).await?;
+        let mut materialized_views = list_mvs_by_source_table_id_impl(
             self,
             tenant,
             source_table_id,
-            Some(expected_source_generation),
+            Some(generation_before),
         )
-        .await
+        .await?;
+        let generation_after = get_mv_source_generation(self, tenant, source_table_id).await?;
+
+        if generation_before != generation_after {
+            materialized_views.clear();
+        }
+
+        Ok(MVSourceBindingSnapshot {
+            generation: generation_after,
+            materialized_views,
+        })
     }
+}
+
+async fn get_mv_source_generation<KV>(
+    kv_api: &KV,
+    tenant: &Tenant,
+    source_table_id: u64,
+) -> Result<u64, MetaError>
+where
+    KV: kvapi::KVApi<Error = MetaError> + ?Sized,
+{
+    let generation_ident = MVSourceBindingVersionIdent::new(tenant, source_table_id);
+    Ok(kv_api
+        .get_pb(&generation_ident)
+        .await?
+        .map(|record| record.data.current_source_generation)
+        .unwrap_or(0))
 }
 
 async fn list_mvs_by_source_table_id_impl<KV>(
