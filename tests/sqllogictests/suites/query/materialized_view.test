@@ -155,6 +155,31 @@ select count(*), sum(amount), count_if(active) from source
 ----
 4 160 3
 
+# TRUNCATE produces an empty source endpoint. Refresh must remove all previously materialized rows.
+statement ok
+truncate table source
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query I
+select count(*) from mv_detail
+----
+0
+
+query I
+select count(*) from mv_aggregate
+----
+0
+
+query I
+select count(*) from source
+----
+0
+
 statement ok
 drop materialized view mv_detail
 

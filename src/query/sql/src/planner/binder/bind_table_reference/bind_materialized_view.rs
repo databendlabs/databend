@@ -26,6 +26,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::info;
 
@@ -40,18 +41,18 @@ use crate::plans::EvalScalar;
 use crate::plans::ScalarItem;
 
 impl Binder {
-    /// Whether the MV storage is still consistent with its source table snapshot.
-    ///
-    /// Uses the same option pair as the synchronous multi-table insert path:
-    /// `materialized_view_source_snapshot_location` vs source `snapshot_loc`.
+    /// Whether the MV storage checkpoint matches the current source data endpoint.
     fn is_materialized_view_fresh(
         mv_table: &dyn Table,
         source_snapshot_location: Option<&String>,
     ) -> bool {
-        let mv_source_snapshot = mv_table
-            .options()
-            .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
-        mv_source_snapshot == source_snapshot_location
+        let options = mv_table.options();
+        // The sequence option distinguishes an established empty checkpoint from CREATE's
+        // unconsumed state. Its value is a CHANGE_TRACKING offset, not part of read freshness:
+        // metadata-only source changes may advance the table sequence without changing data.
+        options.contains_key(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ)
+            && options.get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION)
+                == source_snapshot_location
     }
 
     // Stale MV read: bind the persisted logical definition against the live source table.
@@ -256,8 +257,10 @@ impl Binder {
             );
         }
 
-        if !Self::is_materialized_view_fresh(table_meta.as_ref(), source_snapshot_location.as_ref())
-        {
+        if !Self::is_materialized_view_fresh(
+            table_meta.as_ref(),
+            source_snapshot_location.as_ref(),
+        ) {
             info!(
                 "materialized view {} is stale (source_snapshot={:?}, base_snapshot={:?}); fallback to live compute",
                 table_meta.name(),

@@ -69,6 +69,7 @@ use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
 use crate::interpreters::common::QueryFinishHooks;
+use crate::interpreters::interpreter_txn_commit::execute_commit_statement;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
@@ -153,15 +154,15 @@ impl<'a> MaterializedViewRefresh<'a> {
                 .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION),
         ) {
             (None, None) => None,
-            (Some(seq), Some(location)) => Some((
+            (Some(seq), location) => Some((
                 seq.parse::<u64>().map_err(|error| {
                     ErrorCode::InvalidMaterializedView(format!(
                         "invalid materialized view source offset '{seq}': {error}"
                     ))
                 })?,
-                location.clone(),
+                location.cloned(),
             )),
-            _ => {
+            (None, Some(_)) => {
                 return Err(ErrorCode::InvalidMaterializedView(
                     "materialized view source checkpoint is incomplete",
                 ));
@@ -207,6 +208,10 @@ impl<'a> MaterializedViewRefresh<'a> {
             )));
         }
 
+        if checkpoint.as_ref() == Some(&(source_seq, source_snapshot_location.clone())) {
+            return Ok(());
+        }
+
         info!(
             "materialized view {}.{} refresh offsets: source_table_id={}, mv_offset={:?}, source_offset={}, initial_refresh={}, changed={}",
             self.plan.database,
@@ -232,9 +237,6 @@ impl<'a> MaterializedViewRefresh<'a> {
         )?;
         let is_aggregating = MaterializedViewChecker::check_query(&logical_query).is_aggregating();
 
-        let Some(end_snapshot) = source_snapshot_location else {
-            return Ok(());
-        };
         let source_database_id = source_meta
             .data
             .options
@@ -260,7 +262,7 @@ impl<'a> MaterializedViewRefresh<'a> {
             ..current_source_table.get_table_info().clone()
         })?;
         let source_table = FuseTable::try_from_table(source_table.as_ref())?;
-        if let Some((mv_source_seq, _)) = &checkpoint {
+        if let Some((mv_source_seq, Some(_))) = &checkpoint {
             source_table
                 .check_changes_valid(&source_table.get_table_info().desc, *mv_source_seq)?;
         }
@@ -281,7 +283,7 @@ impl<'a> MaterializedViewRefresh<'a> {
                 is_aggregating,
                 checkpoint,
                 source_seq,
-                end_snapshot,
+                source_snapshot_location,
             )
             .await;
         if refresh_result.is_err() {
@@ -342,11 +344,6 @@ impl<'a> MaterializedViewRefresh<'a> {
         use futures::TryStreamExt;
         while stream.try_next().await?.is_some() {}
         Ok(())
-    }
-
-    async fn commit_transaction(&self) -> Result<()> {
-        crate::interpreters::interpreter_txn_commit::execute_commit_statement(self.ctx.clone())
-            .await
     }
 
     fn column_ref(table: Option<&str>, column: &str) -> Expr {
@@ -564,11 +561,41 @@ impl<'a> MaterializedViewRefresh<'a> {
         source_database: &str,
         source_table_name: &str,
         is_aggregating: bool,
-        checkpoint: Option<(u64, String)>,
+        checkpoint: Option<(u64, Option<String>)>,
         source_seq: u64,
-        end_snapshot: String,
+        end_snapshot: Option<String>,
     ) -> Result<()> {
-        if checkpoint.is_none() {
+        if end_snapshot.is_none() {
+            // A source without a snapshot is a valid empty endpoint. Rebind the physical query to
+            // the captured empty table and overwrite the MV so old materialized rows are removed.
+            self.attach_source(
+                &self.plan.catalog,
+                source_database,
+                source_table_name,
+                Arc::new(source_table.clone()),
+            )?;
+            let query =
+                self.parse_query(physical_query, "invalid materialized view physical query")?;
+            self.execute_statement(&Statement::Insert(InsertStmt {
+                hints: None,
+                with: None,
+                table: TableRef {
+                    catalog: Some(Identifier::from_name(None, &self.plan.catalog)),
+                    database: Some(Identifier::from_name(None, &self.plan.database)),
+                    table: Identifier::from_name(None, &self.plan.view_name),
+                    branch: None,
+                },
+                columns: vec![],
+                source: InsertSource::Select {
+                    query: Box::new(query),
+                },
+                overwrite: true,
+            }))
+            .await?;
+        } else if checkpoint
+            .as_ref()
+            .is_none_or(|(_, start_snapshot)| start_snapshot.is_none())
+        {
             let changes_source_name = format!("_mv_changes_{}_0", self.mv_table.get_id());
             let changes = source_table
                 .get_changes_query(
@@ -616,7 +643,7 @@ impl<'a> MaterializedViewRefresh<'a> {
                 overwrite: true,
             }))
             .await?;
-        } else if let Some((mv_source_seq, start_snapshot)) = checkpoint
+        } else if let Some((mv_source_seq, Some(start_snapshot))) = checkpoint
             && mv_source_seq != source_seq
         {
             let changes_source_name =
@@ -701,16 +728,16 @@ impl<'a> MaterializedViewRefresh<'a> {
             }
         }
 
-        let checkpoint_options = [
+        let checkpoint_options = HashMap::from([
             (
                 OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ.to_string(),
-                source_seq.to_string(),
+                Some(source_seq.to_string()),
             ),
             (
                 OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION.to_string(),
                 end_snapshot,
             ),
-        ];
+        ]);
         let txn_mgr = self.ctx.txn_mgr();
         let updated = txn_mgr
             .lock()
@@ -724,14 +751,11 @@ impl<'a> MaterializedViewRefresh<'a> {
                     UpsertTableOptionReq {
                         table_id: self.mv_table.get_id(),
                         seq: MatchSeq::Exact(self.mv_table.get_table_info().ident.seq),
-                        options: checkpoint_options
-                            .into_iter()
-                            .map(|(key, value)| (key, Some(value)))
-                            .collect::<HashMap<_, _>>(),
+                        options: checkpoint_options,
                     },
                 )
                 .await?;
         }
-        self.commit_transaction().await
+        execute_commit_statement(self.ctx.clone()).await
     }
 }

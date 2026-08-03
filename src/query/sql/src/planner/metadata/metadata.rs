@@ -25,10 +25,9 @@ use databend_common_ast::ast::Literal;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
+pub use databend_common_expression::Symbol;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::display::display_tuple_field_name;
@@ -38,8 +37,6 @@ use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
 use crate::optimizer::ir::SExpr;
-
-pub use databend_common_expression::Symbol;
 
 /// Planner use [`usize`] as its index type.
 ///

@@ -220,12 +220,21 @@ impl TxnManager {
     pub fn update_table_options(
         &mut self,
         table_id: u64,
-        options: impl IntoIterator<Item = (String, String)>,
+        options: HashMap<String, Option<String>>,
     ) -> bool {
         let Some(table) = self.txn_buffer.mutated_tables.get_mut(&table_id) else {
             return false;
         };
-        table.meta.options.extend(options);
+        for (key, value) in options {
+            match value {
+                Some(value) => {
+                    table.meta.options.insert(key, value);
+                }
+                None => {
+                    table.meta.options.remove(&key);
+                }
+            }
+        }
         true
     }
 
