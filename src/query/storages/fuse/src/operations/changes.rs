@@ -957,6 +957,7 @@ mod tests {
             col_stats,
             col_metas: HashMap::new(),
             cluster_stats: None,
+            partition_stats: None,
             location: (test_block_path(uuid), 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,

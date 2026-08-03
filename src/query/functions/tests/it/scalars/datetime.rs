@@ -21,6 +21,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::types::NumberDomain;
 use databend_common_expression::types::date::DATE_MAX;
 use databend_common_expression::types::date::DATE_MIN;
+use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
@@ -1202,6 +1203,15 @@ fn test_calendar_monotonicity_check() {
     });
     // Date inputs ignore the session time zone entirely.
     let dates = Domain::Date(SimpleDomain { min: 0, max: 20000 });
+    // Nullable domains are judged by their non-null range.
+    let nullable_crossing = Domain::Nullable(NullableDomain {
+        has_null: true,
+        value: Some(Box::new(crossing.clone())),
+    });
+    let nullable_clear = Domain::Nullable(NullableDomain {
+        has_null: true,
+        value: Some(Box::new(clear.clone())),
+    });
 
     for name in [
         "to_start_of_day",
@@ -1230,6 +1240,15 @@ fn test_calendar_monotonicity_check() {
         );
         assert_eq!(check(&st_johns, std::slice::from_ref(&clear)), Some(0));
         assert_eq!(check(&st_johns, std::slice::from_ref(&dates)), Some(0));
+        assert_eq!(
+            check(&st_johns, std::slice::from_ref(&nullable_crossing)),
+            None,
+            "{name}: nullable wrapper must not bypass the transition check"
+        );
+        assert_eq!(
+            check(&st_johns, std::slice::from_ref(&nullable_clear)),
+            Some(0)
+        );
     }
 
     // Sub-day rounders rebuild a local wall-clock time inside the day; every
