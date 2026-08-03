@@ -26,6 +26,7 @@ use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::Column;
+use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionContext;
@@ -2141,13 +2142,10 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default().non_deterministic(),
     );
 
-    for name in &[
-        "to_timestamp",
-        "to_timestamp_tz",
-        "to_date",
-        "to_yyyymm",
-        "to_yyyymmdd",
-    ] {
+    // NOTE: `to_timestamp`/`to_timestamp_tz`/`to_date` keep their pre-existing global
+    // monotonicity flags; they carry the same time-zone caveat as the calendar
+    // projections below and should eventually migrate to `monotonicity_check` too.
+    for name in &["to_timestamp", "to_timestamp_tz", "to_date"] {
         registry
             .properties
             .insert(name.to_string(), FunctionProperty::default().monotonicity());
@@ -2214,11 +2212,90 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
     );
 }
 
+/// Date -> calendar-number projection is unconditionally safe for end-point domain
+/// evaluation: `i32::to_date` ignores the session time zone and maps epoch days to a
+/// proleptic Gregorian date, which is non-decreasing in the day number.
+fn date_to_u32_domain<T: DateToNumber<u32>>(
+    ctx: &FunctionContext,
+    domain: &SimpleDomain<i32>,
+) -> FunctionDomain<UInt32Type> {
+    match (
+        ToNumberImpl::eval_date::<T, _>(domain.min, &ctx.tz),
+        ToNumberImpl::eval_date::<T, _>(domain.max, &ctx.tz),
+    ) {
+        (Ok(min), Ok(max)) => FunctionDomain::Domain(SimpleDomain { min, max }),
+        _ => FunctionDomain::MayThrow,
+    }
+}
+
+/// End-point domain evaluation is only sound when the wall clock is monotonic over the
+/// whole range: a DST fallback inside `[min, max]` can rewind local time across a day or
+/// month boundary (e.g. America/St_Johns 2009-11-01 00:01 NDT -> 10-31 23:01 NST), making
+/// `[f(min), f(max)]` exclude reachable outputs. Fail open to `Full` in that case.
+fn timestamp_to_u32_domain<T: ToNumber<u32>>(
+    ctx: &FunctionContext,
+    domain: &SimpleDomain<i64>,
+) -> FunctionDomain<UInt32Type> {
+    if !tz_wall_clock_single_segment(&ctx.tz, domain.min, domain.max) {
+        return FunctionDomain::Full;
+    }
+    FunctionDomain::Domain(SimpleDomain {
+        min: ToNumberImpl::eval_timestamp::<T, _>(domain.min, &ctx.tz),
+        max: ToNumberImpl::eval_timestamp::<T, _>(domain.max, &ctx.tz),
+    })
+}
+
+/// Whether `[min_us, max_us]` lies within one offset segment of `tz`, i.e. contains no
+/// time-zone transition. The wall clock is then strictly increasing over the range, so
+/// calendar projections are monotonic and end-point evaluation is exact.
+fn tz_wall_clock_single_segment(tz: &TimeZone, min_us: i64, max_us: i64) -> bool {
+    if tz.to_fixed_offset().is_ok() {
+        return true;
+    }
+    let (Ok(min_ts), Ok(max_ts)) = (
+        Timestamp::from_microsecond(min_us),
+        Timestamp::from_microsecond(max_us),
+    ) else {
+        return false;
+    };
+    match tz.following(min_ts).next() {
+        None => true,
+        // A transition exactly at `max` already applies to `f(max)`; require it to lie
+        // strictly after the range.
+        Some(transition) => transition.timestamp() > max_ts,
+    }
+}
+
+/// Range-sensitive monotonicity for calendar projections (`to_yyyymm`, `to_start_of_day`,
+/// ...): date inputs are always monotonic, while timestamp inputs are monotonic only when
+/// the range crosses no time-zone transition of the session time zone.
+fn calendar_monotonicity(ctx: &FunctionContext, args: &[Domain]) -> Option<usize> {
+    let [domain] = args else {
+        return None;
+    };
+    match domain {
+        Domain::Date(_) => Some(0),
+        Domain::Timestamp(simple) => {
+            tz_wall_clock_single_segment(&ctx.tz, simple.min, simple.max).then_some(0)
+        }
+        _ => None,
+    }
+}
+
 fn register_to_number_functions(registry: &mut FunctionRegistry) {
+    // Conditionally monotonic: guarded by the session time zone, see
+    // `calendar_monotonicity`.
+    for name in ["to_yyyymm", "to_yyyymmdd"] {
+        registry.properties.insert(
+            name.to_string(),
+            FunctionProperty::default().monotonicity_check(calendar_monotonicity),
+        );
+    }
+
     // date
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _>(
         "to_yyyymm",
-        |_, _| FunctionDomain::Full,
+        date_to_u32_domain::<ToYYYYMM>,
         vectorize_with_builder_1_arg::<DateType, UInt32Type>(|val, output, ctx| {
             match ToNumberImpl::eval_date::<ToYYYYMM, _>(val, &ctx.func_ctx.tz) {
                 Ok(t) => output.push(t),
@@ -2231,7 +2308,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _>(
         "to_yyyymmdd",
-        |_, _| FunctionDomain::Full,
+        date_to_u32_domain::<ToYYYYMMDD>,
         vectorize_with_builder_1_arg::<DateType, UInt32Type>(|val, output, ctx| {
             match ToNumberImpl::eval_date::<ToYYYYMMDD, _>(val, &ctx.func_ctx.tz) {
                 Ok(t) => output.push(t),
@@ -2390,12 +2467,12 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     // timestamp
     registry.register_1_arg::<TimestampType, UInt32Type, _>(
         "to_yyyymm",
-        |_, _| FunctionDomain::Full,
+        timestamp_to_u32_domain::<ToYYYYMM>,
         |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMM, _>(val, &ctx.func_ctx.tz),
     );
     registry.register_1_arg::<TimestampType, UInt32Type, _>(
         "to_yyyymmdd",
-        |_, _| FunctionDomain::Full,
+        timestamp_to_u32_domain::<ToYYYYMMDD>,
         |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMMDD, _>(val, &ctx.func_ctx.tz),
     );
     registry.register_1_arg::<TimestampType, UInt64Type, _>(
@@ -2641,6 +2718,25 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
 }
 
 fn register_rounder_functions(registry: &mut FunctionRegistry) {
+    // Calendar rounders are monotonic only while the wall clock is monotonic; the check
+    // rejects timestamp ranges that cross a time-zone transition (DST fallbacks can
+    // rewind local time across a day boundary). Sub-day rounders stay unregistered
+    // because every fallback breaks them.
+    for name in [
+        "to_start_of_day",
+        "to_monday",
+        "to_start_of_week",
+        "to_start_of_month",
+        "to_start_of_quarter",
+        "to_start_of_year",
+        "to_start_of_iso_year",
+    ] {
+        registry.properties.insert(
+            name.to_string(),
+            FunctionProperty::default().monotonicity_check(calendar_monotonicity),
+        );
+    }
+
     // timestamp -> timestamp
     registry.register_1_arg::<TimestampType, TimestampType, _>(
         "to_start_of_second",
@@ -2675,6 +2771,11 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<TimestampType, TimestampType, _>(
         "to_start_of_day",
         |ctx, domain| {
+            // End-point rounding is an under-approximation when a DST fallback
+            // inside the range rewinds the wall clock across midnight.
+            if !tz_wall_clock_single_segment(&ctx.tz, domain.min, domain.max) {
+                return FunctionDomain::Full;
+            }
             FunctionDomain::Domain(SimpleDomain {
                 min: round_timestamp(domain.min, &ctx.tz, Round::Day),
                 max: round_timestamp(domain.max, &ctx.tz, Round::Day),
