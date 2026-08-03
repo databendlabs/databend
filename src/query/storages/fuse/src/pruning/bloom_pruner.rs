@@ -23,6 +23,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -35,12 +36,15 @@ use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use log::info;
 use log::warn;
 use opendal::Operator;
 
 use crate::FuseBlockPartInfo;
+use crate::fuse_part::BloomIndexLayout;
+use crate::fuse_part::FuseBloomIndexFileInfo;
 use crate::io::BlockWriter;
 use crate::io::BloomBlockFilterReader;
 use crate::io::BloomIndexRebuilder;
@@ -52,8 +56,7 @@ pub trait BloomPruner {
     // returns true, if target should NOT be pruned (false positive allowed)
     async fn should_keep(
         &self,
-        index_location: &Option<Location>,
-        index_length: u64,
+        index_layout: Option<BloomIndexLayout<'_>>,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
         block_meta: &BlockReadInfo,
@@ -68,10 +71,6 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
     expr: &Expr<String>,
     part: &FuseBlockPartInfo,
 ) -> Result<bool> {
-    let Some(index_location) = part.bloom_filter_index_location.as_ref() else {
-        return Ok(false);
-    };
-
     if part.bloom_filter_index_size == 0 {
         return Ok(false);
     }
@@ -95,26 +94,41 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
         }
     }
 
-    let index_columns = result
-        .bloom_fields
-        .iter()
-        .map(|field| BloomIndex::build_filter_bloom_name(index_location.1, field))
-        .collect::<Result<Vec<_>>>()?;
-    let filter = index_location
-        .read_block_filter(
-            dal.clone(),
-            settings,
-            &index_columns,
-            part.bloom_filter_index_size,
-        )
-        .await?;
-
-    let bloom_index = BloomIndex::from_filter_block(
-        func_ctx.clone(),
-        filter.filter_schema,
-        filter.filters,
-        index_location.1,
-    )?;
+    let bloom_index = match part.bloom_index_layout() {
+        None => return Ok(false),
+        Some(BloomIndexLayout::Legacy {
+            location,
+            file_size,
+        }) => {
+            let index_columns = result
+                .bloom_fields
+                .iter()
+                .map(|field| BloomIndex::build_filter_bloom_name(location.1, field))
+                .collect::<Result<Vec<_>>>()?;
+            let filter = location
+                .read_block_filter(dal.clone(), settings, &index_columns, file_size)
+                .await?;
+            BloomIndex::from_filter_block(
+                func_ctx.clone(),
+                filter.filter_schema,
+                filter.filters,
+                location.1,
+            )?
+        }
+        Some(BloomIndexLayout::ColumnGroups { files }) => {
+            let Some(filter) =
+                read_multi_file_block_filter(dal, settings, &result.bloom_fields, &files).await?
+            else {
+                return Ok(false);
+            };
+            BloomIndex::from_filter_block(
+                func_ctx.clone(),
+                filter.block_filter.filter_schema,
+                filter.block_filter.filters,
+                filter.format_version,
+            )?
+        }
+    };
 
     let like_scalar_map = HashMap::new();
     let empty_stats = StatisticsOfColumns::new();
@@ -127,6 +141,97 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
         column_stats,
         data_schema.clone(),
     )? == FilterEvalResult::MustFalse)
+}
+
+struct MultiFileBlockFilter {
+    block_filter: BlockFilter,
+    format_version: u64,
+}
+
+fn merged_filter_version(versions: impl IntoIterator<Item = u64>) -> Option<u64> {
+    let mut has_v2 = false;
+    let mut has_digest_encoding = false;
+    for version in versions {
+        if version == 2 {
+            has_v2 = true;
+        } else {
+            has_digest_encoding = true;
+        }
+    }
+    match (has_v2, has_digest_encoding) {
+        (true, true) => None,
+        (true, false) => Some(2),
+        _ => Some(BlockFilter::VERSION),
+    }
+}
+
+async fn read_multi_file_block_filter(
+    dal: &Operator,
+    settings: &ReadSettings,
+    index_fields: &[TableField],
+    index_files: &[FuseBloomIndexFileInfo],
+) -> Result<Option<MultiFileBlockFilter>> {
+    // The owning data group may contain active columns for which its Bloom file has no filter.
+    // Decide encoding compatibility from the filters actually loaded, not merely from the data
+    // group's active ids.
+    let mut loaded_filters = Vec::new();
+
+    for file in index_files {
+        let mut fields_by_filter_name = HashMap::new();
+        let mut columns = Vec::new();
+        for field in index_fields {
+            if !file.active_column_ids.contains(&field.column_id()) {
+                continue;
+            }
+            let physical = BloomIndex::build_filter_bloom_name(file.location.1, field)?;
+            fields_by_filter_name.insert(physical.clone(), field);
+            columns.push(physical);
+        }
+        if columns.is_empty() {
+            continue;
+        }
+
+        let filter = file
+            .location
+            .read_block_filter(dal.clone(), settings, &columns, file.file_size)
+            .await?;
+        for (field, value) in filter
+            .filter_schema
+            .fields()
+            .iter()
+            .zip(filter.filters.into_iter())
+        {
+            if let Some(index_field) = fields_by_filter_name.get(field.name()) {
+                loaded_filters.push((*index_field, file.location.1, value));
+            }
+        }
+    }
+
+    if loaded_filters.is_empty() {
+        return Ok(None);
+    }
+    let Some(format_version) =
+        merged_filter_version(loaded_filters.iter().map(|(_, version, _)| *version))
+    else {
+        // V2 filters use legacy scalar encoding and cannot be evaluated together with the digest
+        // encoding of newer files. Keeping the block is the safe compatibility behavior.
+        return Ok(None);
+    };
+    let mut merged_fields = Vec::with_capacity(loaded_filters.len());
+    let mut merged_filters = Vec::with_capacity(loaded_filters.len());
+    for (field, _, filter) in loaded_filters {
+        let name = BloomIndex::build_filter_bloom_name(format_version, field)?;
+        merged_fields.push(TableField::new(&name, TableDataType::Binary));
+        merged_filters.push(filter);
+    }
+
+    Ok(Some(MultiFileBlockFilter {
+        block_filter: BlockFilter {
+            filter_schema: Arc::new(TableSchema::new(merged_fields)),
+            filters: merged_filters,
+        },
+        format_version,
+    }))
 }
 
 pub struct BloomPrunerCreator {
@@ -329,6 +434,37 @@ impl BloomPrunerCreator {
         }
     }
 
+    async fn apply_files(
+        &self,
+        index_files: &[FuseBloomIndexFileInfo],
+        column_stats: &StatisticsOfColumns,
+    ) -> Result<bool> {
+        let maybe_filter = read_multi_file_block_filter(
+            &self.dal,
+            &self.settings,
+            &self.index_fields,
+            index_files,
+        )
+        .await;
+        let Some(filter) = maybe_filter? else {
+            return Ok(true);
+        };
+        Ok(BloomIndex::from_filter_block(
+            self.func_ctx.clone(),
+            filter.block_filter.filter_schema,
+            filter.block_filter.filters,
+            filter.format_version,
+        )?
+        .apply(
+            self.filter_expression.clone(),
+            &self.eq_scalar_map,
+            &self.like_scalar_map,
+            &self.ngram_args,
+            column_stats,
+            self.data_schema.clone(),
+        )? != FilterEvalResult::MustFalse)
+    }
+
     async fn try_rebuild_missing_bloom_index(
         &self,
         bloom_index_location: &Location,
@@ -336,6 +472,14 @@ impl BloomPrunerCreator {
         index_columns: &[String],
         block_read_info: &BlockReadInfo,
     ) -> Result<Option<BlockFilter>> {
+        if let Err(e) = BloomIndexRebuilder::validate_rebuild_version(bloom_index_location) {
+            info!(
+                "cannot rebuild missing legacy Bloom index {:?}: {}",
+                bloom_index_location, e
+            );
+            return Ok(None);
+        }
+
         if self.dal.exists(bloom_index_location.0.as_str()).await? {
             info!("bloom index exists, ignore");
             return Ok(None);
@@ -385,27 +529,58 @@ impl BloomPruner for BloomPrunerCreator {
     #[async_backtrace::framed]
     async fn should_keep(
         &self,
-        index_location: &Option<Location>,
-        index_length: u64,
+        index_layout: Option<BloomIndexLayout<'_>>,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
         block_meta: &BlockReadInfo,
     ) -> bool {
-        if let Some(loc) = index_location {
-            // load filter, and try pruning according to filter expression
-            match self
-                .apply(loc, index_length, column_stats, column_ids, block_meta)
-                .await
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    // swallow exceptions intentionally, corrupted index should not prevent execution
-                    warn!("failed to apply bloom pruner, returning true. {}", e);
-                    true
+        match index_layout {
+            Some(BloomIndexLayout::ColumnGroups { files }) => {
+                match self.apply_files(&files, column_stats).await {
+                    Ok(value) => value,
+                    Err(e) => {
+                        warn!(
+                            "failed to apply multi-file bloom pruner, returning true. {}",
+                            e
+                        );
+                        true
+                    }
                 }
             }
-        } else {
-            true
+            Some(BloomIndexLayout::Legacy {
+                location,
+                file_size,
+            }) => {
+                // Load the filter and try pruning according to its expression.
+                match self
+                    .apply(location, file_size, column_stats, column_ids, block_meta)
+                    .await
+                {
+                    Ok(value) => value,
+                    Err(e) => {
+                        // Swallow exceptions intentionally: a corrupt index must not fail a query.
+                        warn!("failed to apply bloom pruner, returning true. {}", e);
+                        true
+                    }
+                }
+            }
+            None => true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_storages_common_index::filters::BlockFilter;
+    use databend_storages_common_table_meta::meta::Versioned;
+
+    use super::merged_filter_version;
+
+    #[test]
+    fn test_merged_filter_version() {
+        assert_eq!(merged_filter_version([2]), Some(2));
+        assert_eq!(merged_filter_version([2, 4]), None);
+        assert_eq!(merged_filter_version([3, 4]), Some(BlockFilter::VERSION));
+        assert_eq!(merged_filter_version([]), Some(BlockFilter::VERSION));
     }
 }

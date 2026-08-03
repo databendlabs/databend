@@ -21,6 +21,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::BlockReadResult;
+use crate::FuseColumnGroupPartInfo;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::DeletedSegmentInfo;
@@ -79,8 +80,11 @@ impl SerializeBlock {
 
 pub enum CompactSourceMeta {
     Concat {
-        read_res: Vec<BlockReadResult>,
-        metas: Vec<Arc<BlockMeta>>,
+        blocks: Vec<(
+            BlockReadResult,
+            Arc<BlockMeta>,
+            Vec<FuseColumnGroupPartInfo>,
+        )>,
         index: BlockMetaIndex,
     },
     Extras(CompactExtraInfo),

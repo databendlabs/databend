@@ -42,6 +42,8 @@ use tokio::sync::OwnedSemaphorePermit;
 
 use super::PrunedColumnOrientedSegmentMeta;
 use crate::FuseBlockPartInfo;
+use crate::FuseColumnGroupPartInfo;
+use crate::fuse_part::BloomIndexLayout;
 use crate::pruning::BlockPruner;
 use crate::pruning_pipeline::RuntimeFilterPruneContext;
 
@@ -220,8 +222,12 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
                         if !bloom_pruner
                             .should_keep(
-                                &bloom_filter_index_location,
-                                bloom_filter_index_size,
+                                bloom_filter_index_location.as_ref().map(|location| {
+                                    BloomIndexLayout::Legacy {
+                                        location,
+                                        file_size: bloom_filter_index_size,
+                                    }
+                                }),
                                 &columns_stat,
                                 column_ids.clone(),
                                 &block_read_info,
@@ -276,12 +282,17 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         }
                     }
 
+                    let column_groups = vec![FuseColumnGroupPartInfo {
+                        location: location_path.clone(),
+                        columns_meta,
+                    }];
                     let part_info = FuseBlockPartInfo::create(
                         location_path,
                         bloom_filter_index_location,
                         bloom_filter_index_size,
+                        vec![],
                         row_count,
-                        columns_meta,
+                        column_groups,
                         Some(columns_stat),
                         compression,
                         None, // TODO(Sky): sort_min_max
