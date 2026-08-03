@@ -254,29 +254,24 @@ impl IPhysicalPlan for PartialTopNPlan {
             .settings
             .get_spill_writer_memory_pool_size_mb()?
             .saturating_mul(1024 * 1024);
-        let read_settings = ReadSettings::from_settings(&builder.settings)?;
-        let ctx = builder.ctx.clone();
-        let candidate_count = self.candidate_count;
-        let enable_fixed_rows = self.enable_fixed_rows;
         let filter =
             runtime_top_n_filter.map(|(_, filter)| (key_desc.sort_column_desc()[0].offset, filter));
+        let params = PartialTopNParams {
+            ctx: builder.ctx.clone(),
+            key_desc,
+            candidate_count: self.candidate_count,
+            max_block_size,
+            memory_settings,
+            spill_schema,
+            writer_pool_bytes,
+            read_settings: ReadSettings::from_settings(&builder.settings)?,
+            enable_fixed_rows: self.enable_fixed_rows,
+            runtime_top_n_filter: filter,
+        };
 
-        builder.main_pipeline.add_transform(|input, output| {
-            create_partial_top_n_processor(
-                input,
-                output,
-                ctx.clone(),
-                key_desc.clone(),
-                candidate_count,
-                max_block_size,
-                memory_settings.clone(),
-                spill_schema.clone(),
-                writer_pool_bytes,
-                read_settings,
-                enable_fixed_rows,
-                filter.clone(),
-            )
-        })
+        builder
+            .main_pipeline
+            .add_transform(|input, output| params.build(input, output))
     }
 }
 
@@ -361,22 +356,18 @@ impl IPhysicalPlan for FinalTopNPlan {
             self.enable_fixed_rows,
         )?;
         let max_block_size = builder.settings.get_max_block_size()? as usize;
-        let limit = self.limit;
-        let offset = self.offset;
-        let enable_fixed_rows = self.enable_fixed_rows;
+        let params = FinalTopNParams {
+            key_desc,
+            limit: self.limit,
+            offset: self.offset,
+            max_block_size,
+            enable_fixed_rows: self.enable_fixed_rows,
+        };
 
         builder.main_pipeline.try_resize(1)?;
-        builder.main_pipeline.add_transform(|input, output| {
-            create_final_top_n_processor(
-                input,
-                output,
-                key_desc.clone(),
-                limit,
-                offset,
-                max_block_size,
-                enable_fixed_rows,
-            )
-        })
+        builder
+            .main_pipeline
+            .add_transform(|input, output| params.build(input, output))
     }
 }
 
@@ -422,10 +413,10 @@ fn format_order_by(order_by: &[SortDesc]) -> String {
         .join(", ")
 }
 
-#[allow(clippy::too_many_arguments)]
-fn create_partial_top_n_processor(
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
+/// Everything the partial TopN stage needs besides the ports. Packed once at
+/// pipeline build; `build` selects the concrete row type and wires the
+/// processor, mirroring `TransformSortBuilder`.
+struct PartialTopNParams {
     ctx: Arc<QueryContext>,
     key_desc: SortKeyDescription,
     candidate_count: usize,
@@ -436,129 +427,115 @@ fn create_partial_top_n_processor(
     read_settings: ReadSettings,
     enable_fixed_rows: bool,
     runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
-) -> Result<ProcessorPtr> {
-    struct PartialTopNRowsVisitor {
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        ctx: Arc<QueryContext>,
-        key_desc: SortKeyDescription,
-        candidate_count: usize,
-        max_block_size: usize,
-        memory_settings: MemorySettings,
-        spill_schema: DataSchemaRef,
-        writer_pool_bytes: usize,
-        read_settings: ReadSettings,
-        runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
-    }
-
-    impl RowsTypeVisitor for PartialTopNRowsVisitor {
-        type Result = Result<ProcessorPtr>;
-
-        fn sort_key_desc(&self) -> SortKeyDescription {
-            self.key_desc.clone()
-        }
-
-        fn visit_type<R>(&mut self) -> Self::Result
-        where
-            R: Rows + 'static,
-            R::Converter: Send + 'static,
-        {
-            let row_converter = if self.key_desc.uses_source_sort_col() {
-                None
-            } else {
-                Some(R::Converter::new(self.key_desc.clone())?)
-            };
-            let transform = TransformPartialTopN::<R>::new(
-                self.ctx.clone(),
-                self.candidate_count,
-                row_converter,
-                self.key_desc.sort_row_offset(),
-                self.max_block_size,
-                self.memory_settings.clone(),
-                self.spill_schema.clone(),
-                self.writer_pool_bytes,
-                self.read_settings,
-                self.runtime_top_n_filter.clone(),
-            );
-            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                self.input.clone(),
-                self.output.clone(),
-                transform,
-            )))
-        }
-    }
-
-    let mut visitor = PartialTopNRowsVisitor {
-        input,
-        output,
-        ctx,
-        key_desc,
-        candidate_count,
-        max_block_size,
-        memory_settings,
-        spill_schema,
-        writer_pool_bytes,
-        read_settings,
-        runtime_top_n_filter,
-    };
-    select_row_type(&mut visitor, enable_fixed_rows)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn create_final_top_n_processor(
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
+impl PartialTopNParams {
+    fn build(&self, input: Arc<InputPort>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
+        struct Build<'a> {
+            params: &'a PartialTopNParams,
+            input: Arc<InputPort>,
+            output: Arc<OutputPort>,
+        }
+
+        impl RowsTypeVisitor for Build<'_> {
+            type Result = Result<ProcessorPtr>;
+
+            fn sort_key_desc(&self) -> SortKeyDescription {
+                self.params.key_desc.clone()
+            }
+
+            fn visit_type<R>(&mut self) -> Self::Result
+            where
+                R: Rows + 'static,
+                R::Converter: Send + 'static,
+            {
+                let params = self.params;
+                let row_converter = if params.key_desc.uses_source_sort_col() {
+                    None
+                } else {
+                    Some(R::Converter::new(params.key_desc.clone())?)
+                };
+                let transform = TransformPartialTopN::<R>::new(
+                    params.ctx.clone(),
+                    params.candidate_count,
+                    row_converter,
+                    params.key_desc.sort_row_offset(),
+                    params.max_block_size,
+                    params.memory_settings.clone(),
+                    params.spill_schema.clone(),
+                    params.writer_pool_bytes,
+                    params.read_settings,
+                    params.runtime_top_n_filter.clone(),
+                );
+                Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                    self.input.clone(),
+                    self.output.clone(),
+                    transform,
+                )))
+            }
+        }
+
+        let mut build = Build {
+            params: self,
+            input,
+            output,
+        };
+        select_row_type(&mut build, self.enable_fixed_rows)
+    }
+}
+
+/// See [`PartialTopNParams`].
+struct FinalTopNParams {
     key_desc: SortKeyDescription,
     limit: usize,
     offset: usize,
     max_block_size: usize,
     enable_fixed_rows: bool,
-) -> Result<ProcessorPtr> {
-    struct FinalTopNRowsVisitor {
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        key_desc: SortKeyDescription,
-        limit: usize,
-        offset: usize,
-        max_block_size: usize,
-    }
+}
 
-    impl RowsTypeVisitor for FinalTopNRowsVisitor {
-        type Result = Result<ProcessorPtr>;
-
-        fn sort_key_desc(&self) -> SortKeyDescription {
-            self.key_desc.clone()
+impl FinalTopNParams {
+    fn build(&self, input: Arc<InputPort>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
+        struct Build<'a> {
+            params: &'a FinalTopNParams,
+            input: Arc<InputPort>,
+            output: Arc<OutputPort>,
         }
 
-        fn visit_type<R>(&mut self) -> Self::Result
-        where
-            R: Rows + 'static,
-            R::Converter: Send + 'static,
-        {
-            let transform = TransformFinalTopN::<R>::new(
-                self.limit,
-                self.offset,
-                !self.key_desc.uses_source_sort_col(),
-                self.key_desc.sort_row_offset(),
-                self.max_block_size,
-            );
-            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                self.input.clone(),
-                self.output.clone(),
-                transform,
-            )))
-        }
-    }
+        impl RowsTypeVisitor for Build<'_> {
+            type Result = Result<ProcessorPtr>;
 
-    let mut visitor = FinalTopNRowsVisitor {
-        input,
-        output,
-        key_desc,
-        limit,
-        offset,
-        max_block_size,
-    };
-    select_row_type(&mut visitor, enable_fixed_rows)
+            fn sort_key_desc(&self) -> SortKeyDescription {
+                self.params.key_desc.clone()
+            }
+
+            fn visit_type<R>(&mut self) -> Self::Result
+            where
+                R: Rows + 'static,
+                R::Converter: Send + 'static,
+            {
+                let params = self.params;
+                let transform = TransformFinalTopN::<R>::new(
+                    params.limit,
+                    params.offset,
+                    !params.key_desc.uses_source_sort_col(),
+                    params.key_desc.sort_row_offset(),
+                    params.max_block_size,
+                );
+                Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                    self.input.clone(),
+                    self.output.clone(),
+                    transform,
+                )))
+            }
+        }
+
+        let mut build = Build {
+            params: self,
+            input,
+            output,
+        };
+        select_row_type(&mut build, self.enable_fixed_rows)
+    }
 }
 
 impl PhysicalPlanBuilder {

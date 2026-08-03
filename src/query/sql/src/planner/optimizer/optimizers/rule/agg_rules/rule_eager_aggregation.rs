@@ -45,6 +45,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
+use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 
 /// Rule to push aggregation past a join to reduces the number of input rows to the join.
@@ -204,15 +205,14 @@ impl<'a> EagerInput<'a> {
         let eval_scalar = s_expr.plan().as_eval_scalar()?;
 
         let mut current = s_expr.unary_child();
-        let ordering_expr = matches!(
-            current.plan(),
-            crate::plans::RelOperator::Sort(_) | crate::plans::RelOperator::TopN(_)
-        )
-        .then(|| {
-            let ordering_expr = current;
-            current = ordering_expr.unary_child();
-            ordering_expr
-        });
+        let ordering_expr = match current.plan() {
+            RelOperator::Sort(_) | RelOperator::TopN(_) => {
+                let ordering_expr = current;
+                current = ordering_expr.unary_child();
+                Some(ordering_expr)
+            }
+            _ => None,
+        };
 
         let final_agg = current.plan().as_aggregate()?.clone();
         current = current.unary_child();

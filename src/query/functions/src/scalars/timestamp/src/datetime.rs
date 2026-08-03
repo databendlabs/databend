@@ -2280,9 +2280,7 @@ fn calendar_monotonicity(ctx: &FunctionContext, args: &[Domain]) -> Option<usize
 fn calendar_domain_monotonic(ctx: &FunctionContext, domain: &Domain) -> bool {
     match domain {
         Domain::Date(_) => true,
-        Domain::Timestamp(simple) => {
-            tz_wall_clock_single_segment(&ctx.tz, simple.min, simple.max)
-        }
+        Domain::Timestamp(simple) => tz_wall_clock_single_segment(&ctx.tz, simple.min, simple.max),
         Domain::Nullable(nullable) => match &nullable.value {
             Some(inner) => calendar_domain_monotonic(ctx, inner),
             // An all-NULL input projects to a single NULL output.

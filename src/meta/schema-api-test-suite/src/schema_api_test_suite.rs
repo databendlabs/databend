@@ -51,6 +51,7 @@ use databend_common_meta_api::serialize_struct;
 use databend_common_meta_api::util::IdempotentKVTxnSender;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::TableEngineMismatch;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
@@ -318,6 +319,10 @@ impl SchemaApiTestSuite {
             + 'static,
     {
         self.table_commit_table_meta(&b.build().await).await?;
+        self.table_commit_after_drop_different_engine(&b.build().await)
+            .await?;
+        self.table_commit_table_meta_engine_mismatch(&b.build().await)
+            .await?;
         self.concurrent_commit_table_meta(b.clone()).await?;
         self.database_drop_out_of_retention_time_history(&b.build().await)
             .await?;
@@ -2583,6 +2588,72 @@ impl SchemaApiTestSuite {
             let ret_table_name_ident: DBIdTableName =
                 get_kv_data(mt, &key_table_id_to_name).await?;
             assert_eq!(ret_table_name_ident, key_dbid_tbname);
+
+            // Engine names are case-insensitive.
+            util.create_table_with(
+                |mut meta| {
+                    meta.engine = "json".to_string();
+                    meta
+                },
+                |mut req| {
+                    req.create_option = CreateOption::CreateOrReplace;
+                    req.name_ident.table_name = table.to_string();
+                    req
+                },
+            )
+            .await?;
+            assert_eq!("json", util.get_table_by_name(table).await?.meta.engine);
+
+            // Restore the upper-case engine for the mismatch cases below.
+            let (table_id, _) = util
+                .create_table_with(
+                    |mut meta| {
+                        meta.engine = "JSON".to_string();
+                        meta
+                    },
+                    |mut req| {
+                        req.create_option = CreateOption::CreateOrReplace;
+                        req.name_ident.table_name = table.to_string();
+                        req
+                    },
+                )
+                .await?;
+
+            // Replacing a table with a different engine must fail without changing
+            // the existing table or its name mapping.
+            let mismatched_req = CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                catalog_name: Some("default".to_string()),
+                name_ident: TableNameIdent {
+                    tenant: tenant.clone(),
+                    db_name: db_name.to_string(),
+                    table_name: table.to_string(),
+                },
+                table_meta: TableMeta {
+                    engine: "STREAM".to_string(),
+                    ..Default::default()
+                },
+                as_dropped: false,
+                materialized_view: None,
+                table_properties: None,
+                table_partition: None,
+            };
+            let expected = KVAppError::AppError(AppError::from(TableEngineMismatch::new(
+                table, "JSON", "STREAM",
+            )));
+            let err = mt.create_table(mismatched_req.clone()).await.unwrap_err();
+            assert_eq!(err, expected);
+            assert_eq!(table_id, get_kv_u64_data(mt, &key_dbid_tbname).await?);
+            assert_eq!("JSON", util.get_table_by_name(table).await?.meta.engine);
+
+            // The same validation applies when CTAS creates its replacement as a
+            // hidden dropped table.
+            let mut as_dropped_req = mismatched_req;
+            as_dropped_req.as_dropped = true;
+            as_dropped_req.table_meta.drop_on = Some(Utc::now());
+            let err = mt.create_table(as_dropped_req).await.unwrap_err();
+            assert_eq!(err, expected);
+            assert_eq!(table_id, get_kv_u64_data(mt, &key_dbid_tbname).await?);
         }
 
         {
@@ -6449,6 +6520,136 @@ impl SchemaApiTestSuite {
             let seqv = mt.get_kv(&table_key.to_string_key()).await?;
             assert!(seqv.is_none());
         }
+
+        Ok(())
+    }
+
+    async fn table_commit_after_drop_different_engine<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
+        let tenant_name = "table_commit_after_drop_different_engine";
+        let db_name = "db";
+        let table_name = "table";
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, table_name, "STREAM");
+        util.create_db().await?;
+        let (dropped_table_id, _) = util.create_table().await?;
+        util.drop_table_by_id().await?;
+
+        let mut replacement_meta = util.table_meta();
+        replacement_meta.engine = "JSON".to_string();
+        replacement_meta.drop_on = Some(Utc::now());
+        let create_req = CreateTableReq {
+            create_option: CreateOption::Create,
+            catalog_name: None,
+            name_ident: TableNameIdent {
+                tenant: util.tenant(),
+                db_name: db_name.to_string(),
+                table_name: table_name.to_string(),
+            },
+            table_meta: replacement_meta,
+            as_dropped: true,
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        };
+        let create_reply = mt.create_table(create_req.clone()).await?;
+        assert_eq!(create_reply.prev_table_id, Some(dropped_table_id));
+
+        mt.commit_table_meta(CommitTableMetaReq {
+            name_ident: create_req.name_ident,
+            db_id: create_reply.db_id,
+            table_id: create_reply.table_id,
+            prev_table_id: create_reply.prev_table_id,
+            orphan_table_name: create_reply.orphan_table_name,
+        })
+        .await?;
+
+        let table = util.get_table_by_name(table_name).await?;
+        assert_eq!(table.ident.table_id, create_reply.table_id);
+        assert_eq!(table.meta.engine, "JSON");
+
+        Ok(())
+    }
+
+    async fn table_commit_table_meta_engine_mismatch<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
+        let tenant_name = "table_commit_table_meta_engine_mismatch";
+        let db_name = "db";
+        let table_name = "table";
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, table_name, "JSON");
+        util.create_db().await?;
+        let (previous_table_id, previous_meta) = util.create_table().await?;
+
+        let mut replacement_meta = previous_meta.clone();
+        replacement_meta.drop_on = Some(Utc::now());
+        let create_req = CreateTableReq {
+            create_option: CreateOption::CreateOrReplace,
+            catalog_name: Some("default".to_string()),
+            name_ident: TableNameIdent {
+                tenant: util.tenant(),
+                db_name: db_name.to_string(),
+                table_name: table_name.to_string(),
+            },
+            table_meta: replacement_meta,
+            as_dropped: true,
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        };
+        let create_reply = mt.create_table(create_req.clone()).await?;
+        assert_eq!(create_reply.prev_table_id, Some(previous_table_id));
+
+        let previous_tbid = TableId::new(previous_table_id);
+        let mut changed_previous_meta = previous_meta;
+        changed_previous_meta.engine = "STREAM".to_string();
+        // Simulate an arbitrary metadata client updating the full visible TableMeta
+        // after CTAS prepare.
+        upsert_test_data(mt, &previous_tbid, serialize_struct(&changed_previous_meta)).await?;
+
+        let dbid_tbname = DBIdTableName {
+            db_id: create_reply.db_id,
+            table_name: table_name.to_string(),
+        };
+        let history_ident = TableIdHistoryIdent {
+            database_id: create_reply.db_id,
+            table_name: table_name.to_string(),
+        };
+        let orphan_history_ident = TableIdHistoryIdent {
+            database_id: create_reply.db_id,
+            table_name: create_reply.orphan_table_name.clone().unwrap(),
+        };
+        let replacement_tbid = TableId::new(create_reply.table_id);
+
+        let name_before = mt.get_pb(&dbid_tbname).await?;
+        let history_before = mt.get_pb(&history_ident).await?;
+        let orphan_history_before = mt.get_pb(&orphan_history_ident).await?;
+        let previous_before = mt.get_pb(&previous_tbid).await?;
+        let replacement_before = mt.get_pb(&replacement_tbid).await?;
+
+        let err = mt
+            .commit_table_meta(CommitTableMetaReq {
+                name_ident: create_req.name_ident,
+                db_id: create_reply.db_id,
+                table_id: create_reply.table_id,
+                prev_table_id: create_reply.prev_table_id,
+                orphan_table_name: create_reply.orphan_table_name,
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err,
+            KVAppError::AppError(AppError::from(TableEngineMismatch::new(
+                table_name, "STREAM", "JSON"
+            )))
+        );
+
+        assert_eq!(mt.get_pb(&dbid_tbname).await?, name_before);
+        assert_eq!(mt.get_pb(&history_ident).await?, history_before);
+        assert_eq!(
+            mt.get_pb(&orphan_history_ident).await?,
+            orphan_history_before
+        );
+        assert_eq!(mt.get_pb(&previous_tbid).await?, previous_before);
+        assert_eq!(mt.get_pb(&replacement_tbid).await?, replacement_before);
 
         Ok(())
     }

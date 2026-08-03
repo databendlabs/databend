@@ -76,14 +76,17 @@ RowFetch
 ├── output columns: [t2.a (#0), t2._row_id (#3), t2.v (#1)]
 ├── columns to fetch: [v]
 ├── estimated rows: 0.20
-└── Limit
+└── TopN(Final)
     ├── output columns: [t2.a (#0), t2._row_id (#3)]
+    ├── sort keys: [a ASC NULLS LAST]
     ├── limit: 1
     ├── offset: 0
     ├── estimated rows: 0.20
-    └── Sort(Single)
-        ├── output columns: [t2.a (#0), t2._row_id (#3)]
+    └── TopN(Partial)
+        ├── output columns: [t2.a (#0), t2._row_id (#3), #_order_col]
         ├── sort keys: [a ASC NULLS LAST]
+        ├── limit: 1
+        ├── offset: 0
         ├── estimated rows: 0.20
         └── Filter
             ├── output columns: [t2.a (#0), t2._row_id (#3)]
@@ -460,7 +463,7 @@ Sequence
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [], limit: NONE]
 │       ├── virtual columns: [v['b']['c']]
 │       └── estimated rows: 1.00

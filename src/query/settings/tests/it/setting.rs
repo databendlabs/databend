@@ -110,6 +110,10 @@ async fn test_set_settings() {
         }
 
         {
+            assert!(settings.get_enable_top_n().unwrap());
+            settings
+                .set_setting("enable_top_n".to_string(), "0".to_string())
+                .unwrap();
             assert!(!settings.get_enable_top_n().unwrap());
             settings
                 .set_setting("enable_top_n".to_string(), "1".to_string())
