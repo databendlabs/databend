@@ -1466,6 +1466,7 @@ impl FragmentCoordinator {
                     shuffle_scatter: exchange_injector
                         .flight_scatter(&info.query_ctx, data_exchange)?,
                     allow_adjust_parallelism: exchange.allow_adjust_parallelism,
+                    row_fetch: exchange.row_fetch.clone(),
                 }),
             )),
             DataExchange::GlobalShuffleExchange(exchange) => Ok(Some(

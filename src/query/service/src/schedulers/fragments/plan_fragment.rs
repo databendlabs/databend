@@ -36,6 +36,7 @@ use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::Recluster;
 use crate::physical_plans::ReplaceDeduplicate;
@@ -78,8 +79,8 @@ pub struct PlanFragment {
     pub exchange: Option<DataExchange>,
     pub query_id: String,
 
-    // The fragments to ask data from.
-    pub source_fragments: Vec<PlanFragment>,
+    /// Whether this intermediate fragment consumes a coordinator-only Merge exchange.
+    pub has_merge_input: bool,
 }
 
 impl PlanFragment {
@@ -88,10 +89,6 @@ impl PlanFragment {
         ctx: Arc<QueryContext>,
         actions: &mut QueryFragmentsActions,
     ) -> Result<()> {
-        // for input in self.source_fragments.iter() {
-        //     input.get_actions(ctx.clone(), actions)?;
-        // }
-
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
 
         match &self.fragment_type {
@@ -103,18 +100,33 @@ impl PlanFragment {
                 fragment_actions.add_action(action);
             }
             FragmentType::Intermediate => {
-                if self
-                    .source_fragments
-                    .iter()
-                    .any(|fragment| matches!(&fragment.exchange, Some(DataExchange::Merge(_))))
-                {
-                    // If this is a intermediate fragment with merge input,
-                    // we will only send it to coordinator node.
-                    let action = QueryFragmentAction::create(
-                        Fragmenter::get_local_executor(ctx),
-                        self.plan.clone(),
-                    );
+                if self.has_merge_input {
+                    // Only the coordinator can consume the Merge input. A node-shuffle
+                    // destination still needs this fragment ID locally to construct its
+                    // exchange receivers, so other executors get an empty source stub.
+                    let local_executor = Fragmenter::get_local_executor(ctx.clone());
+                    let action =
+                        QueryFragmentAction::create(local_executor.clone(), self.plan.clone());
                     fragment_actions.add_action(action);
+
+                    if matches!(
+                        self.exchange.as_ref(),
+                        Some(
+                            DataExchange::Broadcast(_)
+                                | DataExchange::NodeToNodeExchange(_)
+                                | DataExchange::GlobalShuffleExchange(_)
+                        )
+                    ) {
+                        let empty_plan = self.empty_exchange_source_plan()?;
+                        for executor in Fragmenter::get_executors(ctx) {
+                            if executor != local_executor {
+                                fragment_actions.add_action(QueryFragmentAction::create(
+                                    executor,
+                                    empty_plan.clone(),
+                                ));
+                            }
+                        }
+                    }
                 } else {
                     // Otherwise distribute the fragment to all the executors.
                     for executor in Fragmenter::get_executors(ctx) {
@@ -146,6 +158,27 @@ impl PlanFragment {
             fragment_actions.set_exchange(exchange.clone());
         }
         actions.add_fragment_actions(fragment_actions)
+    }
+
+    fn empty_exchange_source_plan(&self) -> Result<PhysicalPlan> {
+        let exchange_sink = ExchangeSink::from_physical_plan(&self.plan).ok_or_else(|| {
+            ErrorCode::Internal("Merge-dependent intermediate fragment has no ExchangeSink")
+        })?;
+        let schema = exchange_sink.schema.clone();
+        let values = DataBlock::empty_with_schema(&schema)
+            .columns()
+            .iter()
+            .map(BlockEntry::to_column)
+            .collect();
+        let empty_input = PhysicalPlan::new(ConstantTableScan {
+            meta: PhysicalPlanMeta::new("EmptyExchangeSource"),
+            values,
+            num_rows: 0,
+            output_schema: schema,
+        });
+        let mut empty_sink = exchange_sink.clone();
+        empty_sink.input = empty_input;
+        Ok(PhysicalPlan::new(empty_sink))
     }
 
     /// Redistribute partitions of current source fragment to executors.

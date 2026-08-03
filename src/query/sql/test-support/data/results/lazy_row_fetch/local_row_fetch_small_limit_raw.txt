@@ -1,0 +1,16 @@
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [lazy_row_fetch.a (#0) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [lazy_row_fetch.a (#0) AS (#0), lazy_row_fetch.b (#1) AS (#1), lazy_row_fetch.c (#2) AS (#2)]
+        └── Filter
+            ├── filters: [gt(lazy_row_fetch.a (#0), 0)]
+            └── Scan
+                ├── table: default.lazy_row_fetch (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+

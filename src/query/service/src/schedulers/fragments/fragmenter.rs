@@ -49,6 +49,7 @@ use crate::servers::flight::v1::exchange::BroadcastExchange;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::MergeExchange;
 use crate::servers::flight::v1::exchange::NodeToNodeExchange;
+use crate::servers::flight::v1::exchange::RowFetchExchange;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextCluster;
@@ -59,18 +60,13 @@ use crate::sessions::TableContextSettings;
 pub struct Fragmenter {
     ctx: Arc<QueryContext>,
     query_id: String,
-    fragments: Vec<PlanFragment>,
 }
 
 impl Fragmenter {
     pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
         let query_id = ctx.get_id();
 
-        Ok(Self {
-            ctx,
-            fragments: vec![],
-            query_id,
-        })
+        Ok(Self { ctx, query_id })
     }
 
     /// Get ids of executor nodes.
@@ -111,18 +107,38 @@ impl Fragmenter {
             fragment_id: self.ctx.fragment_id().next_fragment_id(),
             exchange: None,
             query_id: self.query_id.clone(),
-            source_fragments: self.fragments,
+            has_merge_input: false,
         });
 
         let edges = Self::collect_fragments_edge(fragments.values());
 
-        for (source, target) in edges {
-            let Some(fragment) = fragments.get_mut(&source) else {
+        for (source, target) in &edges {
+            let Some(fragment) = fragments.get_mut(source) else {
                 continue;
             };
 
             if let Some(exchange_sink) = ExchangeSink::from_mut_physical_plan(&mut fragment.plan) {
-                exchange_sink.destination_fragment_id = target;
+                exchange_sink.destination_fragment_id = *target;
+            }
+        }
+
+        // An intermediate fragment that consumes a Merge exchange can only run
+        // on that exchange's coordination node.
+        let merge_input_targets = edges
+            .iter()
+            .filter_map(|(source, target)| {
+                fragments
+                    .get(source)
+                    .is_some_and(|fragment| {
+                        matches!(fragment.exchange.as_ref(), Some(DataExchange::Merge(_)))
+                    })
+                    .then_some(*target)
+            })
+            .collect::<Vec<_>>();
+
+        for target in merge_input_targets {
+            if let Some(fragment) = fragments.get_mut(&target) {
+                fragment.has_merge_input = true;
             }
         }
 
@@ -222,7 +238,11 @@ impl FragmentDeriveHandle {
 
         Ok(match exchange_sink.kind {
             FragmentKind::Init => None,
-            FragmentKind::Normal => {
+            FragmentKind::Normal
+            | FragmentKind::RowFetch {
+                row_id_col_offset: _,
+                local_block_threshold: _,
+            } => {
                 let destination_ids = get_executors(cluster);
 
                 let mut destination_channels = Vec::with_capacity(destination_ids.len());
@@ -237,6 +257,16 @@ impl FragmentDeriveHandle {
                     destination_channels,
                     shuffle_keys: exchange_sink.keys.clone(),
                     allow_adjust_parallelism: exchange_sink.allow_adjust_parallelism,
+                    row_fetch: match exchange_sink.kind {
+                        FragmentKind::RowFetch {
+                            row_id_col_offset,
+                            local_block_threshold,
+                        } => Some(RowFetchExchange {
+                            row_id_col_offset,
+                            local_block_threshold,
+                        }),
+                        _ => None,
+                    },
                 }))
             }
             FragmentKind::GlobalShuffle => {
@@ -255,6 +285,7 @@ impl FragmentDeriveHandle {
                     destination_channels,
                     shuffle_keys: exchange_sink.keys.clone(),
                     allow_adjust_parallelism: exchange_sink.allow_adjust_parallelism,
+                    row_fetch: None,
                 }))
             }
             FragmentKind::Merge => Some(MergeExchange::create(
@@ -317,7 +348,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 plan,
                 exchange,
                 fragment_type,
-                source_fragments: vec![],
+                has_merge_input: false,
                 fragment_id: source_fragment_id,
                 query_id: self.query_id.clone(),
             };
@@ -354,7 +385,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 fragment_id,
                 exchange: None,
                 query_id: self.query_id.clone(),
-                source_fragments: vec![],
+                has_merge_input: false,
             };
 
             self.fragments.insert(fragment_id, fragment);

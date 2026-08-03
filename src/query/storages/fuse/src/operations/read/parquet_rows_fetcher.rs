@@ -17,6 +17,8 @@ use std::collections::hash_map::Entry;
 use std::future::Future;
 use std::sync::Arc;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::spawn;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::block_id_in_segment;
@@ -30,6 +32,10 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
+use databend_common_metrics::storage::metrics_inc_row_fetch_batches;
+use databend_common_metrics::storage::metrics_inc_row_fetch_blocks;
+use databend_common_metrics::storage::metrics_inc_row_fetch_estimated_bytes;
+use databend_common_metrics::storage::metrics_inc_row_fetch_rows;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheValue;
@@ -42,7 +48,10 @@ use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::stream::FuturesUnordered;
 use futures_util::stream::StreamExt;
+use futures_util::stream::TryStreamExt;
 use itertools::Itertools;
+use log::debug;
+use log::info;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
@@ -106,6 +115,7 @@ impl RowsFetchMetadata for RowsFetchMetadataImpl {
 }
 
 pub(super) struct ParquetRowsFetcher {
+    query_id: String,
     snapshot: Option<Arc<TableSnapshot>>,
     table: Arc<FuseTable>,
     projection: Projection,
@@ -180,12 +190,155 @@ impl RowsFetcher for ParquetRowsFetcher {
             .unwrap())
     }
 
+    async fn fetch_metadata_batch(
+        &mut self,
+        block_ids: &[u64],
+    ) -> Result<HashMap<u64, Self::Metadata>> {
+        let started = std::time::Instant::now();
+        let mut result = HashMap::with_capacity(block_ids.len());
+        let mut missing_by_segment = HashMap::<u64, Vec<u64>>::new();
+        for block_id in block_ids {
+            if let Some(metadata) = self.block_meta_lru_cache.get(block_id.to_string()) {
+                result.insert(*block_id, metadata.clone());
+            } else {
+                missing_by_segment
+                    .entry(split_prefix(*block_id).0)
+                    .or_default()
+                    .push(*block_id);
+            }
+        }
+
+        if missing_by_segment.is_empty() {
+            return Ok(result);
+        }
+        let cached_blocks = result.len();
+        let segments_to_read = missing_by_segment.len();
+
+        let snapshot = self
+            .snapshot
+            .as_ref()
+            .expect("ParquetRowsFetcher must be initialized before fetching metadata")
+            .clone();
+        let operator = self.table.operator.clone();
+        let schema = self.schema.clone();
+        let requests = futures_util::stream::iter(missing_by_segment.into_iter().map(
+            |(segment, block_ids)| {
+                let snapshot = snapshot.clone();
+                let segment_reader =
+                    MetaReaders::segment_info_reader(operator.clone(), schema.clone());
+                async move {
+                    let (location, ver) = snapshot
+                        .segments
+                        .get(segment as usize)
+                        .cloned()
+                        .ok_or_else(|| {
+                            ErrorCode::Internal(format!(
+                                "RowFetch segment ID {segment} is out of bounds for {} segments",
+                                snapshot.segments.len()
+                            ))
+                        })?;
+                    let compact_segment_info = segment_reader
+                        .read(&LoadParams {
+                            ver,
+                            location,
+                            len_hint: None,
+                            put_cache: true,
+                        })
+                        .await?;
+                    Ok::<_, ErrorCode>((block_ids, compact_segment_info))
+                }
+            },
+        ))
+        .buffer_unordered(self.max_threads.max(1))
+        .try_collect::<Vec<_>>()
+        .await?;
+
+        for (block_ids, compact_segment_info) in requests {
+            let blocks = compact_segment_info.block_metas()?;
+            let mut prefixes = Vec::with_capacity(block_ids.len());
+            let mut block_metas = Vec::with_capacity(block_ids.len());
+            for block_id in block_ids {
+                let (_, block) = split_prefix(block_id);
+                if block as usize >= blocks.len() {
+                    return Err(ErrorCode::Internal(format!(
+                        "RowFetch block ID {block} is out of bounds for {} blocks",
+                        blocks.len()
+                    )));
+                }
+                let block_idx = block_idx_in_segment(blocks.len(), block as usize);
+                let block_meta = blocks[block_idx].clone();
+                prefixes.push(block_id);
+                block_metas.push(block_meta);
+            }
+
+            for (prefix, metadata) in prefixes.into_iter().zip(self.build_metadata(&block_metas)?) {
+                self.block_meta_lru_cache
+                    .insert(prefix.to_string(), metadata);
+                let metadata = self
+                    .block_meta_lru_cache
+                    .get(prefix.to_string())
+                    .clone()
+                    .expect("inserted RowFetch metadata must be cached");
+                result.insert(prefix, metadata);
+            }
+        }
+
+        let message = format!(
+            "RowFetch metadata batch query_id={} blocks={} cached_blocks={} segments_read={} elapsed_ms={} max_concurrency={}",
+            self.query_id,
+            block_ids.len(),
+            cached_blocks,
+            segments_to_read,
+            started.elapsed().as_millis(),
+            self.max_threads
+        );
+        if segments_to_read >= 8 {
+            info!("{}", message);
+        } else {
+            debug!("{}", message);
+        }
+
+        Ok(result)
+    }
+
     #[async_backtrace::framed]
     async fn fetch(
         &mut self,
         row_ids: &[u64],
         metadata: HashMap<u64, Self::Metadata>,
     ) -> Result<DataBlock> {
+        let block_count = metadata.len();
+        let estimated_bytes = metadata
+            .values()
+            .map(|metadata| metadata.block_bytes)
+            .sum::<usize>();
+
+        Profile::record_usize_profile(ProfileStatisticsName::RowFetchRows, row_ids.len());
+        Profile::record_usize_profile(ProfileStatisticsName::RowFetchBlocks, block_count);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RowFetchEstimatedBytes,
+            estimated_bytes,
+        );
+        Profile::record_usize_profile(ProfileStatisticsName::RowFetchBatches, 1);
+        metrics_inc_row_fetch_rows(row_ids.len() as u64);
+        metrics_inc_row_fetch_blocks(block_count as u64);
+        metrics_inc_row_fetch_estimated_bytes(estimated_bytes as u64);
+        metrics_inc_row_fetch_batches(1);
+
+        let message = format!(
+            "RowFetch batch query_id={} rows={} distinct_blocks={} estimated_bytes={} max_concurrency={}",
+            self.query_id,
+            row_ids.len(),
+            block_count,
+            estimated_bytes,
+            self.max_threads
+        );
+        if block_count >= 128 || estimated_bytes >= 256 * 1024 * 1024 {
+            info!("{}", message);
+        } else {
+            debug!("{}", message);
+        }
+
         let final_block_index = metadata
             .keys()
             .enumerate()
@@ -288,11 +441,13 @@ impl ParquetRowsFetcher {
         settings: ReadSettings,
         max_threads: usize,
         io_semaphore: Arc<Semaphore>,
+        query_id: String,
     ) -> Self {
         let schema = table.schema();
         let operator = table.operator.clone();
         let segment_reader = MetaReaders::segment_info_reader(operator, schema.clone());
         ParquetRowsFetcher {
+            query_id,
             table,
             snapshot: None,
             segment_reader,

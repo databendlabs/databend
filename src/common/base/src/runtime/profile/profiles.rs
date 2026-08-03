@@ -41,6 +41,13 @@ pub enum ProfileStatisticsName {
     ScanBytesFromDataCache,
     ScanBytesFromMemory,
 
+    RowFetchRows,
+    RowFetchBlocks,
+    RowFetchEstimatedBytes,
+    RowFetchBatches,
+    RowFetchLocalBatches,
+    RowFetchDistributedBatches,
+
     RemoteSpillWriteCount,
     RemoteSpillWriteBytes,
     RemoteSpillWriteTime,
@@ -65,6 +72,9 @@ pub enum ProfileStatisticsName {
     MemoryUsage,
     ExternalServerRetryCount,
     ExternalServerRequestCount,
+
+    RowFetchInputBatches,
+    RowFetchAffinityReassignedBlocks,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
@@ -228,6 +238,48 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 unit: StatisticsUnit::Bytes,
                 plain_statistics: true,
             }),
+            (ProfileStatisticsName::RowFetchRows, ProfileDesc {
+                display_name: "row fetch rows",
+                desc: "The number of rows requested by RowFetch",
+                index: ProfileStatisticsName::RowFetchRows as usize,
+                unit: StatisticsUnit::Rows,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::RowFetchBlocks, ProfileDesc {
+                display_name: "row fetch blocks",
+                desc: "The number of distinct block fetches requested by RowFetch batches",
+                index: ProfileStatisticsName::RowFetchBlocks as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::RowFetchEstimatedBytes, ProfileDesc {
+                display_name: "row fetch estimated bytes",
+                desc: "The estimated uncompressed bytes of columns requested by RowFetch",
+                index: ProfileStatisticsName::RowFetchEstimatedBytes as usize,
+                unit: StatisticsUnit::Bytes,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::RowFetchBatches, ProfileDesc {
+                display_name: "row fetch batches",
+                desc: "The number of RowFetch batches",
+                index: ProfileStatisticsName::RowFetchBatches as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::RowFetchLocalBatches, ProfileDesc {
+                display_name: "row fetch local batches",
+                desc: "The number of RowFetch batches kept on the coordinator by adaptive routing",
+                index: ProfileStatisticsName::RowFetchLocalBatches as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::RowFetchDistributedBatches, ProfileDesc {
+                display_name: "row fetch distributed batches",
+                desc: "The number of RowFetch batches hash-distributed by adaptive routing",
+                index: ProfileStatisticsName::RowFetchDistributedBatches as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
             (ProfileStatisticsName::RemoteSpillWriteCount, ProfileDesc {
                 display_name: "numbers remote spilled by write",
                 desc: "The number of remote spilled by write",
@@ -365,6 +417,20 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 display_name: "external server request count",
                 desc: "The count of external server request times",
                 index: ProfileStatisticsName::ExternalServerRequestCount as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::RowFetchInputBatches, ProfileDesc {
+                display_name: "row fetch input batches",
+                desc: "The number of input batches coalesced before adaptive RowFetch routing",
+                index: ProfileStatisticsName::RowFetchInputBatches as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::RowFetchAffinityReassignedBlocks, ProfileDesc {
+                display_name: "row fetch affinity reassigned blocks",
+                desc: "The number of RowFetch blocks moved from their primary hash destination to bound load skew",
+                index: ProfileStatisticsName::RowFetchAffinityReassignedBlocks as usize,
                 unit: StatisticsUnit::Count,
                 plain_statistics: true,
             }),

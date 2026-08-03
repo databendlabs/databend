@@ -1,0 +1,31 @@
+RowFetch
+├── output columns: [lazy_row_fetch.a (#0), lazy_row_fetch._row_id (#3), lazy_row_fetch.b (#1), lazy_row_fetch.c (#2)]
+├── columns to fetch: [b, c]
+├── estimated rows: 0.00
+└── Limit
+    ├── output columns: [lazy_row_fetch.a (#0), lazy_row_fetch._row_id (#3)]
+    ├── limit: 10
+    ├── offset: 0
+    ├── estimated rows: 0.00
+    └── Sort(Final)
+        ├── output columns: [lazy_row_fetch.a (#0), lazy_row_fetch._row_id (#3)]
+        ├── sort keys: [a DESC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── Exchange
+            ├── output columns: [lazy_row_fetch.a (#0), lazy_row_fetch._row_id (#3), #_order_col]
+            ├── exchange type: Merge
+            └── Sort(Partial)
+                ├── output columns: [lazy_row_fetch.a (#0), lazy_row_fetch._row_id (#3), #_order_col]
+                ├── sort keys: [a DESC NULLS LAST]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.lazy_row_fetch
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), _row_id (#3)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [is_true(lazy_row_fetch.a (#0) > 0)], limit: 10]
+                    └── estimated rows: 0.00
+

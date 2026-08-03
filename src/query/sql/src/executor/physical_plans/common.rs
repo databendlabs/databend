@@ -68,6 +68,11 @@ pub enum FragmentKind {
     Init,
     // Partitioned by hash
     Normal,
+    // RowFetch chooses local or hash routing from the runtime block dispersion.
+    RowFetch {
+        row_id_col_offset: usize,
+        local_block_threshold: usize,
+    },
     // Broadcast
     Expansive,
     Merge,
