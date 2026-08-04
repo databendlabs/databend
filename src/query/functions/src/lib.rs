@@ -86,7 +86,7 @@ pub const GENERAL_WINDOW_FUNCTIONS: [Ascii<&str>; 13] = [
 pub const RANK_WINDOW_FUNCTIONS: [&str; 5] =
     ["first_value", "first", "last_value", "last", "nth_value"];
 
-pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 16] = [
+pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 17] = [
     Ascii::new("array_transform"),
     Ascii::new("array_apply"),
     Ascii::new("array_map"),
@@ -103,6 +103,7 @@ pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 16] = [
     Ascii::new("json_map_filter"),
     Ascii::new("json_map_transform_keys"),
     Ascii::new("json_map_transform_values"),
+    Ascii::new("json_path_transform"),
 ];
 
 pub const GENERAL_SEARCH_FUNCTIONS: [Ascii<&str>; 3] = [
@@ -130,4 +131,26 @@ fn builtin_functions() -> FunctionRegistry {
 
     registry.check_ambiguity();
     registry
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The parser only enables the trailing-lambda call grammar for the
+    /// function names in `LAMBDA_FUNCTION_NAMES`, so the two lists must
+    /// stay in sync.
+    #[test]
+    fn general_lambda_functions_match_parser_lambda_names() {
+        let names = GENERAL_LAMBDA_FUNCTIONS
+            .iter()
+            .cloned()
+            .map(Ascii::into_inner)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            names,
+            databend_common_ast::parser::expr::LAMBDA_FUNCTION_NAMES,
+            "GENERAL_LAMBDA_FUNCTIONS must stay in sync with the parser's LAMBDA_FUNCTION_NAMES"
+        );
+    }
 }
