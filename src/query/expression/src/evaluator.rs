@@ -24,6 +24,8 @@ use databend_common_exception::Result;
 use itertools::Itertools;
 use jsonb::RawJsonb;
 use jsonb::Value as JsonbValue;
+use jsonb::jsonpath::JsonPath;
+use jsonb::jsonpath::parse_json_path;
 
 use crate::BlockEntry;
 use crate::FunctionContext;
@@ -57,6 +59,9 @@ use crate::types::boolean;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::utils::filter_helper::FilterHelpers;
+use crate::utils::json_path_transform::PathStep;
+use crate::utils::json_path_transform::replace_at_locations;
+use crate::utils::json_path_transform::select_locations;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
@@ -1904,6 +1909,11 @@ impl<'a> Evaluator<'a> {
         return_type: &DataType,
     ) -> Result<Value<AnyType>> {
         let expr = lambda_expr.as_expr(self.fn_registry);
+
+        if func_name == "json_path_transform" {
+            return self.run_json_path_transform(args, data_types, &expr, return_type);
+        }
+
         // array_reduce differs
         if func_name == "array_reduce" {
             let len = args.iter().find_map(|arg| match arg {
@@ -2133,6 +2143,174 @@ impl<'a> Evaluator<'a> {
             None => Value::Scalar(builder.build_scalar()),
         };
         Ok(res)
+    }
+
+    /// Evaluates `json_path_transform(<json>, <path>, <lambda>)`.
+    ///
+    /// Arguments are laid out as `[json, path, captures...]` and the lambda
+    /// body was cast to `Nullable(Variant)` during type checking.
+    fn run_json_path_transform(
+        &self,
+        args: Vec<Value<AnyType>>,
+        data_types: Vec<DataType>,
+        expr: &Expr,
+        return_type: &DataType,
+    ) -> Result<Value<AnyType>> {
+        debug_assert!(args.len() >= 2);
+        let json_idx = 0;
+        let path_idx = 1;
+
+        let len = args.iter().find_map(|arg| match arg {
+            Value::Column(col) => Some(col.len()),
+            _ => None,
+        });
+        let num_rows = len.unwrap_or(1);
+
+        fn parse_path(path_str: &str) -> Result<JsonPath<'_>> {
+            parse_json_path(path_str.as_bytes())
+                .map_err(|_| ErrorCode::BadArguments(format!("Invalid JSON Path '{path_str}'")))
+        }
+
+        // A constant path is parsed lazily on the first row that needs it, so
+        // an invalid constant path does not fail queries whose rows never
+        // evaluate it, matching the per-row handling of a non-constant path.
+        let const_path_str = match &args[path_idx] {
+            Value::Scalar(Scalar::String(path_str)) => Some(path_str.as_str()),
+            _ => None,
+        };
+        let mut const_path: Option<JsonPath> = None;
+
+        enum JsonTransformRow {
+            Null,
+            Unchanged,
+            Matched {
+                locations: Vec<Vec<PathStep>>,
+                count: usize,
+            },
+        }
+
+        // Phase 1: locate matched values in every row.
+        let mut rows = Vec::with_capacity(num_rows);
+        let mut matched_values = VariantType::create_builder(num_rows, &[]);
+        let mut total_matches = 0usize;
+        for idx in 0..num_rows {
+            let json_scalar = unsafe { args[json_idx].index_unchecked(idx) };
+            let path_scalar = unsafe { args[path_idx].index_unchecked(idx) };
+            let (data, path_str) = match (json_scalar, path_scalar) {
+                (ScalarRef::Null, _) | (_, ScalarRef::Null) => {
+                    rows.push(JsonTransformRow::Null);
+                    continue;
+                }
+                (ScalarRef::Variant(data), ScalarRef::String(path_str)) => (data, path_str),
+                _ => {
+                    return Err(ErrorCode::Internal(
+                        "json_path_transform: unexpected argument types",
+                    ));
+                }
+            };
+            if let Some(path_str) = const_path_str
+                && const_path.is_none()
+            {
+                const_path = Some(parse_path(path_str)?);
+            }
+            let matches = match &const_path {
+                Some(json_path) => select_locations(data, json_path)?,
+                None => select_locations(data, &parse_path(path_str)?)?,
+            };
+            if matches.is_empty() {
+                rows.push(JsonTransformRow::Unchanged);
+            } else {
+                let count = matches.len();
+                let mut locations = Vec::with_capacity(count);
+                for m in matches {
+                    locations.push(m.location);
+                    matched_values.put_slice(&m.value);
+                    matched_values.commit_row();
+                }
+                total_matches += count;
+                rows.push(JsonTransformRow::Matched { locations, count });
+            }
+        }
+
+        // Phase 2: evaluate the lambda once over all matched values.
+        let result_col = if total_matches > 0 {
+            let mut entries = Vec::with_capacity(args.len() - 1);
+            for i in 2..args.len() {
+                let entry = match &args[i] {
+                    Value::Scalar(scalar) => BlockEntry::new_const_column(
+                        data_types[i].clone(),
+                        scalar.clone(),
+                        total_matches,
+                    ),
+                    Value::Column(_) => {
+                        // Repeat the captured value of each row once per match.
+                        let mut builder =
+                            ColumnBuilder::with_capacity(&data_types[i], total_matches);
+                        for (row, transform_row) in rows.iter().enumerate() {
+                            if let JsonTransformRow::Matched { count, .. } = transform_row {
+                                let scalar = unsafe { args[i].index_unchecked(row) };
+                                for _ in 0..*count {
+                                    builder.push(scalar.clone());
+                                }
+                            }
+                        }
+                        builder.build().into()
+                    }
+                };
+                entries.push(entry);
+            }
+            let elem_col = NullableColumn::new_column(
+                Column::Variant(matched_values.build()),
+                Bitmap::new_constant(true, total_matches),
+            );
+            entries.push(elem_col.into());
+            let block = DataBlock::new(entries, total_matches);
+            Some(self.eval_lambda_block(&block, expr)?)
+        } else {
+            None
+        };
+
+        // Phase 3: rebuild each row with its matched values replaced.
+        let mut builder = ColumnBuilder::with_capacity(return_type, num_rows);
+        let mut cursor = 0usize;
+        for (row, transform_row) in rows.iter().enumerate() {
+            match transform_row {
+                JsonTransformRow::Null => {
+                    debug_assert!(return_type.is_nullable());
+                    builder.push_default();
+                }
+                JsonTransformRow::Unchanged => {
+                    let json_scalar = unsafe { args[json_idx].index_unchecked(row) };
+                    builder.push(json_scalar);
+                }
+                JsonTransformRow::Matched { locations, count } => {
+                    let result_col = result_col.as_ref().unwrap();
+                    let mut replacements: Vec<Option<&[u8]>> = Vec::with_capacity(*count);
+                    for i in cursor..cursor + count {
+                        match unsafe { result_col.index_unchecked(i) } {
+                            ScalarRef::Null => replacements.push(None),
+                            ScalarRef::Variant(data) => replacements.push(Some(data)),
+                            _ => {
+                                return Err(ErrorCode::Internal(
+                                    "json_path_transform: lambda result must be variant",
+                                ));
+                            }
+                        }
+                    }
+                    cursor += count;
+                    let json_scalar = unsafe { args[json_idx].index_unchecked(row) };
+                    let ScalarRef::Variant(data) = json_scalar else {
+                        unreachable!()
+                    };
+                    let new_data = replace_at_locations(data, locations, &replacements)?;
+                    builder.push(ScalarRef::Variant(&new_data));
+                }
+            }
+        }
+        match len {
+            Some(_) => Ok(Value::Column(builder.build())),
+            None => Ok(Value::Scalar(builder.build_scalar())),
+        }
     }
 
     pub fn get_children(

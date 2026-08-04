@@ -1,0 +1,184 @@
+statement ok
+DROP DATABASE IF EXISTS db_json_path_transform
+
+statement ok
+CREATE DATABASE db_json_path_transform
+
+statement ok
+USE db_json_path_transform
+
+# Basic scalar usage
+
+query T
+SELECT json_path_transform(parse_json('{"a":1,"b":"keep"}'), '$.a', v -> to_variant(100))
+----
+{"a":100,"b":"keep"}
+
+query T
+SELECT json_path_transform(parse_json('{"name":"hello world"}'), '$.name', v -> to_variant(upper(v::String)))
+----
+{"name":"HELLO WORLD"}
+
+query T
+SELECT json_path_transform(parse_json('[{"x":1},{"x":2},{"y":3}]'), '$[*].x', v -> to_variant(v::Int64 * 10))
+----
+[{"x":10},{"x":20},{"y":3}]
+
+query T
+SELECT json_path_transform(parse_json('[{"key":"body","value":"long text"},{"key":"other","value":"untouched"}]'), '$[*] ? (@.key == "body").value', v -> to_variant(left(v::String, 4)))
+----
+[{"key":"body","value":"long"},{"key":"other","value":"untouched"}]
+
+query T
+SELECT json_path_transform(parse_json('{"a":1}'), '$', v -> to_variant('gone'))
+----
+"gone"
+
+# Recursive wildcard with an exact level selects non-overlapping values.
+query T
+SELECT json_path_transform(parse_json('{"a":{"b":1},"c":2}'), concat('$.**', '{', '2}'), v -> to_variant(10))
+----
+{"a":{"b":10},"c":2}
+
+# NULL and no-match semantics
+
+# No match: the input is returned unchanged.
+query T
+SELECT json_path_transform(parse_json('{"a":1}'), '$.missing', v -> to_variant(0))
+----
+{"a":1}
+
+query T
+SELECT json_path_transform(NULL, '$.a', v -> to_variant(0))
+----
+NULL
+
+query T
+SELECT json_path_transform(parse_json('{"a":1}'), NULL, v -> to_variant(0))
+----
+NULL
+
+# Lambda returning NULL writes a JSON null.
+query T
+SELECT json_path_transform(parse_json('{"a":1}'), '$.a', v -> NULL)
+----
+{"a":null}
+
+# Matched JSON null is distinct from SQL NULL.
+query T
+SELECT json_path_transform(parse_json('{"a":null}'), '$.a', v -> to_variant(v IS NULL))
+----
+{"a":false}
+
+# Lax mode: bracket wildcard on a non-array auto-wraps the value.
+query T
+SELECT json_path_transform(parse_json('{"a":1}'), '$[*].a', v -> to_variant(2))
+----
+{"a":2}
+
+# An invalid constant path is parsed lazily: it is never evaluated when
+# the json argument is NULL, matching the per-row path behavior.
+query T
+SELECT json_path_transform(CAST(NULL AS VARIANT), '$$bad path', v -> to_variant(0))
+----
+NULL
+
+statement ok
+CREATE TABLE t_lazy_path(doc VARIANT NULL)
+
+statement ok
+INSERT INTO t_lazy_path VALUES (NULL), (NULL)
+
+# All rows are NULL, so the invalid constant path never fails the query.
+query T
+SELECT json_path_transform(doc, '$$bad path', v -> to_variant(0)) FROM t_lazy_path
+----
+NULL
+NULL
+
+# Empty input blocks do not evaluate the invalid constant path either.
+query I
+SELECT count() FROM (SELECT json_path_transform(doc, '$$bad path', v -> to_variant(0)) AS r FROM t_lazy_path WHERE false)
+----
+0
+
+statement ok
+DROP TABLE t_lazy_path
+
+# Table data, captured columns, dynamic paths and nested usage
+
+statement ok
+CREATE TABLE events(id INT, doc VARIANT NULL, max_len INT)
+
+statement ok
+INSERT INTO events VALUES
+    (1, parse_json('{"attributes":[{"key":"body","value":{"stringValue":"abcdefgh"}},{"key":"other","value":{"intValue":7}}]}'), 4),
+    (2, parse_json('{"attributes":[{"key":"body","value":{"stringValue":"short"}}]}'), 3),
+    (3, parse_json('{"attributes":[{"key":"other","value":{"intValue":1}}]}'), 2),
+    (4, NULL, 1)
+
+# Captured outer column (max_len) inside the lambda body.
+query IT
+SELECT id, json_path_transform(doc, '$.attributes[*] ? (@.key == "body").value.stringValue', v -> to_variant(left(v::String, max_len)))
+FROM events ORDER BY id
+----
+1 {"attributes":[{"key":"body","value":{"stringValue":"abcd"}},{"key":"other","value":{"intValue":7}}]}
+2 {"attributes":[{"key":"body","value":{"stringValue":"sho"}}]}
+3 {"attributes":[{"key":"other","value":{"intValue":1}}]}
+4 NULL
+
+# The path may be a runtime expression, not only a constant.
+query IT
+SELECT id, json_path_transform(doc,
+    if(id <= 2, '$.attributes[*] ? (@.key == "body").value.stringValue', '$.missing'),
+    v -> to_variant('replaced'))
+FROM events WHERE id IN (1, 3) ORDER BY id
+----
+1 {"attributes":[{"key":"body","value":{"stringValue":"replaced"}},{"key":"other","value":{"intValue":7}}]}
+3 {"attributes":[{"key":"other","value":{"intValue":1}}]}
+
+query T
+SELECT json_path_transform(
+    parse_json('{"content":[{"type":"text","text":"long text"},{"type":"image","url":"u"}]}'),
+    '$.content',
+    c -> json_path_transform(c, '$[*] ? (@.type == "text").text', t -> to_variant(left(t::String, 4))))
+----
+{"content":[{"text":"long","type":"text"},{"type":"image","url":"u"}]}
+
+statement ok
+DROP TABLE events
+
+# Errors
+
+statement error 1006
+SELECT json_path_transform(parse_json('{"a":1}'), '$$bad path', v -> to_variant(0))
+
+# The recursive dialect is supported, but selecting ancestors and descendants
+# together is ambiguous for replacement.
+statement error 1006
+SELECT json_path_transform(parse_json('{"a":{"b":1}}'), '$.**', v -> to_variant(0))
+
+statement error 1006
+SELECT json_path_transform(parse_json('[1,2,3]'), '$[0, 0]', v -> to_variant(0))
+
+statement error 1065
+SELECT json_path_transform(parse_json('{"a":1}'), v -> to_variant(0))
+
+statement error 1065
+SELECT json_path_transform('not variant', '$.a', v -> to_variant(0))
+
+# NULL constants do not bypass validation of the other argument or lambda.
+statement error 1065
+SELECT json_path_transform('not variant', NULL, v -> to_variant(0))
+
+statement error 1065
+SELECT json_path_transform(NULL, '$.a', (a, b) -> to_variant(0))
+
+statement error 1008
+SELECT json_path_transform(NULL, '$.a', v -> missing_lambda_function(v))
+
+statement error 1065
+SELECT json_path_transform(parse_json('{"a":1}'), '$.a', (a, b) -> to_variant(0))
+
+statement ok
+DROP DATABASE db_json_path_transform
