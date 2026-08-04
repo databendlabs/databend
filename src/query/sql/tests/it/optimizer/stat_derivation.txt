@@ -1,0 +1,81 @@
+=== sort_top_n_caps_statistics ===
+description: Top-N sort caps row-count statistics without discarding value bounds.
+sql: SELECT k FROM t ORDER BY k LIMIT 10
+operator: Sort
+cardinality: 10.000
+precise_cardinality: Some(10)
+column_stat: t.k (#0) min=1, max=100, ndv=10.0, null_count=~1.0[..10.0], histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=5.0, null_count=0, histogram=none
+
+=== row_number_statistics ===
+description: ROW_NUMBER derives a non-null positive integer range.
+sql: SELECT ROW_NUMBER() OVER (PARTITION BY p ORDER BY k) AS w FROM t
+operator: Window
+cardinality: 100.000
+precise_cardinality: Some(100)
+column_stat: t.k (#0) min=1, max=100, ndv=100.0, null_count=10, histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=5.0, null_count=0, histogram=some
+column_stat: ROW_NUMBER() OVER (PARTITION BY p ORDER BY k) (#2) min=1, max=100, ndv=~20.0[..100.0], null_count=0, histogram=none
+
+=== rank_statistics ===
+description: RANK derives a non-null range bounded by the input cardinality.
+sql: SELECT RANK() OVER (PARTITION BY p ORDER BY k) AS w FROM t
+operator: Window
+cardinality: 100.000
+precise_cardinality: Some(100)
+column_stat: t.k (#0) min=1, max=100, ndv=100.0, null_count=10, histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=5.0, null_count=0, histogram=some
+column_stat: RANK() OVER (PARTITION BY p ORDER BY k) (#2) min=1, max=100, ndv=?[..100.0], null_count=0, histogram=none
+
+=== dense_rank_statistics ===
+description: DENSE_RANK derives a non-null range bounded by the input cardinality.
+sql: SELECT DENSE_RANK() OVER (PARTITION BY p ORDER BY k) AS w FROM t
+operator: Window
+cardinality: 100.000
+precise_cardinality: Some(100)
+column_stat: t.k (#0) min=1, max=100, ndv=100.0, null_count=10, histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=5.0, null_count=0, histogram=some
+column_stat: DENSE_RANK() OVER (PARTITION BY p ORDER BY k) (#2) min=1, max=100, ndv=?[..100.0], null_count=0, histogram=none
+
+=== ntile_statistics ===
+description: NTILE derives a non-null range bounded by its bucket count.
+sql: SELECT NTILE(4) OVER (PARTITION BY p ORDER BY k) AS w FROM t
+operator: Window
+cardinality: 100.000
+precise_cardinality: Some(100)
+column_stat: t.k (#0) min=1, max=100, ndv=100.0, null_count=10, histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=5.0, null_count=0, histogram=some
+column_stat: NTILE(4) OVER (PARTITION BY p ORDER BY k) (#2) min=1, max=4, ndv=?[..4.0], null_count=0, histogram=none
+
+=== lag_statistics ===
+description: LAG inherits its argument bounds and accounts for boundary NULLs.
+sql: SELECT LAG(k) OVER (PARTITION BY p ORDER BY k) AS w FROM t
+operator: Window
+cardinality: 100.000
+precise_cardinality: Some(100)
+column_stat: t.k (#0) min=1, max=100, ndv=100.0, null_count=10, histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=5.0, null_count=0, histogram=some
+column_stat: LAG(k) OVER (PARTITION BY p ORDER BY k) (#2) min=1, max=100, ndv=100.0, null_count=~14.5[..100.0], histogram=none
+
+=== lead_default_statistics ===
+description: LEAD merges a derived default value into its argument bounds.
+sql: SELECT LEAD(k, 1, 200) OVER (PARTITION BY p ORDER BY k) AS w FROM t
+operator: Window
+cardinality: 100.000
+precise_cardinality: Some(100)
+column_stat: t.k (#0) min=1, max=100, ndv=100.0, null_count=10, histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=5.0, null_count=0, histogram=some
+column_stat: LEAD(k, 1, 200) OVER (PARTITION BY p ORDER BY k) (#3) min=1, max=200, ndv=100.0, null_count=~9.5[..100.0], histogram=none
+
+=== window_group_statistics ===
+description: WindowGroup derives statistics for every supported output column.
+sql: SELECT ROW_NUMBER() OVER (PARTITION BY p ORDER BY k), NTILE(4) OVER (PARTITION BY p ORDER BY k), LAG(k) OVER (PARTITION BY p ORDER BY k) FROM t
+operator: WindowGroup
+cardinality: 100.000
+precise_cardinality: Some(100)
+column_stat: t.k (#0) min=1, max=100, ndv=100.0, null_count=10, histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=5.0, null_count=0, histogram=some
+column_stat: ROW_NUMBER() OVER (PARTITION BY p ORDER BY k) (#2) min=1, max=100, ndv=~20.0[..100.0], null_count=0, histogram=none
+column_stat: NTILE(4) OVER (PARTITION BY p ORDER BY k) (#3) min=1, max=4, ndv=?[..4.0], null_count=0, histogram=none
+column_stat: LAG(k) OVER (PARTITION BY p ORDER BY k) (#4) min=1, max=100, ndv=100.0, null_count=~14.5[..100.0], histogram=none
+

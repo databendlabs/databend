@@ -29,6 +29,7 @@ mod outer_join_to_anti;
 mod push_down_filter_project_set;
 mod selectivity;
 mod selectivity_smoke;
+mod stat_derivation;
 mod union_all;
 
 fn table_statistics(rows: u64) -> TableStatistics {
