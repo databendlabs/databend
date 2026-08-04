@@ -352,54 +352,56 @@ impl<R: oio::ReadStream> oio::ReadStream for ConcurrentLimitWrapper<R> {
 }
 
 impl<R: oio::Write> oio::Write for ConcurrentLimitWrapper<R> {
+    // Acquire per call so long-lived writers do not pin the global IO budget
+    // between write/close/abort invocations (see test_io_handles_do_not_hold_*).
     async fn write(&mut self, bs: Buffer) -> Result<()> {
-        self.acquire().await;
+        let _permit = acquire_operation_permit(&self.semaphore, &self.labels).await;
         self.inner.write(bs).await
     }
 
     async fn close(&mut self) -> Result<Metadata> {
-        self.acquire().await;
+        let _permit = acquire_operation_permit(&self.semaphore, &self.labels).await;
         self.inner.close().await
     }
 
     async fn abort(&mut self) -> Result<()> {
-        self.acquire().await;
+        let _permit = acquire_operation_permit(&self.semaphore, &self.labels).await;
         self.inner.abort().await
     }
 }
 
 impl<R: oio::List> oio::List for ConcurrentLimitWrapper<R> {
     async fn next(&mut self) -> Result<Option<oio::Entry>> {
-        self.acquire().await;
+        let _permit = acquire_operation_permit(&self.semaphore, &self.labels).await;
         self.inner.next().await
     }
 }
 
 impl<R: oio::Delete> oio::Delete for ConcurrentLimitWrapper<R> {
     async fn delete(&mut self, path: &str, args: OpDelete) -> Result<()> {
-        self.acquire().await;
+        let _permit = acquire_operation_permit(&self.semaphore, &self.labels).await;
         self.inner.delete(path, args).await
     }
 
     async fn close(&mut self) -> Result<()> {
-        self.acquire().await;
+        let _permit = acquire_operation_permit(&self.semaphore, &self.labels).await;
         self.inner.close().await
     }
 }
 
 impl<R: oio::Copy> oio::Copy for ConcurrentLimitWrapper<R> {
     async fn next(&mut self) -> Result<Option<usize>> {
-        self.acquire().await;
+        let _permit = acquire_operation_permit(&self.semaphore, &self.labels).await;
         self.inner.next().await
     }
 
     async fn close(&mut self) -> Result<Metadata> {
-        self.acquire().await;
+        let _permit = acquire_operation_permit(&self.semaphore, &self.labels).await;
         self.inner.close().await
     }
 
     async fn abort(&mut self) -> Result<()> {
-        self.acquire().await;
+        let _permit = acquire_operation_permit(&self.semaphore, &self.labels).await;
         self.inner.abort().await
     }
 }

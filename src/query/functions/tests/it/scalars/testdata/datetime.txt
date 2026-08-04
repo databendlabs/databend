@@ -318,7 +318,7 @@ error:
   --> SQL:1:1
   |
 1 | add_years(to_date(0), 10000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Date), CAST(10000 AS Int64))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Date), CAST(10000 AS Int64))`
 
 
 
@@ -609,7 +609,7 @@ error:
   --> SQL:1:1
   |
 1 | add_years(to_timestamp(0), 10000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Timestamp), CAST(10000 AS Int64))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Timestamp), CAST(10000 AS Int64))`
 
 
 
@@ -1101,7 +1101,7 @@ error:
   --> SQL:1:1
   |
 1 | date_add(year, 10000, to_date(0))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Date), CAST(10000 AS Int64))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Date), CAST(10000 AS Int64))`
 
 
 
@@ -1365,7 +1365,7 @@ error:
   --> SQL:1:1
   |
 1 | date_add(year, 10000, to_timestamp(0))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Timestamp), CAST(10000 AS Int64))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Timestamp), CAST(10000 AS Int64))`
 
 
 
@@ -1821,7 +1821,7 @@ error:
   --> SQL:1:12
   |
 1 | to_date(0) + interval 10000 year
-  |            ^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Date), CAST(10000 AS Int64))`
+  |            ^ Invalid date: parameter 'year' is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Date), CAST(10000 AS Int64))`
 
 
 
@@ -2085,7 +2085,7 @@ error:
   --> SQL:1:17
   |
 1 | to_timestamp(0) + interval 10000 year
-  |                 ^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Timestamp), CAST(10000 AS Int64))`
+  |                 ^ Invalid date: parameter 'year' is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(CAST(CAST(0 AS Int64) AS Timestamp), CAST(10000 AS Int64))`
 
 
 
