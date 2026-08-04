@@ -60,7 +60,7 @@ impl Interpreter for AlterTablePartitionByInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
-        let Some(partition_keys) = &plan.partition_keys else {
+        let Some(table_id) = plan.table_id else {
             return Ok(PipelineBuildResult::create());
         };
         let table = match self
@@ -77,7 +77,7 @@ impl Interpreter for AlterTablePartitionByInterpreter {
         table.check_mutable()?;
         FuseTable::try_from_table(table.as_ref())?;
 
-        let partition_by = format!("({})", partition_keys.join(", "));
+        let partition_by = format!("({})", plan.partition_keys.join(", "));
         if let Some(current) = table.options().get(OPT_KEY_PARTITION_BY) {
             if current == &partition_by {
                 return Ok(PipelineBuildResult::create());
@@ -88,7 +88,7 @@ impl Interpreter for AlterTablePartitionByInterpreter {
         }
 
         let req = UpsertTableOptionReq {
-            table_id: table.get_id(),
+            table_id,
             seq: MatchSeq::Exact(table.get_table_info().ident.seq),
             options: HashMap::from([(OPT_KEY_PARTITION_BY.to_owned(), Some(partition_by))]),
         };

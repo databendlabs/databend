@@ -1457,7 +1457,8 @@ impl Binder {
                                 catalog,
                                 database,
                                 table,
-                                partition_keys: None,
+                                table_id: None,
+                                partition_keys: vec![],
                             },
                         )));
                     }
@@ -1481,7 +1482,8 @@ impl Binder {
                         catalog,
                         database,
                         table,
-                        partition_keys: Some(partition_keys),
+                        table_id: Some(tbl.get_id()),
+                        partition_keys,
                     },
                 )))
             }

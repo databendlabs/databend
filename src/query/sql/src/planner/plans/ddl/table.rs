@@ -551,7 +551,8 @@ pub struct AlterTablePartitionByPlan {
     pub database: String,
     pub table: String,
     /// `None` when `IF EXISTS` resolves a missing table during binding.
-    pub partition_keys: Option<Vec<String>>,
+    pub table_id: Option<u64>,
+    pub partition_keys: Vec<String>,
 }
 
 impl AlterTablePartitionByPlan {
