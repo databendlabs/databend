@@ -52,7 +52,6 @@ use futures::stream::Take;
 use opendal::Lister;
 use opendal::Metadata;
 use opendal::Operator;
-use opendal::operator_futures::FutureLister;
 
 use crate::table::SystemTablePart;
 
@@ -152,13 +151,16 @@ impl TempFilesTable {
         let limit = push_downs.as_ref().and_then(|x| x.limit);
 
         let operator = DataOperator::instance().spill_operator();
-        let lister = operator.lister_with(&location_prefix).recursive(true);
+        // OpenDAL 0.58 RPIT may capture Operator's lifetime; own path/operator in the future.
+        let lister_path = location_prefix.clone();
+        let lister_op = operator.clone();
+        let lister_fut = async move { lister_op.lister_with(&lister_path).recursive(true).await };
 
         let stream = {
             let prefix = location_prefix.clone();
             let mut counter = 0;
             let ctx = ctx.clone();
-            let builder = ListerStreamSourceBuilder::with_lister_fut(operator, lister);
+            let builder = ListerStreamSourceBuilder::with_lister_fut(operator, lister_fut);
             builder
                 .limit_opt(limit)
                 .chunk_size(MAX_BATCH_SIZE)
@@ -226,7 +228,7 @@ pub struct ListerStreamSourceBuilder<T>
 where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 {
     op: Operator,
-    lister_fut: FutureLister<T>,
+    lister_fut: T,
     limit: Option<usize>,
     chunk_size: usize,
 }
@@ -234,7 +236,7 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 impl<T> ListerStreamSourceBuilder<T>
 where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 {
-    pub fn with_lister_fut(op: Operator, lister_fut: FutureLister<T>) -> Self {
+    pub fn with_lister_fut(op: Operator, lister_fut: T) -> Self {
         Self {
             op,
             lister_fut,
@@ -269,7 +271,7 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 
 fn stream_source_from_entry_lister_with_chunk_size<T>(
     op: Operator,
-    lister_fut: FutureLister<T>,
+    lister_fut: T,
     limit: Option<usize>,
     chunk_size: usize,
     block_builder: impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static,
@@ -278,7 +280,7 @@ where
     T: Future<Output = opendal::Result<Lister>> + Send + 'static,
 {
     enum ListerState<U: Future<Output = opendal::Result<Lister>> + Send + 'static> {
-        Uninitialized(FutureLister<U>),
+        Uninitialized(U),
         Initialized(Chunks<Take<Lister>>),
     }
 

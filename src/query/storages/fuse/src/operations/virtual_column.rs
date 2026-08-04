@@ -508,7 +508,7 @@ pub async fn cleanup_vacuum_virtual_column_files(
         "{}/{}/",
         table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1
     );
-    operator.remove_all(&v1_prefix).await?;
+    operator.delete_with(&v1_prefix).recursive(true).await?;
 
     // remove orphan virtual column files
     let Some(snapshot_referenced_segments) = fuse_table

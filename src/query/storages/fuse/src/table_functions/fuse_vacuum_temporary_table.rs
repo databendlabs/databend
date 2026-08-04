@@ -99,7 +99,7 @@ pub async fn vacuum_inactive_temp_tables(
                 "[TEMP TABLE] session={session_id} vacuum temporary table: {}",
                 path
             );
-            op.remove_all(&path).await?;
+            op.delete_with(&path).recursive(true).await?;
             session_num += 1;
         }
     }

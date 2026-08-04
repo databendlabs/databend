@@ -567,6 +567,8 @@ sqllogictest = "0.28.4"
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
+# fastrace 0.7.18+ `#[trace]` expands function bodies with an extra brace block.
+unused_braces = "allow"
 
 [workspace.lints.clippy]
 useless_format = "allow"

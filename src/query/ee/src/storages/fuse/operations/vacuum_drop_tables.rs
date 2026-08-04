@@ -72,9 +72,13 @@ async fn vacuum_drop_single_table(
 
     match dry_run_limit {
         None => {
-            operator.remove_all(&dir).await.inspect_err(|err| {
-                error!("failed to remove all in directory {}: {}", dir, err);
-            })?;
+            operator
+                .delete_with(&dir)
+                .recursive(true)
+                .await
+                .inspect_err(|err| {
+                    error!("failed to remove all in directory {}: {}", dir, err);
+                })?;
         }
         Some(dry_run_limit) => {
             let mut ds = operator.lister_with(&dir).recursive(true).await?;

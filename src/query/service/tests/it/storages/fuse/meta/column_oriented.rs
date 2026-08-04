@@ -82,9 +82,7 @@ async fn generate_column_oriented_segment()
 
     let mut block_metas = Vec::new();
 
-    let operator = Operator::new(opendal::services::Memory::default())
-        .unwrap()
-        .finish();
+    let operator = Operator::new(opendal::services::Memory::default()).unwrap();
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     for block in data_blocks {
         let col_stats = gen_columns_statistics(
@@ -354,9 +352,7 @@ async fn test_segment_builder() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_segment_cache() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup_with_segment_cache_bytes(1024 * 1024 * 10).await?;
-    let operator = Operator::new(opendal::services::Memory::default())
-        .unwrap()
-        .finish();
+    let operator = Operator::new(opendal::services::Memory::default()).unwrap();
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     let location =
         loc_generator.gen_segment_info_location(TestFixture::default_table_meta_timestamps(), true);
