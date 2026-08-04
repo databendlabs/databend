@@ -368,12 +368,13 @@ num-traits = "0.2.19"
 num_cpus = "1.17"
 object = "0.36.5"
 object_store = "0.12.4"
-object_store_opendal = { version = "0.54.1" }
+object_store_opendal = { version = "0.58.0" }
 once_cell = "1.15.0"
-opendal = { version = "0.54.1", features = [
+opendal = { version = "0.58.1", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
+    "layers-immutable-index",
     "services-s3",
     "services-fs",
     "services-gcs",
@@ -386,7 +387,9 @@ opendal = { version = "0.54.1", features = [
     "services-http",
     "services-webhdfs",
     "services-huggingface",
+    "services-memory",
 ] }
+opendal-layer-observe-metrics-common = "0.58.1"
 opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", tag = "v0.10.0", features = ["tls"] }
 orc-rust = "0.6.0"
 ordered-float = { version = "5.1.0", default-features = false }
@@ -535,12 +538,12 @@ vergen-gix = { version = "1", features = ["build", "cargo", "rustc"] }
 
 # Observability
 env_logger = "0.11"
-fastrace = { version = "0.7.14", features = ["enable"] }
-fastrace-opentelemetry = "0.10"
+fastrace = { version = "0.7.19", features = ["enable"] }
+fastrace-opentelemetry = "0.17"
 log = { version = "0.4.27", features = ["serde", "kv_serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-opentelemetry = { version = "0.29", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.29", default-features = false, features = [
+opentelemetry = { version = "0.31", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = [
     "trace",
     "logs",
     "metrics",
@@ -550,7 +553,7 @@ opentelemetry-otlp = { version = "0.29", default-features = false, features = [
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry_sdk = { version = "0.29", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry_sdk = { version = "0.31", features = ["trace", "logs", "rt-tokio"] }
 prometheus-client = "0.22"
 prometheus-parse = "0.2.3"
 tracing = "0.1.40"

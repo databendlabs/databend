@@ -100,7 +100,7 @@ impl Files {
         let backend_delete_limit = self
             .operator
             .info()
-            .full_capability()
+            .capability()
             .delete_max_size
             .unwrap_or(1)
             .max(1);

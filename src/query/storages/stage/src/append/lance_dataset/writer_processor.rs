@@ -761,7 +761,7 @@ mod tests {
 
     #[test]
     fn test_build_store_params_preserves_accessor_scheme() {
-        let accessor = Operator::new(Memory::default()).unwrap().finish();
+        let accessor = Operator::new(Memory::default()).unwrap();
         let params = FragmentWriterParams::build_store_params(accessor, "tmp").unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()

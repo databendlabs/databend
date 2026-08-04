@@ -372,9 +372,14 @@ impl SnapshotsIO {
                     Some(path) if de.path() == path => continue,
                     _ => {
                         let last_modified = if let Some(last_modified) = meta.last_modified() {
-                            Some(last_modified)
+                            Some(databend_common_storage::opendal_timestamp_to_chrono(
+                                last_modified,
+                            ))
                         } else {
-                            op.stat(de.path()).await?.last_modified()
+                            op.stat(de.path())
+                                .await?
+                                .last_modified()
+                                .map(databend_common_storage::opendal_timestamp_to_chrono)
                         };
 
                         let location = de.path().to_string();

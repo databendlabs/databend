@@ -82,7 +82,7 @@ impl SpillerDiskConfig {
     pub fn new(temp_dir: Arc<TempDir>, enable_dio: bool) -> Result<SpillerDiskConfig> {
         let local_operator = if !enable_dio {
             let builder = Fs::default().root(temp_dir.path().to_str().unwrap());
-            Some(Operator::new(builder)?.finish())
+            Some(Operator::new(builder)?)
         } else {
             None
         };

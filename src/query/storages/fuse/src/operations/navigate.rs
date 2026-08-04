@@ -320,7 +320,7 @@ impl FuseTable {
             target_uuid.as_simple()
         );
 
-        let has_start_after = op.info().full_capability().list_with_start_after;
+        let has_start_after = op.info().capability().list_with_start_after;
 
         let mut lister = if has_start_after {
             op.lister_with(&snapshot_prefix)
@@ -559,10 +559,11 @@ impl FuseTable {
             match meta.mode() {
                 EntryMode::FILE => {
                     let modified = if let Some(v) = meta.last_modified() {
-                        Some(v)
+                        Some(databend_common_storage::opendal_timestamp_to_chrono(v))
                     } else {
                         let meta = op.stat(de.path()).await?;
                         meta.last_modified()
+                            .map(databend_common_storage::opendal_timestamp_to_chrono)
                     };
 
                     let location = de.path().to_string();

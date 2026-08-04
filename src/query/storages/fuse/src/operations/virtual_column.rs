@@ -887,7 +887,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_collect_virtual_locations_empty_prefix() -> Result<()> {
-        let operator = Operator::new(Memory::default())?.finish();
+        let operator = Operator::new(Memory::default())?;
         let mut files = Vec::new();
         collect_virtual_locations(&operator, "missing/_vb_v2/", &mut files).await?;
         assert!(files.is_empty());

@@ -24,9 +24,10 @@ use databend_common_base::runtime::metrics::FamilyHistogram;
 use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::register_gauge_family;
 use databend_common_base::runtime::metrics::register_histogram_family;
-use opendal::layers::observe;
-use opendal::raw::Access;
+use opendal::OperationContext;
 use opendal::raw::Layer;
+use opendal::raw::Servicer;
+use opendal_layer_observe_metrics_common as observe;
 use prometheus_client::encoding::EncodeLabel;
 use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::encoding::LabelSetEncoder;
@@ -40,11 +41,13 @@ pub struct MetricsLayer {
     metrics: MetricsRecorder,
 }
 
-impl<A: Access> Layer<A> for MetricsLayer {
-    type LayeredAccess = observe::MetricsAccessor<A, MetricsRecorder>;
+impl Layer for MetricsLayer {
+    fn apply_service(&self, inner: Servicer) -> Servicer {
+        observe::MetricsLayer::new(self.metrics.clone()).apply_service(inner)
+    }
 
-    fn layer(&self, inner: A) -> Self::LayeredAccess {
-        observe::MetricsLayer::new(self.metrics.clone()).layer(inner)
+    fn apply_context(&self, srv: Servicer, inner: OperationContext) -> OperationContext {
+        observe::MetricsLayer::new(self.metrics.clone()).apply_context(srv, inner)
     }
 }
 
@@ -355,9 +358,7 @@ mod tests {
 
     #[tokio::test]
     async fn metrics_layer_records_thread_tracker_io_stats() -> Result<()> {
-        let op = Operator::new(services::Memory::default())?
-            .layer(METRICS_LAYER.clone())
-            .finish();
+        let op = Operator::new(services::Memory::default())?.layer(METRICS_LAYER.clone());
 
         let mut payload = ThreadTracker::new_tracking_payload();
         payload.io_stats = Some(std::sync::Arc::new(

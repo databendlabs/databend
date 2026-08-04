@@ -60,7 +60,7 @@ impl Interpreter for PresignInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "presign_interpreter_execute");
 
         let op = init_stage_operator(&self.plan.stage)?;
-        if !op.info().full_capability().presign {
+        if !op.info().capability().presign {
             return Err(ErrorCode::StorageUnsupported(
                 "storage doesn't support presign operation",
             ));

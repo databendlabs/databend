@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use databend_common_meta_app::storage::StorageParams;
-use opendal::Scheme;
+
 use opendal::raw::normalize_root;
 
 #[derive(Debug)]
@@ -95,7 +95,7 @@ pub fn get_external_storage_connection(
     match storage_params {
         StorageParams::S3(config) => {
             info.set_uri(
-                Scheme::S3.to_string(),
+                "s3".to_string(),
                 config.bucket.clone(),
                 config.root.clone(),
             );
@@ -118,7 +118,7 @@ pub fn get_external_storage_connection(
         }
         StorageParams::Azblob(config) => {
             info.set_uri(
-                Scheme::Azblob.to_string(),
+                "azblob".to_string(),
                 config.container.clone(),
                 config.root.clone(),
             );
@@ -129,7 +129,7 @@ pub fn get_external_storage_connection(
         }
         StorageParams::Gcs(config) => {
             info.set_uri(
-                Scheme::Gcs.to_string(),
+                "gcs".to_string(),
                 config.bucket.clone(),
                 config.root.clone(),
             );
@@ -139,7 +139,7 @@ pub fn get_external_storage_connection(
         }
         StorageParams::Oss(config) => {
             info.set_uri(
-                Scheme::Oss.to_string(),
+                "oss".to_string(),
                 config.bucket.clone(),
                 config.root.clone(),
             );
@@ -165,7 +165,7 @@ pub fn get_external_storage_connection(
         }
         StorageParams::Cos(config) => {
             info.set_uri(
-                Scheme::Cos.to_string(),
+                "cos".to_string(),
                 config.bucket.clone(),
                 config.root.clone(),
             );
@@ -176,7 +176,7 @@ pub fn get_external_storage_connection(
         }
         StorageParams::Obs(config) => {
             info.set_uri(
-                Scheme::Obs.to_string(),
+                "obs".to_string(),
                 config.bucket.clone(),
                 config.root.clone(),
             );

@@ -43,7 +43,7 @@ use log::warn;
 use opendal::Entry;
 use opendal::ErrorKind;
 use opendal::Operator;
-use opendal::Scheme;
+
 
 use crate::FuseTable;
 use crate::RetentionPolicy;
@@ -176,16 +176,18 @@ async fn is_gc_candidate_segment_block(
         return Ok(true);
     }
     let last_modified = if let Some(v) = entry.metadata().last_modified() {
-        v
+        databend_common_storage::opendal_timestamp_to_chrono(v)
     } else {
         let path = entry.path();
         let meta = op.stat(path).await?;
-        meta.last_modified().ok_or_else(|| {
-            ErrorCode::StorageOther(format!(
-                "Failed to get `last_modified` metadata of the entry '{}'",
-                path
-            ))
-        })?
+        meta.last_modified()
+            .map(databend_common_storage::opendal_timestamp_to_chrono)
+            .ok_or_else(|| {
+                ErrorCode::StorageOther(format!(
+                    "Failed to get `last_modified` metadata of the entry '{}'",
+                    path
+                ))
+            })?
     };
 
     Ok(last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
@@ -253,7 +255,7 @@ impl FuseTable {
         let dal = self.get_operator_ref();
 
         match dal.info().scheme() {
-            Scheme::Fs => {
+            "fs" | "file" => {
                 fs_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await
             }
             _ => general_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
@@ -588,12 +590,15 @@ impl FuseTable {
         let dal = self.get_operator_ref();
         let gc_root = SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await;
         let gc_root_meta_ts = match dal.stat(&gc_root_path).await {
-            Ok(v) => v.last_modified().ok_or_else(|| {
-                ErrorCode::StorageOther(format!(
-                    "Failed to get `last_modified` metadata of the gc root object '{}'",
-                    gc_root_path
-                ))
-            })?,
+            Ok(v) => v
+                .last_modified()
+                .map(databend_common_storage::opendal_timestamp_to_chrono)
+                .ok_or_else(|| {
+                    ErrorCode::StorageOther(format!(
+                        "Failed to get `last_modified` metadata of the gc root object '{}'",
+                        gc_root_path
+                    ))
+                })?,
             Err(e) => {
                 return if e.kind() == ErrorKind::NotFound {
                     // Concurrent vacuum, ignore it
@@ -619,13 +624,18 @@ impl FuseTable {
                         // support vacuum2, we rely on the `ASSUMPTION_MAX_TXN_DURATION` to identify if
                         // it is available to be vacuumed.
                         let last_modified = match snapshot.metadata().last_modified() {
-                            None => dal.stat(path).await?.last_modified().ok_or_else(|| {
-                                ErrorCode::StorageOther(format!(
-                                    "Failed to get `last_modified` metadata of the snapshot object '{}'",
-                                    gc_root_path
-                                ))
-                            })?,
-                            Some(v) => v,
+                            None => dal
+                                .stat(path)
+                                .await?
+                                .last_modified()
+                                .map(databend_common_storage::opendal_timestamp_to_chrono)
+                                .ok_or_else(|| {
+                                    ErrorCode::StorageOther(format!(
+                                        "Failed to get `last_modified` metadata of the snapshot object '{}'",
+                                        gc_root_path
+                                    ))
+                                })?,
+                            Some(v) => databend_common_storage::opendal_timestamp_to_chrono(v),
                         };
                         if last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts {
                             gc_candidates.push(path.to_owned());

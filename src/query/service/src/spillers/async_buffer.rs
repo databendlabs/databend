@@ -826,7 +826,7 @@ mod tests {
 
     fn create_test_operator() -> std::io::Result<Operator> {
         let builder = opendal::services::Fs::default().root("/tmp");
-        Ok(Operator::new(builder)?.finish())
+        Ok(Operator::new(builder)?)
     }
 
     #[tokio::test(flavor = "multi_thread")]

@@ -378,7 +378,7 @@ mod tests {
         init_test_globals()?;
         let schema = test_schema();
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![10, 20, 30, 40])]);
-        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let operator = opendal::Operator::via_iter(opendal::services::MEMORY_SCHEME, [])?;
         let (index_location, index_size) = write_bloom_index(&operator, &schema, &block).await?;
         let part = make_part(&schema, index_location, index_size, 10, 40);
         let expr = inlist_expr("y", &[11, 21, 31])?;
@@ -411,7 +411,7 @@ mod tests {
         init_test_globals()?;
         let schema = test_schema();
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![10, 20, 30, 40])]);
-        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let operator = opendal::Operator::via_iter(opendal::services::MEMORY_SCHEME, [])?;
         let (index_location, index_size) = write_bloom_index(&operator, &schema, &block).await?;
         let part = make_part(&schema, index_location, index_size, 10, 40);
         let pruner = ExprRuntimePruner::new(
@@ -437,7 +437,7 @@ mod tests {
     async fn test_runtime_inlist_keeps_block_without_bloom_index() -> Result<()> {
         init_test_globals()?;
         let schema = test_schema();
-        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let operator = opendal::Operator::via_iter(opendal::services::MEMORY_SCHEME, [])?;
         let part = make_part(&schema, None, 0, 10, 40);
         let pruner = ExprRuntimePruner::new(
             FunctionContext::default(),
@@ -644,7 +644,7 @@ mod tests {
         init_test_globals()?;
         let schema = test_schema();
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![10, 20, 30, 40])]);
-        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let operator = opendal::Operator::via_iter(opendal::services::MEMORY_SCHEME, [])?;
         let (index_location, index_size) = write_bloom_index(&operator, &schema, &block).await?;
         let part = make_part(&schema, index_location, index_size, 10, 40);
         let pruner = ExprRuntimePruner::new(
@@ -674,7 +674,7 @@ mod tests {
             .map(|value| value * 100 + 42)
             .collect::<Vec<_>>();
         let block = DataBlock::new_from_columns(vec![UInt64Type::from_data(values)]);
-        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let operator = opendal::Operator::via_iter(opendal::services::MEMORY_SCHEME, [])?;
         let (index_location, index_size) = write_bloom_index(&operator, &schema, &block).await?;
         let part = make_part_u64(&schema, index_location, index_size, 42, 99942);
         let pruner = ExprRuntimePruner::new(

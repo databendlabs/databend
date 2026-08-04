@@ -106,7 +106,7 @@ impl InmMemoryFile {
             ..Default::default()
         };
 
-        let op: Operator = Operator::new(Memory::default())?.finish();
+        let op: Operator = Operator::new(Memory::default())?;
         let mut reader_builder = ParquetReaderBuilder::create_with_parquet_schema(
             ctx,
             Arc::new(op),

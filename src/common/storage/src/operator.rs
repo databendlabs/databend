@@ -45,16 +45,19 @@ use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
 use opendal::Builder;
+use opendal::HttpTransporter;
+use opendal::OperationContext;
 use opendal::Operator;
 use opendal::layers::AsyncBacktraceLayer;
 use opendal::layers::FastraceLayer;
-use opendal::layers::HttpClientLayer;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
+use opendal::layers::RetryEvent;
 use opendal::layers::RetryInterceptor;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
-use opendal::raw::HttpClient;
+use opendal::raw::Layer;
+use opendal::raw::Servicer;
 use opendal::services;
 
 use crate::StorageConfig;
@@ -167,32 +170,20 @@ pub(crate) fn init_operator_uncached(
     Ok(op)
 }
 
-/// Please take care about the timing of calling opendal's `finish`.
+/// Build an operator with Databend storage layers.
 ///
-/// Layers added before `finish` will use static dispatch, and layers added after `finish`
-/// will use dynamic dispatch. Adding too many layers via static dispatch will increase
-/// the compile time of rustc or even results in a compile error.
-///
-/// ```txt
-/// error[E0275]: overflow evaluating the requirement `http::response::Response<()>: std::marker::Send`
-///      |
-///      = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`databend_common_storage`)
-/// note: required because it appears within the type `h2::proto::peer::PollMessage`
-///     --> /home/xuanwo/.cargo/registry/src/index.crates.io-6f17d22bba15001f/h2-0.4.5/src/proto/peer.rs:43:10
-///      |
-/// 43   | pub enum PollMessage {
-///      |          ^^^^^^^^^^^
-/// ```
-///
-/// Please balance the performance and compile time.
+/// OpenDAL 0.58 returns a finished operator from `Operator::new`; all layers
+/// use dynamic dispatch through the service stack.
 fn build_operator<B: Builder>(
     builder: B,
     cfg: Option<&StorageNetworkParams>,
     endpoint_policy_scope: EndpointPolicyScope,
 ) -> Result<Operator> {
-    let ob = Operator::new(builder)?
-        // Timeout layer is required to be the first layer so that internal
-        // futures can be cancelled safely when the timeout is reached.
+    let transport = HttpTransporter::new(get_http_client(cfg, endpoint_policy_scope));
+
+    let mut op = Operator::new(builder)?
+        // Timeout layer is required early so internal futures can be cancelled
+        // safely when the timeout is reached.
         .layer({
             let mut retry_timeout = match &cfg {
                 None => 10,
@@ -239,19 +230,11 @@ fn build_operator<B: Builder>(
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
         .layer(RuntimeLayer::new(GlobalIORuntime::instance()))
-        .finish();
-
-    // Make sure the http client has been updated.
-    // HTTP-based storage backends built through this path, including S3,
-    // Azblob, GCS, OSS, OBS, COS and HTTP, share StorageHttpClient. Only
-    // operators built with EndpointPolicyScope::External apply request-time
-    // endpoint egress checks; trusted config-backed operators bypass them.
-    let ob = ob.layer(HttpClientLayer::new(HttpClient::with(get_http_client(
-        cfg,
-        endpoint_policy_scope,
-    ))));
-
-    let mut op = ob
+        // HTTP-based storage backends built through this path, including S3,
+        // Azblob, GCS, OSS, OBS, COS and HTTP, share StorageHttpClient. Only
+        // operators built with EndpointPolicyScope::External apply request-time
+        // endpoint egress checks; trusted config-backed operators bypass them.
+        .layer(HttpTransportLayer(transport))
         // Add retry
         .layer(
             RetryLayer::new()
@@ -259,12 +242,12 @@ fn build_operator<B: Builder>(
                 .with_notify(DatabendRetryInterceptor),
         )
         // Add async backtrace
-        .layer(AsyncBacktraceLayer)
+        .layer(AsyncBacktraceLayer::new())
         // Add logging
         .layer(LoggingLayer::default())
         // Add tracing
-        .layer(FastraceLayer)
-        // Add PrometheusClientLayer
+        .layer(FastraceLayer::new())
+        // Add metrics
         .layer(METRICS_LAYER.clone());
 
     let mut max_concurrent_request = cfg.as_ref().map(|x| x.max_concurrent_io_requests);
@@ -282,6 +265,16 @@ fn build_operator<B: Builder>(
     }
 
     Ok(op)
+}
+
+/// Install a custom HTTP transport into the operator context.
+#[derive(Clone, Debug)]
+struct HttpTransportLayer(HttpTransporter);
+
+impl Layer for HttpTransportLayer {
+    fn apply_context(&self, _srv: Servicer, inner: OperationContext) -> OperationContext {
+        inner.with_http_transport(self.0.clone())
+    }
 }
 
 fn get_http_client(
@@ -448,9 +441,6 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.region("us-east-1");
     }
 
-    // Always enable versioning support.
-    builder = builder.enable_versioning(true);
-
     // Credential.
     builder = builder
         .access_key_id(&cfg.access_key_id)
@@ -458,8 +448,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         .session_token(&cfg.security_token)
         .role_arn(&cfg.role_arn)
         .external_id(&cfg.external_id)
-        // It's safe to allow anonymous since opendal will perform the check first.
-        .allow_anonymous()
+        // Skip signing when credentials are absent; opendal still checks access.
+        .skip_signature()
         // Root.
         .root(&cfg.root);
 
@@ -497,8 +487,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         && cfg.security_token.is_empty()
         && cfg.role_arn.is_empty()
     {
-        // Allow anonymous is actually forcing unsigned requests in OpenDAL.
-        builder = builder.allow_anonymous();
+        // skip_signature forces unsigned requests in OpenDAL.
+        builder = builder.skip_signature();
     }
 
     // Enable virtual host style
@@ -541,7 +531,7 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
     // When role_arn is set, we should not force anonymous access so that
     // the credential chain can assume the role.
     if cfg.role_arn.is_empty() && cfg.access_key_id.is_empty() && cfg.access_key_secret.is_empty() {
-        builder = builder.allow_anonymous();
+        builder = builder.skip_signature();
     }
 
     Ok(builder)
@@ -589,13 +579,17 @@ fn init_huggingface_operator(cfg: &StorageHuggingfaceConfig) -> Result<impl Buil
 pub struct DatabendRetryInterceptor;
 
 impl RetryInterceptor for DatabendRetryInterceptor {
-    fn intercept(&self, err: &opendal::Error, dur: Duration) {
-        let labels = vec![("err", err.kind().to_string())];
+    fn intercept(&self, event: RetryEvent<'_>) {
+        let labels = vec![("err", event.err.kind().to_string())];
         METRIC_OPENDAL_RETRIES_COUNT.get_or_create(&labels).inc();
         warn!(
             target: "opendal::layers::retry",
-            "will retry after {:.2}s because: {:?}",
-            dur.as_secs_f64(), err)
+            "will retry {:?} (attempt {}) after {:.2}s because: {:?}",
+            event.op,
+            event.attempt,
+            event.retry_after.as_secs_f64(),
+            event.err
+        )
     }
 }
 
@@ -858,7 +852,7 @@ impl IcebergFileIO {
                 }
                 "s3.allow-anonymous" => {
                     if ["true", "t", "1", "on"].contains(&value.to_lowercase().as_str()) {
-                        opendal_config.insert("allow_anonymous".to_string(), "true".to_string());
+                        opendal_config.insert("skip_signature".to_string(), "true".to_string());
                     }
                     None
                 }
@@ -879,12 +873,12 @@ impl IcebergFileIO {
         }
 
         let opendal_scheme = match self.scheme.as_str() {
-            "s3" | "s3a" => opendal::Scheme::S3,
-            "gs" | "gcs" => opendal::Scheme::Gcs,
-            "oss" => opendal::Scheme::Oss,
-            "abfs" | "abfss" | "wasb" | "wasbs" => opendal::Scheme::Azdls,
-            "file" | "" => opendal::Scheme::Fs,
-            "memory" => opendal::Scheme::Memory,
+            "s3" | "s3a" => services::S3_SCHEME,
+            "gs" | "gcs" => services::GCS_SCHEME,
+            "oss" => services::OSS_SCHEME,
+            "abfs" | "abfss" | "wasb" | "wasbs" => services::AZDLS_SCHEME,
+            "file" | "" => services::FS_SCHEME,
+            "memory" => services::MEMORY_SCHEME,
             _ => {
                 return Err(Error::new(
                     ErrorKind::Unsupported,

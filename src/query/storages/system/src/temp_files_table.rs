@@ -203,7 +203,7 @@ impl TempFilesTable {
                 temp_files_name.push(path.trim_start_matches(location_prefix).to_string());
 
                 temp_files_last_modified
-                    .push(metadata.last_modified().map(|x| x.timestamp_micros()));
+                    .push(metadata.last_modified().map(|x| x.into_inner().as_microsecond()));
                 temp_files_content_length.push(metadata.content_length());
             }
         }
