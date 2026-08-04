@@ -37,11 +37,13 @@ use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_catalog::table::ReusablePrunedMetas;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
@@ -101,7 +103,9 @@ use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
 use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
+use crate::pruning_pipeline::PrunedSegmentMeta;
 use crate::pruning_pipeline::RuntimeFilterPruneContext;
+use crate::pruning_pipeline::RuntimeTopNSegmentReorder;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
 use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
@@ -623,6 +627,15 @@ impl FuseTable {
             )
         })?;
 
+        // Under runtime TopN (`enable_top_n`), schedule the most promising
+        // segments first so the shared boundary converges early.
+        let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
+        Self::add_runtime_top_n_segment_reorder::<PrunedCompactSegmentMeta>(
+            prune_pipeline,
+            &runtime_scan_filters,
+            max_threads,
+        )?;
+
         let pruning_cost = pruner.pruning_ctx.pruning_cost.clone();
         prune_pipeline.add_transform(|input, output| {
             ExtractSegmentTransform::create(input, output, true, pruning_cost.clone())
@@ -662,16 +675,22 @@ impl FuseTable {
         }
 
         let push_down = pruner.push_down.clone();
+        // The static TopN pruner accumulates every surviving block meta
+        // behind a single-stream barrier before emitting a minimal cover.
+        // The runtime TopN boundary subsumes its value-statistics branch
+        // (skip it to keep the pipeline streaming), but not the
+        // inverted-index based limit prune. Plan-time (eager) pruning always
+        // keeps it: filters are only registered at pipeline build.
         if push_down
             .as_ref()
             .filter(|p| {
-                (!p.order_by.is_empty()
+                let value_top_n = !p.order_by.is_empty()
                     && p.limit.is_some()
                     && p.filters.is_none()
-                    && p.secure_filters.is_none())
-                    || (p.limit.is_some()
-                        && p.secure_filters.is_none()
-                        && p.filter_only_use_index())
+                    && p.secure_filters.is_none();
+                let index_limit =
+                    p.limit.is_some() && p.secure_filters.is_none() && p.filter_only_use_index();
+                (value_top_n && runtime_scan_filters.preferred_filter().is_none()) || index_limit
             })
             .is_some()
         {
@@ -717,8 +736,10 @@ impl FuseTable {
             .as_ref()
             .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit);
-        let enable_prune_cache =
-            enable_prune_cache_for_query(&ctx)? && runtime_filter_prune_context.is_none();
+        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?
+            && runtime_filter_prune_context.is_none()
+            && runtime_scan_filters.is_empty();
+        let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
             limit,
@@ -734,6 +755,8 @@ impl FuseTable {
                 top_k.clone(),
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
+                runtime_scan_filters.clone(),
+                dry_run,
                 enable_prune_cache,
             )
         })?;
@@ -752,6 +775,23 @@ impl FuseTable {
         });
 
         Ok(())
+    }
+
+    fn add_runtime_top_n_segment_reorder<M: PrunedSegmentMeta + BlockMetaInfo>(
+        prune_pipeline: &mut Pipeline,
+        runtime_scan_filters: &RuntimeScanFilters,
+        max_threads: usize,
+    ) -> Result<()> {
+        let Some((filter, order)) = runtime_scan_filters.preferred_filter() else {
+            return Ok(());
+        };
+
+        let window = (max_threads * 8).clamp(64, 1024);
+        prune_pipeline.resize(1, false)?;
+        prune_pipeline.add_transform(|input, output| {
+            RuntimeTopNSegmentReorder::<M>::create(input, output, filter.clone(), order, window)
+        })?;
+        prune_pipeline.try_resize(max_threads)
     }
 
     pub fn prune_column_oriented_segments_with_pipeline(
@@ -822,6 +862,12 @@ impl FuseTable {
                 }
             }
         }
+        let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
+        if let Some((_, order)) = runtime_scan_filters.preferred_filter() {
+            if !block_prune_column_ids.contains(&order.column_id) {
+                block_prune_column_ids.push(order.column_id);
+            }
+        }
 
         let mut segment_column_projection = HashSet::new();
         for column_id in projection_column_ids.iter() {
@@ -859,7 +905,14 @@ impl FuseTable {
                 pruner.pruning_ctx.clone(),
             )
         })?;
+        // Same segment scheduling as the row-oriented path.
+        Self::add_runtime_top_n_segment_reorder::<PrunedColumnOrientedSegmentMeta>(
+            prune_pipeline,
+            &runtime_scan_filters,
+            max_threads,
+        )?;
         // TODO(Sky): deal with sample
+        let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
         prune_pipeline.add_sink(|input| {
             ColumnOrientedBlockPruneSink::create(
                 input,
@@ -867,6 +920,8 @@ impl FuseTable {
                 part_info_tx.clone(),
                 block_prune_column_ids.clone(),
                 runtime_filter_prune_context.clone(),
+                runtime_scan_filters.clone(),
+                dry_run,
             )
         })?;
         // TODO(Sky): populate prune cache , deal with topn prune

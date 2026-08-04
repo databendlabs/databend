@@ -1,0 +1,234 @@
+# EXPLAIN shape tests for the fused TopN operator (`enable_top_n`).
+
+statement ok
+create or replace table t_top_n_explain (a int null, b int not null, c string not null);
+
+statement ok
+set enable_top_n = 1;
+
+# Fused single-node TopN: final stage above partial stage, offset applied at
+# the final stage only, limit + offset pushed down to the scan. Lazy read
+# keeps non-sort columns behind a RowFetch above the final stage.
+query T
+explain select a, b from t_top_n_explain order by a desc limit 3 offset 2
+----
+RowFetch
+├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3), t_top_n_explain.b (#1)]
+├── columns to fetch: [b]
+├── estimated rows: <slt:ignore>
+└── TopN(Final)
+    ├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3)]
+    ├── sort keys: [a DESC NULLS LAST]
+    ├── limit: 3
+    ├── offset: 2
+    ├── estimated rows: <slt:ignore>
+    └── TopN(Partial)
+        ├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3), #_order_col]
+        ├── sort keys: [a DESC NULLS LAST]
+        ├── limit: 5
+        ├── offset: 0
+        ├── estimated rows: <slt:ignore>
+        └── TableScan
+            ├── table: default.default.t_top_n_explain
+            ├── scan id: 0
+            ├── output columns: [a (#0), _row_id (#3)]
+            ├── read rows: <slt:ignore>
+            ├── read size: <slt:ignore>
+            ├── partitions total: <slt:ignore>
+            ├── partitions scanned: <slt:ignore>
+            ├── push downs: [filters: [], limit: 5]
+            └── estimated rows: <slt:ignore>
+
+# Multi-key ordering appends an order column in the partial stage.
+query T
+explain select a, b from t_top_n_explain order by a desc, b asc limit 5
+----
+TopN(Final)
+├── output columns: [t_top_n_explain.a (#0), t_top_n_explain.b (#1)]
+├── sort keys: [a DESC NULLS LAST, b ASC NULLS LAST]
+├── limit: 5
+├── offset: 0
+├── estimated rows: <slt:ignore>
+└── TopN(Partial)
+    ├── output columns: [t_top_n_explain.a (#0), t_top_n_explain.b (#1), #_order_col]
+    ├── sort keys: [a DESC NULLS LAST, b ASC NULLS LAST]
+    ├── limit: 5
+    ├── offset: 0
+    ├── estimated rows: <slt:ignore>
+    └── TableScan
+        ├── table: default.default.t_top_n_explain
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: <slt:ignore>
+        ├── read size: <slt:ignore>
+        ├── partitions total: <slt:ignore>
+        ├── partitions scanned: <slt:ignore>
+        ├── push downs: [filters: [], limit: 5]
+        └── estimated rows: <slt:ignore>
+
+# ORDER BY an expression keeps the EvalScalar below TopN.
+query T
+explain select a from t_top_n_explain order by a + 1 limit 2
+----
+TopN(Final)
+├── output columns: [t_top_n_explain.a (#0), a + 1 (#3)]
+├── sort keys: [a + 1 ASC NULLS LAST]
+├── limit: 2
+├── offset: 0
+├── estimated rows: <slt:ignore>
+└── TopN(Partial)
+    ├── output columns: [t_top_n_explain.a (#0), a + 1 (#3), #_order_col]
+    ├── sort keys: [a + 1 ASC NULLS LAST]
+    ├── limit: 2
+    ├── offset: 0
+    ├── estimated rows: <slt:ignore>
+    └── EvalScalar
+        ├── output columns: [t_top_n_explain.a (#0), a + 1 (#3)]
+        ├── expressions: [t_top_n_explain.a (#0) + 1]
+        ├── estimated rows: <slt:ignore>
+        └── TableScan
+            ├── table: default.default.t_top_n_explain
+            ├── scan id: 0
+            ├── output columns: [a (#0)]
+            ├── read rows: <slt:ignore>
+            ├── read size: <slt:ignore>
+            ├── partitions total: <slt:ignore>
+            ├── partitions scanned: <slt:ignore>
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: <slt:ignore>
+
+# LIMIT 0 keeps the Limit + Sort path.
+query T
+explain select a from t_top_n_explain order by a limit 0
+----
+EmptyResultScan
+
+# Fusion respects max_push_down_limit.
+query T
+settings (max_push_down_limit = 4) explain select a, b from t_top_n_explain order by a desc limit 10
+----
+RowFetch
+├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3), t_top_n_explain.b (#1)]
+├── columns to fetch: [b]
+├── estimated rows: <slt:ignore>
+└── Limit
+    ├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3)]
+    ├── limit: 10
+    ├── offset: 0
+    ├── estimated rows: <slt:ignore>
+    └── Sort(Single)
+        ├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3)]
+        ├── sort keys: [a DESC NULLS LAST]
+        ├── estimated rows: <slt:ignore>
+        └── TableScan
+            ├── table: default.default.t_top_n_explain
+            ├── scan id: 0
+            ├── output columns: [a (#0), _row_id (#3)]
+            ├── read rows: <slt:ignore>
+            ├── read size: <slt:ignore>
+            ├── partitions total: <slt:ignore>
+            ├── partitions scanned: <slt:ignore>
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: <slt:ignore>
+
+# Disabling the setting falls back to Limit + Sort.
+query T
+settings (enable_top_n = 0) explain select a, b from t_top_n_explain order by a desc limit 3 offset 2
+----
+RowFetch
+├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3), t_top_n_explain.b (#1)]
+├── columns to fetch: [b]
+├── estimated rows: <slt:ignore>
+└── Limit
+    ├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3)]
+    ├── limit: 3
+    ├── offset: 2
+    ├── estimated rows: <slt:ignore>
+    └── Sort(Single)
+        ├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3)]
+        ├── sort keys: [a DESC NULLS LAST]
+        ├── estimated rows: <slt:ignore>
+        └── TableScan
+            ├── table: default.default.t_top_n_explain
+            ├── scan id: 0
+            ├── output columns: [a (#0), _row_id (#3)]
+            ├── read rows: <slt:ignore>
+            ├── read size: <slt:ignore>
+            ├── partitions total: <slt:ignore>
+            ├── partitions scanned: <slt:ignore>
+            ├── push downs: [filters: [], limit: 5]
+            └── estimated rows: <slt:ignore>
+
+# Lazy materialization builds a RowFetch above the final TopN.
+query T
+explain select * from t_top_n_explain order by a desc limit 2
+----
+RowFetch
+├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3), t_top_n_explain.b (#1), t_top_n_explain.c (#2)]
+├── columns to fetch: [b, c]
+├── estimated rows: <slt:ignore>
+└── TopN(Final)
+    ├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3)]
+    ├── sort keys: [a DESC NULLS LAST]
+    ├── limit: 2
+    ├── offset: 0
+    ├── estimated rows: <slt:ignore>
+    └── TopN(Partial)
+        ├── output columns: [t_top_n_explain.a (#0), t_top_n_explain._row_id (#3), #_order_col]
+        ├── sort keys: [a DESC NULLS LAST]
+        ├── limit: 2
+        ├── offset: 0
+        ├── estimated rows: <slt:ignore>
+        └── TableScan
+            ├── table: default.default.t_top_n_explain
+            ├── scan id: 0
+            ├── output columns: [a (#0), _row_id (#3)]
+            ├── read rows: <slt:ignore>
+            ├── read size: <slt:ignore>
+            ├── partitions total: <slt:ignore>
+            ├── partitions scanned: <slt:ignore>
+            ├── push downs: [filters: [], limit: 2]
+            └── estimated rows: <slt:ignore>
+
+# Rank limit is pushed into the aggregate below TopN.
+query T
+explain select a, count(*) from t_top_n_explain group by a order by a desc limit 3
+----
+TopN(Final)
+├── output columns: [COUNT(*) (#3), t_top_n_explain.a (#0)]
+├── sort keys: [a DESC NULLS LAST]
+├── limit: 3
+├── offset: 0
+├── estimated rows: <slt:ignore>
+└── TopN(Partial)
+    ├── output columns: [COUNT(*) (#3), t_top_n_explain.a (#0), #_order_col]
+    ├── sort keys: [a DESC NULLS LAST]
+    ├── limit: 3
+    ├── offset: 0
+    ├── estimated rows: <slt:ignore>
+    └── AggregateFinal
+        ├── output columns: [COUNT(*) (#3), t_top_n_explain.a (#0)]
+        ├── group by: [a]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: <slt:ignore>
+        └── AggregatePartial
+            ├── group by: [a]
+            ├── aggregate functions: [count()]
+            ├── estimated rows: <slt:ignore>
+            ├── rank limit: 3
+            └── TableScan
+                ├── table: default.default.t_top_n_explain
+                ├── scan id: 0
+                ├── output columns: [a (#0)]
+                ├── read rows: <slt:ignore>
+                ├── read size: <slt:ignore>
+                ├── partitions total: <slt:ignore>
+                ├── partitions scanned: <slt:ignore>
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: <slt:ignore>
+
+statement ok
+unset enable_top_n;
+
+statement ok
+drop table t_top_n_explain;

@@ -95,6 +95,7 @@ impl RuleFactory {
             RuleID::PushDownLimitEvalScalar => Ok(Box::new(RulePushDownLimitEvalScalar::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new(
                 ctx.get_max_push_down_limit(),
+                ctx.get_enable_top_n(),
             ))),
             RuleID::PushDownLimitWindow => Ok(Box::new(RulePushDownLimitWindow::new(
                 ctx.get_max_push_down_limit(),

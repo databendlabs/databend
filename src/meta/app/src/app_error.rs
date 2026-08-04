@@ -196,6 +196,38 @@ impl TableAlreadyExists {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "Cannot replace '{table_name}': existing table uses engine {existing_engine}, but the new table uses engine {new_engine}"
+)]
+pub struct TableEngineMismatch {
+    table_name: String,
+    existing_engine: String,
+    new_engine: String,
+}
+
+impl TableEngineMismatch {
+    pub fn new(
+        table_name: impl Into<String>,
+        existing_engine: impl Into<String>,
+        new_engine: impl Into<String>,
+    ) -> Self {
+        Self {
+            table_name: table_name.into(),
+            existing_engine: existing_engine.into(),
+            new_engine: new_engine.into(),
+        }
+    }
+
+    pub fn ensure(table_name: &str, existing_engine: &str, new_engine: &str) -> Result<(), Self> {
+        if existing_engine.eq_ignore_ascii_case(new_engine) {
+            return Ok(());
+        }
+
+        Err(Self::new(table_name, existing_engine, new_engine))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ViewAlreadyExists: {view_name} while {context}")]
 pub struct ViewAlreadyExists {
     view_name: String,
@@ -896,6 +928,9 @@ pub enum AppError {
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
+    TableEngineMismatch(#[from] TableEngineMismatch),
+
+    #[error(transparent)]
     ViewAlreadyExists(#[from] ViewAlreadyExists),
 
     #[error(transparent)]
@@ -1199,6 +1234,8 @@ impl AppErrorMessage for TableAlreadyExists {
     }
 }
 
+impl AppErrorMessage for TableEngineMismatch {}
+
 impl AppErrorMessage for ViewAlreadyExists {
     fn message(&self) -> String {
         format!("'{}' as view Already Exists", self.view_name)
@@ -1412,6 +1449,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::MaterializedViewAlreadyExists(err.message())
             }
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
+            AppError::TableEngineMismatch(err) => ErrorCode::TableEngineNotSupported(err.message()),
             AppError::ViewAlreadyExists(err) => ErrorCode::ViewAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {
                 ErrorCode::CreateTableWithDropTime(err.message())

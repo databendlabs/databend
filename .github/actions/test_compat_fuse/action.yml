@@ -1,5 +1,5 @@
-name: "Test fuse-table format in an old query is compatible with new query"
-description: "Download old binaries and current binaries, write data with old query, read data with new query"
+name: "Test fuse-table format compatibility across query versions"
+description: "Run ordered compatibility cases across old and current queries"
 runs:
   using: "composite"
   steps:
@@ -11,7 +11,7 @@ runs:
     - name: Test compatibility
       shell: bash
       run: |
-        pip install pyyaml -q
+        pip install 'PyYAML==6.0.3' -q
         python3 ./tests/compat_fuse/test_compat_fuse.py --run-all
     - name: Upload failure
       if: failure()

@@ -38,6 +38,7 @@ pub struct OptimizerContext {
     enable_join_reorder: RwLock<bool>,
     enable_dphyp: RwLock<bool>,
     max_push_down_limit: RwLock<usize>,
+    enable_top_n: RwLock<bool>,
     planning_agg_index: RwLock<bool>,
     skip_list: HashSet<String>,
     skip_list_str: String,
@@ -79,6 +80,7 @@ impl OptimizerContext {
             enable_join_reorder: RwLock::new(true),
             enable_dphyp: RwLock::new(true),
             max_push_down_limit: RwLock::new(10000),
+            enable_top_n: RwLock::new(false),
             sample_executor: RwLock::new(None),
             planning_agg_index: RwLock::new(false),
             skip_list,
@@ -93,6 +95,7 @@ impl OptimizerContext {
         self.set_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? });
         *self.enable_dphyp.write() = settings.get_enable_dphyp()?;
         *self.max_push_down_limit.write() = settings.get_max_push_down_limit()?;
+        *self.enable_top_n.write() = settings.get_enable_top_n()?;
         *self.enable_trace.write() = settings.get_enable_optimizer_trace()?;
 
         Ok(self)
@@ -151,6 +154,10 @@ impl OptimizerContext {
 
     pub fn get_max_push_down_limit(&self) -> usize {
         *self.max_push_down_limit.read()
+    }
+
+    pub fn get_enable_top_n(&self) -> bool {
+        *self.enable_top_n.read()
     }
 
     pub fn set_flag(self: &Arc<Self>, name: &str, value: bool) -> &Arc<Self> {
