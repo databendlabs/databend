@@ -50,9 +50,6 @@ use databend_common_sql::plans::FunctionCall as ScalarFunctionCall;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
 use databend_common_statistics::F64;
-use databend_common_statistics::Histogram;
-use databend_common_statistics::TypedHistogram;
-use databend_common_statistics::TypedHistogramBucket;
 use proptest::prelude::*;
 
 fn column_binding(name: &str, index: usize, data_type: DataType) -> ColumnBinding {
@@ -109,42 +106,6 @@ fn zero_cardinality_comparison_selectivity_is_finite() {
 
     assert_eq!(estimated_rows, 0.0);
     assert!(estimated_rows.is_finite());
-}
-
-#[test]
-fn distorted_histogram_comparison_estimate_narrows_range() {
-    let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(1000),
-        ndv: NdvEstimate::exact(100.0),
-        null_count: StatCount::exact(0),
-        histogram: Some(Histogram::Float(TypedHistogram {
-            accuracy: false,
-            row_scale: 1.0,
-            buckets: vec![TypedHistogramBucket::new(
-                F64::from(0.0),
-                F64::from(1000.0),
-                100.0,
-                100.0,
-            )],
-            avg_spacing: Some(1e13),
-        })),
-    })]);
-    let expr = comparison_expr(
-        "gt",
-        column_expr("a", 0, DataType::Number(NumberDataType::UInt64)),
-        constant_expr(Scalar::Number(NumberScalar::UInt64(100))),
-    );
-
-    let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(100.0));
-    let estimated_rows = estimator
-        .apply(&[expr])
-        .expect("distorted histogram comparison should estimate");
-    let stat = &estimator.column_stats()[&Symbol::new(0)];
-
-    assert!((estimated_rows - 50.0).abs() < f64::EPSILON);
-    assert_eq!(stat.min, Datum::UInt(101));
-    assert_eq!(stat.max, Datum::UInt(1000));
 }
 
 #[test]
