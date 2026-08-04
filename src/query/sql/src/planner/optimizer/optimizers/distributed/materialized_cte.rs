@@ -60,11 +60,48 @@ impl MaterializedCTEDistributionOptimizer {
 }
 
 /// A Sequence producer must participate in the distributed fragment graph. When
-/// its CTE definition ends in a scalar operator, redistribute the result after
-/// that operator instead of forcing the entire query to run without Exchanges.
-/// Hashing by a constant preserves the producer's rows without broadcasting or
-/// changing the scalar operator's empty-input behavior.
+/// its CTE definition is serial because it consumes a Merge exchange,
+/// redistribute the result after that operator instead of forcing the entire
+/// query to run without Exchanges. Other serial sources, such as
+/// DummyTableScan, are not coordinator-only Merge consumers and must keep the
+/// existing serial fallback. Hashing by a constant preserves the producer's
+/// rows without broadcasting or changing scalar empty-input behavior.
 struct SerialProducerRedistributor;
+
+impl SerialProducerRedistributor {
+    fn match_merge_backed_producer(expr: &SExpr) -> Result<Option<&SExpr>> {
+        let RelOperator::Sequence(_) = expr.plan() else {
+            return Ok(None);
+        };
+
+        let producer = expr.left_child();
+        let physical_prop = RelExpr::with_s_expr(producer).derive_physical_prop()?;
+        if physical_prop.distribution != Distribution::Serial {
+            return Ok(None);
+        }
+
+        let RelOperator::MaterializedCTE(_) = producer.plan() else {
+            return Err(ErrorCode::Internal(
+                "Sequence left child is expected to be MaterializedCTE".to_string(),
+            ));
+        };
+
+        let mut expr = producer.unary_child();
+        loop {
+            let physical_prop = RelExpr::with_s_expr(expr).derive_physical_prop()?;
+            if physical_prop.distribution != Distribution::Serial {
+                return Ok(None);
+            }
+
+            match expr.plan() {
+                RelOperator::Exchange(Exchange::Merge) => return Ok(Some(producer)),
+                RelOperator::Exchange(_) => return Ok(None),
+                _ if expr.arity() == 1 => expr = expr.unary_child(),
+                _ => return Ok(None),
+            }
+        }
+    }
+}
 
 impl SExprVisitor for SerialProducerRedistributor {
     fn visit(&mut self, _expr: &SExpr) -> Result<VisitAction> {
@@ -72,30 +109,19 @@ impl SExprVisitor for SerialProducerRedistributor {
     }
 
     fn post_visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-        if !matches!(expr.plan(), RelOperator::Sequence(_)) {
+        let Some(producer) = Self::match_merge_backed_producer(expr)? else {
             return Ok(VisitAction::Continue);
-        }
-
-        let left = expr.left_child();
-        let physical_prop = RelExpr::with_s_expr(left).derive_physical_prop()?;
-        if physical_prop.distribution != Distribution::Serial {
-            return Ok(VisitAction::Continue);
-        }
-        if !matches!(left.plan(), RelOperator::MaterializedCTE(_)) {
-            return Err(ErrorCode::Internal(
-                "Sequence left child is expected to be MaterializedCTE".to_string(),
-            ));
-        }
+        };
 
         let hash_key = ScalarExpr::ConstantExpr(ConstantExpr {
             value: Scalar::Number(NumberScalar::UInt32(0)),
             span: None,
         });
-        let exchange = left
+        let exchange = producer
             .unary_child_arc()
             .ref_build_unary(Exchange::GlobalHash(vec![hash_key]));
-        let left = left.replace_children([Arc::new(exchange)]);
-        Ok(VisitAction::Replace(expr.replace_left_child(left)))
+        let producer = producer.replace_children([Arc::new(exchange)]);
+        Ok(VisitAction::Replace(expr.replace_left_child(producer)))
     }
 }
 
