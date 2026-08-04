@@ -903,10 +903,8 @@ impl BindContext {
             match self.bound_internal_columns.entry((table_index, column_id)) {
                 btree_map::Entry::Vacant(e) => {
                     let mut metadata = metadata.write();
-                    let column_index = metadata.get_or_add_internal_column(
-                        table_index,
-                        column_binding.internal_column.clone(),
-                    );
+                    let column_index = metadata
+                        .add_internal_column(table_index, column_binding.internal_column.clone());
                     e.insert(column_index);
                     (column_index, true)
                 }

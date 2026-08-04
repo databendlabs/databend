@@ -308,24 +308,10 @@ impl Metadata {
         column_index
     }
 
+    /// Return the metadata symbol for an internal column, adding it if necessary.
+    /// This does not make the column a Scan requirement; requirements are tracked
+    /// separately by bindings and plan usage.
     pub fn add_internal_column(
-        &mut self,
-        table_index: IndexType,
-        internal_column: InternalColumn,
-    ) -> Symbol {
-        let column_index = self.next_column_index();
-        self.columns
-            .push(ColumnEntry::InternalColumn(TableInternalColumn {
-                table_index,
-                column_index,
-                internal_column,
-            }));
-        column_index
-    }
-
-    /// Reuse a metadata symbol across bind contexts. This does not make the column
-    /// a Scan requirement; requirements are tracked separately by bindings and plan usage.
-    pub fn get_or_add_internal_column(
         &mut self,
         table_index: IndexType,
         internal_column: InternalColumn,
@@ -343,7 +329,14 @@ impl Metadata {
             return column_index;
         }
 
-        self.add_internal_column(table_index, internal_column)
+        let column_index = self.next_column_index();
+        self.columns
+            .push(ColumnEntry::InternalColumn(TableInternalColumn {
+                table_index,
+                column_index,
+                internal_column,
+            }));
+        column_index
     }
 
     pub fn add_computed_internal_dependency(
