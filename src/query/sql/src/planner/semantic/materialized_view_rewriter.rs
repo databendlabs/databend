@@ -52,13 +52,15 @@ use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
 /// Parse persisted materialized-view SQL and require a query statement.
-pub fn parse_materialized_view_query(
-    sql: &str,
-    dialect: Dialect,
-    error: impl Into<String>,
-) -> Result<Query> {
+///
+/// MV definitions are serialized from ASTs with `Query::to_string()`, so they are an internal
+/// persisted format rather than SQL in the current session's dialect. Parse them with one fixed
+/// dialect to keep CREATE, REFRESH, and reads independent of session settings. PostgreSQL is the
+/// canonical choice here and its parser accepts both `"` and backtick identifier quotes, covering
+/// the quote characters that the serialized AST may preserve from the CREATE statement.
+pub fn parse_materialized_view_query(sql: &str, error: impl Into<String>) -> Result<Query> {
     let tokens = tokenize_sql(sql)?;
-    let (statement, _) = parse_sql(&tokens, dialect)?;
+    let (statement, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
     let Statement::Query(query) = statement else {
         return Err(ErrorCode::InvalidMaterializedView(error.into()));
     };
@@ -627,19 +629,14 @@ impl VisitorMut for MaterializedViewRewriter {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_ast::parser::Dialect;
-
     use super::*;
 
     fn rewrite_with_columns(
         sql: &str,
         columns: Vec<String>,
     ) -> Result<(Query, MaterializedViewRewriter)> {
-        let mut query = parse_materialized_view_query(
-            sql,
-            Dialect::PostgreSQL,
-            "test materialized view query must be a query",
-        )?;
+        let mut query =
+            parse_materialized_view_query(sql, "test materialized view query must be a query")?;
         let checker = MaterializedViewChecker::check_query(&query);
         let mut rewriter =
             MaterializedViewRewriter::new(checker.is_aggregating(), "default", columns);
@@ -652,12 +649,19 @@ mod tests {
     }
 
     fn check_query(sql: &str) -> Result<MaterializedViewChecker> {
+        let query =
+            parse_materialized_view_query(sql, "test materialized view query must be a query")?;
+        Ok(MaterializedViewChecker::check_query(&query))
+    }
+
+    #[test]
+    fn test_parse_persisted_query_with_backtick_identifiers() -> Result<()> {
         let query = parse_materialized_view_query(
-            sql,
-            Dialect::PostgreSQL,
+            "SELECT `value` FROM `default`.`source`",
             "test materialized view query must be a query",
         )?;
-        Ok(MaterializedViewChecker::check_query(&query))
+        assert_eq!(query.to_string(), "SELECT `value` FROM `default`.`source`");
+        Ok(())
     }
 
     #[test]

@@ -40,7 +40,6 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContextSession;
-use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
@@ -230,7 +229,7 @@ impl<'a> MaterializedViewRefresh<'a> {
             .ok_or_else(|| {
                 ErrorCode::InvalidMaterializedView("materialized view definition not found")
             })?;
-        let logical_query = self.parse_query(
+        let logical_query = parse_materialized_view_query(
             &definition.data.original_query,
             "invalid materialized view logical query",
         )?;
@@ -437,16 +436,20 @@ impl<'a> MaterializedViewRefresh<'a> {
         physical_query: &str,
         changes_query: &Query,
     ) -> Result<Query> {
-        let mut upserts =
-            self.parse_query(physical_query, "invalid materialized view physical query")?;
+        let mut upserts = parse_materialized_view_query(
+            physical_query,
+            "invalid materialized view physical query",
+        )?;
         Self::apply_changes_query(&mut upserts, changes_query.clone(), "INSERT", true)?;
 
-        let mut deletes =
-            self.parse_query(physical_query, "invalid materialized view physical query")?;
+        let mut deletes = parse_materialized_view_query(
+            physical_query,
+            "invalid materialized view physical query",
+        )?;
         Self::apply_changes_query(&mut deletes, changes_query.clone(), "DELETE", true)?;
 
         let row_id = Identifier::from_name(None, MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN);
-        self.parse_query(
+        parse_materialized_view_query(
             &format!(
                 "WITH upserts AS ({upserts}), deletes AS ({deletes}) \
                  SELECT 'UPSERT' AS _mv_refresh_action, upserts.* FROM upserts \
@@ -543,10 +546,6 @@ impl<'a> MaterializedViewRefresh<'a> {
         }
     }
 
-    fn parse_query(&self, sql: &str, error: &str) -> Result<Query> {
-        parse_materialized_view_query(sql, self.ctx.get_settings().get_sql_dialect()?, error)
-    }
-
     #[allow(clippy::too_many_arguments)]
     async fn execute_in_transaction(
         &self,
@@ -568,8 +567,10 @@ impl<'a> MaterializedViewRefresh<'a> {
                 source_table_name,
                 Arc::new(source_table.clone()),
             )?;
-            let query =
-                self.parse_query(physical_query, "invalid materialized view physical query")?;
+            let query = parse_materialized_view_query(
+                physical_query,
+                "invalid materialized view physical query",
+            )?;
             self.execute_statement(&Statement::Insert(InsertStmt {
                 hints: None,
                 with: None,
@@ -617,9 +618,11 @@ impl<'a> MaterializedViewRefresh<'a> {
                 Arc::new(changes_source_table),
             )?;
             let changes_query =
-                self.parse_query(&changes.query, "invalid CHANGE_TRACKING query")?;
-            let mut query =
-                self.parse_query(physical_query, "invalid materialized view physical query")?;
+                parse_materialized_view_query(&changes.query, "invalid CHANGE_TRACKING query")?;
+            let mut query = parse_materialized_view_query(
+                physical_query,
+                "invalid materialized view physical query",
+            )?;
             Self::apply_changes_query(&mut query, changes_query, "INSERT", !is_aggregating)?;
             self.execute_statement(&Statement::Insert(InsertStmt {
                 hints: None,
@@ -668,7 +671,7 @@ impl<'a> MaterializedViewRefresh<'a> {
                 Arc::new(changes_source_table),
             )?;
             let changes_query =
-                self.parse_query(&changes.query, "invalid CHANGE_TRACKING query")?;
+                parse_materialized_view_query(&changes.query, "invalid CHANGE_TRACKING query")?;
             if changes.mode == StreamMode::Standard && is_aggregating {
                 self.attach_source(
                     &self.plan.catalog,
@@ -676,8 +679,10 @@ impl<'a> MaterializedViewRefresh<'a> {
                     source_table_name,
                     Arc::new(source_table.clone()),
                 )?;
-                let query =
-                    self.parse_query(physical_query, "invalid materialized view physical query")?;
+                let query = parse_materialized_view_query(
+                    physical_query,
+                    "invalid materialized view physical query",
+                )?;
                 self.execute_statement(&Statement::Insert(InsertStmt {
                     hints: None,
                     with: None,
@@ -700,8 +705,10 @@ impl<'a> MaterializedViewRefresh<'a> {
                 let merge = self.build_standard_refresh_merge(refresh_source);
                 self.execute_statement(&merge).await?;
             } else {
-                let mut query =
-                    self.parse_query(physical_query, "invalid materialized view physical query")?;
+                let mut query = parse_materialized_view_query(
+                    physical_query,
+                    "invalid materialized view physical query",
+                )?;
                 Self::apply_changes_query(&mut query, changes_query, "INSERT", !is_aggregating)?;
                 self.execute_statement(&Statement::Insert(InsertStmt {
                     hints: None,

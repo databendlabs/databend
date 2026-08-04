@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::TableAlias;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table::Table;
@@ -36,7 +37,9 @@ use crate::binder::ScalarBinder;
 use crate::binder::ddl::materialized_view::find_materialized_view_aggregate;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
+use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
+use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 
 impl Binder {
@@ -66,7 +69,6 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let query = parse_materialized_view_query(
             &mv_definition.original_query,
-            self.dialect,
             "invalid materialized view logical query",
         )?;
 
@@ -125,17 +127,13 @@ impl Binder {
         let mut items = Vec::with_capacity(logical_schema.num_fields());
         let mut output_columns = Vec::with_capacity(logical_schema.num_fields());
         for logical_field in logical_schema.fields() {
-            // For MVDefinition.schema only, default_expr stores the canonical finalized
-            // projection expression rather than a table-column default value.
-            let final_expr = logical_field.default_expr().ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "materialized view logical column '{}' has no final expression; drop and recreate it",
-                    logical_field.name()
-                ))
-            })?;
-            let tokens = tokenize_sql(final_expr)?;
-            let ast = parse_expr(&tokens, self.dialect)?;
-            let (scalar, scalar_type) = {
+            // For MVDefinition.logical_schema only, default_expr stores the canonical finalized
+            // projection expression rather than a table-column default value. A missing expression
+            // is the compact representation of an identity projection from the same-named physical
+            // column.
+            let (scalar, scalar_type) = if let Some(final_expr) = logical_field.default_expr() {
+                let tokens = tokenize_sql(final_expr)?;
+                let ast = parse_expr(&tokens, Dialect::PostgreSQL)?;
                 let mut scalar_binder = ScalarBinder::new(
                     &mut expression_context,
                     self.ctx.clone(),
@@ -145,6 +143,23 @@ impl Binder {
                 );
                 scalar_binder.forbid_udf();
                 scalar_binder.bind(&ast)?
+            } else {
+                let column = expression_context
+                    .columns
+                    .iter()
+                    .find(|column| column.column_name == *logical_field.name())
+                    .cloned()
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "materialized view physical column '{}' does not exist; drop and recreate it",
+                            logical_field.name()
+                        ))
+                    })?;
+                let scalar_type = *column.data_type.clone();
+                (
+                    ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
+                    scalar_type,
+                )
             };
             let logical_type = DataType::from(logical_field.data_type());
             if scalar_type != logical_type {
@@ -230,7 +245,6 @@ impl Binder {
         // the source table, even when their storage checkpoint is fresh.
         let query = parse_materialized_view_query(
             &mv_definition.data.query,
-            self.dialect,
             "invalid materialized view physical query",
         )?;
         let mut definition_binder = Binder::new(

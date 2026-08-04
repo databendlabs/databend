@@ -174,8 +174,12 @@ impl Binder {
             .zip(names)
             .zip(define_exprs)
             .map(|((field, name), define_expr)| {
-                TableField::new(name, field.data_type().clone())
-                    .with_default_expr(Some(define_expr.clone()))
+                let field = TableField::new(name, field.data_type().clone());
+                if define_expr == name {
+                    field
+                } else {
+                    field.with_default_expr(Some(define_expr.clone()))
+                }
             })
             .collect();
         Ok(TableSchemaRefExt::create(fields))
