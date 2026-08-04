@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt;
 use std::borrow::Cow;
-use std::fmt::Display;
-use std::fmt::FormattingOptions;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -1161,19 +1158,24 @@ fn register_to_string(registry: &mut FunctionRegistry) {
             |micros, format, output, ctx| {
                 let ts = micros.to_timestamp(&ctx.func_ctx.tz);
                 let format = prepare_format_string(format, &ctx.func_ctx.date_format_style);
-                let mut buf = String::new();
-                let mut formatter = fmt::Formatter::new(&mut buf, FormattingOptions::new());
-                if Display::fmt(&ts.strftime(&format), &mut formatter).is_err() {
-                    ctx.set_error(output.len(), format!("{format} is invalid time format"));
-                    output.builder.commit_row();
-                    output.validity.push(true);
-                    return;
-                }
-                match write!(output.builder.row_buffer, "{}", buf) {
-                    Ok(_) => {
-                        output.builder.commit_row();
-                        output.validity.push(true);
-                    }
+                // jiff 0.2.28+ makes Display/strftime lenient (unknown directives are
+                // written literally). Use the fallible formatter so invalid formats
+                // still surface as errors (e.g. MySQL-style `%i`).
+                match jiff::fmt::strtime::format(&format, &ts) {
+                    Ok(formatted) => match write!(output.builder.row_buffer, "{}", formatted) {
+                        Ok(_) => {
+                            output.builder.commit_row();
+                            output.validity.push(true);
+                        }
+                        Err(e) => {
+                            ctx.set_error(
+                                output.len(),
+                                format!("{format} is invalid time format, error {e}"),
+                            );
+                            output.builder.commit_row();
+                            output.validity.push(true);
+                        }
+                    },
                     Err(e) => {
                         ctx.set_error(
                             output.len(),

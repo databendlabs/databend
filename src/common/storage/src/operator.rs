@@ -442,14 +442,18 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     }
 
     // Credential.
+    //
+    // OpenDAL 0.58 renamed `allow_anonymous` to `skip_signature`, but the
+    // semantics changed: the old flag only skipped signing when no credential
+    // could be loaded, while `skip_signature` always bypasses signing. Only
+    // apply it in the no-credential branch below so authenticated MinIO/S3
+    // access still signs requests.
     builder = builder
         .access_key_id(&cfg.access_key_id)
         .secret_access_key(&cfg.secret_access_key)
         .session_token(&cfg.security_token)
         .role_arn(&cfg.role_arn)
         .external_id(&cfg.external_id)
-        // Skip signing when credentials are absent; opendal still checks access.
-        .skip_signature()
         // Root.
         .root(&cfg.root);
 
