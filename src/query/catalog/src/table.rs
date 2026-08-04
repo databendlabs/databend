@@ -81,6 +81,13 @@ pub trait Table: Sync + Send {
         false
     }
 
+    /// Whether this table instance supports the given computed internal column.
+    /// Computed internal columns are fixed system expressions expanded by the SQL binder;
+    /// they are not part of the table schema or storage projection.
+    fn supported_computed_internal_column(&self, _column_id: ColumnId) -> bool {
+        false
+    }
+
     fn supported_lazy_materialize(&self) -> bool {
         false
     }

@@ -23,15 +23,26 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BASE_ROW_ID_COL_NAME;
+use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
+use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 
 use super::TypeCheckAdapter;
 use super::TypeChecker;
+use crate::ColumnEntry;
+use crate::binder::ComputedInternalColumn;
+use crate::binder::ComputedInternalColumnBinding;
+use crate::binder::INTERNAL_COLUMN_FACTORY;
+use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::BoundColumnRef;
+use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
 impl<'a, A> TypeChecker<'a, A>
@@ -183,10 +194,133 @@ where A: TypeCheckAdapter
                 let data_type = *column.data_type.clone();
                 (BoundColumnRef { span, column }.into(), data_type)
             }
+            NameResolutionResult::ComputedInternalColumn(column) => {
+                return self.resolve_computed_internal_column(span, &column);
+            }
             NameResolutionResult::Alias { scalar, .. } => (scalar.clone(), scalar.data_type()?),
         };
 
         Ok(Box::new((scalar, data_type)))
+    }
+
+    fn resolve_computed_internal_column(
+        &mut self,
+        span: Span,
+        column: &ComputedInternalColumnBinding,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let table_index = self
+            .bind_context
+            .get_computed_internal_column_table_index(column)?;
+        let supported = {
+            let metadata = self.metadata.read();
+            metadata
+                .table(table_index)
+                .table()
+                .supported_computed_internal_column(column.computed_column.column_id())
+        };
+        if !supported {
+            return Err(ErrorCode::SemanticError(format!(
+                "Unsupported computed internal column '{}'",
+                column.computed_column.name()
+            ))
+            .set_span(span));
+        }
+
+        match column.computed_column {
+            ComputedInternalColumn::ChangeRowId => {
+                let origin_block_id = self.computed_internal_dependency(
+                    table_index,
+                    ORIGIN_BLOCK_ID_COLUMN_ID,
+                    span,
+                )?;
+                let origin_block_row_num = self.computed_internal_dependency(
+                    table_index,
+                    ORIGIN_BLOCK_ROW_NUM_COLUMN_ID,
+                    span,
+                )?;
+                let base_row_id = INTERNAL_COLUMN_FACTORY
+                    .get_internal_column(BASE_ROW_ID_COL_NAME)
+                    .ok_or_else(|| ErrorCode::Internal("Missing _base_row_id definition"))?;
+                let base_row_id = self.bind_context.add_internal_column_binding(
+                    &InternalColumnBinding {
+                        database_name: column.database_name.clone(),
+                        table_name: column.table_name.clone(),
+                        internal_column: base_row_id,
+                    },
+                    self.metadata.clone(),
+                    Some(table_index),
+                    false,
+                )?;
+                let base_row_id = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span,
+                    column: base_row_id,
+                });
+
+                let is_not_null =
+                    self.resolve_scalar_function_call(span, "is_not_null", vec![], vec![
+                        origin_block_id.clone(),
+                    ])?;
+                let origin_uuid =
+                    self.resolve_scalar_function_call(span, "to_uuid", vec![], vec![
+                        origin_block_id,
+                    ])?;
+                let row_num_hex =
+                    self.resolve_scalar_function_call(span, "to_hex", vec![], vec![
+                        origin_block_row_num,
+                    ])?;
+                let row_num = self.resolve_scalar_function_call(span, "lpad", vec![], vec![
+                    row_num_hex.0,
+                    ConstantExpr {
+                        span,
+                        value: Scalar::Number(NumberScalar::UInt64(6)),
+                    }
+                    .into(),
+                    ConstantExpr {
+                        span,
+                        value: Scalar::String("0".to_string()),
+                    }
+                    .into(),
+                ])?;
+                let origin_row_id =
+                    self.resolve_scalar_function_call(span, "concat", vec![], vec![
+                        origin_uuid.0,
+                        row_num.0,
+                    ])?;
+                self.resolve_scalar_function_call(span, "if", vec![], vec![
+                    is_not_null.0,
+                    origin_row_id.0,
+                    base_row_id,
+                ])
+            }
+        }
+    }
+
+    fn computed_internal_dependency(
+        &self,
+        table_index: crate::IndexType,
+        column_id: u32,
+        span: Span,
+    ) -> Result<ScalarExpr> {
+        let column_index = {
+            let metadata = self.metadata.read();
+            metadata.columns().iter().find_map(|column| match column {
+                ColumnEntry::BaseTableColumn(base)
+                    if base.table_index == table_index && base.column_id == column_id =>
+                {
+                    Some(base.column_index)
+                }
+                _ => None,
+            })
+        }
+        .ok_or_else(|| ErrorCode::Internal("Missing computed internal column dependency"))?;
+        let column = self
+            .bind_context
+            .columns
+            .iter()
+            .find(|column| column.index == column_index)
+            .cloned()
+            .ok_or_else(|| ErrorCode::Internal("Unbound computed internal column dependency"))?;
+        Ok(BoundColumnRef { span, column }.into())
     }
 
     /// Get masking policy expression for a column reference

@@ -50,6 +50,7 @@ use log::warn;
 use super::Finder;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;
@@ -1108,11 +1109,6 @@ impl Binder {
         bind_context: &mut BindContext,
         s_expr: SExpr,
     ) -> Result<SExpr> {
-        if bind_context.bound_internal_columns.is_empty()
-            && bind_context.bound_virtual_columns.is_empty()
-        {
-            return Ok(s_expr);
-        }
         let bound_internal_columns = &bind_context.bound_internal_columns;
 
         let mut has_score = false;
@@ -1140,6 +1136,20 @@ impl Binder {
                 .insert(*column_index);
         }
 
+        let scalar_used_columns = s_expr.scalar_used_columns();
+        {
+            let metadata = self.metadata.read();
+            for column_index in scalar_used_columns {
+                if let ColumnEntry::InternalColumn(column) = metadata.column(column_index) {
+                    required_columns
+                        .entry(column.table_index)
+                        .or_default()
+                        .columns
+                        .insert(column.column_index);
+                }
+            }
+        }
+
         if !required_columns.is_empty() {
             let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);
             let mut vector_index_map = mem::take(&mut bind_context.vector_index_map);
@@ -1160,6 +1170,10 @@ impl Binder {
                 .or_default()
                 .columns
                 .insert(*column_index);
+        }
+
+        if required_columns.is_empty() {
+            return Ok(s_expr);
         }
 
         Ok(s_expr.add_column_indexes_to_scans(&required_columns))

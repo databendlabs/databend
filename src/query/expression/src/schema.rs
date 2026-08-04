@@ -91,6 +91,8 @@ pub const FILE_LAST_MODIFIED_COLUMN_NAME: &str = "metadata$file_last_modified";
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
 pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
 pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
+// computed internal column id. Keep it outside all physical internal column ranges.
+pub const CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 13;
 
 pub const FILENAME_COLUMN_ID: u32 = u32::MAX - 14;
 pub const FILE_ROW_NUMBER_COLUMN_ID: u32 = u32::MAX - 15;

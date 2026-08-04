@@ -318,6 +318,27 @@ impl Metadata {
         column_index
     }
 
+    pub fn get_or_add_internal_column(
+        &mut self,
+        table_index: IndexType,
+        internal_column: InternalColumn,
+    ) -> Symbol {
+        let column_id = internal_column.column_id();
+        if let Some(column_index) = self.columns.iter().find_map(|column| match column {
+            ColumnEntry::InternalColumn(column)
+                if column.table_index == table_index
+                    && column.internal_column.column_id() == column_id =>
+            {
+                Some(column.column_index)
+            }
+            _ => None,
+        }) {
+            return column_index;
+        }
+
+        self.add_internal_column(table_index, internal_column)
+    }
+
     pub fn add_virtual_column(
         &mut self,
         table_index: IndexType,

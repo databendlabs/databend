@@ -274,6 +274,19 @@ impl SExpr {
                 .all(|child| child.support_lazy_materialize())
     }
 
+    /// Collect columns referenced by scalar expressions in this plan tree.
+    #[recursive::recursive]
+    pub(crate) fn scalar_used_columns(&self) -> BTreeSet<Symbol> {
+        let mut used_columns = BTreeSet::new();
+        for scalar in self.plan.scalar_expr_iter() {
+            used_columns.extend(scalar.used_columns());
+        }
+        for child in &self.children {
+            used_columns.extend(child.scalar_used_columns());
+        }
+        used_columns
+    }
+
     #[recursive::recursive]
     pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();

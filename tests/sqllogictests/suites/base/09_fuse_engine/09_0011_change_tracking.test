@@ -16,6 +16,9 @@ insert into t values(1),(2)
 statement error 1065
 select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 
+statement error 1065
+select change$row_id from t
+
 statement ok
 alter table t set options(change_tracking = true)
 
@@ -29,6 +32,62 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 2 1 1 NULL
 3 1 1 NULL
 4 1 1 NULL
+
+query I
+select count_if(change$row_id != if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), _base_row_id)) from t
+----
+0
+
+query B
+select count(*) = count(distinct change$row_id) from t
+----
+1
+
+query I
+select count(*) from t as lhs join t as rhs on lhs.change$row_id = rhs.change$row_id
+----
+4
+
+query I
+select count(*) from t as lhs join t as rhs on lhs.change$row_id = rhs.change$row_id join t as third on rhs.change$row_id = third.change$row_id
+----
+4
+
+query I
+select count(*) from t as lhs left semi join t as rhs on lhs.change$row_id = rhs.change$row_id
+----
+4
+
+query I
+select count(*) from t as lhs left anti join t as rhs on lhs.change$row_id = rhs.change$row_id
+----
+0
+
+query I
+select count(*) from t as lhs right semi join t as rhs on lhs.change$row_id = rhs.change$row_id
+----
+4
+
+query I
+select count(*) from t as lhs right anti join t as rhs on lhs.change$row_id = rhs.change$row_id
+----
+0
+
+statement error 1065
+select change$row_id from t as lhs join t as rhs on lhs.a = rhs.a
+
+query T
+select change$row_id from (select 'shadow' as change$row_id)
+----
+shadow
+
+query I rowsort
+select * from t
+----
+1
+2
+3
+4
 
 statement ok
 delete from t where a = 3

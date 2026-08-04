@@ -49,6 +49,8 @@ use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
 use super::AggregateInfo;
+use super::COMPUTED_INTERNAL_COLUMN_FACTORY;
+use super::ComputedInternalColumn;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -118,11 +120,19 @@ pub struct InternalColumnBinding {
     pub internal_column: InternalColumn,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComputedInternalColumnBinding {
+    pub database_name: Option<String>,
+    pub table_name: Option<String>,
+    pub computed_column: ComputedInternalColumn,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NameResolutionResult {
     Column(ColumnBinding),
     InternalColumn(InternalColumnBinding),
+    ComputedInternalColumn(ComputedInternalColumnBinding),
     Alias { alias: String, scalar: ScalarExpr },
 }
 
@@ -644,7 +654,7 @@ impl BindContext {
             return;
         }
 
-        // look up internal column
+        // Look up scan-generated internal columns first, then computed internal columns.
         if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(&column.name) {
             let column_binding = InternalColumnBinding {
                 database_name: database.map(|n| n.to_owned()),
@@ -652,6 +662,13 @@ impl BindContext {
                 internal_column,
             };
             result.push(NameResolutionResult::InternalColumn(column_binding));
+        } else if let Some(computed_column) = COMPUTED_INTERNAL_COLUMN_FACTORY.get(&column.name) {
+            let column_binding = ComputedInternalColumnBinding {
+                database_name: database.map(|n| n.to_owned()),
+                table_name: table.map(|n| n.to_owned()),
+                computed_column,
+            };
+            result.push(NameResolutionResult::ComputedInternalColumn(column_binding));
         }
     }
 
@@ -805,14 +822,38 @@ impl BindContext {
         &self,
         column_binding: &InternalColumnBinding,
     ) -> Result<IndexType> {
-        if let Some(table_name) = &column_binding.table_name {
+        self.get_system_column_table_index(
+            column_binding.database_name.as_deref(),
+            column_binding.table_name.as_deref(),
+            column_binding.internal_column.column_name(),
+        )
+    }
+
+    pub fn get_computed_internal_column_table_index(
+        &self,
+        column_binding: &ComputedInternalColumnBinding,
+    ) -> Result<IndexType> {
+        self.get_system_column_table_index(
+            column_binding.database_name.as_deref(),
+            column_binding.table_name.as_deref(),
+            column_binding.computed_column.name(),
+        )
+    }
+
+    fn get_system_column_table_index(
+        &self,
+        database_name: Option<&str>,
+        table_name: Option<&str>,
+        column_name: &str,
+    ) -> Result<IndexType> {
+        if let Some(table_name) = table_name {
             for column in &self.columns {
-                if column_binding.database_name.is_some()
-                    && column.database_name != column_binding.database_name
-                {
+                if database_name.is_some_and(|database_name| {
+                    column.database_name.as_deref() != Some(database_name)
+                }) {
                     continue;
                 }
-                if column.table_name != column_binding.table_name {
+                if column.table_name.as_deref() != Some(table_name) {
                     continue;
                 }
                 if let Some(table_index) = column.table_index {
@@ -823,25 +864,20 @@ impl BindContext {
                 "Table `{table_name}` is not found in the bind context"
             )))
         } else {
-            let mut table_indices = BTreeSet::new();
-            for column in &self.columns {
-                if column.table_name.is_none() {
-                    continue;
-                }
-                if let Some(table_index) = column.table_index {
-                    table_indices.insert(table_index);
-                }
-            }
+            let table_indices = self
+                .columns
+                .iter()
+                .filter(|column| column.table_name.is_some())
+                .filter_map(|column| column.table_index)
+                .collect::<BTreeSet<_>>();
             if table_indices.is_empty() {
                 return Err(ErrorCode::SemanticError(format!(
-                    "The table of the internal column `{}` is not found",
-                    column_binding.internal_column.column_name()
+                    "The table of the internal column `{column_name}` is not found"
                 )));
             }
             if table_indices.len() > 1 {
                 return Err(ErrorCode::SemanticError(format!(
-                    "The table of the internal column `{}` is ambiguous",
-                    column_binding.internal_column.column_name()
+                    "The table of the internal column `{column_name}` is ambiguous"
                 )));
             }
             Ok(*table_indices.first().unwrap())
@@ -863,12 +899,26 @@ impl BindContext {
             self.get_internal_column_table_index(column_binding)?
         };
 
+        {
+            let metadata = metadata.read();
+            let table = metadata.table(table_index);
+            if !table.table().supported_internal_column(column_id) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Unsupported internal column '{}' in table '{}'.",
+                    column_binding.internal_column.column_name(),
+                    table.table().name()
+                )));
+            }
+        }
+
         let (column_index, is_new) =
             match self.bound_internal_columns.entry((table_index, column_id)) {
                 btree_map::Entry::Vacant(e) => {
                     let mut metadata = metadata.write();
-                    let column_index = metadata
-                        .add_internal_column(table_index, column_binding.internal_column.clone());
+                    let column_index = metadata.get_or_add_internal_column(
+                        table_index,
+                        column_binding.internal_column.clone(),
+                    );
                     e.insert(column_index);
                     (column_index, true)
                 }
@@ -880,14 +930,6 @@ impl BindContext {
 
         let metadata = metadata.read();
         let table = metadata.table(table_index);
-        if !table.table().supported_internal_column(column_id) {
-            return Err(ErrorCode::SemanticError(format!(
-                "Unsupported internal column '{}' in table '{}'.",
-                column_binding.internal_column.column_name(),
-                table.table().name()
-            )));
-        }
-
         let column = metadata.column(column_index);
         let column_binding = ColumnBindingBuilder::new(
             column.name(),
