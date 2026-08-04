@@ -74,8 +74,10 @@ pub struct Metadata {
     /// we need add cols that inner query required to non_lazy_columns
     /// to prevent these cols to be pruned.
     non_lazy_columns: ColumnSet,
-    /// Mappings from table and internal column IDs to column indexes.
-    internal_column_indexes: BTreeMap<(IndexType, ColumnId), Symbol>,
+    /// Physical internal-column dependencies introduced by computed internal expressions.
+    /// The key identifies the dependency within a table, and the value is its metadata symbol.
+    /// Entries here are candidates only; final Scan requirements are filtered by plan usage.
+    computed_internal_dependencies: BTreeMap<(IndexType, ColumnId), Symbol>,
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, Symbol>,
     agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>,
@@ -311,11 +313,6 @@ impl Metadata {
         table_index: IndexType,
         internal_column: InternalColumn,
     ) -> Symbol {
-        let key = (table_index, internal_column.column_id());
-        if let Some(column_index) = self.internal_column_indexes.get(&key) {
-            return *column_index;
-        }
-
         let column_index = self.next_column_index();
         self.columns
             .push(ColumnEntry::InternalColumn(TableInternalColumn {
@@ -323,12 +320,49 @@ impl Metadata {
                 column_index,
                 internal_column,
             }));
-        self.internal_column_indexes.insert(key, column_index);
         column_index
     }
 
-    pub fn internal_column_indexes(&self) -> &BTreeMap<(IndexType, ColumnId), Symbol> {
-        &self.internal_column_indexes
+    /// Reuse a metadata symbol across bind contexts. This does not make the column
+    /// a Scan requirement; requirements are tracked separately by bindings and plan usage.
+    pub fn get_or_add_internal_column(
+        &mut self,
+        table_index: IndexType,
+        internal_column: InternalColumn,
+    ) -> Symbol {
+        let column_id = internal_column.column_id();
+        if let Some(column_index) = self.columns.iter().find_map(|column| match column {
+            ColumnEntry::InternalColumn(column)
+                if column.table_index == table_index
+                    && column.internal_column.column_id() == column_id =>
+            {
+                Some(column.column_index)
+            }
+            _ => None,
+        }) {
+            return column_index;
+        }
+
+        self.add_internal_column(table_index, internal_column)
+    }
+
+    pub fn add_computed_internal_dependency(
+        &mut self,
+        table_index: IndexType,
+        dependency_id: ColumnId,
+        dependency_index: Symbol,
+    ) {
+        let key = (table_index, dependency_id);
+        if let Some(existing) = self.computed_internal_dependencies.get(&key) {
+            debug_assert_eq!(*existing, dependency_index);
+            return;
+        }
+        self.computed_internal_dependencies
+            .insert(key, dependency_index);
+    }
+
+    pub fn computed_internal_dependencies(&self) -> &BTreeMap<(IndexType, ColumnId), Symbol> {
+        &self.computed_internal_dependencies
     }
 
     pub fn add_virtual_column(
@@ -776,27 +810,4 @@ pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) ->
         && args
             .iter()
             .all(|expr| matches!(expr, Expr::Literal { value,.. } if *value != Literal::Null))
-}
-
-#[cfg(test)]
-mod tests {
-    use databend_common_catalog::plan::InternalColumn;
-    use databend_common_catalog::plan::InternalColumnType;
-
-    use super::Metadata;
-
-    #[test]
-    fn test_add_internal_column_reuses_column_index() {
-        let mut metadata = Metadata::default();
-        let internal_column = || InternalColumn::new("_base_row_id", InternalColumnType::BaseRowId);
-
-        let first = metadata.add_internal_column(1, internal_column());
-        let duplicate = metadata.add_internal_column(1, internal_column());
-        let other_table = metadata.add_internal_column(2, internal_column());
-
-        assert_eq!(first, duplicate);
-        assert_ne!(first, other_table);
-        assert_eq!(metadata.columns().len(), 2);
-        assert_eq!(metadata.internal_column_indexes().len(), 2);
-    }
 }

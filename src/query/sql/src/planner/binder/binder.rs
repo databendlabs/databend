@@ -1108,26 +1108,23 @@ impl Binder {
         bind_context: &mut BindContext,
         s_expr: SExpr,
     ) -> Result<SExpr> {
-        let mut required_columns = {
-            let metadata = self.metadata.read();
-            if metadata.internal_column_indexes().is_empty()
-                && bind_context.bound_virtual_columns.is_empty()
-            {
-                return Ok(s_expr);
-            }
-
-            let mut required_columns = BTreeMap::<_, ScanRequiredColumns>::new();
-            for ((table_index, _), column_index) in metadata.internal_column_indexes() {
-                required_columns
-                    .entry(*table_index)
-                    .or_default()
-                    .columns
-                    .insert(*column_index);
-            }
-            required_columns
-        };
-
         let bound_internal_columns = &bind_context.bound_internal_columns;
+        // Copy the small set of unbound dependencies so the metadata lock is released
+        // before deriving plan properties, without requiring a second metadata read.
+        let unbound_computed_dependencies = {
+            let metadata = self.metadata.read();
+            metadata
+                .computed_internal_dependencies()
+                .iter()
+                .filter(|(key, _)| !bound_internal_columns.contains_key(key))
+                .map(|((table_index, _), column_index)| (*table_index, *column_index))
+                .collect::<Vec<_>>()
+        };
+        let has_bound_requirements =
+            !bound_internal_columns.is_empty() || !bind_context.bound_virtual_columns.is_empty();
+        if !has_bound_requirements && unbound_computed_dependencies.is_empty() {
+            return Ok(s_expr);
+        }
 
         let mut has_score = false;
         let mut has_matched = false;
@@ -1143,6 +1140,28 @@ impl Binder {
                 "[SQL-BINDER] Score function must be used together with match or query function"
                     .to_string(),
             ));
+        }
+
+        let mut required_columns = BTreeMap::<_, ScanRequiredColumns>::new();
+        for ((table_index, _), column_index) in bound_internal_columns {
+            required_columns
+                .entry(*table_index)
+                .or_default()
+                .columns
+                .insert(*column_index);
+        }
+
+        if !unbound_computed_dependencies.is_empty() {
+            let rel_prop = s_expr.derive_relational_prop()?;
+            for (table_index, column_index) in unbound_computed_dependencies {
+                if rel_prop.used_columns.contains(&column_index) {
+                    required_columns
+                        .entry(table_index)
+                        .or_default()
+                        .columns
+                        .insert(column_index);
+                }
+            }
         }
 
         if !required_columns.is_empty() {

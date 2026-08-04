@@ -246,6 +246,7 @@ where A: TypeCheckAdapter
         let base_row_id = INTERNAL_COLUMN_FACTORY
             .get_internal_column(BASE_ROW_ID_COL_NAME)
             .ok_or_else(|| ErrorCode::Internal("Missing _base_row_id definition"))?;
+        let base_row_id_column_id = base_row_id.column_id();
         let base_row_id = self.bind_context.add_internal_column_binding(
             &InternalColumnBinding {
                 database_name: column.database_name.clone(),
@@ -256,6 +257,11 @@ where A: TypeCheckAdapter
             Some(table_index),
             false,
         )?;
+        self.metadata.write().add_computed_internal_dependency(
+            table_index,
+            base_row_id_column_id,
+            base_row_id.index,
+        );
         let base_row_id = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span,
             column: base_row_id,
