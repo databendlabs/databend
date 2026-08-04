@@ -165,11 +165,10 @@ impl Rule for RuleTryApplyAggIndex {
             return Ok(());
         }
 
-        let base_columns = metadata.columns_by_table_index(table_index);
         let table_name = metadata.table(table_index).name();
 
         if let Some(mut result) =
-            agg_index::try_rewrite(table_index, table_name, &base_columns, s_expr, index_plans)?
+            agg_index::try_rewrite(table_index, table_name, &metadata, s_expr, index_plans)?
         {
             result.set_applied_rule(&self.id);
             state.add_result(result);

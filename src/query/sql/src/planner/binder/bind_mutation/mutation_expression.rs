@@ -41,7 +41,7 @@ use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
-use crate::binder::split_conjunctions;
+use crate::binder::into_conjunctions;
 use crate::binder::util::TableIdentifier;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
@@ -572,7 +572,7 @@ impl Binder {
             } else {
                 MutationStrategy::MatchedOnly
             };
-            let predicates = split_conjunctions(&scalar);
+            let predicates = into_conjunctions(scalar).collect();
             Ok((strategy, predicates))
         } else {
             Ok((MutationStrategy::Direct, vec![]))

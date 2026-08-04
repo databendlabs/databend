@@ -43,12 +43,13 @@ use crate::ColumnSet;
 use crate::NameResolutionContext;
 use crate::Symbol;
 use crate::Visibility;
+use crate::binder::AliasLookup;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::binder::bind_table_reference::JoinConditions;
 use crate::binder::project::SelectInfo;
-use crate::binder::scalar_common::split_conjunctions;
+use crate::binder::scalar_common::conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
@@ -67,20 +68,41 @@ pub struct SelectList<'a> {
     pub items: Vec<SelectItem<'a>>,
 }
 
-#[derive(Debug, Default, Clone)]
-pub(crate) struct ClauseAliasBindings {
-    preferred: Vec<(String, ScalarExpr)>,
-    available: Vec<(String, ScalarExpr)>,
-    prior_group_aliases: Vec<(String, ScalarExpr)>,
+#[derive(Debug)]
+pub(crate) struct ClauseAliasBindings<'a> {
+    aliases: &'a [(String, ScalarExpr)],
+    preferred: Vec<usize>,
+    available: Vec<usize>,
     group_by_column_first: bool,
 }
 
-pub(crate) type ClauseAliasLookup<'a> = (
-    Option<&'a [(String, ScalarExpr)]>,
-    Option<&'a [(String, ScalarExpr)]>,
-);
+pub(crate) type ClauseAliasLookup<'a> = (AliasLookup<'a>, Option<AliasLookup<'a>>);
 
-impl ClauseAliasBindings {
+pub(crate) struct GroupItemAliasState<'a> {
+    aliases: &'a [(String, ScalarExpr)],
+    preferred: &'a [usize],
+    available: &'a [usize],
+    prior_group_aliases: Vec<usize>,
+    group_by_column_first: bool,
+}
+
+impl ClauseAliasBindings<'_> {
+    pub(crate) fn group_item_state(&self) -> GroupItemAliasState<'_> {
+        GroupItemAliasState {
+            aliases: self.aliases,
+            preferred: &self.preferred,
+            available: &self.available,
+            prior_group_aliases: Vec::new(),
+            group_by_column_first: self.group_by_column_first,
+        }
+    }
+}
+
+impl GroupItemAliasState<'_> {
+    fn lookup<'a>(&'a self, indices: &'a [usize]) -> AliasLookup<'a> {
+        AliasLookup::indexed(self.aliases, indices)
+    }
+
     pub(crate) fn group_item_aliases(
         &self,
         expr: &Expr,
@@ -101,14 +123,10 @@ impl ClauseAliasBindings {
             let fallback_aliases = if disable_select_alias_fallback || self.available.is_empty() {
                 None
             } else {
-                Some(self.available.as_slice())
+                Some(self.lookup(self.available))
             };
 
-            return (
-                (!self.prior_group_aliases.is_empty())
-                    .then_some(self.prior_group_aliases.as_slice()),
-                fallback_aliases,
-            );
+            return (self.lookup(&self.prior_group_aliases), fallback_aliases);
         }
 
         // With `enable_group_by_column_first`, the first binding pass should
@@ -120,41 +138,32 @@ impl ClauseAliasBindings {
         // must not shadow the underlying column `x` inside GROUP BY sets.
         if self.group_by_column_first || disable_select_alias_fallback {
             return (
-                None,
-                (!self.available.is_empty()).then_some(self.available.as_slice()),
+                self.lookup(&[]),
+                (!self.available.is_empty()).then(|| self.lookup(self.available)),
             );
         }
 
-        let preferred = (!self.preferred.is_empty()).then_some(self.preferred.as_slice());
         let fallback =
-            (self.preferred.len() != self.available.len()).then_some(self.available.as_slice());
+            (self.preferred.len() != self.available.len()).then(|| self.lookup(self.available));
 
-        (preferred, fallback)
+        (self.lookup(self.preferred), fallback)
     }
 
     pub(crate) fn matched_group_item_alias(
         &self,
         expr: &Expr,
         scalar_expr: &ScalarExpr,
-    ) -> Option<String> {
+    ) -> Option<usize> {
         let column_name = Self::simple_unqualified_column_name(expr)?;
-        self.available
-            .iter()
-            .find(|(alias, scalar)| {
-                alias.eq_ignore_ascii_case(column_name) && scalar == scalar_expr
-            })
-            .map(|(alias, _)| alias.clone())
+        self.available.iter().copied().find(|index| {
+            let (alias, scalar) = &self.aliases[*index];
+            alias.eq_ignore_ascii_case(column_name) && scalar == scalar_expr
+        })
     }
 
-    pub(crate) fn register_group_item_alias(&mut self, alias: String, scalar: ScalarExpr) {
-        if !self
-            .prior_group_aliases
-            .iter()
-            .any(|(existing_alias, existing_scalar)| {
-                existing_alias.eq_ignore_ascii_case(&alias) && existing_scalar == &scalar
-            })
-        {
-            self.prior_group_aliases.push((alias, scalar));
+    pub(crate) fn register_group_item_alias(&mut self, alias_index: usize) {
+        if !self.prior_group_aliases.contains(&alias_index) {
+            self.prior_group_aliases.push(alias_index);
         }
     }
 
@@ -266,21 +275,22 @@ impl SelectAliasCatalog {
         &self.aliases
     }
 
-    pub(crate) fn group_by_bindings(&self, group_by_column_first: bool) -> ClauseAliasBindings {
+    pub(crate) fn group_by_bindings(&self, group_by_column_first: bool) -> ClauseAliasBindings<'_> {
         let mut bindings = ClauseAliasBindings {
+            aliases: &self.aliases,
+            preferred: Vec::new(),
+            available: Vec::new(),
             group_by_column_first,
-            ..Default::default()
         };
         for item in &self.items {
             if !item.explicit_expr_alias {
                 continue;
             }
 
-            let entry = self.aliases[item.alias_index].clone();
             if item.group_by_policy == GroupByAliasPolicy::Preferred {
-                bindings.preferred.push(entry.clone());
+                bindings.preferred.push(item.alias_index);
             }
-            bindings.available.push(entry);
+            bindings.available.push(item.alias_index);
         }
         bindings
     }
@@ -471,7 +481,7 @@ impl Binder {
                 reject_grouping_functions(Some(&scalar), "Where clause")?;
 
                 let filter_plan = Filter {
-                    predicates: split_conjunctions(&scalar),
+                    predicates: conjunctions(&scalar).cloned().collect(),
                 };
                 let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
 

@@ -64,6 +64,39 @@ use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::ScalarExpr;
 
+#[derive(Clone, Copy)]
+pub struct AliasLookup<'a> {
+    aliases: &'a [(String, ScalarExpr)],
+    indices: Option<&'a [usize]>,
+}
+
+impl<'a> AliasLookup<'a> {
+    pub fn all(aliases: &'a [(String, ScalarExpr)]) -> Self {
+        Self {
+            aliases,
+            indices: None,
+        }
+    }
+
+    pub fn indexed(aliases: &'a [(String, ScalarExpr)], indices: &'a [usize]) -> Self {
+        Self {
+            aliases,
+            indices: Some(indices),
+        }
+    }
+
+    fn len(self) -> usize {
+        self.indices.map_or(self.aliases.len(), <[usize]>::len)
+    }
+
+    fn iter(self) -> impl Iterator<Item = &'a (String, ScalarExpr)> {
+        (0..self.len()).map(move |index| {
+            let index = self.indices.map_or(index, |indices| indices[index]);
+            &self.aliases[index]
+        })
+    }
+}
+
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, EnumAsInner)]
@@ -425,7 +458,7 @@ impl BindContext {
         database: Option<&str>,
         table: Option<&str>,
         column: &Identifier,
-        available_aliases: &[(String, ScalarExpr)],
+        available_aliases: AliasLookup<'_>,
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionResult> {
         let result = self.resolve_name_candidates(
@@ -443,8 +476,8 @@ impl BindContext {
         database: Option<&str>,
         table: Option<&str>,
         column: &Identifier,
-        available_aliases: &[(String, ScalarExpr)],
-        fallback_aliases: Option<&[(String, ScalarExpr)]>,
+        available_aliases: AliasLookup<'_>,
+        fallback_aliases: Option<AliasLookup<'_>>,
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionResult> {
         let mut result = self.resolve_name_candidates(
@@ -474,7 +507,7 @@ impl BindContext {
         database: Option<&str>,
         table: Option<&str>,
         column: &Identifier,
-        available_aliases: &[(String, ScalarExpr)],
+        available_aliases: AliasLookup<'_>,
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionCandidates> {
         let name = &column.name;
@@ -501,7 +534,7 @@ impl BindContext {
                 &mut result,
             );
         } else if self.expr_context.prefer_resolve_alias() {
-            for (alias, scalar) in available_aliases {
+            for (alias, scalar) in available_aliases.iter() {
                 if database.is_none() && table.is_none() && name == alias {
                     result.push(NameResolutionResult::Alias {
                         alias: alias.clone(),
@@ -529,7 +562,7 @@ impl BindContext {
             );
 
             if result.is_empty() {
-                for (alias, scalar) in available_aliases {
+                for (alias, scalar) in available_aliases.iter() {
                     if database.is_none() && table.is_none() && name == alias {
                         result.push(NameResolutionResult::Alias {
                             alias: alias.clone(),
@@ -974,18 +1007,16 @@ impl BindContext {
                         let next_virtual_column_id = virtual_schema
                             .map(|virtual_schema| virtual_schema.next_column_id)
                             .unwrap_or(VIRTUAL_COLUMN_ID_START);
-                        let exists_virtual_columns =
-                            metadata.virtual_columns_by_table_index(table_index);
-                        let mut max_column_id = next_virtual_column_id.saturating_sub(1);
-                        for exists_virtual_column in exists_virtual_columns {
-                            if let ColumnEntry::VirtualColumn(VirtualColumn { column_id, .. }) =
-                                exists_virtual_column
-                            {
-                                if column_id > max_column_id {
-                                    max_column_id = column_id;
+                        let max_column_id = metadata
+                            .virtual_columns_by_table_index(table_index)
+                            .filter_map(|column| match column {
+                                ColumnEntry::VirtualColumn(VirtualColumn { column_id, .. }) => {
+                                    Some(*column_id)
                                 }
-                            }
-                        }
+                                _ => None,
+                            })
+                            .max()
+                            .unwrap_or_else(|| next_virtual_column_id.saturating_sub(1));
                         if max_column_id >= next_virtual_column_id {
                             max_column_id + 1
                         } else {

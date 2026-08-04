@@ -161,24 +161,45 @@ pub fn reject_grouping_functions<'a>(
     Ok(())
 }
 
-pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
-    let mut predicates = Vec::new();
+#[inline]
+fn conjunctions_with<T>(
+    scalar: T,
+    mut expand: impl FnMut(T, &mut Vec<T>) -> Option<T>,
+) -> impl Iterator<Item = T> {
     let mut stack = vec![scalar];
 
-    while let Some(scalar) = stack.pop() {
-        match scalar {
-            ScalarExpr::FunctionCall(func)
-                if matches!(func.func_name.as_str(), "and" | "and_filters") =>
-            {
-                stack.extend(func.arguments.iter().rev());
-            }
-            _ => {
-                predicates.push(scalar.clone());
+    std::iter::from_fn(move || {
+        loop {
+            let scalar = stack.pop()?;
+            if let Some(scalar) = expand(scalar, &mut stack) {
+                return Some(scalar);
             }
         }
-    }
+    })
+}
 
-    predicates
+fn is_conjunction(func: &FunctionCall) -> bool {
+    matches!(func.func_name.as_str(), "and" | "and_filters")
+}
+
+pub fn conjunctions(scalar: &ScalarExpr) -> impl Iterator<Item = &ScalarExpr> {
+    conjunctions_with(scalar, |scalar, stack| match scalar {
+        ScalarExpr::FunctionCall(func) if is_conjunction(func) => {
+            stack.extend(func.arguments.iter().rev());
+            None
+        }
+        _ => Some(scalar),
+    })
+}
+
+pub fn into_conjunctions(scalar: ScalarExpr) -> impl Iterator<Item = ScalarExpr> {
+    conjunctions_with(scalar, |scalar, stack| match scalar {
+        ScalarExpr::FunctionCall(func) if is_conjunction(&func) => {
+            stack.extend(func.arguments.into_iter().rev());
+            None
+        }
+        _ => Some(scalar),
+    })
 }
 
 #[cfg(test)]
@@ -202,18 +223,17 @@ mod tests {
     }
 
     #[test]
-    fn test_split_conjunctions_handles_deep_and_chain() {
+    fn test_conjunctions_handles_deep_and_chain() {
         let mut expr = bool_constant(true);
         for _ in 0..1024 {
             expr = and(expr, bool_constant(true));
         }
 
-        let predicates = split_conjunctions(&expr);
-        assert_eq!(predicates.len(), 1025);
+        assert_eq!(conjunctions(&expr).count(), 1025);
     }
 
     #[test]
-    fn test_split_conjunctions_handles_and_filters() {
+    fn test_conjunctions_handles_and_filters() {
         let expr = ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "and_filters".to_string(),
@@ -225,8 +245,8 @@ mod tests {
             ],
         });
 
-        let predicates = split_conjunctions(&expr);
-        assert_eq!(predicates.len(), 4);
+        assert_eq!(conjunctions(&expr).count(), 4);
+        assert_eq!(into_conjunctions(expr).count(), 4);
     }
 
     #[test]

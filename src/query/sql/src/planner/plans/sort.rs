@@ -49,20 +49,6 @@ impl Sort {
         self.items.iter().map(|item| item.index).collect()
     }
 
-    pub fn sort_items_exclude_partition(&self) -> Vec<SortItem> {
-        self.items
-            .iter()
-            .filter(|item| match &self.window_partition {
-                Some(window) => !window
-                    .partition_by
-                    .iter()
-                    .any(|partition| partition.index == item.index),
-                None => true,
-            })
-            .cloned()
-            .collect()
-    }
-
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) {
         for item in &mut self.items {
             if item.index == old {

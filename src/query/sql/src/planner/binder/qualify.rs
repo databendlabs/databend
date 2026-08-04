@@ -23,7 +23,7 @@ use crate::Binder;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
 use crate::binder::aggregate::AggregateRewriter;
-use crate::binder::split_conjunctions;
+use crate::binder::into_conjunctions;
 use crate::binder::window::WindowRewriter;
 use crate::binder::window::find_replaced_window_function;
 use crate::optimizer::ir::SExpr;
@@ -90,7 +90,7 @@ impl Binder {
             qualify
         };
 
-        let predicates = split_conjunctions(&scalar);
+        let predicates = into_conjunctions(scalar).collect();
 
         let filter = Filter { predicates };
 

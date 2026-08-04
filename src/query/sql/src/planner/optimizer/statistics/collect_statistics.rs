@@ -63,6 +63,12 @@ pub struct StatisticsTraceCollector {
     trace: Arc<Mutex<Option<serde_json::Value>>>,
 }
 
+struct StatisticsColumn {
+    index: Symbol,
+    id: ColumnId,
+    name: String,
+}
+
 impl StatisticsTraceCollector {
     pub fn take(self) -> Option<serde_json::Value> {
         self.trace.lock().unwrap().take()
@@ -135,10 +141,24 @@ impl CollectStatisticsOptimizer {
             RelOperator::Scan(scan) => {
                 let (table_entry, columns) = {
                     let metadata = self.metadata.read();
-                    (
-                        metadata.table(scan.table_index).clone(),
-                        metadata.columns_by_table_index(scan.table_index),
-                    )
+                    let columns = metadata
+                        .columns_by_table_index(scan.table_index)
+                        .filter_map(|column| match column {
+                            ColumnEntry::BaseTableColumn(BaseTableColumn {
+                                column_index,
+                                column_id,
+                                column_name,
+                                virtual_expr: None,
+                                ..
+                            }) => Some(StatisticsColumn {
+                                index: *column_index,
+                                id: *column_id,
+                                name: column_name.clone(),
+                            }),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>();
+                    (metadata.table(scan.table_index).clone(), columns)
                 };
                 let table = table_entry.table();
 
@@ -154,34 +174,21 @@ impl CollectStatisticsOptimizer {
                 let mut top_n = HashMap::new();
                 let mut count_min_sketch = HashMap::new();
                 let collect_frequency_stats = scan.change_type.is_none();
-                for column in columns.iter() {
-                    if let ColumnEntry::BaseTableColumn(BaseTableColumn {
-                        column_index,
-                        column_id,
-                        virtual_expr,
-                        ..
-                    }) = column
+                for column in &columns {
+                    let col_stat = column_statistics_provider.column_statistics(column.id);
+                    column_stats.insert(column.index, col_stat.cloned());
+                    let histogram = column_statistics_provider.histogram(column.id);
+                    histograms.insert(column.index, histogram);
+                    if collect_frequency_stats
+                        && let Some(column_top_n) = column_statistics_provider.top_n(column.id)
                     {
-                        if virtual_expr.is_none() {
-                            let col_stat = column_statistics_provider
-                                .column_statistics(*column_id as ColumnId);
-                            column_stats.insert(*column_index, col_stat.cloned());
-                            let histogram =
-                                column_statistics_provider.histogram(*column_id as ColumnId);
-                            histograms.insert(*column_index, histogram);
-                            if collect_frequency_stats
-                                && let Some(column_top_n) =
-                                    column_statistics_provider.top_n(*column_id as ColumnId)
-                            {
-                                top_n.insert(*column_index, column_top_n);
-                            }
-                            if collect_frequency_stats
-                                && let Some(column_count_min_sketch) = column_statistics_provider
-                                    .count_min_sketch(*column_id as ColumnId)
-                            {
-                                count_min_sketch.insert(*column_index, column_count_min_sketch);
-                            }
-                        }
+                        top_n.insert(column.index, column_top_n);
+                    }
+                    if collect_frequency_stats
+                        && let Some(column_count_min_sketch) =
+                            column_statistics_provider.count_min_sketch(column.id)
+                    {
+                        count_min_sketch.insert(column.index, column_count_min_sketch);
                     }
                 }
 
@@ -478,7 +485,7 @@ impl TraceCollector {
         &mut self,
         scan: &Scan,
         table_entry: &TableEntry,
-        columns: &[ColumnEntry],
+        columns: &[StatisticsColumn],
         table_fields: &[TableField],
         table_stats: &Option<TableStatistics>,
         column_stats: &HashMap<Symbol, Option<BasicColumnStatistics>>,
@@ -494,22 +501,12 @@ impl TraceCollector {
             });
 
         for column in columns {
-            let ColumnEntry::BaseTableColumn(BaseTableColumn {
-                column_index,
-                column_name,
-                virtual_expr: None,
-                ..
-            }) = column
-            else {
-                continue;
-            };
-
-            let column_stat = column_stats.get(column_index).and_then(Option::as_ref);
-            let histogram = histograms.get(column_index).and_then(Option::as_ref);
+            let column_stat = column_stats.get(&column.index).and_then(Option::as_ref);
+            let histogram = histograms.get(&column.index).and_then(Option::as_ref);
             let entry = self
                 .column_stats
                 .0
-                .entry((scan.table_index, column_name.clone()))
+                .entry((scan.table_index, column.name.clone()))
                 .or_insert_with(|| ColumnStatisticsEntry {
                     statistics: None,
                     histogram: None,

@@ -23,7 +23,7 @@ use crate::BindContext;
 use crate::Binder;
 use crate::binder::ExprContext;
 use crate::binder::aggregate::AggregateRewriter;
-use crate::binder::split_conjunctions;
+use crate::binder::into_conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::Filter;
@@ -83,7 +83,7 @@ impl Binder {
             having
         };
 
-        let predicates = split_conjunctions(&scalar);
+        let predicates = into_conjunctions(scalar).collect();
 
         let filter = Filter { predicates };
 

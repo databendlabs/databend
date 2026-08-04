@@ -943,7 +943,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
-        group_by_aliases: &ClauseAliasBindings,
+        group_by_aliases: &ClauseAliasBindings<'_>,
         group_by: &GroupBy,
     ) -> Result<()> {
         let original_context = bind_context.replace_expr_context(ExprContext::GroupClaue);
@@ -1149,7 +1149,7 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
         sets: &[Vec<GroupItem>],
-        group_by_aliases: &ClauseAliasBindings,
+        group_by_aliases: &ClauseAliasBindings<'_>,
     ) -> Result<()> {
         let mut grouping_sets = Vec::with_capacity(sets.len());
         for set in sets {
@@ -1251,14 +1251,14 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
         group_by: &[GroupItem],
-        group_by_aliases: &ClauseAliasBindings,
+        group_by_aliases: &ClauseAliasBindings<'_>,
         collect_grouping_sets: bool,
         grouping_sets: &mut Vec<Vec<ScalarExpr>>,
     ) -> Result<()> {
         if collect_grouping_sets {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
         }
-        let mut group_by_aliases = group_by_aliases.clone();
+        let mut group_by_aliases = group_by_aliases.group_item_state();
         for item in group_by.iter() {
             let expr = &item.expr;
             // If expr is a number literal, then this is a index group item.
@@ -1301,7 +1301,7 @@ impl Binder {
                     self.ctx.clone(),
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
-                    preferred_aliases.unwrap_or(&[]),
+                    preferred_aliases,
                     fallback_aliases,
                     false,
                 )?;
@@ -1323,13 +1323,11 @@ impl Binder {
                 grouping_sets.last_mut().unwrap().push(scalar_expr.clone());
             }
 
-            let group_item_index = if let Some(index) = bind_context
+            let group_item_exists = bind_context
                 .aggregate_info
                 .group_items_map
-                .get(&scalar_expr)
-            {
-                *index
-            } else {
+                .contains_key(&scalar_expr);
+            if !group_item_exists {
                 let group_item_name = format!("{:#}", expr);
                 let index = if let ScalarExpr::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding { index, .. },
@@ -1351,13 +1349,9 @@ impl Binder {
                     scalar_expr,
                     bind_context.aggregate_info.group_items.len() - 1,
                 );
-                bind_context.aggregate_info.group_items.len() - 1
-            };
-            if let Some(alias) = group_alias {
-                let group_item_scalar = bind_context.aggregate_info.group_items[group_item_index]
-                    .scalar
-                    .clone();
-                group_by_aliases.register_group_item_alias(alias, group_item_scalar);
+            }
+            if let Some(alias_index) = group_alias {
+                group_by_aliases.register_group_item_alias(alias_index);
             }
         }
 
