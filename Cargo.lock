@@ -5020,6 +5020,7 @@ dependencies = [
  "anyhow",
  "arrow-schema 58.1.0",
  "async-backtrace",
+ "async-trait",
  "base64 0.22.1",
  "borsh",
  "chrono",
@@ -5036,9 +5037,11 @@ dependencies = [
  "iceberg",
  "log",
  "lru",
+ "object_store",
  "opendal 0.58.1",
  "opendal-layer-observe-metrics-common",
  "parquet 58.1.0",
+ "pin-project",
  "prometheus-client 0.22.3",
  "regex",
  "reqwest 0.12.24",
@@ -5102,7 +5105,6 @@ dependencies = [
  "deltalake",
  "fastrace",
  "itertools 0.13.0",
- "object_store_opendal",
  "parquet 58.1.0",
  "serde",
  "serde_json",
@@ -5444,8 +5446,7 @@ dependencies = [
  "match-template",
  "num-bigint",
  "num-traits",
- "object_store 0.12.4",
- "object_store_opendal",
+ "object_store",
  "opendal 0.58.1",
  "orc-rust 0.6.0",
  "parking_lot 0.12.5",
@@ -7076,7 +7077,7 @@ dependencies = [
  "futures",
  "indexmap 2.14.0",
  "itertools 0.14.0",
- "object_store 0.12.4",
+ "object_store",
  "parquet 55.1.0",
  "reqwest 0.12.24",
  "roaring 0.10.12",
@@ -7143,7 +7144,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "num_cpus",
- "object_store 0.12.4",
+ "object_store",
  "parking_lot 0.12.5",
  "parquet 55.1.0",
  "percent-encoding",
@@ -11650,7 +11651,7 @@ dependencies = [
  "mock_instant",
  "moka",
  "num_cpus",
- "object_store 0.12.4",
+ "object_store",
  "pin-project",
  "prost 0.14.3",
  "rand 0.9.2",
@@ -11728,7 +11729,7 @@ dependencies = [
  "lance-io",
  "log",
  "num-traits",
- "object_store 0.12.4",
+ "object_store",
  "prost 0.14.3",
  "prost-build 0.14.3",
  "prost-types 0.14.3",
@@ -11766,7 +11767,7 @@ dependencies = [
  "libc",
  "log",
  "moka",
- "object_store 0.12.4",
+ "object_store",
  "path_abs",
  "pin-project",
  "prost 0.14.3",
@@ -11827,7 +11828,7 @@ dependencies = [
  "lance-file",
  "lance-io",
  "log",
- "object_store 0.12.4",
+ "object_store",
  "prost 0.14.3",
  "prost-build 0.14.3",
  "prost-types 0.14.3",
@@ -13263,49 +13264,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "object_store"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "622acbc9100d3c10e2ee15804b0caa40e55c933d5aa53814cd520805b7958a49"
-dependencies = [
- "async-trait",
- "bytes",
- "chrono",
- "futures-channel",
- "futures-core",
- "futures-util",
- "http 1.5.0",
- "humantime",
- "itertools 0.14.0",
- "parking_lot 0.12.5",
- "percent-encoding",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "url",
- "walkdir",
- "wasm-bindgen-futures",
- "web-time",
-]
-
-[[package]]
-name = "object_store_opendal"
-version = "0.58.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88f165780495c17aa3ce86846600504198c3fffd99073521552751c2430fa6ac"
-dependencies = [
- "async-trait",
- "bytes",
- "chrono",
- "futures",
- "mea",
- "object_store 0.13.2",
- "opendal 0.58.1",
- "pin-project",
- "tokio",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14347,7 +14305,7 @@ dependencies = [
  "lz4_flex 0.11.3",
  "num",
  "num-bigint",
- "object_store 0.12.4",
+ "object_store",
  "paste",
  "seq-macro",
  "simdutf8",

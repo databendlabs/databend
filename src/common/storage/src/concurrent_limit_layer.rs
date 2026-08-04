@@ -29,8 +29,8 @@ use opendal::Metadata;
 use opendal::OperationContext;
 use opendal::Result;
 use opendal::raw::Layer;
-use opendal::raw::OpCopy;
 use opendal::raw::OpCopier;
+use opendal::raw::OpCopy;
 use opendal::raw::OpCreateDir;
 use opendal::raw::OpDelete;
 use opendal::raw::OpList;
@@ -272,7 +272,11 @@ struct ConcurrentLimitReader {
 }
 
 impl ConcurrentLimitReader {
-    fn new(inner: oio::Reader, semaphore: Arc<Semaphore>, labels: Arc<ConcurrentLimitLabels>) -> Self {
+    fn new(
+        inner: oio::Reader,
+        semaphore: Arc<Semaphore>,
+        labels: Arc<ConcurrentLimitLabels>,
+    ) -> Self {
         Self {
             inner,
             semaphore,

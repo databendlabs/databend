@@ -23,6 +23,7 @@ ahash = { workspace = true }
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
+async-trait = { workspace = true }
 base64 = { workspace = true }
 borsh = { workspace = true }
 chrono = { workspace = true }
@@ -32,9 +33,11 @@ http = { workspace = true }
 iceberg = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
+object_store = { workspace = true }
 opendal = { workspace = true }
 opendal-layer-observe-metrics-common = { workspace = true }
 parquet = { workspace = true }
+pin-project = { workspace = true }
 prometheus-client = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }

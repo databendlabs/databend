@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 
 use databend_common_meta_app::storage::StorageParams;
-
 use opendal::raw::normalize_root;
 
 #[derive(Debug)]
@@ -94,11 +93,7 @@ pub fn get_external_storage_connection(
     let mut info = ExternalStorageConnection::new(BTreeMap::new());
     match storage_params {
         StorageParams::S3(config) => {
-            info.set_uri(
-                "s3".to_string(),
-                config.bucket.clone(),
-                config.root.clone(),
-            );
+            info.set_uri("s3".to_string(), config.bucket.clone(), config.root.clone());
 
             info.set_value("endpoint_url".to_string(), config.endpoint_url.clone());
             info.set_value("region".to_string(), config.region.clone());

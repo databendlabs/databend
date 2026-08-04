@@ -220,11 +220,10 @@ async fn vacuum_by_duration(
 
 /// Read `last_modified` for a single object path via `stat`.
 async fn stat_last_modified(operator: &Operator, path: &str) -> Option<i64> {
-    operator
-        .stat(path)
-        .await
-        .ok()
-        .and_then(|meta| meta.last_modified().map(|v| v.into_inner().as_millisecond()))
+    operator.stat(path).await.ok().and_then(|meta| {
+        meta.last_modified()
+            .map(|v| v.into_inner().as_millisecond())
+    })
 }
 
 /// Resolve a file's `last_modified`, preferring list metadata and falling back to `stat`.

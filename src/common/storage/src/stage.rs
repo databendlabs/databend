@@ -62,9 +62,7 @@ impl StageFileInfo {
             path,
             size: meta.content_length(),
             md5: meta.content_md5().map(str::to_string),
-            last_modified: meta
-                .last_modified()
-                .map(crate::opendal_timestamp_to_chrono),
+            last_modified: meta.last_modified().map(crate::opendal_timestamp_to_chrono),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
             creator: None,

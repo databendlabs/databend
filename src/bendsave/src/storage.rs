@@ -223,8 +223,6 @@ pub async fn load_bendsave_storage(uri: &str) -> Result<Operator> {
 mod tests {
     use std::path::Path;
 
-    
-
     use super::*;
 
     #[tokio::test]

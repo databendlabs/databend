@@ -44,7 +44,6 @@ use opendal::Entry;
 use opendal::ErrorKind;
 use opendal::Operator;
 
-
 use crate::FuseTable;
 use crate::RetentionPolicy;
 use crate::io::SnapshotLiteExtended;

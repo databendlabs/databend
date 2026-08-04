@@ -368,7 +368,9 @@ num-traits = "0.2.19"
 num_cpus = "1.17"
 object = "0.36.5"
 object_store = "0.12.4"
-object_store_opendal = { version = "0.58.0" }
+# object_store_opendal 0.58 requires object_store 0.13, which is not yet
+# aligned with deltalake/lance. Delta/stage use the local adapter in
+# databend-common-storage instead.
 once_cell = "1.15.0"
 opendal = { version = "0.58.1", features = [
     "layers-fastrace",
