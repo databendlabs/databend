@@ -77,6 +77,7 @@ pub struct PlanFragment {
     pub fragment_id: usize,
     pub exchange: Option<DataExchange>,
     pub query_id: String,
+    pub has_merge_input: bool,
 
     // The fragments to ask data from.
     pub source_fragments: Vec<PlanFragment>,
@@ -103,11 +104,7 @@ impl PlanFragment {
                 fragment_actions.add_action(action);
             }
             FragmentType::Intermediate => {
-                if self
-                    .source_fragments
-                    .iter()
-                    .any(|fragment| matches!(&fragment.exchange, Some(DataExchange::Merge(_))))
-                {
+                if self.has_merge_input {
                     // If this is a intermediate fragment with merge input,
                     // we will only send it to coordinator node.
                     let action = QueryFragmentAction::create(
