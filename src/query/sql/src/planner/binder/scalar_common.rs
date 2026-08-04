@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 
+use crate::ColumnSet;
 use crate::optimizer::ir::RelationalProperty;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -290,7 +291,11 @@ pub fn split_equivalent_predicate(scalar: &ScalarExpr) -> Option<(ScalarExpr, Sc
 }
 
 pub fn satisfied_by(scalar: &ScalarExpr, prop: &RelationalProperty) -> bool {
-    scalar.used_columns().is_subset(&prop.output_columns) && !scalar.used_columns().is_empty()
+    satisfied_by_columns(&scalar.used_columns(), prop)
+}
+
+fn satisfied_by_columns(columns: &ColumnSet, prop: &RelationalProperty) -> bool {
+    !columns.is_empty() && columns.is_subset(&prop.output_columns)
 }
 
 /// Helper to determine join condition type from a scalar expression.
@@ -339,15 +344,16 @@ impl<'a> JoinPredicate<'a> {
         left_prop: &RelationalProperty,
         right_prop: &RelationalProperty,
     ) -> Self {
-        if scalar.used_columns().is_empty() {
+        let used_columns = scalar.used_columns();
+        if used_columns.is_empty() {
             return Self::ALL(scalar);
         }
 
-        if satisfied_by(scalar, left_prop) {
+        if satisfied_by_columns(&used_columns, left_prop) {
             return Self::Left(scalar);
         }
 
-        if satisfied_by(scalar, right_prop) {
+        if satisfied_by_columns(&used_columns, right_prop) {
             return Self::Right(scalar);
         }
 
@@ -357,9 +363,10 @@ impl<'a> JoinPredicate<'a> {
                 let mut right_exprs = Vec::new();
 
                 for expr in func.arguments.iter() {
-                    if satisfied_by(expr, left_prop) {
+                    let used_columns = expr.used_columns();
+                    if satisfied_by_columns(&used_columns, left_prop) {
                         left_exprs.push(expr.clone());
-                    } else if satisfied_by(expr, right_prop) {
+                    } else if satisfied_by_columns(&used_columns, right_prop) {
                         right_exprs.push(expr.clone());
                     } else {
                         return Self::Other(scalar);
@@ -383,8 +390,12 @@ impl<'a> JoinPredicate<'a> {
                 let is_equal_op = func.func_name.as_str() == "eq";
                 let left = &func.arguments[0];
                 let right = &func.arguments[1];
+                let left_used_columns = left.used_columns();
+                let right_used_columns = right.used_columns();
 
-                if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
+                if satisfied_by_columns(&left_used_columns, left_prop)
+                    && satisfied_by_columns(&right_used_columns, right_prop)
+                {
                     return Self::Both {
                         left: Box::new(Cow::Borrowed(left)),
                         right: Box::new(Cow::Borrowed(right)),
@@ -392,7 +403,9 @@ impl<'a> JoinPredicate<'a> {
                     };
                 }
 
-                if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
+                if satisfied_by_columns(&right_used_columns, left_prop)
+                    && satisfied_by_columns(&left_used_columns, right_prop)
+                {
                     return Self::Both {
                         left: Box::new(Cow::Borrowed(right)),
                         right: Box::new(Cow::Borrowed(left)),

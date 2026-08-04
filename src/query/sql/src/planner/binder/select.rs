@@ -907,7 +907,7 @@ impl Binder {
                 finder.reset_finder();
                 finder.visit(&s.scalar)?;
                 for scalar in finder.scalars() {
-                    non_lazy_cols.extend(scalar.used_columns())
+                    scalar.collect_used_columns(&mut non_lazy_cols);
                 }
             }
             metadata.add_non_lazy_columns(non_lazy_cols);
@@ -956,7 +956,7 @@ impl Binder {
             if let ScalarExpr::WindowFunction(_) = &s.scalar {
                 continue;
             } else {
-                select_cols.extend(s.scalar.used_columns())
+                s.scalar.collect_used_columns(&mut select_cols);
             }
         }
 

@@ -44,7 +44,6 @@ use databend_common_expression::infer_schema_type;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
-use itertools::Itertools;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
@@ -124,6 +123,26 @@ pub enum NameResolutionResult {
     Column(ColumnBinding),
     InternalColumn(InternalColumnBinding),
     Alias { alias: String, scalar: ScalarExpr },
+}
+
+#[derive(Default)]
+struct NameResolutionCandidates {
+    first: Option<NameResolutionResult>,
+    ambiguous: bool,
+}
+
+impl NameResolutionCandidates {
+    fn push(&mut self, candidate: NameResolutionResult) {
+        match &self.first {
+            Some(first) if first != &candidate => self.ambiguous = true,
+            Some(_) => {}
+            None => self.first = Some(candidate),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.first.is_none()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -457,7 +476,7 @@ impl BindContext {
         column: &Identifier,
         available_aliases: &[(String, ScalarExpr)],
         name_resolution_ctx: &NameResolutionContext,
-    ) -> Result<Vec<NameResolutionResult>> {
+    ) -> Result<NameResolutionCandidates> {
         let name = &column.name;
         let column_case_sensitive = name_resolution_ctx.is_case_sensitive(column);
         if name_resolution_ctx.deny_column_reference {
@@ -471,9 +490,8 @@ impl BindContext {
             return Err(err.set_span(column.span));
         }
 
-        let mut result = vec![];
+        let mut result = NameResolutionCandidates::default();
         // Lookup parent context to resolve outer reference.
-        let mut alias_match_count = 0;
         if !self.expr_context.allow_resolve_alias() {
             self.search_bound_columns_recursively(
                 database,
@@ -489,12 +507,10 @@ impl BindContext {
                         alias: alias.clone(),
                         scalar: scalar.clone(),
                     });
-
-                    alias_match_count += 1;
                 }
             }
 
-            if alias_match_count == 0 {
+            if result.is_empty() {
                 self.search_bound_columns_recursively(
                     database,
                     table,
@@ -529,17 +545,19 @@ impl BindContext {
 
     fn finish_resolve_name(
         column: &Identifier,
-        mut result: Vec<NameResolutionResult>,
+        result: NameResolutionCandidates,
     ) -> Result<NameResolutionResult> {
         let name = &column.name;
-        if result.len() > 1 && !result.iter().all_equal() {
+        if result.ambiguous {
             return Err(ErrorCode::SemanticError(format!(
                 "column {name} reference or alias is ambiguous, please use another alias name",
             ))
             .set_span(column.span));
         }
 
-        if result.is_empty() {
+        if let Some(result) = result.first {
+            Ok(result)
+        } else {
             let err = if column.is_quoted() {
                 ErrorCode::SemanticError(format!(
                     "column {name} doesn't exist, do you mean '{name}'?"
@@ -548,8 +566,6 @@ impl BindContext {
                 ErrorCode::SemanticError(format!("column {name} doesn't exist"))
             };
             Err(err.set_span(column.span))
-        } else {
-            Ok(result.remove(0))
         }
     }
 
@@ -584,13 +600,13 @@ impl BindContext {
 
     // Search bound column recursively from the parent context.
     // If current context found results, it'll stop searching.
-    pub fn search_bound_columns_recursively(
+    fn search_bound_columns_recursively(
         &self,
         database: Option<&str>,
         table: Option<&str>,
         column: &Identifier,
         column_case_sensitive: bool,
-        result: &mut Vec<NameResolutionResult>,
+        result: &mut NameResolutionCandidates,
     ) {
         let mut bind_context: &BindContext = self;
         loop {
@@ -621,7 +637,7 @@ impl BindContext {
         table: Option<&str>,
         column: &Identifier,
         column_case_sensitive: bool,
-        result: &mut Vec<NameResolutionResult>,
+        result: &mut NameResolutionCandidates,
     ) {
         for column_binding in bind_context.columns.iter() {
             if let Some(lower) = &column_binding.column_name_lower {

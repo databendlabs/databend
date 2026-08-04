@@ -164,20 +164,27 @@ impl ScalarExpr {
     }
 
     pub fn used_columns(&self) -> ColumnSet {
-        struct UsedColumnsVisitor {
-            columns: ColumnSet,
+        let mut columns = ColumnSet::new();
+        self.collect_used_columns(&mut columns);
+        columns
+    }
+
+    pub fn collect_used_columns<C>(&self, columns: &mut C)
+    where C: Extend<Symbol> {
+        struct UsedColumnsVisitor<'a, C> {
+            columns: &'a mut C,
         }
 
-        impl<'a> Visitor<'a> for UsedColumnsVisitor {
+        impl<'a, C> Visitor<'a> for UsedColumnsVisitor<'_, C>
+        where C: Extend<Symbol>
+        {
             fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
-                self.columns.insert(col.column.index);
+                self.columns.extend(std::iter::once(col.column.index));
                 Ok(())
             }
 
             fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
-                for idx in subquery.outer_columns.iter() {
-                    self.columns.insert(*idx);
-                }
+                self.columns.extend(subquery.outer_columns.iter().copied());
                 if let Some(child_expr) = subquery.child_expr.as_ref() {
                     self.visit(child_expr)?;
                 }
@@ -185,11 +192,8 @@ impl ScalarExpr {
             }
         }
 
-        let mut visitor = UsedColumnsVisitor {
-            columns: ColumnSet::new(),
-        };
+        let mut visitor = UsedColumnsVisitor { columns };
         visitor.visit(self).unwrap();
-        visitor.columns
     }
 
     pub fn is_deterministic(&self) -> bool {

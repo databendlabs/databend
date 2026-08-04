@@ -380,7 +380,7 @@ impl Binder {
 
         let mut other_condition_columns = ColumnSet::new();
         for predicate in other_conditions.iter() {
-            other_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut other_condition_columns);
         }
 
         self.push_down_other_conditions(
@@ -449,13 +449,13 @@ impl Binder {
             };
         let mut join_condition_columns = ColumnSet::new();
         for predicate in left_conditions.iter() {
-            join_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut join_condition_columns);
         }
         for predicate in right_conditions.iter() {
-            join_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut join_condition_columns);
         }
         for predicate in non_equi_conditions.iter() {
-            join_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut join_condition_columns);
         }
         join_condition_columns.extend(other_condition_columns);
         if !join_condition_columns.is_empty() {

@@ -128,22 +128,22 @@ impl Aggregate {
 
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for group_item in self.group_items.iter() {
+        for group_item in &self.group_items {
             used_columns.insert(group_item.index);
-            used_columns.extend(group_item.scalar.used_columns())
+            group_item.scalar.collect_used_columns(&mut used_columns);
         }
-        for agg in self.aggregate_functions.iter() {
+        for agg in &self.aggregate_functions {
             used_columns.insert(agg.index);
-            used_columns.extend(agg.scalar.used_columns())
+            agg.scalar.collect_used_columns(&mut used_columns);
         }
         Ok(used_columns)
     }
 
     pub fn group_columns(&self) -> Result<ColumnSet> {
         let mut col_set = ColumnSet::new();
-        for group_item in self.group_items.iter() {
+        for group_item in &self.group_items {
             col_set.insert(group_item.index);
-            col_set.extend(group_item.scalar.used_columns())
+            group_item.scalar.collect_used_columns(&mut col_set);
         }
         Ok(col_set)
     }
