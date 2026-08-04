@@ -2462,15 +2462,13 @@ impl Binder {
         let mut cluster_keys = Vec::with_capacity(expr_len);
         let mut vector_cluster_key_num = 0;
         for cluster_expr in cluster_exprs.iter() {
-            if !allow_vector {
-                let mut validator = PartitionBucketValidator { invalid: false };
-                cluster_expr.drive(&mut validator);
-                if validator.invalid {
-                    return Err(ErrorCode::InvalidClusterKeys(format!(
-                        "{key_name} expression `{cluster_expr:#}` must use bucket with a constant count between 1 and {}",
-                        u32::MAX
-                    )));
-                }
+            let mut validator = PartitionBucketValidator { invalid: false };
+            cluster_expr.drive(&mut validator);
+            if validator.invalid {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "{key_name} expression `{cluster_expr:#}` must use bucket with a constant count between 1 and {}",
+                    u32::MAX
+                )));
             }
 
             let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;

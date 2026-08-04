@@ -477,6 +477,15 @@ SELECT count(*) FROM bucket_cluster_only
 ----
 100
 
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE invalid_bucket_cluster_count(id BIGINT) CLUSTER BY (bucket(id, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE zero_bucket_cluster_count(id BIGINT) CLUSTER BY (bucket(0, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE excessive_bucket_cluster_count(id BIGINT) CLUSTER BY (bucket(4294967296, id))
+
 # A bucket cluster key does not substitute for a PARTITION BY declaration.
 statement error write_distribution_mode='hash' requires PARTITION BY
 CREATE TABLE bucket_cluster_hash(id INT) CLUSTER BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash'
