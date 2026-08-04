@@ -50,7 +50,6 @@ use log::warn;
 use super::Finder;
 use crate::BindContext;
 use crate::ColumnBinding;
-use crate::ColumnEntry;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;
@@ -1109,6 +1108,25 @@ impl Binder {
         bind_context: &mut BindContext,
         s_expr: SExpr,
     ) -> Result<SExpr> {
+        let mut required_columns = {
+            let metadata = self.metadata.read();
+            if metadata.internal_column_indexes().is_empty()
+                && bind_context.bound_virtual_columns.is_empty()
+            {
+                return Ok(s_expr);
+            }
+
+            let mut required_columns = BTreeMap::<_, ScanRequiredColumns>::new();
+            for ((table_index, _), column_index) in metadata.internal_column_indexes() {
+                required_columns
+                    .entry(*table_index)
+                    .or_default()
+                    .columns
+                    .insert(*column_index);
+            }
+            required_columns
+        };
+
         let bound_internal_columns = &bind_context.bound_internal_columns;
 
         let mut has_score = false;
@@ -1125,29 +1143,6 @@ impl Binder {
                 "[SQL-BINDER] Score function must be used together with match or query function"
                     .to_string(),
             ));
-        }
-
-        let mut required_columns = BTreeMap::<_, ScanRequiredColumns>::new();
-        for ((table_index, _), column_index) in bound_internal_columns.iter() {
-            required_columns
-                .entry(*table_index)
-                .or_default()
-                .columns
-                .insert(*column_index);
-        }
-
-        let scalar_used_columns = s_expr.scalar_used_columns();
-        {
-            let metadata = self.metadata.read();
-            for column_index in scalar_used_columns {
-                if let ColumnEntry::InternalColumn(column) = metadata.column(column_index) {
-                    required_columns
-                        .entry(column.table_index)
-                        .or_default()
-                        .columns
-                        .insert(column.column_index);
-                }
-            }
         }
 
         if !required_columns.is_empty() {

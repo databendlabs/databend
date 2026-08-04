@@ -899,26 +899,12 @@ impl BindContext {
             self.get_internal_column_table_index(column_binding)?
         };
 
-        {
-            let metadata = metadata.read();
-            let table = metadata.table(table_index);
-            if !table.table().supported_internal_column(column_id) {
-                return Err(ErrorCode::SemanticError(format!(
-                    "Unsupported internal column '{}' in table '{}'.",
-                    column_binding.internal_column.column_name(),
-                    table.table().name()
-                )));
-            }
-        }
-
-        let (column_index, is_new) =
+        let (column_index, is_new_binding) =
             match self.bound_internal_columns.entry((table_index, column_id)) {
                 btree_map::Entry::Vacant(e) => {
                     let mut metadata = metadata.write();
-                    let column_index = metadata.get_or_add_internal_column(
-                        table_index,
-                        column_binding.internal_column.clone(),
-                    );
+                    let column_index = metadata
+                        .add_internal_column(table_index, column_binding.internal_column.clone());
                     e.insert(column_index);
                     (column_index, true)
                 }
@@ -930,6 +916,13 @@ impl BindContext {
 
         let metadata = metadata.read();
         let table = metadata.table(table_index);
+        if !table.table().supported_internal_column(column_id) {
+            return Err(ErrorCode::SemanticError(format!(
+                "Unsupported internal column '{}' in table '{}'.",
+                column_binding.internal_column.column_name(),
+                table.table().name()
+            )));
+        }
         let column = metadata.column(column_index);
         let column_binding = ColumnBindingBuilder::new(
             column.name(),
@@ -946,7 +939,7 @@ impl BindContext {
         .table_index(Some(table_index))
         .build();
 
-        if is_new {
+        if is_new_binding {
             debug_assert!(!self.columns.iter().any(|c| c == &column_binding));
             self.columns.push(column_binding.clone());
         }

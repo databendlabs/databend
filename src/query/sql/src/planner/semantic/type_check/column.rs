@@ -228,71 +228,66 @@ where A: TypeCheckAdapter
 
         match column.computed_column {
             ComputedInternalColumn::ChangeRowId => {
-                let origin_block_id = self.computed_internal_dependency(
-                    table_index,
-                    ORIGIN_BLOCK_ID_COLUMN_ID,
-                    span,
-                )?;
-                let origin_block_row_num = self.computed_internal_dependency(
-                    table_index,
-                    ORIGIN_BLOCK_ROW_NUM_COLUMN_ID,
-                    span,
-                )?;
-                let base_row_id = INTERNAL_COLUMN_FACTORY
-                    .get_internal_column(BASE_ROW_ID_COL_NAME)
-                    .ok_or_else(|| ErrorCode::Internal("Missing _base_row_id definition"))?;
-                let base_row_id = self.bind_context.add_internal_column_binding(
-                    &InternalColumnBinding {
-                        database_name: column.database_name.clone(),
-                        table_name: column.table_name.clone(),
-                        internal_column: base_row_id,
-                    },
-                    self.metadata.clone(),
-                    Some(table_index),
-                    false,
-                )?;
-                let base_row_id = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span,
-                    column: base_row_id,
-                });
-
-                let is_not_null =
-                    self.resolve_scalar_function_call(span, "is_not_null", vec![], vec![
-                        origin_block_id.clone(),
-                    ])?;
-                let origin_uuid =
-                    self.resolve_scalar_function_call(span, "to_uuid", vec![], vec![
-                        origin_block_id,
-                    ])?;
-                let row_num_hex =
-                    self.resolve_scalar_function_call(span, "to_hex", vec![], vec![
-                        origin_block_row_num,
-                    ])?;
-                let row_num = self.resolve_scalar_function_call(span, "lpad", vec![], vec![
-                    row_num_hex.0,
-                    ConstantExpr {
-                        span,
-                        value: Scalar::Number(NumberScalar::UInt64(6)),
-                    }
-                    .into(),
-                    ConstantExpr {
-                        span,
-                        value: Scalar::String("0".to_string()),
-                    }
-                    .into(),
-                ])?;
-                let origin_row_id =
-                    self.resolve_scalar_function_call(span, "concat", vec![], vec![
-                        origin_uuid.0,
-                        row_num.0,
-                    ])?;
-                self.resolve_scalar_function_call(span, "if", vec![], vec![
-                    is_not_null.0,
-                    origin_row_id.0,
-                    base_row_id,
-                ])
+                self.resolve_change_row_id(span, column, table_index)
             }
         }
+    }
+
+    fn resolve_change_row_id(
+        &mut self,
+        span: Span,
+        column: &ComputedInternalColumnBinding,
+        table_index: crate::IndexType,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let origin_block_id =
+            self.computed_internal_dependency(table_index, ORIGIN_BLOCK_ID_COLUMN_ID, span)?;
+        let origin_block_row_num =
+            self.computed_internal_dependency(table_index, ORIGIN_BLOCK_ROW_NUM_COLUMN_ID, span)?;
+        let base_row_id = INTERNAL_COLUMN_FACTORY
+            .get_internal_column(BASE_ROW_ID_COL_NAME)
+            .ok_or_else(|| ErrorCode::Internal("Missing _base_row_id definition"))?;
+        let base_row_id = self.bind_context.add_internal_column_binding(
+            &InternalColumnBinding {
+                database_name: column.database_name.clone(),
+                table_name: column.table_name.clone(),
+                internal_column: base_row_id,
+            },
+            self.metadata.clone(),
+            Some(table_index),
+            false,
+        )?;
+        let base_row_id = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span,
+            column: base_row_id,
+        });
+
+        let is_not_null = self.resolve_scalar_function_call(span, "is_not_null", vec![], vec![
+            origin_block_id.clone(),
+        ])?;
+        let origin_uuid =
+            self.resolve_scalar_function_call(span, "to_uuid", vec![], vec![origin_block_id])?;
+        let row_num_hex =
+            self.resolve_scalar_function_call(span, "to_hex", vec![], vec![origin_block_row_num])?;
+        let row_num = self.resolve_scalar_function_call(span, "lpad", vec![], vec![
+            row_num_hex.0,
+            ConstantExpr {
+                span,
+                value: Scalar::Number(NumberScalar::UInt64(6)),
+            }
+            .into(),
+            ConstantExpr {
+                span,
+                value: Scalar::String("0".to_string()),
+            }
+            .into(),
+        ])?;
+        let origin_row_id = self
+            .resolve_scalar_function_call(span, "concat", vec![], vec![origin_uuid.0, row_num.0])?;
+        self.resolve_scalar_function_call(span, "if", vec![], vec![
+            is_not_null.0,
+            origin_row_id.0,
+            base_row_id,
+        ])
     }
 
     fn computed_internal_dependency(

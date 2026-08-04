@@ -49,6 +49,11 @@ select count(*) from t as lhs join t as rhs on lhs.change$row_id = rhs.change$ro
 4
 
 query I
+select count(*) from t as lhs join t as rhs on lhs.change$row_id = rhs.change$row_id and lhs.change$row_id = rhs.change$row_id
+----
+4
+
+query I
 select count(*) from t as lhs join t as rhs on lhs.change$row_id = rhs.change$row_id join t as third on rhs.change$row_id = third.change$row_id
 ----
 4

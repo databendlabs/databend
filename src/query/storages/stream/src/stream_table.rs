@@ -32,6 +32,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
 use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
+use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
@@ -397,6 +398,10 @@ impl Table for StreamTable {
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
         (BASE_BLOCK_IDS_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
+    }
+
+    fn supported_computed_internal_column(&self, column_id: ColumnId) -> bool {
+        column_id == CHANGE_ROW_ID_COLUMN_ID
     }
 
     /// whether column prune(projection) can help in table read
