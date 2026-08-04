@@ -29,7 +29,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnSet;
 use crate::MetadataRef;
-use crate::binder::Finder;
+use crate::binder::Any;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::binder::reject_grouping_functions;
@@ -784,9 +784,9 @@ impl<'a> JoinConditionResolver<'a> {
             )
         };
         for scalar in scalars {
-            let mut finder = Finder::new(&f);
-            finder.visit(scalar)?;
-            if !finder.scalars().is_empty() {
+            let mut any = Any::new(&f);
+            any.visit(scalar)?;
+            if any.result() {
                 return Err(ErrorCode::SemanticError(
                     "Join condition can't contain aggregate or window functions".to_string(),
                 )

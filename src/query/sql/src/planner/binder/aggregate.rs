@@ -29,6 +29,7 @@ use databend_common_expression::types::NumberScalar;
 use indexmap::Equivalent;
 use itertools::Itertools;
 
+use super::Any;
 use super::ExprContext;
 use super::Finder;
 use super::GROUPING_ID_COLUMN_NAME;
@@ -157,13 +158,25 @@ enum ExpandedGroup {
     GroupingSets(Vec<Vec<GroupItem>>),
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+enum AggregateCall {
+    Aggregate(ScalarItem),
+    Udaf(ScalarItem),
+}
+
+impl AggregateCall {
+    fn item(&self) -> &ScalarItem {
+        match self {
+            AggregateCall::Aggregate(item) | AggregateCall::Udaf(item) => item,
+        }
+    }
+}
+
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct AggregateInfo {
-    /// Builtin aggregation functions.
-    aggregate_functions: Vec<ScalarItem>,
-
-    /// User-defined aggregation functions.
-    udaf_calls: Vec<ScalarItem>,
+    /// Aggregate calls in ascending column index order.
+    /// Column indices are allocated monotonically, so registration order preserves this ordering.
+    aggregate_calls: Vec<AggregateCall>,
 
     /// Arguments of aggregation functions
     aggregate_arguments: Vec<ScalarItem>,
@@ -261,15 +274,23 @@ impl AggregateInfo {
 
     pub fn lookup_aggregate_function(&self, aggregate: &AggregateFunction) -> Option<&ScalarItem> {
         let scalar = ScalarExpr::AggregateFunction(aggregate.clone());
-        self.aggregate_functions
+        self.aggregate_calls
             .iter()
+            .filter_map(|call| match call {
+                AggregateCall::Aggregate(item) => Some(item),
+                AggregateCall::Udaf(_) => None,
+            })
             .find(|item| item.scalar.equivalent(&scalar))
     }
 
     pub fn lookup_udaf_call(&self, udaf: &UDAFCall) -> Option<&ScalarItem> {
         let scalar = ScalarExpr::UDAFCall(udaf.clone());
-        self.udaf_calls
+        self.aggregate_calls
             .iter()
+            .filter_map(|call| match call {
+                AggregateCall::Aggregate(_) => None,
+                AggregateCall::Udaf(item) => Some(item),
+            })
             .find(|item| item.scalar.equivalent(&scalar))
     }
 
@@ -303,21 +324,25 @@ impl AggregateInfo {
     }
 
     pub fn has_aggregate_calls(&self) -> bool {
-        !self.aggregate_functions.is_empty() || !self.udaf_calls.is_empty()
+        !self.aggregate_calls.is_empty()
+    }
+
+    pub fn aggregate_calls(&self) -> impl Iterator<Item = &ScalarItem> {
+        self.aggregate_calls.iter().map(AggregateCall::item)
     }
 
     pub fn has_aggregate_call_index(&self, index: Symbol) -> bool {
-        self.aggregate_functions
-            .iter()
-            .chain(self.udaf_calls.iter())
-            .any(|item| item.index == index)
+        self.aggregate_calls().any(|item| item.index == index)
     }
 
-    pub fn aggregate_calls_for_plan(&self) -> Vec<ScalarItem> {
-        let mut items = self.aggregate_functions.clone();
-        items.extend(self.udaf_calls.iter().cloned());
-        items.sort_by_key(|item| item.index);
-        items
+    fn push_aggregate_call(&mut self, call: AggregateCall) {
+        debug_assert!(
+            self.aggregate_calls
+                .last()
+                .is_none_or(|last| last.item().index < call.item().index),
+            "aggregate calls must be registered in column index order"
+        );
+        self.aggregate_calls.push(call);
     }
 
     fn lookup_existing_aggregate_function_column(
@@ -407,10 +432,10 @@ impl AggregateInfo {
             *aggregate.return_type.clone(),
         );
 
-        self.aggregate_functions.push(ScalarItem {
+        self.push_aggregate_call(AggregateCall::Aggregate(ScalarItem {
             scalar: replaced_agg.into(),
             index,
-        });
+        }));
 
         Ok(build_replaced_aggregate_column(
             &aggregate.display_name,
@@ -446,10 +471,10 @@ impl AggregateInfo {
             .write()
             .add_derived_column(udaf.display_name.clone(), *udaf.return_type.clone());
 
-        self.udaf_calls.push(ScalarItem {
+        self.push_aggregate_call(AggregateCall::Udaf(ScalarItem {
             scalar: replaced_udaf.into(),
             index,
-        });
+        }));
 
         Ok(build_replaced_aggregate_column(
             &udaf.display_name,
@@ -775,9 +800,9 @@ impl AggregateRewriter<'_> {
 
     pub fn check_no_aggregate_calls(expr: &ScalarExpr, error_message: &str) -> Result<()> {
         let f = |scalar: &ScalarExpr| scalar.is_aggregate();
-        let mut finder = Finder::new(&f);
-        finder.visit(expr)?;
-        if !finder.scalars().is_empty() {
+        let mut any = Any::new(&f);
+        any.visit(expr)?;
+        if any.result() {
             return Err(ErrorCode::Internal(error_message.to_string()));
         }
 
@@ -1104,7 +1129,7 @@ impl Binder {
         let aggregate_plan = Aggregate {
             mode: AggregateMode::Initial,
             group_items: agg_info.group_items.clone(),
-            aggregate_functions: agg_info.aggregate_calls_for_plan(),
+            aggregate_functions: agg_info.aggregate_calls().cloned().collect(),
             from_distinct: false,
             rank_limit: None,
 
@@ -1206,11 +1231,12 @@ impl Binder {
         // from the context, we can detect the failure and fallback to resolving with `available_aliases`.
 
         let f = |scalar: &ScalarExpr| scalar.is_aggregate();
+        let mut any = Any::new(&f);
         let mut groups = Vec::new();
         for (idx, select_item) in select_list.items.iter().enumerate() {
-            let mut finder = Finder::new(&f);
-            finder.visit(&select_item.scalar)?;
-            if finder.scalars().is_empty() {
+            any.reset();
+            any.visit(&select_item.scalar)?;
+            if !any.result() {
                 groups.push(Expr::Literal {
                     span: None,
                     value: Literal::UInt64(idx as u64 + 1),
@@ -1352,8 +1378,7 @@ impl Binder {
         for item in bind_context.aggregate_info.group_items.iter() {
             let mut finder = Finder::new(&f);
             finder.visit(&item.scalar)?;
-            if !finder.scalars().is_empty() {
-                let scalar = finder.scalars().first().unwrap();
+            if let Some(scalar) = finder.scalars().first().copied() {
                 let display_name = match scalar {
                     ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
                     ScalarExpr::UDAFCall(udaf) => udaf.display_name.clone(),
@@ -1537,10 +1562,10 @@ mod tests {
         };
 
         let mut agg_info = AggregateInfo::default();
-        agg_info.aggregate_functions.push(ScalarItem {
+        agg_info.push_aggregate_call(AggregateCall::Aggregate(ScalarItem {
             scalar: replaced.clone().into(),
             index: Symbol::new(42),
-        });
+        }));
 
         assert!(agg_info.lookup_aggregate_function(&original).is_none());
         assert_eq!(
@@ -1567,10 +1592,10 @@ mod tests {
         };
 
         let mut agg_info = AggregateInfo::default();
-        agg_info.udaf_calls.push(ScalarItem {
+        agg_info.push_aggregate_call(AggregateCall::Udaf(ScalarItem {
             scalar: replaced.clone().into(),
             index: Symbol::new(84),
-        });
+        }));
 
         assert!(agg_info.lookup_udaf_call(&original).is_none());
         assert_eq!(
@@ -1593,10 +1618,10 @@ mod tests {
         };
 
         let mut agg_info = AggregateInfo::default();
-        agg_info.aggregate_functions.push(ScalarItem {
+        agg_info.push_aggregate_call(AggregateCall::Aggregate(ScalarItem {
             scalar: replaced.clone().into(),
             index: Symbol::new(42),
-        });
+        }));
 
         let mut expr: ScalarExpr = replaced.into();
         AggregateRewriter::rewrite_existing_expr(

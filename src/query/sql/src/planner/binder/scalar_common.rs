@@ -33,12 +33,12 @@ use crate::plans::walk_expr;
 pub const GROUPING_FUNC_NAME: &str = "grouping";
 pub const GROUPING_ID_COLUMN_NAME: &str = "_grouping_id";
 
-// Visitor that find Expressions that match a particular predicate
+// Visitor that collects references to expressions that match a predicate.
 pub struct Finder<'a, F>
 where F: Fn(&ScalarExpr) -> bool
 {
     find_fn: &'a F,
-    scalars: Vec<ScalarExpr>,
+    scalars: Vec<&'a ScalarExpr>,
 }
 
 impl<'a, F> Finder<'a, F>
@@ -51,7 +51,7 @@ where F: Fn(&ScalarExpr) -> bool
         }
     }
 
-    pub fn scalars(&self) -> &[ScalarExpr] {
+    pub fn scalars(&self) -> &[&'a ScalarExpr] {
         &self.scalars
     }
 
@@ -69,10 +69,51 @@ where F: Fn(&ScalarExpr) -> bool
 {
     fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
         if (self.find_fn)(expr) {
-            if !(self.scalars.contains(expr)) {
-                self.scalars.push((*expr).clone())
-            }
+            self.scalars.push(expr);
             // stop recursing down this expr once we find a match
+        } else {
+            walk_expr(self, expr)?;
+        }
+        Ok(())
+    }
+}
+
+/// Visitor that checks whether any expression matches a predicate.
+pub struct Any<'a, F>
+where F: Fn(&ScalarExpr) -> bool
+{
+    find_fn: &'a F,
+    result: bool,
+}
+
+impl<'a, F> Any<'a, F>
+where F: Fn(&ScalarExpr) -> bool
+{
+    pub fn new(find_fn: &'a F) -> Self {
+        Self {
+            find_fn,
+            result: false,
+        }
+    }
+
+    pub fn result(&self) -> bool {
+        self.result
+    }
+
+    pub fn reset(&mut self) {
+        self.result = false;
+    }
+}
+
+impl<'a, F> Visitor<'a> for Any<'_, F>
+where F: Fn(&ScalarExpr) -> bool
+{
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        if self.result {
+            return Ok(());
+        }
+        if (self.find_fn)(expr) {
+            self.result = true;
         } else {
             walk_expr(self, expr)?;
         }
@@ -109,9 +150,9 @@ pub fn reject_grouping_functions<'a>(
     clause_name: &str,
 ) -> Result<()> {
     for scalar in scalars {
-        let mut grouping_finder = Finder::new(&is_grouping_function);
-        grouping_finder.visit(scalar)?;
-        if let Some(ScalarExpr::FunctionCall(func)) = grouping_finder.scalars().first() {
+        let mut finder = Finder::new(&is_grouping_function);
+        finder.visit(scalar)?;
+        if let Some(ScalarExpr::FunctionCall(func)) = finder.scalars().first().copied() {
             return Err(grouping_clause_error(func, clause_name));
         }
     }
@@ -185,6 +226,57 @@ mod tests {
 
         let predicates = split_conjunctions(&expr);
         assert_eq!(predicates.len(), 4);
+    }
+
+    #[test]
+    fn test_finder_borrows_matches() {
+        let expr = and(
+            bool_constant(false),
+            and(bool_constant(false), bool_constant(true)),
+        );
+        let ScalarExpr::FunctionCall(function) = &expr else {
+            unreachable!();
+        };
+        let expected = &function.arguments[0];
+
+        let predicate = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Boolean(false),
+                    ..
+                })
+            )
+        };
+        let mut finder = Finder::new(&predicate);
+        finder.visit(&expr).unwrap();
+        let found = finder.scalars()[0];
+
+        assert!(std::ptr::eq(found, expected));
+    }
+
+    #[test]
+    fn test_any_stops_after_first_match() {
+        let expr = and(
+            bool_constant(false),
+            and(bool_constant(false), bool_constant(true)),
+        );
+        let visits = std::cell::Cell::new(0);
+        let predicate = |scalar: &ScalarExpr| {
+            visits.set(visits.get() + 1);
+            matches!(
+                scalar,
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Boolean(false),
+                    ..
+                })
+            )
+        };
+        let mut any = Any::new(&predicate);
+        any.visit(&expr).unwrap();
+
+        assert!(any.result());
+        assert_eq!(visits.get(), 2);
     }
 }
 

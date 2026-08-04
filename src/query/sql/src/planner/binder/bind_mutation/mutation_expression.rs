@@ -36,8 +36,8 @@ use crate::ColumnSet;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
+use crate::binder::Any;
 use crate::binder::Binder;
-use crate::binder::Finder;
 use crate::binder::InternalColumnBinding;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
@@ -610,9 +610,9 @@ impl Binder {
             ) || scalar.is_aggregate()
         };
 
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
+        let mut any = Any::new(&f);
+        any.visit(scalar)?;
+        Ok(!any.result())
     }
 }
 

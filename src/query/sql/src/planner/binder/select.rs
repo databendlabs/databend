@@ -33,6 +33,7 @@ use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use super::Any;
 use super::Finder;
 use super::aggregate_prepass::AggregateExprInfo;
 use super::reject_grouping_functions;
@@ -218,11 +219,12 @@ impl GroupByAliasPolicy {
             return Self::FallbackOnly;
         }
 
-        let mut finder = Finder::new(&|expr| {
+        let predicate = |expr: &ScalarExpr| {
             expr.is_aggregate() || matches!(expr, ScalarExpr::WindowFunction(_))
-        });
-        finder.visit(&item.scalar).unwrap();
-        if finder.scalars().is_empty() {
+        };
+        let mut any = Any::new(&predicate);
+        any.visit(&item.scalar).unwrap();
+        if !any.result() {
             Self::Preferred
         } else {
             Self::FallbackOnly
@@ -457,9 +459,9 @@ impl Binder {
                     scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
                 };
 
-                let mut finder = Finder::new(&f);
-                finder.visit(&scalar)?;
-                if !finder.scalars().is_empty() {
+                let mut any = Any::new(&f);
+                any.visit(&scalar)?;
+                if any.result() {
                     return Err(ErrorCode::SemanticError(
                         "Where clause can't contain aggregate or window functions".to_string(),
                     )
