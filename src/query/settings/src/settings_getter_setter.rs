@@ -233,6 +233,10 @@ impl Settings {
         self.try_get_u64("max_vacuum_threads")
     }
 
+    pub fn get_storage_delete_batch_size(&self) -> Result<u64> {
+        self.try_get_u64("storage_delete_batch_size")
+    }
+
     // Get storage_fetch_part_num.
     pub fn get_storage_fetch_part_num(&self) -> Result<u64> {
         match self.try_get_u64("storage_fetch_part_num")? {
@@ -404,6 +408,10 @@ impl Settings {
 
     pub fn get_max_push_down_limit(&self) -> Result<usize> {
         Ok(self.try_get_u64("max_push_down_limit")? as usize)
+    }
+
+    pub fn get_enable_top_n(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_top_n")? != 0)
     }
 
     pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {

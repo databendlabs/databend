@@ -93,7 +93,9 @@ impl SegmentPruner {
                 self.pruning_ctx
                     .partition_pruner
                     .as_ref()
-                    .is_none_or(|pruner| pruner.should_keep(info.summary().cluster_stats.as_ref()))
+                    .is_none_or(|pruner| {
+                        pruner.should_keep(info.summary().partition_stats.as_ref())
+                    })
                     && range_pruner.should_keep(&range_input, None)
             }) {
                 // Perf.

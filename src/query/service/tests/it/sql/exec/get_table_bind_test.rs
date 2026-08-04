@@ -1065,10 +1065,6 @@ impl TableContextRuntimeFilter for CtxDelegation {
         todo!()
     }
 
-    fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        Ok(())
-    }
-
     fn get_runtime_filters(&self, _id: usize) -> Vec<RuntimeFilterEntry> {
         Vec::<RuntimeFilterEntry>::new()
     }

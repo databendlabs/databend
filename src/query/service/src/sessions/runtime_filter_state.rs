@@ -23,8 +23,8 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilter;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_expression::Expr;
 use parking_lot::RwLock;
 
@@ -32,6 +32,7 @@ use parking_lot::RwLock;
 pub struct RuntimeFilterState {
     runtime_filters: RwLock<HashMap<usize, RuntimeFilterInfo>>,
     runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
+    runtime_scan_filters: RwLock<HashMap<usize, RuntimeScanFilters>>,
     runtime_filter_logged: AtomicBool,
 }
 
@@ -43,26 +44,18 @@ impl RuntimeFilterState {
     pub fn clear(&self) {
         self.runtime_filters.write().clear();
         self.runtime_filter_ready.write().clear();
+        self.runtime_scan_filters.write().clear();
         self.runtime_filter_logged.store(false, Ordering::SeqCst);
     }
 
-    pub fn assert_empty(&self, query_id: &str) -> Result<()> {
-        if !self.runtime_filters.read().is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filters should be empty for query {query_id}"
-            )));
-        }
-        if !self.runtime_filter_ready.read().is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filter ready set should be empty for query {query_id}"
-            )));
-        }
-        if self.runtime_filter_logged.load(Ordering::Relaxed) {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filter logged flag should be reset for query {query_id}"
-            )));
-        }
-        Ok(())
+    pub fn register_runtime_scan_filter(&self, scan_id: usize, filter: Arc<dyn RuntimeScanFilter>) {
+        let mut filters = self.runtime_scan_filters.write();
+        filters.entry(scan_id).or_default().push(filter);
+    }
+
+    pub fn get_runtime_scan_filters(&self, scan_id: usize) -> RuntimeScanFilters {
+        let filters = self.runtime_scan_filters.read();
+        filters.get(&scan_id).cloned().unwrap_or_default()
     }
 
     pub fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {

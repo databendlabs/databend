@@ -471,14 +471,17 @@ EvalScalar
 query T
 EXPLAIN SELECT referer, isrefresh, count() FROM t GROUP BY referer, isrefresh order by referer, isrefresh desc limit 10;
 ----
-Limit
+TopN(Final)
 ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+├── sort keys: [referer ASC NULLS LAST, isrefresh DESC NULLS LAST]
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 1.00
-└── Sort(Single)
-    ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+└── TopN(Partial)
+    ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1), #_order_col]
     ├── sort keys: [referer ASC NULLS LAST, isrefresh DESC NULLS LAST]
+    ├── limit: 10
+    ├── offset: 0
     ├── estimated rows: 1.00
     └── AggregateFinal
         ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
@@ -504,14 +507,17 @@ Limit
 query T
 EXPLAIN SELECT referer, isrefresh, count() FROM t GROUP BY referer, isrefresh limit 3, 10;
 ----
-Limit
+TopN(Final)
 ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+├── sort keys: [referer ASC NULLS LAST, isrefresh ASC NULLS LAST]
 ├── limit: 10
 ├── offset: 3
 ├── estimated rows: 1.00
-└── Sort(Single)
-    ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+└── TopN(Partial)
+    ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1), #_order_col]
     ├── sort keys: [referer ASC NULLS LAST, isrefresh ASC NULLS LAST]
+    ├── limit: 13
+    ├── offset: 0
     ├── estimated rows: 1.00
     └── AggregateFinal
         ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]

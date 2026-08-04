@@ -97,7 +97,7 @@ impl IPhysicalPlan for CompactSource {
 
         let is_lazy = self.parts.partitions_type() == PartInfoType::LazyLevel;
         let thresholds = table.get_block_thresholds();
-        let cluster_key_id = table.physical_cluster_key_id();
+        let cluster_key_id = table.cluster_key_id();
         let partition_key_count = table.partition_key_count();
         let mut max_threads = builder.settings.get_max_threads()? as usize;
 

@@ -45,6 +45,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
+use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 
 /// Rule to push aggregation past a join to reduces the number of input rows to the join.
@@ -145,6 +146,8 @@ impl RuleEagerAggregation {
                 match_op!(EvalScalar -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
                 match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> Join[*, *]),
                 match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
+                match_op!(EvalScalar -> TopN -> Aggregate -> Aggregate -> Join[*, *]),
+                match_op!(EvalScalar -> TopN -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
             ],
             metadata,
         }
@@ -191,7 +194,7 @@ impl Rule for RuleEagerAggregation {
 #[derive(Clone)]
 struct EagerInput<'a> {
     eval_scalar: &'a EvalScalar,
-    sort_expr: Option<&'a SExpr>,
+    ordering_expr: Option<&'a SExpr>,
     join_expr: &'a SExpr,
     extra_eval_scalar: EvalScalar,
     final_agg: Aggregate,
@@ -202,11 +205,14 @@ impl<'a> EagerInput<'a> {
         let eval_scalar = s_expr.plan().as_eval_scalar()?;
 
         let mut current = s_expr.unary_child();
-        let sort_expr = current.plan().as_sort().map(|_| {
-            let sort_expr = current;
-            current = sort_expr.unary_child();
-            sort_expr
-        });
+        let ordering_expr = match current.plan() {
+            RelOperator::Sort(_) | RelOperator::TopN(_) => {
+                let ordering_expr = current;
+                current = ordering_expr.unary_child();
+                Some(ordering_expr)
+            }
+            _ => None,
+        };
 
         let final_agg = current.plan().as_aggregate()?.clone();
         current = current.unary_child();
@@ -228,7 +234,7 @@ impl<'a> EagerInput<'a> {
 
         Some(Self {
             eval_scalar,
-            sort_expr,
+            ordering_expr,
             join_expr: current,
             extra_eval_scalar,
             final_agg,
@@ -1061,8 +1067,8 @@ impl EagerAnalysis {
                 ..final_aggr.clone()
             })
             .build_unary(final_aggr);
-        let plan = match input.sort_expr {
-            Some(sort_expr) => plan.build_unary(sort_expr.plan.clone()),
+        let plan = match input.ordering_expr {
+            Some(ordering_expr) => plan.build_unary(ordering_expr.plan.clone()),
             None => plan,
         };
         plan.build_unary(eval_scalar)

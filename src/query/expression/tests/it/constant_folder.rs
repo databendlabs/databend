@@ -26,9 +26,11 @@ use databend_common_expression::FunctionID;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::RangeConstraint;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::domain_evaluator;
+use databend_common_expression::expr::Cast;
 use databend_common_expression::expr::ColumnRef;
 use databend_common_expression::expr::Constant;
 use databend_common_expression::expr::Expr;
@@ -246,6 +248,118 @@ fn test_monotonic_nullable_domain_rejects_boundary_probe() {
 
     assert_eq!(folded, expr);
     assert_eq!(output_domain, None);
+}
+
+#[test]
+fn test_monotonicity_check_gates_endpoint_domain() {
+    let mut registry = FunctionRegistry::empty();
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, UInt64Type, _>(
+        "identity",
+        |_, _| FunctionDomain::Full,
+        |value, _| value,
+    );
+    // Range-sensitive rule: monotonic only when the whole range lies below 100.
+    fn below_100(_ctx: &FunctionContext, args: &[Domain]) -> Option<usize> {
+        match args {
+            [Domain::Number(NumberDomain::UInt64(domain))] if domain.max < 100 => Some(0),
+            _ => None,
+        }
+    }
+    registry.properties.insert(
+        "identity".to_string(),
+        FunctionProperty::default().monotonicity_check(below_100),
+    );
+
+    let data_type = DataType::Number(NumberDataType::UInt64);
+    let expr = databend_common_expression::type_check::check_function(
+        None,
+        "identity",
+        &[],
+        &[Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: data_type.clone(),
+            display_name: "a".to_string(),
+        })],
+        &registry,
+    )
+    .unwrap();
+
+    // Accepted range: the fold probes the end points and derives an exact domain.
+    let accepted = Domain::Number(NumberDomain::UInt64(SimpleDomain { min: 10, max: 20 }));
+    let (_, output_domain) = ConstantFolder::fold_with_domain(
+        &expr,
+        &HashMap::from([(0, accepted)]),
+        &FunctionContext::default(),
+        &registry,
+    );
+    assert_eq!(
+        output_domain,
+        Some(Domain::Number(NumberDomain::UInt64(SimpleDomain {
+            min: 10,
+            max: 20,
+        })))
+    );
+
+    // Rejected range: no end-point probing; the domain falls back to `Full`.
+    let rejected = Domain::Number(NumberDomain::UInt64(SimpleDomain { min: 10, max: 200 }));
+    let (_, output_domain) = ConstantFolder::fold_with_domain(
+        &expr,
+        &HashMap::from([(0, rejected)]),
+        &FunctionContext::default(),
+        &registry,
+    );
+    assert_eq!(output_domain, Some(Domain::full(&data_type)));
+}
+
+#[test]
+fn test_range_constraint_unwraps_only_nullable_constant_cast() {
+    let data_type = DataType::Number(NumberDataType::UInt64);
+    let nullable_type = data_type.clone().wrap_nullable();
+    let column = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: 0,
+        data_type: nullable_type.clone(),
+        display_name: "a".to_string(),
+    });
+    let constant = uint_constant(7);
+    let nullable_constant = Expr::Cast(Cast {
+        span: None,
+        is_try: false,
+        expr: Box::new(constant.clone()),
+        dest_type: nullable_type,
+    });
+
+    let constraint =
+        RangeConstraint::try_from_expr(&comparison_expr("gte", column.clone(), nullable_constant))
+            .unwrap();
+    assert_eq!(constraint.column_id, 0);
+    assert_eq!(constraint.operator, "gte");
+    assert_eq!(constraint.constant, Scalar::Number(NumberScalar::UInt64(7)));
+
+    let converted_constant = Expr::Cast(Cast {
+        span: None,
+        is_try: false,
+        expr: Box::new(constant.clone()),
+        dest_type: DataType::Number(NumberDataType::Int64).wrap_nullable(),
+    });
+    assert!(
+        RangeConstraint::try_from_expr(
+            &comparison_expr("gte", column.clone(), converted_constant,)
+        )
+        .is_none()
+    );
+
+    let try_cast_constant = Expr::Cast(Cast {
+        span: None,
+        is_try: true,
+        expr: Box::new(constant),
+        dest_type: data_type.wrap_nullable(),
+    });
+    assert!(
+        RangeConstraint::try_from_expr(&comparison_expr("gte", column, try_cast_constant))
+            .is_none()
+    );
 }
 
 #[test]

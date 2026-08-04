@@ -406,6 +406,12 @@ create or replace temp table IF NOT EXISTS replace_test(b int);
 statement ok
 create or replace temp table replace_test(b int);
 
+statement error 1302
+create or replace temp table replace_test(c int) engine=memory;
+
+statement ok
+select b from replace_test;
+
 statement error 1065
 select a from replace_test;
 

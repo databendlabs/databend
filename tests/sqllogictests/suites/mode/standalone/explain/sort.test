@@ -58,14 +58,17 @@ Sort(Single)
 query T
 explain select a from t1 order by a::string limit 1;
 ----
-Limit
+TopN(Final)
 ├── output columns: [t1.a (#0), a::STRING (#2)]
+├── sort keys: [a::STRING ASC NULLS LAST]
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort(Single)
-    ├── output columns: [t1.a (#0), a::STRING (#2)]
+└── TopN(Partial)
+    ├── output columns: [t1.a (#0), a::STRING (#2), #_order_col]
     ├── sort keys: [a::STRING ASC NULLS LAST]
+    ├── limit: 1
+    ├── offset: 0
     ├── estimated rows: 0.00
     └── EvalScalar
         ├── output columns: [t1.a (#0), a::STRING (#2)]
@@ -148,22 +151,13 @@ digraph {
     1 [ label = "AsyncReadDataTransform" ]
     2 [ label = "DeserializeDataTransform" ]
     3 [ label = "Resize" ]
-    4 [ label = "SortPartialTransform" ]
-    5 [ label = "SortPartialTransform" ]
-    6 [ label = "SortPartialTransform" ]
-    7 [ label = "SortPartialTransform" ]
-    8 [ label = "TransformSortMergeLimit" ]
-    9 [ label = "TransformSortMergeLimit" ]
-    10 [ label = "TransformSortMergeLimit" ]
-    11 [ label = "TransformSortMergeLimit" ]
-    12 [ label = "KWayMergePartitioner" ]
-    13 [ label = "KWayMergeWorker" ]
-    14 [ label = "KWayMergeWorker" ]
-    15 [ label = "KWayMergeWorker" ]
-    16 [ label = "KWayMergeWorker" ]
-    17 [ label = "KWayMergeCombiner" ]
-    18 [ label = "LimitTransform" ]
-    19 [ label = "CompoundBlockOperator(Project)" ]
+    4 [ label = "TransformPartialTopN" ]
+    5 [ label = "TransformPartialTopN" ]
+    6 [ label = "TransformPartialTopN" ]
+    7 [ label = "TransformPartialTopN" ]
+    8 [ label = "Resize" ]
+    9 [ label = "TransformFinalTopN" ]
+    10 [ label = "CompoundBlockOperator(Project)" ]
     0 -> 1 [ label = "" ]
     1 -> 2 [ label = "" ]
     2 -> 3 [ label = "" ]
@@ -171,24 +165,12 @@ digraph {
     3 -> 5 [ label = "from: 1, to: 0" ]
     3 -> 6 [ label = "from: 2, to: 0" ]
     3 -> 7 [ label = "from: 3, to: 0" ]
-    4 -> 8 [ label = "" ]
-    5 -> 9 [ label = "" ]
-    6 -> 10 [ label = "" ]
-    7 -> 11 [ label = "" ]
-    8 -> 12 [ label = "from: 0, to: 0" ]
-    9 -> 12 [ label = "from: 0, to: 1" ]
-    10 -> 12 [ label = "from: 0, to: 2" ]
-    11 -> 12 [ label = "from: 0, to: 3" ]
-    12 -> 13 [ label = "from: 0, to: 0" ]
-    12 -> 14 [ label = "from: 1, to: 0" ]
-    12 -> 15 [ label = "from: 2, to: 0" ]
-    12 -> 16 [ label = "from: 3, to: 0" ]
-    13 -> 17 [ label = "from: 0, to: 0" ]
-    14 -> 17 [ label = "from: 0, to: 1" ]
-    15 -> 17 [ label = "from: 0, to: 2" ]
-    16 -> 17 [ label = "from: 0, to: 3" ]
-    17 -> 18 [ label = "" ]
-    18 -> 19 [ label = "" ]
+    4 -> 8 [ label = "from: 0, to: 0" ]
+    5 -> 8 [ label = "from: 0, to: 1" ]
+    6 -> 8 [ label = "from: 0, to: 2" ]
+    7 -> 8 [ label = "from: 0, to: 3" ]
+    8 -> 9 [ label = "" ]
+    9 -> 10 [ label = "" ]
 }
 
 

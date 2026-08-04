@@ -19,6 +19,7 @@ use async_channel::Sender;
 use chrono::DateTime;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::block_id_in_segment;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
@@ -50,6 +51,11 @@ pub struct ColumnOrientedBlockPruneSink {
     column_ids: Vec<ColumnId>,
     sender: Option<Sender<Result<PartInfoPtr>>>,
     runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
+    runtime_scan_filters: RuntimeScanFilters,
+    /// An EXPLAIN-style dry run prunes without any part consumer: the pruning
+    /// statistics are the product, so pruning must run to completion instead
+    /// of stopping when the receiver disconnects.
+    dry_run: bool,
 }
 
 impl ColumnOrientedBlockPruneSink {
@@ -59,6 +65,8 @@ impl ColumnOrientedBlockPruneSink {
         sender: Sender<Result<PartInfoPtr>>,
         column_ids: Vec<ColumnId>,
         runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
+        runtime_scan_filters: RuntimeScanFilters,
+        dry_run: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(
             input,
@@ -67,6 +75,8 @@ impl ColumnOrientedBlockPruneSink {
                 column_ids,
                 sender: Some(sender),
                 runtime_filter_prune_context,
+                runtime_scan_filters,
+                dry_run,
             },
         )))
     }
@@ -82,14 +92,27 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
     }
 
     async fn consume(&mut self, mut data: DataBlock) -> Result<bool> {
-        let ptr = data.take_meta().ok_or_else(|| {
-            ErrorCode::Internal("Cannot downcast meta to PrunedColumnOrientedSegmentMeta")
-        })?;
-        let (segment_location, segment) = PrunedColumnOrientedSegmentMeta::downcast_from(ptr)
-            .ok_or_else(|| {
-                ErrorCode::Internal("Cannot downcast meta to PrunedColumnOrientedSegmentMeta")
-            })?
-            .segments;
+        if self.runtime_scan_filters.is_finished() {
+            return Ok(true);
+        }
+
+        if !self.dry_run && self.sender.as_ref().is_none_or(Sender::is_closed) {
+            return Ok(true);
+        }
+
+        let Some(ptr) = data.take_meta() else {
+            return Err(ErrorCode::Internal(
+                "Cannot downcast meta to PrunedColumnOrientedSegmentMeta",
+            ));
+        };
+
+        let Some(meta) = PrunedColumnOrientedSegmentMeta::downcast_from(ptr) else {
+            return Err(ErrorCode::Internal(
+                "Cannot downcast meta to PrunedColumnOrientedSegmentMeta",
+            ));
+        };
+
+        let (segment_location, segment) = meta.segments;
 
         let range_pruner = &self.block_pruner.pruning_ctx.range_pruner;
         let bloom_pruner = &self.block_pruner.pruning_ctx.bloom_pruner;
@@ -115,18 +138,13 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
         for block_idx in 0..block_num {
             let location_path = location_path_col.index(block_idx).unwrap().to_string();
 
-            // Skip blocks that don't pass internal column pruning
-            if self
-                .block_pruner
-                .pruning_ctx
-                .internal_column_pruner
-                .as_ref()
-                .is_some_and(|pruner| !pruner.should_keep(BLOCK_NAME_COL_NAME, &location_path))
-            {
-                continue;
+            let internal_pruner = &self.block_pruner.pruning_ctx.internal_column_pruner;
+            if let Some(pruner) = internal_pruner {
+                if !pruner.should_keep(BLOCK_NAME_COL_NAME, &location_path) {
+                    continue;
+                }
             }
 
-            // Clone necessary data for the async task
             let column_ids = self.column_ids.clone();
             let segment = segment.clone();
             let segment_location = segment_location.clone();
@@ -141,6 +159,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             let bloom_index_location_col = bloom_index_location_col.clone();
             let bloom_index_size_col = bloom_index_size_col.clone();
             let runtime_stats_pruner = runtime_stats_pruner.clone();
+            let runtime_scan_filters = self.runtime_scan_filters.clone();
 
             pruning_tasks.push(move |permit: OwnedSemaphorePermit| {
                 Box::pin(async move {
@@ -179,14 +198,16 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
                     let row_count = row_count_col[block_idx];
                     let range_input = RangeIndexInput::from_columns(&columns_stat);
-                    if !range_pruner.should_keep(&range_input, None) {
+                    if !range_pruner.should_keep(&range_input, None)
+                        || runtime_scan_filters.should_prune(Some(&columns_stat))
+                    {
                         return Ok::<_, ()>(());
                     }
 
-                    if runtime_stats_pruner.as_ref().is_some_and(|pruner| {
-                        pruner.should_prune(Some(&columns_stat), row_count as usize)
-                    }) {
-                        return Ok(());
+                    if let Some(pruner) = runtime_stats_pruner.as_ref() {
+                        if pruner.should_prune(Some(&columns_stat), row_count as usize) {
+                            return Ok(());
+                        }
                     }
 
                     let compression = Compression::from_u8(compression_col[block_idx]);

@@ -624,57 +624,43 @@ impl FuseTable {
                 .is_some_and(|mode| mode.eq_ignore_ascii_case("hash"))
     }
 
-    /// The key used for physical Fuse layout. Partition expressions are always the
-    /// leading dimensions, followed by the user-visible linear cluster key.
-    pub fn resolve_physical_cluster_keys(&self) -> Option<Vec<AstExpr>> {
-        let mut keys = self.resolve_partition_keys().unwrap_or_default();
-        if let Some(cluster_keys) = self.resolve_cluster_keys() {
-            keys.extend(cluster_keys);
-        }
-        (!keys.is_empty()).then_some(keys)
-    }
-
-    pub fn physical_cluster_key_id(&self) -> Option<u32> {
-        self.cluster_key_id()
-            .or_else(|| self.partition_key_str().map(|_| 0))
-    }
-
     pub fn partition_pruning_info(
         &self,
         ctx: Arc<dyn TableContext>,
     ) -> Option<PartitionPruningInfo> {
-        let partition_key_count = self.partition_key_count();
-        if partition_key_count == 0 {
-            return None;
-        }
-        Some(PartitionPruningInfo {
-            cluster_key_id: self.physical_cluster_key_id().unwrap(),
-            partition_keys: self
-                .linear_cluster_keys(ctx)
-                .into_iter()
-                .take(partition_key_count)
-                .collect(),
-        })
+        let partition_keys = self.linear_partition_keys(ctx);
+        (!partition_keys.is_empty()).then_some(PartitionPruningInfo { partition_keys })
+    }
+
+    pub fn linear_partition_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
+        self.linear_keys(ctx, self.resolve_partition_keys())
     }
 
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        let Some(cluster_key_exprs) = self.resolve_physical_cluster_keys() else {
+        self.linear_keys(ctx, self.resolve_cluster_keys())
+    }
+
+    fn linear_keys(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        key_exprs: Option<Vec<AstExpr>>,
+    ) -> Vec<RemoteExpr<String>> {
+        let Some(key_exprs) = key_exprs else {
             return vec![];
         };
 
         let table_meta = Arc::new(self.clone());
-        let exprs = parse_cluster_keys(ctx, table_meta.clone(), cluster_key_exprs).unwrap();
-        let cluster_keys = exprs
+        parse_cluster_keys(ctx, table_meta.clone(), key_exprs)
+            .unwrap()
             .iter()
-            .map(|k| {
-                k.project_column_ref(|index| {
+            .map(|key| {
+                key.project_column_ref(|index| {
                     Ok(table_meta.schema().field(*index).name().to_string())
                 })
                 .unwrap()
                 .as_remote_expr()
             })
-            .collect();
-        cluster_keys
+            .collect()
     }
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
@@ -697,7 +683,7 @@ impl FuseTable {
     }
 
     pub fn cluster_key_types(&self, ctx: Arc<dyn TableContext>) -> Vec<DataType> {
-        let Some(ast_exprs) = self.resolve_physical_cluster_keys() else {
+        let Some(ast_exprs) = self.resolve_cluster_keys() else {
             return vec![];
         };
         let cluster_keys = parse_cluster_keys(ctx, Arc::new(self.clone()), ast_exprs).unwrap();
@@ -1001,7 +987,8 @@ impl FuseTable {
     pub fn enable_stream_block_write(&self, ctx: Arc<dyn TableContext>) -> Result<bool> {
         Ok(ctx.get_settings().get_enable_block_stream_write()?
             && matches!(self.storage_format, FuseStorageFormat::Parquet)
-            && self.resolve_physical_cluster_keys().is_none())
+            && self.cluster_key_meta().is_none()
+            && self.partition_key_count() == 0)
     }
 
     pub fn with_schema(&self, schema: Arc<TableSchema>) -> Arc<FuseTable> {
