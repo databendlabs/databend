@@ -1,0 +1,270 @@
+=== rollup_shared_base ===
+description: The default hierarchy derives every lower ROLLUP level from the most detailed grouping.
+sql: SELECT a, b, c, sum(v), count(v), min(v), max(v)
+FROM t
+GROUP BY ROLLUP(a, b, c)
+raw_plan:
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2), sum(v) (#8) AS (#8), count(v) (#9) AS (#9), min(v) (#10) AS (#10), max(v) (#11) AS (#11)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2), _grouping_id (#7) AS (#7)]
+    ├── aggregate functions: [sum(t.v (#3)) AS (#8), count(t.v (#3)) AS (#9), min(t.v (#3)) AS (#10), max(t.v (#3)) AS (#11)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2), t.v (#3) AS (#3)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+Exchange(Merge)
+└── Sequence(Sequence)
+    ├── MaterializedCTE
+    │   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
+    │   ├── ref_count: 4
+    │   ├── channel_size: Some(2)
+    │   └── Aggregate(Final)
+    │       ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2)]
+    │       ├── aggregate functions: [sum(t.v (#3)) AS (#8), count(t.v (#3)) AS (#9), min(t.v (#3)) AS (#10), max(t.v (#3)) AS (#11)]
+    │       └── Aggregate(Partial)
+    │           ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2)]
+    │           ├── aggregate functions: [sum(t.v (#3)) AS (#8), count(t.v (#3)) AS (#9), min(t.v (#3)) AS (#10), max(t.v (#3)) AS (#11)]
+    │           └── Exchange(Hash)
+    │               ├── Exchange(Hash): keys: [t.a (#0)]
+    │               └── Scan
+    │                   ├── table: default.t (#0)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Sequence(Sequence)
+        ├── MaterializedCTE
+        │   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1
+        │   ├── ref_count: 1
+        │   ├── channel_size: Some(2)
+        │   └── Aggregate(Final)
+        │       ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        │       ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+        │       └── Aggregate(Partial)
+        │           ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        │           ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+        │           └── Exchange(Hash)
+        │               ├── Exchange(Hash): keys: [t.a (#0)]
+        │               └── MaterializedCTERef
+        │                   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
+        │                   ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1), t.c (#2)]
+        │                   └── column mapping: [t.a (#0) -> t.a (#0), t.b (#1) -> t.b (#1), t.c (#2) -> t.c (#2), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+        └── Sequence(Sequence)
+            ├── MaterializedCTE
+            │   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0
+            │   ├── ref_count: 1
+            │   ├── channel_size: Some(2)
+            │   └── Aggregate(Final)
+            │       ├── group items: [t.a (#0) AS (#0)]
+            │       ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+            │       └── Aggregate(Partial)
+            │           ├── group items: [t.a (#0) AS (#0)]
+            │           ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+            │           └── Exchange(Hash)
+            │               ├── Exchange(Hash): keys: [t.a (#0)]
+            │               └── MaterializedCTERef
+            │                   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
+            │                   ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1), t.c (#2)]
+            │                   └── column mapping: [t.a (#0) -> t.a (#0), t.b (#1) -> t.b (#1), t.c (#2) -> t.c (#2), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+            └── Sequence(Sequence)
+                ├── MaterializedCTE
+                │   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_empty
+                │   ├── ref_count: 1
+                │   ├── channel_size: Some(2)
+                │   └── Exchange(Hash)
+                │       ├── Exchange(Hash): keys: [0]
+                │       └── Aggregate(Final)
+                │           ├── group items: []
+                │           ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+                │           └── Exchange(Merge)
+                │               └── Aggregate(Partial)
+                │                   ├── group items: []
+                │                   ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+                │                   └── MaterializedCTERef
+                │                       ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
+                │                       ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1), t.c (#2)]
+                │                       └── column mapping: [t.a (#0) -> t.a (#0), t.b (#1) -> t.b (#1), t.c (#2) -> t.c (#2), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+                └── UnionAll
+                    ├── output: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    ├── left: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    ├── right: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    ├── cte_scan_names: []
+                    ├── logical_recursive_cte_id: None
+                    ├── UnionAll
+                    │   ├── output: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   ├── left: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   ├── right: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   ├── cte_scan_names: []
+                    │   ├── logical_recursive_cte_id: None
+                    │   ├── UnionAll
+                    │   │   ├── output: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   │   ├── left: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   │   ├── right: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   │   ├── cte_scan_names: []
+                    │   │   ├── logical_recursive_cte_id: None
+                    │   │   ├── EvalScalar
+                    │   │   │   ├── scalars: [CAST(t.a (#0) AS UInt64 NULL) AS (#0), CAST(t.b (#1) AS UInt64 NULL) AS (#1), CAST(t.c (#2) AS UInt64 NULL) AS (#2), 0 AS (#7), sum(v) (#8) AS (#8), count(v) (#9) AS (#9), min(v) (#10) AS (#10), max(v) (#11) AS (#11)]
+                    │   │   │   └── MaterializedCTERef
+                    │   │   │       ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
+                    │   │   │       ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1), t.c (#2)]
+                    │   │   │       └── column mapping: [t.a (#0) -> t.a (#0), t.b (#1) -> t.b (#1), t.c (#2) -> t.c (#2), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+                    │   │   └── EvalScalar
+                    │   │       ├── scalars: [CAST(t.a (#0) AS UInt64 NULL) AS (#0), CAST(t.b (#1) AS UInt64 NULL) AS (#1), NULL AS (#2), 4 AS (#7), sum(v) (#8) AS (#8), count(v) (#9) AS (#9), min(v) (#10) AS (#10), max(v) (#11) AS (#11)]
+                    │   │       └── MaterializedCTERef
+                    │   │           ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1
+                    │   │           ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1)]
+                    │   │           └── column mapping: [t.a (#0) -> t.a (#0), t.b (#1) -> t.b (#1), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+                    │   └── EvalScalar
+                    │       ├── scalars: [CAST(t.a (#0) AS UInt64 NULL) AS (#0), NULL AS (#1), NULL AS (#2), 6 AS (#7), sum(v) (#8) AS (#8), count(v) (#9) AS (#9), min(v) (#10) AS (#10), max(v) (#11) AS (#11)]
+                    │       └── MaterializedCTERef
+                    │           ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0
+                    │           ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0)]
+                    │           └── column mapping: [t.a (#0) -> t.a (#0), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+                    └── EvalScalar
+                        ├── scalars: [NULL AS (#0), NULL AS (#1), NULL AS (#2), 7 AS (#7), sum(v) (#8) AS (#8), count(v) (#9) AS (#9), min(v) (#10) AS (#10), max(v) (#11) AS (#11)]
+                        └── MaterializedCTERef
+                            ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_empty
+                            ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11)]
+                            └── column mapping: [sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+
+
+=== rollup_nearest_parent_cascade ===
+description: The optional cascade derives every lower ROLLUP level from its closest strict superset.
+sql: SELECT a, b, c, sum(v), count(v), min(v), max(v)
+FROM t
+GROUP BY ROLLUP(a, b, c)
+raw_plan:
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2), sum(v) (#8) AS (#8), count(v) (#9) AS (#9), min(v) (#10) AS (#10), max(v) (#11) AS (#11)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2), _grouping_id (#7) AS (#7)]
+    ├── aggregate functions: [sum(t.v (#3)) AS (#8), count(t.v (#3)) AS (#9), min(t.v (#3)) AS (#10), max(t.v (#3)) AS (#11)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2), t.v (#3) AS (#3)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+Exchange(Merge)
+└── Sequence(Sequence)
+    ├── MaterializedCTE
+    │   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
+    │   ├── ref_count: 2
+    │   ├── channel_size: Some(2)
+    │   └── Aggregate(Final)
+    │       ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2)]
+    │       ├── aggregate functions: [sum(t.v (#3)) AS (#8), count(t.v (#3)) AS (#9), min(t.v (#3)) AS (#10), max(t.v (#3)) AS (#11)]
+    │       └── Aggregate(Partial)
+    │           ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2)]
+    │           ├── aggregate functions: [sum(t.v (#3)) AS (#8), count(t.v (#3)) AS (#9), min(t.v (#3)) AS (#10), max(t.v (#3)) AS (#11)]
+    │           └── Exchange(Hash)
+    │               ├── Exchange(Hash): keys: [t.a (#0)]
+    │               └── Scan
+    │                   ├── table: default.t (#0)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Sequence(Sequence)
+        ├── MaterializedCTE
+        │   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1
+        │   ├── ref_count: 2
+        │   ├── channel_size: Some(2)
+        │   └── Aggregate(Final)
+        │       ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        │       ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+        │       └── Aggregate(Partial)
+        │           ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        │           ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+        │           └── Exchange(Hash)
+        │               ├── Exchange(Hash): keys: [t.a (#0)]
+        │               └── MaterializedCTERef
+        │                   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
+        │                   ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1), t.c (#2)]
+        │                   └── column mapping: [t.a (#0) -> t.a (#0), t.b (#1) -> t.b (#1), t.c (#2) -> t.c (#2), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+        └── Sequence(Sequence)
+            ├── MaterializedCTE
+            │   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0
+            │   ├── ref_count: 2
+            │   ├── channel_size: Some(2)
+            │   └── Aggregate(Final)
+            │       ├── group items: [t.a (#0) AS (#0)]
+            │       ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+            │       └── Aggregate(Partial)
+            │           ├── group items: [t.a (#0) AS (#0)]
+            │           ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+            │           └── Exchange(Hash)
+            │               ├── Exchange(Hash): keys: [t.a (#0)]
+            │               └── MaterializedCTERef
+            │                   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1
+            │                   ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1)]
+            │                   └── column mapping: [t.a (#0) -> t.a (#0), t.b (#1) -> t.b (#1), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+            └── Sequence(Sequence)
+                ├── MaterializedCTE
+                │   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_empty
+                │   ├── ref_count: 1
+                │   ├── channel_size: Some(2)
+                │   └── Exchange(Hash)
+                │       ├── Exchange(Hash): keys: [0]
+                │       └── Aggregate(Final)
+                │           ├── group items: []
+                │           ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+                │           └── Exchange(Merge)
+                │               └── Aggregate(Partial)
+                │                   ├── group items: []
+                │                   ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
+                │                   └── MaterializedCTERef
+                │                       ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0
+                │                       ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0)]
+                │                       └── column mapping: [t.a (#0) -> t.a (#0), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+                └── UnionAll
+                    ├── output: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    ├── left: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    ├── right: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    ├── cte_scan_names: []
+                    ├── logical_recursive_cte_id: None
+                    ├── UnionAll
+                    │   ├── output: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   ├── left: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   ├── right: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   ├── cte_scan_names: []
+                    │   ├── logical_recursive_cte_id: None
+                    │   ├── UnionAll
+                    │   │   ├── output: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   │   ├── left: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   │   ├── right: [t.a (#0), t.b (#1), t.c (#2), sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), _grouping_id (#7)]
+                    │   │   ├── cte_scan_names: []
+                    │   │   ├── logical_recursive_cte_id: None
+                    │   │   ├── EvalScalar
+                    │   │   │   ├── scalars: [CAST(t.a (#0) AS UInt64 NULL) AS (#0), CAST(t.b (#1) AS UInt64 NULL) AS (#1), CAST(t.c (#2) AS UInt64 NULL) AS (#2), 0 AS (#7), sum(v) (#8) AS (#8), count(v) (#9) AS (#9), min(v) (#10) AS (#10), max(v) (#11) AS (#11)]
+                    │   │   │   └── MaterializedCTERef
+                    │   │   │       ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
+                    │   │   │       ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1), t.c (#2)]
+                    │   │   │       └── column mapping: [t.a (#0) -> t.a (#0), t.b (#1) -> t.b (#1), t.c (#2) -> t.c (#2), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+                    │   │   └── EvalScalar
+                    │   │       ├── scalars: [CAST(t.a (#0) AS UInt64 NULL) AS (#0), CAST(t.b (#1) AS UInt64 NULL) AS (#1), NULL AS (#2), 4 AS (#7), sum(v) (#8) AS (#8), count(v) (#9) AS (#9), min(v) (#10) AS (#10), max(v) (#11) AS (#11)]
+                    │   │       └── MaterializedCTERef
+                    │   │           ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1
+                    │   │           ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1)]
+                    │   │           └── column mapping: [t.a (#0) -> t.a (#0), t.b (#1) -> t.b (#1), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+                    │   └── EvalScalar
+                    │       ├── scalars: [CAST(t.a (#0) AS UInt64 NULL) AS (#0), NULL AS (#1), NULL AS (#2), 6 AS (#7), sum(v) (#8) AS (#8), count(v) (#9) AS (#9), min(v) (#10) AS (#10), max(v) (#11) AS (#11)]
+                    │       └── MaterializedCTERef
+                    │           ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0
+                    │           ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0)]
+                    │           └── column mapping: [t.a (#0) -> t.a (#0), sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+                    └── EvalScalar
+                        ├── scalars: [NULL AS (#0), NULL AS (#1), NULL AS (#2), 7 AS (#7), sum(v) (#8) AS (#8), count(v) (#9) AS (#9), min(v) (#10) AS (#10), max(v) (#11) AS (#11)]
+                        └── MaterializedCTERef
+                            ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_empty
+                            ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11)]
+                            └── column mapping: [sum(v) (#8) -> sum(v) (#8), count(v) (#9) -> count(v) (#9), min(v) (#10) -> min(v) (#10), max(v) (#11) -> max(v) (#11)]
+
+

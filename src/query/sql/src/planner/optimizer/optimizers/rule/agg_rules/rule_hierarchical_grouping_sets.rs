@@ -51,8 +51,6 @@ use crate::plans::UnionAll;
 use crate::plans::VisitorMut;
 use crate::plans::walk_expr_mut;
 
-const ID: RuleID = RuleID::HierarchicalGroupingSetsToUnion;
-
 /// True hierarchical optimization for GROUPING SETS with multi-layer dependency analysis.
 ///
 /// This implements genuine hierarchical aggregation where higher-level groupings
@@ -65,20 +63,17 @@ const ID: RuleID = RuleID::HierarchicalGroupingSetsToUnion;
 /// Level 3: CTE_level_1_* -> GROUP BY () -> CTE_level_0
 /// Final: UNION ALL of all results
 pub struct RuleHierarchicalGroupingSetsToUnion {
-    id: RuleID,
     matchers: Vec<Matcher>,
     cte_channel_size: usize,
+    enable_cascading: bool,
 }
 
 impl RuleHierarchicalGroupingSetsToUnion {
     pub fn new(ctx: Arc<OptimizerContext>) -> Self {
-        let cte_channel_size = ctx
-            .get_table_ctx()
-            .get_settings()
-            .get_grouping_sets_channel_size()
-            .unwrap();
+        let settings = ctx.get_table_ctx().get_settings();
+        let cte_channel_size = settings.get_grouping_sets_channel_size().unwrap();
+        let enable_cascading = settings.get_enable_cascading_grouping_sets().unwrap();
         Self {
-            id: ID,
             matchers: vec![Matcher::MatchOp {
                 op_type: RelOp::EvalScalar,
                 children: vec![Matcher::MatchOp {
@@ -87,6 +82,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 }],
             }],
             cte_channel_size: cte_channel_size as usize,
+            enable_cascading,
         }
     }
 
@@ -206,18 +202,26 @@ impl RuleHierarchicalGroupingSetsToUnion {
         }
     }
 
-    /// Optimize the hierarchy to minimize intermediate CTEs while maximizing reuse
+    /// Choose between the existing shared-base hierarchy and a nearest-parent cascade.
     fn optimize_hierarchy(&self, levels: &mut [GroupingLevel]) {
-        // For each level, choose the most detailed parent that can generate it
         for i in 0..levels.len() {
             if !levels[i].possible_parents.is_empty() {
-                // Choose the parent with maximum columns (most detailed)
-                // This ensures we reuse the most specific aggregation available
-                let best_parent_level_idx = *levels[i]
-                    .possible_parents
-                    .iter()
-                    .max_by_key(|&&parent_idx| levels[parent_idx].level)
-                    .unwrap();
+                let best_parent_level_idx = if self.enable_cascading {
+                    // The closest strict superset minimizes the rows re-aggregated by a
+                    // ROLLUP chain, at the cost of a longer dependency path.
+                    *levels[i]
+                        .possible_parents
+                        .iter()
+                        .min_by_key(|&&parent_idx| levels[parent_idx].level)
+                        .unwrap()
+                } else {
+                    // Preserve the existing shared-base shape for controlled A/B tests.
+                    *levels[i]
+                        .possible_parents
+                        .iter()
+                        .max_by_key(|&&parent_idx| levels[parent_idx].level)
+                        .unwrap()
+                };
 
                 // Store the set_index of the chosen parent, not the level index
                 levels[i].chosen_parent = Some(levels[best_parent_level_idx].set_index);
@@ -878,7 +882,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
 impl Rule for RuleHierarchicalGroupingSetsToUnion {
     fn id(&self) -> RuleID {
-        self.id
+        RuleID::HierarchicalGroupingSetsToUnion
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
