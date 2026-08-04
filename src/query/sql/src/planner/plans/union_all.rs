@@ -121,22 +121,31 @@ impl UnionAll {
                         }
                     };
 
-                    let (left, right) = match (left, right) {
-                        (Some(left), Some(right)) => (left, right),
-                        (Some(left), None)
-                            if right_stat_info.statistics.precise_cardinality == Some(0) =>
-                        {
-                            return Ok(Some((output, left)));
-                        }
-                        (None, Some(right))
-                            if left_stat_info.statistics.precise_cardinality == Some(0) =>
-                        {
-                            return Ok(Some((output, right)));
-                        }
+                    debug_assert!(
+                        left_stat_info.statistics.precise_cardinality != Some(0) || left.is_none(),
+                        "exactly empty UNION ALL left input must not carry column statistics"
+                    );
+                    debug_assert!(
+                        right_stat_info.statistics.precise_cardinality != Some(0)
+                            || right.is_none(),
+                        "exactly empty UNION ALL right input must not carry column statistics"
+                    );
+
+                    match (
+                        left_stat_info.statistics.precise_cardinality,
+                        right_stat_info.statistics.precise_cardinality,
+                    ) {
+                        (Some(0), Some(0)) => return Ok(None),
+                        (_, Some(0)) => return Ok(left.map(|stat| (output, stat))),
+                        (Some(0), _) => return Ok(right.map(|stat| (output, stat))),
+                        _ => {}
+                    }
+
+                    let (Some(left), Some(right)) = (left, right) else {
                         // TODO: Distinguish all-NULL column statistics from unknown statistics so
                         // a non-empty all-NULL branch can contribute its NULL count without
                         // discarding the other branch's value statistics.
-                        _ => return Ok(None),
+                        return Ok(None);
                     };
                     let mut ndv = Self::merge_ndv(&left, &right)?;
                     let min = if left.min.compare(&right.min)? == Ordering::Less {
