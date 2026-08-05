@@ -80,6 +80,7 @@ const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
 /// Blocks that reach this level have already been rewritten many times, so
 /// keep them out of future recluster tasks to avoid unbounded level growth.
 const MAX_RECLUSTER_LEVEL: i32 = 32;
+const MAX_RECLUSTER_WINDOW_SEGMENTS: usize = 128;
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 
 /// Candidate tasks plus cached segment metadata for one scanned window.
@@ -685,41 +686,64 @@ impl ReclusterMutator {
         self.properties.memory_threshold.saturating_mul(3) / 4
     }
 
-    /// Group segments by partition before selecting strategy-specific windows.
+    /// Group segments by partition before selecting strategy-specific windows, then split oversized
+    /// windows evenly to bound the metadata decoded by each candidate probe.
     pub fn select_segments(
         &self,
         compact_segments: &[(SegmentLocation, Arc<CompactSegmentInfo>)],
         window_len: usize,
     ) -> Result<Vec<Vec<SelectedReclusterSegment>>> {
-        if self.properties.partition_key_count == 0 {
-            return self
-                .strategy
-                .select_segments(&self.properties, compact_segments, window_len);
-        }
+        let windows = if self.properties.partition_key_count == 0 {
+            self.strategy
+                .select_segments(&self.properties, compact_segments, window_len)?
+        } else {
+            let mut segments_by_partition = BTreeMap::new();
+            for (location, segment) in compact_segments {
+                let Some(partition) = partition_values(
+                    segment.summary.partition_stats.as_ref(),
+                    self.properties.partition_key_count,
+                ) else {
+                    continue;
+                };
+                segments_by_partition
+                    .entry(partition.to_vec())
+                    .or_insert_with(Vec::new)
+                    .push((location.clone(), segment.clone()));
+            }
 
-        let mut segments_by_partition = BTreeMap::new();
-        for (location, segment) in compact_segments {
-            let Some(partition) = partition_values(
-                segment.summary.partition_stats.as_ref(),
-                self.properties.partition_key_count,
-            ) else {
+            let mut windows = Vec::new();
+            for segments in segments_by_partition.into_values() {
+                windows.extend(self.strategy.select_segments(
+                    &self.properties,
+                    &segments,
+                    window_len,
+                )?);
+            }
+            windows
+        };
+
+        let mut split_windows = Vec::with_capacity(windows.len());
+        for window in windows {
+            let segment_count = window.len();
+            let window_count = segment_count.div_ceil(MAX_RECLUSTER_WINDOW_SEGMENTS);
+            if window_count <= 1 {
+                split_windows.push(window);
                 continue;
-            };
-            segments_by_partition
-                .entry(partition.to_vec())
-                .or_insert_with(Vec::new)
-                .push((location.clone(), segment.clone()));
-        }
+            }
 
-        let mut windows = Vec::new();
-        for segments in segments_by_partition.into_values() {
-            windows.extend(self.strategy.select_segments(
-                &self.properties,
-                &segments,
-                window_len,
-            )?);
+            let base_window_len = segment_count / window_count;
+            let larger_windows = segment_count % window_count;
+            let mut segments = window.into_iter();
+            for window_idx in 0..window_count {
+                let window_len = base_window_len + usize::from(window_idx < larger_windows);
+                split_windows.push(segments.by_ref().take(window_len).collect());
+            }
+            debug!(
+                "recluster: split oversized candidate window segments={} windows={} max_window_segments={}",
+                segment_count, window_count, MAX_RECLUSTER_WINDOW_SEGMENTS,
+            );
         }
-        Ok(windows)
+        Ok(split_windows)
     }
 
     #[async_backtrace::framed]
