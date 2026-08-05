@@ -235,14 +235,12 @@ impl CollectStatisticsOptimizer {
                                 span: None,
                                 func_name: "rand".to_string(),
                                 params: vec![],
-                                return_type: None,
                                 arguments: vec![],
                             });
                             let filter = ScalarExpr::FunctionCall(FunctionCall {
                                 span: None,
                                 func_name: "lte".to_string(),
                                 params: vec![],
-                                return_type: None,
                                 arguments: vec![
                                     rand_expr,
                                     ScalarExpr::ConstantExpr(ConstantExpr {

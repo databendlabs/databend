@@ -80,7 +80,6 @@ fn function_expr(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
         span: None,
         func_name: func_name.to_string(),
         params: vec![],
-        return_type: None,
         arguments,
     })
 }

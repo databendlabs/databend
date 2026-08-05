@@ -131,7 +131,6 @@ impl RuleNormalizeAggregateOptimizer {
                             span: None,
                             func_name: "is_not_null".to_string(),
                             params: vec![],
-                            return_type: None,
                             arguments: vec![function.args[0].clone()],
                         });
 
@@ -139,7 +138,6 @@ impl RuleNormalizeAggregateOptimizer {
                             span: None,
                             func_name: "if".to_string(),
                             params: vec![],
-                            return_type: None,
                             arguments: vec![
                                 not_null_check,
                                 ScalarExpr::ConstantExpr(ConstantExpr {

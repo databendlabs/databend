@@ -769,7 +769,6 @@ impl PhysicalPlanBuilder {
                             span: None,
                             func_name: "and_filters".to_string(),
                             params: vec![],
-                            return_type: None,
                             arguments: vec![lhs, rhs],
                         })
                     })
@@ -977,7 +976,6 @@ impl PhysicalPlanBuilder {
                 span: None,
                 func_name: "and".to_string(),
                 params: vec![],
-                return_type: None,
                 arguments: vec![lhs, rhs],
             })
         });

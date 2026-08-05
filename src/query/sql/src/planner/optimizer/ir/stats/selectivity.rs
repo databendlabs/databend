@@ -120,7 +120,6 @@ impl SelectivityEstimator {
                 span: None,
                 func_name: "and_filters".to_string(),
                 params: vec![],
-                return_type: None,
                 arguments: predicates.to_vec(),
             }),
         };

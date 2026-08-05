@@ -1518,7 +1518,6 @@ mod tests {
                 span: None,
                 func_name: "gt".to_string(),
                 params: vec![],
-                return_type: None,
                 arguments: vec![column(0), column(1)],
             })],
             ..Default::default()

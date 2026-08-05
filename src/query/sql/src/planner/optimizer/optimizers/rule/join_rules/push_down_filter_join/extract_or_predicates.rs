@@ -148,7 +148,6 @@ fn make_and_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
         span: None,
         func_name: "and_filters".to_string(),
         params: vec![],
-        return_type: None,
         arguments: scalars,
     }
     .into()
@@ -163,7 +162,6 @@ fn make_or_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
         span: None,
         func_name: "or_filters".to_string(),
         params: vec![],
-        return_type: None,
         arguments: scalars,
     }
     .into()

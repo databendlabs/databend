@@ -1231,7 +1231,6 @@ impl EagerAnalysis {
             span: None,
             func_name: "multiply".to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![
                 new_scalar,
                 wrap_cast(

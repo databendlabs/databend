@@ -378,7 +378,6 @@ where A: super::TypeCheckAdapter
                     let value = FunctionCall {
                         span,
                         params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
-                        return_type: None,
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }
@@ -402,7 +401,6 @@ where A: super::TypeCheckAdapter
                 FunctionCall {
                     span,
                     params: vec![],
-                    return_type: None,
                     arguments: args,
                     func_name,
                 }
@@ -417,7 +415,6 @@ where A: super::TypeCheckAdapter
                 FunctionCall {
                     span,
                     params: vec![],
-                    return_type: None,
                     arguments: vec![scalar.clone()],
                     func_name,
                 }
@@ -505,7 +502,6 @@ where A: super::TypeCheckAdapter
                     span: expr_span,
                     func_name: "get".to_string(),
                     params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
-                    return_type: None,
                     arguments: vec![scalar.clone()],
                 }
                 .into();
@@ -520,7 +516,6 @@ where A: super::TypeCheckAdapter
                 span: path_scalar.span(),
                 func_name: "get".to_string(),
                 params: vec![],
-                return_type: None,
                 arguments: vec![scalar.clone(), path_scalar],
             }
             .into();
@@ -652,7 +647,6 @@ where A: super::TypeCheckAdapter
                     scalar = FunctionCall {
                         span,
                         params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
-                        return_type: None,
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }
@@ -773,7 +767,6 @@ where A: super::TypeCheckAdapter
                 span: None,
                 func_name: "get_by_keypath".to_string(),
                 params: vec![],
-                return_type: Some(Box::new(DataType::Nullable(Box::new(DataType::Variant)))),
                 arguments: args,
             }),
             DataType::Nullable(Box::new(DataType::Variant)),

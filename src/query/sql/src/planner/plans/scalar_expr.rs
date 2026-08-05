@@ -167,10 +167,9 @@ impl ScalarExpr {
             ScalarExpr::WindowFunction(window) => Ok(window.func.return_type()),
             ScalarExpr::AggregateFunction(aggregate) => Ok((*aggregate.return_type).clone()),
             ScalarExpr::LambdaFunction(function) => Ok((*function.return_type).clone()),
-            ScalarExpr::FunctionCall(function) => match &function.return_type {
-                Some(return_type) => Ok((**return_type).clone()),
-                None => Ok(self.as_expr()?.data_type().clone()),
-            },
+            // TODO: Cache the return type once expression rewrites reliably invalidate it when
+            // function arguments change.
+            ScalarExpr::FunctionCall(_) => Ok(self.as_expr()?.data_type().clone()),
             ScalarExpr::CastExpr(cast) => Ok((*cast.target_type).clone()),
             ScalarExpr::SubqueryExpr(subquery) => Ok(subquery.output_data_type()),
             ScalarExpr::UDFCall(udf) => Ok((*udf.return_type).clone()),
@@ -983,7 +982,6 @@ impl SubqueryComparisonOp {
                 span,
                 func_name: "like".to_string(),
                 params: vec![],
-                return_type: None,
                 arguments,
             };
         }
@@ -991,7 +989,6 @@ impl SubqueryComparisonOp {
             span,
             func_name: self.to_func_name().to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![left, right],
         }
     }
@@ -1144,9 +1141,6 @@ pub struct FunctionCall {
     pub func_name: String,
     pub params: Vec<Scalar>,
     pub arguments: Vec<ScalarExpr>,
-    /// Cached during function resolution. Calls synthesized by later optimizer phases may omit it.
-    #[educe(Hash(ignore), PartialEq(ignore))]
-    pub return_type: Option<Box<DataType>>,
 }
 
 #[derive(Clone, Debug, Educe)]

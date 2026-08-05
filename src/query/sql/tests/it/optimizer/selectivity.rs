@@ -223,7 +223,6 @@ fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> Scala
             span: None,
             func_name: name.clone(),
             params: params.clone(),
-            return_type: None,
             arguments: args
                 .iter()
                 .map(|arg| raw_expr_to_scalar(arg, columns))
@@ -702,7 +701,6 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         span: None,
         func_name: ComparisonOp::Equal.to_func_name().to_string(),
         params: vec![],
-        return_type: None,
         arguments: vec![
             ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: None,
@@ -979,7 +977,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             span: None,
             func_name: op.to_func_name().to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![float_column(), float_constant(value)],
         })
     };

@@ -92,7 +92,6 @@ fn build_conjunction(predicates: Vec<ScalarExpr>) -> Option<ScalarExpr> {
             span: Span::None,
             func_name: "and".to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![acc, predicate],
         })
     })
@@ -104,7 +103,6 @@ fn build_disjunction(predicates: Vec<ScalarExpr>) -> Option<ScalarExpr> {
             span: Span::None,
             func_name: "or".to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![acc, predicate],
         })
     })
@@ -215,7 +213,6 @@ impl CTEFilterPushdownOptimizer {
                                 span: Span::None,
                                 func_name: "and".to_string(),
                                 params: vec![],
-                                return_type: None,
                                 arguments: vec![acc, pred.clone()],
                             })
                         },
@@ -348,7 +345,6 @@ mod tests {
             span: Span::None,
             func_name: "eq".to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![
                 bound_column(index, table_index, name),
                 ConstantExpr {
@@ -372,7 +368,6 @@ mod tests {
             span: Span::None,
             func_name: "eq".to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![
                 bound_column(left_index, left_table_index, left_name),
                 bound_column(right_index, right_table_index, right_name),
@@ -388,7 +383,6 @@ mod tests {
                     span: Span::None,
                     func_name: "and".to_string(),
                     params: vec![],
-                    return_type: None,
                     arguments: vec![acc, arg],
                 })
             })
@@ -403,7 +397,6 @@ mod tests {
                     span: Span::None,
                     func_name: "or".to_string(),
                     params: vec![],
-                    return_type: None,
                     arguments: vec![acc, arg],
                 })
             })

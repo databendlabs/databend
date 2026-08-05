@@ -754,7 +754,6 @@ impl AggregateInfo {
             span: function.span,
             func_name: function.func_name.clone(),
             params: replaced_params,
-            return_type: function.return_type.clone(),
             arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: function.span,
                 column: grouping_id_column,
@@ -1527,7 +1526,6 @@ mod tests {
             span: None,
             func_name: "plus".to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![
                 expr,
                 ConstantExpr {

@@ -427,7 +427,6 @@ impl Binder {
                         span: *span,
                         func_name: "get".to_string(),
                         params: vec![Scalar::Number(NumberScalar::Int64((i + 1) as i64))],
-                        return_type: None,
                         arguments: vec![scalar.clone()],
                     });
                     let data_type = field_expr.data_type()?;

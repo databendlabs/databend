@@ -27,7 +27,6 @@ pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
                 span: None,
                 func_name: "eq".to_string(),
                 params: vec![],
-                return_type: None,
                 arguments: vec![equi_condition.left.clone(), equi_condition.right.clone()],
             }))
         })

@@ -185,7 +185,6 @@ mod tests {
             span: None,
             func_name: func_name.to_string(),
             params: vec![],
-            return_type: None,
             arguments,
         })
     }

@@ -226,7 +226,6 @@ impl PhysicalPlanBuilder {
                         span: condition.left.span(),
                         func_name: "eq".to_string(),
                         params: vec![],
-                        return_type: None,
                         arguments: vec![condition.left, condition.right],
                     }
                     .into()

@@ -839,7 +839,6 @@ impl SubqueryDecorrelatorOptimizer {
                 span: None,
                 func_name: "lte".to_string(),
                 params: vec![],
-                return_type: None,
                 arguments: vec![
                     row_number_column.clone(),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -857,7 +856,6 @@ impl SubqueryDecorrelatorOptimizer {
                 span: None,
                 func_name: "gt".to_string(),
                 params: vec![],
-                return_type: None,
                 arguments: vec![
                     row_number_column,
                     ScalarExpr::ConstantExpr(ConstantExpr {

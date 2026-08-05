@@ -120,7 +120,6 @@ pub fn create_column_function_call(name: &str) -> ScalarExpr {
         span: None,
         func_name: "column".to_string(),
         params: vec![],
-        return_type: None,
         arguments: vec![create_constant_string(name)],
     })
 }
@@ -454,7 +453,6 @@ impl ExprBuilder {
             span: None,
             func_name: "and".to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![left, right],
         })
     }
@@ -465,7 +463,6 @@ impl ExprBuilder {
             span: None,
             func_name: "or".to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![left, right],
         })
     }
@@ -476,7 +473,6 @@ impl ExprBuilder {
         ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name,
-            return_type: None,
             arguments: vec![left, right],
             params: vec![],
         })
@@ -492,7 +488,6 @@ impl ExprBuilder {
         ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "if".to_string(),
-            return_type: None,
             arguments: vec![condition, then_expr, else_expr],
             params: vec![],
         })

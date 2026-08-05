@@ -218,7 +218,6 @@ mod tests {
             span: None,
             func_name: "and".to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![lhs, rhs],
         })
     }
@@ -239,7 +238,6 @@ mod tests {
             span: None,
             func_name: "and_filters".to_string(),
             params: vec![],
-            return_type: None,
             arguments: vec![
                 bool_constant(true),
                 and(bool_constant(true), bool_constant(true)),
@@ -353,7 +351,6 @@ fn fold_or_arguments(iter: impl Iterator<Item = ScalarExpr>) -> ScalarExpr {
                 span: None,
                 func_name: "or".to_string(),
                 params: vec![],
-                return_type: None,
                 arguments: vec![acc, arg],
             }
             .into()

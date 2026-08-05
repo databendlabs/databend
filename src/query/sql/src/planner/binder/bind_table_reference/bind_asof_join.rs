@@ -206,7 +206,6 @@ fn make_asof_interval_end_condition(
         span,
         func_name: func_name.to_string(),
         params: vec![],
-        return_type: None,
         arguments: vec![probe_key, lead_key.clone()],
     });
 
@@ -214,13 +213,11 @@ fn make_asof_interval_end_condition(
         span,
         func_name: "if".to_string(),
         params: vec![],
-        return_type: None,
         arguments: vec![
             ScalarExpr::FunctionCall(FunctionCall {
                 span,
                 func_name: "is_not_null".to_string(),
                 params: vec![],
-                return_type: None,
                 arguments: vec![lead_key],
             }),
             compare,
