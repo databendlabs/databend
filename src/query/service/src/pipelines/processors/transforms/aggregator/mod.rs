@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate_exchange_codec;
 mod aggregate_exchange_injector;
 mod aggregate_meta;
 mod aggregate_spiller;
@@ -25,6 +26,7 @@ mod transform_aggregate_final;
 mod transform_aggregate_partial;
 mod transform_single_key;
 
+pub use aggregate_exchange_codec::AggregateExchangeDataCodec;
 pub use aggregate_exchange_injector::AggregateInjector;
 pub use aggregate_meta::*;
 pub use aggregate_spiller::*;
