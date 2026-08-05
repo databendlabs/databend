@@ -653,6 +653,26 @@ impl Display for DataType {
             DataType::Vector(vector) => write!(f, "{vector}"),
             DataType::Generic(index) => write!(f, "T{index}"),
             DataType::Opaque(size) => write!(f, "Opaque({size})"),
+            DataType::AggregateState(state) => {
+                write!(f, "AggregateState({}", state.function_name)?;
+                if !state.params.is_empty() {
+                    write!(f, "(")?;
+                    for (index, encoded_param) in state.params.iter().enumerate() {
+                        if index > 0 {
+                            write!(f, ", ")?;
+                        }
+                        match borsh::from_slice::<Scalar>(encoded_param) {
+                            Ok(param) => write!(f, "{param}")?,
+                            Err(_) => write!(f, "<invalid parameter>")?,
+                        }
+                    }
+                    write!(f, ")")?;
+                }
+                for argument in &state.argument_types {
+                    write!(f, ", {argument}")?;
+                }
+                write!(f, ")")
+            }
             DataType::StageLocation => write!(f, "StageLocation"),
             DataType::TimestampTz => write!(f, "TimestampTz"),
         }
@@ -708,6 +728,31 @@ impl Display for TableDataType {
             TableDataType::Geography => write!(f, "Geography"),
             TableDataType::Vector(vector) => write!(f, "{vector}"),
             TableDataType::StageLocation => write!(f, "StageLocation"),
+            TableDataType::AggregateState {
+                function_name,
+                params,
+                argument_types,
+                ..
+            } => {
+                write!(f, "AggregateState({function_name}")?;
+                if !params.is_empty() {
+                    write!(f, "(")?;
+                    for (index, encoded_param) in params.iter().enumerate() {
+                        if index > 0 {
+                            write!(f, ", ")?;
+                        }
+                        match borsh::from_slice::<Scalar>(encoded_param) {
+                            Ok(param) => write!(f, "{param}")?,
+                            Err(_) => write!(f, "<invalid parameter>")?,
+                        }
+                    }
+                    write!(f, ")")?;
+                }
+                for argument in argument_types {
+                    write!(f, ", {argument}")?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }

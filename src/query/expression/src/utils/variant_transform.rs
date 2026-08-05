@@ -51,6 +51,7 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         DataType::Tuple(types) => types.iter().any(contains_variant),
         DataType::Opaque(_) => false,
         DataType::StageLocation => false,
+        DataType::AggregateState(state) => contains_variant(state.physical_type()),
     }
 }
 
