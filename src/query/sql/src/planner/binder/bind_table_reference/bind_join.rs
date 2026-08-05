@@ -29,7 +29,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnSet;
 use crate::MetadataRef;
-use crate::binder::Finder;
+use crate::binder::Any;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::binder::reject_grouping_functions;
@@ -380,7 +380,7 @@ impl Binder {
 
         let mut other_condition_columns = ColumnSet::new();
         for predicate in other_conditions.iter() {
-            other_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut other_condition_columns);
         }
 
         self.push_down_other_conditions(
@@ -449,13 +449,13 @@ impl Binder {
             };
         let mut join_condition_columns = ColumnSet::new();
         for predicate in left_conditions.iter() {
-            join_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut join_condition_columns);
         }
         for predicate in right_conditions.iter() {
-            join_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut join_condition_columns);
         }
         for predicate in non_equi_conditions.iter() {
-            join_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut join_condition_columns);
         }
         join_condition_columns.extend(other_condition_columns);
         if !join_condition_columns.is_empty() {
@@ -784,9 +784,9 @@ impl<'a> JoinConditionResolver<'a> {
             )
         };
         for scalar in scalars {
-            let mut finder = Finder::new(&f);
-            finder.visit(scalar)?;
-            if !finder.scalars().is_empty() {
+            let mut any = Any::new(&f);
+            any.visit(scalar)?;
+            if any.result() {
                 return Err(ErrorCode::SemanticError(
                     "Join condition can't contain aggregate or window functions".to_string(),
                 )

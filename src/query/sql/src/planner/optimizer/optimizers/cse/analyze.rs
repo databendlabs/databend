@@ -230,7 +230,6 @@ mod tests {
     fn scan_expr(metadata: &Metadata, table_index: usize) -> SExpr {
         let columns = metadata
             .columns_by_table_index(table_index)
-            .into_iter()
             .map(|column| column.index())
             .collect();
         SExpr::create_leaf(Arc::new(RelOperator::Scan(Scan {

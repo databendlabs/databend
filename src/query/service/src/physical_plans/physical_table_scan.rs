@@ -307,7 +307,6 @@ impl PhysicalPlanBuilder {
                 let read_guard = self.metadata.read();
                 let virtual_column_id_set = read_guard
                     .virtual_columns_by_table_index(scan.table_index)
-                    .iter()
                     .map(|column| column.index())
                     .collect::<HashSet<_>>();
                 for required_column_id in required_column_ids {

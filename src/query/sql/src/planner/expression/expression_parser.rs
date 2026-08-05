@@ -73,41 +73,43 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
         None,
     );
 
-    let columns = metadata.read().columns_by_table_index(table_index);
-    let table = metadata.read().table(table_index).clone();
-    for column in columns.iter() {
-        let column_binding = match column {
-            ColumnEntry::BaseTableColumn(BaseTableColumn {
-                column_index,
-                column_name,
-                data_type,
-                path_indices,
-                virtual_expr,
-                ..
-            }) => {
-                let visibility = if path_indices.is_some() {
-                    Visibility::InVisible
-                } else {
-                    Visibility::Visible
-                };
-                ColumnBindingBuilder::new(
-                    column_name.clone(),
-                    *column_index,
-                    Box::new(data_type.into()),
-                    visibility,
-                )
-                .database_name(Some("default".to_string()))
-                .table_name(Some(table.name().to_string()))
-                .table_index(Some(table.index()))
-                .virtual_expr(virtual_expr.clone())
-                .build()
-            }
-            _ => {
-                return Err(ErrorCode::Internal("Invalid column entry"));
-            }
-        };
+    {
+        let metadata = metadata.read();
+        let table = metadata.table(table_index);
+        for column in metadata.columns_by_table_index(table_index) {
+            let column_binding = match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn {
+                    column_index,
+                    column_name,
+                    data_type,
+                    path_indices,
+                    virtual_expr,
+                    ..
+                }) => {
+                    let visibility = if path_indices.is_some() {
+                        Visibility::InVisible
+                    } else {
+                        Visibility::Visible
+                    };
+                    ColumnBindingBuilder::new(
+                        column_name.clone(),
+                        *column_index,
+                        Box::new(data_type.into()),
+                        visibility,
+                    )
+                    .database_name(Some("default".to_string()))
+                    .table_name(Some(table.name().to_string()))
+                    .table_index(Some(table.index()))
+                    .virtual_expr(virtual_expr.clone())
+                    .build()
+                }
+                _ => {
+                    return Err(ErrorCode::Internal("Invalid column entry"));
+                }
+            };
 
-        bind_context.add_column_binding(column_binding);
+            bind_context.add_column_binding(column_binding);
+        }
     }
     Ok((bind_context, metadata))
 }

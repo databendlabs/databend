@@ -540,7 +540,7 @@ impl StatsApplier<'_> {
     ) -> HashMap<Symbol, Option<BasicColumnStatistics>> {
         let mut result = HashMap::new();
 
-        for column in metadata.columns_by_table_index(table_index).iter() {
+        for column in metadata.columns_by_table_index(table_index) {
             if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                 column_index,
                 column_name,
@@ -568,7 +568,7 @@ impl StatsApplier<'_> {
     ) -> Result<HashMap<Symbol, Option<Histogram>>> {
         let mut result = HashMap::new();
 
-        for column in metadata.columns_by_table_index(table_index).iter() {
+        for column in metadata.columns_by_table_index(table_index) {
             if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                 column_index,
                 column_name,

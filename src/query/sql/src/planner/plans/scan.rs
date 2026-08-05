@@ -78,11 +78,11 @@ pub struct AggIndexInfo {
 impl AggIndexInfo {
     pub fn used_columns(&self) -> ColumnSet {
         let mut used_columns = ColumnSet::new();
-        for item in self.selection.iter() {
-            used_columns.extend(item.scalar.used_columns());
+        for item in &self.selection {
+            item.scalar.collect_used_columns(&mut used_columns);
         }
-        for pred in self.predicates.iter() {
-            used_columns.extend(pred.used_columns());
+        for pred in &self.predicates {
+            pred.collect_used_columns(&mut used_columns);
         }
         used_columns
     }
@@ -223,13 +223,13 @@ impl Scan {
     pub(crate) fn used_columns(&self) -> ColumnSet {
         let mut used_columns = ColumnSet::new();
         if let Some(preds) = &self.push_down_predicates {
-            for pred in preds.iter() {
-                used_columns.extend(pred.used_columns());
+            for pred in preds {
+                pred.collect_used_columns(&mut used_columns);
             }
         }
         if let Some(preds) = &self.secure_predicates {
-            for pred in preds.iter() {
-                used_columns.extend(pred.used_columns());
+            for pred in preds {
+                pred.collect_used_columns(&mut used_columns);
             }
         }
         if let Some(prewhere) = &self.prewhere {

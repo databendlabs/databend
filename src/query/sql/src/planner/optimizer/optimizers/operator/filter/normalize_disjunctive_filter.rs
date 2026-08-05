@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use itertools::Itertools;
 
-use crate::binder::split_conjunctions;
+use crate::binder::into_conjunctions;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
@@ -41,9 +41,9 @@ impl NormalizeDisjunctiveFilterOptimizer {
             let rewritten_predicate_scalar = rewrite_predicate_ors(predicate_scalar);
             rewritten_predicates.push(normalize_predicate_scalar(rewritten_predicate_scalar));
         }
-        let mut split_predicates: Vec<ScalarExpr> = Vec::with_capacity(rewritten_predicates.len());
-        for predicate in rewritten_predicates.iter() {
-            split_predicates.extend_from_slice(&split_conjunctions(predicate));
+        let mut split_predicates = Vec::with_capacity(rewritten_predicates.len());
+        for predicate in rewritten_predicates {
+            split_predicates.extend(into_conjunctions(predicate));
         }
         Ok(split_predicates)
     }
