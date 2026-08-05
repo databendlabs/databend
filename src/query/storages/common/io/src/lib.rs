@@ -12,12 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod blocking_io;
 mod buffer_reader;
 mod files;
 mod merge_io_reader;
 mod merge_io_result;
 mod read_settings;
 
+pub use blocking_io::BLOCKING_WRITE_CHUNK_SIZE;
+pub use blocking_io::BLOCKING_WRITE_MAX_CHUNKS;
+pub use blocking_io::OpenDalBlockingWrite;
+pub use blocking_io::OperatorRangeReader;
+pub use blocking_io::blocking_write_retained_bytes;
+pub use blocking_io::create_blocking_write;
 pub use buffer_reader::BufferReader;
 pub use files::Files;
 pub use files::dedup_file_locations;

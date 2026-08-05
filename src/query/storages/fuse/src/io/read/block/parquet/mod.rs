@@ -52,13 +52,27 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
-        self.deserialize_parquet_chunks(
-            part.nums_rows,
+        self.deserialize_part_with_num_rows(part, part.nums_rows, column_chunks, selection)
+    }
+
+    /// Like [`deserialize_part`], but with an explicit row count. Used by sparse-granule-index
+    /// narrowed reads, where the reconstructed partial column chunks contain fewer rows than the
+    /// block's `nums_rows`.
+    pub fn deserialize_part_with_num_rows(
+        &self,
+        part: &FuseBlockPartInfo,
+        num_rows: usize,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks_inner(
+            num_rows,
             &part.columns_meta,
             column_chunks,
             &part.compression,
             &part.location,
             selection,
+            num_rows == part.nums_rows,
         )
     }
 
@@ -70,6 +84,28 @@ impl BlockReader {
         compression: &Compression,
         block_path: &str,
         selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks_inner(
+            num_rows,
+            column_metas,
+            column_chunks,
+            compression,
+            block_path,
+            selection,
+            true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn deserialize_parquet_chunks_inner(
+        &self,
+        num_rows: usize,
+        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        compression: &Compression,
+        block_path: &str,
+        selection: Option<&RowSelection>,
+        complete_column_chunks: bool,
     ) -> databend_common_exception::Result<DataBlock> {
         let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
         // If projection is empty, return a DataBlock with the appropriate row count but no columns
@@ -93,7 +129,7 @@ impl BlockReader {
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
-        let array_cache = if self.put_cache && !has_selection {
+        let array_cache = if self.put_cache && complete_column_chunks && !has_selection {
             CacheManager::instance().get_table_data_array_cache()
         } else {
             None

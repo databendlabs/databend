@@ -16,6 +16,7 @@ mod mutator;
 mod processors;
 
 pub use mutator::MatchedAggregator;
+pub use mutator::MatchedAggregatorConfig;
 pub use processors::BlockIdPartitionExchange;
 pub use processors::MatchedSplitProcessor;
 pub use processors::MergeIntoNotMatchedProcessor;
@@ -23,4 +24,5 @@ pub use processors::MixRowIdKindAndLog;
 pub use processors::MutationSplitProcessor;
 pub use processors::RowNumberAndLogSplitProcessor;
 pub use processors::SourceFullMatched;
+pub use processors::TransformMatchedBlockMutation;
 pub use processors::UnMatchedExprs;

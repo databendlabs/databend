@@ -126,6 +126,31 @@ impl ClusterStatsGenerator {
         }
     }
 
+    pub fn scalar_cluster_key_offsets(&self) -> Vec<usize> {
+        let vector_offset = self
+            .vector_operator
+            .as_ref()
+            .map(|operator| operator.vector_cluster_id_offset);
+        self.cluster_key_index
+            .iter()
+            .copied()
+            .filter(|index| Some(*index) != vector_offset)
+            .collect()
+    }
+
+    pub fn granule_cluster_key_offsets(&self) -> Option<Vec<usize>> {
+        let keys = self.scalar_cluster_key_offsets();
+        (!keys.is_empty()).then_some(keys)
+    }
+
+    pub fn block_thresholds(&self) -> BlockThresholds {
+        self.block_thresholds
+    }
+
+    pub fn cluster_key_id(&self) -> u32 {
+        self.cluster_key_id
+    }
+
     pub fn sort_descs(&self) -> Vec<SortColumnDescription> {
         self.cluster_key_index
             .iter()

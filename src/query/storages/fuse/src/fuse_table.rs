@@ -134,6 +134,7 @@ use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
+use crate::FUSE_OPT_KEY_INDEX_GRANULARITY;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
@@ -383,6 +384,17 @@ impl FuseTable {
             .get(FUSE_OPT_KEY_DATA_PAGE_BYTES)
             .and_then(|v| v.parse::<usize>().ok());
 
+        // `index_granularity` drives the page-boundary layout (a page starts on every granule row),
+        // which is independent of clustering: any table can have page offsets recorded. Only the
+        // per-granule min/max *statistics* (built elsewhere on the sorted write path) need a cluster
+        // key. So honor the option regardless of whether a cluster key exists.
+        let index_granularity = self
+            .table_info
+            .options()
+            .get(FUSE_OPT_KEY_INDEX_GRANULARITY)
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|&g| g > 0);
+
         WriteSettings {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
@@ -391,6 +403,7 @@ impl FuseTable {
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
             data_page_rows,
             data_page_bytes,
+            index_granularity,
             col_stats_truncate_lens: self
                 .table_info
                 .meta
@@ -595,6 +608,21 @@ impl FuseTable {
 
     pub fn cluster_key_id(&self) -> Option<u32> {
         self.table_info.meta.cluster_key_id()
+    }
+
+    /// True when this table has a linear cluster key and a positive `index_granularity`, i.e. the
+    /// sparse granule index applies. Hilbert-clustered and unclustered tables are excluded — the
+    /// sparse index narrows on a monotonic cluster-key sequence, which only linear clustering
+    /// guarantees within a block.
+    pub fn sparse_granule_index_enabled(&self) -> bool {
+        self.cluster_key_meta().is_some()
+            && self
+                .table_info
+                .meta
+                .options
+                .get(FUSE_OPT_KEY_INDEX_GRANULARITY)
+                .and_then(|v| v.parse::<usize>().ok())
+                .is_some_and(|g| g > 0)
     }
 
     fn partition_key_str(&self) -> Option<&str> {

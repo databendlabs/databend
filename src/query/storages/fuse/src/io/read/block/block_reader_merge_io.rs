@@ -37,6 +37,7 @@ pub struct BlockReadResult {
     merge_io_result: MergeIOReadResult,
     pub(crate) cached_column_data: CachedColumnData,
     pub(crate) cached_column_array: CachedColumnArray,
+    row_range: Option<std::ops::Range<usize>>,
 }
 
 impl BlockReadResult {
@@ -49,7 +50,24 @@ impl BlockReadResult {
             merge_io_result,
             cached_column_data,
             cached_column_array,
+            row_range: None,
         }
+    }
+
+    pub fn create_with_row_range(
+        merge_io_result: MergeIOReadResult,
+        row_range: std::ops::Range<usize>,
+    ) -> BlockReadResult {
+        BlockReadResult {
+            merge_io_result,
+            cached_column_data: vec![],
+            cached_column_array: vec![],
+            row_range: Some(row_range),
+        }
+    }
+
+    pub fn row_range(&self) -> Option<&std::ops::Range<usize>> {
+        self.row_range.as_ref()
     }
 
     pub fn columns_chunks(&self) -> Result<HashMap<ColumnId, DataItem<'_>>> {

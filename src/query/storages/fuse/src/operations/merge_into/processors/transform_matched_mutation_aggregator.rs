@@ -12,33 +12,112 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::collections::VecDeque;
+use std::sync::Arc;
+
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::PipeItem;
+use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 
 use crate::operations::merge_into::mutator::MatchedAggregator;
 
-#[async_trait::async_trait]
-impl AsyncAccumulatingTransform for MatchedAggregator {
-    const NAME: &'static str = "MatchedAggregator";
+enum State {
+    Consume,
+    Accumulate(DataBlock),
+    Prepare,
+    Output,
+}
 
-    #[async_backtrace::framed]
-    async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
-        self.accumulate(data).await?;
-        // no partial output
-        Ok(None)
+struct TransformMatchedMutationAggregator {
+    inner: MatchedAggregator,
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    state: State,
+    tasks: VecDeque<DataBlock>,
+}
+
+impl TransformMatchedMutationAggregator {
+    fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        inner: MatchedAggregator,
+    ) -> Box<dyn Processor> {
+        Box::new(Self {
+            inner,
+            input,
+            output,
+            state: State::Consume,
+            tasks: VecDeque::new(),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl Processor for TransformMatchedMutationAggregator {
+    fn name(&self) -> String {
+        "MatchedAggregator".to_string()
     }
 
-    #[async_backtrace::framed]
-    async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
-        // apply mutations
-        let mutation_logs = self.apply().await?;
-        Ok(mutation_logs.map(|logs| logs.into()))
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
+        match self.state {
+            State::Accumulate(_) | State::Prepare => return Ok(Event::Async),
+            State::Output => {
+                if !self.output.can_push() {
+                    return Ok(Event::NeedConsume);
+                }
+                if let Some(task) = self.tasks.pop_front() {
+                    self.output.push_data(Ok(task));
+                    return Ok(Event::NeedConsume);
+                }
+                self.output.finish();
+                return Ok(Event::Finished);
+            }
+            State::Consume => {}
+        }
+
+        if self.input.has_data() {
+            let data = self.input.pull_data().ok_or_else(|| {
+                ErrorCode::Internal("matched aggregator input reported data but returned none")
+            })??;
+            self.state = State::Accumulate(data);
+            return Ok(Event::Async);
+        }
+        if self.input.is_finished() {
+            self.state = State::Prepare;
+            return Ok(Event::Async);
+        }
+        self.input.set_need_data();
+        Ok(Event::NeedData)
+    }
+
+    async fn async_process(&mut self) -> Result<()> {
+        match std::mem::replace(&mut self.state, State::Consume) {
+            State::Accumulate(data) => self.inner.accumulate(data).await,
+            State::Prepare => {
+                self.tasks = self.inner.prepare_tasks().await?;
+                self.state = State::Output;
+                Ok(())
+            }
+            _ => Err(ErrorCode::Internal(
+                "invalid matched aggregator async state",
+            )),
+        }
     }
 }
 
@@ -46,10 +125,8 @@ impl MatchedAggregator {
     pub fn into_pipe_item(self) -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();
-        let processor_ptr =
-            AsyncAccumulatingTransformer::create(input.clone(), output.clone(), self);
-        PipeItem::create(ProcessorPtr::create(processor_ptr), vec![input], vec![
-            output,
-        ])
+        let processor =
+            TransformMatchedMutationAggregator::create(input.clone(), output.clone(), self);
+        PipeItem::create(ProcessorPtr::create(processor), vec![input], vec![output])
     }
 }

@@ -114,6 +114,7 @@ mod dummy {
             enable_parquet_dictionary,
             data_page_rows: None,
             data_page_bytes: None,
+            index_granularity: None,
             col_stats_truncate_lens: std::collections::BTreeMap::new(),
         };
         let schema = Arc::new(schema);

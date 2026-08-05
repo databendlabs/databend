@@ -305,15 +305,18 @@ impl FuseTable {
             ctx.get_cluster().local_id,
         );
 
-        let mut pruner = FusePruner::create(
+        let mut pruner = FusePruner::create_with_pages(
             &ctx,
             self.get_operator(),
             table_schema.clone(),
             &push_downs,
             None,
+            None,
+            vec![],
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
+            self.table_info.meta.indexes.clone(),
             None,
         )?;
 
@@ -882,13 +885,23 @@ fn sum_block_rows(blocks: &[Arc<BlockMeta>]) -> u64 {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 mod tests {
     use chrono::TimeDelta;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::DecimalSize;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+    use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::meta::Statistics;
     use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
     use super::*;
+
+    const TEST_USER_COLUMN_ID: u32 = 0;
+
+    fn test_block_path(uuid: &str) -> String {
+        format!("root/_b/{uuid}_v0.parquet")
+    }
 
     fn snapshot(rows: u64) -> TableSnapshot {
         TableSnapshot::try_new(
@@ -905,6 +918,169 @@ mod tests {
             TableMetaTimestamps::new(None, TimeDelta::hours(1)),
         )
         .unwrap()
+    }
+
+    fn test_block_id(uuid: &str) -> i128 {
+        block_id_from_location(&test_block_path(uuid)).unwrap()
+    }
+
+    fn u64_stats(min: u64, max: u64, null_count: u64) -> ColumnStatistics {
+        ColumnStatistics {
+            min: Scalar::Number(NumberScalar::UInt64(min)),
+            max: Scalar::Number(NumberScalar::UInt64(max)),
+            null_count,
+            in_memory_size: 0,
+            distinct_of_values: None,
+        }
+    }
+
+    fn block_id_stats(min: i128, max: i128, null_count: u64) -> ColumnStatistics {
+        ColumnStatistics {
+            min: Scalar::Decimal(DecimalScalar::Decimal128(min, DecimalSize::default_128())),
+            max: Scalar::Decimal(DecimalScalar::Decimal128(max, DecimalSize::default_128())),
+            null_count,
+            in_memory_size: 0,
+            distinct_of_values: None,
+        }
+    }
+
+    fn test_block(
+        uuid: &str,
+        row_count: u64,
+        block_size: u64,
+        col_stats: HashMap<u32, ColumnStatistics>,
+    ) -> Arc<BlockMeta> {
+        Arc::new(BlockMeta {
+            row_count,
+            block_size,
+            file_size: block_size,
+            col_stats,
+            col_metas: HashMap::new(),
+            cluster_stats: None,
+            partition_stats: None,
+            location: (test_block_path(uuid), 0),
+            bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
+            inverted_index_size: None,
+            ngram_filter_index_size: None,
+            vector_index_size: None,
+            vector_index_location: None,
+            spatial_index_size: None,
+            spatial_index_location: None,
+            spatial_stats: None,
+            granule_index: None,
+            vector_stats: None,
+            virtual_block_meta: None,
+            compression: Compression::None,
+            create_on: None,
+        })
+    }
+
+    fn inserted_block(uuid: &str, row_count: u64) -> Arc<BlockMeta> {
+        test_block(uuid, row_count, row_count * 100, HashMap::new())
+    }
+
+    fn inserted_block_with_user_stats(
+        uuid: &str,
+        row_count: u64,
+        min: u64,
+        max: u64,
+    ) -> Arc<BlockMeta> {
+        let mut col_stats = HashMap::new();
+        col_stats.insert(TEST_USER_COLUMN_ID, u64_stats(min, max, 0));
+        test_block(uuid, row_count, row_count * 100, col_stats)
+    }
+
+    fn rewritten_block(
+        uuid: &str,
+        row_count: u64,
+        origin_uuid: &str,
+        origin_version: u64,
+    ) -> Arc<BlockMeta> {
+        let mut col_stats = HashMap::new();
+        col_stats.insert(
+            ORIGIN_VERSION_COLUMN_ID,
+            u64_stats(origin_version, origin_version, 0),
+        );
+        let origin_block_id = test_block_id(origin_uuid);
+        col_stats.insert(
+            ORIGIN_BLOCK_ID_COLUMN_ID,
+            block_id_stats(origin_block_id, origin_block_id, 0),
+        );
+        test_block(uuid, row_count, row_count * 100, col_stats)
+    }
+
+    fn rewritten_block_with_user_stats(
+        uuid: &str,
+        row_count: u64,
+        origin_uuid: &str,
+        origin_version: u64,
+        min: u64,
+        max: u64,
+    ) -> Arc<BlockMeta> {
+        let mut col_stats = HashMap::new();
+        col_stats.insert(
+            ORIGIN_VERSION_COLUMN_ID,
+            u64_stats(origin_version, origin_version, 0),
+        );
+        let origin_block_id = test_block_id(origin_uuid);
+        col_stats.insert(
+            ORIGIN_BLOCK_ID_COLUMN_ID,
+            block_id_stats(origin_block_id, origin_block_id, 0),
+        );
+        col_stats.insert(TEST_USER_COLUMN_ID, u64_stats(min, max, 0));
+        test_block(uuid, row_count, row_count * 100, col_stats)
+    }
+
+    fn compacted_block_with_user_stats(
+        uuid: &str,
+        row_count: u64,
+        origin_uuids: &[&str],
+        origin_version: u64,
+        min: u64,
+        max: u64,
+    ) -> Arc<BlockMeta> {
+        let mut col_stats = HashMap::new();
+        col_stats.insert(
+            ORIGIN_VERSION_COLUMN_ID,
+            u64_stats(origin_version, origin_version, 0),
+        );
+        let min_origin_block_id = origin_uuids
+            .iter()
+            .map(|uuid| test_block_id(uuid))
+            .min()
+            .unwrap();
+        let max_origin_block_id = origin_uuids
+            .iter()
+            .map(|uuid| test_block_id(uuid))
+            .max()
+            .unwrap();
+        col_stats.insert(
+            ORIGIN_BLOCK_ID_COLUMN_ID,
+            block_id_stats(min_origin_block_id, max_origin_block_id, 0),
+        );
+        col_stats.insert(TEST_USER_COLUMN_ID, u64_stats(min, max, 0));
+        test_block(uuid, row_count, row_count * 100, col_stats)
+    }
+
+    fn mixed_version_block(
+        uuid: &str,
+        row_count: u64,
+        origin_uuid: &str,
+        min_origin_version: u64,
+        max_origin_version: u64,
+    ) -> Arc<BlockMeta> {
+        let mut col_stats = HashMap::new();
+        col_stats.insert(
+            ORIGIN_VERSION_COLUMN_ID,
+            u64_stats(min_origin_version, max_origin_version, 0),
+        );
+        let origin_block_id = test_block_id(origin_uuid);
+        col_stats.insert(
+            ORIGIN_BLOCK_ID_COLUMN_ID,
+            block_id_stats(origin_block_id, origin_block_id, 0),
+        );
+        test_block(uuid, row_count, row_count * 100, col_stats)
     }
 
     fn legacy_snapshot(rows: u64) -> TableSnapshot {

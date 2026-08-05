@@ -1,0 +1,32 @@
+statement ok
+USE compat_granule_rollout
+
+query III
+SELECT count(),sum(payload),count(DISTINCT k) FROM rollout_t
+----
+48 168168 24
+
+# 1.2.833 ignores this option, but two later blocks stay below its legacy threshold.
+statement ok
+ALTER TABLE rollout_t SET OPTIONS(index_granularity='4', auto_compaction_imperfect_blocks_threshold='0')
+
+query II
+SELECT table_option LIKE '%INDEX_GRANULARITY=''4''%', table_option LIKE '%AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD=''0''%' FROM system.tables WHERE database='compat_granule_rollout' AND name='rollout_t'
+----
+1 1
+
+statement ok
+SET recluster_method='vertical'
+
+statement ok
+ALTER TABLE rollout_t RECLUSTER FINAL
+
+query III
+SELECT count(),sum(payload),count(DISTINCT _block_name) FROM rollout_t
+----
+48 168168 1
+
+query I
+SELECT count_if(previous_k > k) FROM (SELECT k,lag(k) OVER (PARTITION BY _block_name ORDER BY _row_id) AS previous_k FROM rollout_t)
+----
+0

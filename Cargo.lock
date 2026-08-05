@@ -5053,6 +5053,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-pipeline-transforms",
+ "databend-common-settings",
  "databend-common-sql",
  "databend-common-statistics",
  "databend-common-storage",
@@ -6741,12 +6742,14 @@ name = "databend-storages-common-io"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "async-channel",
  "bytes",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-metrics",
+ "databend-storages-common-blocks",
  "fastrace",
  "futures",
  "log",
@@ -10341,7 +10344,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.3",
+ "socket2 0.5.9",
  "system-configuration 0.6.1",
  "tokio",
  "tower-service",
@@ -10428,7 +10431,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.0",
+ "windows-core 0.57.0",
 ]
 
 [[package]]
@@ -11117,7 +11120,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -12722,7 +12725,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -13641,7 +13644,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "58.1.0"
-source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=bbbe79543#bbbe7954373500bffc51de3af33ae761266f898a"
+source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=5f3d97f0e9f813955c18af3306fe3d08b1006adc#5f3d97f0e9f813955c18af3306fe3d08b1006adc"
 dependencies = [
  "ahash 0.8.12",
  "arrow-array 58.1.0",

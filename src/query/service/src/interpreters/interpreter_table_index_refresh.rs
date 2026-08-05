@@ -96,6 +96,7 @@ impl Interpreter for RefreshTableIndexInterpreter {
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,
             ast::TableIndexType::Spatial => TableIndexType::Spatial,
+            ast::TableIndexType::Bloom => TableIndexType::Bloom,
             ast::TableIndexType::Aggregating => unreachable!(),
         };
 

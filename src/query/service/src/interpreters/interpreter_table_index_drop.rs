@@ -64,6 +64,7 @@ impl Interpreter for DropTableIndexInterpreter {
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,
             ast::TableIndexType::Spatial => TableIndexType::Spatial,
+            ast::TableIndexType::Bloom => TableIndexType::Bloom,
         };
 
         if matches!(index_type, TableIndexType::Vector)
