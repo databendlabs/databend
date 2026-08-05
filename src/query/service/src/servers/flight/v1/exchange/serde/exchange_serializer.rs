@@ -129,13 +129,10 @@ impl TransformScatterExchangeSerializer {
         compression: Option<FlightCompression>,
         params: &ShuffleExchangeParams,
     ) -> Result<ProcessorPtr> {
-        let local_id = &params.executor_id;
         let compression = match compression {
             None => None,
-            Some(compression) => match compression {
-                FlightCompression::Lz4 => Some(CompressionType::LZ4_FRAME),
-                FlightCompression::Zstd => Some(CompressionType::ZSTD),
-            },
+            Some(FlightCompression::Lz4) => Some(CompressionType::LZ4_FRAME),
+            Some(FlightCompression::Zstd) => Some(CompressionType::ZSTD),
         };
 
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
@@ -146,7 +143,7 @@ impl TransformScatterExchangeSerializer {
                 local_pos: params
                     .destination_ids
                     .iter()
-                    .position(|x| x == local_id)
+                    .position(|x| x == &params.executor_id)
                     .unwrap(),
             },
         )))
@@ -160,9 +157,10 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterExchangeSeriali
     fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<Vec<DataBlock>> {
         let mut new_blocks = Vec::with_capacity(meta.blocks.len());
         for (index, block) in meta.blocks.into_iter().enumerate() {
-            new_blocks.push(match self.local_pos == index {
-                true => block,
-                false => serialize_block(0, block, &self.options)?,
+            new_blocks.push(if self.local_pos == index {
+                block
+            } else {
+                serialize_block(0, block, &self.options)?
             });
         }
 

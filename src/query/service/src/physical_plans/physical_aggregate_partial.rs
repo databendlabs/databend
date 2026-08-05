@@ -207,12 +207,8 @@ impl IPhysicalPlan for AggregatePartial {
             });
         }
 
-        let is_row_shuffle = matches!(self.shuffle_mode, AggregateShuffleMode::Row);
-        let bucket_num = if is_row_shuffle {
-            cluster.nodes.len()
-        } else {
-            2_usize.pow(partial_agg_config.initial_radix_bits as u32)
-        };
+        let is_row_shuffle = matches!(self.shuffle_mode, AggregateShuffleMode::Row(_));
+        let bucket_num = self.shuffle_mode.parallelism();
         let shared_partition_streams = SharedPartitionStream::new(
             builder.main_pipeline.output_len(),
             0,
@@ -233,11 +229,8 @@ impl IPhysicalPlan for AggregatePartial {
             )?))
         })?;
 
-        builder.exchange_injector = AggregateInjector::create(
-            builder.ctx.clone(),
-            params.clone(),
-            self.shuffle_mode.clone(),
-        );
+        builder.exchange_injector =
+            AggregateInjector::create(params.clone(), self.shuffle_mode.clone());
         Ok(())
     }
 }

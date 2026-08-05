@@ -266,7 +266,6 @@ impl TransformFinalAggregate {
                 self.handle_serialized(restored, need_check_spill)?;
             }
             AggregateMeta::Partitioned { data, .. } => match data {
-                PartitionedData::Empty => {}
                 PartitionedData::Serialized(payloads) => {
                     for payload in payloads {
                         check_interrupt()?;
@@ -284,12 +283,6 @@ impl TransformFinalAggregate {
                         check_interrupt()?;
                         let restored = self.spiller.restore(payload)?;
                         self.handle_serialized(restored, need_check_spill)?;
-                    }
-                }
-                PartitionedData::Mixed(items) => {
-                    for item in items {
-                        check_interrupt()?;
-                        self.handle_meta(AggregateMeta::from(item), need_check_spill)?;
                     }
                 }
             },

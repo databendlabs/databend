@@ -288,7 +288,6 @@ impl AccumulatingTransform for TransformPartialAggregate {
                     .map(|(bucket, payload)| AggregatePayload {
                         bucket: bucket as isize,
                         payload,
-                        max_partition_count: 0,
                     })
                     .collect::<Vec<_>>();
                 blocks.push(DataBlock::empty_with_meta(

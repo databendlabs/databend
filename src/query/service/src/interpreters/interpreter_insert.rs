@@ -118,6 +118,7 @@ fn wrap_paimon_write_distribution(
         kind: FragmentKind::GlobalShuffle,
         keys: vec![key],
         allow_adjust_parallelism: false,
+        destination_parallelism: None,
         ignore_exchange: false,
         meta: PhysicalPlanMeta::new("Exchange"),
     }))
@@ -201,6 +202,7 @@ pub fn build_insert_select_physical_plan(
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
+                destination_parallelism: None,
                 ignore_exchange: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             }))

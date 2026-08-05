@@ -326,6 +326,7 @@ impl CopyIntoTableInterpreter {
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
                 allow_adjust_parallelism: true,
+                destination_parallelism: None,
                 ignore_exchange: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             });

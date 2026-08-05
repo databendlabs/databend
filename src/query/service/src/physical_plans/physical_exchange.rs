@@ -39,6 +39,9 @@ pub struct Exchange {
     pub keys: Vec<RemoteExpr>,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
+    /// Total number of destination worker channels requested by the consumer.
+    /// `None` uses the regular per-node pipeline parallelism.
+    pub destination_parallelism: Option<usize>,
 }
 
 #[typetag::serde]
@@ -88,6 +91,7 @@ impl IPhysicalPlan for Exchange {
             keys: self.keys.clone(),
             ignore_exchange: self.ignore_exchange,
             allow_adjust_parallelism: self.allow_adjust_parallelism,
+            destination_parallelism: self.destination_parallelism,
         })
     }
 }
@@ -100,9 +104,7 @@ impl PhysicalPlanBuilder {
         mut required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        if let databend_common_sql::plans::Exchange::NodeToNodeHash(exprs)
-        | databend_common_sql::plans::Exchange::GlobalHash(exprs) = exchange
-        {
+        if let databend_common_sql::plans::Exchange::GlobalHash(exprs) = exchange {
             for expr in exprs {
                 required.extend(expr.used_columns());
             }
@@ -114,16 +116,6 @@ impl PhysicalPlanBuilder {
         let mut keys = vec![];
         let mut allow_adjust_parallelism = true;
         let kind = match exchange {
-            databend_common_sql::plans::Exchange::NodeToNodeHash(scalars) => {
-                for scalar in scalars {
-                    let expr = scalar
-                        .type_check(input_schema.as_ref())?
-                        .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
-                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                    keys.push(expr.as_remote_expr());
-                }
-                FragmentKind::Normal
-            }
             databend_common_sql::plans::Exchange::GlobalHash(scalars) => {
                 for scalar in scalars {
                     let expr = scalar
@@ -147,6 +139,7 @@ impl PhysicalPlanBuilder {
             keys,
             allow_adjust_parallelism,
             ignore_exchange: false,
+            destination_parallelism: None,
             meta: PhysicalPlanMeta::new("Exchange"),
         }))
     }

@@ -854,12 +854,6 @@ impl Operator for Join {
             // Although the build side is also Hash, it is more efficient to
             // utilize the distribution on the probe side.
             // As soon as we support subset property, we can pass through both sides.
-            (Distribution::NodeToNodeHash(_), Distribution::NodeToNodeHash(_)) => {
-                Ok(PhysicalProperty {
-                    distribution: probe_prop.distribution.clone(),
-                })
-            }
-
             (Distribution::GlobalHash(_), Distribution::GlobalHash(_)) => Ok(PhysicalProperty {
                 distribution: probe_prop.distribution.clone(),
             }),

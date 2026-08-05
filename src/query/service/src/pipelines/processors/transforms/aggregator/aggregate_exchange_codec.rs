@@ -33,7 +33,6 @@ use super::AggregateSerdeMeta;
 use super::AggregatorParams;
 use super::BUCKET_TYPE;
 use super::PARTITIONED_AGGREGATE_TYPE;
-use super::PartitionItem;
 use super::PartitionedData;
 use super::SPILLED_TYPE;
 use super::SerializedPayload;
@@ -86,27 +85,22 @@ impl AggregateExchangeDataCodec {
         &self,
         payload: databend_common_expression::AggregatePayload,
     ) -> Result<DataBlock> {
-        let databend_common_expression::AggregatePayload {
-            bucket,
-            payload,
-            max_partition_count,
-        } = payload;
+        let databend_common_expression::AggregatePayload { bucket, payload } = payload;
         let mut flush_state = PayloadFlushState::default();
         let mut blocks = Vec::new();
         while let Some(block) = payload.aggregate_flush(&mut flush_state)? {
-            blocks.push(block.add_meta(Some(AggregateSerdeMeta::create_agg_payload(
-                bucket,
-                max_partition_count,
-                false,
-            )))?);
+            blocks
+                .push(block.add_meta(Some(AggregateSerdeMeta::create_agg_payload(bucket, false)))?);
         }
 
         // Preserve the bucket even when the payload has no rows. Arrow Flight
         // carries the explicit zero row count and the serde metadata.
         if blocks.is_empty() {
-            blocks.push(payload.empty_block(1).add_meta(Some(
-                AggregateSerdeMeta::create_agg_payload(bucket, max_partition_count, true),
-            ))?);
+            blocks.push(
+                payload
+                    .empty_block(1)
+                    .add_meta(Some(AggregateSerdeMeta::create_agg_payload(bucket, true)))?,
+            );
         }
 
         let meta = blocks[0].take_meta().ok_or_else(|| {
@@ -119,7 +113,6 @@ impl AggregateExchangeDataCodec {
 
     fn encode_partitioned(&self, data: PartitionedData) -> Result<Option<DataBlock>> {
         match data {
-            PartitionedData::Empty => Ok(None),
             PartitionedData::Serialized(data) if data.is_empty() => Ok(None),
             PartitionedData::AggregatePayload(data) if data.is_empty() => Ok(None),
             PartitionedData::BucketSpilled(data) if data.is_empty() => Ok(None),
@@ -143,11 +136,7 @@ impl AggregateExchangeDataCodec {
                 }
 
                 let block = DataBlock::concat(&payload_blocks)?.add_meta(Some(
-                    AggregateSerdeMeta::create_partitioned_payload(
-                        buckets,
-                        payload_row_counts,
-                        false,
-                    ),
+                    AggregateSerdeMeta::create_partitioned_payload(buckets, payload_row_counts),
                 ))?;
                 Ok(Some(block))
             }
@@ -168,20 +157,12 @@ impl AggregateExchangeDataCodec {
                     StringType::from_data(locations),
                     BinaryType::from_data(row_groups),
                 ])
-                .add_meta(Some(AggregateSerdeMeta::create_spilled(rows as isize)))?;
+                .add_meta(Some(AggregateSerdeMeta::create_spilled()))?;
                 Ok(Some(block))
             }
-            PartitionedData::Mixed(data) => {
-                let block = PartitionItem::serialize_mixed(data)?;
-                if block.is_empty() && block.get_meta().is_none() {
-                    Ok(None)
-                } else {
-                    Ok(Some(block))
-                }
-            }
-            other => Err(ErrorCode::Internal(format!(
-                "Partitioned aggregate data is not transportable: {other:?}"
-            ))),
+            PartitionedData::Serialized(_) => Err(ErrorCode::Internal(
+                "Serialized partitioned aggregate data is not transportable",
+            )),
         }
     }
 
@@ -214,7 +195,6 @@ impl AggregateExchangeDataCodec {
             payloads.push(SerializedPayload {
                 bucket: *bucket,
                 data_block: block.slice(start..offset),
-                max_partition_count: 0,
             });
         }
 
@@ -229,11 +209,7 @@ impl AggregateExchangeDataCodec {
         )))
     }
 
-    fn decode_spilled(
-        &self,
-        meta: &AggregateSerdeMeta,
-        block: DataBlock,
-    ) -> Result<Option<DataBlock>> {
+    fn decode_spilled(&self, block: DataBlock) -> Result<Option<DataBlock>> {
         if block.num_columns() != 3 {
             return Err(ErrorCode::BadBytes(
                 "Spilled aggregate transport block must contain three columns",
@@ -278,12 +254,6 @@ impl AggregateExchangeDataCodec {
             });
         }
 
-        if meta.shuffle_bucket == -1 {
-            return Err(ErrorCode::BadBytes(
-                "Row-shuffled spilled aggregate transport is unsupported",
-            ));
-        }
-
         Ok(Some(DataBlock::empty_with_meta(
             AggregateMeta::create_partitioned(None, PartitionedData::BucketSpilled(payloads)),
         )))
@@ -326,11 +296,11 @@ impl ExchangeDataCodec for AggregateExchangeDataCodec {
                     self.validate_state_schema(&block)?;
                 }
                 Ok(Some(DataBlock::empty_with_meta(
-                    AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
+                    AggregateMeta::create_serialized(meta.bucket, block),
                 )))
             }
             PARTITIONED_AGGREGATE_TYPE => self.decode_partitioned_payload(&meta, block),
-            SPILLED_TYPE => self.decode_spilled(&meta, block),
+            SPILLED_TYPE => self.decode_spilled(block),
             other => Err(ErrorCode::BadBytes(format!(
                 "Unknown aggregate transport metadata type {other}"
             ))),
@@ -398,7 +368,6 @@ mod tests {
         let serialized = ExpressionSerializedPayload {
             bucket: 7,
             data_block: DataBlock::new_from_columns(vec![Int64Type::from_data(values)]),
-            max_partition_count: 8,
         };
         let payload = serialized
             .convert_to_single_payload(
@@ -410,11 +379,7 @@ mod tests {
             .unwrap();
 
         DataBlock::empty_with_meta(Box::new(AggregateMeta::AggregatePayload(
-            AggregatePayload {
-                bucket: 7,
-                payload,
-                max_partition_count: 8,
-            },
+            AggregatePayload { bucket: 7, payload },
         )))
     }
 
@@ -447,7 +412,6 @@ mod tests {
             .unwrap();
         assert_eq!(serde_meta.typ, BUCKET_TYPE);
         assert_eq!(serde_meta.bucket, 7);
-        assert_eq!(serde_meta.max_partition_count, 8);
         assert!(!serde_meta.is_empty);
 
         let transport = flight_round_trip(transport, &params.spill_schema());
@@ -460,7 +424,6 @@ mod tests {
             panic!("expected serialized aggregate payload")
         };
         assert_eq!(restored.bucket, 7);
-        assert_eq!(restored.max_partition_count, 8);
         assert_eq!(restored.data_block.num_rows(), 3);
         let column = restored.data_block.get_by_offset(0).to_column();
         let values = Int64Type::try_downcast_column(&column).unwrap();
@@ -478,11 +441,7 @@ mod tests {
             None,
         );
         let block = DataBlock::empty_with_meta(Box::new(AggregateMeta::AggregatePayload(
-            AggregatePayload {
-                bucket: 3,
-                payload,
-                max_partition_count: 0,
-            },
+            AggregatePayload { bucket: 3, payload },
         )));
 
         let transport = codec.encode(block).unwrap().unwrap();
@@ -513,7 +472,6 @@ mod tests {
         let serialized = ExpressionSerializedPayload {
             bucket: 2,
             data_block: DataBlock::new_from_columns(vec![group_column.clone()]),
-            max_partition_count: 4,
         };
         let payload = serialized
             .convert_to_single_payload(
@@ -524,11 +482,7 @@ mod tests {
             )
             .unwrap();
         let block = DataBlock::empty_with_meta(Box::new(AggregateMeta::AggregatePayload(
-            AggregatePayload {
-                bucket: 2,
-                payload,
-                max_partition_count: 4,
-            },
+            AggregatePayload { bucket: 2, payload },
         )));
 
         let transport = codec.encode(block).unwrap().unwrap();
@@ -581,7 +535,6 @@ mod tests {
             .add_meta(Some(AggregateSerdeMeta::create_partitioned_payload(
                 vec![4, 9],
                 vec![2, 1],
-                false,
             )))
             .unwrap();
 
@@ -662,7 +615,6 @@ mod tests {
             .add_meta(Some(AggregateSerdeMeta::create_partitioned_payload(
                 vec![1],
                 vec![3],
-                false,
             )))
             .unwrap();
         let error = codec.decode(block).unwrap_err();
@@ -673,7 +625,7 @@ mod tests {
     fn test_rejects_transport_schema_mismatch() {
         let codec = AggregateExchangeDataCodec::create(params());
         let block = DataBlock::new_from_columns(vec![StringType::from_data(vec!["wrong"])])
-            .add_meta(Some(AggregateSerdeMeta::create_agg_payload(0, 0, false)))
+            .add_meta(Some(AggregateSerdeMeta::create_agg_payload(0, false)))
             .unwrap();
         let error = codec.decode(block).unwrap_err();
         assert!(error.message().contains("schema mismatch"));

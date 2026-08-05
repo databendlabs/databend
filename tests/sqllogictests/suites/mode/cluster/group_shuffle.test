@@ -1,6 +1,11 @@
 statement ok
 set group_by_shuffle_mode = 'before_partial';
 
+query II
+SELECT count(), sum(number) FROM numbers_mt(1000);
+----
+1000 499500
+
 query T
 EXPLAIN SELECT number FROM numbers_mt(100000) GROUP BY number;
 ----
@@ -29,6 +34,35 @@ Exchange
                 ├── partitions scanned: 2
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 100000.00
+
+query I
+SELECT COUNT() FROM (
+    SELECT if(number % 5 = 0, NULL, number % 3) AS nullable_key
+    FROM numbers_mt(1000)
+    GROUP BY nullable_key
+);
+----
+4
+
+query TIII rowsort
+SELECT to_string(number % 2) AS string_key, number % 3 AS numeric_key,
+       count(), sum(number)
+FROM numbers_mt(12)
+GROUP BY string_key, numeric_key;
+----
+0 0 2 6
+0 1 2 14
+0 2 2 10
+1 0 2 12
+1 1 2 8
+1 2 2 16
+
+query I
+SELECT COUNT() FROM (
+    SELECT number FROM numbers_mt(1000) WHERE number < 0 GROUP BY number
+);
+----
+0
 
 
 statement ok
@@ -62,3 +96,47 @@ Exchange
                 ├── partitions scanned: 2
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 100000.00
+
+query I
+SELECT COUNT() FROM (
+    SELECT if(number % 5 = 0, NULL, number % 3) AS nullable_key
+    FROM numbers_mt(1000)
+    GROUP BY nullable_key
+);
+----
+4
+
+query TIII rowsort
+SELECT to_string(number % 2) AS string_key, number % 3 AS numeric_key,
+       count(), sum(number)
+FROM numbers_mt(12)
+GROUP BY string_key, numeric_key;
+----
+0 0 2 6
+0 1 2 14
+0 2 2 10
+1 0 2 12
+1 1 2 8
+1 2 2 16
+
+query I
+SELECT COUNT() FROM (
+    SELECT number FROM numbers_mt(1000) WHERE number < 0 GROUP BY number
+);
+----
+0
+
+statement ok
+set force_aggregate_data_spill = 1;
+
+query I
+SELECT COUNT() FROM (
+    SELECT number::string, count()
+    FROM numbers_mt(100000)
+    GROUP BY number::string
+);
+----
+100000
+
+statement ok
+unset force_aggregate_data_spill;

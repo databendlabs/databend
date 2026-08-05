@@ -30,8 +30,6 @@ use crate::types::DataType;
 pub struct SerializedPayload {
     pub bucket: isize,
     pub data_block: DataBlock,
-    // use for new agg_hashtable
-    pub max_partition_count: usize,
 }
 
 impl SerializedPayload {
@@ -112,12 +110,4 @@ impl SerializedPayload {
 pub struct AggregatePayload {
     pub bucket: isize,
     pub payload: Payload,
-    // use for new agg_hashtable
-    pub max_partition_count: usize,
-}
-
-impl AggregatePayload {
-    pub fn exchange_block_number(&self) -> isize {
-        self.max_partition_count as isize * 1000 + self.bucket
-    }
 }
