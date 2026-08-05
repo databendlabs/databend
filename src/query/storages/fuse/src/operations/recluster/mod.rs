@@ -155,6 +155,14 @@ impl FuseTable {
                 })
                 .collect::<Vec<_>>();
 
+            // Count only stable windows inherited from the previous round. Windows found by the
+            // verification scan below are not counted until another `do_recluster` call, so
+            // clearing this cache can trigger at most one immediate retry of the current range.
+            let cached_stable_window_count = valid_carry
+                .iter()
+                .filter(|window| !window.has_tasks())
+                .count();
+            let has_cached_stable_windows = cached_stable_window_count > 0;
             let scan_start = carry.scan_cursor.min(number_segments);
             let scan_end = scan_start.saturating_add(chunk_size).min(number_segments);
 
@@ -401,27 +409,33 @@ impl FuseTable {
             recluster_blocks_count += block_count;
 
             if !parts.is_empty() {
-                // Keep unselected windows as coverage for this fixed FINAL scan range.
-                // A successful task consumes only the selected window. We intentionally do
-                // not invalidate unrelated probed windows for overlaps with newly written
-                // segments; doing so would turn FINAL into an expensive fixed-point rescan
-                // over its own intermediate output.
+                // Keep unselected windows as best-effort continuation state for this scan range.
+                // Empty windows cache stable probes while other tasks are still being rewritten.
+                // Once real tasks are exhausted, the branch below drops this cache and verifies the
+                // whole range once against the latest snapshot before declaring it stable.
                 carry.pending = pending_windows;
                 carry.scan_cursor = scan_start;
                 break parts;
             }
 
-            // Step 5: stable range, advance to the next fixed scan range.
+            if has_cached_stable_windows {
+                debug!(
+                    "recluster: verify candidate range without stable-window cache scan_start={} scan_end={} stable_windows={}",
+                    scan_start, scan_end, cached_stable_window_count,
+                );
+                carry.pending.clear();
+                continue;
+            }
+
+            // Step 5: stable range, advance to the next scan range.
             carry.pending.clear();
-            let next_scan_start = scan_end;
-            carry.scan_cursor = next_scan_start;
+            carry.scan_cursor = scan_end;
             debug!(
-                "recluster: candidate stable chunk advanced next_scan_start={} number_segments={}",
-                next_scan_start, number_segments,
+                "recluster: candidate stable range advanced next_scan_start={} number_segments={}",
+                scan_end, number_segments,
             );
             // LIMIT stops after the first non-pruned scan range.
-            if next_scan_start >= number_segments || (limit.is_some() && scan_had_compact_segments)
-            {
+            if scan_end >= number_segments || (limit.is_some() && scan_had_compact_segments) {
                 break parts;
             }
         };

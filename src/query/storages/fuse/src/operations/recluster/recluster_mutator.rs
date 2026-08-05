@@ -96,6 +96,11 @@ impl ReclusterCandidateWindow {
         self.tasks.len()
     }
 
+    /// Whether this window contains any rewrite or repack task.
+    pub(crate) fn has_tasks(&self) -> bool {
+        !self.tasks.is_empty()
+    }
+
     /// Score of one task candidate by index.
     pub fn task_score(&self, task_idx: usize) -> CandidateScore {
         self.tasks[task_idx].score
