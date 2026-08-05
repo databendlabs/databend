@@ -229,7 +229,7 @@ fn register_bucket(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<u64>, StringType, NumberType<u32>>(
                 |buckets, value, output, ctx| {
-                    output.push(bucket(buckets, value, output.len(), ctx));
+                    output.push(bucket(buckets, value.as_bytes(), output.len(), ctx));
                 },
             ),
         );
@@ -239,7 +239,7 @@ fn register_bucket(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<u64>, DateType, NumberType<u32>>(
                 |buckets, value, output, ctx| {
-                    output.push(bucket(buckets, &value, output.len(), ctx));
+                    output.push(bucket(buckets, &value.to_le_bytes(), output.len(), ctx));
                 },
             ),
         );
@@ -254,7 +254,12 @@ fn register_bucket(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<NumberType<u64>, TimestampType, NumberType<u32>>(
             |buckets, value, output, ctx| {
-                output.push(bucket(buckets, &value, output.len(), ctx));
+                output.push(bucket(
+                    buckets,
+                    &value.to_le_bytes(),
+                    output.len(),
+                    ctx,
+                ));
             },
         ),
     );
@@ -275,7 +280,12 @@ fn register_bucket(registry: &mut FunctionRegistry) {
                         NumberType<NUM_TYPE>,
                         NumberType<u32>,
                     >(|buckets, value, output, ctx| {
-                        output.push(bucket(buckets, &value, output.len(), ctx));
+                        output.push(bucket(
+                            buckets,
+                            &value.to_le_bytes(),
+                            output.len(),
+                            ctx,
+                        ));
                     }),
                 );
             }
@@ -284,9 +294,9 @@ fn register_bucket(registry: &mut FunctionRegistry) {
     }
 }
 
-fn bucket<T: DFHash + ?Sized>(
+fn bucket(
     buckets: u64,
-    value: &T,
+    value: &[u8],
     row: usize,
     ctx: &mut databend_common_expression::EvalContext,
 ) -> u32 {
@@ -299,7 +309,15 @@ fn bucket<T: DFHash + ?Sized>(
         return 0;
     }
 
-    (siphash64(value) % buckets as u64) as u32
+    (bucket_hash_v1(value) % buckets as u64) as u32
+}
+
+fn bucket_hash_v1(value: &[u8]) -> u64 {
+    // bucket() values are persisted in partition metadata. Keep this byte-level
+    // encoding stable; incompatible changes require a new bucket hash version.
+    let mut hasher = SipHasher13::new_with_keys(0, 0);
+    hasher.write(value);
+    hasher.finish()
 }
 
 fn siphash64<T: DFHash + ?Sized>(value: &T) -> u64 {
@@ -540,5 +558,45 @@ impl DFHash for Scalar {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bucket_hash_v1;
+
+    #[test]
+    fn test_bucket_hash_v1_vectors() {
+        // Empty and non-ASCII UTF-8 strings.
+        assert_eq!(bucket_hash_v1(b""), 15130871412783076140);
+        assert_eq!(bucket_hash_v1("ß😀山".as_bytes()), 1354619631122873228);
+
+        // Signed integer bounds.
+        assert_eq!(
+            bucket_hash_v1(&i64::MIN.to_le_bytes()),
+            17224059632725561478
+        );
+        assert_eq!(
+            bucket_hash_v1(&i64::MAX.to_le_bytes()),
+            18405982038362582983
+        );
+
+        // Date and timestamp bounds encoded as their physical i32/i64 values.
+        assert_eq!(
+            bucket_hash_v1(&(-719162_i32).to_le_bytes()),
+            4812557028459763710
+        );
+        assert_eq!(
+            bucket_hash_v1(&2932896_i32.to_le_bytes()),
+            17155122806027163509
+        );
+        assert_eq!(
+            bucket_hash_v1(&(-62135596800000000_i64).to_le_bytes()),
+            13147438665158489210
+        );
+        assert_eq!(
+            bucket_hash_v1(&253402300799999999_i64.to_le_bytes()),
+            13643266700336644080
+        );
     }
 }
