@@ -478,37 +478,40 @@ impl FuseTable {
         pruning_ctx: Arc<PruningContext>,
         segment_pruner: Arc<SegmentPruner>,
         max_concurrency: usize,
-        mut segment_locs: Vec<SegmentLocation>,
+        segment_locs: Vec<SegmentLocation>,
     ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
         if segment_locs.is_empty() {
             return Ok(Vec::new());
         }
 
-        let mut remain = segment_locs.len() % max_concurrency;
-        let batch_size = segment_locs.len() / max_concurrency;
-        let mut works = Vec::with_capacity(max_concurrency);
+        // Keep segment metadata pruning bounded for large snapshot ranges. Results are accumulated
+        // in input order so strategy tie-breaking remains deterministic across pruning waves.
+        let wave_size = max_concurrency.saturating_mul(4).max(1);
+        let mut metas = Vec::new();
+        let mut segment_locs = segment_locs.into_iter();
+        loop {
+            let wave = segment_locs.by_ref().take(wave_size).collect::<Vec<_>>();
+            if wave.is_empty() {
+                break;
+            }
 
-        while !segment_locs.is_empty() {
-            let gap_size = std::cmp::min(1, remain);
-            let batch_size = batch_size + gap_size;
-            remain -= gap_size;
+            let worker_count = max_concurrency.min(wave.len()).max(1);
+            let batch_size = wave.len().div_ceil(worker_count);
+            let works = wave.chunks(batch_size).map(|batch| {
+                pruning_ctx.pruning_runtime.spawn({
+                    let segment_pruner = segment_pruner.clone();
+                    let batch = batch.to_vec();
+                    async move {
+                        let pruned_segments = segment_pruner.pruning(batch).await?;
+                        Result::<_>::Ok(pruned_segments)
+                    }
+                })
+            });
 
-            let batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(pruning_ctx.pruning_runtime.spawn({
-                let segment_pruner = segment_pruner.clone();
-
-                async move {
-                    let pruned_segments = segment_pruner.pruning(batch).await?;
-                    Result::<_>::Ok(pruned_segments)
-                }
-            }));
-        }
-
-        let mut metas = vec![];
-        let workers = futures::future::try_join_all(works).await?;
-        for worker in workers {
-            let res = worker?;
-            metas.extend(res);
+            let workers = futures::future::try_join_all(works).await?;
+            for worker in workers {
+                metas.extend(worker?);
+            }
         }
 
         Ok(metas)
