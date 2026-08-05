@@ -44,7 +44,6 @@ use databend_common_expression::infer_schema_type;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
-use itertools::Itertools;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
@@ -64,6 +63,39 @@ use crate::binder::window::WindowInfo;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::ScalarExpr;
+
+#[derive(Clone, Copy)]
+pub struct AliasLookup<'a> {
+    aliases: &'a [(String, ScalarExpr)],
+    indices: Option<&'a [usize]>,
+}
+
+impl<'a> AliasLookup<'a> {
+    pub fn all(aliases: &'a [(String, ScalarExpr)]) -> Self {
+        Self {
+            aliases,
+            indices: None,
+        }
+    }
+
+    pub fn indexed(aliases: &'a [(String, ScalarExpr)], indices: &'a [usize]) -> Self {
+        Self {
+            aliases,
+            indices: Some(indices),
+        }
+    }
+
+    fn len(self) -> usize {
+        self.indices.map_or(self.aliases.len(), <[usize]>::len)
+    }
+
+    fn iter(self) -> impl Iterator<Item = &'a (String, ScalarExpr)> {
+        (0..self.len()).map(move |index| {
+            let index = self.indices.map_or(index, |indices| indices[index]);
+            &self.aliases[index]
+        })
+    }
+}
 
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
@@ -124,6 +156,26 @@ pub enum NameResolutionResult {
     Column(ColumnBinding),
     InternalColumn(InternalColumnBinding),
     Alias { alias: String, scalar: ScalarExpr },
+}
+
+#[derive(Default)]
+struct NameResolutionCandidates {
+    first: Option<NameResolutionResult>,
+    ambiguous: bool,
+}
+
+impl NameResolutionCandidates {
+    fn push(&mut self, candidate: NameResolutionResult) {
+        match &self.first {
+            Some(first) if first != &candidate => self.ambiguous = true,
+            Some(_) => {}
+            None => self.first = Some(candidate),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.first.is_none()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -406,7 +458,7 @@ impl BindContext {
         database: Option<&str>,
         table: Option<&str>,
         column: &Identifier,
-        available_aliases: &[(String, ScalarExpr)],
+        available_aliases: AliasLookup<'_>,
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionResult> {
         let result = self.resolve_name_candidates(
@@ -424,8 +476,8 @@ impl BindContext {
         database: Option<&str>,
         table: Option<&str>,
         column: &Identifier,
-        available_aliases: &[(String, ScalarExpr)],
-        fallback_aliases: Option<&[(String, ScalarExpr)]>,
+        available_aliases: AliasLookup<'_>,
+        fallback_aliases: Option<AliasLookup<'_>>,
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionResult> {
         let mut result = self.resolve_name_candidates(
@@ -455,9 +507,9 @@ impl BindContext {
         database: Option<&str>,
         table: Option<&str>,
         column: &Identifier,
-        available_aliases: &[(String, ScalarExpr)],
+        available_aliases: AliasLookup<'_>,
         name_resolution_ctx: &NameResolutionContext,
-    ) -> Result<Vec<NameResolutionResult>> {
+    ) -> Result<NameResolutionCandidates> {
         let name = &column.name;
         let column_case_sensitive = name_resolution_ctx.is_case_sensitive(column);
         if name_resolution_ctx.deny_column_reference {
@@ -471,9 +523,8 @@ impl BindContext {
             return Err(err.set_span(column.span));
         }
 
-        let mut result = vec![];
+        let mut result = NameResolutionCandidates::default();
         // Lookup parent context to resolve outer reference.
-        let mut alias_match_count = 0;
         if !self.expr_context.allow_resolve_alias() {
             self.search_bound_columns_recursively(
                 database,
@@ -483,18 +534,16 @@ impl BindContext {
                 &mut result,
             );
         } else if self.expr_context.prefer_resolve_alias() {
-            for (alias, scalar) in available_aliases {
+            for (alias, scalar) in available_aliases.iter() {
                 if database.is_none() && table.is_none() && name == alias {
                     result.push(NameResolutionResult::Alias {
                         alias: alias.clone(),
                         scalar: scalar.clone(),
                     });
-
-                    alias_match_count += 1;
                 }
             }
 
-            if alias_match_count == 0 {
+            if result.is_empty() {
                 self.search_bound_columns_recursively(
                     database,
                     table,
@@ -513,7 +562,7 @@ impl BindContext {
             );
 
             if result.is_empty() {
-                for (alias, scalar) in available_aliases {
+                for (alias, scalar) in available_aliases.iter() {
                     if database.is_none() && table.is_none() && name == alias {
                         result.push(NameResolutionResult::Alias {
                             alias: alias.clone(),
@@ -529,17 +578,19 @@ impl BindContext {
 
     fn finish_resolve_name(
         column: &Identifier,
-        mut result: Vec<NameResolutionResult>,
+        result: NameResolutionCandidates,
     ) -> Result<NameResolutionResult> {
         let name = &column.name;
-        if result.len() > 1 && !result.iter().all_equal() {
+        if result.ambiguous {
             return Err(ErrorCode::SemanticError(format!(
                 "column {name} reference or alias is ambiguous, please use another alias name",
             ))
             .set_span(column.span));
         }
 
-        if result.is_empty() {
+        if let Some(result) = result.first {
+            Ok(result)
+        } else {
             let err = if column.is_quoted() {
                 ErrorCode::SemanticError(format!(
                     "column {name} doesn't exist, do you mean '{name}'?"
@@ -548,8 +599,6 @@ impl BindContext {
                 ErrorCode::SemanticError(format!("column {name} doesn't exist"))
             };
             Err(err.set_span(column.span))
-        } else {
-            Ok(result.remove(0))
         }
     }
 
@@ -584,13 +633,13 @@ impl BindContext {
 
     // Search bound column recursively from the parent context.
     // If current context found results, it'll stop searching.
-    pub fn search_bound_columns_recursively(
+    fn search_bound_columns_recursively(
         &self,
         database: Option<&str>,
         table: Option<&str>,
         column: &Identifier,
         column_case_sensitive: bool,
-        result: &mut Vec<NameResolutionResult>,
+        result: &mut NameResolutionCandidates,
     ) {
         let mut bind_context: &BindContext = self;
         loop {
@@ -621,7 +670,7 @@ impl BindContext {
         table: Option<&str>,
         column: &Identifier,
         column_case_sensitive: bool,
-        result: &mut Vec<NameResolutionResult>,
+        result: &mut NameResolutionCandidates,
     ) {
         for column_binding in bind_context.columns.iter() {
             if let Some(lower) = &column_binding.column_name_lower {
@@ -958,18 +1007,16 @@ impl BindContext {
                         let next_virtual_column_id = virtual_schema
                             .map(|virtual_schema| virtual_schema.next_column_id)
                             .unwrap_or(VIRTUAL_COLUMN_ID_START);
-                        let exists_virtual_columns =
-                            metadata.virtual_columns_by_table_index(table_index);
-                        let mut max_column_id = next_virtual_column_id.saturating_sub(1);
-                        for exists_virtual_column in exists_virtual_columns {
-                            if let ColumnEntry::VirtualColumn(VirtualColumn { column_id, .. }) =
-                                exists_virtual_column
-                            {
-                                if column_id > max_column_id {
-                                    max_column_id = column_id;
+                        let max_column_id = metadata
+                            .virtual_columns_by_table_index(table_index)
+                            .filter_map(|column| match column {
+                                ColumnEntry::VirtualColumn(VirtualColumn { column_id, .. }) => {
+                                    Some(*column_id)
                                 }
-                            }
-                        }
+                                _ => None,
+                            })
+                            .max()
+                            .unwrap_or_else(|| next_virtual_column_id.saturating_sub(1));
                         if max_column_id >= next_virtual_column_id {
                             max_column_id + 1
                         } else {
