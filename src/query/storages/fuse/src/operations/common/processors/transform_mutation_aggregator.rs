@@ -722,31 +722,31 @@ impl TableMutationAggregator {
         );
         let extended_merged_blocks = std::mem::take(&mut self.merged_blocks);
         let mut new_merged_blocks = Vec::with_capacity(extended_merged_blocks.len());
-        for extended_block_meta in extended_merged_blocks.into_iter() {
-            let new_block_meta = if let Some(draft_virtual_block_meta) =
-                &extended_block_meta.draft_virtual_block_meta
+        for extended_block_meta in extended_merged_blocks {
+            let ExtendedBlockMeta {
+                mut block_meta,
+                draft_virtual_block_meta,
+                column_hlls,
+                ..
+            } = Arc::unwrap_or_clone(extended_block_meta);
+
+            if let Some(draft_virtual_block_meta) = draft_virtual_block_meta
+                && let Some(ref mut virtual_column_accumulator) = virtual_column_accumulator
             {
-                let mut new_block_meta = extended_block_meta.block_meta.clone();
+                // Generate ColumnId for virtual columns. Consume the side-car metadata so the
+                // common recluster path can move serialized HLL bytes without cloning them.
+                let virtual_column_metas = virtual_column_accumulator
+                    .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
 
-                if let Some(ref mut virtual_column_accumulator) = virtual_column_accumulator {
-                    // generate ColumnId for virtual columns.
-                    let virtual_column_metas = virtual_column_accumulator
-                        .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
+                block_meta.virtual_block_meta = Some(VirtualBlockMeta {
+                    virtual_column_metas,
+                    virtual_column_size: draft_virtual_block_meta.virtual_column_size,
+                    virtual_location: draft_virtual_block_meta.virtual_location,
+                });
+            }
 
-                    let virtual_block_meta = VirtualBlockMeta {
-                        virtual_column_metas,
-                        virtual_column_size: draft_virtual_block_meta.virtual_column_size,
-                        virtual_location: draft_virtual_block_meta.virtual_location.clone(),
-                    };
-                    new_block_meta.virtual_block_meta = Some(virtual_block_meta);
-                }
-                Arc::new(new_block_meta)
-            } else {
-                Arc::new(extended_block_meta.block_meta.clone())
-            };
-            let column_hlls =
-                BlockHLLState::encode_column_hll(extended_block_meta.column_hlls.clone())?;
-            new_merged_blocks.push((new_block_meta, column_hlls));
+            let column_hlls = BlockHLLState::encode_column_hll(column_hlls)?;
+            new_merged_blocks.push((Arc::new(block_meta), column_hlls));
         }
 
         self.virtual_schema = if let Some(virtual_column_accumulator) = virtual_column_accumulator {
