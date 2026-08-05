@@ -205,11 +205,13 @@ impl AddStreamColumn {
                 span: None,
                 func_name: "if".to_string(),
                 params: vec![],
+                return_type: None,
                 arguments: vec![
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: None,
                         func_name: "is_not_null".to_string(),
                         params: vec![],
+                        return_type: None,
                         arguments: vec![origin_stream_column_scalar_expr.clone()],
                     }),
                     origin_stream_column_scalar_expr,

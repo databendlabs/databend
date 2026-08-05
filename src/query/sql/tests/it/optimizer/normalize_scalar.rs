@@ -98,6 +98,7 @@ fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> Scala
             span: None,
             func_name: name.clone(),
             params: params.clone(),
+            return_type: None,
             arguments: args
                 .iter()
                 .map(|arg| raw_expr_to_scalar(arg, columns))

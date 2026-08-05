@@ -693,6 +693,7 @@ impl<'a> InferFilterOptimizer<'a> {
                     span: None,
                     func_name: String::from(predicate.op.to_func_name()),
                     params: vec![],
+                    return_type: None,
                     arguments: vec![
                         expr.clone(),
                         ScalarExpr::ConstantExpr(predicate.constant.clone()),
@@ -715,6 +716,7 @@ impl<'a> InferFilterOptimizer<'a> {
                                 span: None,
                                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                                 params: vec![],
+                                return_type: None,
                                 arguments: vec![
                                     self.exprs[equal_indexes[i]].clone(),
                                     self.exprs[equal_indexes[j]].clone(),

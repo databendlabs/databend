@@ -616,6 +616,7 @@ impl RuleEliminateSelfJoin {
                 span: None,
                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                 params: vec![],
+                return_type: None,
                 arguments: vec![cond.left, cond.right],
             }));
         }

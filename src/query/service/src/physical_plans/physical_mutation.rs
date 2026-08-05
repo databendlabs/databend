@@ -900,6 +900,7 @@ pub fn generate_update_list(
                     span: None,
                     func_name: "if".to_string(),
                     params: vec![],
+                    return_type: None,
                     arguments: vec![predicate.clone(), left, right],
                 })
             };
@@ -987,6 +988,7 @@ pub fn mutation_update_expr(
                 span: None,
                 func_name: "if".to_string(),
                 params: vec![],
+                return_type: None,
                 arguments: vec![predicate.clone(), left, right],
             });
             let expr = scalar

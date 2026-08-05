@@ -823,6 +823,7 @@ impl SubqueryDecorrelatorOptimizer {
                                 span: subquery.span,
                                 func_name: "contains".to_string(),
                                 params: vec![],
+                                return_type: None,
                                 arguments,
                             });
                             return Ok(Some(func));
@@ -838,6 +839,7 @@ impl SubqueryDecorrelatorOptimizer {
                                 span: subquery.span,
                                 func_name: "eq".to_string(),
                                 params: vec![],
+                                return_type: None,
                                 arguments: vec![*child_expr.clone(), scalar_value],
                             });
                             funcs.push(func);
@@ -852,6 +854,7 @@ impl SubqueryDecorrelatorOptimizer {
                                             span: subquery.span,
                                             func_name: "or".to_string(),
                                             params: vec![],
+                                            return_type: None,
                                             arguments: vec![acc.clone(), func],
                                         });
                                     }

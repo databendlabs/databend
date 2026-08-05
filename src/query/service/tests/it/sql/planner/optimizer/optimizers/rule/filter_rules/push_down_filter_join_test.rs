@@ -217,12 +217,14 @@ fn is_null(expr: ScalarExpr) -> ScalarExpr {
         span: None,
         func_name: "is_not_null".to_string(),
         params: vec![],
+        return_type: None,
         arguments: vec![expr],
     });
     ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "not".to_string(),
         params: vec![],
+        return_type: None,
         arguments: vec![is_not_null],
     })
 }

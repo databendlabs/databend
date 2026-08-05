@@ -1033,6 +1033,7 @@ impl AggIndexRewriter {
                                 span: None,
                                 func_name: "eq".to_string(),
                                 params: vec![],
+                                return_type: None,
                                 arguments: vec![new_scalar.clone(), lower_val_scalar],
                             });
                             new_predicates.push(pred);
@@ -1049,6 +1050,7 @@ impl AggIndexRewriter {
                             span: None,
                             func_name: func_name.to_string(),
                             params: vec![],
+                            return_type: None,
                             arguments: vec![new_scalar.clone(), lower_val_scalar],
                         });
                         new_predicates.push(pred);
@@ -1062,6 +1064,7 @@ impl AggIndexRewriter {
                             span: None,
                             func_name: func_name.to_string(),
                             params: vec![],
+                            return_type: None,
                             arguments: vec![new_scalar.clone(), upper_val_scalar],
                         });
                         new_predicates.push(pred);

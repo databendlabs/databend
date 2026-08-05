@@ -989,6 +989,7 @@ impl<'a> JoinConditionResolver<'a> {
                     span: *span,
                     func_name: ASOF_USING_RANGE_FUNC.to_string(),
                     params: vec![],
+                    return_type: None,
                     arguments: vec![left_scalar, right_scalar],
                 }));
             } else {

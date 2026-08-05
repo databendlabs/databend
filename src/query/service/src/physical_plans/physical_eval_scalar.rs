@@ -399,6 +399,7 @@ impl PhysicalPlanBuilder {
                         span: srf_func.span,
                         func_name: srf_func.func_name.clone(),
                         params: visitor.params.into_iter().collect::<Vec<_>>(),
+                        return_type: None,
                         arguments: srf_func.arguments.clone(),
                     });
                 }

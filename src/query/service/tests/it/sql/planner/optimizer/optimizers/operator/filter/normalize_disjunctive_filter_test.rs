@@ -552,6 +552,7 @@ fn test_empty_or_arguments() -> anyhow::Result<()> {
         span: None,
         func_name: "or".to_string(),
         params: vec![],
+        return_type: None,
         arguments: vec![],
     });
 
@@ -599,6 +600,7 @@ fn test_single_or_argument() -> anyhow::Result<()> {
         span: None,
         func_name: "or".to_string(),
         params: vec![],
+        return_type: None,
         arguments: vec![a],
     });
 
@@ -822,6 +824,7 @@ fn test_normalize_predicate_scalar_boundary() -> anyhow::Result<()> {
         span: None,
         func_name: "and".to_string(),
         params: vec![],
+        return_type: None,
         arguments: vec![a.clone()],
     });
 

@@ -467,6 +467,7 @@ mod tests {
                     span: None,
                     func_name: "plus".to_string(),
                     params: vec![],
+                    return_type: None,
                     arguments: vec![
                         column_with_type(0, nullable_int.clone()),
                         typed_int_constant(10, nullable_int),

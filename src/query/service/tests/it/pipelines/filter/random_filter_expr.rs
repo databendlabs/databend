@@ -107,6 +107,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 span: None,
                 func_name: "and".to_string(),
                 params: vec![],
+                return_type: None,
                 arguments: and_args,
             })
         }
@@ -120,6 +121,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 span: None,
                 func_name: "or".to_string(),
                 params: vec![],
+                return_type: None,
                 arguments: or_args,
             })
         }
@@ -129,6 +131,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 span: None,
                 func_name: "not".to_string(),
                 params: vec![],
+                return_type: None,
                 arguments: vec![child_expr],
             })
         }
@@ -161,6 +164,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 span: None,
                 func_name: op.to_string(),
                 params: vec![],
+                return_type: None,
                 arguments: vec![scalar_expr.clone(), scalar_expr],
             })
         }

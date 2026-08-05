@@ -230,6 +230,7 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
                 span: None,
                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                 params: vec![],
+                return_type: None,
                 arguments: vec![left, right],
             }));
         }

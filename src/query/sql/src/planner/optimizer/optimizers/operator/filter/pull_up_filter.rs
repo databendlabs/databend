@@ -129,6 +129,7 @@ impl PullUpFilterOptimizer {
                     span: None,
                     func_name: "eq".to_string(),
                     params: vec![],
+                    return_type: None,
                     arguments: vec![condition.left, condition.right],
                 });
                 self.predicates.push(predicate);

@@ -401,6 +401,7 @@ where A: TypeCheckAdapter
             span: func.span,
             func_name: "to_variant".to_string(),
             params: vec![],
+            return_type: None,
             arguments: vec![constant_arg.clone()],
         });
         let mut new_arguments = func.arguments.clone();
@@ -410,6 +411,7 @@ where A: TypeCheckAdapter
             span: func.span,
             func_name: func.func_name.clone(),
             params: func.params.clone(),
+            return_type: Some(Box::new(data_type.clone())),
             arguments: new_arguments,
         });
 
@@ -653,15 +655,17 @@ where A: TypeCheckAdapter
             folded_args.swap(0, 1);
         }
 
+        let return_type = expr.data_type().clone();
         Ok(Box::new((
             FunctionCall {
                 span,
                 params,
                 arguments: folded_args,
                 func_name: func_name.to_string(),
+                return_type: Some(Box::new(return_type.clone())),
             }
             .into(),
-            expr.data_type().clone(),
+            return_type,
         )))
     }
 }

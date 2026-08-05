@@ -114,6 +114,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
                 span: None,
                 func_name: "and_filters".to_string(),
                 params: vec![],
+                return_type: None,
                 arguments: args.into_iter().map(normalize_predicate_scalar).collect(),
             })
         }
@@ -123,6 +124,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
                 span: None,
                 func_name: "or_filters".to_string(),
                 params: vec![],
+                return_type: None,
                 arguments: args.into_iter().map(normalize_predicate_scalar).collect(),
             })
         }
@@ -156,6 +158,7 @@ mod tests {
             span: None,
             func_name: func_name.to_string(),
             params: vec![],
+            return_type: None,
             arguments: vec![lhs, rhs],
         })
     }

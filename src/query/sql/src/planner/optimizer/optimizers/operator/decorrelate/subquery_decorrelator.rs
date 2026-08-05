@@ -525,6 +525,7 @@ impl SubqueryDecorrelatorOptimizer {
                         span: subquery.span,
                         func_name: "is_not_null".to_string(),
                         params: vec![],
+                        return_type: None,
                         arguments: vec![column_ref.clone()],
                     });
                     let cast_column_ref_to_uint64 = ScalarExpr::CastExpr(CastExpr {
@@ -546,6 +547,7 @@ impl SubqueryDecorrelatorOptimizer {
                             span: subquery.span,
                             func_name: "if".to_string(),
                             params: vec![],
+                            return_type: None,
                             arguments: vec![is_not_null, cast_column_ref_to_uint64, zero],
                         })),
                         target_type: Box::new(
@@ -559,10 +561,12 @@ impl SubqueryDecorrelatorOptimizer {
                         span: subquery.span,
                         func_name: "not".to_string(),
                         params: vec![],
+                        return_type: None,
                         arguments: vec![ScalarExpr::FunctionCall(FunctionCall {
                             span: subquery.span,
                             func_name: "is_true".to_string(),
                             params: vec![],
+                            return_type: None,
                             arguments: vec![column_ref],
                         })],
                     })
@@ -572,6 +576,7 @@ impl SubqueryDecorrelatorOptimizer {
                         span: subquery.span,
                         func_name: "is_true".to_string(),
                         params: vec![],
+                        return_type: None,
                         arguments: vec![column_ref],
                     })
                 } else {
@@ -648,6 +653,7 @@ impl SubqueryDecorrelatorOptimizer {
                         "noteq".to_string()
                     },
                     params: vec![],
+                    return_type: None,
                     arguments: vec![
                         BoundColumnRef {
                             span: subquery.span,

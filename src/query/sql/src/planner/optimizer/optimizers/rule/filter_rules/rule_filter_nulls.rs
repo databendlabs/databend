@@ -182,6 +182,7 @@ fn join_key_null_filter(key: &ScalarExpr) -> ScalarExpr {
         span: None,
         func_name: "is_not_null".to_string(),
         params: vec![],
+        return_type: None,
         arguments: vec![key.clone()],
     })
 }

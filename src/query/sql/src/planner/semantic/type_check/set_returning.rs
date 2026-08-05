@@ -121,13 +121,18 @@ where A: super::TypeCheckAdapter
         self.bind_context.expr_context = original_context;
         let (arguments, _) = arguments_result?;
 
-        let srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
+        let mut srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
             span,
             func_name: func_name.to_string(),
             params: vec![],
+            return_type: None,
             arguments,
         });
         let srf_expr = srf_scalar.as_expr()?;
+        let srf_return_type = srf_expr.data_type().clone();
+        if let ScalarExpr::FunctionCall(function) = &mut srf_scalar {
+            function.return_type = Some(Box::new(srf_return_type.clone()));
+        }
         let srf_tuple_types = srf_expr.data_type().as_tuple().ok_or_else(|| {
             ErrorCode::Internal(format!(
                 "The return type of srf should be tuple, but got {}",
@@ -136,12 +141,13 @@ where A: super::TypeCheckAdapter
         })?;
 
         let (return_scalar, return_type) = if srf_tuple_types.len() > 1 {
-            (srf_scalar, srf_expr.data_type().clone())
+            (srf_scalar, srf_return_type)
         } else {
             let child_scalar = ScalarExpr::FunctionCall(FunctionCall {
                 span,
                 func_name: "get".to_string(),
                 params: vec![Scalar::Number(NumberScalar::Int64(1))],
+                return_type: Some(Box::new(srf_tuple_types[0].clone())),
                 arguments: vec![srf_scalar],
             });
             (child_scalar, srf_tuple_types[0].clone())

@@ -466,6 +466,7 @@ fn and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
         span: None,
         func_name: "and".to_string(),
         params: vec![],
+        return_type: None,
         arguments: vec![left, right],
     })
 }
@@ -475,6 +476,7 @@ fn not(expr: ScalarExpr) -> ScalarExpr {
         span: None,
         func_name: "not".to_string(),
         params: vec![],
+        return_type: None,
         arguments: vec![expr],
     })
 }
