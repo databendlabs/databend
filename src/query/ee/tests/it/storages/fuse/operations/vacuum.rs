@@ -50,13 +50,18 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use opendal::Capability;
 use opendal::EntryMode;
 use opendal::Metadata;
-use opendal::OperatorBuilder;
-use opendal::raw::Access;
-use opendal::raw::AccessorInfo;
+use opendal::OperationContext;
+use opendal::Operator;
+use opendal::raw::OpDelete;
+use opendal::raw::OpList;
 use opendal::raw::OpStat;
 use opendal::raw::RpStat;
+use opendal::raw::Service;
+use opendal::raw::ServiceInfo;
+use opendal::raw::Servicer;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_tables() -> anyhow::Result<()> {
@@ -229,10 +234,16 @@ mod test_accessor {
     use std::sync::atomic::Ordering;
 
     use opendal::raw::MaybeSend;
-    use opendal::raw::OpDelete;
-    use opendal::raw::OpList;
-    use opendal::raw::RpDelete;
-    use opendal::raw::RpList;
+    use opendal::raw::OpCopier;
+    use opendal::raw::OpCopy;
+    use opendal::raw::OpCreateDir;
+    use opendal::raw::OpPresign;
+    use opendal::raw::OpRead;
+    use opendal::raw::OpRename;
+    use opendal::raw::OpWrite;
+    use opendal::raw::RpCreateDir;
+    use opendal::raw::RpPresign;
+    use opendal::raw::RpRename;
     use opendal::raw::oio;
     use opendal::raw::oio::Entry;
 
@@ -299,40 +310,106 @@ mod test_accessor {
     }
 
     impl oio::Delete for MockDeleter {
-        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
+        async fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
             self.size += 1;
             Ok(())
         }
 
-        async fn flush(&mut self) -> opendal::Result<usize> {
+        async fn close(&mut self) -> opendal::Result<()> {
             self.hit_batch.store(true, Ordering::Release);
-
-            let n = self.size;
             self.size = 0;
-            Ok(n)
+            Ok(())
         }
     }
 
-    impl Access for AccessorFaultyDeletion {
+    impl Service for AccessorFaultyDeletion {
         type Reader = ();
         type Writer = ();
         type Lister = VecLister;
         type Deleter = MockDeleter;
+        type Copier = ();
 
-        fn info(&self) -> Arc<AccessorInfo> {
-            let info = AccessorInfo::default();
-            info.set_native_capability(opendal::Capability {
+        fn info(&self) -> ServiceInfo {
+            ServiceInfo::with_scheme("mock")
+        }
+
+        fn capability(&self) -> Capability {
+            Capability {
                 stat: true,
                 create_dir: true,
                 delete: true,
                 delete_max_size: Some(1000),
                 list: true,
                 ..Default::default()
-            });
-            info.into()
+            }
         }
 
-        async fn stat(&self, _path: &str, _args: OpStat) -> opendal::Result<RpStat> {
+        async fn create_dir(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpCreateDir,
+        ) -> opendal::Result<RpCreateDir> {
+            Ok(RpCreateDir::default())
+        }
+
+        fn read(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpRead,
+        ) -> opendal::Result<Self::Reader> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "read not supported",
+            ))
+        }
+
+        fn write(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpWrite,
+        ) -> opendal::Result<Self::Writer> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "write not supported",
+            ))
+        }
+
+        fn copy(
+            &self,
+            _ctx: &OperationContext,
+            _from: &str,
+            _to: &str,
+            _args: OpCopy,
+            _opts: OpCopier,
+        ) -> opendal::Result<Self::Copier> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "copy not supported",
+            ))
+        }
+
+        async fn rename(
+            &self,
+            _ctx: &OperationContext,
+            _from: &str,
+            _to: &str,
+            _args: OpRename,
+        ) -> opendal::Result<RpRename> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "rename not supported",
+            ))
+        }
+
+        async fn stat(
+            &self,
+            _ctx: &OperationContext,
+            path: &str,
+            _args: OpStat,
+        ) -> opendal::Result<RpStat> {
             self.hit_stat.store(true, Ordering::Release);
             if self.inject_stat_faulty {
                 Err(opendal::Error::new(
@@ -340,16 +417,16 @@ mod test_accessor {
                     "does not matter (stat)",
                 ))
             } else {
-                let stat = if _path.ends_with('/') {
-                    RpStat::new(Metadata::new(EntryMode::DIR))
+                let meta = if path.ends_with('/') {
+                    Metadata::new(EntryMode::DIR)
                 } else {
-                    RpStat::new(Metadata::new(EntryMode::FILE))
+                    Metadata::new(EntryMode::FILE)
                 };
-                Ok(stat)
+                Ok(RpStat::new(meta))
             }
         }
 
-        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+        fn delete(&self, _ctx: &OperationContext) -> opendal::Result<Self::Deleter> {
             self.hit_delete.store(true, Ordering::Release);
 
             if self.inject_delete_faulty {
@@ -358,27 +435,41 @@ mod test_accessor {
                     "does not matter (delete)",
                 ))
             } else {
-                Ok((RpDelete::default(), MockDeleter {
+                Ok(MockDeleter {
                     size: 0,
                     hit_batch: self.hit_batch.clone(),
-                }))
+                })
             }
         }
 
-        async fn list(&self, path: &str, _args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
+        fn list(
+            &self,
+            _ctx: &OperationContext,
+            path: &str,
+            _args: OpList,
+        ) -> opendal::Result<Self::Lister> {
             if self.inject_delete_faulty {
                 // While injecting faulty for delete operation, return an empty list;
                 // otherwise we need to impl other methods.
-                return Ok((RpList::default(), VecLister(vec![])));
-            };
+                return Ok(VecLister(vec![]));
+            }
 
-            Ok((
-                RpList::default(),
-                if path.ends_with('/') {
-                    VecLister(vec!["a".to_owned(), "b".to_owned()])
-                } else {
-                    VecLister(vec![])
-                },
+            Ok(if path.ends_with('/') {
+                VecLister(vec!["a".to_owned(), "b".to_owned()])
+            } else {
+                VecLister(vec![])
+            })
+        }
+
+        async fn presign(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpPresign,
+        ) -> opendal::Result<RpPresign> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "presign not supported",
             ))
         }
     }
@@ -386,10 +477,10 @@ mod test_accessor {
     // Accessor that records batch-delete behaviour, used to verify how
     // `storage_delete_batch_size` interacts with the backend's `delete_max_size`.
     //
-    // - `chunk_count` counts calls to `Access::delete()`, i.e. the number of outer
+    // - `chunk_count` counts calls to `Service::delete()`, i.e. the number of outer
     //   chunks `remove_file_in_batch` splits into (each becomes one `delete_files`
     //   future). This reveals whether cross-chunk parallelism is preserved.
-    // - `flush_sizes` records the key count of each opendal flush.
+    // - `flush_sizes` records the key count of each opendal delete close.
     #[derive(Debug)]
     pub(crate) struct RecordingAccessor {
         // `None` models a backend that advertises no batch-delete capability (like `fs`).
@@ -426,43 +517,145 @@ mod test_accessor {
     }
 
     impl oio::Delete for RecordingDeleter {
-        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
+        async fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
             self.size += 1;
             Ok(())
         }
 
-        async fn flush(&mut self) -> opendal::Result<usize> {
+        async fn close(&mut self) -> opendal::Result<()> {
             let n = self.size;
             if n > 0 {
                 self.flush_sizes.lock().unwrap().push(n);
             }
             self.size = 0;
-            Ok(n)
+            Ok(())
         }
     }
 
-    impl Access for RecordingAccessor {
+    impl Service for RecordingAccessor {
         type Reader = ();
         type Writer = ();
         type Lister = ();
         type Deleter = RecordingDeleter;
+        type Copier = ();
 
-        fn info(&self) -> Arc<AccessorInfo> {
-            let info = AccessorInfo::default();
-            info.set_native_capability(opendal::Capability {
+        fn info(&self) -> ServiceInfo {
+            ServiceInfo::with_scheme("mock")
+        }
+
+        fn capability(&self) -> Capability {
+            Capability {
                 delete: true,
                 delete_max_size: self.delete_max_size,
                 ..Default::default()
-            });
-            info.into()
+            }
         }
 
-        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+        async fn create_dir(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpCreateDir,
+        ) -> opendal::Result<RpCreateDir> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "create_dir not supported",
+            ))
+        }
+
+        fn read(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpRead,
+        ) -> opendal::Result<Self::Reader> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "read not supported",
+            ))
+        }
+
+        fn write(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpWrite,
+        ) -> opendal::Result<Self::Writer> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "write not supported",
+            ))
+        }
+
+        fn copy(
+            &self,
+            _ctx: &OperationContext,
+            _from: &str,
+            _to: &str,
+            _args: OpCopy,
+            _opts: OpCopier,
+        ) -> opendal::Result<Self::Copier> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "copy not supported",
+            ))
+        }
+
+        async fn rename(
+            &self,
+            _ctx: &OperationContext,
+            _from: &str,
+            _to: &str,
+            _args: OpRename,
+        ) -> opendal::Result<RpRename> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "rename not supported",
+            ))
+        }
+
+        async fn stat(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpStat,
+        ) -> opendal::Result<RpStat> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "stat not supported",
+            ))
+        }
+
+        fn delete(&self, _ctx: &OperationContext) -> opendal::Result<Self::Deleter> {
             self.chunk_count.fetch_add(1, Ordering::AcqRel);
-            Ok((RpDelete::default(), RecordingDeleter {
+            Ok(RecordingDeleter {
                 size: 0,
                 flush_sizes: self.flush_sizes.clone(),
-            }))
+            })
+        }
+
+        fn list(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpList,
+        ) -> opendal::Result<Self::Lister> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "list not supported",
+            ))
+        }
+
+        async fn presign(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpPresign,
+        ) -> opendal::Result<RpPresign> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "presign not supported",
+            ))
         }
     }
 }
@@ -485,7 +678,10 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> anyhow::Result<()> {
     // In real case, `Accessor::batch` will be called (instead of Accessor::delete)
     // but all that we need here is let Operator::remove_all failed
     let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
-    let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+    let operator = Operator::from_parts(
+        OperationContext::default(),
+        faulty_accessor.clone() as Servicer,
+    );
 
     let tables = vec![(table_info, operator)];
     let result = do_vacuum_drop_table(tables, None).await?;
@@ -509,7 +705,10 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> anyho
     // Case 1: non-parallel vacuum dropped tables
     {
         let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
-        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+        let operator = Operator::from_parts(
+            OperationContext::default(),
+            faulty_accessor.clone() as Servicer,
+        );
 
         let table = (table_info.clone(), operator);
 
@@ -527,7 +726,10 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> anyho
     // Case 2: parallel vacuum dropped tables
     {
         let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
-        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+        let operator = Operator::from_parts(
+            OperationContext::default(),
+            faulty_accessor.clone() as Servicer,
+        );
 
         let table = (table_info, operator);
         // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
@@ -556,7 +758,10 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> anyh
     // Case 1: non-parallel vacuum dry-run dropped tables
     {
         let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
-        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+        let operator = Operator::from_parts(
+            OperationContext::default(),
+            faulty_accessor.clone() as Servicer,
+        );
 
         let table = (table_info.clone(), operator);
 
@@ -571,7 +776,10 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> anyh
     // Case 2: parallel vacuum dry-run dropped tables
     {
         let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
-        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+        let operator = Operator::from_parts(
+            OperationContext::default(),
+            faulty_accessor.clone() as Servicer,
+        );
 
         let table = (table_info, operator);
         // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
@@ -603,7 +811,7 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> anyhow::Result<()>
     // return Ok(None) before accessor is used.
     use test_accessor::AccessorFaultyDeletion;
     let accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
-    let operator = OperatorBuilder::new(accessor.clone()).finish();
+    let operator = Operator::from_parts(OperationContext::default(), accessor.clone() as Servicer);
 
     let tables = vec![(table_info, operator)];
     let result = do_vacuum_drop_table(tables, None).await?;
@@ -619,7 +827,10 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> anyhow::Result<()>
 async fn test_remove_files_in_batch_do_not_swallow_errors() -> anyhow::Result<()> {
     // errors should not be swallowed in remove_file_in_batch
     let faulty_accessor = Arc::new(test_accessor::AccessorFaultyDeletion::with_delete_fault());
-    let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+    let operator = Operator::from_parts(
+        OperationContext::default(),
+        faulty_accessor.clone() as Servicer,
+    );
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let file_util = Files::create(ctx, operator);
@@ -642,7 +853,7 @@ async fn test_remove_files_in_batch_respects_delete_batch_size() -> anyhow::Resu
     // backend cap, is the binding constraint.
     let recording = Arc::new(test_accessor::RecordingAccessor::new(1000));
     let flush_sizes = recording.flush_sizes();
-    let operator = OperatorBuilder::new(recording.clone()).finish();
+    let operator = Operator::from_parts(OperationContext::default(), recording.clone() as Servicer);
 
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -681,7 +892,7 @@ async fn test_remove_files_in_batch_clamps_to_backend_delete_limit() -> anyhow::
     // cross-chunk concurrency.
     let recording = Arc::new(test_accessor::RecordingAccessor::new(100));
     let flush_sizes = recording.flush_sizes();
-    let operator = OperatorBuilder::new(recording.clone()).finish();
+    let operator = Operator::from_parts(OperationContext::default(), recording.clone() as Servicer);
 
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -719,7 +930,7 @@ async fn test_remove_files_in_batch_no_batch_capability() -> anyhow::Result<()> 
     // delete_files future that opendal would then flush one key at a time serially.
     let recording = Arc::new(test_accessor::RecordingAccessor::with_capability(None));
     let flush_sizes = recording.flush_sizes();
-    let operator = OperatorBuilder::new(recording.clone()).finish();
+    let operator = Operator::from_parts(OperationContext::default(), recording.clone() as Servicer);
 
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;

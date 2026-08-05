@@ -584,7 +584,7 @@ mod test {
         let data = Bytes::from(buf);
         let builder = Memory::default();
         let path = "/tmp/test/merged";
-        let op = Operator::new(builder).unwrap().finish();
+        let op = Operator::new(builder).unwrap();
         op.write(path, data).await.unwrap();
 
         let schema = Type::group_type_builder("schema")

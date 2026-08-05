@@ -26,20 +26,31 @@ mod unit {
 
     use chrono::Duration as ChronoDuration;
     use chrono::Utc;
+    use opendal::BytesRange;
+    use opendal::Capability;
     use opendal::EntryMode;
     use opendal::Metadata;
-    use opendal::OperatorBuilder;
-    use opendal::raw::Access;
-    use opendal::raw::AccessorInfo;
+    use opendal::OperationContext;
     use opendal::raw::MaybeSend;
+    use opendal::raw::OpCopier;
+    use opendal::raw::OpCopy;
+    use opendal::raw::OpCreateDir;
     use opendal::raw::OpDelete;
     use opendal::raw::OpList;
+    use opendal::raw::OpPresign;
     use opendal::raw::OpRead;
+    use opendal::raw::OpRename;
     use opendal::raw::OpStat;
-    use opendal::raw::RpDelete;
-    use opendal::raw::RpList;
+    use opendal::raw::OpWrite;
+    use opendal::raw::RpCreateDir;
+    use opendal::raw::RpPresign;
     use opendal::raw::RpRead;
+    use opendal::raw::RpRename;
     use opendal::raw::RpStat;
+    use opendal::raw::Service;
+    use opendal::raw::ServiceInfo;
+    use opendal::raw::Servicer;
+    use opendal::raw::Timestamp;
     use opendal::raw::oio;
     use opendal::raw::oio::Entry;
 
@@ -71,13 +82,41 @@ mod unit {
     }
 
     impl oio::Delete for RecordingDeleter {
-        fn delete(&mut self, path: &str, _args: OpDelete) -> opendal::Result<()> {
+        async fn delete(&mut self, path: &str, _args: OpDelete) -> opendal::Result<()> {
             self.deleted.lock().unwrap().push(path.to_string());
             Ok(())
         }
 
-        async fn flush(&mut self) -> opendal::Result<usize> {
-            Ok(self.deleted.lock().unwrap().len())
+        async fn close(&mut self) -> opendal::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[derive(Clone)]
+    struct MockReader(Buffer);
+
+    impl oio::Read for MockReader {
+        async fn open(
+            &self,
+            _range: BytesRange,
+        ) -> opendal::Result<(RpRead, Box<dyn oio::ReadStreamDyn>)> {
+            let buf = self.0.clone();
+            Ok((
+                RpRead::default(),
+                Box::new(MockReadStream(Some(buf))) as Box<dyn oio::ReadStreamDyn>,
+            ))
+        }
+
+        async fn read(&self, _range: BytesRange) -> opendal::Result<(RpRead, Buffer)> {
+            Ok((RpRead::default(), self.0.clone()))
+        }
+    }
+
+    struct MockReadStream(Option<Buffer>);
+
+    impl oio::ReadStream for MockReadStream {
+        async fn read(&mut self) -> opendal::Result<Buffer> {
+            Ok(self.0.take().unwrap_or_default())
         }
     }
 
@@ -120,26 +159,103 @@ mod unit {
         }
     }
 
-    impl Access for MockVacuumAccessor {
-        type Reader = Buffer;
+    impl Service for MockVacuumAccessor {
+        type Reader = MockReader;
         type Writer = ();
         type Lister = VecLister;
         type Deleter = RecordingDeleter;
+        type Copier = ();
 
-        fn info(&self) -> Arc<AccessorInfo> {
-            let info = AccessorInfo::default();
-            info.set_native_capability(opendal::Capability {
+        fn info(&self) -> ServiceInfo {
+            ServiceInfo::with_scheme("mock")
+        }
+
+        fn capability(&self) -> Capability {
+            Capability {
                 stat: true,
                 read: true,
                 list: true,
                 delete: true,
                 delete_max_size: Some(1000),
                 ..Default::default()
-            });
-            info.into()
+            }
         }
 
-        async fn stat(&self, path: &str, _args: OpStat) -> opendal::Result<RpStat> {
+        async fn create_dir(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpCreateDir,
+        ) -> opendal::Result<RpCreateDir> {
+            Ok(RpCreateDir::default())
+        }
+
+        fn read(
+            &self,
+            _ctx: &OperationContext,
+            path: &str,
+            _args: OpRead,
+        ) -> opendal::Result<Self::Reader> {
+            self.read_calls.fetch_add(1, Ordering::AcqRel);
+            match self
+                .read_results
+                .get(path)
+                .cloned()
+                .unwrap_or(ReadResult::NotFound)
+            {
+                ReadResult::Buffer(buf) => Ok(MockReader(buf)),
+                ReadResult::NotFound => Err(opendal::Error::new(
+                    opendal::ErrorKind::NotFound,
+                    "mock read not found",
+                )),
+            }
+        }
+
+        fn write(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpWrite,
+        ) -> opendal::Result<Self::Writer> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "write not supported",
+            ))
+        }
+
+        fn copy(
+            &self,
+            _ctx: &OperationContext,
+            _from: &str,
+            _to: &str,
+            _args: OpCopy,
+            _opts: OpCopier,
+        ) -> opendal::Result<Self::Copier> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "copy not supported",
+            ))
+        }
+
+        async fn rename(
+            &self,
+            _ctx: &OperationContext,
+            _from: &str,
+            _to: &str,
+            _args: OpRename,
+        ) -> opendal::Result<RpRename> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "rename not supported",
+            ))
+        }
+
+        async fn stat(
+            &self,
+            _ctx: &OperationContext,
+            path: &str,
+            _args: OpStat,
+        ) -> opendal::Result<RpStat> {
             match self
                 .stat_results
                 .get(path)
@@ -154,42 +270,42 @@ mod unit {
             }
         }
 
-        async fn read(&self, path: &str, _args: OpRead) -> opendal::Result<(RpRead, Self::Reader)> {
-            self.read_calls.fetch_add(1, Ordering::AcqRel);
-            match self
-                .read_results
-                .get(path)
-                .cloned()
-                .unwrap_or(ReadResult::NotFound)
-            {
-                ReadResult::Buffer(buf) => Ok((RpRead::new(), buf)),
-                ReadResult::NotFound => Err(opendal::Error::new(
-                    opendal::ErrorKind::NotFound,
-                    "mock read not found",
-                )),
-            }
-        }
-
-        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
-            Ok((RpDelete::default(), RecordingDeleter {
+        fn delete(&self, _ctx: &OperationContext) -> opendal::Result<Self::Deleter> {
+            Ok(RecordingDeleter {
                 deleted: self.deleted.clone(),
-            }))
+            })
         }
 
-        async fn list(&self, path: &str, _args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
+        fn list(
+            &self,
+            _ctx: &OperationContext,
+            path: &str,
+            _args: OpList,
+        ) -> opendal::Result<Self::Lister> {
             self.list_calls.fetch_add(1, Ordering::AcqRel);
             let mut entries = self.list_entries.get(path).cloned().unwrap_or_default();
             entries.reverse();
-            Ok((RpList::default(), VecLister(entries)))
+            Ok(VecLister(entries))
+        }
+
+        async fn presign(
+            &self,
+            _ctx: &OperationContext,
+            _path: &str,
+            _args: OpPresign,
+        ) -> opendal::Result<RpPresign> {
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unsupported,
+                "presign not supported",
+            ))
         }
     }
 
     fn file_meta(last_modified_millis: Option<i64>) -> Metadata {
         let mut meta = Metadata::new(EntryMode::FILE).with_content_length(0);
         if let Some(last_modified_millis) = last_modified_millis {
-            meta = meta.with_last_modified(
-                chrono::DateTime::<Utc>::from_timestamp_millis(last_modified_millis).unwrap(),
-            );
+            meta =
+                meta.with_last_modified(Timestamp::from_millisecond(last_modified_millis).unwrap());
         }
         meta
     }
@@ -197,9 +313,8 @@ mod unit {
     fn dir_meta(last_modified_millis: Option<i64>) -> Metadata {
         let mut meta = Metadata::new(EntryMode::DIR);
         if let Some(last_modified_millis) = last_modified_millis {
-            meta = meta.with_last_modified(
-                chrono::DateTime::<Utc>::from_timestamp_millis(last_modified_millis).unwrap(),
-            );
+            meta =
+                meta.with_last_modified(Timestamp::from_millisecond(last_modified_millis).unwrap());
         }
         meta
     }
@@ -266,7 +381,7 @@ mod unit {
             ]),
             HashMap::new(),
         );
-        let operator = OperatorBuilder::new(accessor).finish();
+        let operator = Operator::from_parts(OperationContext::default(), accessor as Servicer);
 
         let last_modified =
             resolve_dir_last_modified(&operator, "spill/dir/", &dir_meta(None), "spill/dir.list")
@@ -296,7 +411,8 @@ mod unit {
             ]),
             HashMap::new(),
         );
-        let operator = OperatorBuilder::new(accessor.clone()).finish();
+        let operator =
+            Operator::from_parts(OperationContext::default(), accessor.clone() as Servicer);
         let mut removed_total = 0;
 
         let removed = run_dir_vacuum_for_test(
@@ -343,7 +459,8 @@ mod unit {
                 ReadResult::Buffer(Buffer::from("spill/dir/file1\nspill/dir/file2")),
             )]),
         );
-        let operator = OperatorBuilder::new(accessor.clone()).finish();
+        let operator =
+            Operator::from_parts(OperationContext::default(), accessor.clone() as Servicer);
         let mut removed_total = 0;
 
         let removed = run_dir_vacuum_for_test(
@@ -380,7 +497,8 @@ mod unit {
             HashMap::new(),
             HashMap::new(),
         );
-        let operator = OperatorBuilder::new(accessor.clone()).finish();
+        let operator =
+            Operator::from_parts(OperationContext::default(), accessor.clone() as Servicer);
         let mut removed_total = 0;
 
         let removed = vacuum_dir_with_probe(
@@ -412,7 +530,8 @@ mod unit {
             HashMap::new(),
             HashMap::new(),
         );
-        let operator = OperatorBuilder::new(accessor.clone()).finish();
+        let operator =
+            Operator::from_parts(OperationContext::default(), accessor.clone() as Servicer);
         let mut removed_total = 0;
 
         let removed = vacuum_dir_with_probe(

@@ -209,7 +209,7 @@ impl FuseTable {
         };
 
         let operator = self.get_operator();
-        if !operator.info().full_capability().list_with_start_after {
+        if !operator.info().capability().list_with_start_after {
             return Ok(None);
         }
 

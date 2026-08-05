@@ -46,7 +46,6 @@ use databend_common_storage::STDIN_FD;
 use databend_common_storage::check_storage_params_endpoints;
 use log::LevelFilter;
 use log::info;
-use opendal::Scheme;
 use opendal::raw::normalize_path;
 use opendal::raw::normalize_root;
 
@@ -510,7 +509,7 @@ pub async fn parse_storage_params_from_uri(
 struct ParsedUriLocation {
     root: String,
     path: String,
-    protocol: Scheme,
+    protocol: String,
 }
 
 fn parse_uri_location_parts(l: &UriLocation) -> Result<ParsedUriLocation> {
@@ -525,13 +524,7 @@ fn parse_uri_location_parts(l: &UriLocation) -> Result<ParsedUriLocation> {
     let root = normalize_root(&root);
     let path = normalize_path(&path);
 
-    let protocol = l.protocol.parse::<Scheme>()?;
-    if let Scheme::Custom(_) = protocol {
-        return Err(Error::new(
-            ErrorKind::InvalidInput,
-            anyhow!("protocol {protocol} is not supported yet."),
-        ));
-    }
+    let protocol = l.protocol.to_ascii_lowercase();
 
     Ok(ParsedUriLocation {
         root,
@@ -558,13 +551,8 @@ pub fn apply_uri_connection(
     name: &str,
     conn: UserDefinedConnection,
 ) -> Result<()> {
-    let protocol = l.protocol.parse::<Scheme>()?;
-    let proto = conn.storage_type.parse::<Scheme>().map_err(|err| {
-        Error::new(
-            ErrorKind::InvalidInput,
-            anyhow!("input connection is not a valid protocol: {err:?}"),
-        )
-    })?;
+    let protocol = l.protocol.to_ascii_lowercase();
+    let proto = conn.storage_type.to_ascii_lowercase();
     if proto != protocol {
         return Err(Error::new(
             ErrorKind::InvalidInput,
@@ -594,17 +582,17 @@ async fn parse_uri_location_resolved(
         protocol,
     } = parts;
 
-    let sp = match protocol {
-        Scheme::Azblob => parse_azure_params(l, root)?,
-        Scheme::Gcs => parse_gcs_params(l, root)?,
+    let sp = match protocol.as_str() {
+        "azblob" => parse_azure_params(l, root)?,
+        "gcs" => parse_gcs_params(l, root)?,
         #[cfg(feature = "storage-hdfs")]
-        Scheme::Hdfs => parse_hdfs_params(l, root)?,
-        Scheme::Ipfs => parse_ipfs_params(l, root)?,
-        Scheme::S3 => parse_s3_params(l, root)?,
-        Scheme::Obs => parse_obs_params(l, root)?,
-        Scheme::Oss => parse_oss_params(l, root)?,
-        Scheme::Cos => parse_cos_params(l, root)?,
-        Scheme::Http => {
+        "hdfs" => parse_hdfs_params(l, root)?,
+        "ipfs" => parse_ipfs_params(l, root)?,
+        "s3" => parse_s3_params(l, root)?,
+        "obs" => parse_obs_params(l, root)?,
+        "oss" => parse_oss_params(l, root)?,
+        "cos" => parse_cos_params(l, root)?,
+        "http" | "https" => {
             // Make sure path has been percent decoded before parse pattern.
             let cfg = StorageHttpConfig {
                 endpoint_url: format!("{}://{}", l.protocol, l.name),
@@ -626,7 +614,7 @@ async fn parse_uri_location_resolved(
                 .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
             return Ok((StorageParams::Http(cfg), "/".to_string()));
         }
-        Scheme::Fs => {
+        "fs" | "file" => {
             if root == "/" && path == STDIN_FD {
                 StorageParams::Memory
             } else {
@@ -634,8 +622,8 @@ async fn parse_uri_location_resolved(
                 StorageParams::Fs(cfg)
             }
         }
-        Scheme::Webhdfs => parse_webhdfs_params(l, root)?,
-        Scheme::Huggingface => parse_huggingface_params(l, root)?,
+        "webhdfs" => parse_webhdfs_params(l, root)?,
+        "huggingface" | "hf" => parse_huggingface_params(l, root)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,

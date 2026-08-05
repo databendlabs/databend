@@ -45,6 +45,7 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_storage::OpendalStore;
 use futures::StreamExt;
 use lance_core::datatypes::Schema as LanceSchema;
 use lance_file::writer::FileWriterOptions;
@@ -55,7 +56,6 @@ use lance_table::format::DataFile;
 use lance_table::format::Fragment;
 use log::info;
 use object_store::ObjectStore;
-use object_store_opendal::OpendalStore;
 use opendal::Operator;
 use tokio::sync::Mutex;
 use url::Url;
@@ -761,7 +761,7 @@ mod tests {
 
     #[test]
     fn test_build_store_params_preserves_accessor_scheme() {
-        let accessor = Operator::new(Memory::default()).unwrap().finish();
+        let accessor = Operator::new(Memory::default()).unwrap();
         let params = FragmentWriterParams::build_store_params(accessor, "tmp").unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()

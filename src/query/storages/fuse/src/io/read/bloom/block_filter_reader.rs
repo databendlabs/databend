@@ -393,7 +393,7 @@ mod tests {
         init_test_globals()?;
 
         let (data, filter_name) = write_bloom_index_bytes()?;
-        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let operator = opendal::Operator::via_iter(opendal::services::MEMORY_SCHEME, [])?;
         let path = "bloom_index";
         operator.write(path, data.clone()).await?;
 

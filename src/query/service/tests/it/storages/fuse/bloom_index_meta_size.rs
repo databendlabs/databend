@@ -402,7 +402,7 @@ async fn setup() -> databend_common_exception::Result<ParquetMetaData> {
     }
 
     let block = DataBlock::new_from_columns(columns);
-    let operator = Operator::new(opendal::services::Memory::default())?.finish();
+    let operator = Operator::new(opendal::services::Memory::default())?;
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     let col_stats =
         gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;

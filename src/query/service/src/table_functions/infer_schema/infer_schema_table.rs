@@ -59,7 +59,6 @@ use databend_query_storage_stage_support::Decompressor;
 use databend_query_storage_stage_support::InferSchemaPartInfo;
 use databend_query_storage_stage_support::LoadContext;
 use databend_storages_common_stage::SingleFilePartition;
-use opendal::Scheme;
 
 use super::parquet::ParquetInferSchemaSource;
 use crate::sessions::TableContext;
@@ -161,11 +160,11 @@ impl Table for InferSchemaTable {
             let conn = stage_resolver.resolve_connection(connection_name).await?;
             let uri =
                 UriLocation::from_uri(self.args_parsed.location.clone(), conn.storage_params)?;
-            let proto = conn.storage_type.parse::<Scheme>()?;
-            if proto != uri.protocol.parse::<Scheme>()? {
+            let proto = conn.storage_type.to_ascii_lowercase();
+            let uri_proto = uri.protocol.to_ascii_lowercase();
+            if proto != uri_proto {
                 return Err(ErrorCode::BadArguments(format!(
-                    "protocol from connection_name={connection_name} ({proto}) not match with uri protocol ({0}).",
-                    uri.protocol
+                    "protocol from connection_name={connection_name} ({proto}) not match with uri protocol ({uri_proto}).",
                 )));
             }
             FileLocation::Uri(uri)

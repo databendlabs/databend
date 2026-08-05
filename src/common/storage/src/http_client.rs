@@ -31,8 +31,8 @@ use http::Request;
 use http::Response;
 use lru::LruCache;
 use opendal::Buffer;
-use opendal::raw::HttpBody;
-use opendal::raw::HttpFetch;
+use opendal::HttpBody;
+use opendal::HttpTransport;
 use opendal::raw::parse_content_encoding;
 use opendal::raw::parse_content_length;
 use url::Url;
@@ -206,7 +206,7 @@ impl PinnedClientCacheKey {
     }
 }
 
-impl HttpFetch for StorageHttpClient {
+impl HttpTransport for StorageHttpClient {
     async fn fetch(&self, req: Request<Buffer>) -> opendal::Result<Response<HttpBody>> {
         // Uri stores all string alike data in `Bytes` which means
         // the clone here is cheap.

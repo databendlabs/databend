@@ -508,7 +508,7 @@ pub async fn cleanup_vacuum_virtual_column_files(
         "{}/{}/",
         table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1
     );
-    operator.remove_all(&v1_prefix).await?;
+    operator.delete_with(&v1_prefix).recursive(true).await?;
 
     // remove orphan virtual column files
     let Some(snapshot_referenced_segments) = fuse_table
@@ -887,7 +887,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_collect_virtual_locations_empty_prefix() -> Result<()> {
-        let operator = Operator::new(Memory::default())?.finish();
+        let operator = Operator::new(Memory::default())?;
         let mut files = Vec::new();
         collect_virtual_locations(&operator, "missing/_vb_v2/", &mut files).await?;
         assert!(files.is_empty());

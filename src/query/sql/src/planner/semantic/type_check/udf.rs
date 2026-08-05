@@ -360,7 +360,7 @@ impl FullTypeCheckAdapter {
                         location, err
                     ))
                 })?;
-                if !op.info().full_capability().presign {
+                if !op.info().capability().presign {
                     return Err(ErrorCode::StorageUnsupported(
                         "storage doesn't support presign operation",
                     ));

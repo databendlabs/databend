@@ -143,7 +143,7 @@ async fn test_buffer_flush_with_force_collect() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flush() -> anyhow::Result<()> {
     let builder = services::Memory::default();
-    let op = Operator::new(builder)?.finish();
+    let op = Operator::new(builder)?;
 
     let path = "test_logs.parquet";
     let elements = vec![get_remote_log_elements()];

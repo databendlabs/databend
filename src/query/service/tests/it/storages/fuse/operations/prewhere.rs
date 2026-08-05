@@ -230,7 +230,7 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
     let parquet_bytes = buf.to_bytes();
 
     // Create operator (memory-based for testing)
-    let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+    let operator = opendal::Operator::via_iter(opendal::services::MEMORY_SCHEME, [])?;
 
     // Build filter expression: z == 300 AND x > 2 AND y < 40
     let col_x_expr: Expr<String> = Expr::ColumnRef(ColumnRef {

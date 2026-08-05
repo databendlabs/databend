@@ -460,7 +460,7 @@ pub async fn drop_table_by_id(
                 }
             };
             let op = get_table_operator_for_drop_operation(&table_meta)?;
-            op.remove_all(&dir).await?;
+            op.delete_with(&dir).recursive(true).await?;
         }
         "MEMORY" => {
             let mut guard = mgr.lock();
@@ -544,7 +544,7 @@ pub async fn drop_all_temp_tables(
         // Get the operator for this specific table's storage location
         match get_table_operator_for_drop_operation(&table_meta) {
             Ok(op) => {
-                if let Err(e) = op.remove_all(&dir).await {
+                if let Err(e) = op.delete_with(&dir).recursive(true).await {
                     // Log the error but continue with other tables
                     log::warn!(
                         "[TEMP TABLE] Failed to clean up temp table directory '{}': {}",

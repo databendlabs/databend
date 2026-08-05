@@ -598,7 +598,7 @@ async fn test_accumulator() -> anyhow::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = RowOrientedSegmentBuilder::default();
 
-    let operator = Operator::new(opendal::services::Memory::default())?.finish();
+    let operator = Operator::new(opendal::services::Memory::default())?;
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     for item in blocks {
         let block = item?;

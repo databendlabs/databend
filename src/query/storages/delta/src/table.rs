@@ -42,6 +42,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::EndpointPolicyScope;
+use databend_common_storage::OpendalStore;
 use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;
@@ -53,7 +54,6 @@ use databend_storages_common_pruner::partition_prunner::PartitionPruner;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use deltalake::DeltaTableBuilder;
 use deltalake::kernel::Add;
-use object_store_opendal::OpendalStore;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::OnceCell;
@@ -322,7 +322,8 @@ impl DeltaTable {
             pub num_records: i64,
         }
 
-        let parts = adds.iter()
+        let parts = adds
+            .iter()
             .map(|add: &Add| {
                 let num_records = add
                     .get_stats_parsed()
@@ -334,24 +335,22 @@ impl DeltaTable {
                             Some(stats.num_records)
                         }
                         _ => None,
-                    }
-                    ).unwrap_or(1);
+                    })
+                    .unwrap_or(1);
                 read_rows += num_records as usize;
                 read_bytes += add.size as usize;
                 let partition_values = get_partition_values(add, &partition_fields)?;
                 Ok(Arc::new(Box::new(DeltaPartInfo {
-                        partition_values,
-                        data: ParquetPart::File(
-                            ParquetFilePart {
-                                file: add.path.clone(),
-                                compressed_size: add.size as u64,
-                                estimated_uncompressed_size: add.size as u64, // This field is not used here.
-                                dedup_key: format!("{}_{}", add.modification_time, add.size),
-                                bucket_option: None,
-                                meta: Default::default(),
-                            },
-                        ),
-                    }) as _))
+                    partition_values,
+                    data: ParquetPart::File(ParquetFilePart {
+                        file: add.path.clone(),
+                        compressed_size: add.size as u64,
+                        estimated_uncompressed_size: add.size as u64, // This field is not used here.
+                        dedup_key: format!("{}_{}", add.modification_time, add.size),
+                        bucket_option: None,
+                        meta: Default::default(),
+                    }),
+                }) as _))
             })
             .collect::<Result<Vec<_>>>()?;
 

@@ -96,7 +96,7 @@ async fn parse_input_data(config: &InspectorConfig) -> Result<Vec<u8>> {
                 None => {
                     let current_dir = env::current_dir()?;
                     let builder = Fs::default().root(current_dir.to_str().ok_or("Invalid path")?);
-                    Operator::new(builder)?.finish()
+                    Operator::new(builder)?
                 }
             };
             let buf = op.read(input).await?.to_vec();

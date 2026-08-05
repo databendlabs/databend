@@ -201,12 +201,12 @@ pub async fn load_bendsave_storage(uri: &str) -> Result<Operator> {
             }
             map.insert("bucket".to_string(), name.to_string());
             map.insert("root".to_string(), path.to_string());
-            let op = Operator::from_iter::<opendal::services::S3>(map)?.finish();
+            let op = Operator::from_iter::<opendal::services::S3>(map)?;
             Ok(op)
         }
         "fs" => {
             map.insert("root".to_string(), format!("/{name}/{path}"));
-            let op = Operator::from_iter::<opendal::services::Fs>(map)?.finish();
+            let op = Operator::from_iter::<opendal::services::Fs>(map)?;
             Ok(op)
         }
         _ => Err(anyhow::anyhow!("Unsupported scheme: {}", scheme)),
@@ -222,8 +222,6 @@ pub async fn load_bendsave_storage(uri: &str) -> Result<Operator> {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-
-    use opendal::Scheme;
 
     use super::*;
 
@@ -241,12 +239,12 @@ mod tests {
     #[tokio::test]
     async fn test_load_epochfs_storage() -> Result<()> {
         let op = load_bendsave_storage("s3://bendsave/tmp?region=us-east-1").await?;
-        assert_eq!(op.info().scheme(), Scheme::S3);
+        assert_eq!(op.info().scheme(), "s3");
         assert_eq!(op.info().name(), "bendsave");
         assert_eq!(op.info().root(), "/tmp/");
 
         let op = load_bendsave_storage("fs://opt").await?;
-        assert_eq!(op.info().scheme(), Scheme::Fs);
+        assert_eq!(op.info().scheme(), "fs");
         assert_eq!(op.info().root(), "/opt");
         Ok(())
     }

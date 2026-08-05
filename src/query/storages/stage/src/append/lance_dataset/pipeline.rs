@@ -54,7 +54,7 @@ pub(crate) fn append_data_to_lance_dataset(
     ))?;
     cleanup_target_dataset_on_error(pipeline, op.clone(), target_dataset_path.clone());
 
-    let staging_accessor = Operator::new(Memory::default())?.finish();
+    let staging_accessor = Operator::new(Memory::default())?;
     let staging_dataset_path = "tmp".to_string();
 
     let max_threads = max_threads.max(1);
@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_target_dataset_for_error_removes_partial_dataset() -> Result<()> {
-        let op = Operator::new(Memory::default())?.finish();
+        let op = Operator::new(Memory::default())?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_target_dataset_for_success_keeps_dataset() -> Result<()> {
-        let op = Operator::new(Memory::default())?.finish();
+        let op = Operator::new(Memory::default())?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
@@ -325,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_callback_keeps_dataset_when_later_callback_fails() -> Result<()> {
-        let op = Operator::new(Memory::default())?.finish();
+        let op = Operator::new(Memory::default())?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;

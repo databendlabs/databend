@@ -244,7 +244,11 @@ pub async fn do_vacuum2(
     let legacy_ref_dir = fuse_table
         .meta_location_generator()
         .ref_snapshot_location_prefix();
-    let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
+    let _ = fuse_table
+        .get_operator()
+        .delete_with(legacy_ref_dir)
+        .recursive(true)
+        .await;
 
     ctx.set_status_info(&format!(
         "Removed files for table {}, elapsed: {:?}, files_to_gc: {:?}",
