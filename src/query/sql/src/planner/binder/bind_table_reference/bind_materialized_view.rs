@@ -256,7 +256,8 @@ impl Binder {
                 .ok_or_else(|| {
                     ErrorCode::InvalidMaterializedView(format!(
                         "materialized view {} source table id {} no longer exists",
-                        table_meta.name(), source_table_id
+                        table_meta.name(),
+                        source_table_id
                     ))
                 })?;
             Ok::<_, ErrorCode>(
