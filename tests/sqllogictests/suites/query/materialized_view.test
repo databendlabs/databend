@@ -198,6 +198,38 @@ where database = 'test_materialized_view'
 ----
 0
 
+# A persisted definition resolving to a same-named replacement table must not read old MV storage
+# or execute against the replacement source.
+statement ok
+create table replaced_source (id int) change_tracking = true
+
+statement ok
+create materialized view replaced_mv as select id from replaced_source where id > 0
+
+statement ok
+insert into replaced_source values (1)
+
+statement ok
+refresh materialized view replaced_mv
+
+statement ok
+drop table replaced_source
+
+statement ok
+create table replaced_source (id int) change_tracking = true
+
+statement error (?s)2328.*source table changed
+select * from replaced_mv
+
+statement error (?s)2328.*source table changed
+refresh materialized view replaced_mv
+
+statement ok
+drop materialized view replaced_mv
+
+statement ok
+drop table replaced_source
+
 statement ok
 use default
 

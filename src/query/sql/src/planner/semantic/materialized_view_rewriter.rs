@@ -49,6 +49,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 
+use crate::MetadataRef;
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
 /// Parse persisted materialized-view SQL and require a query statement.
@@ -65,6 +66,29 @@ pub fn parse_materialized_view_query(sql: &str, error: impl Into<String>) -> Res
         return Err(ErrorCode::InvalidMaterializedView(error.into()));
     };
     Ok(*query)
+}
+
+/// Require a bound persisted MV definition to resolve to its original single source table.
+pub fn validate_materialized_view_source(
+    metadata: &MetadataRef,
+    expected_source_table_id: u64,
+    materialized_view_name: &str,
+) -> Result<()> {
+    let actual_source_table_id = {
+        let metadata = metadata.read();
+        let [source] = metadata.tables() else {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {materialized_view_name} physical definition must resolve to exactly one source table"
+            )));
+        };
+        source.table().get_id()
+    };
+    if actual_source_table_id != expected_source_table_id {
+        return Err(ErrorCode::InvalidMaterializedView(format!(
+            "materialized view {materialized_view_name} source table changed: expected table id {expected_source_table_id}, resolved table id {actual_source_table_id}"
+        )));
+    }
+    Ok(())
 }
 
 /// Rewrites a user MV definition into its physical storage query and records

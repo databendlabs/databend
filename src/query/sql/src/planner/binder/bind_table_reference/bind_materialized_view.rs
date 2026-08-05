@@ -41,6 +41,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::validate_materialized_view_source;
 
 impl Binder {
     /// Whether the MV storage checkpoint matches the current source data endpoint.
@@ -204,40 +205,24 @@ impl Binder {
         cte_suffix_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let tenant = self.ctx.get_tenant();
-        let (mv_definition, source_snapshot_location) =
-            databend_common_base::runtime::block_on(async {
-                let catalog = self.ctx.get_catalog(catalog_name).await?;
-                let mv_definition = catalog
-                    .get_mv_definition(&tenant, table_meta.get_id())
-                    .await?
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "materialized view {} has no definition",
-                            table_meta.name()
-                        ))
-                    })?;
-                let source_table_id = table_meta
-                    .get_table_info()
-                    .meta
-                    .materialized_view_source_table_id()
-                    .map_err(ErrorCode::from)?;
-                let source_meta = catalog
-                    .get_table_meta_by_id(source_table_id)
-                    .await?
-                    .ok_or_else(|| {
-                        ErrorCode::UnknownTable(format!(
-                            "materialized view {} source table id {} not found",
-                            table_meta.name(),
-                            source_table_id
-                        ))
-                    })?;
-                let source_snapshot_location = source_meta
-                    .data
-                    .options
-                    .get(OPT_KEY_SNAPSHOT_LOCATION)
-                    .cloned();
-                Ok::<_, ErrorCode>((mv_definition, source_snapshot_location))
-            })?;
+        let (mv_definition, source_table_id) = databend_common_base::runtime::block_on(async {
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let mv_definition = catalog
+                .get_mv_definition(&tenant, table_meta.get_id())
+                .await?
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "materialized view {} has no definition",
+                        table_meta.name()
+                    ))
+                })?;
+            let source_table_id = table_meta
+                .get_table_info()
+                .meta
+                .materialized_view_source_table_id()
+                .map_err(ErrorCode::from)?;
+            Ok::<_, ErrorCode>((mv_definition, source_table_id))
+        })?;
 
         // Aggregate MV storage contains serialized states. Reading and merging those states across
         // cluster nodes needs an explicit distributed plan boundary, which is deferred to a follow-up
@@ -247,15 +232,41 @@ impl Binder {
             &mv_definition.data.query,
             "invalid materialized view physical query",
         )?;
+        let definition_metadata = Metadata::default_ref();
         let mut definition_binder = Binder::new(
             self.ctx.clone(),
             self.catalogs.clone(),
             self.name_resolution_ctx.clone(),
-            Metadata::default_ref(),
+            definition_metadata.clone(),
         )
         .with_subquery_executor(self.subquery_executor.clone());
         let mut definition_context = BindContext::new();
         let (definition_expr, _) = definition_binder.bind_query(&mut definition_context, &query)?;
+        validate_materialized_view_source(
+            &definition_metadata,
+            source_table_id,
+            table_meta.name(),
+        )?;
+
+        let source_snapshot_location = databend_common_base::runtime::block_on(async {
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let source_meta = catalog
+                .get_table_meta_by_id(source_table_id)
+                .await?
+                .ok_or_else(|| {
+                    ErrorCode::InvalidMaterializedView(format!(
+                        "materialized view {} source table id {} no longer exists",
+                        table_meta.name(), source_table_id
+                    ))
+                })?;
+            Ok::<_, ErrorCode>(
+                source_meta
+                    .data
+                    .options
+                    .get(OPT_KEY_SNAPSHOT_LOCATION)
+                    .cloned(),
+            )
+        })?;
         if find_materialized_view_aggregate(&definition_expr)
             .is_some_and(|aggregate| !aggregate.aggregate_functions.is_empty())
         {

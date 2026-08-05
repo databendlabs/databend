@@ -52,6 +52,7 @@ use databend_common_sql::MaterializedViewChecker;
 use databend_common_sql::Planner;
 use databend_common_sql::parse_materialized_view_query;
 use databend_common_sql::plans::RefreshMaterializedViewPlan;
+use databend_common_sql::validate_materialized_view_source;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ChangesDesc;
 use databend_meta_client::types::MatchSeq;
@@ -168,12 +169,20 @@ impl<'a> MaterializedViewRefresh<'a> {
         };
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let definition = catalog
+            .get_mv_definition(&self.plan.tenant, self.mv_table.get_id())
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::InvalidMaterializedView("materialized view definition not found")
+            })?;
+        self.validate_source_table_id(&definition.data.query, source_table_id)
+            .await?;
         let source_meta = catalog
             .get_table_meta_by_id(source_table_id)
             .await?
             .ok_or_else(|| {
-                ErrorCode::UnknownTable(format!(
-                    "materialized view {}.{} source table id {} not found",
+                ErrorCode::InvalidMaterializedView(format!(
+                    "materialized view {}.{} source table changed: expected table id {} no longer exists",
                     self.plan.database, self.plan.view_name, source_table_id
                 ))
             })?;
@@ -223,12 +232,6 @@ impl<'a> MaterializedViewRefresh<'a> {
                 .is_none_or(|(mv_source_seq, _)| *mv_source_seq != source_seq)
         );
 
-        let definition = catalog
-            .get_mv_definition(&self.plan.tenant, self.mv_table.get_id())
-            .await?
-            .ok_or_else(|| {
-                ErrorCode::InvalidMaterializedView("materialized view definition not found")
-            })?;
         let logical_query = parse_materialized_view_query(
             &definition.data.original_query,
             "invalid materialized view logical query",
@@ -288,6 +291,43 @@ impl<'a> MaterializedViewRefresh<'a> {
             txn_mgr.lock().clear();
         }
         refresh_result
+    }
+
+    async fn validate_source_table_id(
+        &self,
+        physical_query: &str,
+        expected_source_table_id: u64,
+    ) -> Result<()> {
+        let query = parse_materialized_view_query(
+            physical_query,
+            "invalid materialized view physical query",
+        )?;
+        let mut planner = Planner::new_with_query_executor(
+            self.ctx.clone(),
+            Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
+                self.ctx.as_ref(),
+            ))),
+        );
+        let plan = planner
+            .plan_stmt(&Statement::Query(Box::new(query)), false)
+            .await
+            .map_err(|error| {
+                ErrorCode::InvalidMaterializedView(format!(
+                    "materialized view {}.{} source table changed: expected table id {}: {}",
+                    self.plan.database, self.plan.view_name, expected_source_table_id, error
+                ))
+            })?;
+        let databend_common_sql::plans::Plan::Query { metadata, .. } = plan else {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {}.{} physical definition is not a query",
+                self.plan.database, self.plan.view_name
+            )));
+        };
+        validate_materialized_view_source(
+            &metadata,
+            expected_source_table_id,
+            &format!("{}.{}", self.plan.database, self.plan.view_name),
+        )
     }
 
     fn attach_source(
