@@ -673,7 +673,7 @@ mod tests {
         let completed = Arc::new(AtomicBool::new(false));
         let completed_clone = completed.clone();
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
-        let task = tokio::spawn(async move {
+        let task = databend_common_base::runtime::spawn(async move {
             shutdown_rx.await.ok();
             completed_clone.store(true, Ordering::SeqCst);
         });
