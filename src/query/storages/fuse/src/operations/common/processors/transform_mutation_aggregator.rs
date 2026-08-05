@@ -406,15 +406,6 @@ impl TableMutationAggregator {
             for chunk in &partition_blocks.into_iter().chunks(chunk_size) {
                 let (new_blocks, new_hlls): (Vec<Arc<BlockMeta>>, Vec<Option<RawBlockHLL>>) =
                     chunk.unzip();
-                let new_hlls = if new_hlls.iter().all(|v| v.is_none()) {
-                    None
-                } else {
-                    let hlls = new_hlls
-                        .into_iter()
-                        .map(|x| x.unwrap_or_default())
-                        .collect::<Vec<_>>();
-                    Some(SegmentStatistics::new(hlls, Vec::new()).to_bytes()?)
-                };
                 // Only compaction/reclustering output may be force-marked perfect to keep
                 // those operations at a fixed point. REPLACE/MERGE append after-images
                 // must retain the physical perfect-block count from reduce_block_metas.
@@ -425,17 +416,21 @@ impl TableMutationAggregator {
 
                 let ctx = self.write_segment_ctx.clone();
                 tasks.push(async move {
+                    // SegmentStatistics encoding and Zstd compression are CPU-heavy. Perform them
+                    // in the bounded worker pool rather than serially before the first write.
+                    let new_hlls = generate_segment_stats(new_hlls)?;
                     ctx.write_segment(new_blocks, new_hlls, force_all_blocks_perfect)
                         .await
                 });
             }
         }
 
-        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let worker_count = max_threads.min(tasks.len());
         let new_segments = execute_futures_in_parallel(
             tasks,
-            threads_nums,
-            threads_nums * 2,
+            worker_count,
+            worker_count,
             "fuse-write-segments-worker".to_owned(),
         )
         .await?
