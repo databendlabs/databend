@@ -44,6 +44,7 @@ use socket2::TcpKeepalive;
 
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
+use crate::servers::mysql::mysql_interactive_worker::KeepAliveTask;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 
@@ -144,8 +145,14 @@ impl MySQLConnection {
 
         query_executor.spawn(async move {
             let tls_clone = tls.clone();
-            let interactive_worker =
-                InteractiveWorker::create(session.clone(), version, client_addr, salt);
+            let keep_alive_task = KeepAliveTask::default();
+            let interactive_worker = InteractiveWorker::create(
+                session.clone(),
+                version,
+                client_addr,
+                salt,
+                keep_alive_task.clone(),
+            );
             let opts = IntermediaryOptions {
                 process_use_statement_on_query: true,
                 reject_connection_on_dbname_absence: false,
@@ -160,6 +167,7 @@ impl MySQLConnection {
             };
 
             run_result.ok();
+            keep_alive_task.stop().await;
 
             let tenant = session.get_current_tenant();
             let session_id = session.get_id();

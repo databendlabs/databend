@@ -46,9 +46,12 @@ use opensrv_mysql::InitWriter;
 use opensrv_mysql::ParamParser;
 use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
+use parking_lot::Mutex;
 use rand::Rng as _;
 use rand::thread_rng;
 use tokio::io::AsyncWrite;
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use crate::auth::CredentialType;
@@ -78,12 +81,59 @@ struct InteractiveWorkerBase {
     version: BuildInfoRef,
 }
 
+struct KeepAliveHandle {
+    shutdown_tx: oneshot::Sender<()>,
+    task: JoinHandle<()>,
+}
+
+#[derive(Default)]
+struct KeepAliveTaskInner {
+    handle: Mutex<Option<KeepAliveHandle>>,
+}
+
+impl Drop for KeepAliveTaskInner {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.get_mut().take() {
+            drop(handle.shutdown_tx);
+            handle.task.abort();
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct KeepAliveTask {
+    inner: Arc<KeepAliveTaskInner>,
+}
+
+impl KeepAliveTask {
+    fn is_started(&self) -> bool {
+        self.inner.handle.lock().is_some()
+    }
+
+    fn start(&self, shutdown_tx: oneshot::Sender<()>, task: JoinHandle<()>) {
+        let old = self
+            .inner
+            .handle
+            .lock()
+            .replace(KeepAliveHandle { shutdown_tx, task });
+        debug_assert!(old.is_none());
+    }
+
+    pub(crate) async fn stop(&self) {
+        let Some(handle) = self.inner.handle.lock().take() else {
+            return;
+        };
+        handle.shutdown_tx.send(()).ok();
+        handle.task.await.ok();
+    }
+}
+
 pub struct InteractiveWorker {
     base: InteractiveWorkerBase,
     version: String,
     salt: [u8; 20],
     client_addr: String,
-    keep_alive_task_started: bool,
+    keep_alive_task: KeepAliveTask,
 }
 
 #[async_trait::async_trait]
@@ -253,8 +303,8 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
                 }
 
                 let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
-                if !self.keep_alive_task_started {
-                    self.start_keep_alive().await
+                if !self.keep_alive_task.is_started() {
+                    self.start_keep_alive()
                 }
 
                 let instant = Instant::now();
@@ -534,17 +584,18 @@ impl InteractiveWorker {
         version: BuildInfoRef,
         client_addr: String,
         salt: [u8; 20],
+        keep_alive_task: KeepAliveTask,
     ) -> InteractiveWorker {
         InteractiveWorker {
             version: format!("{MYSQL_VERSION}-{}", version.commit_detail),
             base: InteractiveWorkerBase { session, version },
             salt,
             client_addr,
-            keep_alive_task_started: false,
+            keep_alive_task,
         }
     }
 
-    async fn start_keep_alive(&mut self) {
+    fn start_keep_alive(&mut self) {
         let session = &self.base.session;
         let tenant = session.get_current_tenant();
         let session_id = session.get_id();
@@ -552,9 +603,9 @@ impl InteractiveWorker {
             .get_current_user()
             .expect("mysql handler should be authed when call")
             .name;
-        self.keep_alive_task_started = true;
+        let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
 
-        databend_common_base::runtime::spawn(async move {
+        let task = databend_common_base::runtime::spawn(async move {
             loop {
                 UserApiProvider::instance()
                     .client_session_api(&tenant)
@@ -565,9 +616,13 @@ impl InteractiveWorker {
                     )
                     .await
                     .ok();
-                tokio::time::sleep(Duration::from_secs(3600)).await;
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(3600)) => {},
+                    _ = &mut shutdown_rx => break,
+                }
             }
         });
+        self.keep_alive_task.start(shutdown_tx, task);
     }
 }
 
@@ -599,5 +654,34 @@ impl ProgressReporter for ContextProgressReporter {
     fn affected_rows(&self) -> u64 {
         let progress = self.context.get_write_progress_value();
         progress.rows as u64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+
+    use tokio::sync::oneshot;
+
+    use super::KeepAliveTask;
+
+    #[tokio::test]
+    async fn test_stop_keep_alive_task() {
+        let keep_alive_task = KeepAliveTask::default();
+        let completed = Arc::new(AtomicBool::new(false));
+        let completed_clone = completed.clone();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let task = tokio::spawn(async move {
+            shutdown_rx.await.ok();
+            completed_clone.store(true, Ordering::SeqCst);
+        });
+        keep_alive_task.start(shutdown_tx, task);
+
+        keep_alive_task.stop().await;
+
+        assert!(completed.load(Ordering::SeqCst));
+        assert!(!keep_alive_task.is_started());
     }
 }
