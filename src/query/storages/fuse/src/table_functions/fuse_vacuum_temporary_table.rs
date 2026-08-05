@@ -37,6 +37,35 @@ use log::info;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
 
+fn parse_temp_table_session<'a>(
+    path: &'a str,
+    tenant_name: &str,
+) -> Result<(&'a str, &'a str, String)> {
+    let parts: Vec<_> = path.split('/').collect();
+    if parts.first() != Some(&TEMP_TABLE_STORAGE_PREFIX) {
+        return Err(ErrorCode::Internal(format!(
+            "invalid path for temp table: {path}"
+        )));
+    }
+
+    // HTTP temporary tables are tenant-scoped, while MySQL temporary tables and
+    // HTTP temporary tables created by older versions use the legacy layout.
+    let user_index = if parts.get(1) == Some(&tenant_name) {
+        2
+    } else {
+        1
+    };
+    let session_index = user_index + 1;
+    if parts.len() <= session_index {
+        return Err(ErrorCode::Internal(format!(
+            "invalid path for temp table: {path}"
+        )));
+    }
+
+    let session_path = parts[..=session_index].join("/");
+    Ok((parts[user_index], parts[session_index], session_path))
+}
+
 #[async_backtrace::framed]
 pub async fn vacuum_inactive_temp_tables(
     ctx: &Arc<dyn TableContext>,
@@ -48,7 +77,8 @@ pub async fn vacuum_inactive_temp_tables(
         .recursive(true)
         .await?;
 
-    let client_session_mgr = UserApiProvider::instance().client_session_api(&ctx.get_tenant());
+    let tenant = ctx.get_tenant();
+    let client_session_mgr = UserApiProvider::instance().client_session_api(&tenant);
     let mut user_session_ids = HashSet::new();
     let mut inactive_user_session_ids = Vec::new();
     let session_limit = limit.unwrap_or(u64::MAX) as usize;
@@ -62,24 +92,19 @@ pub async fn vacuum_inactive_temp_tables(
             continue;
         }
         let path = entry.path();
-        let parts: Vec<_> = path.split('/').collect();
-        if parts.len() < 3 {
-            return Err(ErrorCode::Internal(format!(
-                "invalid path for temp table: {path}"
-            )));
-        };
-        let user_name = parts[1].to_string();
-        let session_id = parts[2].to_string();
-        if user_session_ids.contains(&(user_name.clone(), session_id.clone())) {
+        let (user_name, session_id, session_path) =
+            parse_temp_table_session(path, tenant.tenant_name())?;
+        let user_session = (user_name.to_string(), session_id.to_string(), session_path);
+        if user_session_ids.contains(&user_session) {
             continue;
         }
-        user_session_ids.insert((user_name.clone(), session_id.clone()));
+        user_session_ids.insert(user_session.clone());
         if client_session_mgr
-            .get_client_session(&user_name, &session_id)
+            .get_client_session(user_name, session_id)
             .await?
             .is_none()
         {
-            inactive_user_session_ids.push((user_name, session_id));
+            inactive_user_session_ids.push(user_session);
             if inactive_user_session_ids.len() >= session_limit {
                 break;
             }
@@ -88,18 +113,17 @@ pub async fn vacuum_inactive_temp_tables(
 
     let mut session_num = 0;
 
-    for (user_name, session_id) in inactive_user_session_ids {
+    for (user_name, session_id, session_path) in inactive_user_session_ids {
         if client_session_mgr
             .get_client_session(&user_name, &session_id)
             .await?
             .is_none()
         {
-            let path = format!("{}/{}/{}", TEMP_TABLE_STORAGE_PREFIX, user_name, session_id);
             info!(
                 "[TEMP TABLE] session={session_id} vacuum temporary table: {}",
-                path
+                session_path
             );
-            op.remove_all(&path).await?;
+            op.remove_all(&session_path).await?;
             session_num += 1;
         }
     }
@@ -173,5 +197,44 @@ impl SimpleTableFunc for FuseVacuumTemporaryTable {
             }
         };
         Ok(Self { limit })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_temp_table_session;
+
+    #[test]
+    fn test_parse_temp_table_session() {
+        assert_eq!(
+            (
+                "root",
+                "http-session",
+                "_tmp_tbl/tenant_a/root/http-session".to_string()
+            ),
+            parse_temp_table_session(
+                "_tmp_tbl/tenant_a/root/http-session/table/block.parquet",
+                "tenant_a"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            (
+                "root",
+                "legacy-session",
+                "_tmp_tbl/root/legacy-session".to_string()
+            ),
+            parse_temp_table_session(
+                "_tmp_tbl/root/legacy-session/table/block.parquet",
+                "tenant_a"
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_rejects_invalid_temp_table_path() {
+        assert!(parse_temp_table_session("_tmp_tbl/root", "tenant_a").is_err());
+        assert!(parse_temp_table_session("other/root/session/block.parquet", "tenant_a").is_err());
     }
 }

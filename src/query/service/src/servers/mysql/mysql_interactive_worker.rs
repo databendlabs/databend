@@ -559,8 +559,8 @@ impl InteractiveWorker {
                 UserApiProvider::instance()
                     .client_session_api(&tenant)
                     .upsert_client_session_id(
-                        &session_id,
                         &user_name,
+                        &session_id,
                         Duration::from_secs(3600 + 600),
                     )
                     .await
