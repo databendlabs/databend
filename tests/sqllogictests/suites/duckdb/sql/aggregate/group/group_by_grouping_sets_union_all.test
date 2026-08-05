@@ -20,6 +20,34 @@ create or replace table cascading_grouping_sets (a UInt64, b UInt64, v Nullable(
 statement ok
 insert into cascading_grouping_sets values (1, 1, 10), (1, 2, NULL), (2, 1, 5);
 
+# Cover the ordinary Union rewrite separately from the hierarchical alternative.
+statement ok
+set optimizer_skip_list = 'HierarchicalGroupingSetsToUnion,PushDownPrewhere';
+
+query IIIII
+select sum(v) as total,
+       a,
+       b,
+       grouping(a) + grouping(b) as lochierarchy,
+       rank() over (
+           partition by grouping(a) + grouping(b),
+                        case when grouping(b) = 0 then a end
+           order by sum(v) desc
+       ) as rank_within_parent
+from cascading_grouping_sets
+group by rollup(a, b)
+order by lochierarchy desc, a nulls last, b nulls last;
+----
+15 NULL NULL 2 1
+10 1 NULL 1 1
+5 2 NULL 1 2
+10 1 1 0 1
+NULL 1 2 0 2
+5 2 1 0 1
+
+statement ok
+set optimizer_skip_list = 'PushDownPrewhere';
+
 query IIIIIII rowsort
 select a, b, sum(v), sum0(v), count(v), min(v), max(v)
 from cascading_grouping_sets

@@ -21,6 +21,8 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
 
+use super::grouping_sets_common::ensure_group_items_are_projected;
+use super::grouping_sets_common::union_output_indexes;
 use crate::ScalarExpr;
 use crate::Symbol;
 use crate::optimizer::OptimizerContext;
@@ -128,6 +130,13 @@ impl Rule for RuleGroupingSetsToUnion {
                         }),
                     });
                 }
+                ensure_group_items_are_projected(
+                    &mut eval_scalar,
+                    &agg,
+                    grouping_sets.grouping_id_index,
+                )?;
+                let output_indexes =
+                    union_output_indexes(&eval_scalar, &agg, grouping_sets.grouping_id_index);
 
                 let mut children = Vec::with_capacity(grouping_sets.sets.len());
 
@@ -209,7 +218,14 @@ impl Rule for RuleGroupingSetsToUnion {
                     };
 
                     for scalar in eval_scalar.items.iter_mut() {
-                        visitor.visit(&mut scalar.scalar)?;
+                        if scalar.index == grouping_sets.grouping_id_index {
+                            scalar.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                                value: Scalar::Number(NumberScalar::UInt32(grouping_id)),
+                                span: None,
+                            });
+                        } else {
+                            visitor.visit(&mut scalar.scalar)?;
+                        }
                     }
 
                     let agg_plan = SExpr::create_unary(agg, cte_consumer.clone());
@@ -221,7 +237,7 @@ impl Rule for RuleGroupingSetsToUnion {
                 let mut result = children.first().unwrap().clone();
                 for other in children.into_iter().skip(1) {
                     let left_outputs: Vec<(Symbol, Option<ScalarExpr>)> =
-                        eval_scalar.items.iter().map(|x| (x.index, None)).collect();
+                        output_indexes.iter().map(|index| (*index, None)).collect();
                     let right_outputs = left_outputs.clone();
 
                     let union_plan = UnionAll {
@@ -229,7 +245,7 @@ impl Rule for RuleGroupingSetsToUnion {
                         right_outputs,
                         cte_scan_names: vec![],
                         logical_recursive_cte_id: None,
-                        output_indexes: eval_scalar.items.iter().map(|x| x.index).collect(),
+                        output_indexes: output_indexes.clone(),
                     };
                     result = SExpr::create_binary(Arc::new(union_plan.into()), result, other);
                 }
