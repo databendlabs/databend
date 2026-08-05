@@ -813,8 +813,8 @@ impl FuseTable {
 
         // Only the columns that are used in the push down will be read, cached and passed to the next pipeline.
         let projection_column_ids = {
-            let arrow_schema = self.schema().as_ref().into();
-            let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema()));
+            let arrow_schema = table_schema.as_ref().into();
+            let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&table_schema));
             let column_nodes = match push_down.as_ref().and_then(|p| p.projection.as_ref()) {
                 Some(projection) => {
                     match push_down.as_ref().and_then(|p| p.output_columns.as_ref()) {

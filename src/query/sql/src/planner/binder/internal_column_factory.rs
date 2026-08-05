@@ -20,13 +20,13 @@ use databend_common_catalog::plan::InternalColumnType;
 use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
 use databend_common_expression::BASE_ROW_ID_COL_NAME;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
-use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_expression::FILE_BASENAME_COLUMN_NAME;
 use databend_common_expression::FILE_CONTENT_KEY_COLUMN_NAME;
 use databend_common_expression::FILE_LAST_MODIFIED_COLUMN_NAME;
 use databend_common_expression::FILE_PATH_COLUMN_NAME;
 use databend_common_expression::FILE_ROW_NUMBER_COLUMN_NAME;
 use databend_common_expression::FILENAME_COLUMN_NAME;
+use databend_common_expression::INTERNAL_CHANGE_ROW_ID_COL_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
@@ -76,8 +76,11 @@ impl InternalColumnFactory {
         );
 
         internal_columns.insert(
-            CHANGE_ROW_ID_COL_NAME.to_string(),
-            InternalColumn::new(CHANGE_ROW_ID_COL_NAME, InternalColumnType::ChangeRowId),
+            INTERNAL_CHANGE_ROW_ID_COL_NAME.to_string(),
+            InternalColumn::new(
+                INTERNAL_CHANGE_ROW_ID_COL_NAME,
+                InternalColumnType::ChangeRowId,
+            ),
         );
 
         internal_columns.insert(

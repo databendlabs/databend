@@ -49,9 +49,9 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
-use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ColumnId;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::INTERNAL_CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
@@ -1010,7 +1010,7 @@ impl Table for FuseTable {
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
         column_id >= VECTOR_SCORE_COLUMN_ID
-            || self.change_tracking_enabled() && column_id == CHANGE_ROW_ID_COLUMN_ID
+            || self.change_tracking_enabled() && column_id == INTERNAL_CHANGE_ROW_ID_COLUMN_ID
     }
 
     fn supported_lazy_materialize(&self) -> bool {
