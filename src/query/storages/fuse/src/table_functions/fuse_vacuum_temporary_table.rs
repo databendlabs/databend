@@ -31,6 +31,7 @@ use databend_common_expression::types::StringType;
 use databend_common_storage::DataOperator;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TEMP_TABLE_STORAGE_PREFIX;
+use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use futures_util::TryStreamExt;
 use log::info;
 
@@ -40,7 +41,7 @@ use crate::table_functions::SimpleTableFunc;
 fn parse_temp_table_session<'a>(
     path: &'a str,
     tenant_name: &str,
-) -> Result<(&'a str, &'a str, String)> {
+) -> Result<Option<(&'a str, &'a str, String)>> {
     let parts: Vec<_> = path.split('/').collect();
     if parts.first() != Some(&TEMP_TABLE_STORAGE_PREFIX) {
         return Err(ErrorCode::Internal(format!(
@@ -48,22 +49,34 @@ fn parse_temp_table_session<'a>(
         )));
     }
 
-    // HTTP temporary tables are tenant-scoped, while MySQL temporary tables and
-    // HTTP temporary tables created by older versions use the legacy layout.
-    let user_index = if parts.get(1) == Some(&tenant_name) {
-        2
-    } else {
-        1
+    // A temporary table ID follows database ID in both layouts, which makes the
+    // layouts distinguishable even when a legacy user name equals the tenant.
+    let has_temp_table_id = |user_index: usize| {
+        parts
+            .get(user_index + 3)
+            .and_then(|part| part.parse::<u64>().ok())
+            .is_some_and(is_temp_table_id)
+    };
+    let legacy_layout = has_temp_table_id(1);
+    let tenant_layout = has_temp_table_id(2);
+    let user_index = match (legacy_layout, tenant_layout) {
+        (true, false) => 1,
+        (false, true) if parts.get(1) == Some(&tenant_name) => 2,
+        (false, true) => return Ok(None),
+        _ => {
+            return Err(ErrorCode::Internal(format!(
+                "invalid path for temp table: {path}"
+            )));
+        }
     };
     let session_index = user_index + 1;
-    if parts.len() <= session_index {
-        return Err(ErrorCode::Internal(format!(
-            "invalid path for temp table: {path}"
-        )));
-    }
 
     let session_path = parts[..=session_index].join("/");
-    Ok((parts[user_index], parts[session_index], session_path))
+    Ok(Some((
+        parts[user_index],
+        parts[session_index],
+        session_path,
+    )))
 }
 
 #[async_backtrace::framed]
@@ -92,8 +105,11 @@ pub async fn vacuum_inactive_temp_tables(
             continue;
         }
         let path = entry.path();
-        let (user_name, session_id, session_path) =
-            parse_temp_table_session(path, tenant.tenant_name())?;
+        let Some((user_name, session_id, session_path)) =
+            parse_temp_table_session(path, tenant.tenant_name())?
+        else {
+            continue;
+        };
         let user_session = (user_name.to_string(), session_id.to_string(), session_path);
         if user_session_ids.contains(&user_session) {
             continue;
@@ -202,6 +218,8 @@ impl SimpleTableFunc for FuseVacuumTemporaryTable {
 
 #[cfg(test)]
 mod tests {
+    use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
+
     use super::parse_temp_table_session;
 
     #[test]
@@ -213,9 +231,12 @@ mod tests {
                 "_tmp_tbl/tenant_a/root/http-session".to_string()
             ),
             parse_temp_table_session(
-                "_tmp_tbl/tenant_a/root/http-session/table/block.parquet",
+                &format!(
+                    "_tmp_tbl/tenant_a/root/http-session/1/{TEMP_TBL_ID_BEGIN}/_b/block.parquet"
+                ),
                 "tenant_a"
             )
+            .unwrap()
             .unwrap()
         );
         assert_eq!(
@@ -225,10 +246,38 @@ mod tests {
                 "_tmp_tbl/root/legacy-session".to_string()
             ),
             parse_temp_table_session(
-                "_tmp_tbl/root/legacy-session/table/block.parquet",
+                &format!("_tmp_tbl/root/legacy-session/1/{TEMP_TBL_ID_BEGIN}/_b/block.parquet"),
                 "tenant_a"
             )
             .unwrap()
+            .unwrap()
+        );
+        assert_eq!(
+            (
+                "tenant_a",
+                "mysql-session",
+                "_tmp_tbl/tenant_a/mysql-session".to_string()
+            ),
+            parse_temp_table_session(
+                &format!("_tmp_tbl/tenant_a/mysql-session/1/{TEMP_TBL_ID_BEGIN}/_b/block.parquet"),
+                "tenant_a"
+            )
+            .unwrap()
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_skips_other_tenant_temp_table_path() {
+        assert!(
+            parse_temp_table_session(
+                &format!(
+                    "_tmp_tbl/tenant_b/root/http-session/1/{TEMP_TBL_ID_BEGIN}/_b/block.parquet"
+                ),
+                "tenant_a"
+            )
+            .unwrap()
+            .is_none()
         );
     }
 
