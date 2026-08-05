@@ -71,7 +71,18 @@ message DataType {
     uint64   opaque_t      = 51;
     Empty    stage_location_t = 52;
     Empty    timestamp_tz_t = 53;
+    AggregateState aggregate_state_t = 54;
   }
+}
+
+message AggregateState {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string function_name = 1;
+  repeated bytes params = 2;
+  repeated DataType argument_types = 3;
+  DataType state_type = 4;
 }
 
 // TODO: remove when MIN_MSG_VER becomes >=24

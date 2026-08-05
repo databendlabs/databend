@@ -305,6 +305,25 @@ impl FromToProto for ex::TableDataType {
                     }
                     Dt24::StageLocationT(_) => ex::TableDataType::StageLocation,
                     Dt24::TimestampTzT(_) => ex::TableDataType::TimestampTz,
+                    Dt24::AggregateStateT(state) => {
+                        reader_check_msg(state.ver, state.min_reader_ver)?;
+                        let argument_types = state
+                            .argument_types
+                            .into_iter()
+                            .map(ex::TableDataType::from_pb)
+                            .collect::<Result<Vec<_>, _>>()?;
+                        let state_type = state.state_type.ok_or_else(|| {
+                            Incompatible::new(
+                                "AggregateState.state_type can not be None".to_string(),
+                            )
+                        })?;
+                        ex::TableDataType::AggregateState {
+                            function_name: state.function_name,
+                            params: state.params,
+                            argument_types,
+                            state_type: Box::new(ex::TableDataType::from_pb(*state_type)?),
+                        }
+                    }
                 };
                 Ok(x)
             }
@@ -375,6 +394,19 @@ impl FromToProto for ex::TableDataType {
             }
             TableDataType::StageLocation => new_pb_dt24(Dt24::StageLocationT(pb::Empty {})),
             TableDataType::TimestampTz => new_pb_dt24(Dt24::TimestampTzT(pb::Empty {})),
+            TableDataType::AggregateState {
+                function_name,
+                params,
+                argument_types,
+                state_type,
+            } => new_pb_dt24(Dt24::AggregateStateT(Box::new(pb::AggregateState {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                function_name: function_name.clone(),
+                params: params.clone(),
+                argument_types: argument_types.iter().map(FromToProto::to_pb).collect(),
+                state_type: Some(Box::new(state_type.to_pb())),
+            }))),
         }
     }
 }

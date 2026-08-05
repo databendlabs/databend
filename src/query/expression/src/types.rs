@@ -111,6 +111,20 @@ use crate::values::Scalar;
 
 pub type GenericMap = [DataType];
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AggregateStateDataType {
+    pub function_name: String,
+    pub params: Vec<Vec<u8>>,
+    pub argument_types: Vec<DataType>,
+    pub state_type: Box<DataType>,
+}
+
+impl AggregateStateDataType {
+    pub fn physical_type(&self) -> &DataType {
+        &self.state_type
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
     Null,
@@ -135,6 +149,7 @@ pub enum DataType {
     Geography,
     Vector(VectorDataType),
     Opaque(usize),
+    AggregateState(Box<AggregateStateDataType>),
 
     // Used internally for generic types
     Generic(usize),
@@ -143,6 +158,22 @@ pub enum DataType {
 }
 
 impl DataType {
+    pub fn matches_physical_type(&self, data_type: &DataType) -> bool {
+        if self == data_type {
+            return true;
+        }
+
+        match (self, data_type) {
+            (DataType::AggregateState(state), data_type) => {
+                state.physical_type().matches_physical_type(data_type)
+            }
+            (DataType::Nullable(logical), DataType::Nullable(physical)) => {
+                logical.matches_physical_type(physical)
+            }
+            _ => false,
+        }
+    }
+
     pub fn wrap_nullable(&self) -> Self {
         match self {
             DataType::Null | DataType::Nullable(_) => self.clone(),
@@ -223,6 +254,10 @@ impl DataType {
             DataType::Array(ty) => ty.has_generic(),
             DataType::Map(ty) => ty.has_generic(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
+            DataType::AggregateState(state) => {
+                state.argument_types.iter().any(DataType::has_generic)
+                    || state.state_type.has_generic()
+            }
         }
     }
 
@@ -254,6 +289,18 @@ impl DataType {
             DataType::Tuple(tys) => {
                 DataType::Tuple(tys.iter().map(|ty| ty.remove_generics(generics)).collect())
             }
+            DataType::AggregateState(state) => {
+                DataType::AggregateState(Box::new(AggregateStateDataType {
+                    function_name: state.function_name.clone(),
+                    params: state.params.clone(),
+                    argument_types: state
+                        .argument_types
+                        .iter()
+                        .map(|ty| ty.remove_generics(generics))
+                        .collect(),
+                    state_type: Box::new(state.state_type.remove_generics(generics)),
+                }))
+            }
         }
     }
 
@@ -284,6 +331,7 @@ impl DataType {
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
             DataType::Opaque(_) => false,
             DataType::StageLocation => false,
+            DataType::AggregateState(state) => state.state_type.has_nested_nullable(),
         }
     }
 
@@ -446,6 +494,7 @@ impl DataType {
             DataType::String => "VARCHAR".to_string(),
             DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             DataType::TimestampTz => "TIMESTAMP_TZ".to_string(),
+            DataType::AggregateState(_) => self.to_string(),
             _ => self.to_string().to_uppercase(),
         }
     }
@@ -515,7 +564,8 @@ impl DataType {
             | DataType::EmptyMap
             | DataType::Opaque(_)
             | DataType::Generic(_)
-            | DataType::StageLocation => Err(ErrorCode::BadArguments(format!(
+            | DataType::StageLocation
+            | DataType::AggregateState(_) => Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type {} to sql type",
                 self
             ))),
@@ -532,6 +582,7 @@ impl DataType {
                 .iter()
                 .map(|inner_ty| inner_ty.num_leaf_columns())
                 .sum(),
+            DataType::AggregateState(state) => state.physical_type().num_leaf_columns(),
             _ => 1,
         }
     }

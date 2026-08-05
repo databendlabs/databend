@@ -735,7 +735,7 @@ impl DataBlock {
         match value {
             Value::Scalar(scalar) => self.add_const_column(scalar, data_type),
             Value::Column(column) => {
-                debug_assert_eq!(data_type, column.data_type());
+                debug_assert!(data_type.matches_physical_type(&column.data_type()));
                 self.add_column(column)
             }
         }

@@ -15,6 +15,7 @@
 use std::fmt;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::BlockEntry;
@@ -22,6 +23,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 
@@ -39,6 +41,7 @@ use super::StateAddr;
 pub struct AggregateStateCombinator {
     name: String,
     nested: AggregateFunctionRef,
+    return_type: DataType,
 }
 
 impl AggregateStateCombinator {
@@ -56,9 +59,33 @@ impl AggregateStateCombinator {
             .join(", ");
 
         let name = format!("StateCombinator({nested_name}, {arg_name})");
-        let nested =
-            AggregateFunctionFactory::instance().get(nested_name, params, arguments, sort_descs)?;
-        Ok(Arc::new(AggregateStateCombinator { name, nested }))
+        let encoded_params = params
+            .iter()
+            .map(|param| {
+                borsh::to_vec(param).map_err(|error| {
+                    ErrorCode::Internal(format!(
+                        "Cannot serialize aggregate parameter for {nested_name}_state: {error}"
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let nested = AggregateFunctionFactory::instance().get(
+            nested_name,
+            params,
+            arguments.clone(),
+            sort_descs,
+        )?;
+        let return_type = DataType::AggregateState(Box::new(AggregateStateDataType {
+            function_name: nested_name.to_string(),
+            params: encoded_params,
+            argument_types: arguments,
+            state_type: Box::new(nested.serialize_data_type()),
+        }));
+        Ok(Arc::new(AggregateStateCombinator {
+            name,
+            nested,
+            return_type,
+        }))
     }
 
     pub fn combinator_desc() -> CombinatorDescription {
@@ -72,7 +99,7 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(self.nested.serialize_data_type())
+        Ok(self.return_type.clone())
     }
 
     fn init_state(&self, place: AggrState) {
