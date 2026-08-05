@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod recluster_mutator;
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -33,12 +35,15 @@ use log::debug;
 use log::info;
 use log::warn;
 use opendal::Operator;
+pub use recluster_mutator::CandidateScore;
+pub use recluster_mutator::ReclusterCandidateWindow;
+pub use recluster_mutator::ReclusterFinalCarry;
+pub use recluster_mutator::ReclusterMutator;
+pub use recluster_mutator::SelectedReclusterSegment;
 use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::SegmentLocation;
-use crate::operations::ReclusterFinalCarry;
-use crate::operations::ReclusterMutator;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 
