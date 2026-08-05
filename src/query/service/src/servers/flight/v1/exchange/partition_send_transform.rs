@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::task::Poll;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockPartitionStream;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::ExecutorWaker;
@@ -32,46 +31,38 @@ use super::outbound_send_channels::OutboundSendChannels;
 use super::outbound_send_channels::OutboundSendHandle;
 use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::SyncTaskSet;
-use crate::servers::flight::v1::scatter::FlightScatter;
+use crate::servers::flight::v1::partition::PartitionStream;
+use crate::servers::flight::v1::partition::PartitionedBlock;
 
-pub struct HashSendTransform {
+pub struct PartitionSendTransform {
     id: NodeIndex,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     local_pos: usize,
-    scatter: Arc<Box<dyn FlightScatter>>,
-    partition_stream: BlockPartitionStream,
+    partition_stream: Box<dyn PartitionStream>,
     tasks: SyncTaskSet,
     channels: OutboundSendChannels,
     handle: Option<OutboundSendHandle>,
 }
 
-impl HashSendTransform {
+impl PartitionSendTransform {
     pub fn create_item(
         worker_id: usize,
         local_pos: usize,
-        scatter: Arc<Box<dyn FlightScatter>>,
+        partition_stream: Box<dyn PartitionStream>,
         channels: Vec<Arc<dyn OutboundChannel>>,
         waker: Arc<ExecutorWaker>,
-        rows_threshold: usize,
-        bytes_threshold: usize,
     ) -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();
-        let scatter_size = channels.len();
         let channels = OutboundSendChannels::create(channels);
         let processor = ProcessorPtr::create(Box::new(Self {
-            scatter,
+            partition_stream,
             channels,
             local_pos,
             input: input.clone(),
             output: output.clone(),
             tasks: SyncTaskSet::new(worker_id, waker),
-            partition_stream: BlockPartitionStream::create(
-                rows_threshold,
-                bytes_threshold,
-                scatter_size,
-            ),
             handle: None,
             id: NodeIndex::default(),
         }));
@@ -84,9 +75,9 @@ impl HashSendTransform {
     }
 }
 
-impl Processor for HashSendTransform {
+impl Processor for PartitionSendTransform {
     fn name(&self) -> String {
-        String::from("HashSendTransform")
+        String::from("PartitionSendTransform")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -118,62 +109,63 @@ impl Processor for HashSendTransform {
 
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
+            let ready_blocks = self.partition_stream.push(data_block)?;
 
-            if let Some(indices) = self.scatter.scatter_indices(&data_block)? {
-                let ready_blocks = self.partition_stream.partition(indices, data_block, true);
+            let mut active_downstream = false;
+            let mut futures = Vec::new();
 
-                let mut active_downstream = false;
-                let mut futures = Vec::new();
+            for PartitionedBlock {
+                partition_id,
+                block,
+            } in ready_blocks
+            {
+                if block.is_empty() && block.get_meta().is_none() {
+                    continue;
+                }
 
-                for (partition_id, block) in ready_blocks {
-                    if block.is_empty() {
+                if partition_id == self.local_pos {
+                    if self.output.is_finished() {
                         continue;
                     }
 
-                    if partition_id == self.local_pos {
-                        if self.output.is_finished() {
-                            continue;
-                        }
-
-                        if self.output.can_push() {
-                            active_downstream = true;
-                            self.output.push_data(Ok(block));
-                            continue;
-                        }
-                    }
-
-                    if self.channels.is_closed(partition_id) {
+                    if self.output.can_push() {
+                        active_downstream = true;
+                        self.output.push_data(Ok(block));
                         continue;
                     }
-
-                    futures.push({
-                        let channel = self.channels.channel(partition_id).clone();
-                        async move { (partition_id, channel.add_block(block).await) }
-                    });
                 }
 
-                if !futures.is_empty() {
-                    let joined = Box::pin(futures::future::join_all(futures));
-                    let mut handle = self.tasks.spawn(self.id, joined);
+                if self.channels.is_closed(partition_id) {
+                    continue;
+                }
 
-                    match handle.poll(true) {
-                        Poll::Ready(results) => {
-                            self.channels.handle_send_results(results)?;
-                            if self.no_active_downstream() {
-                                self.input.finish();
-                                return Ok(Event::Finished);
-                            }
-                        }
-                        Poll::Pending => {
-                            self.handle = Some(handle);
-                            return Ok(Event::NeedConsume);
+                futures.push({
+                    let channel = self.channels.channel(partition_id).clone();
+                    async move { (partition_id, channel.add_block(block).await) }
+                });
+            }
+
+            if !futures.is_empty() {
+                let joined = Box::pin(futures::future::join_all(futures));
+                let mut handle = self.tasks.spawn(self.id, joined);
+
+                match handle.poll(true) {
+                    Poll::Ready(results) => {
+                        self.channels.handle_send_results(results)?;
+                        if self.no_active_downstream() {
+                            self.input.finish();
+                            return Ok(Event::Finished);
                         }
                     }
+                    Poll::Pending => {
+                        self.handle = Some(handle);
+                        return Ok(Event::NeedConsume);
+                    }
                 }
+            }
 
-                if active_downstream {
-                    return Ok(Event::NeedConsume);
-                }
+            if active_downstream {
+                return Ok(Event::NeedConsume);
             }
         }
 
@@ -182,21 +174,22 @@ impl Processor for HashSendTransform {
 
             let mut futures = Vec::new();
 
-            for partition_id in 0..self.channels.len() {
+            for PartitionedBlock {
+                partition_id,
+                block,
+            } in self.partition_stream.finish()?
+            {
                 if self.channels.is_closed(partition_id) {
                     continue;
                 }
-
-                if let Some(block) = self.partition_stream.finalize_partition(partition_id) {
-                    if block.is_empty() {
-                        continue;
-                    }
-
-                    futures.push({
-                        let channel = self.channels.channel(partition_id).clone();
-                        async move { (partition_id, channel.add_block(block).await) }
-                    });
+                if block.is_empty() && block.get_meta().is_none() {
+                    continue;
                 }
+
+                futures.push({
+                    let channel = self.channels.channel(partition_id).clone();
+                    async move { (partition_id, channel.add_block(block).await) }
+                });
             }
 
             if futures.is_empty() {
@@ -225,13 +218,12 @@ impl Processor for HashSendTransform {
 
     fn details_status(&self) -> Option<String> {
         Some(format!(
-            "handle_pending={}, local_pos={}, closed_channels={}/{}, closed={:?}, buffered_partitions={:?}",
+            "handle_pending={}, local_pos={}, closed_channels={}/{}, closed={:?}",
             self.handle.is_some(),
             self.local_pos,
             self.channels.closed_count(),
             self.channels.len(),
             self.channels.closed_status(),
-            self.partition_stream.partition_ids(),
         ))
     }
 

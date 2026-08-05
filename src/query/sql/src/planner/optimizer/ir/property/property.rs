@@ -98,7 +98,6 @@ pub enum Distribution {
     Random,
     Serial,
     Broadcast,
-    NodeToNodeHash(Vec<ScalarExpr>),
     GlobalHash(Vec<ScalarExpr>),
 }
 
@@ -119,13 +118,9 @@ impl Distribution {
             | (Distribution::Serial, Distribution::Serial)
             | (Distribution::Broadcast, Distribution::Broadcast) => true,
 
-            (Distribution::NodeToNodeHash(keys), Distribution::NodeToNodeHash(other_keys)) => {
-                keys == other_keys
-            }
             (Distribution::GlobalHash(keys), Distribution::GlobalHash(other_keys)) => {
                 keys == other_keys
             }
-            (Distribution::GlobalHash(_), Distribution::Broadcast) => true,
             _ => false,
         }
     }
@@ -138,14 +133,6 @@ impl Display for Distribution {
             Distribution::Random => write!(f, "Random"),
             Distribution::Serial => write!(f, "Serial"),
             Distribution::Broadcast => write!(f, "Broadcast"),
-            Distribution::NodeToNodeHash(keys) => write!(
-                f,
-                "Hash({})",
-                keys.iter()
-                    .map(|s| s.as_raw_expr().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
             Distribution::GlobalHash(keys) => write!(
                 f,
                 "Hash({})",
@@ -155,5 +142,19 @@ impl Display for Distribution {
                     .join(", ")
             ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Distribution;
+
+    #[test]
+    fn test_global_hash_distribution_is_strict() {
+        let global_hash = Distribution::GlobalHash(vec![]);
+
+        assert!(global_hash.satisfied_by(&Distribution::GlobalHash(vec![])));
+        assert!(!global_hash.satisfied_by(&Distribution::Broadcast));
+        assert!(!Distribution::Broadcast.satisfied_by(&global_hash));
     }
 }

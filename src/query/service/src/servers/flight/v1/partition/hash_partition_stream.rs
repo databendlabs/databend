@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
@@ -34,58 +37,49 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::servers::flight::v1::scatter::flight_scatter::FlightScatter;
+use crate::servers::flight::v1::partition::partition_stream::PartitionStream;
+use crate::servers::flight::v1::partition::partition_stream::PartitionedBlock;
 
 #[derive(Clone)]
-pub struct HashFlightScatter {
+struct HashPartitioner {
     func_ctx: FunctionContext,
     hash_key: Vec<Expr>,
     scatter_size: usize,
 }
 
-impl HashFlightScatter {
-    pub fn try_create(
+impl HashPartitioner {
+    fn try_create(
         func_ctx: FunctionContext,
         hash_keys: Vec<RemoteExpr>,
         scatter_size: usize,
-        local_pos: usize,
-    ) -> Result<Box<dyn FlightScatter>> {
-        if hash_keys.len() == 1 {
-            return OneHashKeyFlightScatter::try_create(
-                func_ctx,
-                &hash_keys[0],
-                scatter_size,
-                local_pos,
-            );
-        }
+    ) -> Result<Self> {
         let hash_key = hash_keys
             .iter()
             .map(|key| key.as_expr(&BUILTIN_FUNCTIONS))
             .collect();
 
-        Ok(Box::new(Self {
+        Ok(Self {
             func_ctx,
             scatter_size,
             hash_key,
-        }))
+        })
     }
 }
 
 #[derive(Clone)]
-struct OneHashKeyFlightScatter {
-    scatter_size: usize,
+struct OneHashKeyPartitioner {
     func_ctx: FunctionContext,
     indices_scalar: Expr,
     default_scatter_index: u64,
 }
 
-impl OneHashKeyFlightScatter {
-    pub fn try_create(
+impl OneHashKeyPartitioner {
+    fn try_create(
         func_ctx: FunctionContext,
         hash_key: &RemoteExpr,
         scatter_size: usize,
         local_pos: usize,
-    ) -> Result<Box<dyn FlightScatter>> {
+    ) -> Result<Self> {
         let default_scatter_index = if shuffle_by_block_id_in_merge_into(hash_key) {
             local_pos as u64
         } else {
@@ -111,72 +105,31 @@ impl OneHashKeyFlightScatter {
             &BUILTIN_FUNCTIONS,
         )?;
 
-        Ok(Box::new(OneHashKeyFlightScatter {
-            scatter_size,
+        Ok(OneHashKeyPartitioner {
             func_ctx,
             indices_scalar,
             default_scatter_index,
-        }))
+        })
     }
 }
 
-impl FlightScatter for OneHashKeyFlightScatter {
-    fn name(&self) -> &'static str {
-        "OneHashKey"
-    }
+trait RowPartitioner: Send + Sync {
+    fn partition_ids(&self, data_block: &DataBlock) -> Result<Vec<u64>>;
+}
 
-    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
-        let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let num = data_block.num_rows();
-
-        let indices = evaluator.run(&self.indices_scalar).unwrap();
-        let indices = get_hash_values(indices, num, self.default_scatter_index)?;
-        let data_blocks = DataBlock::scatter(&data_block, &indices, self.scatter_size)?;
-
-        let block_meta = data_block.get_meta();
-        let mut res = Vec::with_capacity(data_blocks.len());
-        for data_block in data_blocks {
-            res.push(data_block.add_meta(block_meta.cloned())?);
-        }
-
-        Ok(res)
-    }
-
-    fn scatter_indices(&self, data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
+impl RowPartitioner for OneHashKeyPartitioner {
+    fn partition_ids(&self, data_block: &DataBlock) -> Result<Vec<u64>> {
         let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let num = data_block.num_rows();
+
         let indices = evaluator.run(&self.indices_scalar).unwrap();
         let indices = get_hash_values(indices, num, self.default_scatter_index)?;
-        Ok(Some(indices.to_vec()))
+        Ok(indices.to_vec())
     }
 }
 
-impl FlightScatter for HashFlightScatter {
-    fn name(&self) -> &'static str {
-        "Hash"
-    }
-
-    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
-        let indices = self.build_scatter_indices(&data_block)?;
-
-        let block_meta = data_block.get_meta();
-        let data_blocks = DataBlock::scatter(&data_block, &indices, self.scatter_size)?;
-
-        let mut res = Vec::with_capacity(data_blocks.len());
-        for data_block in data_blocks {
-            res.push(data_block.add_meta(block_meta.cloned())?);
-        }
-
-        Ok(res)
-    }
-
-    fn scatter_indices(&self, data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
-        Ok(Some(self.build_scatter_indices(data_block)?))
-    }
-}
-
-impl HashFlightScatter {
-    fn build_scatter_indices(&self, data_block: &DataBlock) -> Result<Vec<u64>> {
+impl RowPartitioner for HashPartitioner {
+    fn partition_ids(&self, data_block: &DataBlock) -> Result<Vec<u64>> {
         let num_rows = data_block.num_rows();
         if self.hash_key.is_empty() {
             return Ok(vec![0; num_rows]);
@@ -197,6 +150,67 @@ impl HashFlightScatter {
         }
         Ok(hashes)
     }
+}
+
+struct HashPartitionStream {
+    partitions: usize,
+    partitioner: Arc<dyn RowPartitioner>,
+    buffer: BlockPartitionStream,
+}
+
+impl PartitionStream for HashPartitionStream {
+    fn push(&mut self, data_block: DataBlock) -> Result<Vec<PartitionedBlock>> {
+        let partition_ids = self.partitioner.partition_ids(&data_block)?;
+        Ok(self
+            .buffer
+            .partition(partition_ids, data_block, true)
+            .into_iter()
+            .map(|(partition_id, block)| PartitionedBlock::create(partition_id, block))
+            .collect())
+    }
+
+    fn finish(&mut self) -> Result<Vec<PartitionedBlock>> {
+        Ok((0..self.partitions)
+            .filter_map(|partition_id| {
+                self.buffer
+                    .finalize_partition(partition_id)
+                    .map(|block| PartitionedBlock::create(partition_id, block))
+            })
+            .collect())
+    }
+}
+
+pub fn create_hash_partition_streams(
+    func_ctx: FunctionContext,
+    hash_keys: Vec<RemoteExpr>,
+    partitions: usize,
+    local_pos: usize,
+    streams: usize,
+    rows_threshold: usize,
+    bytes_threshold: usize,
+) -> Result<Vec<Box<dyn PartitionStream>>> {
+    let partitioner: Arc<dyn RowPartitioner> = if hash_keys.len() == 1 {
+        Arc::new(OneHashKeyPartitioner::try_create(
+            func_ctx,
+            &hash_keys[0],
+            partitions,
+            local_pos,
+        )?)
+    } else {
+        Arc::new(HashPartitioner::try_create(
+            func_ctx, hash_keys, partitions,
+        )?)
+    };
+
+    Ok((0..streams)
+        .map(|_| {
+            Box::new(HashPartitionStream {
+                partitions,
+                partitioner: partitioner.clone(),
+                buffer: BlockPartitionStream::create(rows_threshold, bytes_threshold, partitions),
+            }) as Box<dyn PartitionStream>
+        })
+        .collect())
 }
 
 fn shuffle_by_block_id_in_merge_into(expr: &RemoteExpr) -> bool {
@@ -297,9 +311,22 @@ mod tests {
         })
     }
 
-    fn scatter(hash_key: Vec<Expr>, scatter_size: usize) -> Result<Box<dyn FlightScatter>> {
-        let hash_key = hash_key.iter().map(Expr::as_remote_expr).collect();
-        HashFlightScatter::try_create(FunctionContext::default(), hash_key, scatter_size, 0)
+    fn scatter(hash_key: Vec<Expr>, scatter_size: usize) -> Result<Box<dyn RowPartitioner>> {
+        let hash_key: Vec<_> = hash_key.iter().map(Expr::as_remote_expr).collect();
+        if hash_key.len() == 1 {
+            Ok(Box::new(OneHashKeyPartitioner::try_create(
+                FunctionContext::default(),
+                &hash_key[0],
+                scatter_size,
+                0,
+            )?))
+        } else {
+            Ok(Box::new(HashPartitioner::try_create(
+                FunctionContext::default(),
+                hash_key,
+                scatter_size,
+            )?))
+        }
     }
 
     fn scatter_indices(
@@ -307,9 +334,7 @@ mod tests {
         scatter_size: usize,
         block: &DataBlock,
     ) -> Result<Vec<u64>> {
-        Ok(scatter(hash_key, scatter_size)?
-            .scatter_indices(block)?
-            .unwrap())
+        scatter(hash_key, scatter_size)?.partition_ids(block)
     }
 
     fn block_hash_keys(block: &DataBlock) -> Vec<Expr> {
@@ -453,11 +478,7 @@ mod tests {
         let one_row = DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![42])]);
         let single_key = block_hash_keys(&one_row);
         let single_key_scatter = scatter(single_key, 3)?;
-        assert_eq!(single_key_scatter.name(), "OneHashKey");
-        assert_eq!(
-            single_key_scatter.scatter_indices(&one_row)?.unwrap().len(),
-            1
-        );
+        assert_eq!(single_key_scatter.partition_ids(&one_row)?.len(), 1);
 
         let no_columns = DataBlock::new(vec![], 3);
         assert_eq!(scatter_indices(vec![], 4, &no_columns)?, vec![0, 0, 0]);
@@ -498,5 +519,30 @@ mod tests {
             assert_balanced(&indices, partitions);
         }
         Ok(())
+    }
+
+    fn block(values: Vec<u64>) -> DataBlock {
+        DataBlock::new_from_columns(vec![UInt64Type::from_data(values)])
+    }
+
+    #[test]
+    fn test_hash_partition_stream_batches_and_flushes_per_worker() {
+        let mut streams =
+            create_hash_partition_streams(FunctionContext::default(), vec![], 3, 0, 2, 3, 0)
+                .unwrap();
+
+        assert!(streams[0].push(block(vec![1, 2])).unwrap().is_empty());
+        let ready = streams[0].push(block(vec![3, 4])).unwrap();
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].partition_id, 0);
+        assert_eq!(ready[0].block.num_rows(), 4);
+        assert!(streams[0].finish().unwrap().is_empty());
+
+        assert!(streams[1].push(block(vec![5, 6])).unwrap().is_empty());
+        let flushed = streams[1].finish().unwrap();
+        assert_eq!(flushed.len(), 1);
+        assert_eq!(flushed[0].partition_id, 0);
+        assert_eq!(flushed[0].block.num_rows(), 2);
+        assert!(streams[1].finish().unwrap().is_empty());
     }
 }

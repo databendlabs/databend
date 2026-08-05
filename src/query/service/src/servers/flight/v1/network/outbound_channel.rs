@@ -98,9 +98,7 @@ fn serialize_to_batches(
         Ok((dicts, vec![batch]))
     } else {
         let schema = block.infer_schema();
-        let arrow_schema = ArrowSchema::from(&schema);
         let batch = block.to_record_batch_with_dataschema(&schema)?;
-        let _ = &arrow_schema; // used for schema inference, batch carries it
         let (dicts, batch_data) = encode_batch(&batch, ipc_options)?;
         Ok((dicts, vec![batch_data]))
     }

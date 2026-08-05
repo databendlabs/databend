@@ -555,7 +555,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
         let serialized = SerializedPayload {
             bucket: 0,
             data_block: serialized_block.clone(),
-            max_partition_count: 1,
         };
 
         let mut restored = serialized
@@ -573,7 +572,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
         let partitioned = SerializedPayload {
             bucket: 0,
             data_block: serialized_block.clone(),
-            max_partition_count: 1,
         }
         .convert_to_partitioned_payload(
             vec![Int64Type::data_type()],
@@ -592,7 +590,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
         let single_payload = SerializedPayload {
             bucket: 0,
             data_block: serialized_block.clone(),
-            max_partition_count: 1,
         }
         .convert_to_single_payload(
             vec![Int64Type::data_type()],

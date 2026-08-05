@@ -17,16 +17,10 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::sorts::SortBound;
-use databend_common_settings::FlightCompression;
 
 use crate::servers::flight::v1::exchange::DataExchange;
-use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
-use crate::servers::flight::v1::exchange::ExchangeSorting;
-use crate::servers::flight::v1::exchange::MergeExchangeParams;
-use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::sessions::QueryContext;
 
@@ -37,51 +31,13 @@ impl ExchangeInjector for SortInjector {
         &self,
         _: &Arc<QueryContext>,
         exchange: &DataExchange,
-    ) -> Result<Arc<Box<dyn FlightScatter>>> {
+    ) -> Result<Arc<dyn FlightScatter>> {
         match exchange {
-            DataExchange::Merge(_)
-            | DataExchange::Broadcast(_)
-            | DataExchange::GlobalShuffleExchange(_) => unreachable!(),
-            DataExchange::NodeToNodeExchange(exchange) => {
-                Ok(Arc::new(Box::new(SortBoundScatter {
-                    partitions: exchange.destination_ids.len(),
-                })))
-            }
+            DataExchange::NodeToNodeExchange(exchange) => Ok(Arc::new(SortBoundScatter {
+                partitions: exchange.destination_ids.len(),
+            })),
+            _ => unreachable!(),
         }
-    }
-
-    fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>> {
-        None
-    }
-
-    fn apply_merge_serializer(
-        &self,
-        _: &MergeExchangeParams,
-        _: Option<FlightCompression>,
-        _: &mut Pipeline,
-    ) -> Result<()> {
-        unreachable!()
-    }
-
-    fn apply_merge_deserializer(&self, _: &MergeExchangeParams, _: &mut Pipeline) -> Result<()> {
-        unreachable!()
-    }
-
-    fn apply_shuffle_serializer(
-        &self,
-        params: &ShuffleExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        DefaultExchangeInjector::create().apply_shuffle_serializer(params, compression, pipeline)
-    }
-
-    fn apply_shuffle_deserializer(
-        &self,
-        params: &ShuffleExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        DefaultExchangeInjector::create().apply_shuffle_deserializer(params, pipeline)
     }
 }
 
