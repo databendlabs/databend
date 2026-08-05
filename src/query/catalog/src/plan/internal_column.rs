@@ -301,7 +301,11 @@ impl InternalColumn {
                 num_rows,
             ),
             InternalColumnType::BaseRowId => {
-                StringType::from_data(base_row_ids(meta, num_rows)?).into()
+                let (uuid, offsets) = base_row_id_components(meta, num_rows)?;
+                let base_row_ids = offsets
+                    .map(|offset| format!("{uuid}{offset:06x}"))
+                    .collect();
+                StringType::from_data(base_row_ids).into()
             }
             InternalColumnType::BaseBlockIds => {
                 assert!(meta.base_block_ids.is_some());
@@ -314,8 +318,9 @@ impl InternalColumn {
             InternalColumnType::ChangeRowId => {
                 let origin_block_id_index = schema.index_of(ORIGIN_BLOCK_ID_COL_NAME)?;
                 let origin_row_num_index = schema.index_of(ORIGIN_BLOCK_ROW_NUM_COL_NAME)?;
-                if origin_block_id_index >= block.num_columns()
-                    || origin_row_num_index >= block.num_columns()
+                if [origin_block_id_index, origin_row_num_index]
+                    .into_iter()
+                    .any(|index| index >= block.num_columns())
                 {
                     return Err(ErrorCode::Internal(
                         "change$row_id dependencies are missing from the input block",
@@ -324,11 +329,11 @@ impl InternalColumn {
 
                 let origin_block_ids = block.get_by_offset(origin_block_id_index);
                 let origin_row_nums = block.get_by_offset(origin_row_num_index);
-                let base_row_ids = base_row_ids(meta, num_rows)?;
+                let (base_uuid, base_offsets) = base_row_id_components(meta, num_rows)?;
                 let mut row_ids = Vec::with_capacity(num_rows);
-                for (row, base_row_id) in base_row_ids.into_iter().enumerate() {
+                for (row, base_offset) in base_offsets.enumerate() {
                     let row_id = match origin_block_ids.index(row) {
-                        Some(ScalarRef::Null) => base_row_id,
+                        Some(ScalarRef::Null) => format!("{base_uuid}{base_offset:06x}"),
                         Some(ScalarRef::Decimal(DecimalScalar::Decimal128(block_id, _))) => {
                             let Some(ScalarRef::Number(NumberScalar::UInt64(row_num))) =
                                 origin_row_nums.index(row)
@@ -407,7 +412,10 @@ impl InternalColumn {
     }
 }
 
-fn base_row_ids(meta: &InternalColumnMeta, num_rows: usize) -> Result<Vec<String>> {
+fn base_row_id_components(
+    meta: &InternalColumnMeta,
+    num_rows: usize,
+) -> Result<(&str, Box<dyn Iterator<Item = u64> + '_>)> {
     let uuid = try_extract_uuid_str_from_path(&meta.block_location).map_err(|e| {
         e.add_message(format!(
             "invalid block location for internal row ID: {}",
@@ -418,7 +426,5 @@ fn base_row_ids(meta: &InternalColumnMeta, num_rows: usize) -> Result<Vec<String
         Some(offsets) => Box::new(offsets.iter()),
         None => Box::new(0..num_rows as u64),
     };
-    Ok(offsets
-        .map(|offset| format!("{uuid}{offset:06x}"))
-        .collect())
+    Ok((uuid, offsets))
 }
