@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod linear_recluster;
 mod recluster_mutator;
+mod recluster_strategy;
+mod vector_recluster;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -31,16 +34,28 @@ use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_schedul
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+pub(crate) use linear_recluster::LinearReclusterStrategy;
+pub(crate) use linear_recluster::select_scalar_segments;
 use log::debug;
 use log::info;
 use log::warn;
 use opendal::Operator;
-pub use recluster_mutator::CandidateScore;
 pub use recluster_mutator::ReclusterCandidateWindow;
 pub use recluster_mutator::ReclusterFinalCarry;
 pub use recluster_mutator::ReclusterMutator;
-pub use recluster_mutator::SelectedReclusterSegment;
+pub use recluster_strategy::CandidateScore;
+pub(crate) use recluster_strategy::ReclusterBlock;
+pub(crate) use recluster_strategy::ReclusterBlockStats;
+pub(crate) use recluster_strategy::ReclusterGroup;
+pub use recluster_strategy::ReclusterMode;
+pub(crate) use recluster_strategy::ReclusterProperties;
+pub(crate) use recluster_strategy::ReclusterStrategy;
+pub(crate) use recluster_strategy::ReclusterTaskCandidate;
+pub use recluster_strategy::SelectedReclusterSegment;
+pub(crate) use recluster_strategy::passes_depth_gate;
+pub(crate) use recluster_strategy::task_candidate;
 use tokio::sync::Semaphore;
+pub(crate) use vector_recluster::VectorReclusterStrategy;
 
 use crate::FuseTable;
 use crate::SegmentLocation;
@@ -49,12 +64,6 @@ use crate::pruning::SegmentPruner;
 
 const DEFAULT_RECLUSTER_SEGMENT_LIMIT: usize = 1024;
 const DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW: usize = 32;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ReclusterMode {
-    Conservative,
-    Aggressive,
-}
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -94,15 +103,15 @@ impl FuseTable {
         // Carry is tied to the current cluster key because cached block metas
         // may be normalized during candidate probing.
         let carry_has_state = !carry.pending.is_empty() || carry.scan_cursor != 0;
-        if carry_has_state && carry.cluster_key_id != mutator.cluster_key_id {
+        if carry_has_state && carry.cluster_key_id != mutator.properties.cluster_key_id {
             debug!(
                 "recluster: reset carry reason=cluster_key_changed old_cluster_key_id={} new_cluster_key_id={}",
-                carry.cluster_key_id, mutator.cluster_key_id,
+                carry.cluster_key_id, mutator.properties.cluster_key_id,
             );
             carry.scan_cursor = 0;
             carry.pending.clear();
         }
-        carry.cluster_key_id = mutator.cluster_key_id;
+        carry.cluster_key_id = mutator.properties.cluster_key_id;
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let segment_limit = limit.unwrap_or(DEFAULT_RECLUSTER_SEGMENT_LIMIT);
