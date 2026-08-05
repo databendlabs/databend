@@ -24,6 +24,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 
+use super::grouping_sets_common::ensure_group_items_are_projected;
+use super::grouping_sets_common::union_output_indexes;
 use crate::ColumnBindingBuilder;
 use crate::Symbol;
 use crate::Visibility;
@@ -409,7 +411,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
         // Step 4: Assemble the complete plan
         let union_result =
-            self.create_union_all(&union_branches, eval_scalar, grouping_id_index)?;
+            self.create_union_all(&union_branches, eval_scalar, agg, grouping_id_index)?;
 
         // Step 5: Chain all CTEs in correct dependency order
         // Sequence semantics: left executes first, right executes after
@@ -782,6 +784,8 @@ impl RuleHierarchicalGroupingSetsToUnion {
         agg: &Aggregate,
         grouping_id_index: Symbol,
     ) -> Result<()> {
+        ensure_group_items_are_projected(eval_scalar, agg, grouping_id_index)?;
+
         let grouping_id =
             self.calculate_grouping_id(group_columns, &agg.group_items, grouping_id_index);
 
@@ -827,6 +831,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         &self,
         branches: &[SExpr],
         eval_scalar: &EvalScalar,
+        agg: &Aggregate,
         grouping_id_index: Symbol,
     ) -> Result<SExpr> {
         if branches.is_empty() {
@@ -835,10 +840,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
             ));
         }
 
-        let mut output_indexes: Vec<Symbol> = eval_scalar.items.iter().map(|x| x.index).collect();
-        if !output_indexes.contains(&grouping_id_index) {
-            output_indexes.push(grouping_id_index);
-        }
+        let output_indexes = union_output_indexes(eval_scalar, agg, grouping_id_index);
 
         let mut result = branches[0].clone();
         for branch in branches.iter().skip(1) {
