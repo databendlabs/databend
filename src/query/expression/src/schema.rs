@@ -91,6 +91,7 @@ pub const FILE_LAST_MODIFIED_COLUMN_NAME: &str = "metadata$file_last_modified";
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
 pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
 pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
+pub const CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 13;
 
 pub const FILENAME_COLUMN_ID: u32 = u32::MAX - 14;
 pub const FILE_ROW_NUMBER_COLUMN_ID: u32 = u32::MAX - 15;
@@ -103,8 +104,7 @@ pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
 pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
 pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
 
-// The change$row_id might be expended to the computation of
-// the ORIGIN_BLOCK_ROW_NUM_COL_NAME and BASE_ROW_ID_COL_NAME.
+// Column names reserved for engine-provided values and query pseudo columns.
 pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     HashSet::from([
         ROW_ID_COL_NAME,
@@ -134,7 +134,8 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id >= VECTOR_SCORE_COLUMN_ID
+    column_id == CHANGE_ROW_ID_COLUMN_ID
+        || column_id >= VECTOR_SCORE_COLUMN_ID
         || (FILE_LAST_MODIFIED_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
 }
 
