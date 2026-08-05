@@ -227,24 +227,53 @@ impl MaterializedViewRewriter {
 
         if let Some(GroupBy::Normal(groups)) = &stmt.group_by {
             for group in groups {
-                let selected_group = original_targets.iter().enumerate().find(|(_, target)| {
-                    matches!(target, SelectTarget::AliasedExpr { expr, alias }
-                    if !MaterializedViewChecker::check(expr)
-                        && (expr.as_ref().to_string() == group.to_string()
-                            || alias.as_ref().is_some_and(|alias| {
-                                matches!(group, Expr::ColumnRef { column, .. }
-                                    if column.column.name() == alias.name)
-                            })))
-                });
-                let Some((output_index, _)) = selected_group else {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "materialized view GROUP BY expression '{}' must appear in the SELECT list",
+                // Prefer the SELECT expression itself over an alias. This avoids choosing an
+                // aggregate output whose alias happens to equal the GROUP BY expression.
+                let selected_group = original_targets
+                    .iter()
+                    .enumerate()
+                    .find(|(_, target)| {
+                        matches!(target, SelectTarget::AliasedExpr { expr, .. }
+                            if expr.as_ref().to_string() == group.to_string())
+                    })
+                    .or_else(|| {
+                        original_targets.iter().enumerate().find(|(_, target)| {
+                            matches!(target, SelectTarget::AliasedExpr { alias: Some(alias), .. }
+                                if matches!(group, Expr::ColumnRef { column, .. }
+                                    if column.column.name() == alias.name))
+                        })
+                    });
+
+                let Some((first_output_index, selected_group)) = selected_group else {
+                    return Err(ErrorCode::InvalidMaterializedView(format!(
+                        "GROUP BY key '{}' is not in the view definition's select list",
                         group
                     )));
                 };
-                let name = output_names[output_index].clone();
-                aggregate_targets.push(AggregateExprRewriter::target(group.clone(), &name));
-                self.logical_define_exprs[output_index] = name;
+                let SelectTarget::AliasedExpr {
+                    expr: selected_expr,
+                    ..
+                } = selected_group
+                else {
+                    unreachable!()
+                };
+                let selected_expr_text = selected_expr.to_string();
+                // Store a repeated GROUP BY expression only once, under the first matching output
+                // name. Every logical output of that expression must reference this same physical
+                // column; otherwise later outputs would retain a source expression that does not
+                // exist in the MV storage schema.
+                let name = output_names[first_output_index].clone();
+                for (output_index, target) in original_targets.iter().enumerate() {
+                    if matches!(target, SelectTarget::AliasedExpr { expr, .. }
+                        if expr.to_string() == selected_expr_text)
+                    {
+                        self.logical_define_exprs[output_index] = name.clone();
+                    }
+                }
+                aggregate_targets.push(AggregateExprRewriter::target(
+                    selected_expr.as_ref().clone(),
+                    &name,
+                ));
             }
         }
 
@@ -488,12 +517,6 @@ pub struct MaterializedViewChecker {
 }
 
 impl MaterializedViewChecker {
-    pub fn check(expr: &Expr) -> bool {
-        let mut checker = Self::default();
-        let _ = expr.walk(&mut checker);
-        checker.has_aggregate
-    }
-
     pub fn check_query(query: &Query) -> Self {
         let mut checker = Self::default();
         let _ = query.walk(&mut checker);
@@ -812,6 +835,36 @@ mod tests {
         assert!(rewriter.logical_define_exprs()[3].contains("total_amount"));
         assert!(rewriter.logical_define_exprs()[3].contains("average_amount$sys_facade$1"));
         Ok(())
+    }
+
+    #[test]
+    fn test_rewrite_repeated_group_output_reuses_physical_column() -> Result<()> {
+        let (query, rewriter) = rewrite_with_columns(
+            "SELECT category, category, count(*) FROM source WHERE active GROUP BY category",
+            vec!["a".to_string(), "b".to_string(), "n".to_string()],
+        )?;
+
+        assert_eq!(rewriter.physical_names(), ["n", "a"]);
+        assert_eq!(rewriter.logical_names(), ["a", "b", "n"]);
+        assert_eq!(rewriter.logical_define_exprs(), ["a", "a", "n"]);
+        assert_eq!(
+            query.to_string(),
+            "SELECT count_state() AS n, category AS a FROM default.source WHERE active GROUP BY category"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_rewrite_rejects_group_key_outside_select_list() {
+        let error = rewrite_with_columns("SELECT sum(amount) FROM source GROUP BY id", vec![
+            "total".to_string(),
+        ])
+        .unwrap_err();
+
+        assert_eq!(
+            error.message(),
+            "GROUP BY key 'id' is not in the view definition's select list"
+        );
     }
 
     #[test]
