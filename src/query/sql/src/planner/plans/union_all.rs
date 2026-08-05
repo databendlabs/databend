@@ -12,14 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::stat_distribution::NdvEstimate;
+use databend_common_expression::stat_distribution::StatCardinality;
+use databend_common_expression::stat_distribution::StatCount;
 
 use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::Symbol;
+use crate::optimizer::ir::ColumnStat;
+use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -27,15 +33,17 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
+use crate::optimizer::ir::finite_range_ndv_upper;
+use crate::plans::EvalScalar;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UnionAll {
     // We'll cast the output of union to the expected data type by the cast expr at runtime.
-    // Left of union, output idx and the expected data type
+    // Left input symbol and its optional coercion expression, aligned by output position.
     pub left_outputs: Vec<(Symbol, Option<ScalarExpr>)>,
-    // Right of union, output idx and the expected data type
+    // Right input symbol and its optional coercion expression, aligned by output position.
     pub right_outputs: Vec<(Symbol, Option<ScalarExpr>)>,
     // Recursive cte scan names
     // For example: `with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t`
@@ -57,33 +65,161 @@ impl UnionAll {
         Ok(used_columns)
     }
 
-    pub fn derive_union_stats(
+    fn derive_union_stats(
         &self,
         left_stat_info: Arc<StatInfo>,
         right_stat_info: Arc<StatInfo>,
     ) -> Result<Arc<StatInfo>> {
         let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
 
-        let precise_cardinality =
-            left_stat_info
-                .statistics
-                .precise_cardinality
-                .and_then(|left_cardinality| {
-                    right_stat_info
-                        .statistics
-                        .precise_cardinality
-                        .map(|right_cardinality| left_cardinality + right_cardinality)
-                });
+        let precise_cardinality = if let Some(left_cardinality) =
+            left_stat_info.statistics.precise_cardinality
+            && let Some(right_cardinality) = right_stat_info.statistics.precise_cardinality
+        {
+            Some(left_cardinality + right_cardinality)
+        } else {
+            None
+        };
+
+        let left_cardinality = left_stat_info
+            .statistics
+            .precise_cardinality
+            .map(StatCardinality::exact)
+            .unwrap_or_else(|| StatCardinality::estimate(left_stat_info.cardinality));
+        let right_cardinality = right_stat_info
+            .statistics
+            .precise_cardinality
+            .map(StatCardinality::exact)
+            .unwrap_or_else(|| StatCardinality::estimate(right_stat_info.cardinality));
+
+        debug_assert_eq!(self.left_outputs.len(), self.right_outputs.len());
+        debug_assert_eq!(self.left_outputs.len(), self.output_indexes.len());
+
+        let column_stats = self
+            .left_outputs
+            .iter()
+            .zip(&self.right_outputs)
+            .zip(self.output_indexes.iter().copied())
+            .map(
+                |(((left_output, left_expr), (right_output, right_expr)), output)| {
+                    let left = {
+                        let statistics = &left_stat_info.statistics;
+                        match left_expr.as_ref() {
+                            Some(expr) => {
+                                EvalScalar::derive_item_stat(expr, statistics, left_cardinality)?
+                            }
+                            None => statistics.column_stats.get(left_output).cloned(),
+                        }
+                    };
+                    let right = {
+                        let statistics = &right_stat_info.statistics;
+                        match right_expr.as_ref() {
+                            Some(expr) => {
+                                EvalScalar::derive_item_stat(expr, statistics, right_cardinality)?
+                            }
+                            None => statistics.column_stats.get(right_output).cloned(),
+                        }
+                    };
+
+                    debug_assert!(
+                        left_stat_info.statistics.precise_cardinality != Some(0) || left.is_none(),
+                        "exactly empty UNION ALL left input must not carry column statistics"
+                    );
+                    debug_assert!(
+                        right_stat_info.statistics.precise_cardinality != Some(0)
+                            || right.is_none(),
+                        "exactly empty UNION ALL right input must not carry column statistics"
+                    );
+
+                    match (
+                        left_stat_info.statistics.precise_cardinality,
+                        right_stat_info.statistics.precise_cardinality,
+                    ) {
+                        (Some(0), Some(0)) => return Ok(None),
+                        (_, Some(0)) => return Ok(left.map(|stat| (output, stat))),
+                        (Some(0), _) => return Ok(right.map(|stat| (output, stat))),
+                        _ => {}
+                    }
+
+                    let (Some(left), Some(right)) = (left, right) else {
+                        // TODO: Distinguish all-NULL column statistics from unknown statistics so
+                        // a non-empty all-NULL branch can contribute its NULL count without
+                        // discarding the other branch's value statistics.
+                        return Ok(None);
+                    };
+                    let mut ndv = Self::merge_ndv(&left, &right)?;
+                    let min = if left.min.compare(&right.min)? == Ordering::Less {
+                        left.min
+                    } else {
+                        right.min
+                    };
+                    let max = if left.max.compare(&right.max)? == Ordering::Greater {
+                        left.max
+                    } else {
+                        right.max
+                    };
+
+                    if let Some(upper) = finite_range_ndv_upper(&min, &max) {
+                        ndv = ndv.reduce(upper);
+                    }
+                    let null_count = StatCount::sum(left.null_count, right.null_count);
+                    Ok(Some((output, ColumnStat {
+                        min,
+                        max,
+                        ndv,
+                        null_count,
+                        // Combining histograms requires aligning bucket boundaries and
+                        // accounting for overlapping values. Dropping it is safer than
+                        // exposing either child's distribution as the union distribution.
+                        histogram: None,
+                    })))
+                },
+            )
+            .filter_map(Result::transpose)
+            .collect::<Result<ColumnStatSet>>()?;
 
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality,
-                column_stats: Default::default(),
+                column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+
+    fn merge_ndv(left: &ColumnStat, right: &ColumnStat) -> Result<NdvEstimate> {
+        let ndv_upper = left.ndv.upper + right.ndv.upper;
+        let ranges_disjoint = left.max.compare(&right.min)? == Ordering::Less
+            || right.max.compare(&left.min)? == Ordering::Less;
+        if ranges_disjoint
+            && let (Some(left), Some(right)) = (left.ndv.expected, right.ndv.expected)
+        {
+            return Ok(NdvEstimate::new(left + right, ndv_upper));
+        }
+
+        if left.min.is_numeric()
+            && let (Some(left), Some(left_ndv)) = (&left.histogram, left.ndv.expected)
+            && let (Some(right), Some(right_ndv)) = (&right.histogram, right.ndv.expected)
+            && let Some(intersection) = left.estimate_join_numeric_compatible(right)?
+            && let Some(intersection_ndv) = intersection.ndv.expected
+        {
+            let lower = left_ndv.max(right_ndv);
+            let expected = (left_ndv + right_ndv - intersection_ndv).clamp(lower, ndv_upper);
+            return Ok(NdvEstimate::new(expected, ndv_upper));
+        }
+
+        Ok(match (left.ndv.expected, right.ndv.expected) {
+            // Match join estimation's NDV fallback: use the larger expected
+            // NDV when both sides have one, preserve the known side when only
+            // one does, and become upper-only only when neither side has one.
+            (Some(left), Some(right)) => NdvEstimate::new(left.max(right), ndv_upper),
+            (Some(expected), None) | (None, Some(expected)) => {
+                NdvEstimate::new(expected, ndv_upper)
+            }
+            (None, None) => NdvEstimate::upper_bound(ndv_upper),
+        })
     }
 }
 
