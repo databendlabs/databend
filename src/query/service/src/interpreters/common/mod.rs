@@ -31,7 +31,6 @@ pub use column::*;
 pub use finish_hook::QueryFinishHooks;
 pub use grant::validate_grant_object_exists;
 pub use log::*;
-pub use materialized_view::check_not_materialized_view;
 pub use materialized_view::check_table_maintenance_target;
 pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;

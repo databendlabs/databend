@@ -44,7 +44,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -68,6 +67,7 @@ use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
 use crate::interpreters::common::QueryFinishHooks;
+use crate::interpreters::common::check_table_maintenance_target;
 use crate::interpreters::interpreter_txn_commit::execute_commit_statement;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
@@ -106,12 +106,7 @@ impl Interpreter for RefreshMaterializedViewInterpreter {
                 &self.plan.view_name,
             )
             .await?;
-        if table.engine() != MATERIALIZED_VIEW_ENGINE {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} is not a materialized view",
-                self.plan.database, self.plan.view_name
-            )));
-        }
+        check_table_maintenance_target(table.as_ref(), &self.plan.target)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         MaterializedViewRefresh::new(table, self.ctx.clone(), &self.plan)
             .execute()
@@ -144,6 +139,12 @@ impl<'a> MaterializedViewRefresh<'a> {
         let source_table_id = mv_meta
             .materialized_view_source_table_id()
             .map_err(ErrorCode::from)?;
+        if source_table_id != self.plan.source_table_id {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {}.{} source changed: expected table id {}, found {}",
+                self.plan.database, self.plan.view_name, self.plan.source_table_id, source_table_id
+            )));
+        }
         let checkpoint = match (
             mv_meta
                 .options
@@ -169,19 +170,6 @@ impl<'a> MaterializedViewRefresh<'a> {
         };
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let binding_snapshot = catalog
-            .get_mv_source_binding_snapshot(&self.plan.tenant, source_table_id)
-            .await?;
-        if !binding_snapshot
-            .materialized_views
-            .iter()
-            .any(|mv| mv.mv_id == self.mv_table.get_id())
-        {
-            return Err(ErrorCode::InvalidMaterializedView(format!(
-                "materialized view {}.{} is invalid because its source schema changed; recreate the materialized view",
-                self.plan.database, self.plan.view_name
-            )));
-        }
         let source_meta = catalog
             .get_table_meta_by_id(source_table_id)
             .await?
@@ -213,6 +201,15 @@ impl<'a> MaterializedViewRefresh<'a> {
             return Err(ErrorCode::InvalidMaterializedView(format!(
                 "materialized view {}.{} source table id {} does not have CHANGE_TRACKING enabled",
                 self.plan.database, self.plan.view_name, source_table_id
+            )));
+        }
+        let current_source_generation = catalog
+            .get_mv_source_generation(&self.plan.tenant, source_table_id)
+            .await?;
+        if current_source_generation != self.plan.expected_source_generation {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {}.{} source schema changed while preparing refresh; recreate the materialized view",
+                self.plan.database, self.plan.view_name
             )));
         }
         if checkpoint

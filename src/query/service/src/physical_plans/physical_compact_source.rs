@@ -39,6 +39,7 @@ use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::interpreters::common::check_table_maintenance_target;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
 use crate::physical_plans::Exchange;
@@ -238,7 +239,7 @@ impl PhysicalPlanBuilder {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(catalog).await?;
         let tbl = catalog.get_table(&tenant, database, table).await?;
-        crate::interpreters::common::check_table_maintenance_target(tbl.as_ref(), target)?;
+        check_table_maintenance_target(tbl.as_ref(), target)?;
 
         let table_info = tbl.get_table_info().clone();
 

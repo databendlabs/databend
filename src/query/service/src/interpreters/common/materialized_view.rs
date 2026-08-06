@@ -19,36 +19,23 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::plans::TableMaintenanceTarget;
 
-pub fn check_not_materialized_view(table: &dyn Table, db_name: &str) -> Result<()> {
-    if is_materialized_view_engine(table.engine()) {
-        return Err(ErrorCode::TableEngineNotSupported(format!(
-            "Cannot modify materialized view `{}`.`{}`",
-            db_name,
-            table.name()
-        )));
-    }
-    Ok(())
-}
-
 pub fn check_table_maintenance_target(
     table: &dyn Table,
     target: &TableMaintenanceTarget,
 ) -> Result<()> {
     match target {
         TableMaintenanceTarget::Table => table.check_mutable(),
-        TableMaintenanceTarget::MaterializedView { table_id }
-            if table.get_id() == *table_id && is_materialized_view_engine(table.engine()) =>
-        {
-            Ok(())
-        }
         TableMaintenanceTarget::MaterializedView { table_id } => {
-            Err(ErrorCode::InvalidOperation(format!(
-                "Materialized view maintenance target changed: expected table id {}, found '{}'(id {}, engine {})",
-                table_id,
-                table.name(),
-                table.get_id(),
-                table.engine()
-            )))
+            if table.get_id() != *table_id || !is_materialized_view_engine(table.engine()) {
+                return Err(ErrorCode::InvalidOperation(format!(
+                    "Materialized view maintenance target changed: expected table id {}, found '{}'(id {}, engine {})",
+                    table_id,
+                    table.name(),
+                    table.get_id(),
+                    table.engine()
+                )));
+            }
+            Ok(())
         }
     }
 }

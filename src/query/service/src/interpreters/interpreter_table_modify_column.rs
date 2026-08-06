@@ -630,10 +630,16 @@ impl ModifyTableColumnInterpreter {
         };
         let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
         table_info.meta.schema = new_schema;
-        let update_mv_source_binding = Some(UpdateMVSourceBindingReq::new(
-            self.ctx.get_tenant(),
-            table.get_id(),
-        ));
+        // Temporary tables cannot be materialized-view sources and commit through
+        // UpdateTempTableReq, so they must not carry a regular-table binding update.
+        let update_mv_source_binding = if table.is_temp() {
+            None
+        } else {
+            Some(UpdateMVSourceBindingReq::new(
+                self.ctx.get_tenant(),
+                table.get_id(),
+            ))
+        };
 
         build_select_insert_plan(
             self.ctx.clone(),

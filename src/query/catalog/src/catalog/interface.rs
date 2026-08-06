@@ -82,8 +82,6 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
-use databend_common_meta_app::schema::MVInfo;
-use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -145,17 +143,6 @@ pub struct StorageDescription {
 
 pub trait CatalogCreator: Send + Sync + Debug {
     fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>>;
-}
-
-fn invalidates_mv_source_bindings(old_meta: &TableMeta, new_meta: &TableMeta) -> bool {
-    old_meta.schema.fields().iter().any(|old_field| {
-        new_meta
-            .schema
-            .fields()
-            .iter()
-            .find(|new_field| new_field.column_id == old_field.column_id)
-            != Some(old_field)
-    })
 }
 
 #[async_trait::async_trait]
@@ -295,19 +282,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Get the semantic source generation used to fence MV creation and refresh.
     async fn get_mv_source_generation(&self, tenant: &Tenant, source_table_id: u64) -> Result<u64>;
 
-    /// Read the active MV bindings for one source at a consistent generation.
-    async fn get_mv_source_binding_snapshot(
+    /// Point-read the immutable source generation on one materialized-view binding.
+    async fn get_mv_bound_source_generation(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
-    ) -> Result<MVSourceBindingSnapshot>;
-
-    /// List every MV that depends on a source table, including invalid MVs.
-    async fn list_mvs_by_source_table_id(
-        &self,
-        tenant: &Tenant,
-        source_table_id: u64,
-    ) -> Result<Vec<MVInfo>>;
+        mv_table_id: u64,
+    ) -> Result<Option<u64>>;
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(
@@ -608,7 +589,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             };
             update_temp_tables.push(req);
         } else {
-            if invalidates_mv_source_bindings(&current_table_info.meta, &req.new_table_meta) {
+            if current_table_info
+                .meta
+                .schema
+                .fields()
+                .iter()
+                .any(|old_field| {
+                    req.new_table_meta
+                        .schema
+                        .fields()
+                        .iter()
+                        .find(|new_field| new_field.column_id == old_field.column_id)
+                        != Some(old_field)
+                })
+            {
                 update_mv_source_bindings
                     .push(UpdateMVSourceBindingReq::new(tenant.clone(), req.table_id));
             }

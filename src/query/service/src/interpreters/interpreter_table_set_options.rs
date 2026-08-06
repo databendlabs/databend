@@ -131,15 +131,6 @@ impl Interpreter for SetOptionsInterpreter {
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
 
-        for key in self.plan.set_options.keys() {
-            if is_reserved_opt_key(key) {
-                return Err(ErrorCode::TableOptionInvalid(format!(
-                    "table option '{}' is reserved and cannot be modified",
-                    key
-                )));
-            }
-        }
-
         if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
             error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
@@ -175,6 +166,15 @@ impl Interpreter for SetOptionsInterpreter {
                 "can't change {} for alter table statement",
                 OPT_KEY_PARTITION_BY
             )));
+        }
+
+        for key in self.plan.set_options.keys() {
+            if is_reserved_opt_key(key) {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "table option '{}' is reserved and cannot be modified",
+                    key
+                )));
+            }
         }
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer

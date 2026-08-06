@@ -62,6 +62,7 @@ impl Interpreter for ModifyTableCommentInterpreter {
             Ok(table) => {
                 // check mutability
                 table.check_mutable()?;
+
                 let table_info = table.get_table_info();
                 let engine = table.engine();
                 if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {

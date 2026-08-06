@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -21,7 +22,6 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::plans::RenameTablePlan;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::common::check_not_materialized_view;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -69,7 +69,7 @@ impl Interpreter for RenameTableInterpreter {
                 return Err(error);
             }
         };
-        check_not_materialized_view(table.as_ref(), &self.plan.database)?;
+        table.check_mutable()?;
 
         let _resp = catalog
             .rename_table(RenameTableReq {

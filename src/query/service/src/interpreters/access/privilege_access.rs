@@ -540,6 +540,23 @@ impl PrivilegeAccess {
                 ))
             })?
             .parse::<u64>()?;
+
+        // Current grants and ownership are ID-based. Avoid resolving names on the common path;
+        // only fall back to names for compatibility with legacy grants.
+        match self
+            .validate_access(
+                &GrantObject::TableById(CATALOG_DEFAULT.to_string(), source_db_id, source_table_id),
+                UserPrivilegeType::Select,
+                false,
+                false,
+            )
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {}
+            Err(err) => return Err(err),
+        }
+
         let source_db_name = source_catalog.get_db_name_by_id(source_db_id).await?;
         let source_table_name = source_catalog
             .get_table_name_by_id(source_table_id)
@@ -706,71 +723,6 @@ impl PrivilegeAccess {
             }
             Err(err) => Err(err),
         }
-    }
-
-    async fn validate_query_source_table_access(
-        &self,
-        plan: &Plan,
-        enable_experimental_rbac_check: bool,
-    ) -> Result<()> {
-        let Plan::Query { metadata, .. } = plan else {
-            return Ok(());
-        };
-
-        let metadata = metadata.read().clone();
-        for table in metadata.tables() {
-            if table.is_source_of_stage() {
-                if enable_experimental_rbac_check {
-                    match table.table().get_data_source_info() {
-                        DataSourceInfo::StageSource(stage_info) => {
-                            self.validate_stage_access(
-                                &stage_info.stage_info,
-                                UserPrivilegeType::Read,
-                            )
-                            .await?;
-                        }
-                        DataSourceInfo::ParquetSource(stage_info) => {
-                            self.validate_stage_access(
-                                &stage_info.stage_info,
-                                UserPrivilegeType::Read,
-                            )
-                            .await?;
-                        }
-                        DataSourceInfo::ORCSource(stage_info) => {
-                            self.validate_stage_access(
-                                &stage_info.stage_table_info.stage_info,
-                                UserPrivilegeType::Read,
-                            )
-                            .await?;
-                        }
-                        DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
-                    }
-                }
-                continue;
-            }
-
-            if table.is_source_of_view() || table.table().is_temp() {
-                continue;
-            }
-
-            let catalog_table = table.table();
-            if is_materialized_view_engine(catalog_table.engine()) {
-                self.validate_mv_source_access(catalog_table.as_ref())
-                    .await?;
-            } else {
-                self.validate_table_access(
-                    table.catalog(),
-                    table.database(),
-                    table.name(),
-                    UserPrivilegeType::Select,
-                    false,
-                    false,
-                )
-                .await?;
-            }
-        }
-
-        Ok(())
     }
 
     async fn validate_warehouse_ownership(
@@ -1529,6 +1481,7 @@ impl AccessChecker for PrivilegeAccess {
 
         match plan {
             Plan::Query {
+                metadata,
                 rewrite_kind,
                 s_expr,
                 ..
@@ -1625,8 +1578,39 @@ impl AccessChecker for PrivilegeAccess {
                     }
                 }
 
-                self.validate_query_source_table_access(plan, enable_experimental_rbac_check)
-                    .await?;
+                let metadata = metadata.read().clone();
+
+                for table in metadata.tables() {
+                    if enable_experimental_rbac_check && table.is_source_of_stage() {
+                        match table.table().get_data_source_info() {
+                            DataSourceInfo::StageSource(stage_info) => {
+                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
+                            }
+                            DataSourceInfo::ParquetSource(stage_info) => {
+                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
+                            }
+                            DataSourceInfo::ORCSource(stage_info) => {
+                                self.validate_stage_access(&stage_info.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
+                            }
+                            DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
+                        }
+                    }
+                    if table.is_source_of_view() || table.table().is_temp() {
+                        continue;
+                    }
+
+                    let catalog_name = table.catalog();
+                    // like this sql: copy into t from (select * from @s3); will bind a mock table with name `system.read_parquet(s3)`
+                    // this is no means to check table `system.read_parquet(s3)` privilege
+                    if !table.is_source_of_stage() {
+                        let catalog_table = table.table();
+                        if is_materialized_view_engine(catalog_table.engine()) {
+                            self.validate_mv_source_access(catalog_table.as_ref()).await?;
+                        } else {
+                            self.validate_table_access(catalog_name, table.database(), table.name(), UserPrivilegeType::Select, false, false).await?
+                        }
+                    }
+                }
             }
             Plan::ExplainAnalyze { plan, .. } | Plan::Explain { plan, .. } => {
                 self.check(ctx, plan).await?

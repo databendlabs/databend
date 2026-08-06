@@ -508,13 +508,12 @@ where
                             .into(),
                         ));
                     }
-                    let generation_ident =
+                    let version_ident =
                         MVSourceBindingVersionIdent::new(req.tenant(), source_table_id);
-                    let (generation_kv_seq, generation_record) =
-                        self.get_pb_seq_and_value(&generation_ident).await?;
-                    let current_source_generation = generation_record
+                    let (version_seq, version) = self.get_pb_seq_and_value(&version_ident).await?;
+                    let current_source_generation = version
                         .as_ref()
-                        .map(|record| record.current_source_generation)
+                        .map(|version| version.current_source_generation)
                         .unwrap_or(0);
                     if current_source_generation != mv.expected_source_generation {
                         return Err(KVAppError::AppError(
@@ -526,15 +525,15 @@ where
                         ));
                     }
                     txn.condition
-                        .push(txn_cond_eq_seq(&generation_ident, generation_kv_seq));
-                    if generation_record.is_none() {
+                        .push(txn_cond_eq_seq(&version_ident, version_seq));
+                    if version.is_none() {
                         // A missing version record is semantic generation 0.
                         // Initialize it in the same transaction that publishes
                         // the first MV, so a failed CREATE leaves no record.
                         // Its resulting KV seq is deliberately not the MV
                         // generation; that seq is only a transaction CAS token.
                         txn.if_then.push(txn_put_pb(
-                            &generation_ident,
+                            &version_ident,
                             &MVSourceBindingVersion::default(),
                         ));
                     }

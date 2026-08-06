@@ -287,6 +287,13 @@ impl Binder {
                         source_table_id
                     ))
                 })?;
+            self.validate_materialized_view_binding(
+                catalog_name,
+                source_table_id,
+                table_meta.get_id(),
+                table_meta.name(),
+            )
+            .await?;
             Ok::<_, ErrorCode>((
                 mv_definition,
                 source_table_id,

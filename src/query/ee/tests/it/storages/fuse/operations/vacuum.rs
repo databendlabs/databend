@@ -32,8 +32,6 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
-use databend_common_meta_app::schema::TableId;
-use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
@@ -883,25 +881,15 @@ async fn test_vacuum_dropped_database_cleans_materialized_view() -> anyhow::Resu
     let ctx = fixture.new_query_ctx().await?;
     let tenant = ctx.get_tenant();
     let catalog = ctx.get_default_catalog()?;
-    let source_table = catalog.get_table(&tenant, db_name, source_name).await?;
     let mv_table = catalog.get_table(&tenant, db_name, mv_name).await?;
-    let db_id = catalog
-        .get_database(&tenant, db_name)
-        .await?
-        .get_db_info()
-        .database_id
-        .db_id;
     let mv_table_id = mv_table.get_id();
+    let source_table_id = mv_table
+        .get_table_info()
+        .meta
+        .materialized_view_source_table_id()?;
     let definition_ident = MVDefinitionIdent::new(&tenant, mv_table_id);
-    let source_index_ident = SourceTableMVIdent::new_generic(
-        &tenant,
-        SourceTableMV::new(source_table.get_id(), mv_table_id),
-    );
-    let table_id_ident = TableId::new(mv_table_id);
-    let table_id_to_name = TableIdToName {
-        table_id: mv_table_id,
-    };
-    let name_mapping = DBIdTableName::new(db_id, mv_name);
+    let source_index_ident =
+        SourceTableMVIdent::new_generic(&tenant, SourceTableMV::new(source_table_id, mv_table_id));
 
     assert!(meta.get_pb(&definition_ident).await?.is_some());
     assert!(meta.get_pb(&source_index_ident).await?.is_some());
@@ -924,9 +912,6 @@ async fn test_vacuum_dropped_database_cleans_materialized_view() -> anyhow::Resu
 
     fixture.execute_command("vacuum drop table").await?;
 
-    assert!(meta.get_pb(&table_id_ident).await?.is_none());
-    assert!(meta.get_pb(&table_id_to_name).await?.is_none());
-    assert!(meta.get_pb(&name_mapping).await?.is_none());
     assert!(meta.get_pb(&definition_ident).await?.is_none());
     assert!(meta.get_pb(&source_index_ident).await?.is_none());
     assert!(

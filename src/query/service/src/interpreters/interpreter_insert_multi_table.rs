@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -44,7 +45,6 @@ use databend_common_storages_fuse::FuseTable;
 use super::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::interpreters::common::check_not_materialized_view;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::CastSchema;
 use crate::physical_plans::ChunkAppendData;
@@ -450,7 +450,7 @@ impl InsertMultiTableInterpreter {
                 source_scalar_exprs,
             } = into;
             let table = self.ctx.get_table(catalog, database, table).await?;
-            check_not_materialized_view(table.as_ref(), database)?;
+            table.check_mutable()?;
             branches.push(
                 table,
                 condition,

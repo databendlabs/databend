@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -24,7 +25,6 @@ use databend_common_sql::plans::Plan;
 use databend_meta_client::types::MatchSeq;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::common::check_not_materialized_view;
 use crate::interpreters::util::check_view_circular_dependency;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -58,7 +58,7 @@ impl Interpreter for AlterViewInterpreter {
             .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
             .await
         {
-            check_not_materialized_view(tbl.as_ref(), &self.plan.database)?;
+            tbl.check_mutable()?;
 
             let mut planner = Planner::new(self.ctx.clone());
             let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;

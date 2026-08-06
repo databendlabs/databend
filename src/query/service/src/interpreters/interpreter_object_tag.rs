@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::database::is_builtin_database;
 use databend_common_catalog::database::is_system_database;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::tag_api::TagApi;
@@ -46,7 +47,6 @@ use databend_common_users::UserApiProvider;
 use log::info;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::common::check_not_materialized_view;
 use crate::meta_service_error;
 use crate::meta_txn_error;
 use crate::pipelines::PipelineBuildResult;
@@ -215,7 +215,7 @@ async fn resolve_table_id_object(
                     )));
                 }
             } else {
-                check_not_materialized_view(table.as_ref(), database)?;
+                table.check_mutable()?;
                 if table.is_temp() {
                     return Err(ErrorCode::Unimplemented(
                         "Tags are not supported for temporary tables",

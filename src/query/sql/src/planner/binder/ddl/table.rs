@@ -66,7 +66,6 @@ use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_config::GlobalConfig;
@@ -217,34 +216,6 @@ pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
 }
 
 impl Binder {
-    async fn ensure_table_has_no_materialized_views(
-        &self,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-    ) -> Result<()> {
-        if !catalog_name.eq_ignore_ascii_case(CATALOG_DEFAULT) {
-            return Ok(());
-        }
-
-        let table = self
-            .ctx
-            .get_table(catalog_name, database_name, table_name)
-            .await?;
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let materialized_views = catalog
-            .list_mvs_by_source_table_id(&self.ctx.get_tenant(), table.get_id())
-            .await?;
-        if !materialized_views.is_empty() {
-            return Err(ErrorCode::AlterTableError(format!(
-                "Cannot attach a security policy to table '{}.{}.{}' because it is referenced by a materialized view; drop the materialized view first",
-                catalog_name, database_name, table_name
-            )));
-        }
-
-        Ok(())
-    }
-
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_tables(
         &mut self,
@@ -1304,8 +1275,6 @@ impl Binder {
                 let mut lock_guard = None;
                 let action_in_plan = match action {
                     ModifyColumnAction::SetMaskingPolicy(column, name, using_columns) => {
-                        self.ensure_table_has_no_materialized_views(&catalog, &database, &table)
-                            .await?;
                         let column = self.normalize_object_identifier(column);
                         if let Some(columns) = using_columns {
                             if columns.len() < 2 {
@@ -1501,8 +1470,6 @@ impl Binder {
                         "Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1",
                     ));
                 }
-                self.ensure_table_has_no_materialized_views(&catalog, &database, &table)
-                    .await?;
                 let columns = columns
                     .iter()
                     .map(|c| self.normalize_identifier(c).name)

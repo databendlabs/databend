@@ -69,6 +69,7 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
         let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
         table.check_mutable()?;
+
         let table_info = table.get_table_info();
 
         if table.is_temp() {

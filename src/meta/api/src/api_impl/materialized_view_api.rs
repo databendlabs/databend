@@ -43,13 +43,16 @@
 //! first CREATE publish version 0 and its edge in one transaction; the KV
 //! sequence remains an internal CAS token.
 //!
-//! The list APIs expose the two dependency views explicitly:
+//! The APIs expose the dependency views explicitly:
 //!
 //! - [`MaterializedViewApi::list_mvs_by_source_table_id`] returns every edge,
 //!   including invalid ones, for management and lifecycle operations.
-//! - [`MaterializedViewApi::get_mv_source_binding_snapshot`] reads the source
-//!   generation before and after collecting metadata. It returns matching edges
-//!   only when the generation is stable across both reads.
+//! - [`MaterializedViewApi::get_mv_bound_source_generation`] reads one exact
+//!   dependency edge so query can compare its bound generation with the current
+//!   source generation before using the MV.
+//! - [`MaterializedViewApi::get_mv_source_binding_snapshot`] returns all active
+//!   MVs for source-driven query rewrite when the source generation stays stable
+//!   throughout metadata collection.
 //!
 //! `CreateMaterializedViewMeta::expected_source_generation` provides the same
 //! fence for CREATE. `create_table` compares it with the current value and uses
@@ -88,12 +91,6 @@
 //!     mark TableId(mv_id) dropped
 //!     delete MVDefinitionIdent(tenant, mv_id)
 //!     delete SourceTableMVIdent(tenant, source_id, mv_id)
-//!
-//! REFRESH MV txn:
-//!     assert current_source_generation == refresh_source_generation
-//!     update the MV snapshot in TableId(mv_id)
-//!     replace SourceTableMVIdent(tenant, source_id, mv_id) =
-//!         MVSourceBinding { bound_source_generation: refresh_source_generation }
 //!
 //! RENAME/DROP/MODIFY COLUMN ON SOURCE txn:
 //!     read MVSourceBindingVersion (missing means generation 0)
@@ -174,38 +171,34 @@ where
         self.get_pb(&ident).await
     }
 
-    /// List every MV that depends on a source table, including invalid MVs.
+    /// Get the immutable source generation stored on one exact MV dependency edge.
     ///
-    /// This unfiltered view is intended for management, SHOW, and GC.
-    /// Source-table maintenance must use
-    /// [`MaterializedViewApi::get_mv_source_binding_snapshot`] instead.
+    /// This is a single point read. It does not read the source's current
+    /// generation or decide whether the binding is active; callers compare the
+    /// returned value with the current generation for their operation.
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn list_mvs_by_source_table_id(
+    async fn get_mv_bound_source_generation(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
-    ) -> Result<Vec<MVInfo>, MetaError> {
-        list_mvs_by_source_table_id_impl(self, tenant, source_table_id, None).await
+        mv_table_id: u64,
+    ) -> Result<Option<u64>, MetaError> {
+        let ident = SourceTableMVIdent::new_generic(
+            tenant,
+            SourceTableMV::new(source_table_id, mv_table_id),
+        );
+        Ok(self
+            .get_pb(&ident)
+            .await?
+            .map(|binding| binding.data.bound_source_generation))
     }
 
     /// List MVs valid at the source generation observed by this call.
     ///
-    /// ```text
-    /// get MVSourceBindingVersionIdent(tenant, source_table_id) -> generation_before
-    /// list SourceTableMVIdent(tenant, source_table_id, *) -> mv_table_ids
-    /// filter relationship.bound_source_generation == generation_before
-    /// mget MVDefinitionIdent(mv_table_id) + TableId(mv_table_id) -> MVInfo
-    /// get MVSourceBindingVersionIdent(tenant, source_table_id) -> generation_after
-    /// if generation_before != generation_after, discard all MVInfo
-    /// ```
-    ///
-    /// The returned `generation` is the value from the final generation read. A
-    /// generation change during collection returns an empty `materialized_views`,
-    /// preventing metadata collected across two source-schema generations from
-    /// being exposed. A later writer must still use generation CAS when it commits.
-    /// A definition or `TableMeta` missing between the relationship list and mget
-    /// is omitted with a warning.
+    /// This source-wide API is intended for discovering query-rewrite
+    /// candidates. A generation change while collecting the bindings and MV
+    /// metadata produces an empty candidate list at the final generation.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn get_mv_source_binding_snapshot(
@@ -230,6 +223,19 @@ where
             materialized_views: mvs,
         })
     }
+
+    /// List every MV that depends on a source table, including invalid MVs.
+    ///
+    /// This unfiltered view is intended for management, SHOW, and GC.
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn list_mvs_by_source_table_id(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Vec<MVInfo>, MetaError> {
+        list_mvs_by_source_table_id_impl(self, tenant, source_table_id, None).await
+    }
 }
 
 async fn get_mv_source_generation<KV>(
@@ -252,7 +258,7 @@ async fn list_mvs_by_source_table_id_impl<KV>(
     kv_api: &KV,
     tenant: &Tenant,
     source_table_id: u64,
-    source_generation: Option<u64>,
+    expected_source_generation: Option<u64>,
 ) -> Result<Vec<MVInfo>, MetaError>
 where
     KV: kvapi::KVApi<Error = MetaError> + ?Sized,
@@ -267,8 +273,8 @@ where
     let mv_ids = source_mvs
         .iter()
         .filter_map(|(ident, binding)| {
-            source_generation
-                .is_none_or(|current| binding.data.bound_source_generation == current)
+            expected_source_generation
+                .is_none_or(|expected| binding.data.bound_source_generation == expected)
                 .then_some(ident.name().mv_table_id)
         })
         .collect::<Vec<_>>();
