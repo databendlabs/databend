@@ -46,6 +46,24 @@ pub fn is_materialized_view_engine(engine: &str) -> bool {
     engine == MATERIALIZED_VIEW_ENGINE
 }
 
+pub fn invalidates_mv_source_bindings(old_meta: &TableMeta, new_meta: &TableMeta) -> bool {
+    if old_meta.schema == new_meta.schema {
+        return false;
+    }
+
+    // Match each old column by ID, then compare the complete TableField. A missing or changed
+    // old field invalidates the binding; fields that exist only in the new schema (ADD COLUMN)
+    // are intentionally ignored.
+    old_meta.schema.fields().iter().any(|old_field| {
+        new_meta
+            .schema
+            .fields()
+            .iter()
+            .find(|new_field| new_field.column_id == old_field.column_id)
+            != Some(old_field)
+    })
+}
+
 impl TableMeta {
     /// Return the source table ID required by a materialized view.
     pub fn materialized_view_source_table_id(&self) -> Result<u64, AppError> {
@@ -121,12 +139,29 @@ pub struct CreateMaterializedViewMeta {
     pub expected_source_generation: u64,
 }
 
+/// A point-in-time view of one materialized-view definition and its source generation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MVDefinitionSnapshot {
+    pub definition: Option<SeqV<MVDefinition>>,
+    pub bound_source_generation: Option<u64>,
+    pub current_source_generation: Option<u64>,
+}
+
 /// Complete metadata needed to use one materialized view.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MVInfo {
     pub mv_id: u64,
     pub definition: SeqV<MVDefinition>,
     pub table_meta: SeqV<TableMeta>,
+}
+
+/// A consistent view of the active MV bindings for one source table.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MVSourceBindingSnapshot {
+    /// Binding generation at which `materialized_views` was collected.
+    pub generation: u64,
+    /// Empty when the generation changed while MV metadata was being collected.
+    pub materialized_views: Vec<MVInfo>,
 }
 
 #[cfg(test)]

@@ -800,7 +800,13 @@ pub struct OptimizeTableStmt {
 
 impl Display for OptimizeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "OPTIMIZE TABLE ")?;
+        self.fmt_with_target(f, "TABLE")
+    }
+}
+
+impl OptimizeTableStmt {
+    pub(super) fn fmt_with_target(&self, f: &mut Formatter, target: &str) -> std::fmt::Result {
+        write!(f, "OPTIMIZE {target} ")?;
         write_dot_separated_list(
             f,
             self.catalog

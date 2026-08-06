@@ -238,7 +238,6 @@ impl PhysicalPlanBuilder {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(catalog).await?;
         let tbl = catalog.get_table(&tenant, database, table).await?;
-        // check mutability
         tbl.check_mutable()?;
 
         let table_info = tbl.get_table_info().clone();

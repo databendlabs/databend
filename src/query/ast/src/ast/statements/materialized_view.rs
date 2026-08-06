@@ -20,6 +20,8 @@ use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::AlterTableAction;
+use crate::ast::ClusterOption;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -28,12 +30,35 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
+pub struct AlterMaterializedViewStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub view: Identifier,
+    pub action: AlterTableAction,
+}
+
+impl Display for AlterMaterializedViewStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ALTER MATERIALIZED VIEW ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.view)),
+        )?;
+        write!(f, " {}", self.action)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct CreateMaterializedViewStmt {
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub view: Identifier,
     pub columns: Vec<Identifier>,
+    pub cluster_by: Option<ClusterOption>,
     pub query: Box<Query>,
 }
 
@@ -59,7 +84,30 @@ impl Display for CreateMaterializedViewStmt {
             write_comma_separated_list(f, &self.columns)?;
             write!(f, ")")?;
         }
+        if let Some(cluster_by) = &self.cluster_by {
+            write!(f, " {cluster_by}")?;
+        }
         write!(f, " AS {}", self.query)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
+pub struct ShowCreateMaterializedViewStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub view: Identifier,
+}
+
+impl Display for ShowCreateMaterializedViewStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW CREATE MATERIALIZED VIEW ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.view)),
+        )
     }
 }
 

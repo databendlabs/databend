@@ -477,7 +477,10 @@ impl CreateTableInterpreter {
     ///
     /// - Rebuild `DataSchema` with default exprs.
     /// - Update cluster key of table meta.
-    fn build_request(&self, statistics: Option<TableStatistics>) -> Result<CreateTableReq> {
+    pub(crate) fn build_request(
+        &self,
+        statistics: Option<TableStatistics>,
+    ) -> Result<CreateTableReq> {
         let fields = self.plan.schema.fields().clone();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         for field in fields.iter() {

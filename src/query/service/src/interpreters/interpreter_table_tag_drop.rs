@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DropTableTagPlan;
 use databend_enterprise_table_ref_handler::get_table_ref_handler;
@@ -21,6 +22,7 @@ use databend_enterprise_table_ref_handler::get_table_ref_handler;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct DropTableTagInterpreter {
     ctx: Arc<QueryContext>,
@@ -45,6 +47,12 @@ impl Interpreter for DropTableTagInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let table = self
+            .ctx
+            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+            .await?;
+        table.check_mutable()?;
+
         let handler = get_table_ref_handler();
         handler
             .do_drop_table_tag(self.ctx.clone(), &self.plan)
