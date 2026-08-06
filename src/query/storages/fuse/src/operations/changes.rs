@@ -218,15 +218,15 @@ impl FuseTable {
                     ) \
                     select {a_cols}, \
                             a_change$action as change$action, \
-                            a_change$row_id as change$row_id, \
-                            d_change$action is not null as change$is_update \
+                            d_change$action is not null as change$is_update, \
+                            a_change$row_id as change$row_id \
                     from {cte_name} \
                     where a_change$action is not null \
                     union all \
                     select {d_cols}, \
                             d_change$action, \
-                            d_change$row_id, \
-                            a_change$action is not null \
+                            a_change$action is not null, \
+                            d_change$row_id \
                     from {cte_name} \
                     where d_change$action is not null",
                 )

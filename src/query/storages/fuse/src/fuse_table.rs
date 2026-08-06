@@ -1009,8 +1009,8 @@ impl Table for FuseTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        column_id >= VECTOR_SCORE_COLUMN_ID
-            || self.change_tracking_enabled() && column_id == CHANGE_ROW_ID_COLUMN_ID
+        (column_id >= VECTOR_SCORE_COLUMN_ID && column_id != CHANGE_ROW_ID_COLUMN_ID)
+            || (self.change_tracking_enabled() && column_id == CHANGE_ROW_ID_COLUMN_ID)
     }
 
     fn supported_lazy_materialize(&self) -> bool {

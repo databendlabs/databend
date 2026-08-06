@@ -48,6 +48,7 @@ pub const BLOCK_NAME_COLUMN_ID: u32 = u32::MAX - 1;
 pub const SEGMENT_NAME_COLUMN_ID: u32 = u32::MAX - 2;
 pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
 // internal stream column id.
+pub const CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 4;
 pub const BASE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 5;
 pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
 // internal search column id.
@@ -91,7 +92,6 @@ pub const FILE_LAST_MODIFIED_COLUMN_NAME: &str = "metadata$file_last_modified";
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
 pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
 pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
-pub const CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 13;
 
 pub const FILENAME_COLUMN_ID: u32 = u32::MAX - 14;
 pub const FILE_ROW_NUMBER_COLUMN_ID: u32 = u32::MAX - 15;
@@ -134,8 +134,7 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id == CHANGE_ROW_ID_COLUMN_ID
-        || column_id >= VECTOR_SCORE_COLUMN_ID
+    column_id >= VECTOR_SCORE_COLUMN_ID
         || (FILE_LAST_MODIFIED_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
 }
 
