@@ -34,15 +34,12 @@ pub struct TransformSortMergeLimit<R: Rows> {
     // `heap` must be dropped before `rows`, because its cursors borrow items
     // from the originating rows.
     heap: FixedHeap<Reverse<Cursor<'static, R, LocalCursorOrder>>>,
-    rows: HashMap<usize, R>,
+    rows: Vec<Option<R>>,
     buffer: HashMap<usize, DataBlock>,
 
     /// Record current memory usage.
     num_bytes: ByteSize,
     num_rows: usize,
-
-    /// The index for the next input block.
-    next_index: usize,
 
     block_size: usize,
 }
@@ -56,19 +53,18 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
             return Ok(());
         }
 
-        let input_index = self.next_index;
-        self.next_index += 1;
+        let input_index = self.rows.len();
 
         let block_num_bytes = block.memory_size() as u64;
         self.num_bytes += block_num_bytes;
         self.num_rows += block.num_rows();
         let cur_index = input_index;
         self.buffer.insert(cur_index, block);
-        let old = self.rows.insert(cur_index, init_rows);
-        debug_assert!(old.is_none());
+        debug_assert_eq!(cur_index, self.rows.len());
+        self.rows.push(Some(init_rows));
 
         {
-            let rows = self.rows.get(&cur_index).unwrap();
+            let rows = self.rows[cur_index].as_ref().unwrap();
             let num_rows = rows.len();
             debug_assert!(num_rows > 0);
             // Safety: Rows guarantees its items survive moving the Rows
@@ -87,7 +83,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
                             self.num_rows -= block.num_rows();
                         }
                         if evict.input_index != cur_index {
-                            let rows = self.rows.remove(&evict.input_index);
+                            let rows = self.rows[evict.input_index].take();
                             debug_assert!(rows.is_some());
                         }
                     }
@@ -100,14 +96,15 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
                 let row_index = cursor.row_index + 1;
                 // Safety: the originating Rows remains in `self.rows` for the
                 // entire loop.
-                let current = (row_index < num_rows)
-                    .then(|| unsafe { self.rows.get(&cur_index).unwrap().row_stable(row_index) });
+                let current = (row_index < num_rows).then(|| unsafe {
+                    self.rows[cur_index].as_ref().unwrap().row_stable(row_index)
+                });
                 cursor.advance(1, current);
             }
         }
 
         if !self.buffer.contains_key(&cur_index) {
-            let rows = self.rows.remove(&cur_index);
+            let rows = self.rows[cur_index].take();
             debug_assert!(rows.is_some());
         }
 
@@ -177,10 +174,9 @@ impl<R: Rows> TransformSortMergeLimit<R> {
     pub fn create(block_size: usize, limit: usize) -> Self {
         TransformSortMergeLimit {
             heap: FixedHeap::new(limit),
-            rows: HashMap::with_capacity(limit),
+            rows: Vec::with_capacity(limit),
             buffer: HashMap::with_capacity(limit),
             block_size,
-            next_index: 0,
             num_bytes: ByteSize(0),
             num_rows: 0,
         }
@@ -259,12 +255,37 @@ mod tests {
             sort.add_block(block, rows)?;
         }
 
-        assert_eq!(sort.rows.len(), 1);
+        assert_eq!(sort.rows.iter().flatten().count(), 1);
         let output = sort.on_finish(true)?;
         assert!(sort.rows.is_empty());
         assert_eq!(output.len(), 1);
         let values = Int32Type::try_downcast_column(&output[0].get_by_offset(0).to_column())?;
         assert_eq!(values.as_slice(), &[1, 2, 3]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_top_n_rows_vec_reuses_indices_after_drain() -> Result<()> {
+        let mut sort = TransformSortMergeLimit::<SimpleRowsAsc<Int32Type>>::create(4_096, 2);
+
+        for values in [vec![2, 3], vec![0, 1]] {
+            let column = Int32Type::from_data(values);
+            let block = DataBlock::new_from_columns(vec![column.clone()]);
+            let rows = SimpleRowsAsc::<Int32Type>::from_column(&column)?;
+            sort.add_block(block, rows)?;
+        }
+        assert_eq!(sort.rows.len(), 2);
+
+        let output = sort.on_finish(true)?;
+        assert!(!output.is_empty());
+        assert!(sort.rows.is_empty());
+
+        let column = Int32Type::from_data(vec![4, 5]);
+        let block = DataBlock::new_from_columns(vec![column.clone()]);
+        let rows = SimpleRowsAsc::<Int32Type>::from_column(&column)?;
+        sort.add_block(block, rows)?;
+        assert_eq!(sort.rows.len(), 1);
 
         Ok(())
     }
