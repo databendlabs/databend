@@ -395,6 +395,12 @@ impl Table for StreamTable {
         &self.info
     }
 
+    fn stream_source_table_info(&self) -> Option<&TableInfo> {
+        self.source_table
+            .as_ref()
+            .map(|table| table.get_table_info())
+    }
+
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
         (BASE_BLOCK_IDS_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
     }

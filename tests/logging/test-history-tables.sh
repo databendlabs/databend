@@ -20,12 +20,46 @@ BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../" || exit
 
+ICEBERG_COMPOSE_FILE="$PWD/tests/sqllogictests/scripts/docker-compose-iceberg-tpch.yml"
+iceberg_services_started=false
+
+stop_iceberg_services() {
+    if [ "$iceberg_services_started" = true ]; then
+        echo "Stopping Iceberg REST test services"
+        docker compose -f "$ICEBERG_COMPOSE_FILE" down || true
+    fi
+}
+
+start_iceberg_services() {
+    echo "Starting Iceberg REST test services"
+    iceberg_services_started=true
+    docker compose -f "$ICEBERG_COMPOSE_FILE" up -d rustfs mc rest
+
+    for _ in {1..60}; do
+        if curl -fsS http://127.0.0.1:9002/health/ready >/dev/null \
+            && curl -fsS http://127.0.0.1:8181/v1/config >/dev/null \
+            && docker compose -f "$ICEBERG_COMPOSE_FILE" exec -T mc \
+                /usr/bin/mc stat rustfs/iceberg-tpch >/dev/null 2>&1; then
+            echo "Iceberg REST test services are ready"
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "Iceberg REST test services did not become ready"
+    docker compose -f "$ICEBERG_COMPOSE_FILE" logs rustfs mc rest || true
+    return 1
+}
+
+trap stop_iceberg_services EXIT
+
 echo "Cleaning up previous runs"
 
 killall -9 databend-query || true
 killall -9 databend-meta || true
 killall -9 vector || true
 rm -rf ./.databend
+start_iceberg_services
 
 echo "Starting Databend Query cluster with 2 nodes enable history tables"
 
@@ -68,13 +102,13 @@ echo 'Start databend-query node-1'
 nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
 
 echo "Waiting on node-1..."
-python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
+python3 scripts/ci/wait_tcp.py --timeout 50 --port 9091
 
 echo 'Start databend-query node-2'
 env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
 
 echo "Waiting on node-2..."
-python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
+python3 scripts/ci/wait_tcp.py --timeout 50 --port 9092
 
 echo "Started 2-node cluster with history tables enabled..."
 

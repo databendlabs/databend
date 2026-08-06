@@ -16,6 +16,7 @@ mod async_crash_me;
 mod billing_usage_daily;
 mod copy_history;
 mod fuse_vacuum2;
+mod get_lineage;
 #[cfg(feature = "storage-stage")]
 pub(crate) mod infer_schema;
 mod inspect_parquet;
@@ -42,6 +43,7 @@ mod udf_table;
 
 pub use billing_usage_daily::BillingUsageDailyTable;
 pub use copy_history::CopyHistoryTable;
+pub use get_lineage::GetLineageTable;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
 pub use numbers::generate_numbers_parts;

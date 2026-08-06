@@ -147,13 +147,19 @@ impl ExplainPerfInterpreter {
                 self.ctx.as_ref(),
             ))),
         );
-        let (plan, _extras) = planner.plan_sql(&self.sql).await?;
-        let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
-        let mut stream = interpreter
-            .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
-            .await?;
-        while stream.try_next().await?.is_some() {}
-        Ok(())
+        let previous_query_lineage = self.ctx.get_query_lineage();
+        let result = async {
+            let (plan, _extras) = planner.plan_sql(&self.sql).await?;
+            let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
+            let mut stream = interpreter
+                .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+                .await?;
+            while stream.try_next().await?.is_some() {}
+            Ok(())
+        }
+        .await;
+        self.ctx.attach_query_lineage(previous_query_lineage);
+        result
     }
 
     fn build_hw_counters_html(&self) -> String {
