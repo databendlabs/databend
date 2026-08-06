@@ -466,7 +466,6 @@ impl BindContext {
             table,
             column,
             available_aliases,
-            false,
             name_resolution_ctx,
         )?;
         Self::finish_resolve_name(column, result)
@@ -479,7 +478,6 @@ impl BindContext {
         column: &Identifier,
         available_aliases: AliasLookup<'_>,
         fallback_aliases: Option<AliasLookup<'_>>,
-        column_first_alias_resolution: bool,
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionResult> {
         let mut result = self.resolve_name_candidates(
@@ -487,7 +485,6 @@ impl BindContext {
             table,
             column,
             available_aliases,
-            column_first_alias_resolution,
             name_resolution_ctx,
         )?;
         if result.is_empty()
@@ -498,7 +495,6 @@ impl BindContext {
                 table,
                 column,
                 fallback_aliases,
-                column_first_alias_resolution,
                 name_resolution_ctx,
             )?;
         }
@@ -512,7 +508,6 @@ impl BindContext {
         table: Option<&str>,
         column: &Identifier,
         available_aliases: AliasLookup<'_>,
-        column_first_alias_resolution: bool,
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionCandidates> {
         let name = &column.name;
@@ -538,7 +533,7 @@ impl BindContext {
                 column_case_sensitive,
                 &mut result,
             );
-        } else if self.expr_context.prefer_resolve_alias() && !column_first_alias_resolution {
+        } else if self.expr_context.prefer_resolve_alias() {
             for (alias, scalar) in available_aliases.iter() {
                 if database.is_none() && table.is_none() && name == alias {
                     result.push(NameResolutionResult::Alias {

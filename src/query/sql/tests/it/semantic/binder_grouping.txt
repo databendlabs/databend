@@ -336,3 +336,45 @@ Sort
                 └── limit: NONE
 
 
+=== grouping_in_order_by_keeps_alias_that_is_group_item ===
+description: GROUPING arguments must keep resolving to a same-name alias that is itself a group item, even when an input column shares the name.
+sql: SELECT i + 1 AS i, sum(v) FROM t GROUP BY GROUPING SETS ((i + 1), ()) ORDER BY grouping(i), i
+status: ok
+Sort
+├── sort keys: [grouping(i) (#7) ASC NULLS LAST, i (#6) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [sum(v) (#5) AS (#5), i + 1 (#2) AS (#6), grouping(0)(_grouping_id (#4)) AS (#7)]
+    └── Aggregate(Initial)
+        ├── group items: [plus(t.i (#0), 1) AS (#2), _grouping_id (#4) AS (#4)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#5)]
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), plus(t.i (#0), 1) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_alias_case_when_with_lateral_alias ===
+description: CASE WHEN grouping() aliases over string group columns must bind in ORDER BY together with lateral aliases.
+sql: SELECT CASE WHEN grouping(k) = 1 THEN 'all' ELSE k END AS k, count(*) AS c, sum(v) AS s, s / nullif(c, 0) AS ratio FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY k
+status: ok
+Sort
+├── sort keys: [k (#6) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [COUNT(*) (#4) AS (#4), sum(v) (#5) AS (#5), if(eq(grouping(0)(_grouping_id (#3)), 1), 'all', t.k (#0)) AS (#6), divide(sum(v) (#5), if(eq(COUNT(*) (#4), 0), NULL, COUNT(*) (#4))) AS (#7)]
+    └── Aggregate(Initial)
+        ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+        ├── aggregate functions: [count() AS (#4), sum(t.v (#1)) AS (#5)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+

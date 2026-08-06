@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::TypeName;
@@ -52,7 +54,10 @@ use super::TypeCheckAdapter;
 use super::TypeChecker;
 use super::rewrite_function;
 use super::rewrite_function::rewrite_function_name;
+use crate::binder::AliasLookup;
+use crate::binder::NameResolutionResult;
 use crate::planner::semantic::resolve_type_name;
+use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -215,24 +220,60 @@ where A: TypeCheckAdapter
         }
     }
 
-    fn with_grouping_argument_resolution<R>(
-        &mut self,
-        func_name: &str,
-        resolve: impl FnOnce(&mut Self) -> R,
-    ) -> R {
-        // GROUPING arguments identify input grouping expressions. In clauses
-        // such as HAVING and ORDER BY, bare names normally prefer SELECT
-        // aliases, but expanding a same-name alias here can turn
-        // `grouping(x)` into `grouping(<alias expression>)`. Prefer input
-        // columns for this argument tree while retaining SELECT aliases as a
-        // fallback when no input column has that name.
-        let original_column_first = self.column_first_alias_resolution;
-        if func_name.eq_ignore_ascii_case("grouping") {
-            self.column_first_alias_resolution = true;
+    /// GROUPING arguments must match grouping-sets items exactly (see
+    /// `AggregateInfo::replace_grouping`), but alias-preferring clauses such as
+    /// HAVING and ORDER BY can resolve a bare name to a same-name SELECT alias
+    /// like `if(grouping(x) = 1, 0, x) AS x`, shadowing the group column `x`.
+    /// Retarget such an argument to the input column when that column is a
+    /// grouping-sets item. This only fires on arguments that would otherwise
+    /// be rejected, so it never changes a previously working query.
+    fn grouping_argument_group_item(
+        &self,
+        arena: &CoreExprArena<'_>,
+        arg: CoreExprId,
+        resolved: &ScalarExpr,
+    ) -> Option<ScalarExpr> {
+        let aggregate_info = &self.bind_context.aggregate_info;
+        if aggregate_info.grouping_sets().is_none()
+            || aggregate_info.is_grouping_sets_item(resolved)
+        {
+            return None;
         }
-        let result = resolve(self);
-        self.column_first_alias_resolution = original_column_first;
-        result
+
+        // Only bare unqualified names can be shadowed by SELECT aliases.
+        let CoreExpr::ColumnRef {
+            span,
+            column:
+                ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(ident),
+                },
+        } = arena.get(arg)
+        else {
+            return None;
+        };
+
+        // Unknown or ambiguous names keep the original resolution.
+        let column = match self.bind_context.resolve_name(
+            None,
+            None,
+            ident,
+            AliasLookup::all(&[]),
+            self.name_resolution_ctx,
+        ) {
+            Ok(NameResolutionResult::Column(column)) => column,
+            _ => return None,
+        };
+
+        let candidate: ScalarExpr = BoundColumnRef {
+            span: *span,
+            column,
+        }
+        .into();
+        aggregate_info
+            .is_grouping_sets_item(&candidate)
+            .then_some(candidate)
     }
 
     pub(super) fn resolve_call(
@@ -257,14 +298,17 @@ where A: TypeCheckAdapter
             return rewritten_get_expr;
         }
 
-        let scalars = self.with_grouping_argument_resolution(func_name, |this| {
-            let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
-            for arg in args {
-                let box (scalar, _) = this.resolve_core(arena, *arg)?;
-                scalars.push(scalar);
+        let is_grouping = func_name.eq_ignore_ascii_case("grouping");
+        let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
+        for arg in args {
+            let box (mut scalar, _) = self.resolve_core(arena, *arg)?;
+            if is_grouping
+                && let Some(group_item) = self.grouping_argument_group_item(arena, *arg, &scalar)
+            {
+                scalar = group_item;
             }
-            Ok::<_, ErrorCode>(scalars)
-        })?;
+            scalars.push(scalar);
+        }
 
         if self.should_try_rewrite_variant_function(func_name) {
             let mut arg_types = SmallVec::<[DataType; 4]>::with_capacity(scalars.len());
@@ -308,9 +352,17 @@ where A: TypeCheckAdapter
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let params = self.resolve_core_function_params(arena, span, params, "scalar")?;
-        let (scalars, _) = self.with_grouping_argument_resolution(func_name, |this| {
-            this.resolve_expr_args(arena, args)
-        })?;
+        let (mut scalars, _) = self.resolve_expr_args(arena, args)?;
+
+        // `grouping<...>(...)` with explicit params is the internal rewritten
+        // form; keep its arguments untouched (see `replace_grouping`).
+        if func_name.eq_ignore_ascii_case("grouping") && params.is_empty() {
+            for (scalar, arg) in scalars.iter_mut().zip(args) {
+                if let Some(group_item) = self.grouping_argument_group_item(arena, *arg, scalar) {
+                    *scalar = group_item;
+                }
+            }
+        }
 
         if self.should_try_rewrite_variant_function(func_name) {
             let mut arg_types = Vec::with_capacity(scalars.len());

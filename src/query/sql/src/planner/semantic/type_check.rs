@@ -432,9 +432,6 @@ pub struct TypeChecker<'a, A> {
     aliases: AliasLookup<'a>,
     fallback_aliases: Option<AliasLookup<'a>>,
 
-    // true if input columns should be resolved before SELECT aliases.
-    column_first_alias_resolution: bool,
-
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.
     in_aggregate_function: bool,

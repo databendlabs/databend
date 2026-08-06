@@ -604,6 +604,18 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             setup_sqls: &["CREATE TABLE t(i UInt64, v UInt64)"],
             sql: "SELECT i + 1 AS k, grouping(k) AS g, sum(v) FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY g, k",
         },
+        SqlTestCase {
+            name: "grouping_in_order_by_keeps_alias_that_is_group_item",
+            description: "GROUPING arguments must keep resolving to a same-name alias that is itself a group item, even when an input column shares the name.",
+            setup_sqls: &["CREATE TABLE t(i UInt64, v UInt64)"],
+            sql: "SELECT i + 1 AS i, sum(v) FROM t GROUP BY GROUPING SETS ((i + 1), ()) ORDER BY grouping(i), i",
+        },
+        SqlTestCase {
+            name: "grouping_alias_case_when_with_lateral_alias",
+            description: "CASE WHEN grouping() aliases over string group columns must bind in ORDER BY together with lateral aliases.",
+            setup_sqls: &["CREATE TABLE t(k String, v UInt64)"],
+            sql: "SELECT CASE WHEN grouping(k) = 1 THEN 'all' ELSE k END AS k, count(*) AS c, sum(v) AS s, s / nullif(c, 0) AS ratio FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY k",
+        },
     ];
 
     run_binder_cases("binder_grouping.txt", &cases).await

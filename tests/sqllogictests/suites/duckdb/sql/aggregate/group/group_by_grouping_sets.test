@@ -399,6 +399,31 @@ select k + 1 as x, grouping(x) as g, sum(v) from t group by grouping sets ((x), 
 3 0 70
 NULL 1 100
 
+# A same-name alias that is itself the grouping-sets item keeps winning over the input column.
+query II
+select k + 1 as k, sum(v) from t group by grouping sets ((k + 1), ()) order by grouping(k), k;
+----
+2 30
+3 70
+NULL 100
+
+statement ok
+create table logs(game_id string, v int);
+
+statement ok
+insert into logs values ('a', 1), ('a', 2), ('b', 3);
+
+# Production shape: CASE WHEN grouping() alias over a string group column with a lateral alias.
+query TII
+select case when grouping(game_id) = 1 then 'all' else game_id end as game_id, count(*) as c, c + sum(v) as t from logs group by grouping sets ((game_id), ()) order by game_id;
+----
+a 2 5
+all 3 9
+b 1 4
+
+statement ok
+drop table logs all;
+
 statement ok
 drop table t all;
 
