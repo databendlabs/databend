@@ -543,7 +543,7 @@ impl DataType {
             DataType::String => "VARCHAR".to_string(),
             DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             DataType::TimestampTz => "TIMESTAMP_TZ".to_string(),
-            DataType::AggregateState(_) => self.to_string(),
+            DataType::AggregateState(_) => self.to_string().to_uppercase(),
             _ => self.to_string().to_uppercase(),
         }
     }

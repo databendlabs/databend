@@ -1,12 +1,12 @@
 query T
 select typeof(max_state(number)) from numbers(100);
 ----
-AggregateState(max, UInt64)
+AGGREGATESTATE(MAX, UINT64)
 
 query T
 select typeof(sum_state(number)) from numbers(10000);
 ----
-AggregateState(sum, UInt64)
+AGGREGATESTATE(SUM, UINT64)
 
 query ITIT
 select sum_state(number).1,
@@ -68,7 +68,7 @@ from (
     group by number % 4
 );
 ----
-AggregateState(sum, UInt64)
+AGGREGATESTATE(SUM, UINT64)
 
 query II
 select max_merge(max_merged_state), min_merge(min_merged_state)
@@ -131,13 +131,13 @@ from (
     )
 );
 ----
-AggregateState(arg_min, UInt64, Int64)
+AGGREGATESTATE(ARG_MIN, UINT64, INT64)
 
 query T
 select typeof(quantile_tdigest_state(0.5)(number))
 from numbers(100);
 ----
-AggregateState(quantile_tdigest(0.5), UInt64)
+AGGREGATESTATE(QUANTILE_TDIGEST(0.5), UINT64)
 
 query R
 select quantile_tdigest_merge(0.5)(state)
@@ -170,7 +170,7 @@ select typeof(sum_state), typeof(min_state), typeof(max_state), typeof(count_sta
 from aggregate_state_combinator_test
 limit 1
 ----
-AggregateState(sum, UInt64) NULL AggregateState(min, UInt64) NULL AggregateState(max, UInt64) NULL AggregateState(count, UInt64) NULL
+AGGREGATESTATE(SUM, UINT64) NULL AGGREGATESTATE(MIN, UINT64) NULL AGGREGATESTATE(MAX, UINT64) NULL AGGREGATESTATE(COUNT, UINT64) NULL
 
 query IIII
 select sum_merge(sum_state), min_merge(min_state), max_merge(max_state), count_merge(count_state)

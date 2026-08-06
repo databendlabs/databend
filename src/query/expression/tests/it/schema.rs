@@ -43,6 +43,7 @@ fn test_aggregate_state_table_physical_type() {
     };
 
     assert_eq!(aggregate_state.physical_type().as_ref(), &state_type);
+    assert_eq!(aggregate_state.sql_name(), "AGGREGATESTATE(SUM, UINT64)");
     assert_eq!(
         TableDataType::Nullable(Box::new(aggregate_state))
             .physical_type()

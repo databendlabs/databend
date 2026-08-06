@@ -1590,7 +1590,7 @@ impl TableDataType {
             TableDataType::Vector(ty) => format!("VECTOR({})", ty.dimension()),
             TableDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             TableDataType::StageLocation => "STAGE_LOCATION".to_string(),
-            TableDataType::AggregateState { .. } => self.to_string(),
+            TableDataType::AggregateState { .. } => self.to_string().to_uppercase(),
             _ => self.to_string().to_uppercase(),
         }
     }
