@@ -64,7 +64,7 @@ pub struct TempTblMgr {
     next_id: u64,
 
     // Atomic CTAS tables that have not been published yet.
-    pub staged_tables: HashMap<u64, TempTable>,
+    staged_tables: HashMap<u64, TempTable>,
 }
 
 impl Default for TempTblMgr {

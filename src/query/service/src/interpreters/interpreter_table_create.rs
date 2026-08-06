@@ -319,8 +319,6 @@ impl CreateTableInterpreter {
         //
         // If the un-drop fails, data inserted and the table will be invisible, and available for vacuum.
 
-        let temp_cleanup =
-            temp_prefix.map(|prefix| (self.ctx.get_current_session().temp_tbl_mgr(), prefix));
         pipeline
             .main_pipeline
             .lift_on_finished(move |info: &ExecutionInfo| {
@@ -355,10 +353,18 @@ impl CreateTableInterpreter {
                 Ok(())
             });
 
-        if let Some((temp_tbl_mgr, temp_prefix)) = temp_cleanup {
+        if let Some(temp_prefix) = temp_prefix {
+            let temp_tbl_mgr = self.ctx.get_current_session().temp_tbl_mgr();
             pipeline
                 .main_pipeline
-                .set_on_finished(always_callback(move |_: &ExecutionInfo| {
+                .set_on_finished(always_callback(move |info: &ExecutionInfo| {
+                    // Abort only the staged table created by this CTAS. A successfully committed
+                    // table has already been moved out of staged_tables, but avoid cleanup entirely
+                    // on success so this hook never handles unrelated temporary tables.
+                    if info.res.is_ok() {
+                        return Ok(());
+                    }
+
                     GlobalIORuntime::instance().block_on(cleanup_staged_temp_table(
                         temp_tbl_mgr,
                         table_id,

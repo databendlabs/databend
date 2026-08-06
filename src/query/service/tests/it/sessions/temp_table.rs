@@ -19,6 +19,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_storages_common_session::TempTblMgr;
 use databend_storages_common_session::abort_staged_temp_table;
@@ -56,31 +57,58 @@ fn create_table_req(
 }
 
 #[tokio::test]
-async fn test_aborted_ctas_does_not_leave_a_temporary_table() {
+async fn test_abort_only_removes_requested_staged_temporary_table() {
     let mut mgr = TempTblMgr::default();
-    let staged = mgr
+    let visible = mgr
         .create_table(
-            create_table_req("t", "MEMORY", CreateOption::Create, true),
+            create_table_req("visible", "MEMORY", CreateOption::Create, false),
+            "session".to_string(),
+        )
+        .unwrap();
+    let aborted = mgr
+        .create_table(
+            create_table_req("aborted", "MEMORY", CreateOption::Create, true),
+            "session".to_string(),
+        )
+        .unwrap();
+    let preserved = mgr
+        .create_table(
+            create_table_req("preserved", "MEMORY", CreateOption::Create, true),
             "session".to_string(),
         )
         .unwrap();
     let mgr = Arc::new(Mutex::new(mgr));
 
-    {
-        let guard = mgr.lock();
-        assert!(!guard.is_temp_table("db", "t"));
-        assert!(guard.list_tables().unwrap().is_empty());
-        assert!(!guard.is_empty());
-    }
-
-    abort_staged_temp_table(mgr.clone(), staged.table_id, "session")
+    abort_staged_temp_table(mgr.clone(), aborted.table_id, "session")
         .await
         .unwrap();
     // Cleanup is idempotent.
-    abort_staged_temp_table(mgr.clone(), staged.table_id, "session")
+    abort_staged_temp_table(mgr.clone(), aborted.table_id, "session")
         .await
         .unwrap();
-    assert!(mgr.lock().is_empty());
+
+    let guard = mgr.lock();
+    assert!(
+        guard
+            .get_table_meta_by_id(aborted.table_id)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        guard
+            .get_table_meta_by_id(preserved.table_id)
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        guard
+            .get_table_meta_by_id(visible.table_id)
+            .unwrap()
+            .is_some()
+    );
+    assert!(guard.is_temp_table("db", "visible"));
+    assert_eq!(guard.list_tables().unwrap().len(), 1);
+    assert!(!guard.is_empty());
 }
 
 #[tokio::test]
@@ -92,12 +120,18 @@ async fn test_abort_preserves_staged_table_when_cleanup_fails() {
             "session".to_string(),
         )
         .unwrap();
-    mgr.staged_tables
-        .get_mut(&staged.table_id)
+    let mut table_meta = mgr
+        .get_table_meta_by_id(staged.table_id)
         .unwrap()
-        .meta
-        .options
-        .remove(OPT_KEY_DATABASE_ID);
+        .unwrap()
+        .data;
+    table_meta.options.remove(OPT_KEY_DATABASE_ID);
+    mgr.update_multi_table_meta(vec![UpdateTempTableReq {
+        table_id: staged.table_id,
+        desc: "db.t".to_string(),
+        new_table_meta: table_meta,
+        copied_files: Default::default(),
+    }]);
     let mgr = Arc::new(Mutex::new(mgr));
 
     let err = abort_staged_temp_table(mgr.clone(), staged.table_id, "session")
@@ -106,7 +140,12 @@ async fn test_abort_preserves_staged_table_when_cleanup_fails() {
     assert_eq!(err.code(), ErrorCode::INTERNAL);
 
     let guard = mgr.lock();
-    assert!(guard.staged_tables.contains_key(&staged.table_id));
+    assert!(
+        guard
+            .get_table_meta_by_id(staged.table_id)
+            .unwrap()
+            .is_some()
+    );
     assert!(guard.list_tables().unwrap().is_empty());
     assert!(!guard.is_empty());
 }
