@@ -317,6 +317,16 @@ impl FuseTable {
     ) -> Result<Option<Pipeline>> {
         let snapshot = plan.statistics.snapshot.clone();
         let table_schema = self.schema_with_stream();
+        let internal_column_names = plan
+            .internal_columns
+            .as_ref()
+            .map(|columns| {
+                columns
+                    .values()
+                    .map(|column| column.column_name().clone())
+                    .collect::<HashSet<_>>()
+            })
+            .unwrap_or_default();
         let dal = self.operator.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
         let mut segment_format = FuseSegmentFormat::Row;
@@ -418,6 +428,7 @@ impl FuseTable {
                     part_info_tx,
                     derterministic_cache_key.clone(),
                     table_schema.clone(),
+                    internal_column_names.clone(),
                 )?;
             }
         }
@@ -804,6 +815,7 @@ impl FuseTable {
         part_info_tx: Sender<Result<PartInfoPtr>>,
         _derterministic_cache_key: Option<String>,
         table_schema: TableSchemaRef,
+        internal_column_names: HashSet<String>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let push_down = &pruner.push_down;
@@ -840,6 +852,12 @@ impl FuseTable {
                 let filter = &filters.filter.as_expr(&BUILTIN_FUNCTIONS);
                 let column_refs = filter.column_refs();
                 for (column_name, _) in column_refs {
+                    // Internal columns are materialized after storage reads. Their physical
+                    // dependencies are already included in the pushdown projection, so they
+                    // must not be requested as column-oriented segment metadata/statistics.
+                    if internal_column_names.contains(&column_name) {
+                        continue;
+                    }
                     let field = table_schema.field_with_name(&column_name)?;
                     for column_id in field.leaf_column_ids() {
                         column_ids.insert(column_id);
