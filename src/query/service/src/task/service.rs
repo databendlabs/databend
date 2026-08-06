@@ -224,14 +224,7 @@ impl TaskService {
             // Delete cleanup updates shared metadata, so it must run even if the
             // task's assigned warehouse currently has no live query node.
             let is_delete = matches!(&task_message, TaskMessage::DeleteTask(_, _, _));
-            if is_delete
-                && self
-                    .create_context(None)
-                    .await?
-                    .get_cluster()
-                    .get_warehouse_id()
-                    .is_err()
-            {
+            if is_delete && self.create_context(None).await?.get_cluster().unassign {
                 continue;
             }
             if !is_delete {
