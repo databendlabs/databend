@@ -179,7 +179,7 @@ impl Binder {
             .await?;
 
         let MutationExpressionBindResult {
-            input,
+            mut input,
             mut bind_context,
             mutation_type,
             mutation_strategy,
@@ -261,6 +261,12 @@ impl Binder {
                 .await?,
             );
         }
+        drop(scalar_binder);
+
+        // Matched expressions are bound after the input plan is built. Add every internal column
+        // discovered there to its scan and keep it through physical column pruning.
+        input = self.add_bound_columns_into_expr(&mut bind_context, input)?;
+        required_columns.extend(bind_context.bound_internal_columns.values().copied());
 
         let mutation = crate::plans::Mutation {
             catalog_name,

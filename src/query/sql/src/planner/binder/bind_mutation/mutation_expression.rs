@@ -69,6 +69,7 @@ pub enum MutationExpression {
         target: TableReference,
         from: Option<TableReference>,
         filter: Option<Expr>,
+        force_non_direct: bool,
     },
     Delete {
         target: TableReference,
@@ -87,6 +88,10 @@ impl MutationExpression {
         target_table_schema: Arc<TableSchema>,
     ) -> Result<MutationExpressionBindResult> {
         let mutation_type = self.mutation_type();
+        let force_non_direct = matches!(self, MutationExpression::Update {
+            force_non_direct: true,
+            ..
+        });
         let mut required_columns = ColumnSet::new();
         let mut update_stream_columns = target_table.change_tracking_enabled();
 
@@ -220,6 +225,7 @@ impl MutationExpression {
                 target,
                 from,
                 filter,
+                ..
             }
             | MutationExpression::Delete {
                 target,
@@ -273,11 +279,17 @@ impl MutationExpression {
                     None
                 };
 
-                // If the filter is a simple expression, change the mutation strategy to MutationStrategy::Direct.
+                // Bind the filter first; simple predicates normally use the direct mutation path.
                 let (mut mutation_strategy, predicates) =
                     binder.process_filter(&mut bind_context, filter)?;
 
-                if from_s_expr.is_some() {
+                if from_s_expr.is_some()
+                    || force_non_direct
+                    || bind_context
+                        .bound_internal_columns
+                        .keys()
+                        .any(|(table_index, _)| *table_index == target_table_index)
+                {
                     mutation_strategy = MutationStrategy::MatchedOnly;
                 }
 
