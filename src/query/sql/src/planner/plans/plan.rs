@@ -175,6 +175,7 @@ use crate::plans::SetWorkloadGroupQuotasPlan;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
+use crate::plans::ShowCreateMaterializedViewPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
@@ -356,6 +357,7 @@ pub enum Plan {
 
     // Materialized Views
     CreateMaterializedView(Box<CreateMaterializedViewPlan>),
+    ShowCreateMaterializedView(Box<ShowCreateMaterializedViewPlan>),
     DropMaterializedView(Box<DropMaterializedViewPlan>),
     DescribeMaterializedView(Box<DescribeMaterializedViewPlan>),
     RefreshMaterializedView(Box<RefreshMaterializedViewPlan>),
@@ -588,6 +590,7 @@ impl Plan {
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::ShowCreateDictionary(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
+            Plan::ShowCreateMaterializedView(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
             Plan::VacuumDropTable(plan) => plan.schema(),

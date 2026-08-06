@@ -17,6 +17,7 @@ use databend_common_catalog::table::NavigationPoint;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::TableMaintenanceTarget;
 
 #[derive(Clone, Debug)]
 pub struct OptimizePurgePlan {
@@ -32,6 +33,7 @@ pub struct OptimizeCompactSegmentPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: TableMaintenanceTarget,
     pub num_segment_limit: Option<usize>,
 }
 
@@ -40,6 +42,7 @@ pub struct OptimizeCompactBlock {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: TableMaintenanceTarget,
     pub limit: CompactionLimits,
 }
 

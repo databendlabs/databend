@@ -82,6 +82,8 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVInfo;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -104,6 +106,7 @@ use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::UpdateMVSourceBindingReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -142,6 +145,17 @@ pub struct StorageDescription {
 
 pub trait CatalogCreator: Send + Sync + Debug {
     fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>>;
+}
+
+fn invalidates_mv_source_bindings(old_meta: &TableMeta, new_meta: &TableMeta) -> bool {
+    old_meta.schema.fields().iter().any(|old_field| {
+        new_meta
+            .schema
+            .fields()
+            .iter()
+            .find(|new_field| new_field.column_id == old_field.column_id)
+            != Some(old_field)
+    })
 }
 
 #[async_trait::async_trait]
@@ -277,6 +291,23 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             self.name()
         )))
     }
+
+    /// Get the semantic source generation used to fence MV creation and refresh.
+    async fn get_mv_source_generation(&self, tenant: &Tenant, source_table_id: u64) -> Result<u64>;
+
+    /// Read the active MV bindings for one source at a consistent generation.
+    async fn get_mv_source_binding_snapshot(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<MVSourceBindingSnapshot>;
+
+    /// List every MV that depends on a source table, including invalid MVs.
+    async fn list_mvs_by_source_table_id(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Vec<MVInfo>>;
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(
@@ -557,24 +588,35 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn update_single_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateTableMetaReq,
-        table_info: &TableInfo,
+        current_table_info: &TableInfo,
     ) -> Result<UpdateTableMetaReply> {
         let mut update_table_metas = vec![];
+        let mut update_mv_source_bindings = vec![];
         let mut update_temp_tables = vec![];
-        if table_info.meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+        if current_table_info
+            .meta
+            .options
+            .contains_key(OPT_KEY_TEMP_PREFIX)
+        {
             let req = UpdateTempTableReq {
                 table_id: req.table_id,
-                desc: table_info.desc.clone(),
+                desc: current_table_info.desc.clone(),
                 new_table_meta: req.new_table_meta,
                 copied_files: Default::default(),
             };
             update_temp_tables.push(req);
         } else {
-            update_table_metas.push((req, table_info.clone()));
+            if invalidates_mv_source_bindings(&current_table_info.meta, &req.new_table_meta) {
+                update_mv_source_bindings
+                    .push(UpdateMVSourceBindingReq::new(tenant.clone(), req.table_id));
+            }
+            update_table_metas.push((req, current_table_info.clone()));
         }
         self.update_multi_table_meta(UpdateMultiTableMetaReq {
             update_table_metas,
+            update_mv_source_bindings,
             update_temp_tables,
             ..Default::default()
         })

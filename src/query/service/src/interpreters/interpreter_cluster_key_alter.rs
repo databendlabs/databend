@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
@@ -23,6 +22,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::ClusterType;
 
 use super::Interpreter;
+use crate::interpreters::common::check_table_maintenance_target;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -58,8 +58,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         let table = catalog
             .get_table_with_branch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
             .await?;
-        // check mutability
-        table.check_mutable()?;
+        check_table_maintenance_target(table.as_ref(), &plan.target)?;
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));

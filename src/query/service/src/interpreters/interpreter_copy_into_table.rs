@@ -879,6 +879,7 @@ impl CopyIntoTableInterpreter {
                 main_pipeline,
                 copied_files_meta_req,
                 update_stream_meta,
+                None,
                 plan.write_mode.is_overwrite(),
                 prev_snapshot_id,
                 deduplicated_label,

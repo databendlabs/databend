@@ -528,6 +528,9 @@ impl InterpreterFactory {
             Plan::RefreshMaterializedView(refresh_view) => Ok(Arc::new(
                 RefreshMaterializedViewInterpreter::try_create(ctx, *refresh_view.clone())?,
             )),
+            Plan::ShowCreateMaterializedView(plan) => Ok(Arc::new(
+                ShowCreateMaterializedViewInterpreter::try_create(ctx, *plan.clone())?,
+            )),
 
             // Streams
             Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(

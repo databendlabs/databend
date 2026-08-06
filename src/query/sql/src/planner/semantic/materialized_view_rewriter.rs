@@ -536,7 +536,6 @@ impl VisitorMut for AggregateExprRewriter<'_> {
 pub struct MaterializedViewChecker {
     has_aggregate: bool,
     has_group_by: bool,
-    has_selection: bool,
     not_supported: bool,
 }
 
@@ -552,7 +551,7 @@ impl MaterializedViewChecker {
     }
 
     pub fn is_supported(&self) -> bool {
-        !self.not_supported && (self.has_aggregate || self.has_group_by || self.has_selection)
+        !self.not_supported
     }
 }
 
@@ -598,7 +597,6 @@ impl Visitor for MaterializedViewChecker {
         {
             self.not_supported = true;
         }
-        self.has_selection |= stmt.selection.is_some();
         self.has_group_by |= stmt.group_by.is_some();
         Ok(VisitControl::Continue)
     }
@@ -714,6 +712,7 @@ mod tests {
     #[test]
     fn test_materialized_view_checker_accepts_simple_queries() -> Result<()> {
         for sql in [
+            "SELECT amount AS value FROM t",
             "SELECT amount AS value FROM t WHERE amount > 0",
             "SELECT category, sum(amount) AS total FROM t WHERE amount > 0 GROUP BY category",
         ] {

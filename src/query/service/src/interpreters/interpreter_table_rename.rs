@@ -14,12 +14,14 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::plans::RenameTablePlan;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -51,6 +53,24 @@ impl Interpreter for RenameTableInterpreter {
         // You must have ALTER and DROP privileges for the original table,
         // and CREATE and INSERT privileges for the new table.
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let table = match catalog
+            .get_table(&self.plan.tenant, &self.plan.database, &self.plan.table)
+            .await
+        {
+            Ok(table) => table,
+            Err(error) => {
+                if (error.code() == ErrorCode::UNKNOWN_TABLE
+                    || error.code() == ErrorCode::UNKNOWN_DATABASE
+                    || error.code() == ErrorCode::UNKNOWN_CATALOG)
+                    && self.plan.if_exists
+                {
+                    return Ok(PipelineBuildResult::create());
+                }
+                return Err(error);
+            }
+        };
+        check_not_materialized_view(table.as_ref(), &self.plan.database)?;
+
         let _resp = catalog
             .rename_table(RenameTableReq {
                 if_exists: self.plan.if_exists,

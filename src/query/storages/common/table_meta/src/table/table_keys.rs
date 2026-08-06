@@ -20,6 +20,7 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 
 use crate::meta::ColumnCountMinSketch;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
@@ -80,9 +81,20 @@ pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
 /// The normalized Fuse partition expressions. This is set by CREATE TABLE
 /// PARTITION BY and is not a user-settable table option.
 pub const OPT_KEY_PARTITION_BY: &str = "partition_by";
+pub const OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
 pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
+
+pub const FUSE_ENGINE: &str = "FUSE";
+
+pub fn is_fuse_engine(engine: &str) -> bool {
+    engine.eq_ignore_ascii_case(FUSE_ENGINE)
+}
+
+pub fn is_fuse_backed_engine(engine: &str) -> bool {
+    is_fuse_engine(engine) || is_materialized_view_engine(engine)
+}
 
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specify this option keys in DDL

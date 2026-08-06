@@ -56,7 +56,6 @@ impl Interpreter for RevertTableInterpreter {
 
         // check mutability
         table.check_mutable()?;
-
         let navigation_descriptor = NavigationDescriptor {
             database_name: self.plan.database.clone(),
             point: self.plan.point.clone(),
