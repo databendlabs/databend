@@ -787,7 +787,7 @@ CommitSink
                     ├── apply join filters: [#0, #1]
                     └── estimated rows: 1.00
 
-query TT?
+query TTT
 SELECT * FROM data_main;
 ----
 rec1 cat1 {"metadata":{"category_id":"cat1","timestamp":1625000000000},"timestamp":1625000000000}
