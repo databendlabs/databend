@@ -437,7 +437,7 @@ where A: super::TypeCheckAdapter
             return self.resolve_variant_map_access(span, scalar, &mut paths);
         }
 
-        let mut table_data_type = infer_schema_type(&data_type)?;
+        let mut table_data_type = infer_schema_type(&data_type)?.physical_type().into_owned();
         // If it is a tuple column, convert it to the internal column specified by the paths.
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
@@ -447,7 +447,7 @@ where A: super::TypeCheckAdapter
                     column_entry
                 {
                     // Use data type from meta to get the field names of tuple type.
-                    table_data_type = data_type.clone();
+                    table_data_type = data_type.physical_type().into_owned();
                     if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
                         let box (inner_scalar, _inner_data_type) = self
                             .resolve_tuple_map_access_pushdown(

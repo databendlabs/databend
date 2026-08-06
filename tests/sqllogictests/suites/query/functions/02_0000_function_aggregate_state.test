@@ -8,6 +8,15 @@ select typeof(sum_state(number)) from numbers(10000);
 ----
 AggregateState(sum, UInt64)
 
+query ITIT
+select sum_state(number).1,
+       typeof(sum_state(number).1),
+       max_state(number).2,
+       typeof(max_state(number).2)
+from numbers(100);
+----
+4950 BIGINT UNSIGNED 99 BIGINT UNSIGNED
+
 query I
 select sum_merge(state)
 from (
@@ -169,5 +178,59 @@ from aggregate_state_combinator_test
 ----
 4950 0 99 100
 
+query III
+select (select count() from (
+           select sum_state
+           from aggregate_state_combinator_test
+           group by sum_state
+       )),
+       count(distinct sum_state),
+       count_if(sum_state is not null)
+from aggregate_state_combinator_test;
+----
+4 4 4
+
 statement ok
 drop table aggregate_state_combinator_test
+
+statement ok
+drop table if exists legacy_aggregate_state_combinator_test
+
+statement ok
+create table legacy_aggregate_state_combinator_test as
+select bucket,
+       tuple(sum_state.1, sum_state.2) as sum_state,
+       tuple(min_state.1, min_state.2, min_state.3) as min_state,
+       tuple(max_state.1, max_state.2, max_state.3) as max_state,
+       tuple(count_state.1) as count_state,
+       tuple(arg_min_state.1, arg_min_state.2, arg_min_state.3, arg_min_state.4) as arg_min_state
+from (
+    select number % 4 as bucket,
+           sum_state(number) as sum_state,
+           min_state(number) as min_state,
+           max_state(number) as max_state,
+           count_state(number) as count_state,
+           arg_min_state(number, 100 - number) as arg_min_state
+    from numbers(100)
+    group by bucket
+)
+
+query TT
+select typeof(sum_state), typeof(arg_min_state)
+from legacy_aggregate_state_combinator_test
+limit 1;
+----
+TUPLE(UINT64, BOOLEAN) NULL TUPLE(BOOLEAN, INT64, UINT64, BOOLEAN) NULL
+
+query IIIII
+select sum_merge(sum_state),
+       min_merge(min_state),
+       max_merge(max_state),
+       count_merge(count_state),
+       arg_min_merge(arg_min_state)
+from legacy_aggregate_state_combinator_test;
+----
+4950 0 99 100 99
+
+statement ok
+drop table legacy_aggregate_state_combinator_test

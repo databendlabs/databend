@@ -102,45 +102,27 @@ impl AggregateMergeCombinator {
         let mut candidates = Vec::new();
         collect_candidates(&state_type, &mut candidates);
 
-        for candidate in candidates {
-            let nested = AggregateFunctionFactory::instance().get(
-                nested_name,
-                params.clone(),
-                vec![candidate.clone()],
-                sort_descs.clone(),
-            );
-            if let Ok(nested) = nested
-                && nested.serialize_data_type() == state_type
-            {
-                let encoded_params = params
-                    .iter()
-                    .map(|param| {
-                        borsh::to_vec(param).map_err(|error| {
-                            ErrorCode::Internal(format!(
-                                "Cannot serialize aggregate parameter for {nested_name}_merge: {error}"
-                            ))
-                        })
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                return Ok(Arc::new(Self {
-                    name: format!(
-                        "{}({nested_name})",
-                        if returns_state {
-                            "MergeStateCombinator"
-                        } else {
-                            "MergeCombinator"
-                        }
-                    ),
-                    nested,
-                    returns_state,
-                    state_type: DataType::AggregateState(Box::new(AggregateStateDataType {
-                        function_name: nested_name.to_string(),
-                        params: encoded_params,
-                        argument_types: vec![candidate],
-                        state_type: Box::new(state_type.clone()),
-                    })),
-                }));
-            }
+        if let Some((nested, argument_types)) =
+            find_legacy_signature(nested_name, &params, &state_type, &sort_descs, &candidates)
+        {
+            return Ok(Arc::new(Self {
+                name: format!(
+                    "{}({nested_name})",
+                    if returns_state {
+                        "MergeStateCombinator"
+                    } else {
+                        "MergeCombinator"
+                    }
+                ),
+                nested,
+                returns_state,
+                state_type: DataType::AggregateState(Box::new(AggregateStateDataType {
+                    function_name: nested_name.to_string(),
+                    params: serialize_params(nested_name, &params)?,
+                    argument_types,
+                    state_type: Box::new(state_type.clone()),
+                })),
+            }));
         }
 
         Err(ErrorCode::BadDataValueType(format!(
@@ -209,17 +191,115 @@ impl AggregateMergeCombinator {
 }
 
 fn collect_candidates(data_type: &DataType, candidates: &mut Vec<DataType>) {
-    let data_type = data_type.remove_nullable();
-    if let DataType::Tuple(fields) = &data_type {
+    if let DataType::Tuple(fields) = data_type {
         for field in fields {
             collect_candidates(field, candidates);
         }
         return;
     }
 
-    if data_type != DataType::Boolean && !candidates.contains(&data_type) {
-        candidates.push(data_type);
+    if !candidates.contains(data_type) {
+        candidates.push(data_type.clone());
     }
+    let non_null_type = data_type.remove_nullable();
+    if non_null_type != *data_type && !candidates.contains(&non_null_type) {
+        candidates.push(non_null_type);
+    }
+}
+
+fn find_legacy_signature(
+    nested_name: &str,
+    params: &[Scalar],
+    state_type: &DataType,
+    sort_descs: &[AggregateFunctionSortDesc],
+    candidates: &[DataType],
+) -> Option<(AggregateFunctionRef, Vec<DataType>)> {
+    const MAX_LEGACY_ARGUMENTS: usize = 3;
+    const MAX_SIGNATURE_ATTEMPTS: usize = 4096;
+
+    let mut attempts = 0;
+    for arity in (1..=MAX_LEGACY_ARGUMENTS).chain(std::iter::once(0)) {
+        let mut argument_types = Vec::with_capacity(arity);
+        if let Some(signature) = find_legacy_signature_with_arity(
+            nested_name,
+            params,
+            state_type,
+            sort_descs,
+            candidates,
+            arity,
+            &mut argument_types,
+            &mut attempts,
+            MAX_SIGNATURE_ATTEMPTS,
+        ) {
+            return Some(signature);
+        }
+        if attempts >= MAX_SIGNATURE_ATTEMPTS {
+            break;
+        }
+    }
+    None
+}
+
+#[allow(clippy::too_many_arguments)]
+fn find_legacy_signature_with_arity(
+    nested_name: &str,
+    params: &[Scalar],
+    state_type: &DataType,
+    sort_descs: &[AggregateFunctionSortDesc],
+    candidates: &[DataType],
+    arity: usize,
+    argument_types: &mut Vec<DataType>,
+    attempts: &mut usize,
+    max_attempts: usize,
+) -> Option<(AggregateFunctionRef, Vec<DataType>)> {
+    if argument_types.len() == arity {
+        *attempts += 1;
+        let nested = AggregateFunctionFactory::instance()
+            .get(
+                nested_name,
+                params.to_vec(),
+                argument_types.clone(),
+                sort_descs.to_vec(),
+            )
+            .ok()?;
+        return (nested.serialize_data_type() == *state_type)
+            .then(|| (nested, argument_types.clone()));
+    }
+
+    for candidate in candidates {
+        if *attempts >= max_attempts {
+            return None;
+        }
+        argument_types.push(candidate.clone());
+        if let Some(signature) = find_legacy_signature_with_arity(
+            nested_name,
+            params,
+            state_type,
+            sort_descs,
+            candidates,
+            arity,
+            argument_types,
+            attempts,
+            max_attempts,
+        ) {
+            return Some(signature);
+        }
+        argument_types.pop();
+    }
+    None
+}
+
+fn serialize_params(nested_name: &str, params: &[Scalar]) -> Result<Vec<Vec<u8>>> {
+    params
+        .iter()
+        .map(|param| {
+            borsh::to_vec(param).map_err(|error| {
+                ErrorCode::Internal(format!(
+                    "Cannot serialize aggregate parameter for {nested_name}_merge: {error}"
+                ))
+            })
+        })
+        .collect()
 }
 
 impl AggregateFunction for AggregateMergeCombinator {
