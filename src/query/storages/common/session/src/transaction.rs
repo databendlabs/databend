@@ -217,6 +217,27 @@ impl TxnManager {
         self.txn_buffer.update_multi_table_meta(req);
     }
 
+    pub fn update_table_options(
+        &mut self,
+        table_id: u64,
+        options: HashMap<String, Option<String>>,
+    ) -> bool {
+        let Some(table) = self.txn_buffer.mutated_tables.get_mut(&table_id) else {
+            return false;
+        };
+        for (key, value) in options {
+            match value {
+                Some(value) => {
+                    table.meta.options.insert(key, value);
+                }
+                None => {
+                    table.meta.options.remove(&key);
+                }
+            }
+        }
+        true
+    }
+
     pub fn add_multi_table_insert_rows(&mut self, insert_rows: HashMap<u64, u64>) {
         for (table_id, rows) in insert_rows {
             match self.txn_buffer.multi_table_insert_rows.get_mut(&table_id) {

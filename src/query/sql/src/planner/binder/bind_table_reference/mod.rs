@@ -17,6 +17,7 @@ mod bind_asof_join;
 mod bind_cte;
 mod bind_join;
 mod bind_location;
+mod bind_materialized_view;
 mod bind_obfuscate;
 mod bind_subquery;
 mod bind_table;
