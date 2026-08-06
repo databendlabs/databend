@@ -570,6 +570,28 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn create_table_with_source_table_option(
+        &self,
+        req: CreateTableReq,
+        source_table_option: UpsertTableOptionReq,
+    ) -> Result<CreateTableReply> {
+        info!("Create table with source option update from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(req.tenant(), req.db_name())
+            .await?
+        {
+            return Err(ErrorCode::Unimplemented(
+                "Atomic source option update is not supported for immutable catalogs",
+            ));
+        }
+        self.mutable_catalog
+            .create_table_with_source_table_option(req, source_table_option)
+            .await
+    }
+
+    #[async_backtrace::framed]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         let res = self.mutable_catalog.drop_table_by_id(req).await?;
         Ok(res)

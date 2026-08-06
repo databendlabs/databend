@@ -438,6 +438,21 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply>;
 
+    /// Create a table and update source table options atomically.
+    ///
+    /// This is supported by the default catalog for stream creation. Other catalogs reject it
+    /// rather than falling back to two non-atomic metadata operations.
+    async fn create_table_with_source_table_option(
+        &self,
+        _req: CreateTableReq,
+        _source_table_option: UpsertTableOptionReq,
+    ) -> Result<CreateTableReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'create_table_with_source_table_option' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply>;
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<()>;
