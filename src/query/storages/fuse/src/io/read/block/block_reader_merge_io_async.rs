@@ -34,8 +34,9 @@ use crate::io::BlockReadContext;
 use crate::io::BlockReader;
 
 fn column_group_read_concurrency(max_threads: usize, max_storage_io_requests: usize) -> usize {
+    let max_storage_io_requests = max_storage_io_requests.max(1);
     let outer_readers = max_threads.min(max_storage_io_requests).max(1);
-    max_storage_io_requests.max(1).div_ceil(outer_readers)
+    max_storage_io_requests / outer_readers
 }
 
 impl BlockReader {
@@ -225,7 +226,7 @@ mod tests {
     #[test]
     fn test_column_group_read_concurrency() {
         assert_eq!(column_group_read_concurrency(8, 64), 8);
-        assert_eq!(column_group_read_concurrency(8, 10), 2);
+        assert_eq!(column_group_read_concurrency(8, 10), 1);
         assert_eq!(column_group_read_concurrency(64, 8), 1);
         assert_eq!(column_group_read_concurrency(0, 0), 1);
         assert_eq!(column_group_read_concurrency(0, 8), 8);
