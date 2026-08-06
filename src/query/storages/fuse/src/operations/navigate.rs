@@ -351,7 +351,7 @@ impl FuseTable {
         match first_snapshot_after {
             Some(location) => {
                 let (snapshot, _format_version) =
-                    SnapshotsIO::read_snapshot(location, op.clone(), true).await?;
+                    Self::read_snapshot_for_no_check(location, op.clone()).await?;
 
                 match snapshot.prev_snapshot_id {
                     Some((prev_id, prev_ver)) => {
@@ -365,7 +365,7 @@ impl FuseTable {
                             .meta_location_generator()
                             .gen_snapshot_location(&prev_id, prev_ver)?;
                         let (prev_snapshot, prev_format_version) =
-                            SnapshotsIO::read_snapshot(prev_location, op, true).await?;
+                            Self::read_snapshot_for_no_check(prev_location, op).await?;
                         self.load_table_by_snapshot(
                             prev_snapshot.as_ref(),
                             prev_format_version,
@@ -385,9 +385,29 @@ impl FuseTable {
                     ));
                 };
                 let (snapshot, format_version) =
-                    SnapshotsIO::read_snapshot(location, op, true).await?;
+                    Self::read_snapshot_for_no_check(location, op).await?;
                 self.load_table_by_snapshot(snapshot.as_ref(), format_version, s3_storage_class)
             }
+        }
+    }
+
+    /// Read a snapshot for NO_CHECK navigation.
+    ///
+    /// Missing objects are mapped to `TableHistoricalDataNotFound` so vacuumed
+    /// predecessor snapshots do not surface as raw `StorageNotFound` errors.
+    async fn read_snapshot_for_no_check(
+        location: String,
+        op: opendal::Operator,
+    ) -> Result<(Arc<TableSnapshot>, u64)> {
+        match SnapshotsIO::read_snapshot(location, op, true).await {
+            Ok(v) => Ok(v),
+            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                Err(ErrorCode::TableHistoricalDataNotFound(
+                    "No historical data found at given point with NO_CHECK \
+                     (snapshot object is missing, possibly vacuumed)",
+                ))
+            }
+            Err(e) => Err(e),
         }
     }
 

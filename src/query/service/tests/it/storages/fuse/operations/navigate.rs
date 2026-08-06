@@ -15,6 +15,7 @@
 use std::time::Duration;
 
 use chrono::Utc;
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
@@ -24,6 +25,8 @@ use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -221,6 +224,76 @@ async fn test_navigate_for_purge() -> anyhow::Result<()> {
         .await?;
     assert_eq!(2, files.len());
     assert_eq!(navigate, second_snapshot);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_no_check_timestamp_maps_missing_prev_snapshot() -> anyhow::Result<()> {
+    // When NO_CHECK TIMESTAMP finds a later snapshot whose predecessor object is gone
+    // (vacuumed), it should return TableHistoricalDataNotFound instead of StorageNotFound.
+
+    let fixture = TestFixture::setup().await?;
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+
+    // first snapshot
+    let qry = format!(
+        "insert into {}.{} values (1, (2, 3)), (2, (4, 6)) ",
+        db, tbl
+    );
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    strm.try_collect::<Vec<DataBlock>>().await?;
+
+    let table = fixture.latest_default_table().await?;
+    let first_snapshot = FuseTable::try_from_table(table.as_ref())?
+        .snapshot_loc()
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(2)).await;
+
+    // second snapshot
+    let qry = format!("insert into {}.{} values (3, (6, 9)) ", db, tbl);
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    strm.try_collect::<Vec<DataBlock>>().await?;
+
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let second_snapshot = fuse_table.snapshot_loc().unwrap();
+    assert_ne!(second_snapshot, first_snapshot);
+
+    // Simulate vacuum: remove the predecessor snapshot object and drop its cache entry.
+    fuse_table.get_operator().delete(&first_snapshot).await?;
+    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
+        cache.evict(&first_snapshot);
+    }
+
+    // Navigate with NO_CHECK to a time between the two snapshots.
+    // The path should list the second snapshot and try to load its prev_snapshot_id,
+    // which now 404s and must be mapped to TABLE_HISTORICAL_DATA_NOT_FOUND.
+    let second = fuse_table
+        .read_table_snapshot()
+        .await?
+        .expect("second snapshot should exist");
+    let time_point = second.timestamp.unwrap() - chrono::Duration::milliseconds(1);
+
+    let ctx = fixture.new_query_ctx().await?;
+    let tbl_ctx: std::sync::Arc<dyn TableContext> = ctx.clone();
+    let res = fuse_table
+        .navigate_to_point_unchecked(&tbl_ctx, &NavigationPoint::TimePoint(time_point))
+        .await;
+
+    match res {
+        Ok(_) => panic!("expected historical data not found when prev snapshot is missing"),
+        Err(e) => assert_eq!(
+            e.code(),
+            ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND,
+            "unexpected error: {e}"
+        ),
+    }
 
     Ok(())
 }
