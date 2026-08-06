@@ -2625,9 +2625,7 @@ mod tests {
         calls.store(0, AtomicOrdering::Relaxed);
         let result = like(
             Value::<StringType>::Scalar("prefix-abc-suffix".to_string()),
-            Value::<StringType>::Column(string_column(&[
-                "%a_c%", "%a_c%", "%z_z%", "%a_c%",
-            ])),
+            Value::<StringType>::Column(string_column(&["%a_c%", "%a_c%", "%z_z%", "%a_c%"])),
             escape.clone(),
             &mut ctx,
         );
@@ -2642,9 +2640,7 @@ mod tests {
                 "prefix-zzz-suffix",
                 "prefix-abc-suffix",
             ])),
-            Value::<StringType>::Column(string_column(&[
-                "%a_c%", "%a_c%", "%z_z%", "%a_c%",
-            ])),
+            Value::<StringType>::Column(string_column(&["%a_c%", "%a_c%", "%z_z%", "%a_c%"])),
             escape,
             &mut ctx,
         );
