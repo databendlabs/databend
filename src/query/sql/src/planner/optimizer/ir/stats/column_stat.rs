@@ -31,7 +31,7 @@ pub type ColumnStatSet = HashMap<Symbol, ColumnStat>;
 pub type TopNSet = HashMap<Symbol, ColumnTopN>;
 pub type CountMinSketchSet = HashMap<Symbol, ColumnCountMinSketch>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// Statistics information of a column
 pub struct ColumnStat {
     /// Min value of the column

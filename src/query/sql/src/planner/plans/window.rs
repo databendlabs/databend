@@ -81,11 +81,11 @@ impl WindowGroup {
 
         for item in &self.scalar_items {
             used_columns.insert(item.index);
-            used_columns.extend(item.scalar.used_columns());
+            item.scalar.collect_used_columns(&mut used_columns);
         }
 
         for window in &self.windows {
-            used_columns.extend(window.used_columns()?);
+            window.collect_used_columns(&mut used_columns)?;
         }
 
         Ok(used_columns)
@@ -127,21 +127,34 @@ impl WindowGroup {
 impl Window {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-
-        used_columns.insert(self.index);
-        used_columns.extend(self.function.used_columns());
-        used_columns.extend(self.arguments_columns()?);
-        used_columns.extend(self.partition_by_columns()?);
-        used_columns.extend(self.order_by_columns()?);
-
+        self.collect_used_columns(&mut used_columns)?;
         Ok(used_columns)
+    }
+
+    pub fn collect_used_columns(&self, used_columns: &mut ColumnSet) -> Result<()> {
+        used_columns.insert(self.index);
+        self.function.collect_used_columns(used_columns);
+        for arg in &self.arguments {
+            used_columns.insert(arg.index);
+            arg.scalar.collect_used_columns(used_columns);
+        }
+        for part in &self.partition_by {
+            used_columns.insert(part.index);
+            part.scalar.collect_used_columns(used_columns);
+        }
+        for sort in &self.order_by {
+            used_columns.insert(sort.order_by_item.index);
+            sort.order_by_item.scalar.collect_used_columns(used_columns);
+        }
+
+        Ok(())
     }
 
     pub fn arguments_columns(&self) -> Result<ColumnSet> {
         let mut col_set = ColumnSet::new();
         for arg in self.arguments.iter() {
             col_set.insert(arg.index);
-            col_set.extend(arg.scalar.used_columns())
+            arg.scalar.collect_used_columns(&mut col_set);
         }
         Ok(col_set)
     }
@@ -152,7 +165,7 @@ impl Window {
         let mut col_set = ColumnSet::new();
         for part in self.partition_by.iter() {
             col_set.insert(part.index);
-            col_set.extend(part.scalar.used_columns())
+            part.scalar.collect_used_columns(&mut col_set);
         }
         Ok(col_set)
     }
@@ -161,7 +174,7 @@ impl Window {
         let mut col_set = ColumnSet::new();
         for sort in self.order_by.iter() {
             col_set.insert(sort.order_by_item.index);
-            col_set.extend(sort.order_by_item.scalar.used_columns())
+            sort.order_by_item.scalar.collect_used_columns(&mut col_set);
         }
         Ok(col_set)
     }
@@ -408,21 +421,26 @@ impl WindowFuncType {
     }
 
     pub fn used_columns(&self) -> ColumnSet {
+        let mut used_columns = ColumnSet::new();
+        self.collect_used_columns(&mut used_columns);
+        used_columns
+    }
+
+    pub fn collect_used_columns(&self, used_columns: &mut ColumnSet) {
         match self {
             WindowFuncType::Aggregate(agg) => {
-                agg.exprs().flat_map(|expr| expr.used_columns()).collect()
+                for expr in agg.exprs() {
+                    expr.collect_used_columns(used_columns);
+                }
             }
-            WindowFuncType::LagLead(func) => match &func.default {
-                None => func.arg.used_columns(),
-                Some(d) => func
-                    .arg
-                    .used_columns()
-                    .union(&d.used_columns())
-                    .cloned()
-                    .collect(),
-            },
-            WindowFuncType::NthValue(func) => func.arg.used_columns(),
-            _ => ColumnSet::new(),
+            WindowFuncType::LagLead(func) => {
+                func.arg.collect_used_columns(used_columns);
+                if let Some(default) = &func.default {
+                    default.collect_used_columns(used_columns);
+                }
+            }
+            WindowFuncType::NthValue(func) => func.arg.collect_used_columns(used_columns),
+            _ => {}
         }
     }
 

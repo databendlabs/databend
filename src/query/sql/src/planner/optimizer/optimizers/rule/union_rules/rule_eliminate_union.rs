@@ -29,7 +29,6 @@ use crate::plans::ConstantTableScan;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-use crate::plans::UnionAll;
 
 pub struct RuleEliminateUnion {
     id: RuleID,
@@ -84,7 +83,7 @@ impl Rule for RuleEliminateUnion {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let union: UnionAll = s_expr.plan().clone().try_into()?;
+        let union = s_expr.plan().as_union_all().unwrap();
 
         // Need to check that union's output indexes are the same as left child's output indexes
         // currently this is always !false now, so the following codes are not necessary

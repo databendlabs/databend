@@ -36,9 +36,9 @@ pub struct AsyncFunction {
 impl AsyncFunction {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for item in self.items.iter() {
+        for item in &self.items {
             used_columns.insert(item.index);
-            used_columns.extend(item.scalar.used_columns());
+            item.scalar.collect_used_columns(&mut used_columns);
         }
         Ok(used_columns)
     }
@@ -64,19 +64,14 @@ impl Operator for AsyncFunction {
 
         // Derive outer columns
         let mut outer_columns = input_prop.outer_columns.clone();
-        for item in self.items.iter() {
-            let used_columns = item.scalar.used_columns();
-            let outer = used_columns
-                .difference(&output_columns)
-                .cloned()
-                .collect::<ColumnSet>();
-            outer_columns = outer_columns.union(&outer).cloned().collect();
+        for item in &self.items {
+            item.scalar.collect_used_columns(&mut outer_columns);
         }
-        outer_columns = outer_columns.difference(&output_columns).cloned().collect();
+        outer_columns.retain(|column| !output_columns.contains(column));
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(input_prop.used_columns.clone());
+        used_columns.extend(input_prop.used_columns.iter().copied());
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();

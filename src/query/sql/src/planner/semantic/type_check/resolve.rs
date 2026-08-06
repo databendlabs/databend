@@ -35,6 +35,7 @@ use super::rewrite_function;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::binder::AliasLookup;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
@@ -53,7 +54,7 @@ where A: TypeCheckAdapter
             adapter,
             name_resolution_ctx,
             metadata,
-            aliases,
+            AliasLookup::all(aliases),
             None,
         )
     }
@@ -63,8 +64,8 @@ where A: TypeCheckAdapter
         adapter: A,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
-        aliases: &'a [(String, ScalarExpr)],
-        fallback_aliases: Option<&'a [(String, ScalarExpr)]>,
+        aliases: AliasLookup<'a>,
+        fallback_aliases: Option<AliasLookup<'a>>,
     ) -> Result<Self> {
         let func_ctx = adapter.function_context()?;
         let dialect = adapter.settings().get_sql_dialect()?;
