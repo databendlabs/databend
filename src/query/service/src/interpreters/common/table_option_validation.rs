@@ -73,6 +73,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 pub use databend_storages_common_table_meta::table::analyze_count_min_sketch_error_rate_from_options;
 pub use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use log::error;
@@ -102,6 +103,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_COMMENT);
     r.insert(OPT_KEY_CHANGE_TRACKING);
+    r.insert(OPT_KEY_WRITE_DISTRIBUTION_MODE);
 
     r.insert(OPT_KEY_ENGINE);
 
