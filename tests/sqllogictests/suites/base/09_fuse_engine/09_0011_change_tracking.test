@@ -96,6 +96,11 @@ select count(*) from t_column_oriented where length(change$row_id) = 38
 ----
 2
 
+query III
+select count(*), count(distinct _block_name), count(distinct _segment_name) from t_column_oriented where length(_block_name) > 0 and length(_segment_name) > 0
+----
+2 2 1
+
 statement ok
 drop table t_column_oriented all
 
