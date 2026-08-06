@@ -21,7 +21,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -232,14 +231,14 @@ impl PhysicalPlanBuilder {
             catalog,
             database,
             table,
+            target,
             limit,
         } = compact_block;
 
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(catalog).await?;
         let tbl = catalog.get_table(&tenant, database, table).await?;
-        // check mutability
-        tbl.check_mutable()?;
+        crate::interpreters::common::check_table_maintenance_target(tbl.as_ref(), target)?;
 
         let table_info = tbl.get_table_info().clone();
 

@@ -483,7 +483,7 @@ impl QueryContextShared {
 
     // Cache the source table of a stream table to ensure can get the same table metadata.
     #[async_backtrace::framed]
-    async fn cache_stream_source_table(
+    pub(crate) async fn cache_stream_source_table(
         &self,
         catalog: Arc<dyn Catalog>,
         table: Arc<dyn Table>,

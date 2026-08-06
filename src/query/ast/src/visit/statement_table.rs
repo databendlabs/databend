@@ -185,13 +185,12 @@ impl WalkMut for CreateTableStmt {
     }
 }
 
-impl Walk for AlterTableStmt {
+impl Walk for AlterTableAction {
     fn walk<V: Visitor + ?Sized>(
         &self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!(self.table_reference.walk(visitor));
-        match &self.action {
+        match self {
             AlterTableAction::RenameTable { new_table }
             | AlterTableAction::SwapWith {
                 target_table: new_table,
@@ -289,13 +288,12 @@ impl Walk for AlterTableStmt {
     }
 }
 
-impl WalkMut for AlterTableStmt {
+impl WalkMut for AlterTableAction {
     fn walk_mut<V: VisitorMut + ?Sized>(
         &mut self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!(self.table_reference.walk_mut(visitor));
-        match &mut self.action {
+        match self {
             AlterTableAction::RenameTable { new_table }
             | AlterTableAction::SwapWith {
                 target_table: new_table,
@@ -389,6 +387,28 @@ impl WalkMut for AlterTableStmt {
                 }
             }
         }
+        Ok(VisitControl::Continue)
+    }
+}
+
+impl Walk for AlterTableStmt {
+    fn walk<V: Visitor + ?Sized>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<VisitControl<V::Break>, V::Error> {
+        try_walk!(self.table_reference.walk(visitor));
+        try_walk!(self.action.walk(visitor));
+        Ok(VisitControl::Continue)
+    }
+}
+
+impl WalkMut for AlterTableStmt {
+    fn walk_mut<V: VisitorMut + ?Sized>(
+        &mut self,
+        visitor: &mut V,
+    ) -> Result<VisitControl<V::Break>, V::Error> {
+        try_walk!(self.table_reference.walk_mut(visitor));
+        try_walk!(self.action.walk_mut(visitor));
         Ok(VisitControl::Continue)
     }
 }

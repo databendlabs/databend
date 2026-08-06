@@ -39,6 +39,7 @@ use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::UpdateMVSourceBindingReq;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
@@ -629,6 +630,10 @@ impl ModifyTableColumnInterpreter {
         };
         let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
         table_info.meta.schema = new_schema;
+        let update_mv_source_binding = Some(UpdateMVSourceBindingReq::new(
+            self.ctx.get_tenant(),
+            table.get_id(),
+        ));
 
         build_select_insert_plan(
             self.ctx.clone(),
@@ -637,6 +642,7 @@ impl ModifyTableColumnInterpreter {
             new_schema_without_computed_fields.into(),
             prev_snapshot_id,
             table_meta_timestamps,
+            update_mv_source_binding,
         )
         .await
     }
@@ -896,6 +902,7 @@ pub(crate) async fn build_select_insert_plan(
     new_schema: TableSchemaRef,
     prev_snapshot_id: Option<SnapshotId>,
     table_meta_timestamps: TableMetaTimestamps,
+    update_mv_source_binding: Option<UpdateMVSourceBindingReq>,
 ) -> Result<PipelineBuildResult> {
     // 1. build plan by sql
     let mut planner = Planner::new(ctx.clone());
@@ -948,6 +955,7 @@ pub(crate) async fn build_select_insert_plan(
         &mut build_res.main_pipeline,
         None,
         vec![],
+        update_mv_source_binding,
         true,
         prev_snapshot_id,
         None,

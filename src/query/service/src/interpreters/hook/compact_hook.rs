@@ -29,6 +29,7 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::TableMaintenanceTarget;
 use log::info;
 
 use crate::interpreters::Interpreter;
@@ -214,6 +215,7 @@ pub(crate) async fn compact_table(
             catalog: compact_target.catalog.clone(),
             database: compact_target.database.clone(),
             table: compact_target.table.clone(),
+            target: TableMaintenanceTarget::Table,
             limit: compaction_limits.clone(),
         });
         let s_expr = SExpr::create_leaf(Arc::new(compact_block));
@@ -277,6 +279,7 @@ pub(crate) async fn compact_table(
                 catalog: compact_target.catalog,
                 database: compact_target.database,
                 table: compact_target.table,
+                target: TableMaintenanceTarget::Table,
                 limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
                 selection: None,
                 is_final: false,

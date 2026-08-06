@@ -143,6 +143,7 @@ impl PipelineBuilder {
             main_pipeline,
             copied_files,
             update_stream_meta,
+            None,
             overwrite,
             None,
             deduplicated_label,

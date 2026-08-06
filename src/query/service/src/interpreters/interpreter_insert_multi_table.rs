@@ -44,6 +44,7 @@ use databend_common_storages_fuse::FuseTable;
 use super::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::CastSchema;
 use crate::physical_plans::ChunkAppendData;
@@ -449,6 +450,7 @@ impl InsertMultiTableInterpreter {
                 source_scalar_exprs,
             } = into;
             let table = self.ctx.get_table(catalog, database, table).await?;
+            check_not_materialized_view(table.as_ref(), database)?;
             branches.push(
                 table,
                 condition,

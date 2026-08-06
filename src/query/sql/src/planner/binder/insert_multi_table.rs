@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 
 use crate::BindContext;
 use crate::Binder;
@@ -178,6 +179,11 @@ impl Binder {
                 .ctx
                 .get_table(&catalog_name, &database_name, &table_name)
                 .await?;
+            if is_materialized_view_engine(target_table.engine()) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "Cannot modify materialized view `{database_name}`.`{table_name}`"
+                )));
+            }
             target_tables.insert(
                 target_table.get_id(),
                 (database_name.clone(), table_name.clone()),

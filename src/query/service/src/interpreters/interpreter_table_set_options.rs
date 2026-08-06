@@ -55,6 +55,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 use databend_storages_common_table_meta::table::WriteDistributionMode;
+use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use log::error;
 
 use crate::interpreters::Interpreter;
@@ -129,6 +130,16 @@ impl Interpreter for SetOptionsInterpreter {
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
+
+        for key in self.plan.set_options.keys() {
+            if is_reserved_opt_key(key) {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "table option '{}' is reserved and cannot be modified",
+                    key
+                )));
+            }
+        }
+
         if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
             error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
@@ -180,6 +191,8 @@ impl Interpreter for SetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
+        // check mutability
+        table.check_mutable()?;
 
         if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
             let mode = mode.parse::<WriteDistributionMode>()?;
@@ -221,9 +234,6 @@ impl Interpreter for SetOptionsInterpreter {
                 options_map.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(), begin_version);
             }
         }
-
-        // check mutability
-        table.check_mutable()?;
 
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;

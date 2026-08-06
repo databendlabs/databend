@@ -84,6 +84,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         let info = tbl.get_table_info();
         let create_query = ShowCreateTableInterpreter::show_create_query(
             catalog.as_ref(),
+            &tenant,
             db.name(),
             tbl.as_ref(),
             &settings,

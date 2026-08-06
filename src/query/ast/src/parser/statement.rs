@@ -1618,6 +1618,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ MATERIALIZED ~ ^VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ ( CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ AS ~ #query
         },
         |(
@@ -1628,6 +1629,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             opt_if_not_exists,
             (catalog, database, view),
             opt_columns,
+            opt_cluster_by,
             _,
             query,
         )| {
@@ -1642,9 +1644,39 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     columns: opt_columns
                         .map(|(_, columns, _)| columns)
                         .unwrap_or_default(),
+                    cluster_by: opt_cluster_by.map(|(_, _, _, _, exprs, _)| ClusterOption {
+                        cluster_exprs: exprs,
+                    }),
                     query: Box::new(query),
                 },
             ))
+        },
+    );
+    let alter_materialized_view = map(
+        rule! {
+            ALTER ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3 ~ #alter_table_action
+        },
+        |(_, _, _, (catalog, database, view), action)| {
+            Statement::AlterMaterializedView(AlterMaterializedViewStmt {
+                catalog,
+                database,
+                view,
+                action,
+            })
+        },
+    );
+    let optimize_materialized_view = map(
+        rule! {
+            OPTIMIZE ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
+        },
+        |(_, _, _, (catalog, database, table), action, opt_limit)| {
+            Statement::OptimizeMaterializedView(OptimizeTableStmt {
+                catalog,
+                database,
+                table,
+                action,
+                limit: opt_limit.map(|(_, limit)| limit),
+            })
         },
     );
     let drop_materialized_view = map(
@@ -1666,6 +1698,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, _, (catalog, database, view))| {
             Statement::RefreshMaterializedView(RefreshMaterializedViewStmt {
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
+    let show_create_materialized_view = map(
+        rule! {
+            SHOW ~ CREATE ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, view))| {
+            Statement::ShowCreateMaterializedView(ShowCreateMaterializedViewStmt {
                 catalog,
                 database,
                 view,
@@ -2991,6 +3035,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
                 | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
                 | #show_materialized_views : "`SHOW MATERIALIZED VIEWS [FROM [<catalog>.]<database>] [<show_limit>]`"
+                | #show_create_materialized_view : "`SHOW CREATE MATERIALIZED VIEW [<database>.]<view>`"
                 | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             )
             | (
@@ -3045,8 +3090,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ABORT | ROLLBACK => rule!(#abort).parse(i),
         TRUNCATE => rule!(#truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             ).parse(i),
-        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
-            ).parse(i),
+        OPTIMIZE => rule!(
+            #optimize_materialized_view : "`OPTIMIZE MATERIALIZED VIEW [<database>.]<view> COMPACT [SEGMENT] [LIMIT <limit>]`"
+            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+        ).parse(i),
         VACUUM => rule!(
             #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
@@ -3128,7 +3175,7 @@ AS
                 | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
                 | #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
                 | #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
-                | #create_materialized_view : "`CREATE [OR REPLACE] MATERIALIZED VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+                | #create_materialized_view : "`CREATE [OR REPLACE] MATERIALIZED VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] [CLUSTER BY [LINEAR] (...)] AS SELECT ...`"
                 | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
                 | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             )
@@ -3215,7 +3262,10 @@ AS
             | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | USER | ROLE | CONNECTION | VIEW | STREAM | FUNCTION | PROCEDURE} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
             | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
-            | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
+            | (
+                #alter_materialized_view : "`ALTER MATERIALIZED VIEW [<database>.]<view> {CLUSTER BY (...) | DROP CLUSTER KEY | RECLUSTER [FINAL] [LIMIT <limit>]}`"
+                | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
+            )
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #alter_role : "`ALTER ROLE [IF EXISTS] <role_name> SET COMMENT = '<string_literal>' | UNSET COMMENT`"

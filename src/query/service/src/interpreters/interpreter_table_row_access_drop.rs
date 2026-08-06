@@ -24,6 +24,7 @@ use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextLicense;
@@ -61,6 +62,7 @@ impl Interpreter for DropTableRowAccessPolicyInterpreter {
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 
         let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        check_not_materialized_view(table.as_ref(), db_name)?;
 
         let table_info = table.get_table_info();
         let table_id = table_info.ident.table_id;
