@@ -31,7 +31,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -107,19 +107,16 @@ impl Binder {
                         "materialized view only supports built-in aggregate functions",
                     ));
                 };
-                let agg_name = function
-                    .func_name
-                    .strip_suffix("_state")
-                    .unwrap_or(&function.func_name);
-                let argument_types = function
-                    .args
-                    .iter()
-                    .map(ScalarExpr::data_type)
-                    .collect::<Result<Vec<_>>>()?;
-                let state_type = AggregateFunctionFactory::instance()
-                    .get(agg_name, function.params.clone(), argument_types, vec![])?
-                    .serialize_data_type();
-                data_types.push(infer_schema_type(&state_type)?);
+                if !matches!(
+                    function.return_type.remove_nullable(),
+                    DataType::AggregateState(_)
+                ) {
+                    return Err(ErrorCode::Internal(format!(
+                        "materialized view state function '{}' did not produce AggregateState",
+                        function.func_name
+                    )));
+                }
+                data_types.push(infer_schema_type(function.return_type.as_ref())?);
             }
             for item in &aggregate.group_items {
                 data_types.push(infer_schema_type(&item.scalar.data_type()?)?);

@@ -31,7 +31,6 @@ use databend_common_ast::ast::MergeOption;
 use databend_common_ast::ast::MutationSource;
 use databend_common_ast::ast::MutationUpdateExpr;
 use databend_common_ast::ast::Query;
-use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
@@ -42,7 +41,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
+use databend_common_expression::TableDataType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableIdent;
@@ -58,22 +57,37 @@ use databend_common_storages_fuse::operations::ChangesDesc;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_BASE_BLOCKS;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::StreamMode;
 use log::info;
+use log::warn;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
 use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::interpreter_txn_commit::execute_commit_statement;
+use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
+
+// Full-table semantic compaction is expensive, so wait until incremental aggregate refreshes
+// have appended enough state blocks. Large MVs additionally require at least 10% block growth.
+const AGGREGATE_MV_COMPACT_MIN_DELTA_BLOCKS: u64 = 32;
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum AggregateRefreshEffect {
+    None,
+    Rebuilt,
+    Appended,
+}
 
 pub struct RefreshMaterializedViewInterpreter {
     ctx: Arc<QueryContext>,
@@ -112,6 +126,38 @@ impl Interpreter for RefreshMaterializedViewInterpreter {
                 self.plan.database, self.plan.view_name
             )));
         }
+
+        // MV refresh consumes a checkpoint range exactly once, and its optional semantic
+        // compaction updates the same storage afterwards. Hold a mandatory, non-waiting table
+        // lock across both phases so a concurrent REFRESH fails instead of consuming the same
+        // source changes or racing with compaction. This deliberately bypasses enable_table_lock:
+        // for MV refresh the lock is a correctness requirement, not an optional optimization.
+        let locked_table_id = table.get_id();
+        let table_lock = LockManager::create_table_lock(table.get_table_info().clone())?;
+        let _lock_guard = table_lock.try_lock(self.ctx.clone(), false).await?;
+
+        // The table may have changed while the lock was being acquired. Reload it after locking so
+        // checkpoint and snapshot reads use the endpoint protected by this guard.
+        self.ctx.evict_table_from_cache(
+            &self.plan.catalog,
+            &self.plan.database,
+            &self.plan.view_name,
+        )?;
+        let table = self
+            .ctx
+            .get_table(
+                &self.plan.catalog,
+                &self.plan.database,
+                &self.plan.view_name,
+            )
+            .await?;
+        if table.get_id() != locked_table_id || table.engine() != MATERIALIZED_VIEW_ENGINE {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {}.{} changed while acquiring its refresh lock",
+                self.plan.database, self.plan.view_name
+            )));
+        }
+
         let table = FuseTable::try_from_table(table.as_ref())?;
         MaterializedViewRefresh::new(table, self.ctx.clone(), &self.plan)
             .execute()
@@ -268,6 +314,12 @@ impl<'a> MaterializedViewRefresh<'a> {
                 .check_changes_valid(&source_table.get_table_info().desc, *mv_source_seq)?;
         }
 
+        let previous_mv_block_count = self
+            .mv_table
+            .read_table_snapshot()
+            .await?
+            .map(|snapshot| snapshot.summary.block_count)
+            .unwrap_or(0);
         let txn_mgr = self.ctx.txn_mgr();
         if txn_mgr.lock().is_active() {
             return Err(ErrorCode::InvalidOperation(
@@ -282,6 +334,7 @@ impl<'a> MaterializedViewRefresh<'a> {
                 &source_database,
                 &source_table_name,
                 is_aggregating,
+                previous_mv_block_count,
                 checkpoint,
                 source_seq,
                 source_snapshot_location,
@@ -340,6 +393,231 @@ impl<'a> MaterializedViewRefresh<'a> {
         self.ctx.evict_table_from_cache(catalog, database, table)?;
         self.ctx.attach_table(catalog, database, table, source);
         Ok(())
+    }
+
+    async fn update_compaction_options(
+        &self,
+        table: &dyn Table,
+        base_blocks: u64,
+        delta_blocks: u64,
+    ) -> Result<()> {
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        catalog
+            .upsert_table_option(
+                &self.plan.tenant,
+                &self.plan.database,
+                UpsertTableOptionReq {
+                    table_id: table.get_id(),
+                    seq: MatchSeq::Exact(table.get_table_info().ident.seq),
+                    options: HashMap::from([
+                        (
+                            OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_BASE_BLOCKS.to_string(),
+                            Some(base_blocks.to_string()),
+                        ),
+                        (
+                            OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS.to_string(),
+                            Some(delta_blocks.to_string()),
+                        ),
+                    ]),
+                },
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn maintain_aggregate_compaction(
+        &self,
+        effect: AggregateRefreshEffect,
+        previous_block_count: u64,
+    ) -> Result<()> {
+        if effect == AggregateRefreshEffect::None {
+            return Ok(());
+        }
+        self.ctx.evict_table_from_cache(
+            &self.plan.catalog,
+            &self.plan.database,
+            &self.plan.view_name,
+        )?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let table = catalog
+            .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
+            .await?;
+        if table.get_id() != self.mv_table.get_id() || table.engine() != MATERIALIZED_VIEW_ENGINE {
+            return Ok(());
+        }
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let current_block_count = fuse_table
+            .read_table_snapshot()
+            .await?
+            .map(|snapshot| snapshot.summary.block_count)
+            .unwrap_or(0);
+
+        // A rebuild already emits one globally merged state per group, so it establishes a new
+        // compaction baseline. Only append-only aggregate refreshes accumulate semantic debt.
+        if effect == AggregateRefreshEffect::Rebuilt {
+            self.update_compaction_options(table.as_ref(), current_block_count, 0)
+                .await?;
+            return Ok(());
+        }
+
+        let options = table.options();
+        let base_blocks = options
+            .get(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_BASE_BLOCKS)
+            .map(|value| value.parse::<u64>())
+            .transpose()
+            .map_err(|error| {
+                ErrorCode::InvalidMaterializedView(format!(
+                    "invalid aggregate MV compaction base block count: {error}"
+                ))
+            })?
+            .unwrap_or(previous_block_count);
+        let previous_delta_blocks = options
+            .get(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS)
+            .map(|value| value.parse::<u64>())
+            .transpose()
+            .map_err(|error| {
+                ErrorCode::InvalidMaterializedView(format!(
+                    "invalid aggregate MV compaction delta block count: {error}"
+                ))
+            })?
+            .unwrap_or(0);
+        let delta_blocks = previous_delta_blocks
+            .saturating_add(current_block_count.saturating_sub(previous_block_count));
+        // Persist debt before the best-effort overwrite. A failed compaction must leave the debt
+        // visible so a later append-only refresh can retry instead of treating it as compacted.
+        self.update_compaction_options(table.as_ref(), base_blocks, delta_blocks)
+            .await?;
+
+        let compact_threshold = AGGREGATE_MV_COMPACT_MIN_DELTA_BLOCKS.max(base_blocks / 10);
+        if delta_blocks < compact_threshold || !self.compact_aggregate_states().await? {
+            return Ok(());
+        }
+
+        self.ctx.evict_table_from_cache(
+            &self.plan.catalog,
+            &self.plan.database,
+            &self.plan.view_name,
+        )?;
+        let compacted_table = catalog
+            .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
+            .await?;
+        if compacted_table.get_id() != self.mv_table.get_id()
+            || compacted_table.engine() != MATERIALIZED_VIEW_ENGINE
+        {
+            return Ok(());
+        }
+        let compacted_fuse = FuseTable::try_from_table(compacted_table.as_ref())?;
+        let compacted_block_count = compacted_fuse
+            .read_table_snapshot()
+            .await?
+            .map(|snapshot| snapshot.summary.block_count)
+            .unwrap_or(0);
+        self.update_compaction_options(compacted_table.as_ref(), compacted_block_count, 0)
+            .await
+    }
+
+    async fn compact_aggregate_states(&self) -> Result<bool> {
+        self.ctx.evict_table_from_cache(
+            &self.plan.catalog,
+            &self.plan.database,
+            &self.plan.view_name,
+        )?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let mv_table = catalog
+            .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
+            .await?;
+        if mv_table.get_id() != self.mv_table.get_id()
+            || mv_table.engine() != MATERIALIZED_VIEW_ENGINE
+        {
+            return Ok(false);
+        }
+        let fuse_table = FuseTable::try_from_table(mv_table.as_ref())?;
+        let Some(_snapshot) = fuse_table.read_table_snapshot().await? else {
+            return Ok(false);
+        };
+
+        let physical_source_name = format!(
+            "_mv_compact_{}_{}",
+            mv_table.get_id(),
+            mv_table.get_table_info().ident.seq
+        );
+        let mut physical_source_info = mv_table.get_table_info().clone();
+        physical_source_info.name = physical_source_name.clone();
+        physical_source_info.desc = format!("'{}'.'{}'", self.plan.database, physical_source_name);
+        // Build a query-local FUSE alias over the committed MV snapshot so compaction reads the
+        // persisted AggregateState columns directly. Keeping the MATERIALIZED VIEW engine would
+        // route the alias through bind_materialized_view(), which applies the logical read plan and
+        // finalizes states with *_merge before this compaction can preserve them with *_merge_state.
+        // This only changes the cloned TableInfo; the catalog entry remains a MATERIALIZED VIEW.
+        physical_source_info.meta.engine = "FUSE".to_string();
+        let physical_source = catalog.get_table_by_info(&physical_source_info)?;
+        self.attach_source(
+            &self.plan.catalog,
+            &self.plan.database,
+            &physical_source_name,
+            physical_source,
+        )?;
+
+        let mut state_targets = Vec::new();
+        let mut group_targets = Vec::new();
+        let mut saw_group = false;
+        for field in mv_table.schema().fields() {
+            let column = Identifier::from_name(None, field.name()).to_string();
+            match field.data_type().remove_nullable() {
+                TableDataType::AggregateState { function_name, .. } => {
+                    if saw_group {
+                        return Err(ErrorCode::InvalidMaterializedView(
+                            "aggregate state columns must precede GROUP BY columns in materialized view storage",
+                        ));
+                    }
+                    state_targets.push(format!(
+                        "{}_merge_state({column}) AS {column}",
+                        function_name
+                    ));
+                }
+                _ => {
+                    saw_group = true;
+                    group_targets.push(column);
+                }
+            }
+        }
+        if state_targets.is_empty() && group_targets.is_empty() {
+            return Ok(false);
+        }
+
+        let mut targets = state_targets;
+        targets.extend(group_targets.iter().cloned());
+        let source = format!(
+            "{}.{}.{}",
+            Identifier::from_name(None, &self.plan.catalog),
+            Identifier::from_name(None, &self.plan.database),
+            Identifier::from_name(None, &physical_source_name),
+        );
+        let mut sql = format!("SELECT {} FROM {source}", targets.join(", "));
+        if !group_targets.is_empty() {
+            sql.push_str(&format!(" GROUP BY {}", group_targets.join(", ")));
+        }
+        let query = parse_materialized_view_query(
+            &sql,
+            "invalid materialized view aggregate compact query",
+        )?;
+        self.execute_statement(&Statement::Insert(InsertStmt {
+            hints: None,
+            with: None,
+            table: TableRef {
+                catalog: Some(Identifier::from_name(None, &self.plan.catalog)),
+                database: Some(Identifier::from_name(None, &self.plan.database)),
+                table: Identifier::from_name(None, &self.plan.view_name),
+                branch: None,
+            },
+            columns: vec![],
+            source: InsertSource::Select {
+                query: Box::new(query),
+            },
+            overwrite: true,
+        }))
+        .await?;
+        Ok(true)
     }
 
     async fn execute_statement(&self, statement: &Statement) -> Result<()> {
@@ -406,7 +684,6 @@ impl<'a> MaterializedViewRefresh<'a> {
         query: &mut Query,
         changes_query: Query,
         change_action: &str,
-        has_source_row_id: bool,
     ) -> Result<()> {
         let SetExpr::Select(select) = &mut query.body else {
             return Err(ErrorCode::Internal(
@@ -430,28 +707,6 @@ impl<'a> MaterializedViewRefresh<'a> {
             pivot: None,
             unpivot: None,
         };
-
-        if has_source_row_id {
-            let mut source_row_id_target_count = 0;
-            for target in &mut select.select_list {
-                let SelectTarget::AliasedExpr {
-                    expr,
-                    alias: Some(alias),
-                } = target
-                else {
-                    continue;
-                };
-                if alias.name == MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN {
-                    source_row_id_target_count += 1;
-                    **expr = Self::column_ref(None, CHANGE_ROW_ID_COL_NAME);
-                }
-            }
-            if source_row_id_target_count != 1 {
-                return Err(ErrorCode::InvalidMaterializedView(format!(
-                    "non-aggregate materialized view physical query must have exactly one source row ID column, found {source_row_id_target_count}",
-                )));
-            }
-        }
 
         let insert_filter = Expr::BinaryOp {
             span: None,
@@ -480,13 +735,13 @@ impl<'a> MaterializedViewRefresh<'a> {
             physical_query,
             "invalid materialized view physical query",
         )?;
-        Self::apply_changes_query(&mut upserts, changes_query.clone(), "INSERT", true)?;
+        Self::apply_changes_query(&mut upserts, changes_query.clone(), "INSERT")?;
 
         let mut deletes = parse_materialized_view_query(
             physical_query,
             "invalid materialized view physical query",
         )?;
-        Self::apply_changes_query(&mut deletes, changes_query.clone(), "DELETE", true)?;
+        Self::apply_changes_query(&mut deletes, changes_query.clone(), "DELETE")?;
 
         let row_id = Identifier::from_name(None, MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN);
         parse_materialized_view_query(
@@ -594,10 +849,12 @@ impl<'a> MaterializedViewRefresh<'a> {
         source_database: &str,
         source_table_name: &str,
         is_aggregating: bool,
+        previous_mv_block_count: u64,
         checkpoint: Option<(u64, Option<String>)>,
         source_seq: u64,
         end_snapshot: Option<String>,
     ) -> Result<()> {
+        let mut aggregate_refresh_effect = AggregateRefreshEffect::None;
         if end_snapshot.is_none() {
             // A source without a snapshot is a valid empty endpoint. Rebind the physical query to
             // the captured empty table and overwrite the MV so old materialized rows are removed.
@@ -627,6 +884,9 @@ impl<'a> MaterializedViewRefresh<'a> {
                 overwrite: true,
             }))
             .await?;
+            if is_aggregating {
+                aggregate_refresh_effect = AggregateRefreshEffect::Rebuilt;
+            }
         } else if checkpoint
             .as_ref()
             .is_none_or(|(_, start_snapshot)| start_snapshot.is_none())
@@ -663,7 +923,7 @@ impl<'a> MaterializedViewRefresh<'a> {
                 physical_query,
                 "invalid materialized view physical query",
             )?;
-            Self::apply_changes_query(&mut query, changes_query, "INSERT", !is_aggregating)?;
+            Self::apply_changes_query(&mut query, changes_query, "INSERT")?;
             self.execute_statement(&Statement::Insert(InsertStmt {
                 hints: None,
                 with: None,
@@ -680,6 +940,9 @@ impl<'a> MaterializedViewRefresh<'a> {
                 overwrite: true,
             }))
             .await?;
+            if is_aggregating {
+                aggregate_refresh_effect = AggregateRefreshEffect::Rebuilt;
+            }
         } else if let Some((mv_source_seq, Some(start_snapshot))) = checkpoint
             && mv_source_seq != source_seq
         {
@@ -739,6 +1002,7 @@ impl<'a> MaterializedViewRefresh<'a> {
                     overwrite: true,
                 }))
                 .await?;
+                aggregate_refresh_effect = AggregateRefreshEffect::Rebuilt;
             } else if changes.mode == StreamMode::Standard {
                 let refresh_source =
                     self.build_standard_refresh_source(physical_query, &changes_query)?;
@@ -749,7 +1013,7 @@ impl<'a> MaterializedViewRefresh<'a> {
                     physical_query,
                     "invalid materialized view physical query",
                 )?;
-                Self::apply_changes_query(&mut query, changes_query, "INSERT", !is_aggregating)?;
+                Self::apply_changes_query(&mut query, changes_query, "INSERT")?;
                 self.execute_statement(&Statement::Insert(InsertStmt {
                     hints: None,
                     with: None,
@@ -766,6 +1030,9 @@ impl<'a> MaterializedViewRefresh<'a> {
                     overwrite: false,
                 }))
                 .await?;
+                if is_aggregating {
+                    aggregate_refresh_effect = AggregateRefreshEffect::Appended;
+                }
             }
         }
 
@@ -797,6 +1064,19 @@ impl<'a> MaterializedViewRefresh<'a> {
                 )
                 .await?;
         }
-        execute_commit_statement(self.ctx.clone()).await
+        execute_commit_statement(self.ctx.clone()).await?;
+
+        if is_aggregating {
+            if let Err(error) = self
+                .maintain_aggregate_compaction(aggregate_refresh_effect, previous_mv_block_count)
+                .await
+            {
+                warn!(
+                    "materialized view {}.{} refresh succeeded but aggregate state compaction maintenance failed: {}",
+                    self.plan.database, self.plan.view_name, error
+                );
+            }
+        }
+        Ok(())
     }
 }

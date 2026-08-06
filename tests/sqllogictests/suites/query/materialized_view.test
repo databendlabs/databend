@@ -66,13 +66,40 @@ order by category_name
 a 10 1 10.0
 b 30 1 30.0
 
-# INSERT-only changes use incremental refresh. Aggregate states are appended and merged on read.
+# Stale append-only MVs combine storage with the live delta before explicit refresh.
+# Repeat the exact query text across another source append to cover result-cache invalidation.
+statement ok
+insert into source values (4, 40, 'a', true)
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+3 60
+4 80
+
 statement ok
 insert into source values
-    (4, 40, 'a', true),
     (5, 50, 'b', true),
     (6, 60, 'c', false)
 
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+3 60
+4 80
+5 100
+
+query TIIR
+select category_name, total_amount, row_count, average_amount
+from mv_aggregate
+order by category_name
+----
+a 50 2 25.0
+b 80 2 40.0
+
+# INSERT-only changes use incremental refresh. Aggregate states are appended and merged on read.
 statement ok
 refresh materialized view mv_detail
 
@@ -179,6 +206,111 @@ query I
 select count(*) from source
 ----
 0
+
+# Aggregate semantic compaction is driven by state blocks appended since the last rebuild or
+# successful compact, not by the MV's total block count. Disable ordinary FUSE compact-after-write
+# so each incremental aggregate refresh contributes one observable state block.
+statement ok
+set enable_compact_after_write = 0
+
+statement ok
+create table compact_source (category string, amount int) change_tracking = true
+
+statement ok
+create materialized view compact_mv as
+select category, sum(amount) as total_amount
+from compact_source
+group by category
+
+statement ok
+insert into compact_source values ('a', 1)
+
+statement ok
+refresh materialized view compact_mv
+
+# Accumulate 31 append-only state blocks. Together with the rebuild baseline this leaves 32
+# physical blocks, but the semantic compaction debt is still below its threshold of 32.
+query I
+execute immediate $$
+begin
+    for i in 1 to 31 do
+        insert into compact_source values ('a', 1);
+        refresh materialized view compact_mv;
+    end for;
+    return 31;
+end;
+$$
+----
+31
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'compact_mv')
+order by timestamp desc
+limit 1
+----
+32
+
+query TI
+select category, total_amount from compact_mv
+----
+a 32
+
+# The 32nd appended state block reaches the debt threshold. Semantic compaction merges all equal
+# groups with *_merge_state and overwrites the MV, reducing this single-group MV to one block.
+statement ok
+insert into compact_source values ('a', 1)
+
+statement ok
+refresh materialized view compact_mv
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'compact_mv')
+order by timestamp desc
+limit 1
+----
+1
+
+query TI
+select category, total_amount from compact_mv
+----
+a 33
+
+query I
+select row_count from fuse_block('test_materialized_view', 'compact_mv')
+----
+1
+
+# A successful compact resets the debt. One subsequent incremental refresh appends one new state
+# block and must not immediately rewrite the whole MV again merely because it compacted before.
+statement ok
+insert into compact_source values ('a', 1)
+
+statement ok
+refresh materialized view compact_mv
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'compact_mv')
+order by timestamp desc
+limit 1
+----
+2
+
+query TI
+select category, total_amount from compact_mv
+----
+a 34
+
+statement ok
+drop materialized view compact_mv
+
+statement ok
+drop table compact_source
+
+statement ok
+unset enable_compact_after_write
 
 statement ok
 drop materialized view mv_detail
