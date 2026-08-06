@@ -15,7 +15,10 @@
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::AggregateFunctionParam;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::OrderedFloat;
 use fastrace::func_name;
 
 use crate::common;
@@ -49,5 +52,21 @@ fn test_decode_v182_schema() -> anyhow::Result<()> {
 
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_schema_v182.as_slice(), 182, want())?;
+    Ok(())
+}
+
+#[test]
+fn test_aggregate_state_parameter_roundtrip() -> anyhow::Result<()> {
+    let state_type = TableDataType::AggregateState {
+        function_name: "quantile_tdigest".to_string(),
+        params: vec![AggregateFunctionParam::Number(NumberScalar::Float64(
+            OrderedFloat(0.5),
+        ))],
+        argument_types: vec![TableDataType::Number(NumberDataType::UInt64)],
+        state_type: Box::new(TableDataType::Binary),
+    };
+    let schema = TableSchema::new(vec![TableField::new("state", state_type)]);
+
+    common::test_pb_from_to(func_name!(), schema)?;
     Ok(())
 }

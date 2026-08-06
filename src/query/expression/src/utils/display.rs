@@ -657,14 +657,11 @@ impl Display for DataType {
                 write!(f, "AggregateState({}", state.function_name)?;
                 if !state.params.is_empty() {
                     write!(f, "(")?;
-                    for (index, encoded_param) in state.params.iter().enumerate() {
+                    for (index, param) in state.params.iter().enumerate() {
                         if index > 0 {
                             write!(f, ", ")?;
                         }
-                        match borsh::from_slice::<Scalar>(encoded_param) {
-                            Ok(param) => write!(f, "{param}")?,
-                            Err(_) => write!(f, "<invalid parameter>")?,
-                        }
+                        write!(f, "{param}")?;
                     }
                     write!(f, ")")?;
                 }
@@ -737,14 +734,11 @@ impl Display for TableDataType {
                 write!(f, "AggregateState({function_name}")?;
                 if !params.is_empty() {
                     write!(f, "(")?;
-                    for (index, encoded_param) in params.iter().enumerate() {
+                    for (index, param) in params.iter().enumerate() {
                         if index > 0 {
                             write!(f, ", ")?;
                         }
-                        match borsh::from_slice::<Scalar>(encoded_param) {
-                            Ok(param) => write!(f, "{param}")?,
-                            Err(_) => write!(f, "<invalid parameter>")?,
-                        }
+                        write!(f, "{param}")?;
                     }
                     write!(f, ")")?;
                 }

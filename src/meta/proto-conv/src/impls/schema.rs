@@ -16,9 +16,13 @@
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
 use databend_common_expression as ex;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::VariantDataType;
+use databend_common_expression::types::AggregateFunctionParam;
 use databend_common_expression::types::NumberDataType;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_protos::pb;
 use databend_common_protos::pb::data_type::Dt;
 use databend_common_protos::pb::data_type::Dt24;
@@ -32,6 +36,36 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 use crate::reader_check_msg;
+
+const AGGREGATE_PARAM_BINCODE_V1: &[u8] = b"DBAP\x01";
+
+fn aggregate_param_from_bytes(bytes: &[u8]) -> Result<AggregateFunctionParam, Incompatible> {
+    if let Some(bytes) = bytes.strip_prefix(AGGREGATE_PARAM_BINCODE_V1) {
+        return bincode_deserialize_from_slice(bytes).map_err(|error| {
+            Incompatible::new(format!(
+                "Cannot deserialize aggregate function parameter: {error}"
+            ))
+        });
+    }
+
+    let scalar = borsh::from_slice::<Scalar>(bytes).map_err(|error| {
+        Incompatible::new(format!(
+            "Cannot deserialize legacy aggregate function parameter: {error}"
+        ))
+    })?;
+    AggregateFunctionParam::try_from(scalar).map_err(|error| {
+        Incompatible::new(format!(
+            "Cannot convert legacy aggregate function parameter: {error}"
+        ))
+    })
+}
+
+fn aggregate_param_to_bytes(param: &AggregateFunctionParam) -> Vec<u8> {
+    let mut bytes = AGGREGATE_PARAM_BINCODE_V1.to_vec();
+    bincode_serialize_into_buf(&mut bytes, param)
+        .expect("serializing an aggregate function parameter should not fail");
+    bytes
+}
 
 impl FromToProto for ex::TableSchema {
     type PB = pb::DataSchema;
@@ -312,6 +346,11 @@ impl FromToProto for ex::TableDataType {
                             .into_iter()
                             .map(ex::TableDataType::from_pb)
                             .collect::<Result<Vec<_>, _>>()?;
+                        let params = state
+                            .params
+                            .iter()
+                            .map(|param| aggregate_param_from_bytes(param))
+                            .collect::<Result<Vec<_>, _>>()?;
                         let state_type = state.state_type.ok_or_else(|| {
                             Incompatible::new(
                                 "AggregateState.state_type can not be None".to_string(),
@@ -319,7 +358,7 @@ impl FromToProto for ex::TableDataType {
                         })?;
                         ex::TableDataType::AggregateState {
                             function_name: state.function_name,
-                            params: state.params,
+                            params,
                             argument_types,
                             state_type: Box::new(ex::TableDataType::from_pb(*state_type)?),
                         }
@@ -403,7 +442,7 @@ impl FromToProto for ex::TableDataType {
                 ver: VER,
                 min_reader_ver: MIN_READER_VER,
                 function_name: function_name.clone(),
-                params: params.clone(),
+                params: params.iter().map(aggregate_param_to_bytes).collect(),
                 argument_types: argument_types.iter().map(FromToProto::to_pb).collect(),
                 state_type: Some(Box::new(state_type.to_pb())),
             }))),
@@ -701,5 +740,18 @@ fn new_pb_dt24(dt24: Dt24) -> pb::DataType {
         min_reader_ver: MIN_READER_VER,
         dt: None,
         dt24: Some(dt24),
+    }
+}
+
+#[cfg(test)]
+mod aggregate_param_tests {
+    use super::*;
+
+    #[test]
+    fn test_decode_legacy_borsh_scalar() {
+        let bytes = borsh::to_vec(&Scalar::String("legacy".to_string())).unwrap();
+        let param = aggregate_param_from_bytes(&bytes).unwrap();
+
+        assert_eq!(param, AggregateFunctionParam::String("legacy".to_string()));
     }
 }

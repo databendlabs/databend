@@ -32,6 +32,7 @@ use crate::BlockMetaInfo;
 use crate::BlockMetaInfoDowncast;
 use crate::Scalar;
 use crate::display::display_tuple_field_name;
+use crate::types::AggregateFunctionParam;
 use crate::types::AggregateStateDataType;
 use crate::types::DataType;
 use crate::types::DecimalDataKind;
@@ -359,7 +360,7 @@ pub enum TableDataType {
     Opaque(usize),
     AggregateState {
         function_name: String,
-        params: Vec<Vec<u8>>,
+        params: Vec<AggregateFunctionParam>,
         argument_types: Vec<TableDataType>,
         state_type: Box<TableDataType>,
     },

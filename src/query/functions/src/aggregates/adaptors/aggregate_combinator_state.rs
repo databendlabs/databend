@@ -15,7 +15,6 @@
 use std::fmt;
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::BlockEntry;
@@ -23,6 +22,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AggregateFunctionParam;
 use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -59,25 +59,20 @@ impl AggregateStateCombinator {
             .join(", ");
 
         let name = format!("StateCombinator({nested_name}, {arg_name})");
-        let encoded_params = params
+        let state_params = params
             .iter()
-            .map(|param| {
-                borsh::to_vec(param).map_err(|error| {
-                    ErrorCode::Internal(format!(
-                        "Cannot serialize aggregate parameter for {nested_name}_state: {error}"
-                    ))
-                })
-            })
+            .cloned()
+            .map(AggregateFunctionParam::try_from)
             .collect::<Result<Vec<_>>>()?;
         let nested = AggregateFunctionFactory::instance().get(
             nested_name,
-            params,
+            params.clone(),
             arguments.clone(),
             sort_descs,
         )?;
         let return_type = DataType::AggregateState(Box::new(AggregateStateDataType {
             function_name: nested_name.to_string(),
-            params: encoded_params,
+            params: state_params,
             argument_types: arguments,
             state_type: Box::new(nested.serialize_data_type()),
         }));

@@ -44,6 +44,8 @@ pub mod zero_size_type;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::hash::Hash;
 use std::iter::TrustedLen;
 use std::ops::Deref;
@@ -52,7 +54,10 @@ use std::ops::Range;
 
 use databend_common_ast::ast::TypeName;
 pub use databend_common_base::base::OrderedFloat;
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz as TimestampTzScalar;
 use databend_common_exception::ErrorCode;
+use databend_common_frozen_api::FrozenAPI;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -112,10 +117,97 @@ use crate::values::Scalar;
 
 pub type GenericMap = [DataType];
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FrozenAPI)]
+pub enum AggregateFunctionParam {
+    Null,
+    Number(NumberScalar),
+    Decimal(DecimalScalar),
+    Timestamp(i64),
+    TimestampTz(TimestampTzScalar),
+    Date(i32),
+    Interval(months_days_micros),
+    Boolean(bool),
+    Binary(Vec<u8>),
+    String(String),
+    Bitmap(Vec<u8>),
+    Tuple(Vec<AggregateFunctionParam>),
+    Variant(Vec<u8>),
+    Geometry(Vec<u8>),
+}
+
+impl TryFrom<Scalar> for AggregateFunctionParam {
+    type Error = ErrorCode;
+
+    fn try_from(value: Scalar) -> Result<Self, Self::Error> {
+        Ok(match value {
+            Scalar::Null => Self::Null,
+            Scalar::Number(value) => Self::Number(value),
+            Scalar::Decimal(value) => Self::Decimal(value),
+            Scalar::Timestamp(value) => Self::Timestamp(value),
+            Scalar::TimestampTz(value) => Self::TimestampTz(value),
+            Scalar::Date(value) => Self::Date(value),
+            Scalar::Interval(value) => Self::Interval(value),
+            Scalar::Boolean(value) => Self::Boolean(value),
+            Scalar::Binary(value) => Self::Binary(value),
+            Scalar::String(value) => Self::String(value),
+            Scalar::Bitmap(value) => Self::Bitmap(value),
+            Scalar::Tuple(values) => Self::Tuple(
+                values
+                    .into_iter()
+                    .map(Self::try_from)
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            Scalar::Variant(value) => Self::Variant(value),
+            Scalar::Geometry(value) => Self::Geometry(value),
+            value => {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Aggregate function parameter type '{}' cannot be persisted",
+                    value.as_ref().infer_data_type()
+                )));
+            }
+        })
+    }
+}
+
+impl From<AggregateFunctionParam> for Scalar {
+    fn from(value: AggregateFunctionParam) -> Self {
+        match value {
+            AggregateFunctionParam::Null => Scalar::Null,
+            AggregateFunctionParam::Number(value) => Scalar::Number(value),
+            AggregateFunctionParam::Decimal(value) => Scalar::Decimal(value),
+            AggregateFunctionParam::Timestamp(value) => Scalar::Timestamp(value),
+            AggregateFunctionParam::TimestampTz(value) => Scalar::TimestampTz(value),
+            AggregateFunctionParam::Date(value) => Scalar::Date(value),
+            AggregateFunctionParam::Interval(value) => Scalar::Interval(value),
+            AggregateFunctionParam::Boolean(value) => Scalar::Boolean(value),
+            AggregateFunctionParam::Binary(value) => Scalar::Binary(value),
+            AggregateFunctionParam::String(value) => Scalar::String(value),
+            AggregateFunctionParam::Bitmap(value) => Scalar::Bitmap(value),
+            AggregateFunctionParam::Tuple(values) => {
+                Scalar::Tuple(values.into_iter().map(Scalar::from).collect())
+            }
+            AggregateFunctionParam::Variant(value) => Scalar::Variant(value),
+            AggregateFunctionParam::Geometry(value) => Scalar::Geometry(value),
+        }
+    }
+}
+
+impl Display for AggregateFunctionParam {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&Scalar::from(self.clone()), formatter)
+    }
+}
+
+impl Hash for AggregateFunctionParam {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        Scalar::from(self.clone()).hash(state)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AggregateStateDataType {
     pub function_name: String,
-    pub params: Vec<Vec<u8>>,
+    pub params: Vec<AggregateFunctionParam>,
     pub argument_types: Vec<DataType>,
     pub state_type: Box<DataType>,
 }
