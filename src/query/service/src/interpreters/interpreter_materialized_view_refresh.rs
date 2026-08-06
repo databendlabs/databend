@@ -42,7 +42,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableIdent;
@@ -432,20 +431,19 @@ impl<'a> MaterializedViewRefresh<'a> {
         };
 
         if has_source_row_id {
-            let mut source_row_id_target_count = 0;
-            for target in &mut select.select_list {
-                let SelectTarget::AliasedExpr {
-                    expr,
-                    alias: Some(alias),
-                } = target
-                else {
-                    continue;
-                };
-                if alias.name == MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN {
-                    source_row_id_target_count += 1;
-                    **expr = Self::column_ref(None, CHANGE_ROW_ID_COL_NAME);
-                }
-            }
+            let source_row_id_target_count = select
+                .select_list
+                .iter()
+                .filter(|target| {
+                    matches!(
+                        target,
+                        SelectTarget::AliasedExpr {
+                            alias: Some(alias),
+                            ..
+                        } if alias.name == MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN
+                    )
+                })
+                .count();
             if source_row_id_target_count != 1 {
                 return Err(ErrorCode::InvalidMaterializedView(format!(
                     "non-aggregate materialized view physical query must have exactly one source row ID column, found {source_row_id_target_count}",
