@@ -78,6 +78,7 @@ where A: TypeCheckAdapter
             metadata,
             aliases,
             fallback_aliases,
+            column_first_alias_resolution: false,
             in_aggregate_function: false,
             in_window_function: false,
             in_masking_policy: false,

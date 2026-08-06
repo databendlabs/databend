@@ -62,6 +62,7 @@ where A: TypeCheckAdapter
                     &column,
                     self.aliases,
                     self.fallback_aliases,
+                    self.column_first_alias_resolution,
                     self.name_resolution_ctx,
                 )?
             }

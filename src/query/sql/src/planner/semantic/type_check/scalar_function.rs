@@ -215,6 +215,26 @@ where A: TypeCheckAdapter
         }
     }
 
+    fn with_grouping_argument_resolution<R>(
+        &mut self,
+        func_name: &str,
+        resolve: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        // GROUPING arguments identify input grouping expressions. In clauses
+        // such as HAVING and ORDER BY, bare names normally prefer SELECT
+        // aliases, but expanding a same-name alias here can turn
+        // `grouping(x)` into `grouping(<alias expression>)`. Prefer input
+        // columns for this argument tree while retaining SELECT aliases as a
+        // fallback when no input column has that name.
+        let original_column_first = self.column_first_alias_resolution;
+        if func_name.eq_ignore_ascii_case("grouping") {
+            self.column_first_alias_resolution = true;
+        }
+        let result = resolve(self);
+        self.column_first_alias_resolution = original_column_first;
+        result
+    }
+
     pub(super) fn resolve_call(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -237,11 +257,14 @@ where A: TypeCheckAdapter
             return rewritten_get_expr;
         }
 
-        let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
-        for arg in args {
-            let box (scalar, _) = self.resolve_core(arena, *arg)?;
-            scalars.push(scalar);
-        }
+        let scalars = self.with_grouping_argument_resolution(func_name, |this| {
+            let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
+            for arg in args {
+                let box (scalar, _) = this.resolve_core(arena, *arg)?;
+                scalars.push(scalar);
+            }
+            Ok::<_, ErrorCode>(scalars)
+        })?;
 
         if self.should_try_rewrite_variant_function(func_name) {
             let mut arg_types = SmallVec::<[DataType; 4]>::with_capacity(scalars.len());
@@ -285,7 +308,9 @@ where A: TypeCheckAdapter
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let params = self.resolve_core_function_params(arena, span, params, "scalar")?;
-        let (scalars, _) = self.resolve_expr_args(arena, args)?;
+        let (scalars, _) = self.with_grouping_argument_resolution(func_name, |this| {
+            this.resolve_expr_args(arena, args)
+        })?;
 
         if self.should_try_rewrite_variant_function(func_name) {
             let mut arg_types = Vec::with_capacity(scalars.len());

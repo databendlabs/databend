@@ -349,19 +349,19 @@ drop database grouping_sets;
 
 # Regression: SELECT alias containing grouping() must not shadow column in GROUPING SETS
 statement ok
-create database grouping_alias_regression;
+create database grouping_alias_test;
 
 statement ok
-use grouping_alias_regression;
+use grouping_alias_test;
 
 statement ok
-create table events(category_id int, label string, amount int);
+create table t(k int, d string, v int);
 
 statement ok
-insert into events values (1, 'A', 10), (1, 'B', 20), (2, 'A', 30), (2, 'B', 40);
+insert into t values (1, 'A', 10), (1, 'B', 20), (2, 'A', 30), (2, 'B', 40);
 
-query IIT rowsort
-select if(grouping(category_id)=1, 0, category_id) as category_id, label, sum(amount) from events group by grouping sets ((label), (category_id, label));
+query ITI rowsort
+select if(grouping(k)=1, 0, k) as k, d, sum(v) from t group by grouping sets ((d), (k, d));
 ----
 0 A 40
 0 B 60
@@ -370,8 +370,37 @@ select if(grouping(category_id)=1, 0, category_id) as category_id, label, sum(am
 2 A 30
 2 B 40
 
-statement ok
-drop table events all;
+# ORDER BY and HAVING alias prebinding must keep grouping() bound to the input column.
+query ITI
+select if(grouping(k)=1, 0, k) as k, d, sum(v) from t group by grouping sets ((d), (k, d)) order by k, d;
+----
+0 A 40
+0 B 60
+1 A 10
+1 B 20
+2 A 30
+2 B 40
+
+query ITI rowsort
+select if(grouping(k)=1, 0, k) as k, d, sum(v) from t group by grouping sets ((d), (k, d)) having k is not null;
+----
+0 A 40
+0 B 60
+1 A 10
+1 B 20
+2 A 30
+2 B 40
+
+# GROUPING arguments retain alias fallback when no input column has that name.
+query III
+select k + 1 as x, grouping(x) as g, sum(v) from t group by grouping sets ((x), ()) order by g, x;
+----
+2 0 30
+3 0 70
+NULL 1 100
 
 statement ok
-drop database grouping_alias_regression;
+drop table t all;
+
+statement ok
+drop database grouping_alias_test;

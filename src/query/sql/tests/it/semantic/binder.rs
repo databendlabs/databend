@@ -583,10 +583,26 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
         SqlTestCase {
             name: "grouping_sets_select_alias_with_grouping_func_does_not_shadow_column",
             description: "A SELECT alias containing grouping() must not shadow the underlying column in GROUPING SETS items.",
-            setup_sqls: &[
-                "CREATE TABLE events(category_id UInt64, label String, amount Decimal(18,6))",
-            ],
-            sql: "SELECT if(grouping(category_id)=1, 0, category_id) AS category_id, label, sum(amount) FROM events GROUP BY GROUPING SETS ((label), (category_id, label))",
+            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
+            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d))",
+        },
+        SqlTestCase {
+            name: "grouping_alias_in_order_by_prefers_group_column",
+            description: "ORDER BY alias prebinding must resolve grouping() arguments to input group columns.",
+            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
+            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) ORDER BY k, d",
+        },
+        SqlTestCase {
+            name: "grouping_alias_in_having_prefers_group_column",
+            description: "HAVING alias prebinding must resolve grouping() arguments to input group columns.",
+            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
+            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) HAVING k IS NOT NULL",
+        },
+        SqlTestCase {
+            name: "grouping_in_order_by_falls_back_to_group_alias",
+            description: "GROUPING arguments should still fall back to a valid group alias when no input column has that name.",
+            setup_sqls: &["CREATE TABLE t(i UInt64, v UInt64)"],
+            sql: "SELECT i + 1 AS k, grouping(k) AS g, sum(v) FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY g, k",
         },
     ];
 
