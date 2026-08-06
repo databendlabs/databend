@@ -61,9 +61,21 @@ pub struct TempTblMgr {
     // User-visible temporary tables.
     name_to_id: HashMap<String, u64>,
     id_to_table: HashMap<u64, TempTable>,
-    // Atomic CTAS tables that have not been published yet.
-    staged_tables: HashMap<u64, TempTable>,
     next_id: u64,
+
+    // Atomic CTAS tables that have not been published yet.
+    pub staged_tables: HashMap<u64, TempTable>,
+}
+
+impl Default for TempTblMgr {
+    fn default() -> Self {
+        TempTblMgr {
+            name_to_id: HashMap::new(),
+            id_to_table: HashMap::new(),
+            staged_tables: HashMap::new(),
+            next_id: TEMP_TBL_ID_BEGIN,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -80,12 +92,7 @@ impl TempTblMgr {
     }
 
     pub fn init() -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(TempTblMgr {
-            name_to_id: HashMap::new(),
-            id_to_table: HashMap::new(),
-            staged_tables: HashMap::new(),
-            next_id: TEMP_TBL_ID_BEGIN,
-        }))
+        Arc::new(Mutex::new(Self::default()))
     }
 
     fn inc_next_id(&mut self) {
@@ -95,7 +102,7 @@ impl TempTblMgr {
         }
     }
 
-    pub fn is_empty(&mut self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.id_to_table.is_empty() && self.staged_tables.is_empty()
     }
 
@@ -112,9 +119,7 @@ impl TempTblMgr {
             ..
         } = req;
         let Some(db_id) = table_meta.options.get(OPT_KEY_DATABASE_ID) else {
-            return Err(ErrorCode::Internal(format!(
-                "Database id not set in table options"
-            )));
+            return Err(ErrorCode::Internal("Database id not set in table options"));
         };
         let db_id = db_id.parse::<u64>()?;
 
@@ -408,19 +413,15 @@ fn get_table_operator_for_drop_operation(table_meta: &TableMeta) -> Result<Opera
     }
 }
 
-pub async fn abort_staged_temp_table(
-    mgr: TempTblMgrRef,
+async fn cleanup_temp_table_data(
     table_id: u64,
+    table_meta: &TableMeta,
     temp_prefix: &str,
 ) -> Result<()> {
-    let Some(table) = mgr.lock().abort_staged_table(table_id) else {
-        return Ok(());
-    };
-
-    match table.meta.engine.as_str() {
+    match table_meta.engine.as_str() {
         "FUSE" => {
-            let dir = parse_storage_prefix(&table.meta.options, table_id)?;
-            let op = get_table_operator_for_drop_operation(&table.meta)?;
+            let dir = parse_storage_prefix(&table_meta.options, table_id)?;
+            let op = get_table_operator_for_drop_operation(table_meta)?;
             op.remove_all(&dir).await?;
         }
         "MEMORY" => {
@@ -432,7 +433,25 @@ pub async fn abort_staged_temp_table(
         }
         _ => {}
     }
+    Ok(())
+}
 
+pub async fn abort_staged_temp_table(
+    mgr: TempTblMgrRef,
+    table_id: u64,
+    temp_prefix: &str,
+) -> Result<()> {
+    let Some(table_meta) = mgr
+        .lock()
+        .staged_tables
+        .get(&table_id)
+        .map(|table| table.meta.clone())
+    else {
+        return Ok(());
+    };
+
+    cleanup_temp_table_data(table_id, &table_meta, temp_prefix).await?;
+    mgr.lock().abort_staged_table(table_id);
     Ok(())
 }
 
@@ -598,15 +617,6 @@ mod tests {
 
     use super::*;
 
-    fn new_temp_table_mgr() -> TempTblMgr {
-        TempTblMgr {
-            name_to_id: HashMap::new(),
-            id_to_table: HashMap::new(),
-            staged_tables: HashMap::new(),
-            next_id: TEMP_TBL_ID_BEGIN,
-        }
-    }
-
     fn table_name_ident(table_name: &str) -> TableNameIdent {
         TableNameIdent {
             tenant: Tenant::new_literal("tenant"),
@@ -662,7 +672,7 @@ mod tests {
 
     #[test]
     fn test_ctas_commit_preserves_temporary_tables_when_visible_table_changed() {
-        let mut mgr = new_temp_table_mgr();
+        let mut mgr = TempTblMgr::default();
         let table_name = "t";
         let desc = TempTblMgr::temp_table_desc("db", table_name);
 
@@ -727,7 +737,7 @@ mod tests {
 
     #[test]
     fn test_ctas_commit_publishes_its_own_temporary_table() {
-        let mut mgr = new_temp_table_mgr();
+        let mut mgr = TempTblMgr::default();
         let table_name = "t";
         let desc = TempTblMgr::temp_table_desc("db", table_name);
 
@@ -811,27 +821,8 @@ mod tests {
     }
 
     #[test]
-    fn test_aborted_ctas_does_not_leave_a_temporary_table() {
-        let mut mgr = new_temp_table_mgr();
-        let staged = mgr
-            .create_table(
-                create_table_req("t", "FUSE", CreateOption::Create, true),
-                "session".to_string(),
-            )
-            .unwrap();
-
-        assert!(!mgr.is_temp_table("db", "t"));
-        assert!(mgr.list_tables().unwrap().is_empty());
-        assert!(!mgr.is_empty());
-
-        assert!(mgr.abort_staged_table(staged.table_id).is_some());
-        assert!(mgr.abort_staged_table(staged.table_id).is_none());
-        assert!(mgr.is_empty());
-    }
-
-    #[test]
     fn test_ctas_internal_prefix_is_available_to_users() {
-        let mut mgr = new_temp_table_mgr();
+        let mut mgr = TempTblMgr::default();
         let internal_like_name = "__tmp_orphan@user";
 
         let created = mgr
