@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -64,7 +65,6 @@ use crate::SelectBuilder;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
-use crate::planner::binder::ddl::table::apply_fuse_storage_defaults;
 use crate::planner::semantic::MaterializedViewChecker;
 use crate::planner::semantic::MaterializedViewRewriter;
 use crate::planner::semantic::ViewRewriter;
@@ -123,6 +123,34 @@ fn normalize_null_fields(schema: TableSchemaRef) -> TableSchemaRef {
 }
 
 impl Binder {
+    pub(in crate::planner::binder) async fn validate_materialized_view_binding(
+        &self,
+        catalog_name: &str,
+        source_table_id: u64,
+        mv_table_id: u64,
+        materialized_view_name: &str,
+    ) -> Result<u64> {
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let bound_source_generation = catalog
+            .get_mv_bound_source_generation(&tenant, source_table_id, mv_table_id)
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::InvalidMaterializedView(format!(
+                    "materialized view {materialized_view_name} has no source binding"
+                ))
+            })?;
+        let current_source_generation = catalog
+            .get_mv_source_generation(&tenant, source_table_id)
+            .await?;
+        if bound_source_generation != current_source_generation {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {materialized_view_name} is invalid because its source schema changed; recreate the materialized view"
+            )));
+        }
+        Ok(current_source_generation)
+    }
+
     async fn resolve_materialized_view_target(
         &self,
         catalog: &Option<Identifier>,
@@ -354,16 +382,6 @@ impl Binder {
                 direct_source_catalog, direct_source_database, direct_source_name
             )));
         }
-        let source_meta = &direct_source.get_table_info().meta;
-        if !source_meta.column_mask_policy_columns_ids.is_empty()
-            || source_meta.row_access_policy_columns_ids.is_some()
-        {
-            return Err(ErrorCode::InvalidMaterializedView(format!(
-                "Materialized view cannot be created on source table '{}.{}.{}' because it has a row access policy or masking policy",
-                direct_source_catalog, direct_source_database, direct_source_name
-            )));
-        }
-
         let original_query_plan = self.as_query_plan(query).await?;
         let Plan::Query {
             metadata: original_metadata,
@@ -469,7 +487,7 @@ impl Binder {
         // 5. Assemble CreateMaterializedViewPlan: the physical schema is used by
         //    Fuse storage; MVDefinition holds the original query, rewritten storage
         //    query, and logical schema (with final projection expressions).
-        let mut options = std::collections::BTreeMap::new();
+        let mut options = BTreeMap::new();
         options.insert(
             OPT_KEY_DATABASE_ID.to_owned(),
             target_database_id.to_string(),
@@ -501,7 +519,6 @@ impl Binder {
         let storage_params = self
             .resolve_database_default_storage_params(target_database.as_ref())
             .await?;
-        apply_fuse_storage_defaults(&mut options, storage_params.as_ref())?;
 
         let mv_definition = MVDefinition {
             original_query: original_query.to_string(),
@@ -687,15 +704,36 @@ impl Binder {
             database,
             view,
         } = stmt;
-        let (catalog, database, view_name) =
-            self.normalize_object_identifier_triple(catalog, database, view);
+        let tenant = self.ctx.get_tenant();
+        let (catalog, database, view_name, mv_table) = self
+            .resolve_materialized_view_target(catalog, database, view)
+            .await?;
+        let mv_table_id = mv_table.get_id();
+        let source_table_id = mv_table
+            .get_table_info()
+            .meta
+            .materialized_view_source_table_id()
+            .map_err(ErrorCode::from)?;
+        let expected_source_generation = self
+            .validate_materialized_view_binding(
+                &catalog,
+                source_table_id,
+                mv_table_id,
+                &format!("{database}.{view_name}"),
+            )
+            .await?;
 
         Ok(Plan::RefreshMaterializedView(Box::new(
             RefreshMaterializedViewPlan {
-                tenant: self.ctx.get_tenant(),
+                tenant,
                 catalog,
                 database,
                 view_name,
+                target: TableMaintenanceTarget::MaterializedView {
+                    table_id: mv_table_id,
+                },
+                source_table_id,
+                expected_source_generation,
             },
         )))
     }

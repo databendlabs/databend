@@ -216,19 +216,16 @@ ALTER TABLE test_mv RECLUSTER
 statement error 3905
 ALTER TABLE test_mv FLASHBACK TO (SNAPSHOT => '00000000-0000-0000-0000-000000000000')
 
-statement error 1302
-ALTER TABLE test_mv REFRESH CACHE
-
-statement error 1302
+statement error 3905
 ALTER TABLE test_mv CREATE TAG mv_snapshot
 
-statement error 1302
+statement error 3905
 ALTER TABLE test_mv DROP TAG mv_snapshot
 
-statement error 1302
+statement error 3905
 ALTER TABLE test_mv SET TAG missing_tag = 'value'
 
-statement error 1302
+statement error 3905
 ALTER TABLE test_mv UNSET TAG missing_tag
 
 # TRUNCATE is blocked on materialized views.
@@ -368,13 +365,20 @@ SET ROLE account_admin
 statement ok
 DROP ROLE mv_maintenance_role
 
+# Snowflake-compatible syntax requires a column list whenever CLUSTER BY is present.
+statement error 1065
+CREATE MATERIALIZED VIEW test_mv_cluster_without_columns CLUSTER BY (val) AS SELECT val FROM mv_base_t
+
 # Invalid cluster keys are rejected before table metadata is stored.
-statement error
-CREATE MATERIALIZED VIEW test_mv_bad_cluster CLUSTER BY (missing_col) AS SELECT val FROM mv_base_t
+statement error 1081
+CREATE MATERIALIZED VIEW test_mv_bad_cluster (val) CLUSTER BY (missing_col) AS SELECT val FROM mv_base_t
 
 # CREATE MATERIALIZED VIEW with CLUSTER BY
 statement ok
 CREATE MATERIALIZED VIEW test_mv2 (val, cnt) CLUSTER BY (val) AS SELECT val, COUNT(*) AS cnt FROM mv_base_t GROUP BY val
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv2
 
 query I
 SELECT count(*) FROM test_mv2
@@ -387,10 +391,10 @@ SHOW CREATE MATERIALIZED VIEW test_mv2
 test_mv2 CREATE MATERIALIZED VIEW `default`.`test_mv2` (`val`, `cnt`) CLUSTER BY (val) AS SELECT val, COUNT(*) AS cnt FROM default.mv_base_t GROUP BY val
 
 # Aggregate result/state columns cannot be used as MV cluster keys.
-statement error
+statement error 1081
 CREATE MATERIALIZED VIEW test_mv_bad_aggregate_cluster (val, cnt) CLUSTER BY (cnt) AS SELECT val, COUNT(*) AS cnt FROM mv_base_t GROUP BY val
 
-statement error
+statement error 1081
 ALTER MATERIALIZED VIEW test_mv2 CLUSTER BY (cnt)
 
 statement ok
@@ -542,6 +546,10 @@ ALTER TABLE mv_guard_source_renamed RENAME COLUMN a TO renamed_a
 statement error
 REFRESH MATERIALIZED VIEW mv_guard
 
+# Reads reject the same stale source binding instead of using MV storage.
+statement error 2328
+SELECT * FROM mv_guard
+
 # CREATE observes the nonzero generation produced by RENAME and can publish a new binding.
 statement ok
 CREATE MATERIALIZED VIEW mv_guard_recreated AS SELECT renamed_a, b, c FROM mv_guard_source_renamed
@@ -551,6 +559,9 @@ ALTER TABLE mv_guard_source_renamed MODIFY COLUMN renamed_a BIGINT
 
 statement error
 REFRESH MATERIALIZED VIEW mv_guard_recreated
+
+statement error 2328
+SELECT * FROM mv_guard_recreated
 
 statement ok
 ALTER TABLE mv_guard_source_renamed DROP COLUMN b

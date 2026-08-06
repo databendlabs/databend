@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DropTableTagPlan;
 use databend_enterprise_table_ref_handler::get_table_ref_handler;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::common::check_not_materialized_view;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -51,7 +51,7 @@ impl Interpreter for DropTableTagInterpreter {
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
-        check_not_materialized_view(table.as_ref(), &self.plan.database)?;
+        table.check_mutable()?;
 
         let handler = get_table_ref_handler();
         handler

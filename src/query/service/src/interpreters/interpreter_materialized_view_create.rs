@@ -49,7 +49,6 @@ impl Interpreter for CreateMaterializedViewInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let table_interpreter =
             CreateTableInterpreter::try_create(self.ctx.clone(), self.plan.table_plan.clone())?;
-        table_interpreter.validate_create().await?;
 
         let materialized_view = CreateMaterializedViewMeta {
             definition: self.plan.mv_definition.clone(),

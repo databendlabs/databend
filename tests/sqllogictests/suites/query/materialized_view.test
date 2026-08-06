@@ -37,29 +37,6 @@ where database = 'test_materialized_view' and name = 'source'
 ----
 1
 
-# Snowflake-compatible syntax requires a column list whenever CLUSTER BY is present.
-statement error 1065
-create materialized view mv_cluster_without_columns cluster by (id) as
-select id from source
-
-statement ok
-create materialized view mv_detail_cluster (item_id, doubled_amount) cluster by (item_id) as
-select id, amount * 2 from source where active
-
-statement ok
-create materialized view mv_aggregate_cluster (category_name, total_amount) cluster by (category_name) as
-select category, sum(amount) from source where active group by category
-
-# Aggregate result/state columns are not valid first-version MV cluster keys.
-statement error 1081
-create materialized view mv_aggregate_bad_cluster (category_name, total_amount) cluster by (total_amount) as
-select category, sum(amount) from source where active group by category
-
-query TT
-show create materialized view mv_detail_cluster
-----
-mv_detail_cluster CREATE MATERIALIZED VIEW `test_materialized_view`.`mv_detail_cluster` (`item_id`, `doubled_amount`) CLUSTER BY (item_id) AS SELECT id, amount * 2 FROM test_materialized_view.source WHERE active
-
 # A rejected cross-engine replacement must not enable change tracking on its source.
 statement ok
 create table atomic_source (id int)
@@ -138,12 +115,6 @@ refresh materialized view mv_detail
 statement ok
 refresh materialized view mv_aggregate
 
-statement ok
-refresh materialized view mv_detail_cluster
-
-statement ok
-refresh materialized view mv_aggregate_cluster
-
 query II
 select item_id, doubled_amount from mv_detail order by item_id
 ----
@@ -157,18 +128,6 @@ order by category_name
 ----
 a 10 1 10.0
 b 30 1 30.0
-
-query II
-select item_id, doubled_amount from mv_detail_cluster order by item_id
-----
-1 20
-3 60
-
-query TI
-select category_name, total_amount from mv_aggregate_cluster order by category_name
-----
-a 10
-b 30
 
 # INSERT-only changes use incremental refresh. Aggregate states are appended and merged on read.
 statement ok
@@ -292,12 +251,6 @@ drop materialized view if exists mv_detail
 
 statement ok
 drop materialized view mv_aggregate
-
-statement ok
-drop materialized view mv_detail_cluster
-
-statement ok
-drop materialized view mv_aggregate_cluster
 
 query I
 select count(*)

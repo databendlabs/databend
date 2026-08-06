@@ -44,7 +44,7 @@ pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ: &str = "materialized_view_
 pub const MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN: &str = "_mv_source_row_id";
 
 pub fn is_materialized_view_engine(engine: &str) -> bool {
-    engine.eq_ignore_ascii_case(MATERIALIZED_VIEW_ENGINE)
+    engine == MATERIALIZED_VIEW_ENGINE
 }
 
 impl TableMeta {
@@ -95,8 +95,6 @@ impl TableMeta {
 pub struct MVDefinition {
     pub original_query: String,
     pub query: String,
-    /// User-visible output schema. Aggregate-state and refresh-only columns live
-    /// exclusively in the backing table's physical `TableMeta.schema`.
     pub logical_schema: TableSchema,
     pub sync_creation: bool,
 }

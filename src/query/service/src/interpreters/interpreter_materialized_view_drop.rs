@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_sql::plans::DropMaterializedViewPlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -54,35 +54,22 @@ impl Interpreter for DropMaterializedViewInterpreter {
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();
         let view_name = self.plan.view_name.clone();
-        let tbl = match self
+        let tbl = self
             .ctx
             .get_table(&catalog_name, &db_name, &view_name)
             .await
-        {
-            Ok(table) => Some(table),
-            Err(error)
-                if self.plan.if_exists
-                    && matches!(
-                        error.code(),
-                        ErrorCode::UNKNOWN_TABLE
-                            | ErrorCode::UNKNOWN_DATABASE
-                            | ErrorCode::UNKNOWN_CATALOG
-                    ) =>
-            {
-                None
-            }
-            Err(error) if error.code() == ErrorCode::UNKNOWN_TABLE => {
-                return Err(ErrorCode::UnknownTable(format!(
-                    "unknown materialized view `{}`.`{}` in catalog '{}'",
-                    db_name, view_name, &catalog_name
-                )));
-            }
-            Err(error) => return Err(error),
-        };
+            .ok();
+
+        if tbl.is_none() && !self.plan.if_exists {
+            return Err(ErrorCode::UnknownTable(format!(
+                "unknown materialized view `{}`.`{}` in catalog '{}'",
+                db_name, view_name, &catalog_name
+            )));
+        }
 
         if let Some(table) = &tbl {
             let engine = table.get_table_info().engine();
-            if !is_materialized_view_engine(engine) {
+            if engine != MATERIALIZED_VIEW_ENGINE {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} is not MATERIALIZED VIEW, please use `DROP {} {}.{}`",
                     &self.plan.database,
