@@ -14,23 +14,46 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SampleConfig;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::TableReference;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor;
+use databend_common_ast::visit::Walk;
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TimeNavigation;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_expression::types::DataType;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
+use databend_storages_common_table_meta::table::get_change_type;
 use log::info;
 
 use crate::BindContext;
 use crate::Metadata;
+use crate::ScalarExpr;
 use crate::Visibility;
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
@@ -39,9 +62,30 @@ use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::validate_materialized_view_source;
+
+#[derive(Default)]
+struct MaterializedViewChangeScanFinder {
+    change_types: Vec<ChangeType>,
+}
+
+impl Visitor for MaterializedViewChangeScanFinder {
+    type Error = !;
+
+    fn visit_table_reference(
+        &mut self,
+        table_ref: &TableReference,
+    ) -> std::result::Result<VisitControl, Self::Error> {
+        if let TableReference::Table { alias, .. } = table_ref {
+            let alias_name = alias.as_ref().map(|alias| alias.name.name.clone());
+            if let Some(change_type) = get_change_type(&alias_name) {
+                self.change_types.push(change_type);
+            }
+        }
+        Ok(VisitControl::Continue)
+    }
+}
 
 impl Binder {
     /// Whether the MV storage checkpoint matches the current source data endpoint.
@@ -191,6 +235,209 @@ impl Binder {
         Ok((projection, output_context))
     }
 
+    fn apply_materialized_view_changes_query(
+        query: &mut Query,
+        changes_query: Query,
+    ) -> Result<()> {
+        let SetExpr::Select(select) = &mut query.body else {
+            return Err(ErrorCode::Internal(
+                "materialized view physical query must be a SELECT",
+            ));
+        };
+        let [source] = select.from.as_mut_slice() else {
+            return Err(ErrorCode::Internal(
+                "materialized view hybrid read requires exactly one base table",
+            ));
+        };
+        let alias = match source {
+            TableReference::Table { alias, .. } => alias.clone(),
+            _ => None,
+        };
+        *source = TableReference::Subquery {
+            span: None,
+            lateral: false,
+            subquery: Box::new(changes_query),
+            alias,
+            pivot: None,
+            unpivot: None,
+        };
+
+        let mut source_row_id_target_count = 0;
+        for target in &mut select.select_list {
+            let SelectTarget::AliasedExpr {
+                expr,
+                alias: Some(alias),
+            } = target
+            else {
+                continue;
+            };
+            if alias.name == MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN {
+                source_row_id_target_count += 1;
+                **expr = Expr::ColumnRef {
+                    span: None,
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(Identifier::from_name(None, CHANGE_ROW_ID_COL_NAME)),
+                    },
+                };
+            }
+        }
+        if source_row_id_target_count != 1 {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "non-aggregate materialized view physical query must have exactly one source row ID column, found {source_row_id_target_count}",
+            )));
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn bind_materialized_view_hybrid(
+        &mut self,
+        bind_context: &mut BindContext,
+        catalog_name: &str,
+        database: &str,
+        table_name: &str,
+        table_name_alias: Option<String>,
+        table_meta: Arc<dyn Table>,
+        mv_definition: &MVDefinition,
+        source_table: Arc<dyn Table>,
+        source_database: &str,
+        checkpoint_seq: u64,
+        checkpoint_location: Option<String>,
+        alias: &Option<TableAlias>,
+        sample: &Option<SampleConfig>,
+        cte_suffix_name: Option<String>,
+    ) -> Result<Option<(SExpr, BindContext)>> {
+        let internal_source_name = format!(
+            "_mv_read_changes_{}_{}",
+            table_meta.get_id(),
+            checkpoint_seq
+        );
+        let mut checkpoint_info = TableInfo {
+            ident: TableIdent::new(source_table.get_id(), checkpoint_seq),
+            desc: format!("materialized view {} read checkpoint", table_meta.name()),
+            name: internal_source_name.clone(),
+            ..source_table.get_table_info().clone()
+        };
+        checkpoint_info.meta.options.insert(
+            OPT_KEY_SOURCE_TABLE_ID.to_string(),
+            source_table.get_id().to_string(),
+        );
+        checkpoint_info
+            .meta
+            .options
+            .insert(OPT_KEY_TABLE_VER.to_string(), checkpoint_seq.to_string());
+        match checkpoint_location {
+            Some(location) => {
+                checkpoint_info
+                    .meta
+                    .options
+                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+            }
+            None => {
+                checkpoint_info
+                    .meta
+                    .options
+                    .remove(OPT_KEY_SNAPSHOT_LOCATION);
+            }
+        }
+
+        let changes_table = databend_common_base::runtime::block_on(source_table.navigate_to(
+            &self.ctx,
+            &TimeNavigation::Changes {
+                append_only: false,
+                at: NavigationPoint::StreamInfo(checkpoint_info),
+                end: None,
+                desc: String::new(),
+            },
+        ))?;
+        let changes_sql =
+            databend_common_base::runtime::block_on(changes_table.generate_changes_query(
+                self.ctx.clone(),
+                source_database,
+                &internal_source_name,
+                "",
+            ))?;
+        let changes_query = parse_materialized_view_query(
+            &changes_sql,
+            "invalid CHANGE_TRACKING query for materialized view hybrid read",
+        )?;
+        let mut finder = MaterializedViewChangeScanFinder::default();
+        changes_query.walk(&mut finder).unwrap();
+        if finder.change_types.as_slice() != [ChangeType::Append] {
+            return Ok(None);
+        }
+
+        // The delta branch is backed by a Binder-local CHANGE_TRACKING table whose endpoint is
+        // reconstructed for every plan. Its result-cache dependency cannot be represented by the
+        // MV storage partitions alone, so a cached result could survive a source-table append.
+        // Keep hybrid reads uncached until dynamic table dependencies are part of the cache key.
+        self.ctx.result_cache_state().set_cacheable(false);
+
+        self.internal_tables.insert(
+            (
+                catalog_name.to_string(),
+                source_database.to_string(),
+                internal_source_name,
+            ),
+            changes_table,
+        );
+        let mut delta_query = parse_materialized_view_query(
+            &mv_definition.query,
+            "invalid materialized view physical query",
+        )?;
+        Self::apply_materialized_view_changes_query(&mut delta_query, changes_query)?;
+        let mut delta_context = BindContext::with_parent(bind_context.clone())?;
+        let (delta_expr, delta_context) = self.bind_query(&mut delta_context, &delta_query)?;
+
+        let table_index = self.metadata.write().add_table(
+            catalog_name.to_string(),
+            database.to_string(),
+            table_meta,
+            None,
+            table_name_alias,
+            !bind_context.binding_views.is_empty(),
+            bind_context.planning_agg_index,
+            false,
+            cte_suffix_name,
+        );
+        let (storage_expr, storage_context) =
+            self.bind_base_table(bind_context, database, table_index, None, sample, false)?;
+        if storage_context.columns.len() != delta_context.columns.len() {
+            return Err(ErrorCode::Internal(format!(
+                "materialized view hybrid branches have {} and {} columns",
+                storage_context.columns.len(),
+                delta_context.columns.len()
+            )));
+        }
+        let (union_expr, union_context) = self.bind_union(
+            None,
+            None,
+            Some(bind_context),
+            &storage_context,
+            &delta_context,
+            storage_expr,
+            delta_expr,
+            false,
+            None,
+        )?;
+        let (union_expr, mut logical_context) = self.build_materialized_view_final_projection(
+            &union_context,
+            &mv_definition.logical_schema,
+            union_expr,
+        )?;
+        if let Some(alias) = alias {
+            logical_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+        } else {
+            for column in logical_context.columns.iter_mut() {
+                column.database_name = Some(database.to_string());
+                column.table_name = Some(table_name.to_string());
+            }
+        }
+        Ok(Some((union_expr, logical_context)))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind_materialized_view(
         &mut self,
@@ -248,26 +495,54 @@ impl Binder {
             table_meta.name(),
         )?;
 
-        let source_snapshot_location = databend_common_base::runtime::block_on(async {
-            let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let source_meta = catalog
-                .get_table_meta_by_id(source_table_id)
-                .await?
-                .ok_or_else(|| {
-                    ErrorCode::InvalidMaterializedView(format!(
-                        "materialized view {} source table id {} no longer exists",
-                        table_meta.name(),
-                        source_table_id
-                    ))
+        let (source_table, source_database, source_seq, source_snapshot_location) =
+            databend_common_base::runtime::block_on(async {
+                let catalog = self.ctx.get_catalog(catalog_name).await?;
+                let source_meta = catalog
+                    .get_table_meta_by_id(source_table_id)
+                    .await?
+                    .ok_or_else(|| {
+                        ErrorCode::InvalidMaterializedView(format!(
+                            "materialized view {} source table changed: expected table id {} no longer exists",
+                            table_meta.name(), source_table_id
+                        ))
+                    })?;
+                let source_database_id = source_meta
+                    .data
+                    .options
+                    .get(OPT_KEY_DATABASE_ID)
+                    .ok_or_else(|| ErrorCode::Internal("source table database id is missing"))?
+                    .parse::<u64>()?;
+                let source_database = catalog.get_db_name_by_id(source_database_id).await?;
+                let source_table_name = catalog
+                    .get_table_name_by_id(source_table_id)
+                    .await?
+                    .ok_or_else(|| {
+                        ErrorCode::InvalidMaterializedView(format!(
+                            "materialized view {} source table changed: expected table id {} no longer exists",
+                            table_meta.name(), source_table_id
+                        ))
+                    })?;
+                let current_source = catalog
+                    .get_table(&tenant, &source_database, &source_table_name)
+                    .await?;
+                let source_table = catalog.get_table_by_info(&TableInfo {
+                    ident: TableIdent::new(source_table_id, source_meta.seq),
+                    meta: source_meta.data.clone(),
+                    ..current_source.get_table_info().clone()
                 })?;
-            Ok::<_, ErrorCode>(
-                source_meta
+                let source_snapshot_location = source_meta
                     .data
                     .options
                     .get(OPT_KEY_SNAPSHOT_LOCATION)
-                    .cloned(),
-            )
-        })?;
+                    .cloned();
+                Ok::<_, ErrorCode>((
+                    source_table,
+                    source_database,
+                    source_meta.seq,
+                    source_snapshot_location,
+                ))
+            })?;
         if find_materialized_view_aggregate(&definition_expr)
             .is_some_and(|aggregate| !aggregate.aggregate_functions.is_empty())
         {
@@ -282,6 +557,63 @@ impl Binder {
 
         if !Self::is_materialized_view_fresh(table_meta.as_ref(), source_snapshot_location.as_ref())
         {
+            let checkpoint_seq = match table_meta
+                .options()
+                .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ)
+            {
+                Some(seq) => seq.parse::<u64>().map_err(|error| {
+                    ErrorCode::InvalidMaterializedView(format!(
+                        "invalid materialized view source offset '{seq}': {error}"
+                    ))
+                })?,
+                None => {
+                    info!(
+                        "materialized view {} has no source checkpoint; fallback to live compute",
+                        table_meta.name()
+                    );
+                    return self.bind_materialized_view_fallback(
+                        bind_context,
+                        &mv_definition.data,
+                        database,
+                        table_name,
+                        alias,
+                    );
+                }
+            };
+            if checkpoint_seq > source_seq {
+                return Err(ErrorCode::InvalidMaterializedView(format!(
+                    "materialized view {} offset {} is newer than source table version {}",
+                    table_meta.name(),
+                    checkpoint_seq,
+                    source_seq
+                )));
+            }
+            let checkpoint_location = table_meta
+                .options()
+                .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION)
+                .cloned();
+            if let Some(result) = self.bind_materialized_view_hybrid(
+                bind_context,
+                catalog_name,
+                database,
+                table_name,
+                table_name_alias.clone(),
+                table_meta.clone(),
+                &mv_definition.data,
+                source_table,
+                &source_database,
+                checkpoint_seq,
+                checkpoint_location,
+                alias,
+                sample,
+                cte_suffix_name.clone(),
+            )? {
+                info!(
+                    "materialized view {} uses append-only hybrid read",
+                    table_meta.name()
+                );
+                return Ok(result);
+            }
             info!(
                 "materialized view {} is stale (source_snapshot={:?}, base_snapshot={:?}); fallback to live compute",
                 table_meta.name(),

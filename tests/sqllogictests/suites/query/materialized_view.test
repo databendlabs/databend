@@ -58,6 +58,31 @@ select item_id, doubled_amount from mv_detail order by item_id
 1 20
 3 60
 
+# A stale append-only detail MV combines storage with the live delta before explicit refresh.
+# Repeat the exact query text across another source append to cover result-cache invalidation.
+statement ok
+insert into source values (4, 40, 'a', true)
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+3 60
+4 80
+
+statement ok
+insert into source values
+    (5, 50, 'b', true),
+    (6, 60, 'c', false)
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+3 60
+4 80
+5 100
+
 query TIIR
 select category_name, total_amount, row_count, average_amount
 from mv_aggregate
