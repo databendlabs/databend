@@ -182,14 +182,14 @@ fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindCo
         bind_context.add_column_binding(
             ColumnBindingBuilder::new(
                 column_name.clone(),
-                column_index,
-                Box::new(DataType::from(&data_type)),
+                *column_index,
+                Box::new(DataType::from(data_type)),
                 Visibility::Visible,
             )
             .table_name(Some("t2".to_string()))
             .database_name(Some("default".to_string()))
             .table_index(Some(table_index))
-            .column_position(column_position)
+            .column_position(*column_position)
             .build(),
         );
     }

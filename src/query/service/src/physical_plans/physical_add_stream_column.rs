@@ -136,7 +136,7 @@ impl AddStreamColumn {
     ) -> Result<PhysicalPlan> {
         let input_schema = input.output_schema()?;
         let num_fields = input_schema.fields().len();
-        let column_entries = metadata.read().columns_by_table_index(table_index);
+        let metadata = metadata.read();
 
         let stream_columns = [
             StreamColumn::new(ORIGIN_VERSION_COL_NAME, StreamColumnType::OriginVersion),
@@ -151,7 +151,7 @@ impl AddStreamColumn {
         let mut exprs = Vec::with_capacity(stream_columns.len());
         for stream_column in stream_columns.iter() {
             let column_index =
-                Binder::find_column_index(&column_entries, stream_column.column_name())?;
+                Binder::find_column_index(&metadata, table_index, stream_column.column_name())?;
             let schema_index = input_schema.index_of(&column_index.to_string()).unwrap();
 
             let origin_stream_column_scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {

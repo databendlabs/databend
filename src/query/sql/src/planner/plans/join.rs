@@ -533,21 +533,12 @@ impl JoinSideColumnStats {
 impl Join {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for condition in self.equi_conditions.iter() {
-            used_columns = used_columns
-                .union(&condition.left.used_columns())
-                .cloned()
-                .collect();
-            used_columns = used_columns
-                .union(&condition.right.used_columns())
-                .cloned()
-                .collect();
+        for condition in &self.equi_conditions {
+            condition.left.collect_used_columns(&mut used_columns);
+            condition.right.collect_used_columns(&mut used_columns);
         }
-        for condition in self.non_equi_conditions.iter() {
-            used_columns = used_columns
-                .union(&condition.used_columns())
-                .cloned()
-                .collect();
+        for condition in &self.non_equi_conditions {
+            condition.collect_used_columns(&mut used_columns);
         }
         Ok(used_columns)
     }
@@ -780,34 +771,22 @@ impl Operator for Join {
         if let Some(mark_index) = self.marker_index {
             output_columns.insert(mark_index);
         }
-        output_columns = output_columns
-            .union(&right_prop.output_columns)
-            .cloned()
-            .collect();
+        output_columns.extend(right_prop.output_columns.iter().copied());
 
         // Derive outer columns
         let mut outer_columns = left_prop.outer_columns.clone();
-        outer_columns = outer_columns
-            .union(&right_prop.outer_columns)
-            .cloned()
-            .collect();
+        outer_columns.extend(right_prop.outer_columns.iter().copied());
 
-        for condition in self.equi_conditions.iter() {
-            let left_used_columns = condition.left.used_columns();
-            let right_used_columns = condition.right.used_columns();
-            let used_columns: ColumnSet = left_used_columns
-                .union(&right_used_columns)
-                .cloned()
-                .collect();
-            let outer = used_columns.difference(&output_columns).cloned().collect();
-            outer_columns = outer_columns.union(&outer).cloned().collect();
+        for condition in &self.equi_conditions {
+            condition.left.collect_used_columns(&mut outer_columns);
+            condition.right.collect_used_columns(&mut outer_columns);
         }
-        outer_columns = outer_columns.difference(&output_columns).cloned().collect();
+        outer_columns.retain(|column| !output_columns.contains(column));
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(left_prop.used_columns.clone());
-        used_columns.extend(right_prop.used_columns.clone());
+        used_columns.extend(left_prop.used_columns.iter().copied());
+        used_columns.extend(right_prop.used_columns.iter().copied());
 
         Ok(Arc::new(RelationalProperty {
             output_columns,

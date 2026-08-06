@@ -17,7 +17,6 @@ use std::io::Write;
 use std::sync::Arc;
 
 use databend_common_catalog::BasicColumnStatistics;
-use databend_common_catalog::TableStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::stat_distribution::NdvEstimate;
@@ -41,10 +40,11 @@ use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
-use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
-use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
+use super::column_stat;
+use super::histogram_stat;
+use super::table_statistics;
 use crate::framework::LiteTableContext;
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_title;
@@ -52,10 +52,18 @@ use crate::framework::golden::write_case_title;
 #[derive(Clone, Copy)]
 struct TableStats {
     rows: u64,
-    min: i64,
-    max: i64,
-    ndv: u64,
+    column_json: &'static str,
     histogram_json: &'static str,
+}
+
+impl TableStats {
+    fn column_stat(self) -> Result<BasicColumnStatistics> {
+        column_stat(self.column_json)
+    }
+
+    fn histogram(self) -> Result<Histogram> {
+        histogram_stat(self.histogram_json)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -86,55 +94,12 @@ struct JoinBehaviorGroup {
     cases: Vec<JoinTestCase>,
 }
 
-fn table_statistics(rows: u64) -> TableStatistics {
-    TableStatistics {
-        num_rows: Some(rows),
-        data_size: Some(rows.saturating_mul(8)),
-        data_size_compressed: None,
-        index_size: None,
-        bloom_index_size: None,
-        ngram_index_size: None,
-        inverted_index_size: None,
-        vector_index_size: None,
-        virtual_column_size: None,
-        number_of_blocks: Some(1),
-        number_of_segments: Some(1),
-    }
-}
-
-fn column_statistics(stats: TableStats) -> HashMap<String, BasicColumnStatistics> {
-    HashMap::from([("k".to_string(), BasicColumnStatistics {
-        min: Some(Datum::Int(stats.min)),
-        max: Some(Datum::Int(stats.max)),
-        ndv: Some(stats.ndv),
-        null_count: 0,
-        in_memory_size: stats.rows.saturating_mul(8),
-    })])
-}
-
-fn histogram_from_json(json: &str) -> Result<Histogram> {
-    let statistics_json = format!(
-        r#"{{
-            "format_version": 4,
-            "snapshot_id": "00000000-0000-0000-0000-000000000000",
-            "row_count": 0,
-            "hll": {{}},
-            "histograms": {{"0": {json}}}
-        }}"#
-    );
-    let mut statistics: TableSnapshotStatistics = serde_json::from_str(&statistics_json)
-        .map_err(|err| ErrorCode::Internal(format!("invalid histogram json: {err}")))?;
-    statistics
-        .histograms
-        .remove(&0)
-        .ok_or_else(|| ErrorCode::Internal("invalid histogram".to_string()))
+fn column_statistics(stats: TableStats) -> Result<HashMap<String, BasicColumnStatistics>> {
+    Ok(HashMap::from([("k".to_string(), stats.column_stat()?)]))
 }
 
 fn histogram_statistics(stats: TableStats) -> Result<HashMap<String, Histogram>> {
-    Ok(HashMap::from([(
-        "k".to_string(),
-        histogram_from_json(stats.histogram_json)?,
-    )]))
+    Ok(HashMap::from([("k".to_string(), stats.histogram()?)]))
 }
 
 fn column_label(metadata: &Metadata, column: Symbol) -> String {
@@ -271,16 +236,26 @@ fn direct_column(column: usize, table: &str) -> ScalarExpr {
 }
 
 fn direct_stat_info(column: usize, stats: TableStats) -> Result<Arc<StatInfo>> {
+    let column_stat = stats.column_stat()?;
+    let min = column_stat
+        .min
+        .ok_or_else(|| ErrorCode::Internal("direct column statistics require min".to_string()))?;
+    let max = column_stat
+        .max
+        .ok_or_else(|| ErrorCode::Internal("direct column statistics require max".to_string()))?;
+    let ndv = column_stat
+        .ndv
+        .ok_or_else(|| ErrorCode::Internal("direct column statistics require ndv".to_string()))?;
     Ok(Arc::new(StatInfo {
         cardinality: stats.rows as f64,
         statistics: Statistics {
             precise_cardinality: None,
             column_stats: HashMap::from([(Symbol::new(column), ColumnStat {
-                min: Datum::Int(stats.min),
-                max: Datum::Int(stats.max),
-                ndv: NdvEstimate::exact(stats.ndv as f64),
-                null_count: StatCount::exact(0),
-                histogram: Some(histogram_from_json(stats.histogram_json)?),
+                min,
+                max,
+                ndv: NdvEstimate::exact(ndv as f64),
+                null_count: StatCount::exact(column_stat.null_count),
+                histogram: Some(stats.histogram()?),
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
@@ -329,14 +304,14 @@ async fn write_sql_join_input(
     ctx.register_table_sql_with_stats(
         "CREATE TABLE l(k BIGINT, t BIGINT)",
         Some(table_statistics(case.left.rows)),
-        column_statistics(case.left),
+        column_statistics(case.left)?,
         histogram_statistics(case.left)?,
     )
     .await?;
     ctx.register_table_sql_with_stats(
         "CREATE TABLE r(k BIGINT, t BIGINT)",
         Some(table_statistics(case.right.rows)),
-        column_statistics(case.right),
+        column_statistics(case.right)?,
         histogram_statistics(case.right)?,
     )
     .await?;
@@ -360,15 +335,27 @@ async fn write_sql_join_input(
 fn write_stats_case_header(file: &mut impl Write, case: &JoinTestCase) -> Result<()> {
     writeln!(file, "case          : {}", case.name)?;
     writeln!(file, "description   : {}", case.description)?;
+    write_input_stats(file, "left", case.left)?;
+    write_input_stats(file, "right", case.right)?;
+    Ok(())
+}
+
+fn write_input_stats(file: &mut impl Write, side: &str, stats: TableStats) -> Result<()> {
+    let column_stat = stats.column_stat()?;
+    let min = column_stat
+        .min
+        .ok_or_else(|| ErrorCode::Internal(format!("{side} column statistics require min")))?;
+    let max = column_stat
+        .max
+        .ok_or_else(|| ErrorCode::Internal(format!("{side} column statistics require max")))?;
+    let ndv = column_stat
+        .ndv
+        .ok_or_else(|| ErrorCode::Internal(format!("{side} column statistics require ndv")))?;
+    let label = format!("{side} stats");
     writeln!(
         file,
-        "left stats    : rows={}, min={}, max={}, ndv={}",
-        case.left.rows, case.left.min, case.left.max, case.left.ndv
-    )?;
-    writeln!(
-        file,
-        "right stats   : rows={}, min={}, max={}, ndv={}",
-        case.right.rows, case.right.min, case.right.max, case.right.ndv
+        "{label:<14}: rows={}, min={}, max={}, ndv={}",
+        stats.rows, min, max, ndv
     )?;
     Ok(())
 }
@@ -408,9 +395,7 @@ async fn test_join_cardinality_estimation_golden() -> Result<()> {
 fn overlap_left_stats() -> TableStats {
     TableStats {
         rows: 9,
-        min: 1,
-        max: 5,
-        ndv: 3,
+        column_json: r#"{"min": 1, "max": 5, "ndv": 3, "null_count": 0}"#,
         histogram_json: r#"{
             "accuracy": true,
             "buckets": [
@@ -425,9 +410,7 @@ fn overlap_left_stats() -> TableStats {
 fn overlap_right_stats() -> TableStats {
     TableStats {
         rows: 26,
-        min: 1,
-        max: 5,
-        ndv: 4,
+        column_json: r#"{"min": 1, "max": 5, "ndv": 4, "null_count": 0}"#,
         histogram_json: r#"{
             "accuracy": true,
             "buckets": [
@@ -443,9 +426,7 @@ fn overlap_right_stats() -> TableStats {
 fn no_overlap_right_stats() -> TableStats {
     TableStats {
         rows: 26,
-        min: 20,
-        max: 23,
-        ndv: 4,
+        column_json: r#"{"min": 20, "max": 23, "ndv": 4, "null_count": 0}"#,
         histogram_json: r#"{
             "accuracy": true,
             "buckets": [
@@ -461,9 +442,7 @@ fn no_overlap_right_stats() -> TableStats {
 fn partial_overlap_right_stats() -> TableStats {
     TableStats {
         rows: 30,
-        min: 3,
-        max: 9,
-        ndv: 4,
+        column_json: r#"{"min": 3, "max": 9, "ndv": 4, "null_count": 0}"#,
         histogram_json: r#"{
             "accuracy": true,
             "buckets": [
