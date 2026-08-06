@@ -12,34 +12,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::AlterMaterializedViewStmt;
+use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::CreateMaterializedViewStmt;
 use databend_common_ast::ast::DropMaterializedViewStmt;
+use databend_common_ast::ast::Engine;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::OptimizeTableAction;
+use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::RefreshMaterializedViewStmt;
+use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::ShowCreateMaterializedViewStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowMaterializedViewsStmt;
+use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::visit::WalkMut;
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
+use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::is_fuse_engine;
 use log::debug;
 
 use crate::BindContext;
@@ -48,18 +64,32 @@ use crate::SelectBuilder;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
+use crate::planner::binder::ddl::table::apply_fuse_storage_defaults;
 use crate::planner::semantic::MaterializedViewChecker;
 use crate::planner::semantic::MaterializedViewRewriter;
 use crate::planner::semantic::ViewRewriter;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::Aggregate;
+use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::CreateMaterializedViewPlan;
+use crate::plans::CreateTablePlan;
 use crate::plans::DropMaterializedViewPlan;
+use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::Plan;
+use crate::plans::ReclusterPlan;
 use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ScalarExpr;
+use crate::plans::ShowCreateMaterializedViewPlan;
+use crate::plans::TableMaintenanceTarget;
+
+fn is_supported_materialized_view_source(table: &dyn Table) -> bool {
+    !table.is_temp()
+        && !table.is_stream()
+        && !table.is_read_only()
+        && is_fuse_engine(table.engine())
+}
 
 /// Walk a unary plan chain and return the first Aggregate node, if any.
 pub(crate) fn find_materialized_view_aggregate(s_expr: &SExpr) -> Option<&Aggregate> {
@@ -93,6 +123,37 @@ fn normalize_null_fields(schema: TableSchemaRef) -> TableSchemaRef {
 }
 
 impl Binder {
+    async fn resolve_materialized_view_target(
+        &self,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+        view: &Identifier,
+    ) -> Result<(String, String, String, Arc<dyn Table>)> {
+        let (catalog, database, view) =
+            self.normalize_object_identifier_triple(catalog, database, view);
+        let table = self.ctx.get_table(&catalog, &database, &view).await?;
+        if !is_materialized_view_engine(table.engine()) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "'{}.{}.{}' is not a materialized view",
+                catalog, database, view
+            )));
+        }
+        Ok((catalog, database, view, table))
+    }
+
+    fn materialized_view_cluster_schema(physical_schema: &TableSchemaRef) -> TableSchemaRef {
+        let fields = physical_schema
+            .fields()
+            .iter()
+            // Aggregate states use Tuple physical types and are rejected by the existing Fuse
+            // cluster-key type validation. The refresh row ID is a String, so exclude that hidden
+            // physical column before delegating to the same validation.
+            .filter(|field| field.name() != MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN)
+            .cloned()
+            .collect();
+        TableSchemaRefExt::create(fields)
+    }
+
     /// Build the physical schema from rewriter names and types inferred by binding.
     /// Aggregate outputs are persisted as serialized states, while group keys and
     /// non-aggregate outputs use their bound result types.
@@ -191,7 +252,9 @@ impl Binder {
     }
 
     /// Resolve the single base table referenced by the defining query.
-    fn materialized_view_source_table(metadata: &MetadataRef) -> Result<(Arc<dyn Table>, String)> {
+    fn materialized_view_source_table(
+        metadata: &MetadataRef,
+    ) -> Result<(Arc<dyn Table>, String, String, String)> {
         let metadata = metadata.read();
         if metadata.tables().len() != 1 {
             return Err(ErrorCode::SemanticError(
@@ -199,7 +262,12 @@ impl Binder {
             ));
         }
         let table = &metadata.tables()[0];
-        Ok((table.table(), table.database().to_string()))
+        Ok((
+            table.table(),
+            table.catalog().to_string(),
+            table.database().to_string(),
+            table.name().to_string(),
+        ))
     }
 
     #[async_backtrace::framed]
@@ -213,8 +281,15 @@ impl Binder {
             database,
             view,
             columns,
+            cluster_by,
             query,
         } = stmt;
+
+        if cluster_by.is_some() && columns.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "Materialized view with CLUSTER BY must include a column list".to_string(),
+            ));
+        }
 
         // Reject unsupported syntax before binding. The rest of CREATE can then rely on a single
         // plain table source and on the SELECT/FROM/WHERE/GROUP BY shape understood by refresh.
@@ -235,8 +310,59 @@ impl Binder {
         let (catalog_name, database_name, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
         let target_catalog = self.ctx.get_catalog(&catalog_name).await?;
+        if target_catalog.support_partition() {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Catalog '{}' does not support MATERIALIZED VIEW",
+                target_catalog.name()
+            )));
+        }
         let target_database = target_catalog.get_database(&tenant, &database_name).await?;
         let target_database_id = target_database.get_db_info().database_id.db_id;
+
+        // Resolve the direct AST source before query binding. Binding a view or another MV expands
+        // it to its underlying query, which must not allow that object to masquerade as a FUSE
+        // base-table source.
+        let (direct_source_catalog, direct_source_database, direct_source_name) = match &query.body
+        {
+            SetExpr::Select(select) => match select.from.as_slice() {
+                [
+                    TableReference::Table {
+                        table: table_ref, ..
+                    },
+                ] => self.normalize_object_identifier_triple(
+                    &table_ref.catalog,
+                    &table_ref.database,
+                    &table_ref.table,
+                ),
+                _ => unreachable!("materialized view checker accepted a non-table source"),
+            },
+            _ => unreachable!("materialized view checker accepted a non-SELECT query"),
+        };
+        let direct_source = self
+            .ctx
+            .get_table(
+                &direct_source_catalog,
+                &direct_source_database,
+                &direct_source_name,
+            )
+            .await?;
+        if !direct_source_catalog.eq_ignore_ascii_case(CATALOG_DEFAULT)
+            || !is_supported_materialized_view_source(direct_source.as_ref())
+        {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Materialized view source '{}.{}.{}' must be a persistent base table in the default catalog using FUSE engine",
+                direct_source_catalog, direct_source_database, direct_source_name
+            )));
+        }
+        let source_meta = &direct_source.get_table_info().meta;
+        if !source_meta.column_mask_policy_columns_ids.is_empty()
+            || source_meta.row_access_policy_columns_ids.is_some()
+        {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "Materialized view cannot be created on source table '{}.{}.{}' because it has a row access policy or masking policy",
+                direct_source_catalog, direct_source_database, direct_source_name
+            )));
+        }
 
         let original_query_plan = self.as_query_plan(query).await?;
         let Plan::Query {
@@ -249,14 +375,14 @@ impl Binder {
                 "materialized view AS clause must produce a Query plan",
             ));
         };
-        let (source_table, source_database) =
+        let (source_table, source_catalog_name, source_database, source_table_name) =
             Self::materialized_view_source_table(original_metadata)?;
-        if source_table.engine() != "FUSE" {
-            return Err(ErrorCode::SemanticError(format!(
-                "Materialized view source table '{}.{}' must use FUSE engine, but uses {}",
-                source_database,
-                source_table.name(),
-                source_table.engine()
+        if !source_catalog_name.eq_ignore_ascii_case(CATALOG_DEFAULT)
+            || !is_supported_materialized_view_source(source_table.as_ref())
+        {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Materialized view source '{}.{}.{}' must be a persistent base table in the default catalog using FUSE engine",
+                source_catalog_name, source_database, source_table_name
             )));
         }
         let source_table_id = source_table.get_id();
@@ -276,6 +402,10 @@ impl Binder {
                     ),
                 ]),
             });
+        let source_catalog = self.ctx.get_catalog(&source_catalog_name).await?;
+        let expected_source_generation = source_catalog
+            .get_mv_source_generation(&tenant, source_table_id)
+            .await?;
 
         // Qualify the logical definition once so stale fallback is independent of the session's
         // current database. The physical definition starts from that same canonical source SQL.
@@ -339,7 +469,7 @@ impl Binder {
         // 5. Assemble CreateMaterializedViewPlan: the physical schema is used by
         //    Fuse storage; MVDefinition holds the original query, rewritten storage
         //    query, and logical schema (with final projection expressions).
-        let mut options = BTreeMap::new();
+        let mut options = std::collections::BTreeMap::new();
         options.insert(
             OPT_KEY_DATABASE_ID.to_owned(),
             target_database_id.to_string(),
@@ -349,6 +479,30 @@ impl Binder {
             source_table_id.to_string(),
         );
 
+        let mut cluster_key = None;
+        if let Some(cluster_opt) = cluster_by {
+            let cluster_schema = Self::materialized_view_cluster_schema(&physical_schema);
+            let keys = self
+                .analyze_cluster_keys(cluster_opt, cluster_schema, None)
+                .await
+                .map_err(|error| {
+                    ErrorCode::InvalidClusterKeys(format!(
+                        "materialized view CLUSTER BY must reference physical non-aggregate columns or GROUP BY keys: {error}"
+                    ))
+                })?;
+            if !keys.is_empty() {
+                options
+                    .entry(OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
+                    .or_insert_with(|| "1".to_owned());
+                cluster_key = Some(format!("({})", keys.join(", ")));
+            }
+        }
+
+        let storage_params = self
+            .resolve_database_default_storage_params(target_database.as_ref())
+            .await?;
+        apply_fuse_storage_defaults(&mut options, storage_params.as_ref())?;
+
         let mv_definition = MVDefinition {
             original_query: original_query.to_string(),
             query: physical_query.to_string(),
@@ -356,19 +510,146 @@ impl Binder {
             sync_creation: false,
         };
 
-        let plan = CreateMaterializedViewPlan {
+        let table_plan = CreateTablePlan {
             create_option: create_option.clone().into(),
             tenant,
             catalog: catalog_name,
             database: database_name,
-            view_name,
+            table: view_name,
             schema: physical_schema,
+            engine: Engine::MaterializedView,
+            engine_options: Default::default(),
+            storage_params,
             options,
+            table_properties: None,
+            table_partition: None,
+            field_comments: vec![],
+            field_stats_truncate_len: vec![],
+            cluster_key,
+            as_select: None,
+            table_indexes: None,
+            table_constraints: None,
+            attached_columns: None,
+        };
+        let plan = CreateMaterializedViewPlan {
+            table_plan,
             mv_definition,
             source_table_option,
+            query_plan: Box::new(original_query_plan),
+            expected_source_generation,
         };
 
         Ok(Plan::CreateMaterializedView(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_alter_materialized_view(
+        &mut self,
+        stmt: &AlterMaterializedViewStmt,
+    ) -> Result<Plan> {
+        let AlterMaterializedViewStmt {
+            catalog,
+            database,
+            view,
+            action,
+        } = stmt;
+        let tenant = self.ctx.get_tenant();
+        let (catalog, database, table, mv_table) = self
+            .resolve_materialized_view_target(catalog, database, view)
+            .await?;
+        let table_id = mv_table.get_id();
+
+        match action {
+            AlterTableAction::AlterTableClusterKey { cluster_by } => {
+                let cluster_schema = Self::materialized_view_cluster_schema(&mv_table.schema());
+                let cluster_keys = self
+                    .analyze_cluster_keys(cluster_by, cluster_schema, None)
+                    .await
+                    .map_err(|error| {
+                        ErrorCode::InvalidClusterKeys(format!(
+                            "materialized view CLUSTER BY must reference physical non-aggregate columns or GROUP BY keys: {error}"
+                        ))
+                    })?;
+
+                Ok(Plan::AlterTableClusterKey(Box::new(
+                    AlterTableClusterKeyPlan {
+                        tenant,
+                        catalog,
+                        database,
+                        table,
+                        target: TableMaintenanceTarget::MaterializedView { table_id },
+                        branch: None,
+                        cluster_keys,
+                    },
+                )))
+            }
+            AlterTableAction::DropTableClusterKey => Ok(Plan::DropTableClusterKey(Box::new(
+                DropTableClusterKeyPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    target: TableMaintenanceTarget::MaterializedView { table_id },
+                    branch: None,
+                },
+            ))),
+            AlterTableAction::ReclusterTable {
+                is_final,
+                selection,
+                limit,
+            } => {
+                if selection.is_some() {
+                    return Err(ErrorCode::Unimplemented(
+                        "ALTER MATERIALIZED VIEW RECLUSTER WHERE is not supported".to_string(),
+                    ));
+                }
+                Ok(Plan::ReclusterTable(Box::new(ReclusterPlan {
+                    catalog,
+                    database,
+                    table,
+                    target: TableMaintenanceTarget::MaterializedView { table_id },
+                    limit: limit.map(|value| value as usize),
+                    selection: None,
+                    is_final: *is_final,
+                })))
+            }
+            _ => Err(ErrorCode::SemanticError(format!(
+                "unsupported ALTER MATERIALIZED VIEW action: {action}"
+            ))),
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_optimize_materialized_view(
+        &mut self,
+        stmt: &OptimizeTableStmt,
+    ) -> Result<Plan> {
+        let OptimizeTableStmt {
+            catalog,
+            database,
+            table,
+            action,
+            limit,
+        } = stmt;
+        let (catalog, database, table, mv_table) = self
+            .resolve_materialized_view_target(catalog, database, table)
+            .await?;
+        let OptimizeTableAction::Compact { target } = action else {
+            return Err(ErrorCode::SemanticError(format!(
+                "unsupported OPTIMIZE MATERIALIZED VIEW action: {action}"
+            )));
+        };
+
+        Ok(Self::build_optimize_compact_plan(
+            catalog,
+            database,
+            table,
+            TableMaintenanceTarget::MaterializedView {
+                table_id: mv_table.get_id(),
+            },
+            target,
+            limit.map(|value| value as usize),
+        ))
     }
 
     #[async_backtrace::framed]
@@ -415,6 +696,33 @@ impl Binder {
                 catalog,
                 database,
                 view_name,
+            },
+        )))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_create_materialized_view(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &ShowCreateMaterializedViewStmt,
+    ) -> Result<Plan> {
+        let ShowCreateMaterializedViewStmt {
+            catalog,
+            database,
+            view,
+        } = stmt;
+        let (catalog, database, view_name) =
+            self.normalize_object_identifier_triple(catalog, database, view);
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("Table", DataType::String),
+            DataField::new("Create Table", DataType::String),
+        ]);
+        Ok(Plan::ShowCreateMaterializedView(Box::new(
+            ShowCreateMaterializedViewPlan {
+                catalog,
+                database,
+                view_name,
+                schema,
             },
         )))
     }

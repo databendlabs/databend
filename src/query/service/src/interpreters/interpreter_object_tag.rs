@@ -46,6 +46,7 @@ use databend_common_users::UserApiProvider;
 use log::info;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::meta_service_error;
 use crate::meta_txn_error;
 use crate::pipelines::PipelineBuildResult;
@@ -213,10 +214,13 @@ async fn resolve_table_id_object(
                         table_name
                     )));
                 }
-            } else if table.is_temp() {
-                return Err(ErrorCode::Unimplemented(
-                    "Tags are not supported for temporary tables",
-                ));
+            } else {
+                check_not_materialized_view(table.as_ref(), database)?;
+                if table.is_temp() {
+                    return Err(ErrorCode::Unimplemented(
+                        "Tags are not supported for temporary tables",
+                    ));
+                }
             }
             Ok(Some(TaggableObject::Table {
                 table_id: table.get_table_info().ident.table_id,

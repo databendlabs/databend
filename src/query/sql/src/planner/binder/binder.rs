@@ -352,9 +352,19 @@ impl Binder {
             Statement::CreateMaterializedView(stmt) => {
                 self.bind_create_materialized_view(stmt).await?
             }
+            Statement::AlterMaterializedView(stmt) => {
+                self.bind_alter_materialized_view(stmt).await?
+            }
+            Statement::OptimizeMaterializedView(stmt) => {
+                self.bind_optimize_materialized_view(stmt).await?
+            }
             Statement::DropMaterializedView(stmt) => self.bind_drop_materialized_view(stmt).await?,
             Statement::RefreshMaterializedView(stmt) => {
                 self.bind_refresh_materialized_view(stmt).await?
+            }
+            Statement::ShowCreateMaterializedView(stmt) => {
+                self.bind_show_create_materialized_view(bind_context, stmt)
+                    .await?
             }
             Statement::ShowMaterializedViews(stmt) => {
                 self.bind_show_materialized_views(bind_context, stmt)

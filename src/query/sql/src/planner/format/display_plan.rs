@@ -124,6 +124,7 @@ impl Plan {
 
             // Materialized Views
             Plan::CreateMaterializedView(_) => Ok("CreateMaterializedView".to_string()),
+            Plan::ShowCreateMaterializedView(_) => Ok("ShowCreateMaterializedView".to_string()),
             Plan::DropMaterializedView(_) => Ok("DropMaterializedView".to_string()),
             Plan::RefreshMaterializedView(_) => Ok("RefreshMaterializedView".to_string()),
             Plan::DescribeMaterializedView(_) => Ok("DescribeMaterializedViewStmt".to_string()),

@@ -74,6 +74,9 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVInfo;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::PaimonCatalogOption;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
@@ -276,6 +279,38 @@ impl Catalog for PaimonCatalog {
 
     async fn get_table_meta_by_id(&self, _table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         Err(read_only("get_table_meta_by_id"))
+    }
+
+    async fn get_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _mv_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        Err(read_only("get_mv_definition"))
+    }
+
+    async fn get_mv_source_generation(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<u64> {
+        Err(read_only("get_mv_source_generation"))
+    }
+
+    async fn get_mv_source_binding_snapshot(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<MVSourceBindingSnapshot> {
+        Err(read_only("get_mv_source_binding_snapshot"))
+    }
+
+    async fn list_mvs_by_source_table_id(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<Vec<MVInfo>> {
+        Err(read_only("list_mvs_by_source_table_id"))
     }
 
     async fn mget_table_names_by_ids(

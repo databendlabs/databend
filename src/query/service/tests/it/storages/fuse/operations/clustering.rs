@@ -17,6 +17,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTableClusterKeyPlan;
+use databend_common_sql::plans::TableMaintenanceTarget;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
@@ -67,6 +68,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
+        target: TableMaintenanceTarget::Table,
         branch: None,
         cluster_keys: vec!["id".to_string()],
     };
@@ -89,6 +91,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
+        target: TableMaintenanceTarget::Table,
         branch: None,
     };
     let interpreter =

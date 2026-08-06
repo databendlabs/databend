@@ -147,6 +147,17 @@ impl Interpreter for CreateTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        self.validate_create().await?;
+
+        match &self.plan.as_select {
+            Some(select_plan_node) => self.create_table_as_select(select_plan_node.clone()).await,
+            None => self.create_table().await,
+        }
+    }
+}
+
+impl CreateTableInterpreter {
+    pub(crate) async fn validate_create(&self) -> Result<()> {
         let tenant = &self.plan.tenant;
 
         let has_computed_column = self
@@ -197,14 +208,8 @@ impl Interpreter for CreateTableInterpreter {
             }
         }
 
-        match &self.plan.as_select {
-            Some(select_plan_node) => self.create_table_as_select(select_plan_node.clone()).await,
-            None => self.create_table().await,
-        }
+        Ok(())
     }
-}
-
-impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         assert!(
@@ -477,7 +482,10 @@ impl CreateTableInterpreter {
     ///
     /// - Rebuild `DataSchema` with default exprs.
     /// - Update cluster key of table meta.
-    fn build_request(&self, statistics: Option<TableStatistics>) -> Result<CreateTableReq> {
+    pub(crate) fn build_request(
+        &self,
+        statistics: Option<TableStatistics>,
+    ) -> Result<CreateTableReq> {
         let fields = self.plan.schema.fields().clone();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         for field in fields.iter() {

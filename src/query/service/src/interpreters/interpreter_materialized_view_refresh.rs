@@ -43,6 +43,7 @@ use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
+use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableIdent;
@@ -52,7 +53,6 @@ use databend_common_sql::MaterializedViewChecker;
 use databend_common_sql::Planner;
 use databend_common_sql::parse_materialized_view_query;
 use databend_common_sql::plans::RefreshMaterializedViewPlan;
-use databend_common_sql::validate_materialized_view_source;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ChangesDesc;
 use databend_meta_client::types::MatchSeq;
@@ -169,14 +169,19 @@ impl<'a> MaterializedViewRefresh<'a> {
         };
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let definition = catalog
-            .get_mv_definition(&self.plan.tenant, self.mv_table.get_id())
-            .await?
-            .ok_or_else(|| {
-                ErrorCode::InvalidMaterializedView("materialized view definition not found")
-            })?;
-        self.validate_source_table_id(&definition.data.query, source_table_id)
+        let binding_snapshot = catalog
+            .get_mv_source_binding_snapshot(&self.plan.tenant, source_table_id)
             .await?;
+        if !binding_snapshot
+            .materialized_views
+            .iter()
+            .any(|mv| mv.mv_id == self.mv_table.get_id())
+        {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {}.{} is invalid because its source schema changed; recreate the materialized view",
+                self.plan.database, self.plan.view_name
+            )));
+        }
         let source_meta = catalog
             .get_table_meta_by_id(source_table_id)
             .await?
@@ -186,6 +191,12 @@ impl<'a> MaterializedViewRefresh<'a> {
                     self.plan.database, self.plan.view_name, source_table_id
                 ))
             })?;
+        if source_meta.data.drop_on.is_some() {
+            return Err(ErrorCode::UnknownTable(format!(
+                "materialized view {}.{} source table id {} has been dropped",
+                self.plan.database, self.plan.view_name, source_table_id
+            )));
+        }
         let source_seq = source_meta.seq;
         let source_snapshot_location = source_meta
             .data
@@ -232,12 +243,20 @@ impl<'a> MaterializedViewRefresh<'a> {
                 .is_none_or(|(mv_source_seq, _)| *mv_source_seq != source_seq)
         );
 
+        let definition = catalog
+            .get_mv_definition(&self.plan.tenant, self.mv_table.get_id())
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::InvalidMaterializedView("materialized view definition not found")
+            })?;
         let logical_query = parse_materialized_view_query(
             &definition.data.original_query,
             "invalid materialized view logical query",
         )?;
         let is_aggregating = MaterializedViewChecker::check_query(&logical_query).is_aggregating();
 
+        // TODO: Consider using the source name in the persisted physical query as a
+        // query-scoped binding to avoid these reverse name lookups.
         let source_database_id = source_meta
             .data
             .options
@@ -254,14 +273,15 @@ impl<'a> MaterializedViewRefresh<'a> {
                     source_table_id
                 ))
             })?;
-        let current_source_table = catalog
-            .get_table(&self.plan.tenant, &source_database, &source_table_name)
-            .await?;
-        let source_table = catalog.get_table_by_info(&TableInfo {
-            ident: TableIdent::new(source_table_id, source_seq),
-            meta: source_meta.data.clone(),
-            ..current_source_table.get_table_info().clone()
-        })?;
+        let source_table_info = TableInfo::new_full(
+            &source_database,
+            &source_table_name,
+            TableIdent::new(source_table_id, source_seq),
+            source_meta.data.clone(),
+            catalog.info(),
+            DatabaseType::NormalDB,
+        );
+        let source_table = catalog.get_table_by_info(&source_table_info)?;
         let source_table = FuseTable::try_from_table(source_table.as_ref())?;
         if let Some((mv_source_seq, Some(_))) = &checkpoint {
             source_table
@@ -291,43 +311,6 @@ impl<'a> MaterializedViewRefresh<'a> {
             txn_mgr.lock().clear();
         }
         refresh_result
-    }
-
-    async fn validate_source_table_id(
-        &self,
-        physical_query: &str,
-        expected_source_table_id: u64,
-    ) -> Result<()> {
-        let query = parse_materialized_view_query(
-            physical_query,
-            "invalid materialized view physical query",
-        )?;
-        let mut planner = Planner::new_with_query_executor(
-            self.ctx.clone(),
-            Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
-                self.ctx.as_ref(),
-            ))),
-        );
-        let plan = planner
-            .plan_stmt(&Statement::Query(Box::new(query)), false)
-            .await
-            .map_err(|error| {
-                ErrorCode::InvalidMaterializedView(format!(
-                    "materialized view {}.{} source table changed: expected table id {}: {}",
-                    self.plan.database, self.plan.view_name, expected_source_table_id, error
-                ))
-            })?;
-        let databend_common_sql::plans::Plan::Query { metadata, .. } = plan else {
-            return Err(ErrorCode::InvalidMaterializedView(format!(
-                "materialized view {}.{} physical definition is not a query",
-                self.plan.database, self.plan.view_name
-            )));
-        };
-        validate_materialized_view_source(
-            &metadata,
-            expected_source_table_id,
-            &format!("{}.{}", self.plan.database, self.plan.view_name),
-        )
     }
 
     fn attach_source(
@@ -586,6 +569,32 @@ impl<'a> MaterializedViewRefresh<'a> {
         }
     }
 
+    fn rebind_physical_query_source(
+        &self,
+        physical_query: &str,
+        source_database: &str,
+        source_table_name: &str,
+    ) -> Result<String> {
+        let mut query = parse_materialized_view_query(
+            physical_query,
+            "invalid materialized view physical query",
+        )?;
+        let SetExpr::Select(select) = &mut query.body else {
+            return Err(ErrorCode::InvalidMaterializedView(
+                "materialized view physical query must be a SELECT",
+            ));
+        };
+        let [TableReference::Table { table, .. }] = select.from.as_mut_slice() else {
+            return Err(ErrorCode::InvalidMaterializedView(
+                "materialized view refresh requires exactly one base table",
+            ));
+        };
+        table.catalog = Some(Identifier::from_name(None, &self.plan.catalog));
+        table.database = Some(Identifier::from_name(None, source_database));
+        table.table = Identifier::from_name(None, source_table_name);
+        Ok(query.to_string())
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn execute_in_transaction(
         &self,
@@ -598,6 +607,13 @@ impl<'a> MaterializedViewRefresh<'a> {
         source_seq: u64,
         end_snapshot: Option<String>,
     ) -> Result<()> {
+        // The definition keeps the source name from CREATE time, while the dependency is anchored
+        // by table ID. Resolve that ID to its current name before every refresh so renaming the
+        // source table does not invalidate an otherwise compatible MV binding.
+        let physical_query =
+            self.rebind_physical_query_source(physical_query, source_database, source_table_name)?;
+        let physical_query = physical_query.as_str();
+
         if end_snapshot.is_none() {
             // A source without a snapshot is a valid empty endpoint. Rebind the physical query to
             // the captured empty table and overwrite the MV so old materialized rows are removed.

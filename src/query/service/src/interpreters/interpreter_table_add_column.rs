@@ -26,6 +26,7 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::AddColumnOption;
@@ -190,6 +191,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 new_schema.into(),
                 prev_snapshot_id,
                 table_meta_timestamps,
+                None,
             )
             .await;
         }
@@ -300,7 +302,7 @@ where
             new_snapshot_location = Some(new_snapshot_loc);
         }
         new_table_meta.updated_on = Utc::now();
-        update_table_meta(fuse_tbl, &new_table_meta, catalog).await?;
+        update_table_meta(fuse_tbl, &new_table_meta, catalog, ctx.get_tenant()).await?;
 
         if let Some(new_snapshot_location) = new_snapshot_location {
             FuseTable::write_last_snapshot_hint(
@@ -320,8 +322,9 @@ pub(crate) async fn update_table_meta(
     fuse_tbl: &FuseTable,
     new_table_meta: &TableMeta,
     catalog: Arc<dyn Catalog>,
+    tenant: Tenant,
 ) -> Result<()> {
-    let mut table_info = fuse_tbl.get_table_info().clone();
+    let table_info = fuse_tbl.get_table_info().clone();
     let table_id = table_info.ident.table_id;
     let table_version = table_info.ident.seq;
     let req = UpdateTableMetaReq {
@@ -331,7 +334,8 @@ pub(crate) async fn update_table_meta(
         base_snapshot_location: fuse_tbl.snapshot_loc(),
         lvt_check: None,
     };
-    table_info.meta = new_table_meta.clone();
-    catalog.update_single_table_meta(req, &table_info).await?;
+    catalog
+        .update_single_table_meta(&tenant, req, &table_info)
+        .await?;
     Ok(())
 }
