@@ -153,6 +153,32 @@ from (
 50.0
 
 statement ok
+drop table if exists aggregate_state_parameter_test
+
+statement ok
+create table aggregate_state_parameter_test as
+select number % 4 as bucket,
+       quantile_tdigest_state(0.5)(number) as state
+from numbers(100)
+group by bucket
+
+query T
+select typeof(state)
+from aggregate_state_parameter_test
+limit 1;
+----
+AGGREGATESTATE(QUANTILE_TDIGEST(0.5), UINT64) NULL
+
+query R
+select quantile_tdigest_merge(0.5)(state)
+from aggregate_state_parameter_test;
+----
+50.0
+
+statement ok
+drop table aggregate_state_parameter_test
+
+statement ok
 drop table if exists aggregate_state_combinator_test
 
 statement ok

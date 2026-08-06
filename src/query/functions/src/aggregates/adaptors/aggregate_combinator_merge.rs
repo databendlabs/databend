@@ -23,6 +23,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AggregateFunctionParam;
 use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -118,7 +119,7 @@ impl AggregateMergeCombinator {
                 returns_state,
                 state_type: DataType::AggregateState(Box::new(AggregateStateDataType {
                     function_name: nested_name.to_string(),
-                    params: serialize_params(nested_name, &params)?,
+                    params: persist_params(&params)?,
                     argument_types,
                     state_type: Box::new(state_type.clone()),
                 })),
@@ -143,20 +144,9 @@ impl AggregateMergeCombinator {
             )));
         }
 
-        let params = state
-            .params
-            .iter()
-            .map(|param| {
-                borsh::from_slice(param).map_err(|error| {
-                    ErrorCode::Internal(format!(
-                        "Cannot deserialize aggregate parameter for {nested_name}_merge: {error}"
-                    ))
-                })
-            })
-            .collect::<Result<Vec<Scalar>>>()?;
         let nested = AggregateFunctionFactory::instance().get(
             nested_name,
-            params,
+            state.params.iter().cloned().map(Scalar::from).collect(),
             state.argument_types.clone(),
             sort_descs,
         )?;
@@ -289,16 +279,11 @@ fn find_legacy_signature_with_arity(
     None
 }
 
-fn serialize_params(nested_name: &str, params: &[Scalar]) -> Result<Vec<Vec<u8>>> {
+fn persist_params(params: &[Scalar]) -> Result<Vec<AggregateFunctionParam>> {
     params
         .iter()
-        .map(|param| {
-            borsh::to_vec(param).map_err(|error| {
-                ErrorCode::Internal(format!(
-                    "Cannot serialize aggregate parameter for {nested_name}_merge: {error}"
-                ))
-            })
-        })
+        .cloned()
+        .map(AggregateFunctionParam::try_from)
         .collect()
 }
 

@@ -20,9 +20,11 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::AggregateFunctionParam;
 use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use jiff::fmt::strtime::BrokenDownTime;
 use jiff::tz;
@@ -65,6 +67,17 @@ fn test_aggregate_state_physical_type() {
     let column = ColumnBuilder::repeat(&default.as_ref(), 2, &aggregate_state).build();
     assert!(matches!(column, Column::Tuple(_)));
     assert_eq!(column.len(), 2);
+}
+
+#[test]
+fn test_aggregate_function_param_scalar_conversion() {
+    let scalar = databend_common_expression::Scalar::Tuple(vec![
+        databend_common_expression::Scalar::String("param".to_string()),
+        databend_common_expression::Scalar::Number(NumberScalar::UInt64(0)),
+    ]);
+    let param = AggregateFunctionParam::try_from(scalar.clone()).unwrap();
+
+    assert_eq!(databend_common_expression::Scalar::from(param), scalar);
 }
 
 #[test]
