@@ -327,6 +327,8 @@ impl SchemaApiTestSuite {
         self.database_drop_out_of_retention_time_history(&b.build().await)
             .await?;
         self.table_create_get_drop(&b.build().await).await?;
+        self.table_create_with_source_option_atomicity(&b.build().await)
+            .await?;
         self.materialized_view_lifecycle(&b.build().await).await?;
         self.table_drop_without_db_id_to_name(&b.build().await)
             .await?;
@@ -1661,6 +1663,122 @@ impl SchemaApiTestSuite {
                 other => panic!("unexpected undrop error: {other:?}"),
             }
         }
+
+        Ok(())
+    }
+
+    async fn table_create_with_source_option_atomicity<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
+        let tenant_name = "table_create_with_source_option_atomicity";
+        let db_name = "db";
+        let mut source = DbTableHarness::new(mt, tenant_name, db_name, "source", "FUSE");
+        source.create_db().await?;
+        let (source_id, _) = source.create_table().await?;
+        let tenant = source.tenant();
+
+        let create_req = |name: &str, create_option: CreateOption, engine: &str| CreateTableReq {
+            create_option,
+            catalog_name: None,
+            name_ident: TableNameIdent::new(&tenant, db_name, name),
+            table_meta: TableMeta {
+                engine: engine.to_string(),
+                ..Default::default()
+            },
+            as_dropped: false,
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        };
+        let source_update = |table_id, seq| UpsertTableOptionReq {
+            table_id,
+            seq: MatchSeq::Exact(seq),
+            options: HashMap::from([
+                ("change_tracking".to_string(), Some("true".to_string())),
+                ("begin_version".to_string(), Some(seq.to_string())),
+            ]),
+        };
+
+        // Publishing the target and updating the source happen together.
+        let source_before = source.get_table().await?;
+        let reply = mt
+            .create_table_with_source_table_option(
+                create_req("stream", CreateOption::Create, "STREAM"),
+                Some(source_update(source_id, source_before.ident.seq)),
+            )
+            .await?;
+        assert!(reply.new_table);
+        let source_after = source.get_table().await?;
+        assert!(source_after.ident.seq > source_before.ident.seq);
+        assert_eq!(
+            source_after.meta.options.get("change_tracking"),
+            Some(&"true".to_string())
+        );
+        assert_eq!(
+            source_after.meta.options.get("begin_version"),
+            Some(&source_before.ident.seq.to_string())
+        );
+        assert_eq!(
+            mt.get_table(GetTableReq::new(&tenant, db_name, "stream"))
+                .await?
+                .meta
+                .engine,
+            "STREAM"
+        );
+
+        // CREATE IF NOT EXISTS is a no-op, including the attached source update.
+        let mut second_source =
+            DbTableHarness::new(mt, tenant_name, db_name, "second_source", "FUSE");
+        let (second_source_id, _) = second_source.create_table().await?;
+        let second_before = second_source.get_table().await?;
+        let reply = mt
+            .create_table_with_source_table_option(
+                create_req("stream", CreateOption::CreateIfNotExists, "STREAM"),
+                Some(source_update(second_source_id, second_before.ident.seq)),
+            )
+            .await?;
+        assert!(!reply.new_table);
+        assert_eq!(second_source.get_table().await?, second_before);
+
+        // A rejected cross-engine replacement leaves the source unchanged.
+        let mut third_source =
+            DbTableHarness::new(mt, tenant_name, db_name, "third_source", "FUSE");
+        let (third_source_id, _) = third_source.create_table().await?;
+        let third_before = third_source.get_table().await?;
+        let err = mt
+            .create_table_with_source_table_option(
+                create_req("stream", CreateOption::CreateOrReplace, "FUSE"),
+                Some(source_update(third_source_id, third_before.ident.seq)),
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::TableEngineMismatch(_))
+        ));
+        assert_eq!(third_source.get_table().await?, third_before);
+
+        // A stale source condition rejects the entire transaction and does not publish the target.
+        let mut fourth_source =
+            DbTableHarness::new(mt, tenant_name, db_name, "fourth_source", "FUSE");
+        let (fourth_source_id, _) = fourth_source.create_table().await?;
+        let fourth_before = fourth_source.get_table().await?;
+        let err = mt
+            .create_table_with_source_table_option(
+                create_req("stale_stream", CreateOption::Create, "STREAM"),
+                Some(source_update(fourth_source_id, fourth_before.ident.seq + 1)),
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::TableVersionMismatched(_))
+        ));
+        assert_eq!(fourth_source.get_table().await?, fourth_before);
+        assert!(
+            mt.get_table(GetTableReq::new(&tenant, db_name, "stale_stream"))
+                .await
+                .is_err()
+        );
 
         Ok(())
     }

@@ -557,6 +557,21 @@ impl Catalog for SessionCatalog {
         }
     }
 
+    async fn create_table_with_source_table_option(
+        &self,
+        req: CreateTableReq,
+        source_table_option: UpsertTableOptionReq,
+    ) -> Result<CreateTableReply> {
+        if req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            return Err(ErrorCode::Unimplemented(
+                "Atomic source option update is not supported for temporary tables",
+            ));
+        }
+        self.inner
+            .create_table_with_source_table_option(req, source_table_option)
+            .await
+    }
+
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         if let Some(reply) = databend_storages_common_session::drop_table_by_id(
             self.temp_tbl_mgr.clone(),
