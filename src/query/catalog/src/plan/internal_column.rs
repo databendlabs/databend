@@ -21,6 +21,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -31,7 +32,6 @@ use databend_common_expression::FILE_PATH_COLUMN_ID;
 use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
 use databend_common_expression::FILENAME_COLUMN_ID;
 use databend_common_expression::FromData;
-use databend_common_expression::INTERNAL_CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
@@ -239,7 +239,7 @@ impl InternalColumn {
             InternalColumnType::SnapshotName => SNAPSHOT_NAME_COLUMN_ID,
             InternalColumnType::BaseRowId => BASE_ROW_ID_COLUMN_ID,
             InternalColumnType::BaseBlockIds => BASE_BLOCK_IDS_COLUMN_ID,
-            InternalColumnType::ChangeRowId => INTERNAL_CHANGE_ROW_ID_COLUMN_ID,
+            InternalColumnType::ChangeRowId => CHANGE_ROW_ID_COLUMN_ID,
             InternalColumnType::SearchMatched => SEARCH_MATCHED_COLUMN_ID,
             InternalColumnType::SearchScore => SEARCH_SCORE_COLUMN_ID,
             InternalColumnType::VectorScore => VECTOR_SCORE_COLUMN_ID,
@@ -323,7 +323,7 @@ impl InternalColumn {
                     .any(|index| index >= block.num_columns())
                 {
                     return Err(ErrorCode::Internal(
-                        "_change_row_id dependencies are missing from the input block",
+                        "change$row_id dependencies are missing from the input block",
                     ));
                 }
 
@@ -339,7 +339,7 @@ impl InternalColumn {
                                 origin_row_nums.index(row)
                             else {
                                 return Err(ErrorCode::Internal(
-                                    "invalid _origin_block_row_num for _change_row_id",
+                                    "invalid _origin_block_row_num for change$row_id",
                                 ));
                             };
                             format!(
@@ -350,7 +350,7 @@ impl InternalColumn {
                         }
                         _ => {
                             return Err(ErrorCode::Internal(
-                                "invalid _origin_block_id for _change_row_id",
+                                "invalid _origin_block_id for change$row_id",
                             ));
                         }
                     };

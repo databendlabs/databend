@@ -17,7 +17,7 @@ statement error 1065
 select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 
 statement error 1065
-select _change_row_id from t
+select change$row_id from t
 
 statement ok
 alter table t set options(change_tracking = true)
@@ -34,22 +34,22 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 4 1 1 NULL
 
 query I
-select count_if(_change_row_id != if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), _base_row_id)) from t
+select count_if(change$row_id != if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), _base_row_id)) from t
 ----
 0
 
 query I
-select count(*) from t where length(_change_row_id) = 38
+select count(*) from t where length(change$row_id) = 38
 ----
 4
 
 query I
-select count(*) from t where _change_row_id = 'not-a-row-id'
+select count(*) from t where change$row_id = 'not-a-row-id'
 ----
 0
 
 query I
-select count(*) from t as tracked where a = 2 and length(tracked._change_row_id) = 38
+select count(*) from t as tracked where a = 2 and length(tracked.change$row_id) = 38
 ----
 1
 
@@ -77,7 +77,7 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 3 0 0 1
 
 query I
-select count_if(_change_row_id != if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), _base_row_id)) from t
+select count_if(change$row_id != if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), _base_row_id)) from t
 ----
 0
 
@@ -92,7 +92,7 @@ statement ok
 set enable_prune_pipeline = 1
 
 query I
-select count(*) from t_column_oriented where length(_change_row_id) = 38
+select count(*) from t_column_oriented where length(change$row_id) = 38
 ----
 2
 

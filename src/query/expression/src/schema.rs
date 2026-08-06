@@ -68,7 +68,6 @@ pub const BLOCK_NAME_COL_NAME: &str = "_block_name";
 // internal stream column name.
 pub const BASE_ROW_ID_COL_NAME: &str = "_base_row_id";
 pub const BASE_BLOCK_IDS_COL_NAME: &str = "_base_block_ids";
-pub const INTERNAL_CHANGE_ROW_ID_COL_NAME: &str = "_change_row_id";
 // internal search column name.
 pub const SEARCH_MATCHED_COL_NAME: &str = "_search_matched";
 pub const SEARCH_SCORE_COL_NAME: &str = "_search_score";
@@ -92,7 +91,7 @@ pub const FILE_LAST_MODIFIED_COLUMN_NAME: &str = "metadata$file_last_modified";
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
 pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
 pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
-pub const INTERNAL_CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 13;
+pub const CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 13;
 
 pub const FILENAME_COLUMN_ID: u32 = u32::MAX - 14;
 pub const FILE_ROW_NUMBER_COLUMN_ID: u32 = u32::MAX - 15;
@@ -114,7 +113,6 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         BLOCK_NAME_COL_NAME,
         BASE_ROW_ID_COL_NAME,
         BASE_BLOCK_IDS_COL_NAME,
-        INTERNAL_CHANGE_ROW_ID_COL_NAME,
         SEARCH_MATCHED_COL_NAME,
         SEARCH_SCORE_COL_NAME,
         VECTOR_SCORE_COL_NAME,
@@ -136,7 +134,7 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id == INTERNAL_CHANGE_ROW_ID_COLUMN_ID
+    column_id == CHANGE_ROW_ID_COLUMN_ID
         || column_id >= VECTOR_SCORE_COLUMN_ID
         || (FILE_LAST_MODIFIED_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
 }

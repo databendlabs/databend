@@ -158,7 +158,7 @@ impl FuseTable {
                     "select *, \
                             'INSERT' as change$action, \
                             false as change$is_update, \
-                            {append_alias}._change_row_id as change$row_id \
+                            {append_alias}.change$row_id \
                     from {table_desc} as {append_alias} \
                     where not(is_not_null(_origin_version) and \
                               (_origin_version < {seq} or \
@@ -204,13 +204,13 @@ impl FuseTable {
                         from ( \
                             select {a_cols}, \
                                     'INSERT' as a_change$action, \
-                                    {a_table_alias}._change_row_id as a_change$row_id \
+                                    {a_table_alias}.change$row_id as a_change$row_id \
                             from {table_desc} as {a_table_alias} \
                         ) as A \
                         FULL OUTER JOIN ( \
                             select {d_cols_alias}, \
                                     'DELETE' as d_change$action, \
-                                    {d_table_alias}._change_row_id as d_change$row_id \
+                                    {d_table_alias}.change$row_id as d_change$row_id \
                             from {table_desc} as {d_table_alias} \
                         ) as D \
                         on A.a_change$row_id = D.d_change$row_id \
