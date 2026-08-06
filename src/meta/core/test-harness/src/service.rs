@@ -62,7 +62,7 @@ pub async fn start_metasrv_with_context<R: RuntimeApi>(
     // This ensures init_cluster (for single=true) uses the correct port.
     let port = tc.config.grpc.listen_port.unwrap_or(0);
     let addr: SocketAddr = format!("{}:{}", tc.config.grpc.listen_host, port).parse()?;
-    let incoming = TcpIncoming::bind(addr)?;
+    let incoming = TcpIncoming::bind(addr)?.with_nodelay(Some(true));
     let actual_port = incoming.local_addr()?.port();
     tc.config.grpc.listen_port = Some(actual_port);
 

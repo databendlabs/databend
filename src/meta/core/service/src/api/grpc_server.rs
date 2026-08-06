@@ -102,7 +102,8 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         let addr: SocketAddr = format!("{}:{}", self.config.grpc.listen_host, port).parse()?;
 
         let incoming = TcpIncoming::bind(addr)
-            .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?;
+            .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?
+            .with_nodelay(Some(true));
 
         Ok(incoming)
     }
