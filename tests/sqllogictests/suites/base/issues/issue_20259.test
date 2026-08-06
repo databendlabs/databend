@@ -1,0 +1,170 @@
+statement ok
+DROP TABLE IF EXISTS issue_20259;
+
+statement ok
+CREATE TABLE issue_20259(a INT, b STRING);
+
+statement ok
+INSERT INTO issue_20259 VALUES (1, 'a'), (2, 'b'), (3, 'c');
+
+# Internal columns in mutation assignments also use the regular scan-based path.
+statement ok
+UPDATE issue_20259 SET b = to_string(_row_id) WHERE a = 1;
+
+# Internal columns in mutation predicates use the regular scan-based path.
+statement ok
+UPDATE issue_20259 SET a = 20 WHERE _row_id > 0 AND a = 2;
+
+statement ok
+UPDATE issue_20259 SET b = _block_name WHERE a = 3;
+
+statement ok
+UPDATE issue_20259 SET a = 30 WHERE _block_name != '' AND a = 3;
+
+query IB
+SELECT a, length(b) > 0 FROM issue_20259 ORDER BY a;
+----
+1 1
+20 1
+30 1
+
+# Internal columns in DELETE predicates use the regular scan-based path.
+statement ok
+DELETE FROM issue_20259 WHERE _row_id > 0 AND a = 20;
+
+statement ok
+DELETE FROM issue_20259 WHERE _block_name != '' AND a = 30;
+
+query I
+SELECT a FROM issue_20259 ORDER BY a;
+----
+1
+
+# A subquery forces the non-direct mutation path, which materializes the internal column through
+# the regular table scan.
+statement ok
+INSERT INTO issue_20259 VALUES (4, 'd');
+
+statement ok
+UPDATE issue_20259 SET b = _block_name WHERE a IN (SELECT 4);
+
+query IB
+SELECT a, length(b) > 0 FROM issue_20259 ORDER BY a;
+----
+1 1
+4 1
+
+# Qualified internal-column references use the same generic path.
+statement ok
+UPDATE issue_20259 AS t SET b = to_string(t._row_id) WHERE t.a = 4;
+
+query IB
+SELECT a, length(b) > 0 FROM issue_20259 ORDER BY a;
+----
+1 1
+4 1
+
+# Internal columns work with change tracking through the regular scan-based path.
+statement ok
+DROP TABLE IF EXISTS issue_20259_change_tracking;
+
+statement ok
+CREATE TABLE issue_20259_change_tracking(a INT, b STRING) CHANGE_TRACKING = TRUE;
+
+statement ok
+INSERT INTO issue_20259_change_tracking VALUES (1, 'a'), (2, 'b'), (3, 'c');
+
+statement ok
+UPDATE issue_20259_change_tracking
+SET b = to_string(_row_id)
+WHERE _block_name != '' AND a = 1;
+
+statement ok
+DELETE FROM issue_20259_change_tracking WHERE _row_id > 0 AND a = 2;
+
+query IB
+SELECT a, length(b) > 0 FROM issue_20259_change_tracking ORDER BY a;
+----
+1 1
+3 1
+
+statement ok
+DROP TABLE issue_20259_change_tracking;
+
+statement ok
+UPDATE issue_20259 SET b = to_string(_ROW_ID) WHERE a = 1;
+
+query IB
+SELECT a, length(b) > 0 FROM issue_20259 ORDER BY a;
+----
+1 1
+4 1
+
+statement ok
+DROP TABLE issue_20259;
+
+# Source-side internal columns used by UPDATE FROM evaluators must survive column pruning.
+statement ok
+DROP TABLE IF EXISTS issue_20259_target;
+
+statement ok
+DROP TABLE IF EXISTS issue_20259_source;
+
+statement ok
+CREATE TABLE issue_20259_target(a INT, b STRING);
+
+statement ok
+CREATE TABLE issue_20259_source(a INT);
+
+statement ok
+INSERT INTO issue_20259_target VALUES (1, '');
+
+statement ok
+INSERT INTO issue_20259_source VALUES (1);
+
+statement ok
+UPDATE issue_20259_target AS t
+SET b = s._block_name
+FROM issue_20259_source AS s
+WHERE t.a = s.a;
+
+query IB
+SELECT a, length(b) > 0 FROM issue_20259_target;
+----
+1 1
+
+statement ok
+DROP TABLE issue_20259_target;
+
+statement ok
+DROP TABLE issue_20259_source;
+
+# `_snapshot_name` also uses metadata from the regular scan path.
+statement ok
+DROP TABLE IF EXISTS issue_20259_snapshot;
+
+statement ok
+CREATE TABLE issue_20259_snapshot(a INT, b STRING);
+
+statement ok
+INSERT INTO issue_20259_snapshot VALUES (1, 'a'), (2, 'b');
+
+statement ok
+UPDATE issue_20259_snapshot SET b = _snapshot_name WHERE a = 1;
+
+query IB
+SELECT a, length(b) > 0 FROM issue_20259_snapshot ORDER BY a;
+----
+1 1
+2 1
+
+statement ok
+DELETE FROM issue_20259_snapshot WHERE _snapshot_name != '' AND a = 2;
+
+query I
+SELECT a FROM issue_20259_snapshot ORDER BY a;
+----
+1
+
+statement ok
+DROP TABLE issue_20259_snapshot;
