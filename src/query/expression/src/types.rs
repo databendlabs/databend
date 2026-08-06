@@ -41,6 +41,7 @@ pub mod variant;
 pub mod vector;
 pub mod zero_size_type;
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -158,6 +159,54 @@ pub enum DataType {
 }
 
 impl DataType {
+    pub fn physical_type(&self) -> Cow<'_, DataType> {
+        match self {
+            DataType::AggregateState(state) => Cow::Borrowed(state.physical_type()),
+            DataType::Nullable(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(DataType::Nullable(Box::new(physical_inner.into_owned())))
+                }
+            }
+            DataType::Array(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(DataType::Array(Box::new(physical_inner.into_owned())))
+                }
+            }
+            DataType::Map(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(DataType::Map(Box::new(physical_inner.into_owned())))
+                }
+            }
+            DataType::Tuple(fields) => {
+                let physical_fields = fields
+                    .iter()
+                    .map(|field| field.physical_type())
+                    .collect::<Vec<_>>();
+                if physical_fields
+                    .iter()
+                    .zip(fields)
+                    .all(|(physical, logical)| physical.as_ref() == logical)
+                {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(DataType::Tuple(
+                        physical_fields.into_iter().map(Cow::into_owned).collect(),
+                    ))
+                }
+            }
+            _ => Cow::Borrowed(self),
+        }
+    }
+
     pub fn matches_physical_type(&self, data_type: &DataType) -> bool {
         if self == data_type {
             return true;

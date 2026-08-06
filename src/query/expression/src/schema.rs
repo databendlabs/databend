@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -1432,6 +1433,60 @@ impl From<&TableDataType> for DataType {
 }
 
 impl TableDataType {
+    pub fn physical_type(&self) -> Cow<'_, TableDataType> {
+        match self {
+            TableDataType::AggregateState { state_type, .. } => Cow::Borrowed(state_type),
+            TableDataType::Nullable(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(TableDataType::Nullable(Box::new(
+                        physical_inner.into_owned(),
+                    )))
+                }
+            }
+            TableDataType::Array(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(TableDataType::Array(Box::new(physical_inner.into_owned())))
+                }
+            }
+            TableDataType::Map(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(TableDataType::Map(Box::new(physical_inner.into_owned())))
+                }
+            }
+            TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                let physical_fields = fields_type
+                    .iter()
+                    .map(|field| field.physical_type())
+                    .collect::<Vec<_>>();
+                if physical_fields
+                    .iter()
+                    .zip(fields_type)
+                    .all(|(physical, logical)| physical.as_ref() == logical)
+                {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(TableDataType::Tuple {
+                        fields_name: fields_name.clone(),
+                        fields_type: physical_fields.into_iter().map(Cow::into_owned).collect(),
+                    })
+                }
+            }
+            _ => Cow::Borrowed(self),
+        }
+    }
+
     pub fn wrap_nullable(&self) -> Self {
         match self {
             TableDataType::Null | TableDataType::Nullable(_) => self.clone(),

@@ -177,7 +177,9 @@ pub fn check_cast<Index: ColumnIndex>(
     {
         return Ok(expr);
     }
-    if expr.data_type() == &wrapped_dest_type {
+    if expr.data_type() == &wrapped_dest_type
+        || expr.data_type().matches_physical_type(&wrapped_dest_type)
+    {
         Ok(expr)
     } else if expr.data_type().wrap_nullable() == wrapped_dest_type {
         Ok(Expr::Cast(Cast {
@@ -717,6 +719,12 @@ pub fn unify(
                 .unwrap_or_else(Substitution::empty);
             Ok(subst)
         }
+        (DataType::AggregateState(state), dest_ty) => unify(
+            state.physical_type(),
+            dest_ty,
+            auto_cast_rules,
+            dynamic_cast_rules,
+        ),
         _ => Err(ErrorCode::from_string_no_backtrace(format!(
             "unable to unify `{}` with `{}`",
             src_ty, dest_ty
