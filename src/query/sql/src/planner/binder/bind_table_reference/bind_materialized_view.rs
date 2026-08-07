@@ -186,10 +186,8 @@ impl Binder {
                     vec![],
                 )?;
                 let return_type = function.return_type()?;
-                let output = self.create_derived_column_binding(
-                    column.column_name.clone(),
-                    return_type.clone(),
-                );
+                let output = self
+                    .create_derived_column_binding(column.column_name.clone(), return_type.clone());
                 aggregate_functions.push(ScalarItem {
                     scalar: ScalarExpr::AggregateFunction(AggregateFunction {
                         span: None,
