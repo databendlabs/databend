@@ -132,6 +132,8 @@ enum NumFlag {
     PlusPost,
     MinusPost,
     Eeee,
+    ThUpper,
+    ThLower,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -201,6 +203,11 @@ impl NumDesc {
                 NumPoz::Tk0 => {
                     if self.flag.contains(NumFlag::Bracket) {
                         return Err("\"0\" must be ahead of \"PR\"");
+                    }
+
+                    if self.flag.contains(NumFlag::Multi) {
+                        self.multi += 1;
+                        return Ok(());
                     }
 
                     if !self.flag.intersects(NumFlag::Zero | NumFlag::Decimal) {
@@ -365,6 +372,16 @@ impl NumDesc {
                     Ok(())
                 }
 
+                NumPoz::TkTH => {
+                    self.flag.insert(NumFlag::ThUpper);
+                    Ok(())
+                }
+
+                NumPoz::Tkth => {
+                    self.flag.insert(NumFlag::ThLower);
+                    Ok(())
+                }
+
                 NumPoz::TkComma => Ok(()),
 
                 _ => unreachable!(),
@@ -401,7 +418,39 @@ impl NumDesc {
         }
 
         if self.flag.contains(NumFlag::Multi) {
-            return Err(ErrorCode::Unimplemented("to_char V (multiplies)"));
+            // V shifts the number by `multi` decimal places (multiply by 10^multi).
+            // Total output width = pre + multi digits.
+            let total_width = self.pre + self.multi;
+            let abs_val = if value == i64::MIN {
+                -(i64::MIN as i128)
+            } else {
+                value.unsigned_abs() as i128
+            };
+            let result = 10i128
+                .checked_pow(self.multi as u32)
+                .and_then(|m| abs_val.checked_mul(m));
+
+            let (number, out_pre_spaces) = match result {
+                Some(shifted) => {
+                    let orgnum = format!("{}", shifted);
+                    let numstr_pre_len = orgnum.len();
+                    match numstr_pre_len.cmp(&total_width) {
+                        std::cmp::Ordering::Less => (orgnum, total_width - numstr_pre_len),
+                        std::cmp::Ordering::Greater => ("#".repeat(total_width), 0),
+                        std::cmp::Ordering::Equal => (orgnum, 0),
+                    }
+                }
+                None => {
+                    // Overflow: display as hashes
+                    ("#".repeat(total_width), 0)
+                }
+            };
+
+            return Ok(NumPart {
+                sign: value >= 0,
+                number,
+                out_pre_spaces,
+            });
         }
 
         let mut orgnum = if value == i64::MIN {
@@ -479,7 +528,26 @@ impl NumDesc {
         }
 
         if self.flag.contains(NumFlag::Multi) {
-            return Err(ErrorCode::Unimplemented("to_char V (multiplies)"));
+            // V shifts the number by `multi` decimal places (multiply by 10^multi),
+            // then rounds to the nearest integer.
+            // Total output width = pre + multi digits.
+            let multiplier = 10f64.powi(self.multi as i32);
+            let shifted = (value.abs() * multiplier).round_ties_even();
+            let orgnum = format!("{:.0}", shifted);
+            let numstr_pre_len = orgnum.len();
+            let total_width = self.pre + self.multi;
+
+            let (number, out_pre_spaces) = match numstr_pre_len.cmp(&total_width) {
+                std::cmp::Ordering::Less => (orgnum, total_width - numstr_pre_len),
+                std::cmp::Ordering::Greater => ("#".repeat(total_width), 0),
+                std::cmp::Ordering::Equal => (orgnum, 0),
+            };
+
+            return Ok(NumPart {
+                sign: !value.is_sign_negative(),
+                number,
+                out_pre_spaces,
+            });
         }
 
         let orgnum = format!("{:.0}", value.abs());
@@ -945,7 +1013,7 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
     }
 
     // Count
-    np.num_count = np.desc.post + np.desc.pre - 1;
+    np.num_count = np.desc.post + np.desc.pre + np.desc.multi - 1;
 
     if np.desc.flag.contains(NumFlag::FillMode) && np.desc.flag.contains(NumFlag::Decimal) {
         np.calc_last_relevant_decnum();
@@ -1039,6 +1107,35 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
 
                 NumPoz::TkPR => (),
                 NumPoz::TkFM => (),
+                NumPoz::TkV => (),
+                NumPoz::TkTH | NumPoz::Tkth => {
+                    // Extract last two digits from internal number to determine suffix.
+                    // Use only digits before any decimal point.
+                    let int_part: &[char] = match np.number.iter().position(|c| *c == '.') {
+                        Some(dot) => &np.number[..dot],
+                        None => &np.number,
+                    };
+                    let last_two: u64 = {
+                        let len = int_part.len();
+                        let start = len.saturating_sub(2);
+                        int_part[start..]
+                            .iter()
+                            .filter(|c| c.is_ascii_digit())
+                            .fold(0u64, |acc, c| acc * 10 + (*c as u64 - '0' as u64))
+                    };
+                    let suffix = match last_two % 100 {
+                        11..=13 => "th",
+                        n if n % 10 == 1 => "st",
+                        n if n % 10 == 2 => "nd",
+                        n if n % 10 == 3 => "rd",
+                        _ => "th",
+                    };
+                    if matches!(key.id, NumPoz::TkTH) {
+                        np.inout.push_str(&suffix.to_uppercase());
+                    } else {
+                        np.inout.push_str(suffix);
+                    }
+                }
                 _ => unimplemented!(),
             },
             FormatNode::End => break,
@@ -1192,6 +1289,50 @@ mod tests {
         assert_eq!("###############", i64_to_char(4000, "FMRN")?);
         assert_eq!("###############", i64_to_char(-1, "FMRN")?);
 
+        // TH / th ordinal suffix
+        assert_eq!(" 0TH", i64_to_char(0, "9TH")?);
+        assert_eq!(" 1ST", i64_to_char(1, "9TH")?);
+        assert_eq!(" 2ND", i64_to_char(2, "9TH")?);
+        assert_eq!(" 3RD", i64_to_char(3, "9TH")?);
+        assert_eq!(" 4TH", i64_to_char(4, "9TH")?);
+        assert_eq!(" 11TH", i64_to_char(11, "99TH")?);
+        assert_eq!(" 12TH", i64_to_char(12, "99TH")?);
+        assert_eq!(" 13TH", i64_to_char(13, "99TH")?);
+        assert_eq!(" 21ST", i64_to_char(21, "99TH")?);
+        assert_eq!(" 22ND", i64_to_char(22, "99TH")?);
+        assert_eq!(" 23RD", i64_to_char(23, "99TH")?);
+        assert_eq!(" 111TH", i64_to_char(111, "999TH")?);
+        assert_eq!(" 112TH", i64_to_char(112, "999TH")?);
+        assert_eq!(" 113TH", i64_to_char(113, "999TH")?);
+
+        // lowercase ordinal
+        assert_eq!(" 1st", i64_to_char(1, "9th")?);
+        assert_eq!(" 2nd", i64_to_char(2, "9th")?);
+        assert_eq!(" 3rd", i64_to_char(3, "9th")?);
+        assert_eq!(" 4th", i64_to_char(4, "9th")?);
+        assert_eq!(" 12th", i64_to_char(12, "99th")?);
+
+        // ordinal with FM (fill mode)
+        assert_eq!("1st", i64_to_char(1, "FM9th")?);
+        assert_eq!("12th", i64_to_char(12, "FM99th")?);
+
+        // negative ordinal
+        assert_eq!("-1st", i64_to_char(-1, "9th")?);
+        assert_eq!(" -12th", i64_to_char(-12, "999th")?);
+
+        // ordinal with trailing literal (suffix must appear before literal)
+        assert_eq!(" 1ST!", i64_to_char(1, "9TH\"!\"")?);
+        assert_eq!(" 3RD!", i64_to_char(3, "9TH\"!\"")?);
+
+        // ordinal with sign suffix
+        assert_eq!("1st ", i64_to_char(1, "9thMI")?);
+        assert_eq!("1st-", i64_to_char(-1, "9thMI")?);
+
+        // V (shift/multiply by 10^n)
+        assert_eq!(" 12000", i64_to_char(12, "99V999")?);
+        assert_eq!("-12000", i64_to_char(-12, "99V999")?);
+        assert_eq!(" 50", i64_to_char(5, "9V9")?);
+
         Ok(())
     }
 
@@ -1249,11 +1390,14 @@ mod tests {
         assert_eq!("cdlxxxv", f64_to_char(485.0, "FMrn")?);
         assert_eq!("V", f64_to_char(5.2, "FMRN")?);
 
-        // assert_eq!(" 482nd", f64_to_char(482, "999th")?);
+        assert_eq!(" 482nd", f64_to_char(482.0, "999th")?);
 
-        // assert_eq!(" 12000", f64_to_char(12, "99V999")?);
-        // assert_eq!(" 12400", f64_to_char(12.4, "99V999")?);
-        // assert_eq!(" 125", f64_to_char(12.45, "99V9")?);
+        assert_eq!(" 12000", f64_to_char(12.0, "99V999")?);
+        assert_eq!(" 12400", f64_to_char(12.4, "99V999")?);
+        // 12.45 * 10 = 124.5, ties-to-even rounds to 124
+        assert_eq!(" 124", f64_to_char(12.45, "99V9")?);
+        // 12.55 * 10 = 125.5, ties-to-even rounds to 126
+        assert_eq!(" 126", f64_to_char(12.55, "99V9")?);
 
         Ok(())
     }
