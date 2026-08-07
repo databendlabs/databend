@@ -27,6 +27,31 @@ SELECT id, v FROM t1 order by id
 6 616161
 7 616161
 
+query T
+SELECT to_hex(to_binary(char(0, 65, 127, 128, 255), 'latin1'))
+----
+00417f80ff
+
+query T
+SELECT to_hex(to_binary(as_string(get(parse_json('{"v":"\u0000A\u007f\u0080\u00ff"}'), 'v')), 'latin1'))
+----
+00417f80ff
+
+query T
+SELECT to_hex(try_to_binary(char(128, 255), 'latin-1'))
+----
+80ff
+
+query T
+SELECT to_hex(try_to_binary(char(128, 255), 'iso-8859-1'))
+----
+80ff
+
+query ?
+SELECT try_to_binary(char(256), 'latin1')
+----
+NULL
+
 statement ok
 ALTER TABLE t1 MODIFY COLUMN v string
 
