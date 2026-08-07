@@ -757,6 +757,30 @@ mod tests {
     }
 
     #[test]
+    fn test_materialized_view_checker_rejects_non_deterministic_functions() -> Result<()> {
+        // Non-deterministic functions (and their aliases) must not appear in an MV definition,
+        // because refresh would recompute different values than the original query. Aliases such
+        // as current_timestamp/current_date resolve to canonical functions whose properties mark
+        // them non-deterministic, so they must be rejected just like the canonical names.
+        for sql in [
+            "SELECT amount, now() AS t FROM t WHERE amount > 0",
+            "SELECT amount, current_timestamp AS t FROM t WHERE amount > 0",
+            "SELECT amount, current_timestamp() AS t FROM t WHERE amount > 0",
+            "SELECT amount, today() AS d FROM t WHERE amount > 0",
+            "SELECT amount, current_date AS d FROM t WHERE amount > 0",
+            "SELECT amount, current_date() AS d FROM t WHERE amount > 0",
+            "SELECT amount, rand() AS r FROM t WHERE amount > 0",
+            "SELECT amount, uuid() AS u FROM t WHERE amount > 0",
+            "SELECT amount FROM t WHERE created_at > now()",
+            "SELECT amount FROM t WHERE created_at > current_timestamp",
+        ] {
+            let checker = check_query(sql)?;
+            assert!(!checker.is_supported(), "should reject: {sql}");
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_rewrite_non_aggregate_query() -> Result<()> {
         let (query, rewriter) =
             rewrite("SELECT amount AS value, category FROM t WHERE amount > 0")?;

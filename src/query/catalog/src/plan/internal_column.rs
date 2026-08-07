@@ -21,8 +21,10 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
 use databend_common_expression::FILE_BASENAME_COLUMN_ID;
 use databend_common_expression::FILE_CONTENT_KEY_COLUMN_ID;
 use databend_common_expression::FILE_LAST_MODIFIED_COLUMN_ID;
@@ -30,13 +32,19 @@ use databend_common_expression::FILE_PATH_COLUMN_ID;
 use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
 use databend_common_expression::FILENAME_COLUMN_ID;
 use databend_common_expression::FromData;
+use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
+use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
+use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
+use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_expression::SEGMENT_NAME_COLUMN_ID;
 use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
 use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
@@ -46,10 +54,13 @@ use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::number::F32;
+use databend_common_expression::types::number::NumberScalar;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 use roaring::RoaringTreemap;
+use uuid::Uuid;
 
 // Segment and Block id Bits when generate internal column `_row_id`
 // Assumes that the max block count of a segment is 2 ^ NUM_BLOCK_ID_BITS
@@ -161,6 +172,9 @@ pub enum InternalColumnType {
     FileBasename,
     FileContentKey,
     FileLastModified,
+
+    // Keep new variants at the end to preserve serialized enum ordering.
+    ChangeRowId,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -191,6 +205,7 @@ impl InternalColumn {
             InternalColumnType::BaseBlockIds => TableDataType::Array(Box::new(
                 TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::default_128())),
             )),
+            InternalColumnType::ChangeRowId => TableDataType::String,
             InternalColumnType::SearchMatched => TableDataType::Boolean,
             InternalColumnType::SearchScore => TableDataType::Number(NumberDataType::Float32),
             InternalColumnType::VectorScore => TableDataType::Number(NumberDataType::Float32),
@@ -224,6 +239,7 @@ impl InternalColumn {
             InternalColumnType::SnapshotName => SNAPSHOT_NAME_COLUMN_ID,
             InternalColumnType::BaseRowId => BASE_ROW_ID_COLUMN_ID,
             InternalColumnType::BaseBlockIds => BASE_BLOCK_IDS_COLUMN_ID,
+            InternalColumnType::ChangeRowId => CHANGE_ROW_ID_COLUMN_ID,
             InternalColumnType::SearchMatched => SEARCH_MATCHED_COLUMN_ID,
             InternalColumnType::SearchScore => SEARCH_SCORE_COLUMN_ID,
             InternalColumnType::VectorScore => VECTOR_SCORE_COLUMN_ID,
@@ -236,8 +252,23 @@ impl InternalColumn {
         }
     }
 
-    pub fn generate_column_values(&self, meta: &InternalColumnMeta, num_rows: usize) -> BlockEntry {
-        match &self.column_type {
+    pub fn dependencies(&self) -> &'static [ColumnId] {
+        match self.column_type {
+            InternalColumnType::ChangeRowId => {
+                &[ORIGIN_BLOCK_ID_COLUMN_ID, ORIGIN_BLOCK_ROW_NUM_COLUMN_ID]
+            }
+            _ => &[],
+        }
+    }
+
+    pub fn generate_column_values(
+        &self,
+        meta: &InternalColumnMeta,
+        block: &DataBlock,
+        schema: &TableSchema,
+    ) -> Result<BlockEntry> {
+        let num_rows = block.num_rows();
+        let entry = match &self.column_type {
             InternalColumnType::RowId => {
                 let block_id = meta.block_id as u64;
                 let seg_id = meta.segment_idx as u64;
@@ -270,26 +301,11 @@ impl InternalColumn {
                 num_rows,
             ),
             InternalColumnType::BaseRowId => {
-                let uuid =
-                    try_extract_uuid_str_from_path(&meta.block_location).unwrap_or_else(|e| {
-                        panic!(
-                            "Internal error: block_location {} should be a valid table object key: {}",
-                            &meta.block_location, e
-                        )
-                    });
-                let mut row_ids = Vec::with_capacity(num_rows);
-                if let Some(offsets) = &meta.offsets {
-                    for i in offsets.iter() {
-                        let row_id = format!("{}{:06x}", uuid, i);
-                        row_ids.push(row_id);
-                    }
-                } else {
-                    for i in 0..num_rows {
-                        let row_id = format!("{}{:06x}", uuid, i);
-                        row_ids.push(row_id);
-                    }
-                }
-                StringType::from_data(row_ids).into()
+                let (uuid, offsets) = base_row_id_components(meta, num_rows)?;
+                let base_row_ids = offsets
+                    .map(|offset| format!("{uuid}{offset:06x}"))
+                    .collect();
+                StringType::from_data(base_row_ids).into()
             }
             InternalColumnType::BaseBlockIds => {
                 assert!(meta.base_block_ids.is_some());
@@ -298,6 +314,49 @@ impl InternalColumn {
                     meta.base_block_ids.clone().unwrap(),
                     num_rows,
                 )
+            }
+            InternalColumnType::ChangeRowId => {
+                let origin_block_id_index = schema.index_of(ORIGIN_BLOCK_ID_COL_NAME)?;
+                let origin_row_num_index = schema.index_of(ORIGIN_BLOCK_ROW_NUM_COL_NAME)?;
+                if [origin_block_id_index, origin_row_num_index]
+                    .into_iter()
+                    .any(|index| index >= block.num_columns())
+                {
+                    return Err(ErrorCode::Internal(
+                        "change$row_id dependencies are missing from the input block",
+                    ));
+                }
+
+                let origin_block_ids = block.get_by_offset(origin_block_id_index);
+                let origin_row_nums = block.get_by_offset(origin_row_num_index);
+                let (base_uuid, base_offsets) = base_row_id_components(meta, num_rows)?;
+                let mut row_ids = Vec::with_capacity(num_rows);
+                for (row, base_offset) in base_offsets.enumerate() {
+                    let row_id = match origin_block_ids.index(row) {
+                        Some(ScalarRef::Null) => format!("{base_uuid}{base_offset:06x}"),
+                        Some(ScalarRef::Decimal(DecimalScalar::Decimal128(block_id, _))) => {
+                            let Some(ScalarRef::Number(NumberScalar::UInt64(row_num))) =
+                                origin_row_nums.index(row)
+                            else {
+                                return Err(ErrorCode::Internal(
+                                    "invalid _origin_block_row_num for change$row_id",
+                                ));
+                            };
+                            format!(
+                                "{}{:06x}",
+                                Uuid::from_u128(block_id as u128).as_simple(),
+                                row_num
+                            )
+                        }
+                        _ => {
+                            return Err(ErrorCode::Internal(
+                                "invalid _origin_block_id for change$row_id",
+                            ));
+                        }
+                    };
+                    row_ids.push(row_id);
+                }
+                StringType::from_data(row_ids).into()
             }
             InternalColumnType::SearchMatched => {
                 assert!(meta.matched_rows.is_some());
@@ -348,6 +407,24 @@ impl InternalColumn {
             | InternalColumnType::FileLastModified => {
                 todo!("generate_column_values not support for file related")
             }
-        }
+        };
+        Ok(entry)
     }
+}
+
+fn base_row_id_components(
+    meta: &InternalColumnMeta,
+    num_rows: usize,
+) -> Result<(&str, Box<dyn Iterator<Item = u64> + '_>)> {
+    let uuid = try_extract_uuid_str_from_path(&meta.block_location).map_err(|e| {
+        e.add_message(format!(
+            "invalid block location for internal row ID: {}",
+            meta.block_location
+        ))
+    })?;
+    let offsets: Box<dyn Iterator<Item = u64> + '_> = match &meta.offsets {
+        Some(offsets) => Box::new(offsets.iter()),
+        None => Box::new(0..num_rows as u64),
+    };
+    Ok((uuid, offsets))
 }
