@@ -202,8 +202,7 @@ impl Binder {
         // pre-window expressions behind aliases, but SRF aliases must already point
         // at the ProjectSet-produced columns instead of expanding back to raw SRFs.
         let mut semantic_alias = select_list.alias_catalog();
-        let group_by_aliases = semantic_alias
-            .group_by_bindings(self.ctx.get_settings().get_enable_group_by_column_first()?);
+        let group_by_aliases = semantic_alias.group_by_bindings();
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
