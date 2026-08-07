@@ -29,6 +29,7 @@ use super::AggregateFunctionSortAdaptor;
 use super::Aggregators;
 
 const STATE_SUFFIX: &str = "_state";
+const MERGE_STATE_SUFFIX: &str = "_merge_state";
 
 pub type AggregateFunctionCreator = Box<
     dyn Fn(
@@ -251,13 +252,9 @@ impl AggregateFunctionFactory {
             .case_insensitive_combinator_desc
             .iter()
             .find_map(|(suffix, desc)| {
-                name.strip_suffix(suffix)
-                    .map(|nested_name| (nested_name, suffix, desc))
-            })
-            .and_then(|(nested_name, suffix, desc)| {
-                self.case_insensitive_desc
-                    .get(nested_name)
-                    .map(|nested_desc| (nested_name, suffix, nested_desc, desc))
+                let nested_name = name.strip_suffix(suffix)?;
+                let nested_desc = self.case_insensitive_desc.get(nested_name)?;
+                Some((nested_name, suffix, nested_desc, desc))
             })
         else {
             return Err(ErrorCode::UnknownAggregateFunction(format!(
@@ -265,7 +262,7 @@ impl AggregateFunctionFactory {
             )));
         };
 
-        let (nested, features) = if suffix == STATE_SUFFIX {
+        let (nested, features) = if suffix == STATE_SUFFIX || suffix == MERGE_STATE_SUFFIX {
             let nested = (*desc.creator)(
                 nested_name,
                 params.clone(),

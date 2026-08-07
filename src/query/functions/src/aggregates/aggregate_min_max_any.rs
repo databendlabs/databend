@@ -392,7 +392,8 @@ fn need_manual_drop_state(data_type: &DataType) -> bool {
         | DataType::Interval
         | DataType::Opaque(_)
         | DataType::Generic(_)
-        | DataType::StageLocation => false,
+        | DataType::StageLocation
+        | DataType::AggregateState(_) => false,
     }
 }
 

@@ -31,7 +31,6 @@ use databend_common_ast::ast::MergeOption;
 use databend_common_ast::ast::MutationSource;
 use databend_common_ast::ast::MutationUpdateExpr;
 use databend_common_ast::ast::Query;
-use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
@@ -42,7 +41,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableIdent;
@@ -406,7 +404,6 @@ impl<'a> MaterializedViewRefresh<'a> {
         query: &mut Query,
         changes_query: Query,
         change_action: &str,
-        has_source_row_id: bool,
     ) -> Result<()> {
         let SetExpr::Select(select) = &mut query.body else {
             return Err(ErrorCode::Internal(
@@ -430,28 +427,6 @@ impl<'a> MaterializedViewRefresh<'a> {
             pivot: None,
             unpivot: None,
         };
-
-        if has_source_row_id {
-            let mut source_row_id_target_count = 0;
-            for target in &mut select.select_list {
-                let SelectTarget::AliasedExpr {
-                    expr,
-                    alias: Some(alias),
-                } = target
-                else {
-                    continue;
-                };
-                if alias.name == MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN {
-                    source_row_id_target_count += 1;
-                    **expr = Self::column_ref(None, CHANGE_ROW_ID_COL_NAME);
-                }
-            }
-            if source_row_id_target_count != 1 {
-                return Err(ErrorCode::InvalidMaterializedView(format!(
-                    "non-aggregate materialized view physical query must have exactly one source row ID column, found {source_row_id_target_count}",
-                )));
-            }
-        }
 
         let insert_filter = Expr::BinaryOp {
             span: None,
@@ -480,13 +455,13 @@ impl<'a> MaterializedViewRefresh<'a> {
             physical_query,
             "invalid materialized view physical query",
         )?;
-        Self::apply_changes_query(&mut upserts, changes_query.clone(), "INSERT", true)?;
+        Self::apply_changes_query(&mut upserts, changes_query.clone(), "INSERT")?;
 
         let mut deletes = parse_materialized_view_query(
             physical_query,
             "invalid materialized view physical query",
         )?;
-        Self::apply_changes_query(&mut deletes, changes_query.clone(), "DELETE", true)?;
+        Self::apply_changes_query(&mut deletes, changes_query.clone(), "DELETE")?;
 
         let row_id = Identifier::from_name(None, MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN);
         parse_materialized_view_query(
@@ -663,7 +638,7 @@ impl<'a> MaterializedViewRefresh<'a> {
                 physical_query,
                 "invalid materialized view physical query",
             )?;
-            Self::apply_changes_query(&mut query, changes_query, "INSERT", !is_aggregating)?;
+            Self::apply_changes_query(&mut query, changes_query, "INSERT")?;
             self.execute_statement(&Statement::Insert(InsertStmt {
                 hints: None,
                 with: None,
@@ -749,7 +724,7 @@ impl<'a> MaterializedViewRefresh<'a> {
                     physical_query,
                     "invalid materialized view physical query",
                 )?;
-                Self::apply_changes_query(&mut query, changes_query, "INSERT", !is_aggregating)?;
+                Self::apply_changes_query(&mut query, changes_query, "INSERT")?;
                 self.execute_statement(&Statement::Insert(InsertStmt {
                     hints: None,
                     with: None,

@@ -173,6 +173,10 @@ impl From<&TableField> for Field {
                     *size as _,
                 )
             }
+            TableDataType::AggregateState { state_type, .. } => {
+                let field = TableField::new(&f.name, state_type.as_ref().clone());
+                return Field::from(&field).with_name(&f.name);
+            }
 
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,

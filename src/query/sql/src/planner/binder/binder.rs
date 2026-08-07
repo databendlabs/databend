@@ -29,6 +29,7 @@ use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -103,6 +104,8 @@ pub struct Binder {
     /// Only that CTE should treat self references as `RecursiveCteScan`.
     pub bind_recursive_cte: Option<String>,
     pub m_cte_table_name: HashMap<String, String>,
+    /// Binder-local tables used by internal rewrites such as MV CHANGE_TRACKING reads.
+    pub internal_tables: HashMap<(String, String, String), Arc<dyn Table>>,
 
     pub enable_result_cache: bool,
 
@@ -130,6 +133,7 @@ impl Binder {
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: None,
             m_cte_table_name: HashMap::new(),
+            internal_tables: HashMap::new(),
             enable_result_cache,
             subquery_executor: None,
         }

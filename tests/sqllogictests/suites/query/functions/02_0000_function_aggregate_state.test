@@ -1,9 +1,280 @@
-query IT
-select max_state(number).2, typeof(max_state(number)) from numbers(100);
+query T
+select typeof(max_state(number)) from numbers(100);
 ----
-99 TUPLE(BOOLEAN, UINT64, BOOLEAN)
+AGGREGATESTATE(MAX, UINT64)
 
-query IT
-select sum_state(number).1, typeof(sum_state(number)) from numbers(10000);
+query T
+select typeof(sum_state(number)) from numbers(10000);
 ----
-49995000 TUPLE(UINT64, BOOLEAN)
+AGGREGATESTATE(SUM, UINT64)
+
+query ITIT
+select sum_state(number).1,
+       typeof(sum_state(number).1),
+       max_state(number).2,
+       typeof(max_state(number).2)
+from numbers(100);
+----
+4950 BIGINT UNSIGNED 99 BIGINT UNSIGNED
+
+query I
+select sum_merge(state)
+from (
+    select number % 2, sum_state(number) as state
+    from numbers(10000)
+    group by number % 2
+);
+----
+49995000
+
+query RT
+select sum_merge(state), typeof(sum_merge(state))
+from (
+    select number % 2, sum_state(to_decimal(number, 10, 2)) as state
+    from numbers(10)
+    group by number % 2
+);
+----
+45.00 DECIMAL(18, 2) NULL
+
+query II
+select max_merge(max_state), min_merge(min_state)
+from (
+    select number % 2, max_state(number) as max_state, min_state(number) as min_state
+    from numbers(100)
+    group by number % 2
+);
+----
+99 0
+
+query I
+select sum_merge(merged_state)
+from (
+    select sum_merge_state(state) as merged_state
+    from (
+        select number % 4, sum_state(number) as state
+        from numbers(10000)
+        group by number % 4
+    )
+);
+----
+49995000
+
+query T
+select typeof(sum_merge_state(state))
+from (
+    select number % 4, sum_state(number) as state
+    from numbers(10000)
+    group by number % 4
+);
+----
+AGGREGATESTATE(SUM, UINT64)
+
+query II
+select max_merge(max_merged_state), min_merge(min_merged_state)
+from (
+    select max_merge_state(max_state) as max_merged_state,
+           min_merge_state(min_state) as min_merged_state
+    from (
+        select number % 4, max_state(number) as max_state, min_state(number) as min_state
+        from numbers(100)
+        group by number % 4
+    )
+);
+----
+99 0
+
+query IIII
+select sum_merge(sum_state),
+       min_merge(min_state),
+       max_merge(max_state),
+       count_merge(count_state)
+from (
+    select sum_merge_state(sum_state) as sum_state,
+           min_merge_state(min_state) as min_state,
+           max_merge_state(max_state) as max_state,
+           count_merge_state(count_state) as count_state
+    from (
+        select number % 4,
+               sum_state(number) as sum_state,
+               min_state(number) as min_state,
+               max_state(number) as max_state,
+               count_state(number) as count_state
+        from numbers(100)
+        group by number % 4
+    )
+);
+----
+4950 0 99 100
+
+query I
+select arg_min_merge(state)
+from (
+    select arg_min_merge_state(state) as state
+    from (
+        select number % 4, arg_min_state(number, 100 - number) as state
+        from numbers(100)
+        group by number % 4
+    )
+);
+----
+99
+
+query T
+select typeof(state)
+from (
+    select arg_min_merge_state(state) as state
+    from (
+        select number % 4, arg_min_state(number, 100 - number) as state
+        from numbers(100)
+        group by number % 4
+    )
+);
+----
+AGGREGATESTATE(ARG_MIN, UINT64, INT64)
+
+query T
+select typeof(quantile_tdigest_state(0.5)(number))
+from numbers(100);
+----
+AGGREGATESTATE(QUANTILE_TDIGEST(0.5), UINT64)
+
+query R
+select quantile_tdigest_merge(0.5)(state)
+from (
+    select quantile_tdigest_merge_state(0.5)(state) as state
+    from (
+        select number % 4, quantile_tdigest_state(0.5)(number) as state
+        from numbers(100)
+        group by number % 4
+    )
+);
+----
+50.0
+
+statement ok
+drop table if exists aggregate_state_parameter_test
+
+statement ok
+create table aggregate_state_parameter_test as
+select number % 4 as bucket,
+       quantile_tdigest_state(0.5)(number) as state
+from numbers(100)
+group by bucket
+
+query T
+select typeof(state)
+from aggregate_state_parameter_test
+limit 1;
+----
+AGGREGATESTATE(QUANTILE_TDIGEST(0.5), UINT64) NULL
+
+query R
+select quantile_tdigest_merge(0.5)(state)
+from aggregate_state_parameter_test;
+----
+50.0
+
+statement error 1006
+select quantile_tdigest_merge(0.9)(state)
+from aggregate_state_parameter_test;
+
+statement error 1006
+select quantile_tdigest_merge_state(0.9)(state)
+from aggregate_state_parameter_test;
+
+statement ok
+drop table aggregate_state_parameter_test
+
+statement ok
+drop table if exists aggregate_state_combinator_test
+
+statement ok
+create table aggregate_state_combinator_test as
+select number % 4 as bucket,
+       sum_state(number) as sum_state,
+       min_state(number) as min_state,
+       max_state(number) as max_state,
+       count_state(number) as count_state
+from numbers(100)
+group by bucket
+
+query TTTT
+select typeof(sum_state), typeof(min_state), typeof(max_state), typeof(count_state)
+from aggregate_state_combinator_test
+limit 1
+----
+AGGREGATESTATE(SUM, UINT64) NULL AGGREGATESTATE(MIN, UINT64) NULL AGGREGATESTATE(MAX, UINT64) NULL AGGREGATESTATE(COUNT, UINT64) NULL
+
+query IIII
+select sum_merge(sum_state), min_merge(min_state), max_merge(max_state), count_merge(count_state)
+from aggregate_state_combinator_test
+----
+4950 0 99 100
+
+query III
+select (select count() from (
+           select sum_state
+           from aggregate_state_combinator_test
+           group by sum_state
+       )),
+       count(distinct sum_state),
+       count_if(sum_state is not null)
+from aggregate_state_combinator_test;
+----
+4 4 4
+
+query I
+select count()
+from (
+    select sum_state
+    from aggregate_state_combinator_test
+    order by sum_state
+);
+----
+4
+
+statement ok
+drop table aggregate_state_combinator_test
+
+statement ok
+drop table if exists legacy_aggregate_state_combinator_test
+
+statement ok
+create table legacy_aggregate_state_combinator_test as
+select bucket,
+       tuple(sum_state.1, sum_state.2) as sum_state,
+       tuple(min_state.1, min_state.2, min_state.3) as min_state,
+       tuple(max_state.1, max_state.2, max_state.3) as max_state,
+       tuple(count_state.1) as count_state,
+       tuple(arg_min_state.1, arg_min_state.2, arg_min_state.3, arg_min_state.4) as arg_min_state
+from (
+    select number % 4 as bucket,
+           sum_state(number) as sum_state,
+           min_state(number) as min_state,
+           max_state(number) as max_state,
+           count_state(number) as count_state,
+           arg_min_state(number, 100 - number) as arg_min_state
+    from numbers(100)
+    group by bucket
+)
+
+query TT
+select typeof(sum_state), typeof(arg_min_state)
+from legacy_aggregate_state_combinator_test
+limit 1;
+----
+TUPLE(UINT64, BOOLEAN) NULL TUPLE(BOOLEAN, INT64, UINT64, BOOLEAN) NULL
+
+query IIIII
+select sum_merge(sum_state),
+       min_merge(min_state),
+       max_merge(max_state),
+       count_merge(count_state),
+       arg_min_merge(arg_min_state)
+from legacy_aggregate_state_combinator_test;
+----
+4950 0 99 100 99
+
+statement ok
+drop table legacy_aggregate_state_combinator_test
