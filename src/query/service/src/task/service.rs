@@ -221,12 +221,7 @@ impl TaskService {
             let (_, task_message) = result?;
             let task_key = TaskMessageIdent::new(tenant, task_message.key());
 
-            // Delete cleanup updates shared metadata, so it must run even if the
-            // task's assigned warehouse currently has no live query node.
             let is_delete = matches!(&task_message, TaskMessage::DeleteTask(_, _, _));
-            if is_delete && self.create_context(None).await?.get_cluster().unassign {
-                continue;
-            }
             if !is_delete {
                 if let Some(WarehouseOptions {
                     warehouse: Some(warehouse),
@@ -515,6 +510,8 @@ impl TaskService {
                     });
                 }
                 TaskMessage::DeleteTask(task_name, _, task_id) => {
+                    // Every node may still hold a local schedule for this task. Cancel it before
+                    // an unassigned node skips the shared metadata cleanup below.
                     if task_id.is_none_or(|task_id| {
                         scheduled_tasks
                             .get(&task_name)
@@ -523,6 +520,9 @@ impl TaskService {
                         if let Some((_, token)) = scheduled_tasks.remove(&task_name) {
                             token.cancel();
                         }
+                    }
+                    if self.create_context(None).await?.get_cluster().unassign {
+                        continue;
                     }
                     if task_mgr
                         .accept(&task_key)
