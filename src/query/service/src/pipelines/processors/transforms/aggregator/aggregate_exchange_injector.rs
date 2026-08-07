@@ -14,40 +14,31 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline::core::Pipeline;
-use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_settings::FlightCompression;
 
 use crate::physical_plans::AggregateShuffleMode;
-use crate::pipelines::processors::transforms::aggregator::AggregateBucketScatter;
-use crate::pipelines::processors::transforms::aggregator::AggregateRowScatter;
+use crate::pipelines::processors::transforms::aggregator::AggregateBucketPartitionStream;
+use crate::pipelines::processors::transforms::aggregator::AggregateExchangeDataCodec;
+use crate::pipelines::processors::transforms::aggregator::AggregateRowPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
-use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
-use crate::servers::flight::v1::exchange::ExchangeSorting;
-use crate::servers::flight::v1::exchange::MergeExchangeParams;
-use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
-use crate::servers::flight::v1::scatter::FlightScatter;
+use crate::servers::flight::v1::exchange::GlobalShuffleExchange;
+use crate::servers::flight::v1::network::ExchangeDataCodec;
+use crate::servers::flight::v1::partition::PartitionStream;
 use crate::sessions::QueryContext;
 
 pub struct AggregateInjector {
-    ctx: Arc<QueryContext>,
     aggregator_params: Arc<AggregatorParams>,
     shuffle_mode: AggregateShuffleMode,
 }
 
 impl AggregateInjector {
     pub fn create(
-        ctx: Arc<QueryContext>,
         params: Arc<AggregatorParams>,
         shuffle_mode: AggregateShuffleMode,
     ) -> Arc<dyn ExchangeInjector> {
         Arc::new(AggregateInjector {
-            ctx,
             aggregator_params: params,
             shuffle_mode,
         })
@@ -55,93 +46,39 @@ impl AggregateInjector {
 }
 
 impl ExchangeInjector for AggregateInjector {
-    fn flight_scatter(
+    fn exchange_data_codec(&self) -> Arc<dyn ExchangeDataCodec> {
+        AggregateExchangeDataCodec::create(self.aggregator_params.clone())
+    }
+
+    fn partition_streams(
         &self,
         _: &Arc<QueryContext>,
-        exchange: &DataExchange,
-    ) -> Result<Arc<Box<dyn FlightScatter>>> {
-        match exchange {
-            DataExchange::Merge(_) => unreachable!(),
-            DataExchange::Broadcast(_) => unreachable!(),
-            DataExchange::GlobalShuffleExchange(_) => unreachable!(),
-            DataExchange::NodeToNodeExchange(exchange) => match self.shuffle_mode {
-                AggregateShuffleMode::Row => Ok(Arc::new(Box::new(AggregateRowScatter {
-                    buckets: exchange.destination_ids.len(),
-                    aggregate_params: self.aggregator_params.clone(),
-                }))),
-                AggregateShuffleMode::Bucket(_) => Ok(Arc::new(Box::new(AggregateBucketScatter {
-                    buckets: exchange.destination_ids.len(),
-                }))),
-            },
-        }
-    }
-
-    fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>> {
-        None
-    }
-
-    fn apply_merge_serializer(
-        &self,
-        _: &MergeExchangeParams,
-        _compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let params = self.aggregator_params.clone();
-
-        pipeline.add_transform(|input, output| {
-            TransformAggregateSerializer::try_create(input, output, params.clone())
-        })
-    }
-
-    fn apply_shuffle_serializer(
-        &self,
-        shuffle_params: &ShuffleExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let params = self.aggregator_params.clone();
-
-        let local_id = &shuffle_params.executor_id;
-        let local_pos = shuffle_params
-            .destination_ids
+        exchange: &GlobalShuffleExchange,
+        streams: usize,
+        _: usize,
+        _: usize,
+    ) -> Result<Vec<Box<dyn PartitionStream>>> {
+        let partitions = exchange
+            .destination_channels
             .iter()
-            .position(|x| x == local_id)
-            .unwrap();
-
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                TransformExchangeAggregateSerializer::try_create(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    params.clone(),
-                    compression,
-                    local_pos,
-                )?,
-            ))
-        })?;
-
-        Ok(())
-    }
-
-    fn apply_merge_deserializer(
-        &self,
-        params: &MergeExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            TransformAggregateDeserializer::try_create(input, output, &params.schema)
-        })
-    }
-
-    fn apply_shuffle_deserializer(
-        &self,
-        params: &ShuffleExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            TransformAggregateDeserializer::try_create(input, output, &params.schema)
-        })?;
-        Ok(())
+            .map(|(_, channels)| channels.len())
+            .sum();
+        let expected_partitions = self.shuffle_mode.parallelism();
+        if partitions != expected_partitions {
+            return Err(ErrorCode::Internal(format!(
+                "Aggregate shuffle has {partitions} destination lanes, expected {expected_partitions}",
+            )));
+        }
+        Ok((0..streams)
+            .map(|_| match self.shuffle_mode {
+                AggregateShuffleMode::Row(_) => Box::new(AggregateRowPartitionStream {
+                    buckets: partitions,
+                    aggregate_params: self.aggregator_params.clone(),
+                }) as Box<dyn PartitionStream>,
+                AggregateShuffleMode::Bucket(_) => Box::new(AggregateBucketPartitionStream {
+                    buckets: partitions,
+                }) as Box<dyn PartitionStream>,
+            })
+            .collect())
     }
 }

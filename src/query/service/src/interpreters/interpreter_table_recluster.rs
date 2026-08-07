@@ -75,7 +75,6 @@ pub struct ReclusterTableInterpreter {
     plan: ReclusterPlan,
     lock_opt: LockTableOption,
 }
-
 impl ReclusterTableInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
@@ -420,6 +419,7 @@ impl ReclusterTableInterpreter {
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
+                destination_parallelism: None,
                 ignore_exchange: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             });

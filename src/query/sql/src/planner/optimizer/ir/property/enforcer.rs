@@ -70,9 +70,6 @@ impl Enforcer for DistributionEnforcer {
         match &self.0 {
             Distribution::Serial => Ok(Exchange::Merge.into()),
             Distribution::Broadcast => Ok(Exchange::Broadcast.into()),
-            Distribution::NodeToNodeHash(hash_keys) => {
-                Ok(Exchange::NodeToNodeHash(hash_keys.clone()).into())
-            }
             Distribution::GlobalHash(hash_keys) => {
                 Ok(Exchange::GlobalHash(hash_keys.clone()).into())
             }
@@ -131,11 +128,7 @@ impl PropertyEnforcer {
                 &mut probe_required_property[0].distribution,
                 &mut build_required_property[0].distribution,
             ) {
-                (
-                    Distribution::NodeToNodeHash(probe_keys),
-                    Distribution::NodeToNodeHash(build_keys),
-                )
-                | (Distribution::GlobalHash(probe_keys), Distribution::GlobalHash(build_keys)) => {
+                (Distribution::GlobalHash(probe_keys), Distribution::GlobalHash(build_keys)) => {
                     Some((probe_keys, build_keys))
                 }
                 _ => None,

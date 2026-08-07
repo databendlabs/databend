@@ -49,7 +49,6 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
-use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
 use crate::sessions::TableContext;
@@ -150,10 +149,7 @@ impl IPhysicalPlan for AggregateFinal {
         let max_block_rows = builder.settings.get_max_block_size()? as usize;
         let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
 
-        let mut is_cluster_aggregate = false;
-        if ExchangeSource::check_physical_plan(&self.input) {
-            is_cluster_aggregate = true;
-        }
+        let is_cluster_aggregate = ExchangeSource::check_physical_plan(&self.input);
 
         let params = PipelineBuilder::build_aggregator_params(
             self.before_group_by_schema.clone(),
@@ -177,16 +173,10 @@ impl IPhysicalPlan for AggregateFinal {
             return Ok(());
         }
 
-        let old_inject = builder.exchange_injector.clone();
-
-        if ExchangeSource::check_physical_plan(&self.input) {
-            builder.exchange_injector = AggregateInjector::create(
-                builder.ctx.clone(),
-                params.clone(),
-                self.shuffle_mode.clone(),
-            );
-        }
-
+        // Only a direct Aggregate exchange partitions the input for the final
+        // workers. An ExchangeSource nested below another operator (for example,
+        // a Merge exchange below a join) does not satisfy this contract.
+        let input_partitioned = is_cluster_aggregate;
         self.input.build_pipeline(builder)?;
 
         // For distributed plans, since we are unaware of the data size processed by other nodes,
@@ -196,13 +186,13 @@ impl IPhysicalPlan for AggregateFinal {
             false => builder.main_pipeline.output_len(),
         };
 
-        builder.exchange_injector = old_inject;
         build_partition_bucket(
             &mut builder.main_pipeline,
             params.clone(),
             after_group_parallel,
             builder.ctx.clone(),
             self.shuffle_mode.clone(),
+            input_partitioned,
         )
     }
 }
@@ -249,7 +239,7 @@ impl PhysicalPlanBuilder {
         };
 
         // 2. Build physical plan.
-        let input = self.build(s_expr.child(0)?, required).await?;
+        let mut input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
         let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
 
@@ -270,8 +260,15 @@ impl PhysicalPlanBuilder {
                     group_by_shuffle_mode = "before_merge".to_string();
                 }
 
+                // In before_partial mode the exchange transports ordinary
+                // input rows with the default codec. Mark it explicitly so
+                // the whole distributed Aggregate uses the same channel
+                // orchestration without changing where aggregation occurs.
                 let is_cluster_aggregate = Exchange::check_physical_plan(&input);
                 let shuffle_mode = determine_shuffle_mode(self.ctx.clone(), is_cluster_aggregate)?;
+                if let Some(exchange) = Exchange::from_mut_physical_plan(&mut input) {
+                    exchange.destination_parallelism = Some(shuffle_mode.parallelism());
+                }
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     // ignore `_grouping_id`.
@@ -358,6 +355,7 @@ impl PhysicalPlanBuilder {
                         kind,
                         ignore_exchange: false,
                         allow_adjust_parallelism: true,
+                        destination_parallelism: Some(shuffle_mode.parallelism()),
                         meta: PhysicalPlanMeta::new("Exchange"),
                         input: PhysicalPlan::new(aggregate_partial),
                     })
@@ -486,8 +484,9 @@ impl PhysicalPlanBuilder {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum AggregateShuffleMode {
-    // calculate shuffle destination based on hash of rows
-    Row,
+    // Calculate the global shuffle destination based on the hash of rows.
+    // The value is the total number of lanes in this shuffle.
+    Row(u64),
     // calculate shuffle destination based on id of bucket
     // cpu_nums in cluster stored in it
     Bucket(u64),
@@ -496,8 +495,16 @@ pub enum AggregateShuffleMode {
 impl AggregateShuffleMode {
     pub fn determine_radix_bits(&self) -> u64 {
         match &self {
-            AggregateShuffleMode::Row => 0,
+            AggregateShuffleMode::Row(_) => 0,
             AggregateShuffleMode::Bucket(hint) => hint.trailing_zeros() as u64,
+        }
+    }
+
+    pub fn parallelism(&self) -> usize {
+        match self {
+            AggregateShuffleMode::Row(partitions) | AggregateShuffleMode::Bucket(partitions) => {
+                *partitions as usize
+            }
         }
     }
 }
@@ -513,23 +520,24 @@ fn determine_shuffle_mode(
     let force_shuffle_mode = settings.get_force_aggregate_shuffle_mode()?;
     let thread_nums = settings.get_max_threads()?;
 
-    let parallelism = if is_cluster_aggregate {
-        (ctx.get_cluster().nodes.len() as u64 * thread_nums).next_power_of_two()
+    let row_parallelism = if is_cluster_aggregate {
+        ctx.get_cluster().nodes.len() as u64 * thread_nums
     } else {
-        thread_nums.next_power_of_two()
+        thread_nums
     };
+    let bucket_parallelism = row_parallelism.next_power_of_two();
 
     let use_bucket = match force_shuffle_mode.as_str() {
         "row" => false,
         "bucket" => true,
-        "auto" => parallelism <= ROW_SHUFFLE_ENABLE_THRESHOLD,
+        "auto" => bucket_parallelism <= ROW_SHUFFLE_ENABLE_THRESHOLD,
         _ => false,
     };
 
     let shuffle_mode = if use_bucket {
-        AggregateShuffleMode::Bucket(parallelism)
+        AggregateShuffleMode::Bucket(bucket_parallelism)
     } else {
-        AggregateShuffleMode::Row
+        AggregateShuffleMode::Row(row_parallelism)
     };
 
     Ok(shuffle_mode)

@@ -23,14 +23,14 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 
+use super::PartitionSendSource;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::GlobalExchangeParams;
 use super::exchange_params::MergeExchangeParams;
 use super::exchange_source_reader::ExchangeSourceReader;
-use super::hash_send_source::HashSendSource;
+use super::serde::TransformExchangeDeserializer;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
-use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
 
@@ -38,7 +38,6 @@ use crate::sessions::TableContextCluster;
 pub fn via_exchange_source(
     ctx: Arc<QueryContext>,
     params: &MergeExchangeParams,
-    injector: Arc<dyn ExchangeInjector>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
     // UpstreamTransform --->  DummyTransform   --->    DummyTransform      --->  DownstreamTransform
@@ -90,23 +89,26 @@ pub fn via_exchange_source(
         pipeline.try_resize(last_output_len)?;
     }
 
-    injector.apply_merge_deserializer(params, pipeline)
+    pipeline.add_transform(|input, output| {
+        Ok(TransformExchangeDeserializer::create(
+            input,
+            output,
+            &params.schema,
+        ))
+    })
 }
 
-/// Add HashSendSource receivers to the pipeline for hash exchange source-only path.
-/// Existing pipeline outputs pass through as DummyTransforms; remote InboundChannels
-/// are added as HashSendSource processors.
+/// Add PartitionSendSource receivers to the pipeline for a hash exchange source-only path.
+/// Existing pipeline outputs pass through as dummy transforms.
 #[allow(dead_code)]
 pub fn via_hash_exchange_source(
     _ctx: &Arc<QueryContext>,
     params: &GlobalExchangeParams,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
-    let query_id = &params.query_id;
-    let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
-
-    let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+    let channel_set =
+        exchange_manager.get_exchange_channel_set(&params.query_id, &params.exchange_id)?;
     let waker = pipeline.get_waker();
 
     let last_output_len = pipeline.output_len();
@@ -124,10 +126,10 @@ pub fn via_hash_exchange_source(
         ));
     }
 
-    for idx in 0..num_receivers {
-        items.push(HashSendSource::create_item(
-            idx,
-            channel_set.create_receiver(idx, &params.schema),
+    for worker_id in 0..num_receivers {
+        items.push(PartitionSendSource::create_item(
+            worker_id,
+            channel_set.create_receiver_with_codec(worker_id, &params.schema, params.codec.clone()),
             waker.clone(),
         ));
     }
