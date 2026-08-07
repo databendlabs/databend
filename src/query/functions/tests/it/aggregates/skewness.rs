@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use databend_common_exception::Result;
 use databend_common_expression::FromData;
 use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
@@ -7,6 +8,8 @@ use databend_common_expression::types::UInt64Type;
 use goldenfile::Mint;
 
 use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_function_v2_support::assert_single_float_close;
+use super::aggregate_function_v2_support::eval_v2_aggr;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -57,4 +60,15 @@ fn test_skewness_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("skewness_group_by.txt").unwrap();
     run_skewness_cases(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_v2_skewness_matches_expected_formula() -> Result<()> {
+    let entries = [UInt64Type::from_data(vec![1, 2, 3, 10]).into()];
+    let direct_v2 = eval_v2_aggr("skewness", &entries, 4, false)?;
+    let serialized_v2 = eval_v2_aggr("skewness", &entries, 4, true)?;
+
+    assert_single_float_close(&direct_v2, 1.763632614803888);
+    assert_eq!(serialized_v2, direct_v2);
+    Ok(())
 }

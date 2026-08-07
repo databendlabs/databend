@@ -418,6 +418,8 @@ where A: TypeCheckAdapter
                 &BUILTIN_FUNCTIONS,
             )?;
 
+            let _ = arguments.pop();
+            let _ = arg_types.pop();
             vec![Scalar::Number(NumberScalar::UInt64(max_num_buckets))]
         } else {
             params

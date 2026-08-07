@@ -4291,6 +4291,7 @@ dependencies = [
  "glob",
  "goldenfile",
  "hex",
+ "inventory",
  "itertools 0.13.0",
  "jaq-core",
  "jaq-json",
