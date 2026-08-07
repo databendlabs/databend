@@ -186,7 +186,7 @@ async fn try_rebuild_req(
             storage_class,
             table_info.desc.as_str(),
         )?;
-        let default_cluster_key_id = latest_table.cluster_key_id();
+        let cluster_key_info = latest_table.cluster_key_info();
         let latest_snapshot = latest_table.read_table_snapshot().await?;
         let (update_table_meta_req, _) = req
             .update_table_metas
@@ -237,7 +237,7 @@ async fn try_rebuild_req(
         let s = merge_statistics(
             new_snapshot.summary(),
             &latest_snapshot.summary(),
-            default_cluster_key_id,
+            cluster_key_info,
         );
         let mut merged_summary = deduct_statistics(&s, &base_snapshot.summary());
         let mut additional_stats_meta = latest_snapshot.additional_stats_meta();
@@ -328,6 +328,7 @@ async fn try_rebuild_req(
             merged_summary,
             merged_segments,
             latest_table.cluster_key_meta(),
+            latest_table.cluster_type(),
             None,
             table_meta_timestamps,
         )?;

@@ -41,6 +41,7 @@ use crate::operations::recluster::passes_depth_gate;
 use crate::operations::recluster::select_scalar_segments;
 use crate::operations::recluster::task_candidate;
 use crate::statistics::VectorClusterInfo;
+use crate::statistics::cluster_stats_scalar_overlap;
 use crate::statistics::vector_cluster_info_from_column;
 
 /// Vector cluster-key recluster behavior.
@@ -296,7 +297,7 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         for left in 0..block_count {
             for right in left + 1..block_count {
                 if require_scalar_overlap
-                    && !scalar_cluster_stats_overlap(
+                    && !cluster_stats_scalar_overlap(
                         blocks[indices[left]].stats(),
                         blocks[indices[right]].stats(),
                     )
@@ -513,7 +514,7 @@ fn build_vector_segment_overlaps(
     for left in 0..segments.len() {
         for right in left + 1..segments.len() {
             if require_scalar_overlap
-                && !scalar_cluster_stats_overlap(&segments[left].stats, &segments[right].stats)
+                && !cluster_stats_scalar_overlap(&segments[left].stats, &segments[right].stats)
             {
                 continue;
             }
@@ -544,36 +545,6 @@ fn build_vector_segment_overlaps(
         }
     }
     Ok(overlaps)
-}
-
-fn scalar_cluster_stats_overlap(left: &ClusterStatistics, right: &ClusterStatistics) -> bool {
-    let left_min = left.min();
-    let left_max = left.max();
-    let right_min = right.min();
-    let right_max = right.max();
-    if left_min.len() != left_max.len()
-        || left_min.len() != right_min.len()
-        || left_min.len() != right_max.len()
-    {
-        return true;
-    }
-    left_min
-        .iter()
-        .zip(left_max.iter())
-        .zip(right_min.iter().zip(right_max.iter()))
-        .all(|((left_min, left_max), (right_min, right_max))| {
-            scalar_le(left_min, right_max) && scalar_le(right_min, left_max)
-        })
-}
-
-fn scalar_le(
-    left: &databend_common_expression::Scalar,
-    right: &databend_common_expression::Scalar,
-) -> bool {
-    matches!(
-        left.partial_cmp(right),
-        None | Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
-    )
 }
 
 fn block_meta_vector_stats<'a>(

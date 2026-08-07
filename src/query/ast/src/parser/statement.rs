@@ -97,6 +97,28 @@ fn match_ident_text(text: &'static str) -> impl FnMut(Input) -> IResult<()> {
     }
 }
 
+pub fn cluster_type(i: Input) -> IResult<ClusterType> {
+    alt((
+        value(ClusterType::Linear, rule! { LINEAR }),
+        value(ClusterType::Hilbert, rule! { HILBERT }),
+    ))
+    .parse(i)
+}
+
+/// Parse a cluster key together with its physical clustering type.
+pub fn cluster_option(i: Input) -> IResult<ClusterOption> {
+    map(
+        rule! {
+            #cluster_type? ~ "(" ~ #comma_separated_list1(expr) ~ ")"
+        },
+        |(cluster_type, _, cluster_exprs, _)| ClusterOption {
+            cluster_type: cluster_type.unwrap_or(ClusterType::Linear),
+            cluster_exprs,
+        },
+    )
+    .parse(i)
+}
+
 pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain_options = map(
         rule! {
@@ -1145,7 +1167,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( #engine )?
             ~ ( #uri_location )?
             ~ #create_table_partition_by?
-            ~ ( CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ ( CLUSTER ~ ^BY ~ ^#cluster_option )?
             ~ ( #table_option )?
             ~ ( PROPERTIES ~  #connection_options )?
             ~ ( AS ~ ^#query )?
@@ -1186,9 +1208,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 source,
                 engine,
                 uri_location,
-                cluster_by: opt_cluster_by.map(|(_, _, _, _, exprs, _)| ClusterOption {
-                    cluster_exprs: exprs,
-                }),
+                cluster_by: opt_cluster_by.map(|(_, _, cluster_by)| cluster_by),
                 table_options,
                 partition_by,
                 table_properties: opt_table_properties.map(|(_, properties)| properties),
@@ -5036,11 +5056,9 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let alter_table_cluster_key = map(
         rule! {
-            CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+            CLUSTER ~ ^BY ~ ^#cluster_option
         },
-        |(_, _, _, _, cluster_exprs, _)| AlterTableAction::AlterTableClusterKey {
-            cluster_by: ClusterOption { cluster_exprs },
-        },
+        |(_, _, cluster_by)| AlterTableAction::AlterTableClusterKey { cluster_by },
     );
 
     let drop_table_cluster_key = map(

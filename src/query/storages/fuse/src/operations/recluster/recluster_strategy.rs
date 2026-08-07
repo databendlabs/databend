@@ -23,21 +23,24 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
+use databend_common_sql::ClusterKeys;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::FuseTable;
 use crate::MAX_RECLUSTER_DEPTH;
 use crate::MIN_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
+use crate::operations::recluster::HilbertReclusterStrategy;
 use crate::operations::recluster::LinearReclusterStrategy;
 use crate::operations::recluster::VectorReclusterStrategy;
 use crate::statistics::PreparedClusterKeyExpr;
 use crate::statistics::VectorClusterInfo;
-use crate::statistics::get_min_max_stats;
+use crate::statistics::cluster_stats_from_col_stats;
 use crate::statistics::prepare_cluster_key_exprs;
 
 /// Recluster candidate selection mode.
@@ -56,6 +59,7 @@ pub(crate) struct ReclusterProperties {
     pub(crate) depth_threshold: f64,
     pub(crate) block_thresholds: BlockThresholds,
     pub(crate) cluster_key_id: u32,
+    pub(crate) cluster_type: ClusterType,
     pub(crate) partition_key_count: usize,
     pub(crate) memory_threshold: usize,
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
@@ -67,44 +71,48 @@ impl ReclusterProperties {
     pub(crate) fn try_create(
         table: &FuseTable,
         schema: &TableSchemaRef,
-        mut cluster_key_exprs: Vec<Expr<usize>>,
+        cluster_keys: ClusterKeys,
         mode: ReclusterMode,
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
         cluster_key_id: u32,
         memory_threshold: usize,
     ) -> Result<(Self, Arc<dyn ReclusterStrategy>)> {
-        let vector_indices = cluster_key_exprs
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, expr)| {
-                matches!(expr.data_type().remove_nullable(), DataType::Vector(_)).then_some(idx)
-            })
-            .collect::<Vec<_>>();
-        if vector_indices.len() > 1 {
-            return Err(ErrorCode::InvalidClusterKeys(
-                "Only one vector column is supported in cluster by",
-            ));
-        }
-        let strategy: Arc<dyn ReclusterStrategy> = match vector_indices.first().copied() {
-            Some(vector_index) => Arc::new(VectorReclusterStrategy::try_create(
-                table,
-                &mut cluster_key_exprs,
-                vector_index,
-            )?),
-            None => {
-                if cluster_key_exprs.is_empty() {
+        let (cluster_type, cluster_key_exprs, strategy): (
+            ClusterType,
+            Vec<Expr<usize>>,
+            Arc<dyn ReclusterStrategy>,
+        ) = match cluster_keys {
+            ClusterKeys::Linear(keys) => {
+                if keys.is_empty() {
                     return Err(ErrorCode::Internal(
                         "recluster requires non-empty cluster key expressions",
                     ));
                 }
-                Arc::new(LinearReclusterStrategy)
+                (ClusterType::Linear, keys, Arc::new(LinearReclusterStrategy))
             }
+            ClusterKeys::Vector {
+                mut keys,
+                vector_index,
+            } => {
+                let strategy = VectorReclusterStrategy::try_create(table, &mut keys, vector_index)?;
+                (ClusterType::Linear, keys, Arc::new(strategy))
+            }
+            ClusterKeys::Hilbert(dimensions) => (
+                ClusterType::Hilbert,
+                dimensions,
+                Arc::new(HilbertReclusterStrategy),
+            ),
         };
-        let scalar_cluster_key_types = cluster_key_exprs
-            .iter()
-            .map(|expr| expr.data_type().clone())
-            .collect();
+
+        let scalar_cluster_key_types = if cluster_type == ClusterType::Hilbert {
+            Vec::new()
+        } else {
+            cluster_key_exprs
+                .iter()
+                .map(|expr| expr.data_type().clone())
+                .collect()
+        };
         let prepared_cluster_key_exprs =
             prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
         let properties = Self {
@@ -112,6 +120,7 @@ impl ReclusterProperties {
             depth_threshold,
             block_thresholds,
             cluster_key_id,
+            cluster_type,
             partition_key_count: table.partition_key_count(),
             memory_threshold,
             prepared_cluster_key_exprs,
@@ -157,6 +166,7 @@ impl ReclusterProperties {
             depth_threshold,
             block_thresholds,
             cluster_key_id,
+            cluster_type: ClusterType::Linear,
             partition_key_count,
             memory_threshold,
             prepared_cluster_key_exprs,
@@ -206,13 +216,12 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
             }
         }
 
-        let (min, max) = get_min_max_stats(
+        cluster_stats_from_col_stats(
             &properties.prepared_cluster_key_exprs,
             col_stats,
-            cluster_stats,
-            Some(properties.cluster_key_id),
-        );
-        ClusterStatistics::new(properties.cluster_key_id, min, max, 0)
+            properties.cluster_key_id,
+            0,
+        )
     }
 }
 

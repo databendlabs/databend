@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -61,7 +62,7 @@ pub struct SegmentCompactMutator {
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
-    default_cluster_key_id: Option<u32>,
+    cluster_key_info: Option<ClusterKeyInfo>,
     pub(crate) partition_key_count: usize,
     table_meta_timestamps: TableMetaTimestamps,
 }
@@ -72,7 +73,7 @@ impl SegmentCompactMutator {
         compact_params: CompactOptions,
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         Ok(Self {
@@ -81,7 +82,7 @@ impl SegmentCompactMutator {
             data_accessor: operator,
             location_generator,
             compaction: Default::default(),
-            default_cluster_key_id,
+            cluster_key_info,
             partition_key_count: 0,
             table_meta_timestamps,
         })
@@ -136,7 +137,7 @@ impl SegmentCompactMutator {
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         let mut compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,
-            self.default_cluster_key_id,
+            self.cluster_key_info,
             chunk_size,
             &fuse_segment_io,
             &self.data_accessor,
@@ -171,7 +172,7 @@ pub struct SegmentCompactor<'a> {
     // Size of compacted segment should be in range R == [threshold, 2 * threshold)
     // within R, smaller one is preferred
     threshold: u64,
-    default_cluster_key_id: Option<u32>,
+    cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
     fragmented_segments: Vec<(usize, SegmentInfo, Location)>,
@@ -190,7 +191,7 @@ pub struct SegmentCompactor<'a> {
 impl<'a> SegmentCompactor<'a> {
     pub fn new(
         threshold: u64,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         chunk_size: usize,
         segment_reader: &'a SegmentsIO,
         operator: &'a Operator,
@@ -199,7 +200,7 @@ impl<'a> SegmentCompactor<'a> {
     ) -> Self {
         Self {
             threshold,
-            default_cluster_key_id,
+            cluster_key_info,
             partition_key_count: 0,
             accumulated_num_blocks: 0,
             fragmented_segments: vec![],
@@ -244,7 +245,7 @@ impl<'a> SegmentCompactor<'a> {
                 })
                 .collect::<Result<Vec<_>>>()?;
 
-            if let Some(default_cluster_key) = self.default_cluster_key_id {
+            if let Some((default_cluster_key, _)) = self.cluster_key_info {
                 // sort ascending.
                 segment_infos.sort_by(|a, b| {
                     sort_by_cluster_stats(
@@ -393,11 +394,7 @@ impl<'a> SegmentCompactor<'a> {
         let mut fragment_indexes = Vec::with_capacity(fragments.len());
         for (segment_idx, segment, _location) in fragments {
             fragment_indexes.push(segment_idx);
-            merge_statistics_mut(
-                &mut new_statistics,
-                &segment.summary,
-                self.default_cluster_key_id,
-            );
+            merge_statistics_mut(&mut new_statistics, &segment.summary, self.cluster_key_info);
             blocks.append(&mut segment.blocks.clone());
             match segment.summary.additional_stats_meta.map(|m| m.location) {
                 Some(loc) => stats_locations.push(loc),
@@ -408,7 +405,7 @@ impl<'a> SegmentCompactor<'a> {
         merge_statistics_mut(
             &mut self.compacted_state.removed_statistics,
             &new_statistics,
-            self.default_cluster_key_id,
+            self.cluster_key_info,
         );
 
         let location = self

@@ -38,10 +38,12 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::PartitionStatistics;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 use fastrace::Span;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
@@ -80,8 +82,21 @@ const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
 /// Blocks that reach this level have already been rewritten many times, so
 /// keep them out of future recluster tasks to avoid unbounded level growth.
 const MAX_RECLUSTER_LEVEL: i32 = 32;
-const MAX_RECLUSTER_WINDOW_SEGMENTS: usize = 128;
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
+/// Minimum depth threshold enforced for Hilbert clustering. Hilbert overlap is measured on
+/// per-dimension MBRs, which report false overlaps even when blocks do not actually intersect,
+/// so the measured depth never settles at 1. Clamping the threshold up to this floor keeps
+/// RECLUSTER FINAL from selecting tasks forever on already well-clustered data.
+const HILBERT_MIN_RECLUSTER_DEPTH: f64 = 8.0;
+/// Bound the synchronous block-metadata work performed by one candidate probe.
+const MAX_RECLUSTER_WINDOW_SEGMENTS: usize = 128;
+
+/// A partition-local segment window selected for candidate probing.
+#[derive(Clone)]
+pub struct SelectedReclusterWindow {
+    pub segments: Vec<SelectedReclusterSegment>,
+    pub partition_stats: Option<PartitionStatistics>,
+}
 
 /// Candidate tasks plus cached segment metadata for one scanned window.
 #[derive(Clone, Default)]
@@ -89,6 +104,8 @@ pub struct ReclusterCandidateWindow {
     // Window locations plus cached SegmentInfo for positions touched by candidates.
     pub(crate) segments: Vec<(Location, Option<Arc<SegmentInfo>>)>,
     pub(crate) tasks: Vec<ReclusterTaskCandidate>,
+    // Exact PARTITION BY values shared by all segments in this window.
+    partition_stats: Option<PartitionStatistics>,
 }
 
 impl ReclusterCandidateWindow {
@@ -161,7 +178,7 @@ impl ReclusterMutator {
         };
         let block_thresholds = table.get_block_thresholds();
 
-        let depth_threshold = table
+        let mut depth_threshold = table
             .get_table_info()
             .options()
             .get(FUSE_OPT_KEY_RECLUSTER_DEPTH)
@@ -173,6 +190,13 @@ impl ReclusterMutator {
                     DEFAULT_RECLUSTER_DEPTH
                 }
             }) as f64;
+        // Hilbert overlap is measured on per-dimension MBRs, which report false overlaps even when
+        // blocks do not actually intersect, so the measured depth never settles at 1. Clamp the
+        // threshold up to a Hilbert-specific floor so RECLUSTER FINAL cannot keep selecting tasks
+        // forever (this also overrides an explicit low `recluster_depth` for Hilbert tables).
+        if matches!(table.cluster_type(), Some(ClusterType::Hilbert)) {
+            depth_threshold = depth_threshold.max(HILBERT_MIN_RECLUSTER_DEPTH);
+        }
 
         let settings = ctx.get_settings();
         let recluster_block_size = settings.get_recluster_block_size()? as usize;
@@ -202,12 +226,12 @@ impl ReclusterMutator {
                 "recluster requires cluster key expressions",
             ));
         };
-        let cluster_key_exprs =
+        let parsed_cluster_keys =
             parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
         let (properties, strategy) = ReclusterProperties::try_create(
             table,
             &schema,
-            cluster_key_exprs,
+            parsed_cluster_keys,
             mode,
             depth_threshold,
             block_thresholds,
@@ -270,12 +294,16 @@ impl ReclusterMutator {
     #[async_backtrace::framed]
     pub async fn probe_candidate_window(
         &self,
-        compact_segments: Vec<SelectedReclusterSegment>,
+        selected_window: SelectedReclusterWindow,
         task_budget: usize,
         decode_runtime: Arc<Runtime>,
         decode_semaphore: Arc<Semaphore>,
     ) -> Result<ReclusterCandidateWindow> {
         debug_assert!(task_budget > 0);
+        let SelectedReclusterWindow {
+            segments: compact_segments,
+            partition_stats,
+        } = selected_window;
         let mut window_segments = Vec::with_capacity(compact_segments.len());
         let mut window_segment_infos = Vec::with_capacity(compact_segments.len());
         let mut selected_segments = Vec::with_capacity(compact_segments.len());
@@ -303,6 +331,7 @@ impl ReclusterMutator {
         let mut candidate_window = ReclusterCandidateWindow {
             segments: window_segments,
             tasks: Vec::new(),
+            partition_stats,
         };
         let mut selected_window_positions = vec![false; window_segment_infos.len()];
 
@@ -537,6 +566,7 @@ impl ReclusterMutator {
                     total_compressed,
                     level: candidate.output_level,
                     all_ordered: candidate.all_ordered,
+                    partition_stats: window.partition_stats.clone(),
                 });
                 selected_block_count += block_metas.len() as u64;
             }
@@ -549,14 +579,14 @@ impl ReclusterMutator {
         let mut removed_segment_indexes = removed_segment_infos.keys().copied().collect::<Vec<_>>();
         removed_segment_indexes.sort_unstable_by(|a, b| b.cmp(a));
 
-        let default_cluster_key_id = Some(self.properties.cluster_key_id);
+        let cluster_key_info = Some((self.properties.cluster_key_id, self.properties.cluster_type));
         let mut removed_segment_summary = Statistics::default();
         for segment_info in removed_segment_infos.values() {
             // Summary still comes from SegmentInfo, not normalized cached blocks.
             merge_statistics_mut(
                 &mut removed_segment_summary,
                 &segment_info.summary,
-                default_cluster_key_id,
+                cluster_key_info,
             );
         }
 
@@ -638,7 +668,7 @@ impl ReclusterMutator {
             total_bytes += blocks[idx].meta.block_size;
         }
         // Physical small-block compaction intentionally takes precedence over strategy-specific
-        // overlap depth gates. A compactable group is rewritten even when its strategy depth
+        // overlap depth gates. A compactable group is rewritten even when its Hilbert/vector depth
         // is below the recluster threshold, so RECLUSTER also converges fragmented layouts.
         if self
             .properties
@@ -692,10 +722,13 @@ impl ReclusterMutator {
         &self,
         compact_segments: &[(SegmentLocation, Arc<CompactSegmentInfo>)],
         window_len: usize,
-    ) -> Result<Vec<Vec<SelectedReclusterSegment>>> {
+    ) -> Result<Vec<SelectedReclusterWindow>> {
         let windows = if self.properties.partition_key_count == 0 {
             self.strategy
                 .select_segments(&self.properties, compact_segments, window_len)?
+                .into_iter()
+                .map(|segments| (None, segments))
+                .collect::<Vec<_>>()
         } else {
             let mut segments_by_partition = BTreeMap::new();
             for (location, segment) in compact_segments {
@@ -703,6 +736,8 @@ impl ReclusterMutator {
                     segment.summary.partition_stats.as_ref(),
                     self.properties.partition_key_count,
                 ) else {
+                    // Legacy segments without exact partition metadata cannot safely
+                    // participate in a partition-local rewrite window.
                     continue;
                 };
                 segments_by_partition
@@ -712,22 +747,27 @@ impl ReclusterMutator {
             }
 
             let mut windows = Vec::new();
-            for segments in segments_by_partition.into_values() {
-                windows.extend(self.strategy.select_segments(
-                    &self.properties,
-                    &segments,
-                    window_len,
-                )?);
+            for (partition, segments) in segments_by_partition {
+                let partition_stats = Some(PartitionStatistics::new(partition));
+                windows.extend(
+                    self.strategy
+                        .select_segments(&self.properties, &segments, window_len)?
+                        .into_iter()
+                        .map(|segments| (partition_stats.clone(), segments)),
+                );
             }
             windows
         };
 
         let mut split_windows = Vec::with_capacity(windows.len());
-        for window in windows {
+        for (partition_stats, window) in windows {
             let segment_count = window.len();
             let window_count = segment_count.div_ceil(MAX_RECLUSTER_WINDOW_SEGMENTS);
             if window_count <= 1 {
-                split_windows.push(window);
+                split_windows.push(SelectedReclusterWindow {
+                    segments: window,
+                    partition_stats,
+                });
                 continue;
             }
 
@@ -736,7 +776,10 @@ impl ReclusterMutator {
             let mut segments = window.into_iter();
             for window_idx in 0..window_count {
                 let window_len = base_window_len + usize::from(window_idx < larger_windows);
-                split_windows.push(segments.by_ref().take(window_len).collect());
+                split_windows.push(SelectedReclusterWindow {
+                    segments: segments.by_ref().take(window_len).collect(),
+                    partition_stats: partition_stats.clone(),
+                });
             }
             debug!(
                 "recluster: split oversized candidate window segments={} windows={} max_window_segments={}",

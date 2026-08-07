@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::ClusterType;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -1209,13 +1211,58 @@ SELECT * from s;"#,
 }
 
 #[test]
-fn test_hilbert_cluster_type_is_rejected() {
-    for sql in [
-        "create table t(a int, b int) cluster by hilbert(a, b)",
-        "alter table t cluster by hilbert(a, b)",
+fn test_hilbert_cluster_syntax_preserves_explicit_type() {
+    for (sql, expected) in [
+        (
+            "create table t(a int, b int) cluster by hilbert(a, b)",
+            "CREATE TABLE t (a Int32, b Int32) CLUSTER BY HILBERT(a, b)",
+        ),
+        (
+            "alter table t cluster by hilbert(a, b)",
+            "ALTER TABLE t CLUSTER BY HILBERT(a, b)",
+        ),
+        (
+            "create dynamic table t(a int, b int) cluster by hilbert(a, b) target_lag = downstream as select 1, 2",
+            "CREATE DYNAMIC TABLE t (a Int32, b Int32) CLUSTER BY HILBERT(a, b) TARGET_LAG = DOWNSTREAM REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT 1, 2",
+        ),
     ] {
         let tokens = tokenize_sql(sql).unwrap();
-        assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(stmt.to_string(), expected, "{sql}");
+    }
+}
+
+#[test]
+fn test_cluster_type_parser() {
+    for (sql, expected_type, expected_sql) in [
+        (
+            "create table t(a int, b int) cluster by (a, b)",
+            ClusterType::Linear,
+            "CREATE TABLE t (a Int32, b Int32) CLUSTER BY LINEAR(a, b)",
+        ),
+        (
+            "create table t(a int, b int) cluster by linear(a, b)",
+            ClusterType::Linear,
+            "CREATE TABLE t (a Int32, b Int32) CLUSTER BY LINEAR(a, b)",
+        ),
+        (
+            "create table t(a int, b int) cluster by hilbert(a, b)",
+            ClusterType::Hilbert,
+            "CREATE TABLE t (a Int32, b Int32) CLUSTER BY HILBERT(a, b)",
+        ),
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(stmt.to_string(), expected_sql, "{sql}");
+
+        let Statement::CreateTable(create_table) = stmt else {
+            panic!("expected CREATE TABLE for {sql}");
+        };
+        assert_eq!(
+            create_table.cluster_by.unwrap().cluster_type,
+            expected_type,
+            "{sql}"
+        );
     }
 }
 

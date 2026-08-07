@@ -199,6 +199,13 @@ impl Display for ClusterType {
     }
 }
 
+pub fn cluster_type_from_options(options: &BTreeMap<String, String>) -> ClusterType {
+    match options.get(OPT_KEY_CLUSTER_TYPE) {
+        Some(value) if value.eq_ignore_ascii_case(HILBERT_CLUSTER_TYPE) => ClusterType::Hilbert,
+        _ => ClusterType::Linear,
+    }
+}
+
 impl std::str::FromStr for ClusterType {
     type Err = databend_common_exception::ErrorCode;
     fn from_str(s: &str) -> Result<Self, Self::Err> {

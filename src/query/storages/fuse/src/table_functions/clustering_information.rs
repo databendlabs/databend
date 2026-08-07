@@ -23,18 +23,22 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
+use databend_common_sql::HILBERT_CLUSTER_DIMENSIONS;
 use databend_common_sql::analyze_cluster_keys;
+use databend_common_sql::parse_cluster_key_exprs;
 use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
+use databend_storages_common_table_meta::table::ClusterType;
 use jsonb::Value as JsonbValue;
 use serde::Deserialize;
 use serde::Serialize;
@@ -42,9 +46,12 @@ use serde::Serialize;
 use crate::FuseTable;
 use crate::Table;
 use crate::io::SegmentsIO;
+use crate::operations::hilbert_diagnostics;
 use crate::sessions::TableContext;
 use crate::statistics::BlockOverlapDepth;
 use crate::statistics::calculate_block_overlap_depths;
+use crate::statistics::cluster_key_types_for_depth;
+use crate::statistics::cluster_stats_for_hilbert_depth;
 use crate::statistics::get_min_max_stats;
 use crate::statistics::prepare_cluster_key_exprs;
 use crate::table_functions::SimpleArgFunc;
@@ -174,70 +181,101 @@ impl<'a> ClusteringInformationImpl<'a> {
         cluster_key: &Option<String>,
     ) -> Result<ClusteringInformationResponse> {
         let mut default_cluster_key_id = None;
-        let (cluster_key, exprs) = match (self.table.cluster_key_str(), cluster_key) {
-            (a, Some(b)) => {
-                let (cluster_key, exprs) =
-                    analyze_cluster_keys(self.ctx.clone(), Arc::new(self.table.clone()), b)?;
-                let exprs = exprs
-                    .into_iter()
-                    .map(|expr| expr.project_column_ref(|index| Ok(index.as_usize())))
-                    .collect::<Result<Vec<_>>>()?;
-                if a.is_some() && a.unwrap() == cluster_key {
-                    default_cluster_key_id = self.table.cluster_key_id();
+        let (cluster_key, stats_exprs, use_hilbert_stats) =
+            match (self.table.cluster_key_str(), cluster_key) {
+                (default_key, Some(custom_key)) => {
+                    let (normalized_key, _) = analyze_cluster_keys(
+                        self.ctx.clone(),
+                        Arc::new(self.table.clone()),
+                        custom_key,
+                    )?;
+                    let is_default = default_key == Some(normalized_key.as_str());
+                    let ast_exprs = if is_default {
+                        default_cluster_key_id = self.table.cluster_key_id();
+                        self.table.resolve_cluster_keys().unwrap()
+                    } else {
+                        parse_cluster_key_exprs(custom_key)?
+                    };
+                    let parsed_cluster_keys = parse_cluster_keys(
+                        self.ctx.clone(),
+                        Arc::new(self.table.clone()),
+                        ast_exprs,
+                    )?;
+                    let is_hilbert = parsed_cluster_keys.is_hilbert();
+                    if is_hilbert && !is_default {
+                        return Err(ErrorCode::InvalidClusterKeys(
+                            "Custom hilbert cluster key must match the table default cluster key",
+                        ));
+                    }
+                    (
+                        normalized_key,
+                        parsed_cluster_keys.into_stats_keys(),
+                        is_hilbert,
+                    )
                 }
-                (cluster_key, exprs)
-            }
-            (Some(a), None) => {
-                let cluster_keys = self.table.resolve_cluster_keys().unwrap();
-                let exprs = parse_cluster_keys(
-                    self.ctx.clone(),
-                    Arc::new(self.table.clone()),
-                    cluster_keys,
-                )?;
-                default_cluster_key_id = self.table.cluster_key_id();
-                (a.to_string(), exprs)
-            }
-            _ => {
-                unreachable!("Unclustered table {}", self.table.table_info.desc);
-            }
-        };
-        let cluster_type = "linear".to_string();
+                (Some(default_key), None) => {
+                    let cluster_keys = self.table.resolve_cluster_keys().unwrap();
+                    let parsed_cluster_keys = parse_cluster_keys(
+                        self.ctx.clone(),
+                        Arc::new(self.table.clone()),
+                        cluster_keys,
+                    )?;
+                    let is_hilbert = parsed_cluster_keys.is_hilbert();
+                    default_cluster_key_id = self.table.cluster_key_id();
+                    (
+                        default_key.to_string(),
+                        parsed_cluster_keys.into_stats_keys(),
+                        is_hilbert,
+                    )
+                }
+                _ => {
+                    unreachable!("Unclustered table {}", self.table.table_info.desc);
+                }
+            };
+        let hilbert_cluster_key_id = use_hilbert_stats
+            .then_some(default_cluster_key_id)
+            .flatten();
+
+        let cluster_type = if use_hilbert_stats {
+            ClusterType::Hilbert
+        } else {
+            ClusterType::Linear
+        }
+        .to_string();
 
         let snapshot = self.table.read_table_snapshot().await?;
         let now = Utc::now();
-        let timestamp = snapshot
-            .as_ref()
-            .map_or(now, |s| s.timestamp.unwrap_or(now))
-            .timestamp_micros();
-        if snapshot.is_none() {
+        let Some(snapshot) = snapshot else {
+            let info = if use_hilbert_stats {
+                serde_json::to_value(HilbertClusterStatistics::default())?
+            } else {
+                serde_json::to_value(LinearClusterStatistics::default())?
+            };
             return Ok(ClusteringInformationResponse {
                 cluster_key,
                 cluster_type,
-                timestamp,
-                info: serde_json::to_value(LinerClusterStatistics::default())?,
+                timestamp: now.timestamp_micros(),
+                info,
             });
-        }
-        let snapshot = snapshot.unwrap();
+        };
+        let timestamp = snapshot.timestamp.unwrap_or(now).timestamp_micros();
 
         let schema = self.table.schema();
-        let scalar_exprs = exprs
-            .into_iter()
-            .filter(|expr| !matches!(expr.data_type().remove_nullable(), DataType::Vector(_)))
-            .collect::<Vec<_>>();
-        let scalar_cluster_key_types = scalar_exprs
-            .iter()
-            .map(|v| {
-                let data_type = v.data_type();
-                if matches!(*data_type, DataType::String) {
-                    data_type.wrap_nullable()
-                } else {
-                    data_type.clone()
-                }
-            })
-            .collect::<Vec<_>>();
-        let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&scalar_exprs, schema.as_ref());
+        let scalar_cluster_key_types = if use_hilbert_stats {
+            Vec::new()
+        } else {
+            cluster_key_types_for_depth(&stats_exprs)
+        };
+        let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&stats_exprs, schema.as_ref());
 
-        let mut ranges = Vec::with_capacity(snapshot.summary.block_count as usize);
+        let capacity = snapshot.summary.block_count as usize;
+        let mut ranges = if use_hilbert_stats {
+            Vec::new()
+        } else {
+            Vec::with_capacity(capacity)
+        };
+        let mut hilbert_bounds =
+            use_hilbert_stats.then(|| Vec::<[Scalar; 4]>::with_capacity(capacity));
         let mut constant_block_count = 0;
 
         let segments_io = SegmentsIO::create(
@@ -253,6 +291,41 @@ impl<'a> ClusteringInformationImpl<'a> {
             for segment in segments {
                 let segment = segment?;
                 for block in segment.blocks {
+                    if let Some(default_key_id) = hilbert_cluster_key_id {
+                        let current_cluster_stats = block
+                            .cluster_stats
+                            .as_ref()
+                            .filter(|stats| stats.cluster_key_id == default_key_id);
+                        let stats = cluster_stats_for_hilbert_depth(
+                            &prepared_cluster_key_exprs,
+                            &block.col_stats,
+                            current_cluster_stats,
+                            default_key_id,
+                        );
+                        if stats.min() == stats.max() {
+                            constant_block_count += 1;
+                        }
+                        let (min, max) = valid_cluster_stats_hilbert_minmax(
+                            &stats,
+                            HILBERT_CLUSTER_DIMENSIONS,
+                        )
+                        .ok_or_else(|| {
+                            ErrorCode::Internal(
+                                "Hilbert diagnostics requires normalized 2D cluster statistics",
+                            )
+                        })?;
+                        hilbert_bounds
+                            .as_mut()
+                            .expect("Hilbert bounds initialized with Hilbert cluster key")
+                            .push([
+                                min[0].clone(),
+                                max[0].clone(),
+                                min[1].clone(),
+                                max[1].clone(),
+                            ]);
+                        continue;
+                    }
+
                     let (min, max) = get_min_max_stats(
                         &prepared_cluster_key_exprs,
                         &block.col_stats,
@@ -269,6 +342,23 @@ impl<'a> ClusteringInformationImpl<'a> {
         }
         drop(snapshot);
 
+        if let Some(bounds) = hilbert_bounds {
+            let block_count = bounds.len();
+            let (max_depth, overlap_pairs) = hilbert_diagnostics(&bounds)?;
+            let info = HilbertClusterStatistics {
+                total_block_count,
+                constant_block_count,
+                average_overlaps: rounded_average(overlap_pairs.saturating_mul(2), block_count),
+                max_depth,
+            };
+            return Ok(ClusteringInformationResponse {
+                cluster_key,
+                cluster_type,
+                timestamp,
+                info: serde_json::to_value(info)?,
+            });
+        }
+
         let stats = if scalar_cluster_key_types.is_empty() {
             vec![BlockOverlapDepth::default(); ranges.len()]
         } else {
@@ -279,50 +369,32 @@ impl<'a> ClusteringInformationImpl<'a> {
                 cluster_key,
                 cluster_type,
                 timestamp,
-                info: serde_json::to_value(LinerClusterStatistics {
+                info: serde_json::to_value(LinearClusterStatistics {
                     total_block_count,
                     ..Default::default()
                 })?,
             });
         }
 
-        let mut sum_overlap = 0;
-        let mut sum_depth = 0;
+        let mut sum_overlap = 0u64;
+        let mut sum_depth = 0u64;
         let length = stats.len();
         let mut depth_counts = BTreeMap::new();
-        let bucket_counts = stats.into_iter().fold(BTreeMap::new(), |mut acc, stat| {
-            sum_overlap += stat.overlap;
-            sum_depth += stat.depth;
-            depth_counts
-                .entry(stat.depth)
-                .and_modify(|v| *v += 1)
-                .or_insert(1);
-
-            let bucket = get_buckets(stat.depth);
-            acc.entry(bucket).and_modify(|v| *v += 1).or_insert(1);
-            acc
-        });
-        // round the float to 4 decimal places.
-        let average_depth = (10000.0 * sum_depth as f64 / length as f64).round() / 10000.0;
-        let average_overlaps = (10000.0 * sum_overlap as f64 / length as f64).round() / 10000.0;
-
-        let block_depth_histogram =
-            bucket_counts
-                .into_iter()
-                .fold(BTreeMap::new(), |mut acc, (bucket, count)| {
-                    acc.insert(format!("{:05}", bucket), count);
-                    acc
-                });
-        let p95_depth = percentile_depth(&depth_counts, length, 95);
-        let p99_depth = percentile_depth(&depth_counts, length, 99);
-
-        let info = LinerClusterStatistics {
+        for stat in stats {
+            sum_overlap = sum_overlap.saturating_add(stat.overlap as u64);
+            sum_depth = sum_depth.saturating_add(stat.depth as u64);
+            *depth_counts.entry(stat.depth).or_insert(0) += 1;
+        }
+        let average_depth = rounded_average(sum_depth, length);
+        let average_overlaps = rounded_average(sum_overlap, length);
+        let block_depth_histogram = depth_histogram(&depth_counts);
+        let info = LinearClusterStatistics {
             total_block_count,
             constant_block_count,
             average_overlaps,
             average_depth,
-            p95_depth,
-            p99_depth,
+            p95_depth: percentile_depth(&depth_counts, length, 95),
+            p99_depth: percentile_depth(&depth_counts, length, 99),
             block_depth_histogram,
         };
         Ok(ClusteringInformationResponse {
@@ -359,7 +431,7 @@ fn build_block(info: ClusteringInformationResponse) -> Result<DataBlock> {
 }
 
 #[derive(Serialize, Default)]
-struct LinerClusterStatistics {
+struct LinearClusterStatistics {
     total_block_count: u64,
     constant_block_count: u64,
     average_overlaps: f64,
@@ -367,6 +439,33 @@ struct LinerClusterStatistics {
     p95_depth: usize,
     p99_depth: usize,
     block_depth_histogram: BTreeMap<String, u64>,
+}
+
+/// Exact scalable 2D diagnostics. Per-block average depth and its histogram are intentionally
+/// omitted: computing each MBR's maximum internal stabbing depth requires an output-sensitive
+/// overlap structure and can degrade to quadratic work for dense layouts.
+#[derive(Serialize, Default)]
+struct HilbertClusterStatistics {
+    total_block_count: u64,
+    constant_block_count: u64,
+    average_overlaps: f64,
+    max_depth: usize,
+}
+
+fn rounded_average(sum: u64, count: usize) -> f64 {
+    if count == 0 {
+        return 0.0;
+    }
+    (10000.0 * sum as f64 / count as f64).round() / 10000.0
+}
+
+fn depth_histogram(depth_counts: &BTreeMap<usize, u64>) -> BTreeMap<String, u64> {
+    let mut histogram = BTreeMap::new();
+    for (depth, count) in depth_counts {
+        let bucket = get_buckets(*depth);
+        *histogram.entry(format!("{:05}", bucket)).or_insert(0) += count;
+    }
+    histogram
 }
 
 /// The histogram contains buckets with widths:
@@ -420,5 +519,49 @@ mod tests {
         assert_eq!(percentile_depth(&depth_counts, 7, 95), 20);
         assert_eq!(percentile_depth(&depth_counts, 7, 99), 20);
         assert_eq!(percentile_depth(&BTreeMap::new(), 0, 99), 0);
+    }
+
+    #[test]
+    fn test_statistics_json_shapes() {
+        let linear = LinearClusterStatistics {
+            total_block_count: 3,
+            constant_block_count: 1,
+            average_overlaps: 0.6667,
+            average_depth: 1.6667,
+            p95_depth: 2,
+            p99_depth: 2,
+            block_depth_histogram: BTreeMap::from([
+                ("00001".to_string(), 1),
+                ("00002".to_string(), 2),
+            ]),
+        };
+        assert_eq!(
+            serde_json::to_value(linear).unwrap(),
+            serde_json::json!({
+                "total_block_count": 3,
+                "constant_block_count": 1,
+                "average_overlaps": 0.6667,
+                "average_depth": 1.6667,
+                "p95_depth": 2,
+                "p99_depth": 2,
+                "block_depth_histogram": {"00001": 1, "00002": 2}
+            })
+        );
+
+        let hilbert = HilbertClusterStatistics {
+            total_block_count: 3,
+            constant_block_count: 1,
+            average_overlaps: 0.6667,
+            max_depth: 2,
+        };
+        assert_eq!(
+            serde_json::to_value(hilbert).unwrap(),
+            serde_json::json!({
+                "total_block_count": 3,
+                "constant_block_count": 1,
+                "average_overlaps": 0.6667,
+                "max_depth": 2
+            })
+        );
     }
 }

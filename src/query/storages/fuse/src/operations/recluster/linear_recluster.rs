@@ -36,6 +36,7 @@ use crate::operations::recluster::SelectedReclusterSegment;
 use crate::operations::recluster::passes_depth_gate;
 use crate::operations::recluster::task_candidate;
 use crate::statistics::RangeMaxTree;
+use crate::statistics::cluster_stats_scalar_minmax;
 
 /// Linear cluster-key recluster behavior.
 pub(crate) struct LinearReclusterStrategy;
@@ -65,7 +66,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             // window-global block index range. `indices` maps each local index
             // back to its `blocks` index.
             let stats = blocks[i].stats();
-            let (min, max) = (stats.min().as_slice(), stats.max().as_slice());
+            let (min, max) = cluster_stats_scalar_minmax(stats);
             if min.len() != properties.scalar_cluster_key_types.len()
                 || max.len() != properties.scalar_cluster_key_types.len()
             {
@@ -373,7 +374,7 @@ pub(crate) fn select_scalar_segments(
         }
 
         total_blocks += compact_segment.summary.block_count as usize;
-        let (min, max) = (stats.min().as_slice(), stats.max().as_slice());
+        let (min, max) = cluster_stats_scalar_minmax(&stats);
         if min.len() != properties.scalar_cluster_key_types.len()
             || max.len() != properties.scalar_cluster_key_types.len()
         {

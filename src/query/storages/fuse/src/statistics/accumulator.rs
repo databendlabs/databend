@@ -30,6 +30,7 @@ use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -58,12 +59,12 @@ impl SegmentBuilder for RowOrientedSegmentBuilder {
     fn build(
         &mut self,
         thresholds: BlockThresholds,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self::Segment> {
         let builder = std::mem::take(self);
         let mut stat =
-            super::reduce_block_metas(&builder.blocks_metas, thresholds, default_cluster_key_id)?;
+            super::reduce_block_metas(&builder.blocks_metas, thresholds, cluster_key_info)?;
         stat.additional_stats_meta = additional_stats_meta;
         Ok(SegmentInfo::new(builder.blocks_metas, stat))
     }

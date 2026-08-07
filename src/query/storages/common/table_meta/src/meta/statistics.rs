@@ -40,11 +40,13 @@ use crate::meta::VectorDistanceType;
 use crate::meta::format::compress;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
+use crate::table::ClusterType;
 
 pub type FormatVersion = u64;
 pub type SnapshotId = Uuid;
 pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
+pub type ClusterKeyInfo = (u32, ClusterType);
 pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
 pub type StatisticsOfSpatialColumns = HashMap<ColumnId, SpatialStatistics>;
 pub type StatisticsOfVectorColumns =
@@ -53,6 +55,108 @@ pub type BlockHLL = HashMap<ColumnId, MetaHLL>;
 pub type BlockTopN = HashMap<ColumnId, ColumnTopN>;
 pub type BlockCountMinSketch = HashMap<ColumnId, ColumnCountMinSketch>;
 pub type RawBlockHLL = Vec<u8>;
+
+/// Return the trailing Hilbert MBR bounds when the persisted layout is valid.
+/// Linear partition dimensions may precede the Hilbert dimensions; callers must
+/// already have established that the table uses Hilbert clustering.
+pub fn valid_cluster_stats_hilbert_minmax(
+    stats: &crate::meta::ClusterStatistics,
+    expected_dim_len: usize,
+) -> Option<(&[Scalar], &[Scalar])> {
+    let min = stats.min();
+    let max = stats.max();
+    if min.len() != max.len() || min.len() < expected_dim_len {
+        return None;
+    }
+    let start = min.len() - expected_dim_len;
+    let min = &min[start..];
+    let max = &max[start..];
+    if min
+        .iter()
+        .zip(max)
+        .any(|(min, max)| min.as_ref().cmp(&max.as_ref()) == Ordering::Greater)
+    {
+        return None;
+    }
+    Some((min, max))
+}
+
+pub fn cluster_stats_scalar_minmax(
+    stats: &crate::meta::ClusterStatistics,
+) -> (&[Scalar], &[Scalar]) {
+    (stats.min(), stats.max())
+}
+
+/// Conservative scalar-key overlap check; incomplete stats are treated as overlapping.
+pub fn cluster_stats_scalar_overlap(
+    left: &crate::meta::ClusterStatistics,
+    right: &crate::meta::ClusterStatistics,
+) -> bool {
+    let (left_min, left_max) = cluster_stats_scalar_minmax(left);
+    let (right_min, right_max) = cluster_stats_scalar_minmax(right);
+    if left_min.len() != left_max.len()
+        || right_min.len() != right_max.len()
+        || left_min.len() != right_min.len()
+    {
+        return true;
+    }
+
+    scalar_tuple_cmp(left_min, right_max) != Ordering::Greater
+        && scalar_tuple_cmp(right_min, left_max) != Ordering::Greater
+}
+
+pub fn reduce_cluster_min_max(
+    min_stats: &[&[Scalar]],
+    max_stats: &[&[Scalar]],
+    cluster_type: ClusterType,
+) -> Option<(Vec<Scalar>, Vec<Scalar>)> {
+    debug_assert_eq!(min_stats.len(), max_stats.len());
+    if min_stats.is_empty() {
+        return None;
+    }
+
+    match cluster_type {
+        ClusterType::Linear => {
+            let min = min_stats
+                .iter()
+                .copied()
+                .min_by(|left, right| scalar_tuple_cmp(left, right))?
+                .to_vec();
+            let max = max_stats
+                .iter()
+                .copied()
+                .max_by(|left, right| scalar_tuple_cmp(left, right))?
+                .to_vec();
+            Some((min, max))
+        }
+        ClusterType::Hilbert => {
+            let mut min = min_stats[0].to_vec();
+            let mut max = max_stats[0].to_vec();
+            debug_assert_eq!(min.len(), max.len());
+            let dimensions = min.len();
+            for (next_min, next_max) in min_stats.iter().zip(max_stats).skip(1) {
+                for dimension in 0..dimensions {
+                    if next_min[dimension].as_ref().cmp(&min[dimension].as_ref()) == Ordering::Less
+                    {
+                        min[dimension] = next_min[dimension].clone();
+                    }
+                    if next_max[dimension].as_ref().cmp(&max[dimension].as_ref())
+                        == Ordering::Greater
+                    {
+                        max[dimension] = next_max[dimension].clone();
+                    }
+                }
+            }
+            Some((min, max))
+        }
+    }
+}
+
+fn scalar_tuple_cmp(left: &[Scalar], right: &[Scalar]) -> Ordering {
+    left.iter()
+        .map(Scalar::as_ref)
+        .cmp(right.iter().map(Scalar::as_ref))
+}
 
 const COUNT_MIN_SKETCH_WIDTH: usize = 2048;
 const MAX_COUNT_MIN_SKETCH_WIDTH: usize = 1 << 20;
@@ -541,6 +645,7 @@ mod tests {
     use databend_common_expression::types::NumberScalar;
 
     use super::*;
+    use crate::meta::ClusterStatistics;
 
     fn uint_scalar(value: u64) -> Scalar {
         Scalar::Number(NumberScalar::UInt64(value))
@@ -548,6 +653,65 @@ mod tests {
 
     fn int32_scalar(value: i32) -> Scalar {
         Scalar::Number(NumberScalar::Int32(value))
+    }
+
+    #[test]
+    fn cluster_stats_scalar_overlap_uses_lexicographic_ranges() {
+        let stats = |min: &[i32], max: &[i32]| {
+            ClusterStatistics::new(
+                0,
+                min.iter().copied().map(int32_scalar).collect(),
+                max.iter().copied().map(int32_scalar).collect(),
+                0,
+            )
+        };
+
+        let left = stats(&[1, 100], &[2, 200]);
+        assert!(cluster_stats_scalar_overlap(
+            &left,
+            &stats(&[2, 0], &[3, 50])
+        ));
+        assert!(!cluster_stats_scalar_overlap(
+            &left,
+            &stats(&[2, 201], &[3, 0])
+        ));
+    }
+
+    #[test]
+    fn explicit_cluster_type_controls_min_max_reduction() {
+        let min0 = vec![int32_scalar(0), int32_scalar(100)];
+        let max0 = vec![int32_scalar(5), int32_scalar(200)];
+        let min1 = vec![int32_scalar(1), int32_scalar(0)];
+        let max1 = vec![int32_scalar(6), int32_scalar(50)];
+
+        let (linear_min, linear_max) =
+            reduce_cluster_min_max(&[&min0, &min1], &[&max0, &max1], ClusterType::Linear).unwrap();
+        assert_eq!(linear_min, min0);
+        assert_eq!(linear_max, max1);
+
+        let (hilbert_min, hilbert_max) =
+            reduce_cluster_min_max(&[&min0, &min1], &[&max0, &max1], ClusterType::Hilbert).unwrap();
+        assert_eq!(hilbert_min, vec![int32_scalar(0), int32_scalar(0)]);
+        assert_eq!(hilbert_max, vec![int32_scalar(6), int32_scalar(200)]);
+    }
+
+    #[test]
+    fn valid_hilbert_stats_reject_malformed_ranges() {
+        let stats = |dimensions: (i32, i32, i32, i32)| {
+            ClusterStatistics::new(
+                0,
+                vec![int32_scalar(dimensions.0), int32_scalar(dimensions.2)],
+                vec![int32_scalar(dimensions.1), int32_scalar(dimensions.3)],
+                0,
+            )
+        };
+
+        let valid = stats((0, 3, 4, 7));
+        assert!(valid_cluster_stats_hilbert_minmax(&valid, 2).is_some());
+        assert!(valid_cluster_stats_hilbert_minmax(&valid, 3).is_none());
+
+        let reversed_dimension = stats((3, 0, 4, 7));
+        assert!(valid_cluster_stats_hilbert_minmax(&reversed_dimension, 2).is_none());
     }
 
     #[test]

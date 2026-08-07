@@ -279,6 +279,7 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     let mut new_snap = TableSnapshot::try_from_previous(
         snapshot.clone(),
         fuse_table.cluster_key_meta(),
+        fuse_table.cluster_type(),
         Some(fuse_table.get_table_info().ident.seq),
         TestFixture::default_table_meta_timestamps(),
     )?;

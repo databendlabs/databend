@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::io::Error;
 use std::sync::Arc;
 use std::vec;
@@ -74,6 +76,7 @@ pub async fn generate_snapshot_with_segments(
     let mut new_snapshot = TableSnapshot::try_from_previous(
         current_snapshot,
         current_cluster_key_meta,
+        fuse_table.cluster_type(),
         Some(fuse_table.get_table_info().ident.seq),
         TestFixture::default_table_meta_timestamps(),
     )?;
@@ -215,7 +218,7 @@ async fn generate_blocks(
     let blocks: std::vec::Vec<DataBlock> = stream.try_collect().await?;
     for block in blocks {
         let stats =
-            gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
+            gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())?;
         let (block_meta, _index_meta, hll) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, stats, None)
             .await?;
@@ -279,6 +282,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         locations,
         None,
         None,
+        None,
         TestFixture::default_table_meta_timestamps(),
     )?;
     snapshot_1.timestamp = Some(now - Duration::hours(12));
@@ -299,6 +303,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     let mut snapshot_2 = TableSnapshot::try_from_previous(
         Arc::new(snapshot_1.clone()),
         snapshot_1.cluster_key_meta.clone(),
+        snapshot_1.cluster_type,
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;
@@ -462,6 +467,7 @@ pub async fn generate_snapshot_v4(
         schema.as_ref().clone(),
         Statistics::default(),
         segments.iter().map(|s| s.0.clone()).collect(),
+        None,
         None,
         None,
         TestFixture::default_table_meta_timestamps(),

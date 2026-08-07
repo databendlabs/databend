@@ -394,9 +394,7 @@ impl Processor for TransformSerializeBlock {
                         .build(block, |block, generator| match &stats_type {
                             ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
                             ClusterStatsGenType::WithOrigin(origin_stats) => {
-                                let cluster_stats = generator
-                                    .gen_with_origin_stats(&block, origin_stats.clone())?;
-                                Ok((cluster_stats, block))
+                                generator.gen_with_origin_stats(block, origin_stats.clone())
                             }
                         })?;
 

@@ -20,6 +20,7 @@ use chrono::Utc;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
+use databend_common_catalog::table::Table;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
@@ -35,6 +36,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::VectorDataType;
 use databend_common_sql::parse_to_filters;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use databend_common_storages_fuse::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
@@ -44,6 +46,7 @@ use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::operations::SelectedReclusterSegment;
+use databend_common_storages_fuse::operations::SelectedReclusterWindow;
 use databend_common_storages_fuse::pruning::SegmentLocation;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::VectorClusterInfo;
@@ -64,6 +67,8 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::VectorColumnStatistics;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use futures::TryStreamExt;
 use rand::Rng;
 use rand::SeedableRng;
@@ -131,6 +136,46 @@ async fn segment_pruning(
     .await?)
 }
 
+fn make_hilbert_recluster_block(
+    cluster_key_id: u32,
+    min: (i32, i32),
+    max: (i32, i32),
+) -> Arc<BlockMeta> {
+    let block_id = Uuid::new_v4().simple().to_string();
+    Arc::new(BlockMeta::new(
+        1,
+        1,
+        1,
+        HashMap::default(),
+        HashMap::default(),
+        Some(ClusterStatistics::new(
+            cluster_key_id,
+            vec![Scalar::Tuple(vec![
+                Scalar::from(min.0),
+                Scalar::from(min.1),
+            ])],
+            vec![Scalar::Tuple(vec![
+                Scalar::from(max.0),
+                Scalar::from(max.1),
+            ])],
+            0,
+        )),
+        (block_id, DataBlock::VERSION),
+        None,
+        0,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        meta::Compression::Lz4Raw,
+        Some(Utc::now()),
+    ))
+}
+
 fn make_recluster_block(
     cluster_key_id: u32,
     min: i32,
@@ -186,7 +231,11 @@ async fn write_recluster_segment(
         .iter()
         .map(|block| block.as_ref())
         .collect::<Vec<_>>();
-    let statistics = reduce_block_metas(&block_refs, thresholds, Some(cluster_key_id))?;
+    let statistics = reduce_block_metas(
+        &block_refs,
+        thresholds,
+        Some((cluster_key_id, ClusterType::Linear)),
+    )?;
     let segment = SegmentInfo::new(blocks, statistics);
     let segment_location = location_generator
         .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
@@ -514,7 +563,7 @@ async fn materialize_segment_locations_with_mode(
     let mut block_num = 0;
     let mut parts = ReclusterParts::default();
     for selected_segs in segment_windows {
-        selected_segments = selected_segs.len();
+        selected_segments = selected_segs.segments.len();
         let (candidate_block_num, candidate_parts) =
             materialize_candidate_window(&mutator, selected_segs, max_tasks).await?;
         if !candidate_parts.is_empty() {
@@ -528,10 +577,11 @@ async fn materialize_segment_locations_with_mode(
 
 async fn materialize_candidate_window(
     mutator: &ReclusterMutator,
-    selected_segs: Vec<SelectedReclusterSegment>,
+    selected_window: SelectedReclusterWindow,
     task_budget: usize,
 ) -> anyhow::Result<(u64, ReclusterParts)> {
-    let segment_indexes = selected_segs
+    let segment_indexes = selected_window
+        .segments
         .iter()
         .map(|segment| (segment.loc.location.clone(), segment.loc.segment_idx))
         .collect::<HashMap<_, _>>();
@@ -541,7 +591,12 @@ async fn materialize_candidate_window(
     )?);
     let decode_semaphore = Arc::new(Semaphore::new(4));
     let window = mutator
-        .probe_candidate_window(selected_segs, task_budget, decode_runtime, decode_semaphore)
+        .probe_candidate_window(
+            selected_window,
+            task_budget,
+            decode_runtime,
+            decode_semaphore,
+        )
         .await?;
     if window.task_count() == 0 {
         return Ok((0, ReclusterParts::default()));
@@ -574,10 +629,11 @@ fn task_part_counts(parts: &ReclusterParts) -> Vec<usize> {
         .collect::<Vec<_>>()
 }
 
-fn assert_partition_isolated(windows: &[Vec<SelectedReclusterSegment>], expected_segments: usize) {
+fn assert_partition_isolated(windows: &[SelectedReclusterWindow], expected_segments: usize) {
     let mut selected_segments = HashSet::new();
     for window in windows {
         let partitions = window
+            .segments
             .iter()
             .map(|segment| {
                 selected_segments.insert(segment.loc.segment_idx);
@@ -758,6 +814,115 @@ async fn test_compacts_small_overlaps() -> anyhow::Result<()> {
     assert!(!parts.is_empty());
     assert_eq!(parts.tasks.len(), 1);
     assert_eq!(task_part_counts(&parts), vec![3]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_hilbert_small_block_compaction_precedes_depth_gate() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let schema = TableSchemaRef::new(TableSchema::new_from_column_ids(
+        vec![
+            TableField::new_from_column_id("x", TableDataType::Number(NumberDataType::Int32), 0),
+            TableField::new_from_column_id("y", TableDataType::Number(NumberDataType::Int32), 1),
+        ],
+        Default::default(),
+        2,
+    ));
+    let mut create_table_plan = fixture.default_create_table_plan();
+    create_table_plan.schema = schema.clone();
+    create_table_plan.cluster_key = Some("(x, y)".to_owned());
+    create_table_plan.options.insert(
+        OPT_KEY_CLUSTER_TYPE.to_owned(),
+        ClusterType::Hilbert.to_string(),
+    );
+    create_table_plan
+        .options
+        .insert(FUSE_OPT_KEY_RECLUSTER_DEPTH.to_owned(), "3".to_owned());
+    create_table_plan
+        .options
+        .insert(FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), "100".to_owned());
+    create_table_plan
+        .options
+        .insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "100".to_owned());
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    let _ = interpreter.execute(ctx.clone()).await?;
+
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let cluster_key_id = fuse_table.cluster_key_id().unwrap();
+    let thresholds = fuse_table.get_block_thresholds();
+    let blocks = (0..3)
+        .map(|_| make_hilbert_recluster_block(cluster_key_id, (0, 0), (10, 10)))
+        .collect::<Vec<_>>();
+    let block_refs = blocks.iter().map(AsRef::as_ref).collect::<Vec<_>>();
+    let summary = reduce_block_metas(
+        &block_refs,
+        thresholds,
+        Some((cluster_key_id, ClusterType::Hilbert)),
+    )?;
+    let compact_segment = Arc::new(CompactSegmentInfo::try_from(SegmentInfo::new(
+        blocks,
+        summary.clone(),
+    ))?);
+    let snapshot = meta::TableSnapshot::try_new(
+        None,
+        None,
+        schema.as_ref().clone(),
+        summary,
+        vec![],
+        Some((cluster_key_id, "(x, y)".to_owned())),
+        Some(ClusterType::Hilbert),
+        None,
+        TestFixture::default_table_meta_timestamps(),
+    )?;
+    let ctx: Arc<dyn TableContext> = ctx;
+    let mutator =
+        ReclusterMutator::try_create(fuse_table, ctx, &snapshot, ReclusterMode::Conservative)?;
+    let selected = SelectedReclusterWindow {
+        segments: vec![SelectedReclusterSegment {
+            loc: SegmentLocation {
+                segment_idx: 0,
+                location: ("hilbert-segment".to_owned(), SegmentInfo::VERSION),
+                snapshot_loc: None,
+            },
+            info: compact_segment.clone(),
+        }],
+        partition_stats: None,
+    };
+
+    let (block_count, parts) = materialize_candidate_window(&mutator, selected, 1).await?;
+    assert_eq!(block_count, 3);
+    assert_eq!(task_part_counts(&parts), vec![3]);
+
+    let compact_segments = (0..129)
+        .map(|segment_idx| {
+            (
+                SegmentLocation {
+                    segment_idx,
+                    location: (
+                        format!("hilbert-segment-{segment_idx}"),
+                        SegmentInfo::VERSION,
+                    ),
+                    snapshot_loc: None,
+                },
+                compact_segment.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let windows = mutator.select_segments(&compact_segments[..128], 32)?;
+    assert_eq!(windows.len(), 1);
+    assert_eq!(windows[0].segments.len(), 128);
+
+    let windows = mutator.select_segments(&compact_segments, 32)?;
+    assert_eq!(windows.len(), 2);
+    assert_eq!(windows[0].segments.len(), 65);
+    assert_eq!(windows[1].segments.len(), 64);
 
     Ok(())
 }
@@ -1000,6 +1165,7 @@ async fn test_select_segments_covers_candidates() -> anyhow::Result<()> {
         .iter()
         .map(|window| {
             window
+                .segments
                 .iter()
                 .map(|segment| segment.loc.segment_idx)
                 .collect::<HashSet<_>>()
@@ -1037,18 +1203,18 @@ async fn test_select_segments_covers_candidates() -> anyhow::Result<()> {
 
     let windows = mutator.select_segments(&oversized_segments[..128], 32)?;
     assert_eq!(windows.len(), 1);
-    assert_eq!(windows[0].len(), 128);
+    assert_eq!(windows[0].segments.len(), 128);
 
     let windows = mutator.select_segments(&oversized_segments, 32)?;
     assert_eq!(windows.len(), 2);
-    assert_eq!(windows[0].len(), 65);
-    assert_eq!(windows[1].len(), 64);
+    assert_eq!(windows[0].segments.len(), 65);
+    assert_eq!(windows[1].segments.len(), 64);
 
     // `RECLUSTER LIMIT 1`: each window holds at most one segment (segments on
     // distinct cluster-key points are never grouped), so the limit is honored.
     let limit_one_windows = mutator.select_segments(&compact_segments, 1)?;
     for window in &limit_one_windows {
-        assert_eq!(window.len(), 1);
+        assert_eq!(window.segments.len(), 1);
     }
 
     let thresholds = BlockThresholds::new(1000, 100, 100, 1);
@@ -1089,14 +1255,19 @@ async fn test_select_segments_covers_candidates() -> anyhow::Result<()> {
     let segment_windows = mutator.select_segments(&compact_segments, 3)?;
     let window_sizes = segment_windows
         .iter()
-        .map(|window| window.len())
+        .map(|window| window.segments.len())
         .collect::<Vec<_>>();
     // The trailing window is folded into the previous one, so all five nested
     // segments end up in a single window.
     assert_eq!(window_sizes, vec![5]);
     let selected = segment_windows
         .iter()
-        .flat_map(|window| window.iter().map(|segment| segment.loc.segment_idx))
+        .flat_map(|window| {
+            window
+                .segments
+                .iter()
+                .map(|segment| segment.loc.segment_idx)
+        })
         .collect::<HashSet<_>>();
     assert_eq!(selected.len(), 5);
 
@@ -1133,7 +1304,7 @@ async fn test_select_segments_covers_candidates() -> anyhow::Result<()> {
     );
     let segment_windows = mutator.select_segments(&compact_segments, 2)?;
     assert_eq!(segment_windows.len(), 1);
-    assert_eq!(segment_windows[0].len(), 4);
+    assert_eq!(segment_windows[0].segments.len(), 4);
 
     Ok(())
 }
@@ -1190,7 +1361,7 @@ async fn test_scalar_segment_selection_does_not_cross_partitions() -> anyhow::Re
 
     let windows = mutator.select_segments(&compact_segments, 8)?;
     assert_eq!(windows.len(), 2);
-    assert!(windows.iter().all(|window| window.len() == 2));
+    assert!(windows.iter().all(|window| window.segments.len() == 2));
     assert_partition_isolated(&windows, 4);
 
     Ok(())
@@ -1253,7 +1424,7 @@ async fn test_select_segments_normal_conservative() -> anyhow::Result<()> {
     assert_eq!(
         aggressive_windows
             .iter()
-            .map(|window| window.len())
+            .map(|window| window.segments.len())
             .collect::<Vec<_>>(),
         vec![4, 3, 3]
     );
@@ -1271,7 +1442,7 @@ async fn test_select_segments_normal_conservative() -> anyhow::Result<()> {
     assert_eq!(
         conservative_windows
             .iter()
-            .map(|window| window.len())
+            .map(|window| window.segments.len())
             .collect::<Vec<_>>(),
         vec![4]
     );
@@ -1297,7 +1468,7 @@ async fn test_select_segments_normal_conservative() -> anyhow::Result<()> {
     .await?;
     let conservative_windows = conservative_mutator.select_segments(&compact_segments, 2)?;
     assert_eq!(conservative_windows.len(), 1);
-    assert_eq!(conservative_windows[0].len(), 3);
+    assert_eq!(conservative_windows[0].segments.len(), 3);
 
     Ok(())
 }
@@ -1348,7 +1519,6 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
     let vector_cluster_info = VectorClusterInfo {
         key_index: 1,
         column_id: 1,
-        column_name: "embedding".to_string(),
         dimension: 2,
         distance_type: VectorDistanceType::L2,
     };
@@ -1371,6 +1541,7 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
         .into_iter()
         .find(|window| {
             window
+                .segments
                 .iter()
                 .map(|segment| segment.loc.segment_idx)
                 .collect::<HashSet<_>>()
@@ -1428,7 +1599,6 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
     let vector_cluster_info = VectorClusterInfo {
         key_index: 0,
         column_id: 1,
-        column_name: "embedding".to_string(),
         dimension: 2,
         distance_type: VectorDistanceType::L2,
     };
@@ -1451,6 +1621,7 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
         .into_iter()
         .find(|window| {
             window
+                .segments
                 .iter()
                 .map(|segment| segment.loc.segment_idx)
                 .collect::<HashSet<_>>()
@@ -1509,7 +1680,6 @@ async fn test_vector_segment_selection_does_not_cross_partitions() -> anyhow::Re
     let vector_cluster_info = VectorClusterInfo {
         key_index: 0,
         column_id: 1,
-        column_name: "embedding".to_string(),
         dimension: 2,
         distance_type: VectorDistanceType::L2,
     };
@@ -2346,7 +2516,10 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
                 !(level < 0 && info.summary.block_count as usize >= threshold.block_per_segment)
             })
             .count();
-        let total_windowed: usize = segment_windows.iter().map(|window| window.len()).sum();
+        let total_windowed: usize = segment_windows
+            .iter()
+            .map(|window| window.segments.len())
+            .sum();
         assert_eq!(expected_segments, total_windowed);
 
         // select the blocks with the highest depth.

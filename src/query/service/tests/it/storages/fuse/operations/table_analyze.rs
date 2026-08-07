@@ -153,7 +153,7 @@ async fn test_table_update_analyze_statistics() -> anyhow::Result<()> {
         merge_statistics_mut(
             &mut segment_summary,
             &segment_info.summary,
-            fuse_table.cluster_key_id(),
+            fuse_table.cluster_key_info(),
         );
     }
 
@@ -275,6 +275,7 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let snapshot_1 = TableSnapshot::try_from_previous(
         snapshot_0.clone(),
         fuse_table.cluster_key_meta(),
+        fuse_table.cluster_type(),
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;
@@ -297,6 +298,7 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let mut snapshot_2 = TableSnapshot::try_from_previous(
         Arc::new(snapshot_1.clone()),
         fuse_table.cluster_key_meta(),
+        fuse_table.cluster_type(),
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;

@@ -32,6 +32,7 @@ use databend_common_pipeline_transforms::blocks::TransformCastSchema;
 use databend_common_pipeline_transforms::build_compact_block_pipeline;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_common_sql::parse_cluster_keys;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReplaceIntoProcessor;
 use databend_common_storages_fuse::operations::UnbranchedReplaceIntoProcessor;
@@ -191,7 +192,27 @@ impl IPhysicalPlan for ReplaceDeduplicate {
         } else {
             None
         };
-        let cluster_keys = table.linear_cluster_keys(builder.ctx.clone());
+        let cluster_keys = if let Some(cluster_key_exprs) = table.resolve_cluster_keys() {
+            let table_meta: Arc<dyn Table> = Arc::new(table.clone());
+            let parsed =
+                parse_cluster_keys(builder.ctx.clone(), table_meta.clone(), cluster_key_exprs)?;
+            if parsed.is_hilbert() {
+                vec![]
+            } else {
+                parsed
+                    .into_keys()
+                    .into_iter()
+                    .map(|expr| {
+                        expr.project_column_ref(|index| {
+                            Ok(table_meta.schema().field(*index).name().to_string())
+                        })
+                        .map(|expr| expr.as_remote_expr())
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            }
+        } else {
+            vec![]
+        };
         if self.need_insert {
             let replace_into_processor = ReplaceIntoProcessor::create(
                 builder.ctx.clone(),

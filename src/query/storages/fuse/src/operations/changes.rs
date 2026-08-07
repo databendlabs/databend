@@ -920,6 +920,7 @@ mod tests {
             vec![],
             None,
             None,
+            None,
             TableMetaTimestamps::new(None, TimeDelta::hours(1)),
         )
         .unwrap()

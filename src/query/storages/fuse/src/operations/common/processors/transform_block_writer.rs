@@ -96,8 +96,14 @@ impl TransformBlockBuilder {
         Ok(self.builder.as_mut().unwrap())
     }
 
+    fn persisted_block_size(&self, block: &DataBlock) -> usize {
+        block.estimate_block_size(self.properties.source_schema.fields().len())
+    }
+
     fn split_input(&self, input: DataBlock) -> Vec<DataBlock> {
-        let block_size = input.estimate_block_size(input.num_columns());
+        // Recluster input may include evaluated cluster expressions. Size blocks using only the
+        // persisted columns; HilbertStatisticsState removes temporary expressions before writing.
+        let block_size = self.persisted_block_size(&input);
         let num_rows = input.num_rows();
         let average_row_size = block_size.div_ceil(num_rows);
         let max_rows = self
@@ -184,7 +190,7 @@ impl Processor for TransformBlockBuilder {
                 block.check_valid()?;
                 self.input_num_rows += block.num_rows();
                 for block in self.split_input(block) {
-                    let block_size = block.estimate_block_size(block.num_columns());
+                    let block_size = self.persisted_block_size(&block);
                     self.input_data_size += block_size;
                     self.input_data.push_back((block_size, block));
                 }
