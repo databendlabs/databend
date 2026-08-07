@@ -40,12 +40,12 @@ use databend_meta::meta_service::MetaNode;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::metrics::server_metrics;
 use databend_meta::openraft::MessageSummary;
-use databend_meta::raft_store::config::RaftConfig;
-use databend_meta::raft_store::ondisk::DATA_VERSION;
-use databend_meta::raft_store::ondisk::OnDisk;
+use databend_meta::raft_config::config::RaftConfig;
+use databend_meta::raft_config::data_version::DATA_VERSION;
 use databend_meta::raft_version::raft_client_requires;
 use databend_meta::raft_version::raft_server_provides;
 use databend_meta::runtime_api::RuntimeApi;
+use databend_meta::store_compat::ondisk::OnDisk;
 use databend_meta::types::Cmd;
 use databend_meta::types::LogEntry;
 use databend_meta::types::node::Node;
@@ -165,7 +165,7 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
     );
 
     let runtime = RT::new(Some(32), Some("meta-io-rt".to_string())).map_err(|e| {
-        databend_meta::raft_store::MetaStartupError::MetaServiceError(format!(
+        databend_meta::raft_config::MetaStartupError::MetaServiceError(format!(
             "Cannot create meta IO runtime: {}",
             e
         ))

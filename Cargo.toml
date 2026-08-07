@@ -167,11 +167,11 @@ databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 
 # External meta service
-databend-meta = "260629.0.0"
-databend-meta-test-harness = "260629.0.0"
+databend-meta = "260629.2.0"
+databend-meta-test-harness = "260629.2.0"
 
 # External meta client
-databend-meta-client = "260205.13.1"
+databend-meta-client = "260205.13.2"
 structkey = "0.1.1"
 
 # Crates.io dependencies
@@ -414,6 +414,7 @@ prost-build = { version = "0.14.3" }
 prqlc = "0.11.3"
 rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 rand_distr = "0.4.3"
+raft-log = "0.4.4"
 rayon = "1.9.0"
 recursive = "0.1.1"
 redis = { version = "0.27.5", features = ["tokio-comp", "connection-manager"] }
@@ -637,9 +638,9 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
 databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.4.0" }
-databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.0.0" }
-databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.1" }
-databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.0.0" }
+databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.2.0" }
+databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.2" }
+databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.2.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "a16344417d1fec6df4a62d8e77679211e909f86e" }
 lance-arrow = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
@@ -648,13 +649,13 @@ lance-encoding = { git = "https://github.com/datafuse-extras/lance", rev = "85f9
 lance-file = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
 lance-io = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
 lance-table = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
-map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
+map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
 # Keep ORC on a patch while the upstream crate has not caught up with Arrow 58 yet.
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc17101f1c96e1ea7c7a19e931110471a4bd7e21" }
 parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "bbbe79543" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
-state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }
+state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.4.0" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-common" }
