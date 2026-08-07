@@ -346,6 +346,10 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_bloom_index_location_from_block_location(loc: &str) -> String {
+        Self::gen_bloom_index_location_with_version(loc, BlockFilter::VERSION)
+    }
+
+    pub fn gen_bloom_index_location_with_version(loc: &str, format_version: u64) -> String {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
@@ -353,10 +357,7 @@ impl TableMetaLocationGenerator {
         let id: String = block_name.chars().take(32).collect();
         format!(
             "{}/{}/{}_v{}.parquet",
-            prefix,
-            FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
-            id,
-            BlockFilter::VERSION,
+            prefix, FUSE_TBL_XOR_BLOOM_INDEX_PREFIX, id, format_version,
         )
     }
 

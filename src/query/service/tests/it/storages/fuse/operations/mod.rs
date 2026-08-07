@@ -16,6 +16,7 @@
 mod alter_table;
 mod analyze;
 mod clustering;
+mod column_groups;
 mod commit;
 
 mod create_or_replace_ownership_object;

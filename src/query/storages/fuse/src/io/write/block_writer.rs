@@ -287,6 +287,7 @@ impl BlockBuilder {
             file_size,
             col_stats,
             col_metas,
+            column_groups: vec![],
             cluster_stats,
             partition_stats,
             location: block_location,
