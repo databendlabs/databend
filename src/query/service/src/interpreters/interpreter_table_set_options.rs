@@ -130,7 +130,6 @@ impl Interpreter for SetOptionsInterpreter {
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
-
         if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
             error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
@@ -191,8 +190,6 @@ impl Interpreter for SetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
-        // check mutability
-        table.check_mutable()?;
 
         if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
             let mode = mode.parse::<WriteDistributionMode>()?;
@@ -234,6 +231,9 @@ impl Interpreter for SetOptionsInterpreter {
                 options_map.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(), begin_version);
             }
         }
+
+        // check mutability
+        table.check_mutable()?;
 
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;

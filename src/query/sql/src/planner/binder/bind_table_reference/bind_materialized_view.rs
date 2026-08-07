@@ -287,13 +287,22 @@ impl Binder {
                         source_table_id
                     ))
                 })?;
-            self.validate_materialized_view_binding(
-                catalog_name,
-                source_table_id,
-                table_meta.get_id(),
-                table_meta.name(),
-            )
-            .await?;
+            // The binding generation is immutable while the source generation only increases.
+            // Read the source generation at admission before checking the exact binding.
+            let current_source_generation = catalog
+                .get_mv_source_generation(&tenant, source_table_id)
+                .await?;
+            let bound_source_generation = catalog
+                .get_mv_bound_source_generation(&tenant, source_table_id, table_meta.get_id())
+                .await?;
+            if current_source_generation.is_none()
+                || bound_source_generation != current_source_generation
+            {
+                return Err(ErrorCode::InvalidMaterializedView(format!(
+                    "materialized view {} has an invalid source binding; recreate the materialized view",
+                    table_meta.name()
+                )));
+            }
             Ok::<_, ErrorCode>((
                 mv_definition,
                 source_table_id,

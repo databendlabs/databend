@@ -279,8 +279,12 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         )))
     }
 
-    /// Get the semantic source generation used to fence MV creation and refresh.
-    async fn get_mv_source_generation(&self, tenant: &Tenant, source_table_id: u64) -> Result<u64>;
+    /// Get the current semantic source generation, if its record exists.
+    async fn get_mv_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>>;
 
     /// Point-read the immutable source generation on one materialized-view binding.
     async fn get_mv_bound_source_generation(

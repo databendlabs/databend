@@ -55,12 +55,18 @@ impl Interpreter for DescribeTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
+        let catalog = self.plan.catalog.as_str();
         let database = self.plan.database.as_str();
         let table = self.plan.table.as_str();
-        let table = self.ctx.get_table(catalog_name, database, table).await?;
+        let table = self.ctx.get_table(catalog, database, table).await?;
         let tbl_info = table.get_table_info();
-        let is_materialized_view = is_materialized_view_engine(tbl_info.engine());
+
+        if is_materialized_view_engine(tbl_info.engine()) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "DESCRIBE is not supported for MATERIALIZED VIEW {}.{}",
+                &self.plan.database, &self.plan.table
+            )));
+        }
 
         let schema = if tbl_info.engine() == VIEW_ENGINE {
             if let Some(query) = tbl_info.options().get(QUERY) {
@@ -72,27 +78,11 @@ impl Interpreter for DescribeTableInterpreter {
                     "Logical error, View Table must have a SelectQuery inside.",
                 ));
             }
-        } else if is_materialized_view {
-            let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let definition = catalog
-                .get_mv_definition(&self.ctx.get_tenant(), table.get_id())
-                .await?
-                .ok_or_else(|| {
-                    ErrorCode::Internal(
-                        "Logical error, Materialized View must have a query definition.",
-                    )
-                })?;
-            Ok(Arc::new(definition.data.logical_schema))
         } else {
             Ok(table.schema())
         }?;
 
-        let (names, types, nulls, mut default_exprs, extras) = generate_desc_schema(schema);
-        if is_materialized_view {
-            // MV logical schemas use default_expr internally to persist the final projection
-            // over physical aggregate-state columns. It is not a user-visible column default.
-            default_exprs.fill("NULL".to_string());
-        }
+        let (names, types, nulls, default_exprs, extras) = generate_desc_schema(schema);
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(names),

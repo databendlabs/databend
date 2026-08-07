@@ -291,7 +291,7 @@ impl Catalog for PaimonCatalog {
         &self,
         _tenant: &Tenant,
         _source_table_id: u64,
-    ) -> Result<u64> {
+    ) -> Result<Option<u64>> {
         Err(read_only("get_mv_source_generation"))
     }
 

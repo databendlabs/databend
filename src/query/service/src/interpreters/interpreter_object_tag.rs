@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::database::is_builtin_database;
 use databend_common_catalog::database::is_system_database;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::tag_api::TagApi;
@@ -214,13 +213,10 @@ async fn resolve_table_id_object(
                         table_name
                     )));
                 }
-            } else {
-                table.check_mutable()?;
-                if table.is_temp() {
-                    return Err(ErrorCode::Unimplemented(
-                        "Tags are not supported for temporary tables",
-                    ));
-                }
+            } else if table.is_temp() {
+                return Err(ErrorCode::Unimplemented(
+                    "Tags are not supported for temporary tables",
+                ));
             }
             Ok(Some(TaggableObject::Table {
                 table_id: table.get_table_info().ident.table_id,

@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -450,7 +449,6 @@ impl InsertMultiTableInterpreter {
                 source_scalar_exprs,
             } = into;
             let table = self.ctx.get_table(catalog, database, table).await?;
-            table.check_mutable()?;
             branches.push(
                 table,
                 condition,

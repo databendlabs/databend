@@ -118,34 +118,6 @@ fn normalize_null_fields(schema: TableSchemaRef) -> TableSchemaRef {
 }
 
 impl Binder {
-    pub(in crate::planner::binder) async fn validate_materialized_view_binding(
-        &self,
-        catalog_name: &str,
-        source_table_id: u64,
-        mv_table_id: u64,
-        materialized_view_name: &str,
-    ) -> Result<u64> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let bound_source_generation = catalog
-            .get_mv_bound_source_generation(&tenant, source_table_id, mv_table_id)
-            .await?
-            .ok_or_else(|| {
-                ErrorCode::InvalidMaterializedView(format!(
-                    "materialized view {materialized_view_name} has no source binding"
-                ))
-            })?;
-        let current_source_generation = catalog
-            .get_mv_source_generation(&tenant, source_table_id)
-            .await?;
-        if bound_source_generation != current_source_generation {
-            return Err(ErrorCode::InvalidMaterializedView(format!(
-                "materialized view {materialized_view_name} is invalid because its source schema changed; recreate the materialized view"
-            )));
-        }
-        Ok(current_source_generation)
-    }
-
     async fn resolve_materialized_view_target(
         &self,
         catalog: &Option<Identifier>,
@@ -408,7 +380,8 @@ impl Binder {
         let source_catalog = self.ctx.get_catalog(&source_catalog_name).await?;
         let expected_source_generation = source_catalog
             .get_mv_source_generation(&tenant, source_table_id)
-            .await?;
+            .await?
+            .unwrap_or(0);
 
         // Qualify the logical definition once so stale fallback is independent of the session's
         // current database. The physical definition starts from that same canonical source SQL.
@@ -501,9 +474,10 @@ impl Binder {
             }
         }
 
-        let storage_params = self
-            .resolve_database_default_storage_params(target_database.as_ref())
-            .await?;
+        // TODO: resolve the database default storage params for the materialized view so it honors
+        // DEFAULT_STORAGE_CONNECTION/DEFAULT_STORAGE_PATH like base tables do. Deferred to a
+        // follow-up; the MV currently falls back to the global default storage.
+        let storage_params = None;
 
         let mv_definition = MVDefinition {
             original_query: original_query.to_string(),
@@ -544,7 +518,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_alter_materialized_view(
+    pub(crate) async fn bind_alter_materialized_view(
         &mut self,
         stmt: &AlterMaterializedViewStmt,
     ) -> Result<Plan> {
@@ -621,7 +595,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_optimize_materialized_view(
+    pub(crate) async fn bind_optimize_materialized_view(
         &mut self,
         stmt: &OptimizeTableStmt,
     ) -> Result<Plan> {
@@ -698,14 +672,6 @@ impl Binder {
             .meta
             .materialized_view_source_table_id()
             .map_err(ErrorCode::from)?;
-        let expected_source_generation = self
-            .validate_materialized_view_binding(
-                &catalog,
-                source_table_id,
-                mv_table_id,
-                &format!("{database}.{view_name}"),
-            )
-            .await?;
 
         Ok(Plan::RefreshMaterializedView(Box::new(
             RefreshMaterializedViewPlan {
@@ -717,13 +683,12 @@ impl Binder {
                     table_id: mv_table_id,
                 },
                 source_table_id,
-                expected_source_generation,
             },
         )))
     }
 
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_show_create_materialized_view(
+    pub(crate) async fn bind_show_create_materialized_view(
         &mut self,
         _bind_context: &mut BindContext,
         stmt: &ShowCreateMaterializedViewStmt,

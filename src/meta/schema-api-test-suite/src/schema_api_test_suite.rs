@@ -1776,13 +1776,10 @@ impl SchemaApiTestSuite {
                     .await?
                     .is_empty()
             );
-            assert!(
-                mt.get_pb(&MVSourceBindingVersionIdent::new(
-                    &tenant,
-                    missing_source_id
-                ))
-                .await?
-                .is_none()
+            assert_eq!(
+                mt.get_mv_source_generation(&tenant, missing_source_id)
+                    .await?,
+                None
             );
         }
 
@@ -1850,6 +1847,11 @@ impl SchemaApiTestSuite {
             assert_eq!(initialized_version.data, MVSourceBindingVersion {
                 current_source_generation: initial_source_binding_generation,
             });
+            assert_eq!(
+                mt.get_mv_source_generation(&tenant, source_table_id)
+                    .await?,
+                Some(initial_source_binding_generation)
+            );
 
             let published_table = mt
                 .get_pb(&TableId::new(created.table_id))

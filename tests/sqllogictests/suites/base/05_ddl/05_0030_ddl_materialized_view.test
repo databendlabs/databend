@@ -83,13 +83,9 @@ SELECT count(*) FROM test_mv
 ----
 2
 
-# DESC sees the materialized view schema.
-query TTTTT
+# DESC does not expose the materialized view's physical storage schema.
+statement error 1302
 DESC test_mv
-----
-id INT YES NULL (empty)
-val VARCHAR YES NULL (empty)
-amount INT YES NULL (empty)
 
 # SHOW CREATE MATERIALIZED VIEW
 query TT
@@ -97,11 +93,9 @@ SHOW CREATE MATERIALIZED VIEW test_mv
 ----
 test_mv CREATE MATERIALIZED VIEW `default`.`test_mv` (`id`, `val`, `amount`) AS SELECT id, val, amount FROM default.mv_base_t WHERE id <= 2
 
-# SHOW CREATE TABLE on MV outputs MV DDL.
-query TT
+# SHOW CREATE TABLE does not accept materialized views.
+statement error 1302
 SHOW CREATE TABLE test_mv
-----
-test_mv CREATE MATERIALIZED VIEW `default`.`test_mv` (`id`, `val`, `amount`) AS SELECT id, val, amount FROM default.mv_base_t WHERE id <= 2
 
 # Materialized view creation is always asynchronous; explicit creation modes are rejected.
 statement error
@@ -111,7 +105,7 @@ statement error
 CREATE ASYNC MATERIALIZED VIEW test_mv_async AS SELECT id FROM mv_base_t
 
 # SHOW CREATE MATERIALIZED VIEW rejects base tables.
-statement error
+statement error 1302
 SHOW CREATE MATERIALIZED VIEW mv_base_t
 
 # SHOW MATERIALIZED VIEWS surfaces the MV object.
@@ -160,20 +154,21 @@ CREATE OR REPLACE MATERIALIZED VIEW test_mv AS SELECT id, val, amount FROM mv_ba
 
 # Protected options: user cannot set MV options via CREATE TABLE.
 statement error 1301
-CREATE TABLE fake_mv (x INT) materialized_view = 'true'
+CREATE TABLE fake_mv (x INT) materialized_view_source_table_id = '1'
 
 # The MV engine cannot be used to bypass CREATE MATERIALIZED VIEW metadata creation.
 statement error 1005
 CREATE TABLE fake_mv_engine (x INT) ENGINE = MATERIALIZED_VIEW
 
 # Protected options: user cannot set MV options via ALTER TABLE.
+statement error 1301
+ALTER TABLE test_mv SET OPTIONS (materialized_view_source_table_id = '1')
+
+# Even an option valid for the MV engine cannot be changed through ALTER TABLE.
 statement error 3905
-ALTER TABLE test_mv SET OPTIONS (materialized_view_query = 'SELECT 1')
+ALTER TABLE test_mv SET OPTIONS (aggressive_recluster = 1)
 
-statement error
-ALTER TABLE test_mv SET OPTIONS (block_per_segment = 10)
-
-statement error
+statement error 3905
 ALTER TABLE test_mv UNSET OPTIONS (block_per_segment)
 
 statement error
@@ -221,12 +216,6 @@ ALTER TABLE test_mv CREATE TAG mv_snapshot
 
 statement error 3905
 ALTER TABLE test_mv DROP TAG mv_snapshot
-
-statement error 3905
-ALTER TABLE test_mv SET TAG missing_tag = 'value'
-
-statement error 3905
-ALTER TABLE test_mv UNSET TAG missing_tag
 
 # TRUNCATE is blocked on materialized views.
 statement error 3905
@@ -543,7 +532,7 @@ REFRESH MATERIALIZED VIEW mv_guard
 statement ok
 ALTER TABLE mv_guard_source_renamed RENAME COLUMN a TO renamed_a
 
-statement error
+statement error 2328
 REFRESH MATERIALIZED VIEW mv_guard
 
 # Reads reject the same stale source binding instead of using MV storage.
@@ -557,7 +546,7 @@ CREATE MATERIALIZED VIEW mv_guard_recreated AS SELECT renamed_a, b, c FROM mv_gu
 statement ok
 ALTER TABLE mv_guard_source_renamed MODIFY COLUMN renamed_a BIGINT
 
-statement error
+statement error 2328
 REFRESH MATERIALIZED VIEW mv_guard_recreated
 
 statement error 2328

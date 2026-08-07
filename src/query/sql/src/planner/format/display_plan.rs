@@ -126,7 +126,6 @@ impl Plan {
             Plan::ShowCreateMaterializedView(_) => Ok("ShowCreateMaterializedView".to_string()),
             Plan::DropMaterializedView(_) => Ok("DropMaterializedView".to_string()),
             Plan::RefreshMaterializedView(_) => Ok("RefreshMaterializedView".to_string()),
-            Plan::DescribeMaterializedView(_) => Ok("DescribeMaterializedViewStmt".to_string()),
 
             // Streams
             Plan::CreateStream(_) => Ok("CreateStream".to_string()),

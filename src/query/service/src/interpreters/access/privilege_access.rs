@@ -2504,8 +2504,6 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            // TODO
-            Plan::DescribeMaterializedView(_) => {},
         }
 
         Ok(())
