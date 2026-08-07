@@ -512,6 +512,23 @@ SELECT count(*) FROM hash_partitioned WHERE id >= 40000
 ----
 3
 
+# Vector clustering buffers and concatenates input blocks. Keep the partition
+# splitter after vector clustering so the serialized blocks remain partition-local.
+statement ok
+CREATE TABLE hash_partitioned_vector(p INT, embedding VECTOR(2), VECTOR INDEX idx (embedding) distance='cosine') PARTITION BY (p) CLUSTER BY (embedding) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO hash_partitioned_vector VALUES
+    (0, [0.1, 0.2]),
+    (1, [0.2, 0.3]),
+    (0, [0.3, 0.4]),
+    (1, [0.4, 0.5])
+
+query I
+SELECT count(*) FROM hash_partitioned_vector
+----
+4
+
 statement error write_distribution_mode must be either 'none' or 'hash'
 CREATE TABLE invalid_write_distribution(p INT) PARTITION BY (p) WRITE_DISTRIBUTION_MODE='random'
 
