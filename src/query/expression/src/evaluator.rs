@@ -40,13 +40,28 @@ use crate::type_check::format_function_argument_mismatch_hint;
 use crate::type_check::get_simple_cast_function;
 use crate::types::BooleanType;
 use crate::types::DataType;
+use crate::types::Decimal64Type;
+use crate::types::Decimal128Type;
+use crate::types::Decimal256Type;
 use crate::types::DecimalColumn;
+use crate::types::DecimalDataKind;
 use crate::types::DecimalDataType;
 use crate::types::F32;
+use crate::types::Float32Type;
+use crate::types::Float64Type;
+use crate::types::Int8Type;
+use crate::types::Int16Type;
+use crate::types::Int32Type;
+use crate::types::Int64Type;
 use crate::types::NullableType;
+use crate::types::NumberDataType;
 use crate::types::NumberScalar;
 use crate::types::ReturnType;
 use crate::types::StringType;
+use crate::types::UInt8Type;
+use crate::types::UInt16Type;
+use crate::types::UInt32Type;
+use crate::types::UInt64Type;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::types::VectorDataType;
@@ -99,6 +114,131 @@ impl<'a> EvaluateOptions<'a> {
             strict_eval: self.strict_eval,
         }
     }
+}
+
+fn select_binary_if_typed<T: ValueType>(
+    flag: &Bitmap,
+    then_result: &Value<AnyType>,
+    else_result: &Value<AnyType>,
+    data_type: &DataType,
+    len: usize,
+) -> Result<Column> {
+    let then_result = then_result.try_downcast::<T>()?;
+    let else_result = else_result.try_downcast::<T>()?;
+    let mut output_builder = ColumnBuilder::with_capacity(data_type, len);
+
+    {
+        let mut output = T::downcast_builder(&mut output_builder);
+        match (&then_result, &else_result) {
+            (Value::Scalar(then_value), Value::Scalar(else_value)) => {
+                let then_value = T::to_scalar_ref(then_value);
+                let else_value = T::to_scalar_ref(else_value);
+                for take_then in flag.iter() {
+                    let value = if take_then {
+                        then_value.clone()
+                    } else {
+                        else_value.clone()
+                    };
+                    T::push_item_mut(&mut output, value);
+                }
+            }
+            (Value::Scalar(then_value), Value::Column(else_column)) => {
+                let then_value = T::to_scalar_ref(then_value);
+                for (row, take_then) in flag.iter().enumerate() {
+                    let value = if take_then {
+                        then_value.clone()
+                    } else {
+                        unsafe { T::index_column_unchecked(else_column, row) }
+                    };
+                    T::push_item_mut(&mut output, value);
+                }
+            }
+            (Value::Column(then_column), Value::Scalar(else_value)) => {
+                let else_value = T::to_scalar_ref(else_value);
+                for (row, take_then) in flag.iter().enumerate() {
+                    let value = if take_then {
+                        unsafe { T::index_column_unchecked(then_column, row) }
+                    } else {
+                        else_value.clone()
+                    };
+                    T::push_item_mut(&mut output, value);
+                }
+            }
+            (Value::Column(then_column), Value::Column(else_column)) => {
+                for (row, take_then) in flag.iter().enumerate() {
+                    let value = if take_then {
+                        unsafe { T::index_column_unchecked(then_column, row) }
+                    } else {
+                        unsafe { T::index_column_unchecked(else_column, row) }
+                    };
+                    T::push_item_mut(&mut output, value);
+                }
+            }
+        }
+    }
+
+    Ok(output_builder.build())
+}
+
+fn select_binary_numeric_if(
+    flag: &Bitmap,
+    then_result: &Value<AnyType>,
+    else_result: &Value<AnyType>,
+    data_type: &DataType,
+    len: usize,
+) -> Result<Option<Column>> {
+    macro_rules! select_plain {
+        ($type:ty) => {
+            select_binary_if_typed::<$type>(flag, then_result, else_result, data_type, len)
+        };
+    }
+    macro_rules! select_nullable {
+        ($type:ty) => {
+            select_binary_if_typed::<NullableType<$type>>(
+                flag,
+                then_result,
+                else_result,
+                data_type,
+                len,
+            )
+        };
+    }
+    macro_rules! select_number {
+        ($number_type:expr, $select:ident) => {
+            match $number_type {
+                NumberDataType::UInt8 => $select!(UInt8Type),
+                NumberDataType::UInt16 => $select!(UInt16Type),
+                NumberDataType::UInt32 => $select!(UInt32Type),
+                NumberDataType::UInt64 => $select!(UInt64Type),
+                NumberDataType::Int8 => $select!(Int8Type),
+                NumberDataType::Int16 => $select!(Int16Type),
+                NumberDataType::Int32 => $select!(Int32Type),
+                NumberDataType::Int64 => $select!(Int64Type),
+                NumberDataType::Float32 => $select!(Float32Type),
+                NumberDataType::Float64 => $select!(Float64Type),
+            }
+        };
+    }
+
+    let column = match data_type {
+        DataType::Number(number_type) => select_number!(number_type, select_plain)?,
+        DataType::Decimal(size) => match size.data_kind() {
+            DecimalDataKind::Decimal64 => select_plain!(Decimal64Type)?,
+            DecimalDataKind::Decimal128 => select_plain!(Decimal128Type)?,
+            DecimalDataKind::Decimal256 => select_plain!(Decimal256Type)?,
+        },
+        DataType::Nullable(inner) => match inner.as_ref() {
+            DataType::Number(number_type) => select_number!(number_type, select_nullable)?,
+            DataType::Decimal(size) => match size.data_kind() {
+                DecimalDataKind::Decimal64 => select_nullable!(Decimal64Type)?,
+                DecimalDataKind::Decimal128 => select_nullable!(Decimal128Type)?,
+                DecimalDataKind::Decimal256 => select_nullable!(Decimal256Type)?,
+            },
+            _ => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    Ok(Some(column))
 }
 
 pub struct Evaluator<'a> {
@@ -1640,6 +1780,13 @@ impl<'a> Evaluator<'a> {
                 })
                 .all_equal()
         );
+
+        if let (Some(len), [flag], [then_result]) = (len, flags.as_slice(), results.as_slice())
+            && let Some(column) =
+                select_binary_numeric_if(flag, then_result, &else_result, &generics[0], len)?
+        {
+            return Ok(Value::Column(column));
+        }
 
         // Pick the results from the result branches depending on the condition.
         let mut output_builder = ColumnBuilder::with_capacity(&generics[0], len.unwrap_or(1));
