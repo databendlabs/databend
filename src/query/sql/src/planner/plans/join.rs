@@ -763,6 +763,16 @@ impl Operator for Join {
         Box::new(iter)
     }
 
+    fn visit_scalar_expr_mut(&mut self, visitor: &mut dyn FnMut(&mut ScalarExpr)) {
+        for condition in &mut self.equi_conditions {
+            visitor(&mut condition.left);
+            visitor(&mut condition.right);
+        }
+        for condition in &mut self.non_equi_conditions {
+            visitor(condition);
+        }
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;

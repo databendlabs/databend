@@ -194,6 +194,15 @@ impl Operator for WindowGroup {
         Box::new(scalar_items.chain(windows))
     }
 
+    fn visit_scalar_expr_mut(&mut self, visitor: &mut dyn FnMut(&mut ScalarExpr)) {
+        for item in &mut self.scalar_items {
+            visitor(&mut item.scalar);
+        }
+        for window in &mut self.windows {
+            window.visit_scalar_expr_mut(visitor);
+        }
+    }
+
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -276,6 +285,34 @@ impl Operator for Window {
                 Box::new(iter.chain(std::iter::once(nth_value_function.arg.as_ref())))
             }
             _ => Box::new(iter),
+        }
+    }
+
+    fn visit_scalar_expr_mut(&mut self, visitor: &mut dyn FnMut(&mut ScalarExpr)) {
+        for item in &mut self.order_by {
+            visitor(&mut item.order_by_item.scalar);
+        }
+        for item in &mut self.partition_by {
+            visitor(&mut item.scalar);
+        }
+        for item in &mut self.arguments {
+            visitor(&mut item.scalar);
+        }
+
+        match &mut self.function {
+            WindowFuncType::Aggregate(aggregate) => {
+                for expr in aggregate.exprs_mut() {
+                    visitor(expr);
+                }
+            }
+            WindowFuncType::LagLead(function) => {
+                visitor(&mut function.arg);
+                if let Some(default) = &mut function.default {
+                    visitor(default);
+                }
+            }
+            WindowFuncType::NthValue(function) => visitor(&mut function.arg),
+            _ => {}
         }
     }
 

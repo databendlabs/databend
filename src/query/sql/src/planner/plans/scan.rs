@@ -327,6 +327,32 @@ impl Operator for Scan {
         )
     }
 
+    fn visit_scalar_expr_mut(&mut self, visitor: &mut dyn FnMut(&mut ScalarExpr)) {
+        if let Some(predicates) = &mut self.push_down_predicates {
+            for predicate in predicates {
+                visitor(predicate);
+            }
+        }
+        if let Some(predicates) = &mut self.secure_predicates {
+            for predicate in predicates {
+                visitor(predicate);
+            }
+        }
+        if let Some(prewhere) = &mut self.prewhere {
+            for predicate in &mut prewhere.predicates {
+                visitor(predicate);
+            }
+        }
+        if let Some(agg_index) = &mut self.agg_index {
+            for predicate in &mut agg_index.predicates {
+                visitor(predicate);
+            }
+            for selection in &mut agg_index.selection {
+                visitor(&mut selection.scalar);
+            }
+        }
+    }
+
     fn arity(&self) -> usize {
         0
     }

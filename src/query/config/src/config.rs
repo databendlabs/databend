@@ -3352,6 +3352,14 @@ pub struct CacheConfig {
     )]
     pub table_data_cache_population_queue_size: u32,
 
+    /// Maximum memory used by parameterized and exact logical plan cache entries.
+    #[clap(
+        long = "cache-planner-cache-max-bytes",
+        value_name = "VALUE",
+        default_value = "536870912"
+    )]
+    pub planner_cache_max_bytes: u64,
+
     /// Bytes of data cache in-memory
     #[clap(
         long = "cache-data-cache-in-memory-bytes",
@@ -3441,6 +3449,7 @@ impl Default for CacheConfig {
             disk_cache_virtual_column_meta_size: 0,
             data_cache_storage: CacheStorageTypeConfig::None,
             table_data_cache_population_queue_size: 0,
+            planner_cache_max_bytes: 512 * 1024 * 1024,
             data_cache_in_memory_bytes: 0,
             disk_cache_config: DiskCacheConfig::default(),
             data_cache_key_reload_policy: DiskCacheKeyReloadPolicy::Reset,

@@ -83,6 +83,15 @@ impl Operator for MutationSource {
         )
     }
 
+    fn visit_scalar_expr_mut(&mut self, visitor: &mut dyn FnMut(&mut ScalarExpr)) {
+        for predicate in &mut self.secure_predicates {
+            visitor(predicate);
+        }
+        for predicate in &mut self.user_predicates {
+            visitor(predicate);
+        }
+    }
+
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         Ok(Arc::new(RelationalProperty {
             output_columns: self.columns.clone(),
