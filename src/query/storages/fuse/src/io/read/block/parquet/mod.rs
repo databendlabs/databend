@@ -206,6 +206,20 @@ impl BlockReader {
         {
             let data_type = field.data_type().into();
 
+            // NOTE, there is something tricky here:
+            // - `column_chunks` always contains data of leaf columns
+            // - here we may processing a nested type field
+            // - But, even if the field being processed is a field with multiple leaf columns
+            //    `column_chunks.get(&field.column_id)` will still return Some(DataItem::_)[^1],
+            //    even if we are getting data from `column_chunks` using a non-leaf
+            //    `column_id` of `projected_schema.fields`
+            //
+            //   [^1]: Except in the current block, there is no data stored for the
+            //         corresponding field, and a default value has been declared for
+            //         the corresponding field.
+            //
+            //  Yes, it is too obscure, we need to polish it later.
+
             let value = match column_chunks.get(&field.column_id) {
                 Some(DataItem::RawData(_)) => {
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
