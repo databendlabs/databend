@@ -206,14 +206,14 @@ impl IPhysicalPlan for TableScan {
             true,
         )?;
 
+        let schema = self.source.schema();
         // Fill internal columns if needed.
         if let Some(internal_columns) = &self.internal_column {
-            builder
-                .main_pipeline
-                .add_transformer(|| TransformAddInternalColumns::new(internal_columns.clone()));
+            builder.main_pipeline.add_transformer(|| {
+                TransformAddInternalColumns::new(internal_columns.clone(), schema.clone())
+            });
         }
 
-        let schema = self.source.schema();
         let mut projection = self
             .name_mapping
             .keys()

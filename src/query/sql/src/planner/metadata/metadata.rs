@@ -38,7 +38,7 @@ use parking_lot::RwLock;
 
 use crate::optimizer::ir::SExpr;
 
-/// Planner use [`usize`] as it's index type.
+/// Planner use [`usize`] as its index type.
 ///
 /// This type will be used across the whole planner.
 pub type IndexType = usize;

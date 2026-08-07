@@ -4,6 +4,7 @@ SHOW ENGINES
 DELTA DELTA Storage Engine
 FUSE FUSE Storage Engine
 ICEBERG ICEBERG Storage Engine
+MATERIALIZED_VIEW Materialized View (Fuse-backed)
 MEMORY MEMORY Storage Engine
 NULL NULL Storage Engine
 PAIMON PAIMON Storage Engine

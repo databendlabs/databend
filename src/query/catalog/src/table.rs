@@ -453,6 +453,11 @@ pub trait Table: Sync + Send {
         self.engine() == "STREAM"
     }
 
+    /// Whether this table instance represents a CHANGE_TRACKING data source.
+    fn has_changes_source(&self) -> bool {
+        false
+    }
+
     fn use_own_sample_block(&self) -> bool {
         false
     }

@@ -219,7 +219,7 @@ impl Interpreter for ExplainInterpreter {
                 Plan::DataMutation { s_expr, .. } => {
                     let plan: Mutation = s_expr.plan().clone().try_into()?;
                     let mutation_build_info =
-                        build_mutation_info(self.ctx.clone(), &plan, true).await?;
+                        build_mutation_info(self.ctx.clone(), &plan, true, None).await?;
                     self.explain_analyze(
                         s_expr.child(0)?,
                         &plan.metadata,

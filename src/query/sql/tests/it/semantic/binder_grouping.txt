@@ -258,19 +258,123 @@ EvalScalar
 
 === grouping_sets_select_alias_with_grouping_func_does_not_shadow_column ===
 description: A SELECT alias containing grouping() must not shadow the underlying column in GROUPING SETS items.
-sql: SELECT if(grouping(category_id)=1, 0, category_id) AS category_id, label, sum(amount) FROM events GROUP BY GROUPING SETS ((label), (category_id, label))
+sql: SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d))
 status: ok
 EvalScalar
-├── scalars: [events.label (#1) AS (#1), sum(amount) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, events.category_id (#0)) AS (#7)]
+├── scalars: [t.d (#1) AS (#1), sum(v) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, t.k (#0)) AS (#7)]
 └── Aggregate(Initial)
-    ├── group items: [events.label (#1) AS (#1), events.category_id (#0) AS (#0), _grouping_id (#5) AS (#5)]
-    ├── aggregate functions: [sum(events.amount (#2)) AS (#6)]
+    ├── group items: [t.d (#1) AS (#1), t.k (#0) AS (#0), _grouping_id (#5) AS (#5)]
+    ├── aggregate functions: [sum(t.v (#2)) AS (#6)]
     └── EvalScalar
-        ├── scalars: [events.category_id (#0) AS (#0), events.label (#1) AS (#1), events.amount (#2) AS (#2)]
+        ├── scalars: [t.k (#0) AS (#0), t.d (#1) AS (#1), t.v (#2) AS (#2)]
         └── Scan
-            ├── table: default.events (#0)
+            ├── table: default.t (#0)
             ├── filters: []
             ├── order by: []
             └── limit: NONE
+
+
+=== grouping_alias_in_order_by_prefers_group_column ===
+description: ORDER BY alias prebinding must resolve grouping() arguments to input group columns.
+sql: SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) ORDER BY k, d
+status: ok
+Sort
+├── sort keys: [k (#7) ASC NULLS LAST, t.d (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t.d (#1) AS (#1), sum(v) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, t.k (#0)) AS (#7)]
+    └── Aggregate(Initial)
+        ├── group items: [t.d (#1) AS (#1), t.k (#0) AS (#0), _grouping_id (#5) AS (#5)]
+        ├── aggregate functions: [sum(t.v (#2)) AS (#6)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.d (#1) AS (#1), t.v (#2) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_alias_in_having_prefers_group_column ===
+description: HAVING alias prebinding must resolve grouping() arguments to input group columns.
+sql: SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) HAVING k IS NOT NULL
+status: ok
+EvalScalar
+├── scalars: [t.d (#1) AS (#1), sum(v) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, t.k (#0)) AS (#7)]
+└── Filter
+    ├── filters: [is_not_null(if(eq(grouping(1)(_grouping_id (#5)), 1), 0, t.k (#0)))]
+    └── Aggregate(Initial)
+        ├── group items: [t.d (#1) AS (#1), t.k (#0) AS (#0), _grouping_id (#5) AS (#5)]
+        ├── aggregate functions: [sum(t.v (#2)) AS (#6)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.d (#1) AS (#1), t.v (#2) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_in_order_by_falls_back_to_group_alias ===
+description: GROUPING arguments should still fall back to a valid group alias when no input column has that name.
+sql: SELECT i + 1 AS k, grouping(k) AS g, sum(v) FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY g, k
+status: ok
+Sort
+├── sort keys: [g (#7) ASC NULLS LAST, k (#6) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [sum(v) (#5) AS (#5), k (#2) AS (#6), grouping(0)(_grouping_id (#4)) AS (#7)]
+    └── Aggregate(Initial)
+        ├── group items: [plus(t.i (#0), 1) AS (#2), _grouping_id (#4) AS (#4)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#5)]
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), plus(t.i (#0), 1) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_in_order_by_keeps_alias_that_is_group_item ===
+description: GROUPING arguments must keep resolving to a same-name alias that is itself a group item, even when an input column shares the name.
+sql: SELECT i + 1 AS i, sum(v) FROM t GROUP BY GROUPING SETS ((i + 1), ()) ORDER BY grouping(i), i
+status: ok
+Sort
+├── sort keys: [grouping(i) (#7) ASC NULLS LAST, i (#6) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [sum(v) (#5) AS (#5), i + 1 (#2) AS (#6), grouping(0)(_grouping_id (#4)) AS (#7)]
+    └── Aggregate(Initial)
+        ├── group items: [plus(t.i (#0), 1) AS (#2), _grouping_id (#4) AS (#4)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#5)]
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), plus(t.i (#0), 1) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_alias_case_when_with_lateral_alias ===
+description: CASE WHEN grouping() aliases over string group columns must bind in ORDER BY together with lateral aliases.
+sql: SELECT CASE WHEN grouping(k) = 1 THEN 'all' ELSE k END AS k, count(*) AS c, sum(v) AS s, s / nullif(c, 0) AS ratio FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY k
+status: ok
+Sort
+├── sort keys: [k (#6) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [COUNT(*) (#4) AS (#4), sum(v) (#5) AS (#5), if(eq(grouping(0)(_grouping_id (#3)), 1), 'all', t.k (#0)) AS (#6), divide(sum(v) (#5), if(eq(COUNT(*) (#4), 0), NULL, COUNT(*) (#4))) AS (#7)]
+    └── Aggregate(Initial)
+        ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+        ├── aggregate functions: [count() AS (#4), sum(t.v (#1)) AS (#5)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 
 

@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::fmt::Debug;
 
 use databend_common_ast::ast::SampleConfig;
+use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionRegistry;
@@ -32,6 +34,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use jsonb::keypath::OwnedKeyPaths;
 
 use super::AggIndexInfo;
+use crate::plan::InternalColumn;
 use crate::plan::Projection;
 
 /// Information of Virtual Columns.
@@ -204,6 +207,42 @@ pub struct PushDownInfo {
 }
 
 impl PushDownInfo {
+    pub fn add_internal_column_dependencies<'a>(
+        &mut self,
+        schema: &TableSchema,
+        internal_columns: impl Iterator<Item = &'a InternalColumn>,
+    ) -> Result<()> {
+        let dependency_ids = internal_columns
+            .flat_map(InternalColumn::dependencies)
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if dependency_ids.is_empty() {
+            return Ok(());
+        }
+
+        let mut dependency_indices = Vec::with_capacity(dependency_ids.len());
+        for column_id in dependency_ids {
+            let field = schema.field_of_column_id(column_id)?;
+            dependency_indices.push(schema.index_of(field.name())?);
+        }
+        dependency_indices.sort_unstable();
+        let dependencies = Projection::Columns(dependency_indices);
+
+        if let Some(projection) = &mut self.projection {
+            projection.merge(&dependencies);
+        }
+        if let Some(output_columns) = &mut self.output_columns {
+            output_columns.merge(&dependencies);
+        }
+        if let Some(prewhere) = &mut self.prewhere {
+            prewhere.output_columns.merge(&dependencies);
+            prewhere
+                .remain_columns
+                .merge(&dependencies.difference(&prewhere.prewhere_columns));
+        }
+        Ok(())
+    }
+
     pub fn filter_only_use_index(&self) -> bool {
         let allow_search = self.inverted_index.is_some();
         if !allow_search {

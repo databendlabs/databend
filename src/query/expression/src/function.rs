@@ -352,11 +352,20 @@ impl FunctionRegistry {
 
     pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
         let func_name = func_name.to_lowercase();
-        if self.contains(&func_name) {
-            Some(self.properties.get(&func_name).cloned().unwrap_or_default())
-        } else {
-            None
+        if !self.contains(&func_name) {
+            return None;
         }
+
+        // Properties are stored under canonical function names, and aliases point directly to
+        // their canonical functions.
+        let canonical_name = self.aliases.get(&func_name).unwrap_or(&func_name);
+
+        Some(
+            self.properties
+                .get(canonical_name)
+                .cloned()
+                .unwrap_or_default(),
+        )
     }
 
     pub fn register_function(&mut self, func: Function) {

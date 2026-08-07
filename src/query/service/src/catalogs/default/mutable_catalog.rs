@@ -31,6 +31,7 @@ use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi2;
+use databend_common_meta_api::MaterializedViewApi;
 use databend_common_meta_api::RefApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
@@ -105,6 +106,7 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -555,6 +557,18 @@ impl Catalog for MutableCatalog {
             .await
             .map_err(meta_service_error)?;
         Ok(res)
+    }
+
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.ctx
+            .meta
+            .get_mv_definition(tenant, mv_table_id)
+            .await
+            .map_err(meta_service_error)
     }
 
     async fn mget_table_names_by_ids(

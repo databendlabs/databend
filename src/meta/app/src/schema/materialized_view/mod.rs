@@ -36,6 +36,11 @@ pub use source_table_mv_ident::SourceTableMVResource;
 pub const MATERIALIZED_VIEW_ENGINE: &str = "MATERIALIZED_VIEW";
 /// Internal table option containing the source table ID of a materialized view.
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID: &str = "materialized_view_source_table_id";
+/// Internal table option containing the source table sequence captured when the MV was created
+/// or last refreshed.
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ: &str = "materialized_view_source_table_seq";
+/// Hidden physical column used to match source DELETE/UPDATE rows during refresh.
+pub const MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN: &str = "_mv_source_row_id";
 
 pub fn is_materialized_view_engine(engine: &str) -> bool {
     engine == MATERIALIZED_VIEW_ENGINE
@@ -56,6 +61,24 @@ impl TableMeta {
         source_table_id.parse::<u64>().map_err(|_| {
             AppError::InvalidMaterializedView(InvalidMaterializedView::new(format!(
                 "invalid table option {OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID}: '{source_table_id}'"
+            )))
+        })
+    }
+
+    /// Return the source table sequence recorded by a materialized view.
+    pub fn materialized_view_source_table_seq(&self) -> Result<u64, AppError> {
+        let source_table_seq = self
+            .options
+            .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ)
+            .ok_or_else(|| {
+                AppError::InvalidMaterializedView(InvalidMaterializedView::new(format!(
+                    "missing required table option {OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ}"
+                )))
+            })?;
+
+        source_table_seq.parse::<u64>().map_err(|_| {
+            AppError::InvalidMaterializedView(InvalidMaterializedView::new(format!(
+                "invalid table option {OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ}: '{source_table_seq}'"
             )))
         })
     }
@@ -109,6 +132,7 @@ pub struct MVInfo {
 #[cfg(test)]
 mod tests {
     use super::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
+    use super::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
     use crate::schema::TableMeta;
 
     #[test]
@@ -128,5 +152,24 @@ mod tests {
             "42".to_string(),
         );
         assert_eq!(table_meta.materialized_view_source_table_id().unwrap(), 42);
+    }
+
+    #[test]
+    fn test_materialized_view_source_table_seq() {
+        let mut table_meta = TableMeta::default();
+
+        assert!(table_meta.materialized_view_source_table_seq().is_err());
+
+        table_meta.options.insert(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ.to_string(),
+            "invalid".to_string(),
+        );
+        assert!(table_meta.materialized_view_source_table_seq().is_err());
+
+        table_meta.options.insert(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ.to_string(),
+            "42".to_string(),
+        );
+        assert_eq!(table_meta.materialized_view_source_table_seq().unwrap(), 42);
     }
 }

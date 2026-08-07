@@ -2368,6 +2368,11 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
+            // TODO
+            Plan::CreateMaterializedView(_) => {},
+            Plan::DropMaterializedView(_) => {},
+            Plan::DescribeMaterializedView(_) => {},
+            Plan::RefreshMaterializedView(_) => {},
         }
 
         Ok(())

@@ -121,6 +121,12 @@ impl Plan {
             Plan::DropView(_) => Ok("DropView".to_string()),
             Plan::DescribeView(_) => Ok("DescribeView".to_string()),
 
+            // Materialized Views
+            Plan::CreateMaterializedView(_) => Ok("CreateMaterializedView".to_string()),
+            Plan::DropMaterializedView(_) => Ok("DropMaterializedView".to_string()),
+            Plan::RefreshMaterializedView(_) => Ok("RefreshMaterializedView".to_string()),
+            Plan::DescribeMaterializedView(_) => Ok("DescribeMaterializedViewStmt".to_string()),
+
             // Streams
             Plan::CreateStream(_) => Ok("CreateStream".to_string()),
             Plan::DropStream(_) => Ok("DropStream".to_string()),

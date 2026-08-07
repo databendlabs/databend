@@ -51,6 +51,7 @@ pub const BLOCK_NAME_COLUMN_ID: u32 = u32::MAX - 1;
 pub const SEGMENT_NAME_COLUMN_ID: u32 = u32::MAX - 2;
 pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
 // internal stream column id.
+pub const CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 4;
 pub const BASE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 5;
 pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
 // internal search column id.
@@ -106,8 +107,7 @@ pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
 pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
 pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
 
-// The change$row_id might be expended to the computation of
-// the ORIGIN_BLOCK_ROW_NUM_COL_NAME and BASE_ROW_ID_COL_NAME.
+// Column names reserved for engine-provided values and query pseudo columns.
 pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     HashSet::from([
         ROW_ID_COL_NAME,
