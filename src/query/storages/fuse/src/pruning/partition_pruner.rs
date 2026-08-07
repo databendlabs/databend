@@ -216,8 +216,7 @@ fn predicate_domain(constraints: &[RangeConstraint<String>]) -> Option<Domain> {
         return Some(constraint.constant.as_ref().domain(data_type));
     }
 
-    let (min, max) = Domain::full(&data_type.remove_nullable()).to_minmax();
-    let mut bounds = HistogramBounds::new(min.to_datum()?, max.to_datum()?);
+    let mut bounds = data_type.full_histogram_bounds().ok()?;
     for constraint in constraints {
         let op = ComparisonOp::try_from_func_name(&constraint.operator)?;
         let value = constraint.constant.clone().to_datum()?;

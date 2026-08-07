@@ -23,9 +23,9 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnMinMax;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Scalar;
 use databend_common_expression::types::ArrayColumn;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -43,7 +43,7 @@ use databend_common_expression::types::array::ArrayColumnBuilder;
 pub struct RuntimeFilterPacket {
     pub id: usize,
     pub inlist: Option<Column>,
-    pub min_max: Option<SerializableDomain>,
+    pub min_max: Option<ColumnMinMax>,
     pub bloom: Option<Vec<u64>>,
 }
 
@@ -108,7 +108,7 @@ struct FlightRuntimeFilterPacket {
     pub id: usize,
     pub bloom: Option<usize>,
     pub inlist: Option<usize>,
-    pub min_max: Option<SerializableDomain>,
+    pub min_max: Option<ColumnMinMax>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
@@ -255,10 +255,4 @@ impl BlockMetaInfo for FlightJoinRuntimeFilterPacket {
     fn override_block_schema(&self) -> Option<DataSchemaRef> {
         Some(self.schema.clone())
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct SerializableDomain {
-    pub min: Scalar,
-    pub max: Scalar,
 }

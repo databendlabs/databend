@@ -31,6 +31,7 @@ members = [
     "src/meta/store",
     "src/meta/ver",
     "src/query/codegen",
+    "src/query/expression/fuzz",
     "src/tests/planner_replay",
     "src/query/storages/paimon",
     "tests/sqllogictests",

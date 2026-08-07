@@ -15,6 +15,7 @@
 use std::convert::TryFrom;
 
 use databend_common_statistics::Datum;
+use databend_common_statistics::HistogramBounds;
 
 pub use super::stat_distribution::ReturnStat;
 pub use super::stat_distribution::StatArgs;
@@ -27,16 +28,28 @@ use crate::FunctionDomain;
 use crate::Scalar;
 use crate::ScalarRef;
 use crate::types::AnyType;
+use crate::types::ArgType;
 use crate::types::DataType;
+use crate::types::DateType;
+use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
 use crate::types::NumberDomain;
+use crate::types::TimestampType;
+use crate::types::TimestampTzType;
+use crate::types::boolean::BooleanDomain;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalDomain;
+use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
 use crate::types::i256;
 use crate::types::number::F32;
 use crate::types::number::F64;
+use crate::types::number::Number;
 use crate::types::number::NumberScalar;
+use crate::types::number::SimpleDomain;
+use crate::types::string::StringDomain;
+use crate::with_decimal_type;
+use crate::with_number_type;
 
 macro_rules! scalar_to_datum {
     ($value:expr, $scalar:ident, $binary_to_bytes:expr, $string_to_bytes:expr) => {
@@ -121,6 +134,130 @@ impl ScalarRef<'_> {
             .as_bytes()
             .to_vec())
     }
+}
+
+impl Domain {
+    pub fn histogram_bounds(&self) -> Result<HistogramBounds, String> {
+        let (min, max) = match self {
+            Domain::Number(domain) => with_number_type!(|NUM| match domain {
+                NumberDomain::NUM(SimpleDomain { min, max }) => (
+                    Scalar::Number(NumberScalar::NUM(*min)),
+                    Scalar::Number(NumberScalar::NUM(*max)),
+                ),
+            }),
+            Domain::Decimal(domain) => with_decimal_type!(|DECIMAL| match domain {
+                DecimalDomain::DECIMAL(SimpleDomain { min, max }, size) => (
+                    Scalar::Decimal(DecimalScalar::DECIMAL(*min, *size)),
+                    Scalar::Decimal(DecimalScalar::DECIMAL(*max, *size)),
+                ),
+            }),
+            Domain::Boolean(BooleanDomain {
+                has_false: true,
+                has_true: true,
+            }) => (Scalar::Boolean(false), Scalar::Boolean(true)),
+            Domain::Boolean(BooleanDomain {
+                has_false: true,
+                has_true: false,
+            }) => (Scalar::Boolean(false), Scalar::Boolean(false)),
+            Domain::Boolean(BooleanDomain {
+                has_false: false,
+                has_true: true,
+            }) => (Scalar::Boolean(true), Scalar::Boolean(true)),
+            Domain::Boolean(BooleanDomain {
+                has_false: false,
+                has_true: false,
+            }) => {
+                return Err(
+                    "cannot construct histogram bounds from an empty Boolean domain".into(),
+                );
+            }
+            Domain::String(StringDomain {
+                min,
+                max: Some(max),
+            }) => (Scalar::String(min.clone()), Scalar::String(max.clone())),
+            Domain::Timestamp(SimpleDomain { min, max }) => {
+                (Scalar::Timestamp(*min), Scalar::Timestamp(*max))
+            }
+            Domain::TimestampTz(SimpleDomain { min, max }) => {
+                (Scalar::TimestampTz(*min), Scalar::TimestampTz(*max))
+            }
+            Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
+            Domain::Nullable(domain) => {
+                let value = domain.value.as_deref().ok_or_else(|| {
+                    "cannot construct histogram bounds from an all-NULL domain".to_string()
+                })?;
+                return value.histogram_bounds();
+            }
+            domain => {
+                return Err(format!(
+                    "cannot construct finite histogram bounds from domain {domain:?}"
+                ));
+            }
+        };
+
+        histogram_bounds_from_scalars(min, max)
+    }
+}
+
+impl DataType {
+    pub fn full_histogram_bounds(&self) -> Result<HistogramBounds, String> {
+        let (min, max) = match self {
+            DataType::Nullable(inner) => return inner.full_histogram_bounds(),
+            DataType::Boolean => (Scalar::Boolean(false), Scalar::Boolean(true)),
+            DataType::Number(number_type) => with_number_type!(|NUM| match number_type {
+                NumberDataType::NUM => (
+                    Scalar::Number(NumberScalar::NUM(<_ as Number>::MIN)),
+                    Scalar::Number(NumberScalar::NUM(<_ as Number>::MAX)),
+                ),
+            }),
+            DataType::Decimal(size) => {
+                with_decimal_type!(|DECIMAL| match DecimalDataType::from(*size) {
+                    DecimalDataType::DECIMAL(size) => (
+                        Scalar::Decimal(DecimalScalar::DECIMAL(
+                            <_ as Decimal>::min_for_precision(size.precision()),
+                            size,
+                        )),
+                        Scalar::Decimal(DecimalScalar::DECIMAL(
+                            <_ as Decimal>::max_for_precision(size.precision()),
+                            size,
+                        )),
+                    ),
+                })
+            }
+            DataType::Timestamp => {
+                let domain = TimestampType::full_domain();
+                (Scalar::Timestamp(domain.min), Scalar::Timestamp(domain.max))
+            }
+            DataType::TimestampTz => {
+                let domain = TimestampTzType::full_domain();
+                (
+                    Scalar::TimestampTz(domain.min),
+                    Scalar::TimestampTz(domain.max),
+                )
+            }
+            DataType::Date => {
+                let domain = DateType::full_domain();
+                (Scalar::Date(domain.min), Scalar::Date(domain.max))
+            }
+            data_type => {
+                return Err(format!(
+                    "cannot construct finite histogram bounds for data type {data_type}"
+                ));
+            }
+        };
+
+        histogram_bounds_from_scalars(min, max)
+    }
+}
+
+fn histogram_bounds_from_scalars(min: Scalar, max: Scalar) -> Result<HistogramBounds, String> {
+    let min = min
+        .to_datum()
+        .ok_or_else(|| "histogram lower bound cannot be represented as Datum".to_string())?;
+    let max = max
+        .to_datum()
+        .ok_or_else(|| "histogram upper bound cannot be represented as Datum".to_string())?;
+    HistogramBounds::try_new(min, max).map_err(|error| error.to_string())
 }
 
 impl Domain {
@@ -364,6 +501,7 @@ fn type_mismatch(expected: &str, actual: &Datum) -> String {
 #[cfg(test)]
 mod tests {
     use databend_common_column::types::timestamp_tz;
+    use databend_common_statistics::HistogramBounds;
 
     use super::*;
 
@@ -379,5 +517,36 @@ mod tests {
             ScalarRef::TimestampTz(value).to_datum(),
             Some(Datum::Int(1_234_567))
         );
+    }
+
+    #[test]
+    fn histogram_bounds_from_domain_preserve_finite_non_null_range() {
+        let domain = Domain::Nullable(crate::types::nullable::NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::Number(NumberDomain::Int32(
+                SimpleDomain { min: -2, max: 3 },
+            )))),
+        });
+
+        let bounds = domain.histogram_bounds().unwrap();
+        assert_eq!(bounds.into_parts(), (Datum::Int(-2), Datum::Int(3)));
+
+        let unbounded_string = Domain::String(StringDomain {
+            min: "a".to_string(),
+            max: None,
+        });
+        assert!(unbounded_string.histogram_bounds().is_err());
+    }
+
+    #[test]
+    fn histogram_bounds_from_data_type_use_full_representable_range() {
+        let data_type = DataType::Number(NumberDataType::UInt16).wrap_nullable();
+        let bounds = data_type.full_histogram_bounds().unwrap();
+
+        assert_eq!(
+            bounds.into_parts(),
+            (Datum::UInt(u16::MIN as u64), Datum::UInt(u16::MAX as u64))
+        );
+        assert!(DataType::String.full_histogram_bounds().is_err());
     }
 }
