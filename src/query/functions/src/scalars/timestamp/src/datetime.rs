@@ -2268,17 +2268,25 @@ fn tz_wall_clock_single_segment(tz: &TimeZone, min_us: i64, max_us: i64) -> bool
 
 /// Range-sensitive monotonicity for calendar projections (`to_yyyymm`, `to_start_of_day`,
 /// ...): date inputs are always monotonic, while timestamp inputs are monotonic only when
-/// the range crosses no time-zone transition of the session time zone.
+/// the range crosses no time-zone transition of the session time zone. Nullable domains
+/// are judged by their non-null range; NULLs map to NULL and carry no ordering.
 fn calendar_monotonicity(ctx: &FunctionContext, args: &[Domain]) -> Option<usize> {
     let [domain] = args else {
         return None;
     };
+    calendar_domain_monotonic(ctx, domain).then_some(0)
+}
+
+fn calendar_domain_monotonic(ctx: &FunctionContext, domain: &Domain) -> bool {
     match domain {
-        Domain::Date(_) => Some(0),
-        Domain::Timestamp(simple) => {
-            tz_wall_clock_single_segment(&ctx.tz, simple.min, simple.max).then_some(0)
-        }
-        _ => None,
+        Domain::Date(_) => true,
+        Domain::Timestamp(simple) => tz_wall_clock_single_segment(&ctx.tz, simple.min, simple.max),
+        Domain::Nullable(nullable) => match &nullable.value {
+            Some(inner) => calendar_domain_monotonic(ctx, inner),
+            // An all-NULL input projects to a single NULL output.
+            None => true,
+        },
+        _ => false,
     }
 }
 
