@@ -134,9 +134,7 @@ impl FuseTable {
         }
 
         let partition_key_indices: Arc<[_]> = cluster_stats_gen.partition_key_index.clone().into();
-        let has_vector_cluster = cluster_stats_gen.vector_operator.is_some();
-        if !has_vector_cluster && !partition_key_indices.is_empty() {
-            let partition_key_indices = partition_key_indices.clone();
+        if !partition_key_indices.is_empty() {
             let mut builder = pipeline.add_transform_with_specified_len(
                 move |input, output| {
                     Ok(ProcessorPtr::create(AccumulatingTransformer::create(
@@ -192,22 +190,6 @@ impl FuseTable {
             }
             pipeline.add_pipe(builder.finalize());
         }
-        if has_vector_cluster && !partition_key_indices.is_empty() {
-            let mut builder = pipeline.add_transform_with_specified_len(
-                move |input, output| {
-                    Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                        input,
-                        output,
-                        TransformPartitionBy::new(partition_key_indices.clone()),
-                    )))
-                },
-                transform_len,
-            )?;
-            if need_match {
-                builder.add_items_prepend(vec![create_dummy_item()]);
-            }
-            pipeline.add_pipe(builder.finalize());
-        }
         Ok(cluster_stats_gen)
     }
 
@@ -255,8 +237,7 @@ impl FuseTable {
         }
 
         let partition_key_indices: Arc<[_]> = cluster_stats_gen.partition_key_index.clone().into();
-        let has_vector_cluster = cluster_stats_gen.vector_operator.is_some();
-        if !rewrite_replaced_block && !has_vector_cluster && !partition_key_indices.is_empty() {
+        if !rewrite_replaced_block && !partition_key_indices.is_empty() {
             pipeline.add_accumulating_transformer({
                 let partition_key_indices = partition_key_indices.clone();
                 move || TransformPartitionBy::new(partition_key_indices.clone())
@@ -282,16 +263,10 @@ impl FuseTable {
                 move || TransformSortPartial::new(LimitType::None, sort_desc.clone())
             });
         }
-        if (rewrite_replaced_block || has_vector_cluster) && !partition_key_indices.is_empty() {
-            if rewrite_replaced_block {
-                pipeline.add_accumulating_transformer(move || {
-                    TransformPartitionBy::new_for_update(partition_key_indices.clone())
-                });
-            } else {
-                pipeline.add_accumulating_transformer(move || {
-                    TransformPartitionBy::new(partition_key_indices.clone())
-                });
-            }
+        if rewrite_replaced_block && !partition_key_indices.is_empty() {
+            pipeline.add_accumulating_transformer(move || {
+                TransformPartitionBy::new_for_update(partition_key_indices.clone())
+            });
         }
         Ok(cluster_stats_gen)
     }
