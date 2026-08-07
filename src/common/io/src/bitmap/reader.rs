@@ -98,6 +98,9 @@ impl<'a> TreemapReader<'a> {
         let mut last_result = None;
         for bitmap_result in self.iter() {
             let bitmap = bitmap_result?;
+            if bitmap.containers() == 0 {
+                continue;
+            }
             let last_idx = bitmap.containers() - 1;
             let container = bitmap.container(last_idx)?;
             if let Some(low16) = container.max() {
@@ -190,6 +193,14 @@ impl BitmapReader<'_> {
 
         if containers > u16::MAX as u32 + 1 {
             return Err(Error::other("size is greater than supported"));
+        }
+
+        if containers == 0 {
+            return Ok(BitmapReader {
+                prefix,
+                containers,
+                buf: &buf[..reader.position() as usize],
+            });
         }
 
         let last_container = (containers - 1) as i64;
@@ -972,6 +983,7 @@ mod tests {
     use rand::Rng;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
+    use roaring::RoaringBitmap;
     use roaring::RoaringTreemap;
 
     use super::*;
@@ -996,6 +1008,108 @@ mod tests {
         }
 
         bitmap
+    }
+
+    // Mirrors the generators from RoaringFormatSpec/testdata and testdata64. We deliberately
+    // serialize with the local `roaring` crate: BitmapReader supports the no-run portable subset
+    // emitted by that implementation, rather than every representation accepted by the format.
+    fn create_format_spec_32_bitmap() -> RoaringTreemap {
+        let mut bitmap = RoaringTreemap::new();
+        for value in (0..100_000u64).step_by(1_000) {
+            bitmap.insert(value);
+        }
+        for value in 100_000..200_000u64 {
+            bitmap.insert(3 * value);
+        }
+        for value in 700_000..800_000u64 {
+            bitmap.insert(value);
+        }
+        bitmap
+    }
+
+    fn create_format_spec_64_bitmap() -> RoaringTreemap {
+        let mut bitmap = RoaringTreemap::new();
+        for value in (0..65_536u64).step_by(2) {
+            bitmap.insert(value);
+        }
+        let start = 1u64 << 32;
+        bitmap.insert_range(start..start + 1_000_000);
+        bitmap.insert(1u64 << 48);
+        bitmap
+    }
+
+    fn create_format_spec_portable_64_bitmap() -> RoaringTreemap {
+        let mut bitmap = RoaringTreemap::new();
+        for prefix in 0..2u64 {
+            let base = prefix << 32;
+            bitmap.insert_range((base)..=(base | 0x09000));
+            bitmap.insert_range((base | 0x0A000)..=(base | 0x10000));
+            bitmap.insert(base | 0x20000);
+            bitmap.insert(base | 0x20005);
+            for value in (0..0x10000u64).step_by(2) {
+                bitmap.insert(base | 0x80000 | value);
+            }
+        }
+        bitmap
+    }
+
+    fn assert_decodes_like_roaring(bitmap: &RoaringTreemap) -> io::Result<()> {
+        let mut buf = Vec::new();
+        bitmap.serialize_into(&mut buf)?;
+
+        let reader = TreemapReader::new(&buf)?;
+        let expected: Vec<_> = bitmap.bitmaps().collect();
+        assert_eq!(reader._size as usize, expected.len());
+
+        let actual: Vec<_> = reader.iter().collect::<io::Result<_>>()?;
+        assert_eq!(actual.len(), expected.len());
+
+        for (actual, (expected_prefix, expected_bitmap)) in actual.iter().zip(expected) {
+            assert_eq!(actual.prefix(), expected_prefix);
+            assert_eq!(actual.buf.len(), 4 + expected_bitmap.serialized_size());
+            assert_eq!(
+                RoaringBitmap::deserialize_from(actual.bitmap_buf())?,
+                *expected_bitmap
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_decode_format_spec_generated_data() -> io::Result<()> {
+        for bitmap in [
+            create_format_spec_32_bitmap(),
+            create_format_spec_64_bitmap(),
+            create_format_spec_portable_64_bitmap(),
+        ] {
+            assert_decodes_like_roaring(&bitmap)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_decode_empty_bitmap_bucket() -> io::Result<()> {
+        let prefix = 42u32;
+        let mut empty_bitmap = Vec::new();
+        RoaringBitmap::new().serialize_into(&mut empty_bitmap)?;
+
+        let mut entry = prefix.to_le_bytes().to_vec();
+        entry.extend_from_slice(&empty_bitmap);
+        let decoded = BitmapReader::decode(&entry)?;
+        assert_eq!(decoded.prefix(), prefix);
+        assert_eq!(decoded.containers(), 0);
+        assert_eq!(decoded.buf.len(), entry.len());
+        assert_eq!(decoded.bitmap_buf(), empty_bitmap);
+
+        let mut treemap = 1u64.to_le_bytes().to_vec();
+        treemap.extend_from_slice(&entry);
+        assert_eq!(bitmap_len(&treemap)?, 0);
+        assert_eq!(bitmap_min(&treemap)?, None);
+        assert_eq!(bitmap_max(&treemap)?, None);
+        assert!(!bitmap_contains(&treemap, (prefix as u64) << 32)?);
+
+        Ok(())
     }
 
     #[test]

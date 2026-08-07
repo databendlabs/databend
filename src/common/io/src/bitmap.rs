@@ -2142,68 +2142,91 @@ mod tests {
     /// following prop tests are ignored when using `miri`.
     #[cfg_attr(miri, ignore)]
     mod proptests {
-        use proptest::bits::BitSetLike;
-        use proptest::bits::SampledBitSetStrategy;
-        use proptest::collection::SizeRange;
         use proptest::collection::btree_map;
         use proptest::prelude::*;
+        use rand::Rng;
+        use rand::SeedableRng;
+        use rand::rngs::SmallRng;
         use roaring::RoaringBitmap;
 
         use super::*;
 
-        /// The random bits strategy.
-        ///
-        /// Generate random bits with [`Store::sampled`].
-        #[derive(Clone, Debug)]
-        struct Store(Vec<u16>);
+        const CONTAINER_BITS: usize = u16::MAX as usize + 1;
+        const CONTAINER_BYTES: usize = CONTAINER_BITS / u8::BITS as usize;
 
-        impl Store {
-            fn sampled(
-                size: impl Into<SizeRange>,
-                bits: impl Into<SizeRange>,
-            ) -> SampledBitSetStrategy<Self> {
-                SampledBitSetStrategy::new(size.into(), bits.into())
+        #[derive(Clone, Copy, Debug)]
+        enum ContainerSpec {
+            Array { size: usize, seed: u64 },
+            Bitmap { seed: u64 },
+        }
+
+        impl ContainerSpec {
+            fn fill(self, bytes: &mut [u8]) {
+                match self {
+                    ContainerSpec::Array { size, seed } => {
+                        let mut rng = SmallRng::seed_from_u64(seed);
+                        let mut values = vec![0; size];
+                        rng.fill(&mut values[..]);
+                        for value in values {
+                            bytes[value as usize / u8::BITS as usize] |=
+                                1 << (value % u8::BITS as u16);
+                        }
+                    }
+                    ContainerSpec::Bitmap { seed } => {
+                        let mut rng = SmallRng::seed_from_u64(seed);
+                        loop {
+                            rng.fill(&mut bytes[..]);
+                            let count: usize =
+                                bytes.iter().map(|byte| byte.count_ones() as usize).sum();
+                            if count > 4096 {
+                                return;
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        /// Implement BitSetLike as required by SampledBitSetStrategy.
-        impl BitSetLike for Store {
-            fn new_bitset(max: usize) -> Self {
-                assert!(max <= u16::MAX as usize + 1);
-                Store(Vec::new())
+        fn bitmap_from_specs(
+            specs: impl IntoIterator<Item = (u16, ContainerSpec)>,
+        ) -> RoaringBitmap {
+            let specs: Vec<_> = specs.into_iter().collect();
+            let Some((last_key, _)) = specs.last() else {
+                return RoaringBitmap::new();
+            };
+            let mut bytes = vec![0; (*last_key as usize + 1) * CONTAINER_BYTES];
+            for (key, spec) in specs {
+                let start = key as usize * CONTAINER_BYTES;
+                spec.fill(&mut bytes[start..start + CONTAINER_BYTES]);
             }
-            fn len(&self) -> usize {
-                u16::MAX as usize + 1
-            }
-            fn test(&self, bit: usize) -> bool {
-                self.0.binary_search(&(bit as u16)).is_ok()
-            }
-            fn set(&mut self, bit: usize) {
-                let v = bit as u16;
-                if let Err(pos) = self.0.binary_search(&v) {
-                    self.0.insert(pos, v);
-                }
-            }
-            fn clear(&mut self, bit: usize) {
-                let v = bit as u16;
-                if let Ok(pos) = self.0.binary_search(&v) {
-                    self.0.remove(pos);
-                }
-            }
-            fn count(&self) -> usize {
-                self.0.len()
-            }
+            RoaringBitmap::from_lsb0_bytes(0, &bytes)
+        }
+
+        #[test]
+        fn test_seeded_container_buffer() {
+            let specs = [
+                (3, ContainerSpec::Array {
+                    size: 4096,
+                    seed: 42,
+                }),
+                (7, ContainerSpec::Bitmap { seed: 42 }),
+            ];
+            let bitmap = bitmap_from_specs(specs);
+            assert_eq!(bitmap, bitmap_from_specs(specs));
+            assert_eq!(bitmap.min().map(|value| value >> 16), Some(3));
+            assert_eq!(bitmap.max().map(|value| value >> 16), Some(7));
         }
 
         /// The container strategy.
         ///
         /// Generates:
-        ///     50% array container with 1 to 4096 values
-        ///     50% bitmap container with 4097 to 65536 values
-        fn container_strategy() -> impl Strategy<Value = Vec<u16>> {
+        ///     50% array container from 1 to 4096 random u16 candidates
+        ///     50% bitmap container from 65536 random bits
+        fn container_strategy() -> impl Strategy<Value = ContainerSpec> {
             prop_oneof![
-                Store::sampled(1..=4096, ..=u16::MAX as usize).prop_map(|bs| bs.0),
-                Store::sampled(4097..u16::MAX as usize, ..=u16::MAX as usize).prop_map(|bs| bs.0),
+                (1usize..=4096, any::<u64>())
+                    .prop_map(|(size, seed)| ContainerSpec::Array { size, seed }),
+                any::<u64>().prop_map(|seed| ContainerSpec::Bitmap { seed }),
             ]
         }
 
@@ -2211,15 +2234,7 @@ mod tests {
         ///
         /// Generate 0 to 16 containers, with containers from [`container_strategy`].
         fn bitmap_strategy() -> impl Strategy<Value = RoaringBitmap> {
-            btree_map(0u16..=16, container_strategy(), 0usize..=16).prop_map(|map| {
-                let mut bitmap = RoaringBitmap::new();
-                for (key, values) in map {
-                    for v in values {
-                        bitmap.insert((key as u32) << 16 | v as u32);
-                    }
-                }
-                bitmap
-            })
+            btree_map(0u16..=16, container_strategy(), 0usize..=16).prop_map(bitmap_from_specs)
         }
 
         /// The RoaringTreemap strategy.
@@ -2227,15 +2242,9 @@ mod tests {
         /// Generate 0 to 16 RoaringBitmaps, each generated by [`bitmap_strategy`].
         fn tree_strategy() -> impl Strategy<Value = RoaringTreemap> {
             btree_map(0u32..=16, bitmap_strategy(), 0usize..=16).prop_map(|map| {
-                let mut treemap = RoaringTreemap::new();
-                for (key, bitmap) in map {
-                    if !bitmap.is_empty() {
-                        for v in bitmap.iter() {
-                            treemap.insert((key as u64) << 32 | v as u64);
-                        }
-                    }
-                }
-                treemap
+                RoaringTreemap::from_bitmaps(
+                    map.into_iter().filter(|(_, bitmap)| !bitmap.is_empty()),
+                )
             })
         }
 
