@@ -253,8 +253,6 @@ async fn test_no_check_timestamp_maps_missing_prev_snapshot() -> anyhow::Result<
         .snapshot_loc()
         .unwrap();
 
-    tokio::time::sleep(Duration::from_millis(2)).await;
-
     // second snapshot
     let qry = format!("insert into {}.{} values (3, (6, 9)) ", db, tbl);
     let strm = fixture.execute_query(qry.as_str()).await?;
