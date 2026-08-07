@@ -14,13 +14,8 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::ColumnID;
-use databend_common_ast::ast::ColumnRef;
-use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SampleConfig;
-use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
@@ -35,9 +30,8 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_expression::types::DataType;
-use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -60,6 +54,9 @@ use crate::binder::ScalarBinder;
 use crate::binder::ddl::materialized_view::find_materialized_view_aggregate;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
+use crate::plans::Aggregate;
+use crate::plans::AggregateFunction;
+use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarItem;
@@ -152,6 +149,93 @@ impl Binder {
             }
         }
         Ok((s_expr, logical_context))
+    }
+
+    fn build_materialized_view_state_merge(
+        &mut self,
+        physical_context: &BindContext,
+        child: SExpr,
+    ) -> Result<(SExpr, BindContext)> {
+        let physical_columns = physical_context
+            .columns
+            .iter()
+            .filter(|column| column.visibility == Visibility::Visible)
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut aggregate_functions = Vec::new();
+        let mut group_items = Vec::new();
+        let mut output_columns = Vec::with_capacity(physical_columns.len());
+        let mut saw_group_column = false;
+
+        for column in physical_columns {
+            let argument_type = *column.data_type.clone();
+            if matches!(argument_type.remove_nullable(), DataType::AggregateState(_)) {
+                if saw_group_column {
+                    return Err(ErrorCode::InvalidMaterializedView(
+                        "aggregate state columns must precede GROUP BY columns in materialized view storage",
+                    ));
+                }
+                let DataType::AggregateState(state) = argument_type.remove_nullable() else {
+                    unreachable!()
+                };
+                let merge_name = format!("{}_merge", state.function_name);
+                let function = AggregateFunctionFactory::instance().get(
+                    &merge_name,
+                    vec![],
+                    vec![argument_type.clone()],
+                    vec![],
+                )?;
+                let return_type = function.return_type()?;
+                let output = self.create_derived_column_binding(
+                    column.column_name.clone(),
+                    return_type.clone(),
+                );
+                aggregate_functions.push(ScalarItem {
+                    scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+                        span: None,
+                        func_name: merge_name.clone(),
+                        distinct: false,
+                        params: vec![],
+                        args: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column,
+                        })],
+                        return_type: Box::new(return_type),
+                        sort_descs: vec![],
+                        display_name: format!("{merge_name}({})", output.column_name),
+                    }),
+                    index: output.index,
+                });
+                output_columns.push(output);
+            } else {
+                saw_group_column = true;
+                group_items.push(ScalarItem {
+                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: column.clone(),
+                    }),
+                    index: column.index,
+                });
+                output_columns.push(column);
+            }
+        }
+
+        let aggregate = Aggregate {
+            mode: AggregateMode::Initial,
+            group_items,
+            aggregate_functions,
+            from_distinct: false,
+            rank_limit: None,
+            grouping_sets: None,
+        };
+        let s_expr = SExpr::create_unary(Arc::new(aggregate.into()), Arc::new(child));
+        let mut output_context = BindContext::new();
+        output_context.parent = physical_context.parent.clone();
+        output_context
+            .cte_context
+            .set_cte_context(physical_context.cte_context.clone());
+        output_context.columns = output_columns;
+        Ok((s_expr, output_context))
     }
 
     fn build_materialized_view_final_projection(
@@ -262,32 +346,6 @@ impl Binder {
             unpivot: None,
         };
 
-        let mut source_row_id_target_count = 0;
-        for target in &mut select.select_list {
-            let SelectTarget::AliasedExpr {
-                expr,
-                alias: Some(alias),
-            } = target
-            else {
-                continue;
-            };
-            if alias.name == MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN {
-                source_row_id_target_count += 1;
-                **expr = Expr::ColumnRef {
-                    span: None,
-                    column: ColumnRef {
-                        database: None,
-                        table: None,
-                        column: ColumnID::Name(Identifier::from_name(None, CHANGE_ROW_ID_COL_NAME)),
-                    },
-                };
-            }
-        }
-        if source_row_id_target_count != 1 {
-            return Err(ErrorCode::InvalidMaterializedView(format!(
-                "non-aggregate materialized view physical query must have exactly one source row ID column, found {source_row_id_target_count}",
-            )));
-        }
         Ok(())
     }
 
@@ -301,6 +359,7 @@ impl Binder {
         table_name_alias: Option<String>,
         table_meta: Arc<dyn Table>,
         mv_definition: &MVDefinition,
+        is_aggregating: bool,
         source_table: Arc<dyn Table>,
         source_database: &str,
         checkpoint_seq: u64,
@@ -369,12 +428,6 @@ impl Binder {
             return Ok(None);
         }
 
-        // The delta branch is backed by a Binder-local CHANGE_TRACKING table whose endpoint is
-        // reconstructed for every plan. Its result-cache dependency cannot be represented by the
-        // MV storage partitions alone, so a cached result could survive a source-table append.
-        // Keep hybrid reads uncached until dynamic table dependencies are part of the cache key.
-        self.ctx.result_cache_state().set_cacheable(false);
-
         self.internal_tables.insert(
             (
                 catalog_name.to_string(),
@@ -422,6 +475,11 @@ impl Binder {
             false,
             None,
         )?;
+        let (union_expr, union_context) = if is_aggregating {
+            self.build_materialized_view_state_merge(&union_context, union_expr)?
+        } else {
+            (union_expr, union_context)
+        };
         let (union_expr, mut logical_context) = self.build_materialized_view_final_projection(
             &union_context,
             &mv_definition.logical_schema,
@@ -495,6 +553,8 @@ impl Binder {
             table_meta.name(),
         )?;
 
+        let is_aggregating = find_materialized_view_aggregate(&definition_expr).is_some();
+
         let (source_table, source_database, source_seq, source_snapshot_location) =
             databend_common_base::runtime::block_on(async {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
@@ -543,18 +603,19 @@ impl Binder {
                     source_snapshot_location,
                 ))
             })?;
-        if find_materialized_view_aggregate(&definition_expr)
-            .is_some_and(|aggregate| !aggregate.aggregate_functions.is_empty())
-        {
-            return self.bind_materialized_view_fallback(
-                bind_context,
-                &mv_definition.data,
-                database,
-                table_name,
-                alias,
-            );
-        }
-
+        // MV results depend on both persisted storage and the live source endpoint. Include both
+        // identities in the result-cache key so a source append cannot reuse a previously fresh
+        // storage-only result. Sequence values distinguish no-snapshot endpoints and metadata
+        // revisions; snapshot locations identify data endpoints when present.
+        self.ctx.result_cache_state().add_cache_key_extra(format!(
+            "mv:{}:{}:{:?}|source:{}:{}:{:?}",
+            table_meta.get_id(),
+            table_meta.get_table_info().ident.seq,
+            table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION),
+            source_table_id,
+            source_seq,
+            source_snapshot_location
+        ));
         if !Self::is_materialized_view_fresh(table_meta.as_ref(), source_snapshot_location.as_ref())
         {
             let checkpoint_seq = match table_meta
@@ -600,6 +661,7 @@ impl Binder {
                 table_name_alias.clone(),
                 table_meta.clone(),
                 &mv_definition.data,
+                is_aggregating,
                 source_table,
                 &source_database,
                 checkpoint_seq,
@@ -645,6 +707,11 @@ impl Binder {
 
         let (s_expr, physical_context) =
             self.bind_base_table(bind_context, database, table_index, None, sample, false)?;
+        let (s_expr, physical_context) = if is_aggregating {
+            self.build_materialized_view_state_merge(&physical_context, s_expr)?
+        } else {
+            (s_expr, physical_context)
+        };
         let (s_expr, mut logical_context) = self.build_materialized_view_final_projection(
             &physical_context,
             &mv_definition.data.logical_schema,

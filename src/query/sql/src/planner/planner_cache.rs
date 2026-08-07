@@ -29,6 +29,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::is_cacheable_function;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_settings::ChangeValue;
@@ -311,7 +312,6 @@ impl TableRefVisitor {
                 self.cache_miss = true;
                 return;
             }
-
             let catalog = table.catalog.to_owned().unwrap_or(Identifier {
                 span: None,
                 name: self.ctx.get_current_catalog(),
@@ -345,6 +345,13 @@ impl TableRefVisitor {
                     )
                     .await
                 {
+                    if table.engine() == MATERIALIZED_VIEW_ENGINE {
+                        // An MV plan can depend on its live source endpoint even though the SQL AST
+                        // only names MV storage. The planner-cache snapshot therefore cannot model
+                        // all dependencies and must not reuse the bound MV plan.
+                        self.cache_miss = true;
+                        return;
+                    }
                     if let Some(snapshot) = TableSnapshot::from_resolved_table(table.as_ref()) {
                         self.has_security_policy |= snapshot.has_security_policy();
                         self.table_snapshots.push(snapshot);

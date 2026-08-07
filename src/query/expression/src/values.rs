@@ -513,6 +513,7 @@ impl Scalar {
             DataType::Geometry => Scalar::Geometry(vec![]),
             DataType::Geography => Scalar::Geography(Geography::default()),
             DataType::Vector(ty) => Scalar::Vector(ty.default_value()),
+            DataType::AggregateState(state) => Scalar::default_value(state.physical_type()),
             _ => unimplemented!(),
         }
     }
@@ -2033,6 +2034,9 @@ impl ColumnBuilder {
     }
 
     pub fn repeat(scalar: &ScalarRef, n: usize, data_type: &DataType) -> ColumnBuilder {
+        if let DataType::AggregateState(state) = data_type {
+            return Self::repeat(scalar, n, state.physical_type());
+        }
         if !scalar.is_null() {
             if let DataType::Nullable(ty) = data_type {
                 let mut builder = ColumnBuilder::with_capacity(ty, 1);

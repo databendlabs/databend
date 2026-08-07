@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use arrow_schema::Schema;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Scalar;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::AggregateStateDataType;
@@ -51,11 +54,17 @@ fn test_aggregate_state_physical_type() {
         DataType::Nullable(Box::new(state_type.clone()))
     );
     assert_eq!(
-        DataType::Tuple(vec![DataType::String, aggregate_state])
+        DataType::Tuple(vec![DataType::String, aggregate_state.clone()])
             .physical_type()
             .into_owned(),
-        DataType::Tuple(vec![DataType::String, state_type])
+        DataType::Tuple(vec![DataType::String, state_type.clone()])
     );
+
+    let default = Scalar::default_value(&aggregate_state);
+    assert!(matches!(default, Scalar::Tuple(_)));
+    let column = ColumnBuilder::repeat(&default.as_ref(), 2, &aggregate_state).build();
+    assert!(matches!(column, Column::Tuple(_)));
+    assert_eq!(column.len(), 2);
 }
 
 #[test]
