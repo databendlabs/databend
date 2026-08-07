@@ -171,7 +171,7 @@ impl Binder {
         let mut cluster_key = None;
         if let Some(cluster_opt) = cluster_by {
             let keys = self
-                .analyze_cluster_keys(cluster_opt, schema.clone(), None)
+                .analyze_cluster_keys(cluster_opt, schema.clone(), None, true)
                 .await?;
             if !keys.is_empty() {
                 cluster_key = Some(format!("({})", keys.join(", ")));
