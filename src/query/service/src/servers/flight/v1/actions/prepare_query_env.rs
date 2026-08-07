@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::servers::flight::v1::packets::QueryFragment;
+use databend_common_exception::Result;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct QueryFragments {
-    pub query_id: String,
-    pub exchange_session_id: String,
-    pub fragments: Vec<QueryFragment>,
+use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::packets::QueryEnvAdmission;
+
+pub static PREPARE_QUERY_ENV: &str = "/actions/prepare_query_env";
+
+pub async fn prepare_query_env(admission: QueryEnvAdmission) -> Result<()> {
+    DataExchangeManager::instance().admit_query_env(&admission)
 }

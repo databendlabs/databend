@@ -31,6 +31,8 @@ use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::spawn_blocking;
+use databend_common_cache::Cache;
+use databend_common_cache::LruCache;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -86,6 +88,7 @@ use crate::servers::flight::v1::network::NetworkInboundSender;
 use crate::servers::flight::v1::network::PingPongExchange;
 use crate::servers::flight::v1::packets::Edge;
 use crate::servers::flight::v1::packets::QueryEnv;
+use crate::servers::flight::v1::packets::QueryEnvAdmission;
 use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
@@ -109,6 +112,8 @@ enum QueryExchange {
         exchange: PingPongExchange,
     },
 }
+
+const CLOSED_EXCHANGE_SESSION_CACHE_CAPACITY: usize = 100_000;
 
 async fn create_flight_client(
     remote_node_id: String,
@@ -167,12 +172,16 @@ async fn create_flight_client(
 
 pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
+    closed_exchange_sessions: Mutex<LruCache<String, ()>>,
 }
 
 impl DataExchangeManager {
     pub fn init() -> Result<()> {
         GlobalInstance::set(Arc::new(DataExchangeManager {
             queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
+            closed_exchange_sessions: Mutex::new(LruCache::with_items_capacity(
+                CLOSED_EXCHANGE_SESSION_CACHE_CAPACITY,
+            )),
         }));
 
         Ok(())
@@ -257,11 +266,16 @@ impl DataExchangeManager {
             .collect()
     }
 
-    pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
+    pub fn get_query_ctx(
+        &self,
+        query_id: &str,
+        exchange_session_id: &str,
+    ) -> Result<Arc<QueryContext>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         if let Some(coordinator) = queries_coordinator.get_mut(query_id) {
+            coordinator.validate_exchange_session(exchange_session_id)?;
             if let Some(coordinator) = &coordinator.info {
                 return Ok(coordinator.query_ctx.clone());
             }
@@ -271,6 +285,64 @@ impl DataExchangeManager {
             "Query {} not found in cluster.",
             query_id
         )))
+    }
+
+    pub fn admit_query_env(&self, admission: &QueryEnvAdmission) -> Result<()> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        if self
+            .closed_exchange_sessions
+            .lock()
+            .contains(&admission.exchange_session_id)
+        {
+            return Err(ErrorCode::ClosedQuery(format!(
+                "Exchange session {} is closed",
+                admission.exchange_session_id
+            )));
+        }
+
+        let query_coordinator = match queries_coordinator.entry(admission.query_id.clone()) {
+            Entry::Occupied(entry) => {
+                let coordinator = entry.into_mut();
+                coordinator.validate_exchange_session(&admission.exchange_session_id)?;
+                coordinator
+            }
+            Entry::Vacant(entry) => entry.insert(QueryCoordinator::create(
+                admission.exchange_session_id.clone(),
+            )),
+        };
+
+        for (channel_id, num_threads) in &admission.inbound_channels {
+            query_coordinator.get_or_create_inbound_channel_set(channel_id, *num_threads)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn abort_query_env(&self, query_id: &str, exchange_session_id: &str) {
+        let query_coordinator = {
+            let queries_coordinator_guard = self.queries_coordinator.lock();
+            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+            match queries_coordinator.get(query_id) {
+                Some(query_coordinator)
+                    if query_coordinator.exchange_session_id == exchange_session_id =>
+                {
+                    let query_coordinator = queries_coordinator.remove(query_id);
+                    self.closed_exchange_sessions
+                        .lock()
+                        .insert(exchange_session_id.to_string(), ());
+                    query_coordinator
+                }
+                _ => None,
+            }
+        };
+
+        if let Some(mut query_coordinator) = query_coordinator {
+            query_coordinator.shutdown_query(None);
+            query_coordinator.on_finished();
+        }
     }
 
     #[async_backtrace::framed]
@@ -322,6 +394,7 @@ impl DataExchangeManager {
                     let edge = edge.weight().clone();
 
                     let query_id = env.query_id.clone();
+                    let exchange_session_id = env.exchange_session_id.clone();
                     let address = source.flight_address.clone();
                     let source_id = source.id.clone();
 
@@ -338,7 +411,9 @@ impl DataExchangeManager {
                                 .await?;
                                 Ok::<QueryExchange, ErrorCode>(QueryExchange::Fragment {
                                     channel: channel.clone(),
-                                    exchange: flight_client.do_get(&query_id, &channel).await?,
+                                    exchange: flight_client
+                                        .do_get(&query_id, &exchange_session_id, &channel)
+                                        .await?,
                                 })
                             }));
                         }
@@ -354,7 +429,11 @@ impl DataExchangeManager {
                                 Ok::<QueryExchange, ErrorCode>(QueryExchange::Statistics {
                                     source: source_id,
                                     exchange: flight_client
-                                        .request_server_exchange(&query_id, &target.id)
+                                        .request_server_exchange(
+                                            &query_id,
+                                            &exchange_session_id,
+                                            &target.id,
+                                        )
                                         .await?,
                                 })
                             }));
@@ -383,6 +462,7 @@ impl DataExchangeManager {
                         let target_id = target.id.clone();
                         let local_node_id = config.query.node_id.clone();
                         let query_id = env.query_id.clone();
+                        let exchange_session_id = env.exchange_session_id.clone();
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
                         let num_threads = channels.len();
@@ -405,6 +485,7 @@ impl DataExchangeManager {
                                 let response_stream = flight_client
                                     .do_exchange(send_rx, DoExchangeParams {
                                         query_id,
+                                        exchange_session_id,
                                         num_threads,
                                         exchange_id: exchange_id.clone(),
                                     })
@@ -466,36 +547,32 @@ impl DataExchangeManager {
 
                 if let Some(query_info) = query_info.as_mut() {
                     let query_id = env.query_id.clone();
+                    let exchange_session_id = env.exchange_session_id.clone();
                     query_info.remove_leak_query_worker =
                         Some(GlobalIORuntime::instance().spawn(async move {
                             let _ = tokio::time::sleep(Duration::from_secs(180)).await;
-                            DataExchangeManager::instance().remove_if_leak_query(query_id);
+                            DataExchangeManager::instance()
+                                .remove_if_leak_query(query_id, exchange_session_id);
                         }));
                 }
 
                 let queries_coordinator_guard = self.queries_coordinator.lock();
                 let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-                match queries_coordinator.entry(env.query_id.clone()) {
-                    Entry::Occupied(mut v) => {
-                        let query_coordinator = v.get_mut();
-                        query_coordinator.info = query_info;
-                        query_coordinator.is_request_server =
-                            GlobalConfig::instance().query.node_id == env.request_server_id;
-                        query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
-                        query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
-                        query_coordinator.add_statistics_exchanges(request_exchanges)?;
-                    }
-                    Entry::Vacant(v) => {
-                        let query_coordinator = v.insert(QueryCoordinator::create());
-                        query_coordinator.info = query_info;
-                        query_coordinator.is_request_server =
-                            GlobalConfig::instance().query.node_id == env.request_server_id;
-                        query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
-                        query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
-                        query_coordinator.add_statistics_exchanges(request_exchanges)?;
-                    }
-                };
+                let query_coordinator =
+                    queries_coordinator.get_mut(&env.query_id).ok_or_else(|| {
+                        ErrorCode::ClosedQuery(format!(
+                            "Query {} was closed during init",
+                            env.query_id
+                        ))
+                    })?;
+                query_coordinator.validate_exchange_session(&env.exchange_session_id)?;
+                query_coordinator.info = query_info;
+                query_coordinator.is_request_server =
+                    GlobalConfig::instance().query.node_id == env.request_server_id;
+                query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
+                query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
+                query_coordinator.add_statistics_exchanges(request_exchanges)?;
 
                 return Ok(());
             }
@@ -505,30 +582,32 @@ impl DataExchangeManager {
         Ok(())
     }
 
-    fn remove_if_leak_query(&self, query_id: String) {
-        let leak_query_id = {
+    fn remove_if_leak_query(&self, query_id: String, exchange_session_id: String) {
+        let is_leaked = {
             let queries_coordinator_guard = self.queries_coordinator.lock();
             let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
             match queries_coordinator.get(&query_id) {
-                None => None,
-                Some(may_leak_query) => {
-                    let info = may_leak_query.info.as_ref().expect("expect query info");
-                    match info.started.load(Ordering::SeqCst) {
-                        true => None,
-                        false => Some(query_id),
-                    }
+                Some(may_leak_query)
+                    if may_leak_query.exchange_session_id == exchange_session_id =>
+                {
+                    may_leak_query
+                        .info
+                        .as_ref()
+                        .is_some_and(|info| !info.started.load(Ordering::SeqCst))
                 }
+                _ => false,
             }
         };
 
-        if let Some(query_id) = leak_query_id {
+        if is_leaked {
             warn!(
                 "Query {} cannot start command while in 180 seconds",
                 query_id
             );
-            self.on_finished_query(
+            self.on_finished_exchange(
                 &query_id,
+                &exchange_session_id,
                 Some(ErrorCode::Internal(format!(
                     "Query {} cannot start command while in 180 seconds",
                     query_id
@@ -613,7 +692,12 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn set_ctx(&self, query_id: &str, ctx: Arc<QueryContext>) -> Result<()> {
+    pub fn set_ctx(
+        &self,
+        query_id: &str,
+        exchange_session_id: &str,
+        ctx: Arc<QueryContext>,
+    ) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
         match queries_coordinator.get_mut(query_id) {
@@ -622,6 +706,7 @@ impl DataExchangeManager {
                 query_id
             ))),
             Some(coordinator) => {
+                coordinator.validate_exchange_session(exchange_session_id)?;
                 if let Some(info) = coordinator.info.as_mut() {
                     info.query_ctx = ctx;
                     return Ok(());
@@ -635,7 +720,7 @@ impl DataExchangeManager {
 
     // Execute query in background
     #[fastrace::trace]
-    pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
+    pub fn execute_partial_query(&self, query_id: &str, exchange_session_id: &str) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -644,7 +729,10 @@ impl DataExchangeManager {
                 "Query {} not found in cluster.",
                 query_id
             ))),
-            Some(coordinator) => coordinator.execute_pipeline(),
+            Some(coordinator) => {
+                coordinator.validate_exchange_session(exchange_session_id)?;
+                coordinator.execute_pipeline()
+            }
         }
     }
 
@@ -659,7 +747,10 @@ impl DataExchangeManager {
                 "Query {} not found in cluster.",
                 fragments.query_id
             ))),
-            Some(query_coordinator) => query_coordinator.prepare_pipeline(fragments),
+            Some(query_coordinator) => {
+                query_coordinator.validate_exchange_session(&fragments.exchange_session_id)?;
+                query_coordinator.prepare_pipeline(fragments)
+            }
         }
     }
 
@@ -667,34 +758,40 @@ impl DataExchangeManager {
     pub fn handle_statistics_exchange(
         &self,
         id: String,
+        exchange_session_id: String,
         target: String,
     ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        match queries_coordinator.entry(id) {
-            Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(target),
-            Entry::Vacant(v) => v
-                .insert(QueryCoordinator::create())
-                .add_statistics_exchange(target),
-        }
+        let query_coordinator = queries_coordinator.get_mut(&id).ok_or_else(|| {
+            ErrorCode::ClosedQuery(format!(
+                "Cannot attach statistics exchange to closed query {}",
+                id
+            ))
+        })?;
+        query_coordinator.validate_exchange_session(&exchange_session_id)?;
+        query_coordinator.add_statistics_exchange(target)
     }
 
     #[fastrace::trace]
     pub fn handle_exchange_fragment(
         &self,
         query: String,
+        exchange_session_id: String,
         channel_id: String,
     ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        match queries_coordinator.entry(query) {
-            Entry::Occupied(mut v) => v.get_mut().register_flight_channel_sender(channel_id),
-            Entry::Vacant(v) => v
-                .insert(QueryCoordinator::create())
-                .register_flight_channel_sender(channel_id),
-        }
+        let query_coordinator = queries_coordinator.get_mut(&query).ok_or_else(|| {
+            ErrorCode::ClosedQuery(format!(
+                "Cannot attach exchange fragment to closed query {}",
+                query
+            ))
+        })?;
+        query_coordinator.validate_exchange_session(&exchange_session_id)?;
+        query_coordinator.register_flight_channel_sender(channel_id)
     }
 
     /// Handle a do_exchange request from a remote node.
@@ -706,6 +803,7 @@ impl DataExchangeManager {
     pub fn handle_do_exchange(
         &self,
         query_id: &str,
+        exchange_session_id: &str,
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
@@ -716,12 +814,14 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        match queries_coordinator.entry(query_id.to_string()) {
-            Entry::Occupied(mut v) => v.get_mut().create_inbound_sender(channel_id, num_threads),
-            Entry::Vacant(v) => v
-                .insert(QueryCoordinator::create())
-                .create_inbound_sender(channel_id, num_threads),
-        }
+        let query_coordinator = queries_coordinator.get_mut(query_id).ok_or_else(|| {
+            ErrorCode::ClosedQuery(format!(
+                "Cannot attach do_exchange to closed query {}",
+                query_id
+            ))
+        })?;
+        query_coordinator.validate_exchange_session(exchange_session_id)?;
+        query_coordinator.create_inbound_sender(channel_id, num_threads)
     }
 
     /// Get the NetworkInboundReceivers for a given query and channel.
@@ -808,6 +908,25 @@ impl DataExchangeManager {
 
     #[fastrace::trace]
     pub fn on_finished_query(&self, query_id: &str, cause: Option<ErrorCode>) {
+        self.finish_query(query_id, None, cause);
+    }
+
+    #[fastrace::trace]
+    pub fn on_finished_exchange(
+        &self,
+        query_id: &str,
+        exchange_session_id: &str,
+        cause: Option<ErrorCode>,
+    ) {
+        self.finish_query(query_id, Some(exchange_session_id), cause);
+    }
+
+    fn finish_query(
+        &self,
+        query_id: &str,
+        expected_exchange_session_id: Option<&str>,
+        cause: Option<ErrorCode>,
+    ) {
         let lock_start = Instant::now();
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let lock_wait = lock_start.elapsed();
@@ -820,7 +939,21 @@ impl DataExchangeManager {
 
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
+        let matches_session = queries_coordinator
+            .get(query_id)
+            .is_some_and(|coordinator| {
+                expected_exchange_session_id
+                    .is_none_or(|expected| coordinator.exchange_session_id == expected)
+            });
+
+        if matches_session {
+            let mut query_coordinator = queries_coordinator
+                .remove(query_id)
+                .expect("query coordinator must exist after session check");
+            self.closed_exchange_sessions
+                .lock()
+                .insert(query_coordinator.exchange_session_id.clone(), ());
+
             // Drop mutex guard to avoid deadlock during shutdown,
             drop(queries_coordinator_guard);
 
@@ -844,6 +977,7 @@ impl DataExchangeManager {
             keep_alive: settings.get_flight_keep_alive_params()?,
         };
         let mut root_fragment_ids = actions.get_root_fragment_ids()?;
+        let exchange_session_id = actions.get_exchange_session_id().to_string();
         let conf = GlobalConfig::instance();
 
         // Initialize query env between cluster nodes
@@ -860,14 +994,19 @@ impl DataExchangeManager {
             .do_action(INIT_QUERY_FRAGMENTS, query_fragments, flight_params)
             .await?;
 
-        self.set_ctx(&ctx.get_id(), ctx.clone())?;
+        self.set_ctx(&ctx.get_id(), &exchange_session_id, ctx.clone())?;
         if let Some(query_fragments) = local_fragments {
             init_query_fragments(query_fragments).await?;
         }
 
         // Get local pipeline of local task
         let main_fragment_id = root_fragment_ids.pop().unwrap();
-        let build_res = self.get_root_pipeline(ctx, main_fragment_id, root_fragment_ids)?;
+        let build_res = self.get_root_pipeline(
+            ctx,
+            &exchange_session_id,
+            main_fragment_id,
+            root_fragment_ids,
+        )?;
 
         let prepared_query = actions.prepared_query()?;
         let _: HashMap<String, ()> = cluster
@@ -880,6 +1019,7 @@ impl DataExchangeManager {
     fn get_root_pipeline(
         &self,
         ctx: Arc<QueryContext>,
+        exchange_session_id: &str,
         main_fragment_id: usize,
         fragment_ids: Vec<usize>,
     ) -> Result<PipelineBuildResult> {
@@ -891,6 +1031,8 @@ impl DataExchangeManager {
         match queries_coordinator.get_mut(&query_id) {
             None => Err(ErrorCode::Internal("Query not exists.")),
             Some(query_coordinator) => {
+                query_coordinator.validate_exchange_session(exchange_session_id)?;
+                let exchange_session_id = query_coordinator.exchange_session_id.clone();
                 if !query_coordinator.flight_data_senders.is_empty() {
                     unreachable!(
                         "query_coordinator.fragment_senders is not empty: {:?}",
@@ -945,8 +1087,11 @@ impl DataExchangeManager {
                         let mut statistics_receiver = statistics_receiver.lock();
 
                         statistics_receiver.shutdown(info.res.is_err());
-                        ctx.get_exchange_manager()
-                            .on_finished_query(&query_id, info.res.clone().err());
+                        ctx.get_exchange_manager().on_finished_exchange(
+                            &query_id,
+                            &exchange_session_id,
+                            info.res.clone().err(),
+                        );
                         statistics_receiver.wait_shutdown()
                     },
                 ));
@@ -1024,6 +1169,7 @@ struct QueryInfo {
 }
 
 pub(crate) struct QueryCoordinator {
+    exchange_session_id: String,
     info: Option<QueryInfo>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
     /// True when this node is the request server (coordinator) for the query.
@@ -1039,8 +1185,9 @@ pub(crate) struct QueryCoordinator {
 }
 
 impl QueryCoordinator {
-    pub fn create() -> QueryCoordinator {
+    pub fn create(exchange_session_id: String) -> QueryCoordinator {
         QueryCoordinator {
+            exchange_session_id,
             info: None,
             is_request_server: false,
             flight_data_senders: HashMap::new(),
@@ -1050,6 +1197,17 @@ impl QueryCoordinator {
             inbound_channel_sets: HashMap::new(),
             ping_pong_exchanges: HashMap::new(),
         }
+    }
+
+    fn validate_exchange_session(&self, exchange_session_id: &str) -> Result<()> {
+        if self.exchange_session_id == exchange_session_id {
+            return Ok(());
+        }
+
+        Err(ErrorCode::ClosedQuery(format!(
+            "Exchange session {} does not belong to the active query",
+            exchange_session_id
+        )))
     }
 
     pub fn add_statistics_exchange(
@@ -1152,7 +1310,24 @@ impl QueryCoordinator {
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
-        let channel_set = self.get_or_create_inbound_channel_set(channel_id, num_threads)?;
+        let channel_set = self
+            .inbound_channel_sets
+            .get(channel_id)
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "do_exchange channel {} was not admitted",
+                    channel_id
+                ))
+            })?
+            .clone();
+        if channel_set.channels.len() != num_threads {
+            return Err(ErrorCode::Internal(format!(
+                "NetworkInboundChannelSet {} has {} channels, expected {}",
+                channel_id,
+                channel_set.channels.len(),
+                num_threads
+            )));
+        }
 
         // TODO: get max_bytes_per_connection from query settings
         let max_bytes_per_connection = 20 * 1024 * 1024; // 20MB
@@ -1358,6 +1533,7 @@ impl QueryCoordinator {
         info_mut.query_executor = Some(executor.clone());
 
         let query_id = info_mut.query_id.clone();
+        let exchange_session_id = self.exchange_session_id.clone();
         let query_ctx = info_mut.query_ctx.clone();
         query_ctx.set_executor(executor.get_inner())?;
         let request_server_exchanges = std::mem::take(&mut self.statistics_exchanges);
@@ -1390,7 +1566,7 @@ impl QueryCoordinator {
                 statistics_sender.shutdown(error.clone()).await;
                 let exchange_manager = query_ctx.get_exchange_manager();
                 if let Err(cause) = spawn_blocking(move || {
-                    exchange_manager.on_finished_query(&query_id, error);
+                    exchange_manager.on_finished_exchange(&query_id, &exchange_session_id, error);
                 })
                 .await
                 {

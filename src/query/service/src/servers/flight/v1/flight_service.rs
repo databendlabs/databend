@@ -117,17 +117,26 @@ impl FlightService for DatabendQueryFlightService {
             "request_server_exchange" => {
                 let target = request.get_metadata("x-target")?;
                 let query_id = request.get_metadata("x-query-id")?;
+                let exchange_session_id = request.get_metadata("x-exchange-session-id")?;
                 Ok(RawResponse::new(Box::pin(
-                    DataExchangeManager::instance().handle_statistics_exchange(query_id, target)?,
+                    DataExchangeManager::instance().handle_statistics_exchange(
+                        query_id,
+                        exchange_session_id,
+                        target,
+                    )?,
                 )))
             }
             "exchange_fragment" => {
                 let query_id = request.get_metadata("x-query-id")?;
+                let exchange_session_id = request.get_metadata("x-exchange-session-id")?;
                 let channel_id = request.get_metadata("x-channel-id")?;
 
                 Ok(RawResponse::new(Box::pin(
-                    DataExchangeManager::instance()
-                        .handle_exchange_fragment(query_id, channel_id)?,
+                    DataExchangeManager::instance().handle_exchange_fragment(
+                        query_id,
+                        exchange_session_id,
+                        channel_id,
+                    )?,
                 )))
             }
             exchange_type => Err(Status::unimplemented(format!(
@@ -156,6 +165,7 @@ impl FlightService for DatabendQueryFlightService {
 
         let sender = DataExchangeManager::instance().handle_do_exchange(
             &params.query_id,
+            &params.exchange_session_id,
             &params.exchange_id,
             params.num_threads,
         )?;

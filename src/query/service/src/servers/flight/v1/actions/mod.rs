@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod abort_query_env;
 mod flight_actions;
 mod get_running_query_dump;
 mod init_query_env;
 mod init_query_fragments;
 mod kill_query;
+mod prepare_query_env;
 mod set_priority;
 mod start_prepared_query;
 mod system_action;
@@ -24,6 +26,7 @@ mod truncate_table;
 
 use std::sync::Arc;
 
+pub use abort_query_env::ABORT_QUERY_ENV;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
@@ -35,6 +38,7 @@ pub use init_query_env::INIT_QUERY_ENV;
 pub use init_query_fragments::INIT_QUERY_FRAGMENTS;
 pub use init_query_fragments::init_query_fragments;
 pub use kill_query::KILL_QUERY;
+pub use prepare_query_env::PREPARE_QUERY_ENV;
 pub use set_priority::SET_PRIORITY;
 pub use start_prepared_query::START_PREPARED_QUERY;
 pub use system_action::SYSTEM_ACTION;

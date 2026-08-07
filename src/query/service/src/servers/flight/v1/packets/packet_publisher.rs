@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::query_kind::QueryKind;
@@ -29,6 +30,8 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
 use databend_meta_client::types::NodeInfo;
 use log::debug;
+use log::warn;
+use petgraph::Direction;
 use petgraph::Graph;
 use petgraph::dot::Dot;
 use petgraph::graph::NodeIndex;
@@ -37,7 +40,9 @@ use serde::Serialize;
 
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
+use crate::servers::flight::v1::actions::ABORT_QUERY_ENV;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
+use crate::servers::flight::v1::actions::PREPARE_QUERY_ENV;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::TableContextCluster;
@@ -156,6 +161,7 @@ impl DataflowDiagramBuilder {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryEnv {
     pub query_id: String,
+    pub exchange_session_id: String,
     pub cluster: Arc<Cluster>,
     pub settings: Arc<Settings>,
     pub query_kind: QueryKind,
@@ -168,11 +174,138 @@ pub struct QueryEnv {
     pub user: UserInfo,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryEnvAdmission {
+    pub query_id: String,
+    pub exchange_session_id: String,
+    pub inbound_channels: HashMap<String, usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExchangeSession {
+    pub query_id: String,
+    pub exchange_session_id: String,
+}
+
+struct QueryEnvAdmissionGuard {
+    cluster: Arc<Cluster>,
+    query_id: String,
+    exchange_session_id: String,
+    node_ids: Vec<String>,
+    flight_params: FlightParams,
+    armed: bool,
+}
+
+impl QueryEnvAdmissionGuard {
+    fn create(
+        cluster: Arc<Cluster>,
+        query_id: String,
+        exchange_session_id: String,
+        node_ids: Vec<String>,
+        flight_params: FlightParams,
+    ) -> Self {
+        Self {
+            cluster,
+            query_id,
+            exchange_session_id,
+            node_ids,
+            flight_params,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for QueryEnvAdmissionGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+
+        let cluster = self.cluster.clone();
+        let query_id = self.query_id.clone();
+        let exchange_session_id = self.exchange_session_id.clone();
+        let node_ids = self.node_ids.clone();
+        let flight_params = self.flight_params;
+
+        GlobalIORuntime::instance().spawn(async move {
+            for node_id in node_ids {
+                let message = HashMap::from([(node_id.clone(), ExchangeSession {
+                    query_id: query_id.clone(),
+                    exchange_session_id: exchange_session_id.clone(),
+                })]);
+                if let Err(cause) = cluster
+                    .do_action::<_, ()>(ABORT_QUERY_ENV, message, flight_params)
+                    .await
+                {
+                    warn!(
+                        "Failed to abort query env admission for {} on {}: {}",
+                        query_id, node_id, cause
+                    );
+                }
+            }
+        });
+    }
+}
+
 impl QueryEnv {
+    fn admissions(&self) -> Result<HashMap<String, QueryEnvAdmission>> {
+        let mut admissions = HashMap::with_capacity(self.dataflow_diagram.node_count());
+
+        for index in self.dataflow_diagram.node_indices() {
+            let mut inbound_channels = HashMap::new();
+            for edge in self
+                .dataflow_diagram
+                .edges_directed(index, Direction::Incoming)
+            {
+                if let Edge::ExchangeFragment {
+                    exchange_id,
+                    channels,
+                } = edge.weight()
+                {
+                    match inbound_channels.insert(exchange_id.clone(), channels.len()) {
+                        Some(num_threads) if num_threads != channels.len() => {
+                            return Err(ErrorCode::Internal(format!(
+                                "Conflicting do_exchange admission for exchange {}: {} and {} channels",
+                                exchange_id,
+                                num_threads,
+                                channels.len()
+                            )));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            admissions.insert(self.dataflow_diagram[index].id.clone(), QueryEnvAdmission {
+                query_id: self.query_id.clone(),
+                exchange_session_id: self.exchange_session_id.clone(),
+                inbound_channels,
+            });
+        }
+
+        Ok(admissions)
+    }
+
     pub async fn init(&self, ctx: &Arc<QueryContext>, flight_params: FlightParams) -> Result<()> {
         debug!("Dataflow diagram {:?}", self.dataflow_diagram);
 
         let cluster = ctx.get_cluster();
+        let admissions = self.admissions()?;
+        let mut admission_guard = QueryEnvAdmissionGuard::create(
+            cluster.clone(),
+            self.query_id.clone(),
+            self.exchange_session_id.clone(),
+            admissions.keys().cloned().collect(),
+            flight_params,
+        );
+        let _ = cluster
+            .do_action::<_, ()>(PREPARE_QUERY_ENV, admissions, flight_params)
+            .await?;
+
         let mut message = HashMap::with_capacity(self.dataflow_diagram.node_count());
 
         for node in self.dataflow_diagram.node_weights() {
@@ -183,6 +316,7 @@ impl QueryEnv {
             .do_action::<_, ()>(INIT_QUERY_ENV, message, flight_params)
             .await?;
 
+        admission_guard.disarm();
         Ok(())
     }
 

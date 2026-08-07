@@ -116,6 +116,7 @@ pub async fn build_distributed_pipeline(
     }
 
     let exchange_manager = ctx.get_exchange_manager();
+    let exchange_session_id = fragments_actions.get_exchange_session_id().to_string();
 
     match exchange_manager
         .commit_actions(ctx.clone(), fragments_actions)
@@ -127,7 +128,11 @@ pub async fn build_distributed_pipeline(
             Ok(build_res)
         }
         Err(error) => {
-            exchange_manager.on_finished_query(&ctx.get_id(), Some(error.clone()));
+            exchange_manager.on_finished_exchange(
+                &ctx.get_id(),
+                &exchange_session_id,
+                Some(error.clone()),
+            );
             Err(error)
         }
     }

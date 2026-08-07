@@ -47,6 +47,7 @@ use crate::servers::flight::v1::packets::DataPacket;
 #[derive(Serialize, Deserialize)]
 pub struct DoExchangeParams {
     pub query_id: String,
+    pub exchange_session_id: String,
     pub exchange_id: String,
     pub num_threads: usize,
 }
@@ -195,6 +196,7 @@ impl FlightClient {
     pub async fn request_server_exchange(
         &mut self,
         query_id: &str,
+        exchange_session_id: &str,
         target: &str,
     ) -> Result<FlightExchange> {
         let streaming = self
@@ -203,6 +205,7 @@ impl FlightClient {
                     .with_metadata("x-type", "request_server_exchange")?
                     .with_metadata("x-target", target)?
                     .with_metadata("x-query-id", query_id)?
+                    .with_metadata("x-exchange-session-id", exchange_session_id)?
                     .build(),
             )
             .await?;
@@ -217,10 +220,16 @@ impl FlightClient {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn do_get(&mut self, query_id: &str, channel_id: &str) -> Result<FlightExchange> {
+    pub async fn do_get(
+        &mut self,
+        query_id: &str,
+        exchange_session_id: &str,
+        channel_id: &str,
+    ) -> Result<FlightExchange> {
         let request = RequestBuilder::create(Ticket::default())
             .with_metadata("x-type", "exchange_fragment")?
             .with_metadata("x-query-id", query_id)?
+            .with_metadata("x-exchange-session-id", exchange_session_id)?
             .with_metadata("x-channel-id", channel_id)?
             .build();
         let request = databend_common_tracing::inject_span_to_tonic_request(request);
