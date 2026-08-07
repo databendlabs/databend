@@ -26,16 +26,15 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 
 use super::Base;
-use super::MemoryMerger;
 use super::MergeSort;
 use super::OutputData;
 use super::RowsStat;
+use super::SelectedMemoryMerger;
 use super::SortSpill;
 use super::SortSpillParams;
 use super::TransformSortMergeLimit;
 use super::core::RowConverter;
 use super::core::Rows;
-use super::core::algorithm::SortAlgorithm;
 use super::create_memory_merger;
 use crate::traits::SortSpiller;
 
@@ -50,21 +49,21 @@ enum State {
 }
 
 #[allow(clippy::large_enum_variant)]
-enum Inner<A: SortAlgorithm, S: SortSpiller> {
+enum Inner<R: Rows, S: SortSpiller> {
     Collect(Vec<DataBlock>),
-    Limit(TransformSortMergeLimit<A::Rows>),
-    Memory(MemoryMerger<A>),
-    Spill(Vec<DataBlock>, SortSpill<A, S>),
+    Limit(TransformSortMergeLimit<R>),
+    Memory(SelectedMemoryMerger<R>),
+    Spill(Vec<DataBlock>, SortSpill<R, S>),
 }
 
-pub struct TransformSort<A: SortAlgorithm, S: SortSpiller> {
+pub struct TransformSort<R: Rows, S: SortSpiller> {
     name: &'static str,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: VecDeque<DataBlock>,
     state: State,
 
-    row_converter: <A::Rows as Rows>::Converter,
+    row_converter: R::Converter,
     /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
     /// we can generate and output the order column to avoid the extra converting in the next transform.
     remove_order_col: bool,
@@ -75,16 +74,16 @@ pub struct TransformSort<A: SortAlgorithm, S: SortSpiller> {
     input_has_order_col: bool,
 
     base: Base<S>,
-    inner: Inner<A, S>,
+    inner: Inner<R, S>,
 
     max_block_size: usize,
     enable_restore_prefetch: bool,
     enable_sort_spill_stream_regroup: bool,
 }
 
-impl<A, S> TransformSort<A, S>
+impl<R, S> TransformSort<R, S>
 where
-    A: SortAlgorithm,
+    R: Rows,
     S: SortSpiller,
 {
     #[allow(clippy::too_many_arguments)]
@@ -92,12 +91,13 @@ where
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         sort_row_offset: usize,
-        row_converter: <A::Rows as Rows>::Converter,
+        row_converter: R::Converter,
         max_block_size: usize,
         limit: Option<(usize, bool)>,
         spiller: S,
         remove_order_col: bool,
         input_has_order_col: bool,
+        enable_loser_tree: bool,
         enable_restore_prefetch: bool,
         enable_sort_spill_stream_regroup: bool,
     ) -> Result<Self> {
@@ -124,6 +124,7 @@ where
                 spiller,
                 sort_row_offset,
                 limit,
+                enable_loser_tree,
             },
             inner,
             max_block_size,
@@ -186,7 +187,7 @@ where
         if self.input_has_order_col {
             match &mut self.inner {
                 Inner::Limit(limit_sort) => {
-                    let rows = A::Rows::from_column(
+                    let rows = R::from_column(
                         &block.get_by_offset(self.base.sort_row_offset).to_column(),
                     )?;
                     limit_sort.add_block(block, rows)
@@ -225,11 +226,12 @@ where
                     self.state = State::Finish;
                     return Ok(());
                 }
-                let mut merger = create_memory_merger::<A>(
+                let mut merger = create_memory_merger::<R>(
                     input_data,
                     self.base.sort_row_offset,
                     self.base.limit,
                     self.max_block_size,
+                    self.base.enable_loser_tree,
                 );
 
                 if let Some(block) = merger.next_block()? {
@@ -284,11 +286,10 @@ where
 }
 
 #[async_trait::async_trait]
-impl<A, S> Processor for TransformSort<A, S>
+impl<R, S> Processor for TransformSort<R, S>
 where
-    A: SortAlgorithm + 'static,
-    A::Rows: 'static,
-    <A::Rows as Rows>::Converter: Send + 'static,
+    R: Rows + 'static,
+    R::Converter: Send + 'static,
     S: SortSpiller,
 {
     fn name(&self) -> String {
