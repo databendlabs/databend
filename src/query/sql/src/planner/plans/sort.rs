@@ -26,6 +26,7 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
+use crate::optimizer::ir::cap_stat_info_by_rows;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
@@ -188,6 +189,13 @@ impl Operator for Sort {
     }
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(0)
+        let input = rel_expr.derive_cardinality_child(0)?;
+        let Some(limit) = self.limit else {
+            return Ok(input);
+        };
+        Ok(Arc::new(cap_stat_info_by_rows(
+            input.as_ref().clone(),
+            limit,
+        )))
     }
 }

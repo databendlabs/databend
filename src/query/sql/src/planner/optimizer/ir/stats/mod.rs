@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod cardinality;
 mod column_stat;
 mod constraint;
 mod join;
 mod selectivity;
 
+pub(crate) use cardinality::cap_stat_info_by_rows;
 pub use column_stat::*;
 use databend_common_statistics::Datum;
 pub use databend_common_statistics::UniformSampleSet;
