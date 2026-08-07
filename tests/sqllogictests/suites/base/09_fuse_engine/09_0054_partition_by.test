@@ -455,6 +455,8 @@ SELECT if(block_count BETWEEN 6 AND 12, 1, 0) FROM fuse_snapshot('db_09_0054', '
 
 # The common write layout prepares the INT table row from a BIGINT input and
 # full-sorts by the physical partition transform before Fuse serialization.
+# CLUSTER BY verifies that partition boundaries are split before its partial
+# sort can interleave rows from a mixed-boundary block.
 statement ok
 SET max_threads=4
 
@@ -462,7 +464,7 @@ statement ok
 SET max_block_size=1000
 
 statement ok
-CREATE TABLE hash_partitioned(id INT) PARTITION BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+CREATE TABLE hash_partitioned(id INT) PARTITION BY (bucket(16, id)) CLUSTER BY (id) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
 
 statement ok
 CREATE TABLE hash_partitioned_none(id INT) PARTITION BY (bucket(16, id)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
