@@ -117,11 +117,8 @@ use crate::values::Scalar;
 
 pub type GenericMap = [DataType];
 
-/// Persisted aggregate function parameters.
-///
-/// The bincode variant indexes and the serde layouts of all nested scalar types are part of the
-/// on-disk table schema format. New variants must only be appended; existing variants and their
-/// payload layouts must not be reordered or changed without a metadata migration.
+/// Aggregate function parameters persisted through an explicitly tagged protobuf representation.
+/// Rust enum ordering and serde layouts are not part of the on-disk format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FrozenAPI)]
 pub enum AggregateFunctionParam {
     Null,
@@ -138,6 +135,16 @@ pub enum AggregateFunctionParam {
     Tuple(Vec<AggregateFunctionParam>),
     Variant(Vec<u8>),
     Geometry(Vec<u8>),
+}
+
+impl AggregateFunctionParam {
+    pub fn interval_from_parts(months: i32, days: i32, microseconds: i64) -> Self {
+        Self::Interval(months_days_micros::new(months, days, microseconds))
+    }
+
+    pub fn timestamp_tz_from_parts(timestamp: i64, offset: i32) -> Self {
+        Self::TimestampTz(TimestampTzScalar::new(timestamp, offset))
+    }
 }
 
 impl TryFrom<Scalar> for AggregateFunctionParam {
