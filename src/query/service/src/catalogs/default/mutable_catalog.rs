@@ -37,7 +37,6 @@ use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_api::TableApi;
 use databend_common_meta_api::kv_app_error::KVAppError;
-use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
 use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::KeyWithTenant;
@@ -108,7 +107,6 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
-use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -573,17 +571,16 @@ impl Catalog for MutableCatalog {
             .map_err(meta_service_error)
     }
 
-    async fn get_mv_source_generation(&self, tenant: &Tenant, source_table_id: u64) -> Result<u64> {
-        let generation_ident = MVSourceBindingVersionIdent::new(tenant, source_table_id);
-        let generation_record = self
-            .ctx
+    async fn get_mv_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        self.ctx
             .meta
-            .get_pb(&generation_ident)
+            .get_mv_source_generation(tenant, source_table_id)
             .await
-            .map_err(meta_service_error)?;
-        Ok(generation_record
-            .map(|record| record.data.current_source_generation)
-            .unwrap_or(0))
+            .map_err(meta_service_error)
     }
 
     async fn get_mv_bound_source_generation(

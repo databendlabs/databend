@@ -258,7 +258,7 @@ impl Catalog for ImmutableCatalog {
         &self,
         _tenant: &Tenant,
         _source_table_id: u64,
-    ) -> Result<u64> {
+    ) -> Result<Option<u64>> {
         Err(ErrorCode::Unimplemented(
             "Immutable catalog does not support materialized-view source generations",
         ))

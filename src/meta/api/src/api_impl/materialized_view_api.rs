@@ -171,6 +171,23 @@ where
         self.get_pb(&ident).await
     }
 
+    /// Get the current semantic MV-binding generation of one source table.
+    ///
+    /// Return `None` if the generation record has not been created.
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_mv_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>, MetaError> {
+        let generation_ident = MVSourceBindingVersionIdent::new(tenant, source_table_id);
+        Ok(self
+            .get_pb(&generation_ident)
+            .await?
+            .map(|record| record.data.current_source_generation))
+    }
+
     /// Get the immutable source generation stored on one exact MV dependency edge.
     ///
     /// This is a single point read. It does not read the source's current
@@ -206,7 +223,15 @@ where
         tenant: &Tenant,
         source_table_id: u64,
     ) -> Result<MVSourceBindingSnapshot, MetaError> {
-        let generation_before = get_mv_source_generation(self, tenant, source_table_id).await?;
+        let Some(generation_before) = self
+            .get_mv_source_generation(tenant, source_table_id)
+            .await?
+        else {
+            return Ok(MVSourceBindingSnapshot {
+                generation: 0,
+                materialized_views: vec![],
+            });
+        };
         let mut mvs = list_mvs_by_source_table_id_impl(
             self,
             tenant,
@@ -214,12 +239,14 @@ where
             Some(generation_before),
         )
         .await?;
-        let generation_after = get_mv_source_generation(self, tenant, source_table_id).await?;
-        if generation_before != generation_after {
+        let generation_after = self
+            .get_mv_source_generation(tenant, source_table_id)
+            .await?;
+        if generation_after != Some(generation_before) {
             mvs.clear();
         }
         Ok(MVSourceBindingSnapshot {
-            generation: generation_after,
+            generation: generation_after.unwrap_or(0),
             materialized_views: mvs,
         })
     }
@@ -236,22 +263,6 @@ where
     ) -> Result<Vec<MVInfo>, MetaError> {
         list_mvs_by_source_table_id_impl(self, tenant, source_table_id, None).await
     }
-}
-
-async fn get_mv_source_generation<KV>(
-    kv_api: &KV,
-    tenant: &Tenant,
-    source_table_id: u64,
-) -> Result<u64, MetaError>
-where
-    KV: kvapi::KVApi<Error = MetaError> + ?Sized,
-{
-    let generation_ident = MVSourceBindingVersionIdent::new(tenant, source_table_id);
-    Ok(kv_api
-        .get_pb(&generation_ident)
-        .await?
-        .map(|record| record.data.current_source_generation)
-        .unwrap_or(0))
 }
 
 async fn list_mvs_by_source_table_id_impl<KV>(

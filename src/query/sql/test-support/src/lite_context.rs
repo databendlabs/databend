@@ -660,7 +660,7 @@ impl Catalog for DummyCatalog {
         &self,
         _tenant: &Tenant,
         _source_table_id: u64,
-    ) -> Result<u64> {
+    ) -> Result<Option<u64>> {
         unsupported("catalog::get_mv_source_generation")
     }
 

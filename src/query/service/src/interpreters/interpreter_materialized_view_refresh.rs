@@ -145,6 +145,29 @@ impl<'a> MaterializedViewRefresh<'a> {
                 self.plan.database, self.plan.view_name, self.plan.source_table_id, source_table_id
             )));
         }
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        // Binding validity is an admission check, not a refresh fence. The binding generation is
+        // immutable while the source generation only increases, so read the source first and then
+        // the binding. Once admitted, a concurrent source-schema change may let this refresh finish;
+        // subsequent MV reads will reject the stale binding.
+        let current_source_generation = catalog
+            .get_mv_source_generation(&self.plan.tenant, source_table_id)
+            .await?;
+        let bound_source_generation = catalog
+            .get_mv_bound_source_generation(
+                &self.plan.tenant,
+                source_table_id,
+                self.mv_table.get_id(),
+            )
+            .await?;
+        if current_source_generation.is_none()
+            || bound_source_generation != current_source_generation
+        {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {}.{} has an invalid source binding; recreate the materialized view",
+                self.plan.database, self.plan.view_name
+            )));
+        }
         let checkpoint = match (
             mv_meta
                 .options
@@ -169,7 +192,6 @@ impl<'a> MaterializedViewRefresh<'a> {
             }
         };
 
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let source_meta = catalog
             .get_table_meta_by_id(source_table_id)
             .await?
@@ -201,15 +223,6 @@ impl<'a> MaterializedViewRefresh<'a> {
             return Err(ErrorCode::InvalidMaterializedView(format!(
                 "materialized view {}.{} source table id {} does not have CHANGE_TRACKING enabled",
                 self.plan.database, self.plan.view_name, source_table_id
-            )));
-        }
-        let current_source_generation = catalog
-            .get_mv_source_generation(&self.plan.tenant, source_table_id)
-            .await?;
-        if current_source_generation != self.plan.expected_source_generation {
-            return Err(ErrorCode::InvalidMaterializedView(format!(
-                "materialized view {}.{} source schema changed while preparing refresh; recreate the materialized view",
-                self.plan.database, self.plan.view_name
             )));
         }
         if checkpoint

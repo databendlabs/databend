@@ -509,7 +509,7 @@ impl PrivilegeAccess {
 
     async fn validate_mv_source_access(&self, mv_table: &dyn Table) -> Result<()> {
         if !is_materialized_view_engine(mv_table.engine()) {
-            return Err(ErrorCode::InvalidMaterializedView(format!(
+            return Err(ErrorCode::TableEngineNotSupported(format!(
                 "'{}' is not a materialized view",
                 mv_table.name()
             )));
@@ -2504,8 +2504,6 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            // TODO
-            Plan::DescribeMaterializedView(_) => {},
         }
 
         Ok(())
