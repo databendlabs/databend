@@ -4707,7 +4707,6 @@ name = "databend-common-proto-conv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "borsh",
  "chrono",
  "convert_case 0.6.0",
  "databend-base",

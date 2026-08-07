@@ -175,6 +175,14 @@ from aggregate_state_parameter_test;
 ----
 50.0
 
+statement error 1006
+select quantile_tdigest_merge(0.9)(state)
+from aggregate_state_parameter_test;
+
+statement error 1006
+select quantile_tdigest_merge_state(0.9)(state)
+from aggregate_state_parameter_test;
+
 statement ok
 drop table aggregate_state_parameter_test
 
@@ -215,6 +223,16 @@ select (select count() from (
 from aggregate_state_combinator_test;
 ----
 4 4 4
+
+query I
+select count()
+from (
+    select sum_state
+    from aggregate_state_combinator_test
+    order by sum_state
+);
+----
+4
 
 statement ok
 drop table aggregate_state_combinator_test

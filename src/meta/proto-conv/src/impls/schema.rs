@@ -16,7 +16,6 @@
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
 use databend_common_expression as ex;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::VariantDataType;
 use databend_common_expression::types::AggregateFunctionParam;
@@ -40,22 +39,14 @@ use crate::reader_check_msg;
 const AGGREGATE_PARAM_BINCODE_V1: &[u8] = b"DBAP\x01";
 
 fn aggregate_param_from_bytes(bytes: &[u8]) -> Result<AggregateFunctionParam, Incompatible> {
-    if let Some(bytes) = bytes.strip_prefix(AGGREGATE_PARAM_BINCODE_V1) {
-        return bincode_deserialize_from_slice(bytes).map_err(|error| {
-            Incompatible::new(format!(
-                "Cannot deserialize aggregate function parameter: {error}"
-            ))
-        });
-    }
-
-    let scalar = borsh::from_slice::<Scalar>(bytes).map_err(|error| {
+    let bytes = bytes
+        .strip_prefix(AGGREGATE_PARAM_BINCODE_V1)
+        .ok_or_else(|| {
+            Incompatible::new("Unsupported aggregate function parameter encoding".to_string())
+        })?;
+    bincode_deserialize_from_slice(bytes).map_err(|error| {
         Incompatible::new(format!(
-            "Cannot deserialize legacy aggregate function parameter: {error}"
-        ))
-    })?;
-    AggregateFunctionParam::try_from(scalar).map_err(|error| {
-        Incompatible::new(format!(
-            "Cannot convert legacy aggregate function parameter: {error}"
+            "Cannot deserialize aggregate function parameter: {error}"
         ))
     })
 }
@@ -740,18 +731,5 @@ fn new_pb_dt24(dt24: Dt24) -> pb::DataType {
         min_reader_ver: MIN_READER_VER,
         dt: None,
         dt24: Some(dt24),
-    }
-}
-
-#[cfg(test)]
-mod aggregate_param_tests {
-    use super::*;
-
-    #[test]
-    fn test_decode_legacy_borsh_scalar() {
-        let bytes = borsh::to_vec(&Scalar::String("legacy".to_string())).unwrap();
-        let param = aggregate_param_from_bytes(&bytes).unwrap();
-
-        assert_eq!(param, AggregateFunctionParam::String("legacy".to_string()));
     }
 }
