@@ -117,6 +117,11 @@ use crate::values::Scalar;
 
 pub type GenericMap = [DataType];
 
+/// Persisted aggregate function parameters.
+///
+/// The bincode variant indexes and the serde layouts of all nested scalar types are part of the
+/// on-disk table schema format. New variants must only be appended; existing variants and their
+/// payload layouts must not be reordered or changed without a metadata migration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FrozenAPI)]
 pub enum AggregateFunctionParam {
     Null,

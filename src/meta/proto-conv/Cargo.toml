@@ -7,7 +7,6 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-borsh = { workspace = true }
 chrono = { workspace = true }
 databend-base = { workspace = true }
 databend-common-expression = { workspace = true }

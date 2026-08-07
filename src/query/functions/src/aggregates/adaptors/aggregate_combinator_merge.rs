@@ -89,15 +89,26 @@ impl AggregateMergeCombinator {
         _nested_creator: &AggregateFunctionCreator,
         returns_state: bool,
     ) -> Result<AggregateFunctionRef> {
+        let combinator_name = if returns_state {
+            "merge_state"
+        } else {
+            "merge"
+        };
         if arguments.len() != 1 {
             return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                "Aggregate function {nested_name}_merge expects exactly one state argument"
+                "Aggregate function {nested_name}_{combinator_name} expects exactly one state argument"
             )));
         }
 
         let state_type = arguments[0].remove_nullable();
         if let DataType::AggregateState(state) = &state_type {
-            return Self::try_create_from_metadata(nested_name, state, sort_descs, returns_state);
+            return Self::try_create_from_metadata(
+                nested_name,
+                &params,
+                state,
+                sort_descs,
+                returns_state,
+            );
         }
 
         let mut candidates = Vec::new();
@@ -127,20 +138,32 @@ impl AggregateMergeCombinator {
         }
 
         Err(ErrorCode::BadDataValueType(format!(
-            "Cannot infer the original aggregate argument from state type '{state_type}' for {nested_name}_merge"
+            "Cannot infer the original aggregate argument from state type '{state_type}' for {nested_name}_{combinator_name}"
         )))
     }
 
     fn try_create_from_metadata(
         nested_name: &str,
+        params: &[Scalar],
         state: &AggregateStateDataType,
         sort_descs: Vec<AggregateFunctionSortDesc>,
         returns_state: bool,
     ) -> Result<AggregateFunctionRef> {
+        let combinator_name = if returns_state {
+            "merge_state"
+        } else {
+            "merge"
+        };
         if !state.function_name.eq_ignore_ascii_case(nested_name) {
             return Err(ErrorCode::BadDataValueType(format!(
-                "Aggregate state for '{}' cannot be merged by {nested_name}_merge",
+                "Aggregate state for '{}' cannot be merged by {nested_name}_{combinator_name}",
                 state.function_name
+            )));
+        }
+
+        if !params.is_empty() && persist_params(params)? != state.params {
+            return Err(ErrorCode::BadArguments(format!(
+                "Aggregate function parameters for {nested_name}_{combinator_name} do not match the persisted state parameters"
             )));
         }
 
@@ -152,7 +175,7 @@ impl AggregateMergeCombinator {
         )?;
         if nested.serialize_data_type() != *state.state_type {
             return Err(ErrorCode::BadDataValueType(format!(
-                "Aggregate state layout does not match the signature of {nested_name}_merge"
+                "Aggregate state layout does not match the signature of {nested_name}_{combinator_name}"
             )));
         }
 
