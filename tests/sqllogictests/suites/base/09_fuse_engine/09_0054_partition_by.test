@@ -269,6 +269,23 @@ CREATE TABLE alter_invalid_partition(a INT, b INT)
 statement error PARTITION BY expression `a \+ b` is invalid
 ALTER TABLE alter_invalid_partition PARTITION BY (a + b)
 
+# Vector CLUSTER BY may buffer and concatenate blocks across physical partition
+# boundaries, so the combination is rejected until it has partition-aware batching.
+statement error Vector data type is not supported for CLUSTER BY with PARTITION BY
+CREATE TABLE vector_partition_create(id INT, embedding VECTOR(3), VECTOR INDEX idx (embedding) distance='cosine') PARTITION BY (id) CLUSTER BY (embedding)
+
+statement ok
+CREATE TABLE vector_partition_alter_cluster(id INT, embedding VECTOR(3), VECTOR INDEX idx (embedding) distance='cosine') PARTITION BY (id)
+
+statement error Vector data type is not supported for CLUSTER BY with PARTITION BY
+ALTER TABLE vector_partition_alter_cluster CLUSTER BY (embedding)
+
+statement ok
+CREATE TABLE vector_partition_alter_partition(id INT, embedding VECTOR(3), VECTOR INDEX idx (embedding) distance='cosine') CLUSTER BY (embedding)
+
+statement error Vector data type is not supported for CLUSTER BY with PARTITION BY
+ALTER TABLE vector_partition_alter_partition PARTITION BY (id)
+
 # IF EXISTS must skip partition-key binding when the table is absent.
 statement ok
 ALTER TABLE IF EXISTS alter_missing_partition PARTITION BY (missing_column)
