@@ -169,8 +169,7 @@ impl BlockReader {
                                     let mut value =
                                         Value::from_arrow_rs(cached.0.clone(), &data_type)?;
                                     if let Some(sel) = selection {
-                                        let mut filter_visitor =
-                                            FilterVisitor::new(&sel.bitmap);
+                                        let mut filter_visitor = FilterVisitor::new(&sel.bitmap);
                                         filter_visitor.visit_value(value)?;
                                         value = filter_visitor.take_result().unwrap();
                                     }
@@ -224,10 +223,7 @@ impl BlockReader {
                                     fh,
                                 );
                                 let array_memory_size = arrow_array.get_array_memory_size();
-                                cache.insert(
-                                    key.into(),
-                                    (arrow_array.clone(), array_memory_size),
-                                );
+                                cache.insert(key.into(), (arrow_array.clone(), array_memory_size));
                             } else if !has_selection {
                                 // Cache full array with base key (only when no selection)
                                 let key = TableDataCacheKey::new(
@@ -237,10 +233,7 @@ impl BlockReader {
                                     len,
                                 );
                                 let array_memory_size = arrow_array.get_array_memory_size();
-                                cache.insert(
-                                    key.into(),
-                                    (arrow_array.clone(), array_memory_size),
-                                );
+                                cache.insert(key.into(), (arrow_array.clone(), array_memory_size));
                             }
                         }
                     }
