@@ -309,6 +309,311 @@ mod bitmap {
 }
 
 #[divan::bench_group(max_time = 0.5)]
+mod bitmap_scalar {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::Expr;
+    use databend_common_expression::FromData;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::type_check;
+    use databend_common_expression::types::BitmapType;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression_test_support as parser;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+    use databend_common_io::HybridBitmap;
+
+    fn serialize_bitmap(bitmap: &HybridBitmap) -> Vec<u8> {
+        let mut data = Vec::new();
+        bitmap.serialize_into(&mut data).unwrap();
+        data
+    }
+
+    fn bitmap_entry(bitmap: &HybridBitmap) -> BlockEntry {
+        BitmapType::from_data(vec![serialize_bitmap(bitmap); 1]).into()
+    }
+
+    fn build_expr(sql: &str, columns: &[(&str, DataType)]) -> Expr {
+        let raw_expr = parser::parse_raw_expr(sql, columns, &BUILTIN_FUNCTIONS);
+        type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap()
+    }
+
+    fn eval_block(expr: &Expr, block: &DataBlock) {
+        let func_ctx = FunctionContext::default();
+        let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
+        let result = evaluator.run(expr).unwrap();
+        divan::black_box(result);
+    }
+
+    fn large_bitmap() -> HybridBitmap {
+        let mut bm = HybridBitmap::new();
+        for i in 0..10u64 {
+            for v in i * 65536..i * 65536 + 5000 {
+                bm.insert(v);
+            }
+        }
+        for j in 10..50u64 {
+            for v in j * 65536..j * 65536 + 100 {
+                bm.insert(v);
+            }
+        }
+        bm
+    }
+
+    fn overlap_large_bitmap() -> HybridBitmap {
+        let mut bm = HybridBitmap::new();
+        for i in 5..10u64 {
+            for v in i * 65536 - 3000..i * 65536 + 5000 {
+                bm.insert(v);
+            }
+        }
+        for i in 10..50u64 {
+            for v in i * 65536 - 30..i * 65536 + 50 {
+                bm.insert(v);
+            }
+        }
+        bm
+    }
+
+    fn subset_large_bitmap() -> HybridBitmap {
+        let mut bm = HybridBitmap::new();
+        for i in 0..5u64 {
+            for v in i * 65536 + 1000..i * 65536 + 4000 {
+                bm.insert(v);
+            }
+        }
+        for j in 10..30u64 {
+            for v in j * 65536 + 10..j * 65536 + 90 {
+                bm.insert(v);
+            }
+        }
+        bm
+    }
+
+    fn disjoint_large_bitmap() -> HybridBitmap {
+        let mut bm = HybridBitmap::new();
+        for i in 100..110u64 {
+            for v in i * 65536..i * 65536 + 5000 {
+                bm.insert(v);
+            }
+        }
+        for j in 110..150u64 {
+            for v in j * 65536..j * 65536 + 100 {
+                bm.insert(v);
+            }
+        }
+
+        bm
+    }
+
+    fn small_bitmap() -> HybridBitmap {
+        HybridBitmap::from_iter(24 * 65536..24 * 65536 + 31)
+    }
+
+    fn overlap_small_bitmap() -> HybridBitmap {
+        HybridBitmap::from_iter(24 * 65536 - 10..24 * 65536 + 21)
+    }
+
+    fn subset_small_bitmap() -> HybridBitmap {
+        HybridBitmap::from_iter(24 * 65536 + 1..24 * 65536 + 30)
+    }
+
+    const C1: &[(&str, DataType)] = &[("a", DataType::Bitmap)];
+    const C2: &[(&str, DataType)] = &[("a", DataType::Bitmap), ("b", DataType::Bitmap)];
+
+    #[divan::bench]
+    fn bitmap_contains_large(bencher: divan::Bencher) {
+        let bm = large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&bm)], 1);
+        let expr = build_expr("bitmap_contains(a, 5*65536+2500)", C1);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_contains_small(bencher: divan::Bencher) {
+        let bm = small_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&bm)], 1);
+        let expr = build_expr("bitmap_contains(a, 15)", C1);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_count_large(bencher: divan::Bencher) {
+        let bm = large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&bm)], 1);
+        let expr = build_expr("bitmap_count(a)", C1);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_count_small(bencher: divan::Bencher) {
+        let bm = small_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&bm)], 1);
+        let expr = build_expr("bitmap_count(a)", C1);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    // bitmap_min
+    #[divan::bench]
+    fn bitmap_min_large(bencher: divan::Bencher) {
+        let bm = large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&bm)], 1);
+        let expr = build_expr("bitmap_min(a)", C1);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_min_small(bencher: divan::Bencher) {
+        let bm = small_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&bm)], 1);
+        let expr = build_expr("bitmap_min(a)", C1);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_max_large(bencher: divan::Bencher) {
+        let bm = large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&bm)], 1);
+        let expr = build_expr("bitmap_max(a)", C1);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_max_small(bencher: divan::Bencher) {
+        let bm = small_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&bm)], 1);
+        let expr = build_expr("bitmap_max(a)", C1);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_and_large_large(bencher: divan::Bencher) {
+        let a = large_bitmap();
+        let b = overlap_large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_and(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_and_small_small(bencher: divan::Bencher) {
+        let a = small_bitmap();
+        let b = overlap_small_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_and(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_and_large_small(bencher: divan::Bencher) {
+        let a = large_bitmap();
+        let b = small_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_and(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_and_small_large(bencher: divan::Bencher) {
+        let a = small_bitmap();
+        let b = large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_and(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_has_any_large_large(bencher: divan::Bencher) {
+        let a = large_bitmap();
+        let b = overlap_large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_has_any(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_has_any_small_small(bencher: divan::Bencher) {
+        let a = small_bitmap();
+        let b = overlap_small_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_has_any(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_has_any_large_small(bencher: divan::Bencher) {
+        let a = large_bitmap();
+        let b = small_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_has_any(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_has_any_small_large(bencher: divan::Bencher) {
+        let a = small_bitmap();
+        let b = large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_has_any(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_has_any_large_large_disjoint(bencher: divan::Bencher) {
+        let a = large_bitmap();
+        let b = disjoint_large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_has_any(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_has_all_large_large(bencher: divan::Bencher) {
+        let a = large_bitmap();
+        let b = subset_large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_has_all(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_has_all_small_small(bencher: divan::Bencher) {
+        let a = small_bitmap();
+        let b = subset_small_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_has_all(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_has_all_large_small(bencher: divan::Bencher) {
+        let a = large_bitmap();
+        let b = small_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_has_all(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_has_all_small_large(bencher: divan::Bencher) {
+        let a = small_bitmap();
+        let b = large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_has_all(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+
+    #[divan::bench]
+    fn bitmap_has_all_large_large_disjoint(bencher: divan::Bencher) {
+        let a = large_bitmap();
+        let b = disjoint_large_bitmap();
+        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
+        let expr = build_expr("bitmap_has_all(a, b)", C2);
+        bencher.bench(|| eval_block(&expr, &block));
+    }
+}
+
+#[divan::bench_group(max_time = 0.5)]
 mod datetime_fast_path {
     use std::sync::LazyLock;
 

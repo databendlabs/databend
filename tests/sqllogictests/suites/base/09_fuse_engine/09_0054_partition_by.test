@@ -222,6 +222,57 @@ SELECT p, c, v FROM t
 4 21 b1
 5 11 b2
 
+# Existing rows written before PARTITION BY have no partition statistics. They
+# must remain visible after adding a partition key, while subsequent writes use
+# the partitioned layout. A pre-existing CLUSTER BY also verifies that its
+# statistics are not mistaken for partition statistics.
+statement ok
+CREATE TABLE alter_partitioned(p INT, c INT) CLUSTER BY (c) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO alter_partitioned VALUES (1, 100), (2, 200)
+
+statement ok
+ALTER TABLE alter_partitioned PARTITION BY (p % 2)
+
+query TT
+SHOW CREATE TABLE alter_partitioned
+----
+alter_partitioned <slt:ignore>PARTITION BY (p % 2)<slt:ignore>CLUSTER BY (c)<slt:ignore>
+
+statement ok
+INSERT INTO alter_partitioned VALUES (3, 300), (4, 400)
+
+query II rowsort
+SELECT p, c FROM alter_partitioned WHERE p % 2 = 1
+----
+1 100
+3 300
+
+# Repeating the normalized definition is idempotent, but changing an existing
+# partition key would reinterpret persisted partition statistics and is rejected.
+statement ok
+ALTER TABLE alter_partitioned PARTITION BY (p % 2)
+
+statement error PARTITION BY is already defined
+ALTER TABLE alter_partitioned PARTITION BY (p % 3)
+
+statement ok
+CREATE TABLE alter_memory(p INT) ENGINE=MEMORY
+
+statement error ALTER TABLE PARTITION BY is not supported for engine MEMORY
+ALTER TABLE alter_memory PARTITION BY (p)
+
+statement ok
+CREATE TABLE alter_invalid_partition(a INT, b INT)
+
+statement error PARTITION BY expression `a \+ b` is invalid
+ALTER TABLE alter_invalid_partition PARTITION BY (a + b)
+
+# IF EXISTS must skip partition-key binding when the table is absent.
+statement ok
+ALTER TABLE IF EXISTS alter_missing_partition PARTITION BY (missing_column)
+
 # Moving a row to another partition must preserve physical partition boundaries.
 statement ok
 OPTIMIZE TABLE t COMPACT
@@ -231,7 +282,7 @@ SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 't') LIMIT 1
 ----
 3 3
 
-statement error
+statement error PARTITION BY is already defined
 ALTER TABLE t PARTITION BY (c)
 
 statement error referenced by partition key
