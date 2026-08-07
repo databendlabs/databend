@@ -329,6 +329,7 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
     let part = FuseBlockPartInfo {
         location: "test_block".to_string(),
         bloom_filter_index_location: None,
+        file_size: parquet_bytes.len() as u64,
         bloom_filter_index_size: 0,
         create_on: None,
         nums_rows: num_rows,

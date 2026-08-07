@@ -286,30 +286,26 @@ impl QueryPipelineExecutor {
 
         self.start_executor_daemon()?;
 
-        let mut thread_join_handles = self.execute_threads(self.threads_num);
+        // Pulling and complete pipelines call this from a dedicated OS thread, which can also act
+        // as one worker. Generic callers may invoke the executor from a Tokio runtime, where a
+        // processor using Tokio's blocking APIs would panic if it ran inline.
+        let execute_inline = tokio::runtime::Handle::try_current().is_err();
+        let spawned_threads = self.threads_num - usize::from(execute_inline);
+        let mut thread_join_handles = self.execute_threads(spawned_threads);
+
+        if execute_inline {
+            let inline_thread_num = spawned_threads;
+            let inline_thread_name = format!("PipelineExecutor-{}", inline_thread_num);
+            let inline_span =
+                Span::enter_with_local_parent("QueryPipelineExecutor::execute_threads")
+                    .with_property(|| ("thread_name", inline_thread_name));
+            let thread_res = self.execute_thread(inline_thread_num, inline_span);
+            self.check_thread_result(thread_res)?;
+        }
 
         while let Some(join_handle) = thread_join_handles.pop() {
             let thread_res = join_handle.join().flatten();
-
-            {
-                let finished_error_guard = self.finished_error.lock();
-                if let Some(error) = finished_error_guard.as_ref() {
-                    let may_error = error.clone();
-                    drop(finished_error_guard);
-
-                    let profiling = self.fetch_plans_profile(true);
-                    self.on_finished(ExecutionInfo::create(Err(may_error.clone()), profiling))?;
-                    return Err(may_error);
-                }
-            }
-
-            // We will ignore the abort query error, because returned by finished_error if abort query.
-            if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
-                let may_error = thread_res.unwrap_err();
-                let profiling = self.fetch_plans_profile(true);
-                self.on_finished(ExecutionInfo::create(Err(may_error.clone()), profiling))?;
-                return Err(may_error);
-            }
+            self.check_thread_result(thread_res)?;
         }
 
         if let Err(error) = self.graph.assert_finished_graph() {
@@ -320,6 +316,30 @@ impl QueryPipelineExecutor {
 
         let profiling = self.fetch_plans_profile(true);
         self.on_finished(ExecutionInfo::create(Ok(()), profiling))?;
+        Ok(())
+    }
+
+    fn check_thread_result(&self, thread_res: Result<()>) -> Result<()> {
+        {
+            let finished_error_guard = self.finished_error.lock();
+            if let Some(error) = finished_error_guard.as_ref() {
+                let may_error = error.clone();
+                drop(finished_error_guard);
+
+                let profiling = self.fetch_plans_profile(true);
+                self.on_finished(ExecutionInfo::create(Err(may_error.clone()), profiling))?;
+                return Err(may_error);
+            }
+        }
+
+        // We will ignore the abort query error, because returned by finished_error if abort query.
+        if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
+            let may_error = thread_res.unwrap_err();
+            let profiling = self.fetch_plans_profile(true);
+            self.on_finished(ExecutionInfo::create(Err(may_error.clone()), profiling))?;
+            return Err(may_error);
+        }
+
         Ok(())
     }
 
@@ -417,26 +437,30 @@ impl QueryPipelineExecutor {
 
             let span = Span::enter_with_local_parent("QueryPipelineExecutor::execute_threads")
                 .with_property(|| ("thread_name", name.clone()));
-            thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
-                let _g = span.set_local_parent();
-                let this_clone = this.clone();
-                let try_result = catch_unwind(|| this_clone.execute_single_thread(thread_num));
-
-                // finish the pipeline executor when has error or panic
-                if let Err(cause) = try_result.flatten() {
-                    span.with_property(|| ("error", "true")).add_properties(|| {
-                        [
-                            ("error.type", cause.code().to_string()),
-                            ("error.message", cause.display_text()),
-                        ]
-                    });
-                    this.finish(Some(cause));
-                }
-
-                Ok(())
+            thread_join_handles.push(Thread::named_spawn(Some(name), move || {
+                this.execute_thread(thread_num, span)
             }));
         }
         thread_join_handles
+    }
+
+    fn execute_thread(self: &Arc<Self>, thread_num: usize, span: Span) -> Result<()> {
+        let _g = span.set_local_parent();
+        let this = self.clone();
+        let try_result = catch_unwind(|| unsafe { this.execute_single_thread(thread_num) });
+
+        // Finish the pipeline executor when a worker returns an error or panics.
+        if let Err(cause) = try_result.flatten() {
+            span.with_property(|| ("error", "true")).add_properties(|| {
+                [
+                    ("error.type", cause.code().to_string()),
+                    ("error.message", cause.display_text()),
+                ]
+            });
+            self.finish(Some(cause));
+        }
+
+        Ok(())
     }
 
     /// # Safety

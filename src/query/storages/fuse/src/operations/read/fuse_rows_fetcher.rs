@@ -73,6 +73,7 @@ pub fn row_fetch_processor(
         FuseStorageFormat::Parquet => {
             let read_settings = ReadSettings::from_ctx(&ctx)?;
             let max_threads = ctx.get_settings().get_max_threads()? as usize;
+            let source_parts = source.parts.partitions.clone();
             let block_threshold = BlockThreshold {
                 max_rows: ctx.get_settings().get_max_block_size()? as usize,
                 max_bytes: ctx.get_settings().get_max_block_bytes()? as usize,
@@ -92,6 +93,7 @@ pub fn row_fetch_processor(
                         read_settings,
                         max_threads,
                         io_semaphore.clone(),
+                        &source_parts,
                     ),
                     need_wrap_nullable,
                     fetched_data_types.clone(),
