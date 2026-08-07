@@ -14,6 +14,7 @@
 
 use databend_common_column::bitmap::utils::SlicesIterator;
 use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::MutableBitmap;
 use parquet::arrow::arrow_reader::RowSelector;
 
 /// A wrapper around parquet's `RowSelection` that also tracks the number of selected rows (bits set to 1 in the bitmap).
@@ -37,6 +38,37 @@ impl RowSelection {
             selected_rows,
             bitmap,
         }
+    }
+
+    pub fn from_range(total_rows: usize, start: usize, end: usize) -> Self {
+        let start = start.min(total_rows);
+        let end = end.min(total_rows).max(start);
+
+        let selected_rows = end - start;
+        let mut bitmap = MutableBitmap::with_capacity(total_rows);
+        bitmap.extend_constant(start, false);
+        bitmap.extend_constant(selected_rows, true);
+        bitmap.extend_constant(total_rows - end, false);
+
+        let mut selectors = Vec::with_capacity(3);
+        if selected_rows == 0 {
+            if total_rows > 0 {
+                selectors.push(RowSelector::skip(total_rows));
+            }
+        } else {
+            if start > 0 {
+                selectors.push(RowSelector::skip(start));
+            }
+            selectors.push(RowSelector::select(selected_rows));
+            if end < total_rows {
+                selectors.push(RowSelector::skip(total_rows - end));
+            }
+        }
+        Self::new(
+            parquet::arrow::arrow_reader::RowSelection::from(selectors),
+            selected_rows,
+            bitmap.into(),
+        )
     }
 }
 
@@ -135,5 +167,26 @@ mod tests {
         assert_eq!(selectors.len(), 1);
         assert_eq!(selectors[0].row_count, 5);
         assert!(selectors[0].skip);
+    }
+
+    #[test]
+    fn test_row_selection_from_range() {
+        let row_selection = RowSelection::from_range(10, 2, 5);
+        let selectors: Vec<_> = row_selection.selection.iter().collect();
+
+        assert_eq!(row_selection.selected_rows, 3);
+        assert_eq!(row_selection.bitmap.iter().collect::<Vec<_>>(), vec![
+            false, false, true, true, true, false, false, false, false, false
+        ]);
+        assert_eq!(selectors.len(), 3);
+        assert_eq!((selectors[0].row_count, selectors[0].skip), (2, true));
+        assert_eq!((selectors[1].row_count, selectors[1].skip), (3, false));
+        assert_eq!((selectors[2].row_count, selectors[2].skip), (5, true));
+
+        let empty = RowSelection::from_range(10, 4, 4);
+        let selectors: Vec<_> = empty.selection.iter().collect();
+        assert_eq!(empty.selected_rows, 0);
+        assert_eq!(selectors.len(), 1);
+        assert_eq!((selectors[0].row_count, selectors[0].skip), (10, true));
     }
 }
