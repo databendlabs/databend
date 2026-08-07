@@ -21,13 +21,11 @@ databend-common-expression = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
-databend-common-storage = { workspace = true }
 databend-common-users = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 educe = { workspace = true }
 futures = { workspace = true }
-log = { workspace = true }
 paimon = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
