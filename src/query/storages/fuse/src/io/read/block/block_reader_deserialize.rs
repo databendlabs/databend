@@ -68,6 +68,7 @@ impl BlockReader {
                 compression,
                 block_path,
                 None,
+                None,
             ),
             FuseStorageFormat::Unsupported => Err(unsupported_storage_format_error()),
         }
@@ -107,6 +108,7 @@ impl BlockReader {
                 column_chunks,
                 &meta.compression,
                 &meta.location,
+                None,
                 None,
             ),
             FuseStorageFormat::Unsupported => Err(unsupported_storage_format_error()),

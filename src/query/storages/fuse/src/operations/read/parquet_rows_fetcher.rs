@@ -405,6 +405,7 @@ impl ParquetRowsFetcher {
             &metadata.compression,
             &metadata.location,
             None,
+            None,
         )
     }
 }

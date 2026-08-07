@@ -47,6 +47,18 @@ impl TableDataCacheKey {
             cache_key: format!("{block_path}-{column_id}-{offset}-{len}"),
         }
     }
+
+    pub fn new_with_filter(
+        block_path: &str,
+        column_id: u32,
+        offset: u64,
+        len: u64,
+        filter_hash: u64,
+    ) -> Self {
+        Self {
+            cache_key: format!("{block_path}-{column_id}-{offset}-{len}-{filter_hash:x}"),
+        }
+    }
 }
 
 impl From<TableDataCacheKey> for String {

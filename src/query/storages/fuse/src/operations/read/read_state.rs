@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -229,12 +231,26 @@ impl ReadState {
             should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
         });
 
-        let mut remain_block = self.remain_reader.deserialize_part(
+        // Compute filter hash for predicate-keyed cache when row selection is pushed down.
+        // Only use the static prewhere filter — when runtime filters are active, the
+        // selection depends on dynamic state and caching is less beneficial.
+        let filter_hash = if push_down_row_selection && self.runtime_filters.is_empty() {
+            self.filters.as_ref().map(|f| {
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                f.hash(&mut hasher);
+                hasher.finish()
+            })
+        } else {
+            None
+        };
+
+        let mut remain_block = self.remain_reader.deserialize_part_with_filter_hash(
             part,
             remain_columns_chunks,
             push_down_row_selection
                 .then_some(row_selection.as_ref())
                 .flatten(),
+            filter_hash,
         )?;
         if !push_down_row_selection {
             if let Some(bitmap) = bitmap_selection.as_ref() {

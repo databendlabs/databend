@@ -35,6 +35,7 @@ impl AggIndexReader {
             &part.compression,
             &part.location,
             None,
+            None,
         )?;
 
         self.apply_agg_info(block)

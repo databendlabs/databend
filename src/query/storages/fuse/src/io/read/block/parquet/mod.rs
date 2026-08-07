@@ -59,6 +59,25 @@ impl BlockReader {
             &part.compression,
             &part.location,
             selection,
+            None,
+        )
+    }
+
+    pub fn deserialize_part_with_filter_hash(
+        &self,
+        part: &FuseBlockPartInfo,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+        filter_hash: Option<u64>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks(
+            part.nums_rows,
+            &part.columns_meta,
+            column_chunks,
+            &part.compression,
+            &part.location,
+            selection,
+            filter_hash,
         )
     }
 
@@ -70,6 +89,7 @@ impl BlockReader {
         compression: &Compression,
         block_path: &str,
         selection: Option<&RowSelection>,
+        filter_hash: Option<u64>,
     ) -> databend_common_exception::Result<DataBlock> {
         let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
         // If projection is empty, return a DataBlock with the appropriate row count but no columns
@@ -82,6 +102,91 @@ impl BlockReader {
         }
 
         let has_selection = selection.is_some();
+        let array_cache = if self.put_cache {
+            CacheManager::instance().get_table_data_array_cache()
+        } else {
+            None
+        };
+
+        // When selection is active and filter_hash is provided, try predicate-keyed cache.
+        // If all RawData columns hit, we can skip parquet decompression entirely.
+        if has_selection && filter_hash.is_some() {
+            if let Some(cache) = &array_cache {
+                let fh = filter_hash.unwrap();
+                let mut cached_entries: Vec<Option<(usize, ArrayRef)>> =
+                    vec![None; self.projected_schema.fields.len()];
+                let mut all_hit = true;
+
+                for (i, (field, column_node)) in self
+                    .projected_schema
+                    .fields
+                    .iter()
+                    .zip(self.project_column_nodes.iter())
+                    .enumerate()
+                {
+                    match column_chunks.get(&field.column_id) {
+                        Some(DataItem::RawData(_)) if !column_node.is_nested => {
+                            let meta = column_metas.get(&field.column_id).unwrap();
+                            let (offset, len) = meta.offset_length();
+                            let key = TableDataCacheKey::new_with_filter(
+                                block_path,
+                                field.column_id,
+                                offset,
+                                len,
+                                fh,
+                            );
+                            if let Some(cached) = cache.get(key.as_ref()) {
+                                cached_entries[i] = Some((i, cached.0.clone()));
+                            } else {
+                                all_hit = false;
+                                break;
+                            }
+                        }
+                        Some(DataItem::RawData(_)) => {
+                            // Nested RawData columns can't be cached individually
+                            all_hit = false;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+
+                if all_hit {
+                    let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
+                    for ((i, field), _column_node) in self
+                        .projected_schema
+                        .fields
+                        .iter()
+                        .enumerate()
+                        .zip(self.project_column_nodes.iter())
+                    {
+                        let data_type = field.data_type().into();
+                        let value = if let Some((_, arr)) = cached_entries[i].take() {
+                            Value::from_arrow_rs(arr, &data_type)?
+                        } else {
+                            match column_chunks.get(&field.column_id) {
+                                Some(DataItem::ColumnArray(cached)) => {
+                                    let mut value =
+                                        Value::from_arrow_rs(cached.0.clone(), &data_type)?;
+                                    if let Some(sel) = selection {
+                                        let mut filter_visitor =
+                                            FilterVisitor::new(&sel.bitmap);
+                                        filter_visitor.visit_value(value)?;
+                                        value = filter_visitor.take_result().unwrap();
+                                    }
+                                    value
+                                }
+                                None => Value::Scalar(self.default_vals[i].clone()),
+                                _ => unreachable!(),
+                            }
+                        };
+                        entries.push(BlockEntry::new(value, || (data_type, result_rows)));
+                    }
+                    return Ok(DataBlock::new(entries, result_rows));
+                }
+            }
+        }
+
         let parquet_selection = selection.map(|s| s.selection.clone());
         let record_batch = column_chunks_to_record_batch(
             &self.original_schema,
@@ -93,12 +198,6 @@ impl BlockReader {
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
-        let array_cache = if self.put_cache && !has_selection {
-            CacheManager::instance().get_table_data_array_cache()
-        } else {
-            None
-        };
-
         for ((i, field), column_node) in self
             .projected_schema
             .fields
@@ -108,32 +207,41 @@ impl BlockReader {
         {
             let data_type = field.data_type().into();
 
-            // NOTE, there is something tricky here:
-            // - `column_chunks` always contains data of leaf columns
-            // - here we may processing a nested type field
-            // - But, even if the field being processed is a field with multiple leaf columns
-            //    `column_chunks.get(&field.column_id)` will still return Some(DataItem::_)[^1],
-            //    even if we are getting data from `column_chunks` using a non-leaf
-            //    `column_id` of `projected_schema.fields`
-            //
-            //   [^1]: Except in the current block, there is no data stored for the
-            //         corresponding field, and a default value has been declared for
-            //         the corresponding field.
-            //
-            //  Yes, it is too obscure, we need to polish it later.
-
             let value = match column_chunks.get(&field.column_id) {
                 Some(DataItem::RawData(_)) => {
-                    // get the deserialized arrow array, which may be a nested array
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
                     if !column_node.is_nested {
                         if let Some(cache) = &array_cache {
                             let meta = column_metas.get(&field.column_id).unwrap();
                             let (offset, len) = meta.offset_length();
-                            let key =
-                                TableDataCacheKey::new(block_path, field.column_id, offset, len);
-                            let array_memory_size = arrow_array.get_array_memory_size();
-                            cache.insert(key.into(), (arrow_array.clone(), array_memory_size));
+                            if let Some(fh) = filter_hash {
+                                // Cache filtered array with predicate key
+                                let key = TableDataCacheKey::new_with_filter(
+                                    block_path,
+                                    field.column_id,
+                                    offset,
+                                    len,
+                                    fh,
+                                );
+                                let array_memory_size = arrow_array.get_array_memory_size();
+                                cache.insert(
+                                    key.into(),
+                                    (arrow_array.clone(), array_memory_size),
+                                );
+                            } else if !has_selection {
+                                // Cache full array with base key (only when no selection)
+                                let key = TableDataCacheKey::new(
+                                    block_path,
+                                    field.column_id,
+                                    offset,
+                                    len,
+                                );
+                                let array_memory_size = arrow_array.get_array_memory_size();
+                                cache.insert(
+                                    key.into(),
+                                    (arrow_array.clone(), array_memory_size),
+                                );
+                            }
                         }
                     }
                     Value::from_arrow_rs(arrow_array, &data_type)?
