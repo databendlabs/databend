@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -48,6 +47,7 @@ use md5::Digest;
 use md5::Md5 as Md5Hasher;
 use naive_cityhash::cityhash64_with_seed;
 use num_traits::AsPrimitive;
+use siphasher::sip::SipHasher13;
 use twox_hash::XxHash32;
 use twox_hash::XxHash64;
 
@@ -70,7 +70,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             NumberClass::Decimal128 => {
                 struct Siphash64;
                 impl HashFunction for Siphash64 {
-                    type Hasher = DefaultHasher;
+                    type Hasher = SipHasher13;
                     fn name() -> &'static str {
                         "siphash64"
                     }
@@ -102,6 +102,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         });
     }
 
+    register_bucket(registry);
+
     // Could be used in exchange
     registry
         .scalar_builder("siphash64")
@@ -113,9 +115,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             GenericType<0>,
             NumberType<u64>,
         >(|val, output, _| {
-            let mut hasher = DefaultHasher::default();
-            DFHash::hash(&val.to_owned(), &mut hasher);
-            output.push(hasher.finish());
+            output.push(siphash64(&val.to_owned()));
         }))
         .register();
 
@@ -222,6 +222,111 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 }
 
+fn register_bucket(registry: &mut FunctionRegistry) {
+    registry
+        .register_passthrough_nullable_2_arg::<NumberType<u64>, StringType, NumberType<u32>, _, _>(
+            "bucket",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<NumberType<u64>, StringType, NumberType<u32>>(
+                |buckets, value, output, ctx| {
+                    output.push(bucket(buckets, value.as_bytes(), output.len(), ctx));
+                },
+            ),
+        );
+    registry
+        .register_passthrough_nullable_2_arg::<NumberType<u64>, DateType, NumberType<u32>, _, _>(
+            "bucket",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<NumberType<u64>, DateType, NumberType<u32>>(
+                |buckets, value, output, ctx| {
+                    output.push(bucket(buckets, &value.to_le_bytes(), output.len(), ctx));
+                },
+            ),
+        );
+    registry.register_passthrough_nullable_2_arg::<
+        NumberType<u64>,
+        TimestampType,
+        NumberType<u32>,
+        _,
+        _,
+    >(
+        "bucket",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<NumberType<u64>, TimestampType, NumberType<u32>>(
+            |buckets, value, output, ctx| {
+                output.push(bucket(
+                    buckets,
+                    &value.to_le_bytes(),
+                    output.len(),
+                    ctx,
+                ));
+            },
+        ),
+    );
+    for num_type in ALL_INTEGER_TYPES {
+        with_integer_mapped_type!(|NUM_TYPE| match num_type {
+            NumberDataType::NUM_TYPE => {
+                registry.register_passthrough_nullable_2_arg::<
+                    NumberType<u64>,
+                    NumberType<NUM_TYPE>,
+                    NumberType<u32>,
+                    _,
+                    _,
+                >(
+                    "bucket",
+                    |_, _, _| FunctionDomain::MayThrow,
+                    vectorize_with_builder_2_arg::<
+                        NumberType<u64>,
+                        NumberType<NUM_TYPE>,
+                        NumberType<u32>,
+                    >(|buckets, value, output, ctx| {
+                        output.push(bucket(
+                            buckets,
+                            &value.to_le_bytes(),
+                            output.len(),
+                            ctx,
+                        ));
+                    }),
+                );
+            }
+            _ => unreachable!(),
+        });
+    }
+}
+
+fn bucket(
+    buckets: u64,
+    value: &[u8],
+    row: usize,
+    ctx: &mut databend_common_expression::EvalContext,
+) -> u32 {
+    let Ok(buckets) = u32::try_from(buckets) else {
+        ctx.set_error(row, "bucket count must be between 1 and 4294967295");
+        return 0;
+    };
+    if buckets == 0 {
+        ctx.set_error(row, "bucket count must be greater than zero");
+        return 0;
+    }
+
+    (bucket_hash_v1(value) % buckets as u64) as u32
+}
+
+fn bucket_hash_v1(value: &[u8]) -> u64 {
+    // bucket() values are persisted in partition metadata. Keep this byte-level
+    // encoding stable; incompatible changes require a new bucket hash version.
+    let mut hasher = SipHasher13::new_with_keys(0, 0);
+    hasher.write(value);
+    hasher.finish()
+}
+
+fn siphash64<T: DFHash + ?Sized>(value: &T) -> u64 {
+    // Keep SQL hash results independent of Rust's unspecified DefaultHasher.
+    let mut hasher = SipHasher13::new_with_keys(0, 0);
+    DFHash::hash(value, &mut hasher);
+    hasher.finish()
+}
+
 fn register_simple_domain_type_hash<T: ArgType>(registry: &mut FunctionRegistry)
 where for<'a> T::ScalarRef<'a>: DFHash {
     registry
@@ -232,9 +337,7 @@ where for<'a> T::ScalarRef<'a>: DFHash {
         .calc_domain(|_, _| FunctionDomain::Full)
         .vectorized(vectorize_with_builder_1_arg::<T, NumberType<u64>>(
             |val, output, _| {
-                let mut hasher = DefaultHasher::default();
-                DFHash::hash(&val, &mut hasher);
-                output.push(hasher.finish());
+                output.push(siphash64(&val));
             },
         ))
         .register();
@@ -455,5 +558,45 @@ impl DFHash for Scalar {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bucket_hash_v1;
+
+    #[test]
+    fn test_bucket_hash_v1_vectors() {
+        // Empty and non-ASCII UTF-8 strings.
+        assert_eq!(bucket_hash_v1(b""), 15130871412783076140);
+        assert_eq!(bucket_hash_v1("ß😀山".as_bytes()), 1354619631122873228);
+
+        // Signed integer bounds.
+        assert_eq!(
+            bucket_hash_v1(&i64::MIN.to_le_bytes()),
+            17224059632725561478
+        );
+        assert_eq!(
+            bucket_hash_v1(&i64::MAX.to_le_bytes()),
+            18405982038362582983
+        );
+
+        // Date and timestamp bounds encoded as their physical i32/i64 values.
+        assert_eq!(
+            bucket_hash_v1(&(-719162_i32).to_le_bytes()),
+            4812557028459763710
+        );
+        assert_eq!(
+            bucket_hash_v1(&2932896_i32.to_le_bytes()),
+            17155122806027163509
+        );
+        assert_eq!(
+            bucket_hash_v1(&(-62135596800000000_i64).to_le_bytes()),
+            13147438665158489210
+        );
+        assert_eq!(
+            bucket_hash_v1(&253402300799999999_i64.to_le_bytes()),
+            13643266700336644080
+        );
     }
 }

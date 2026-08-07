@@ -61,18 +61,13 @@ impl Rule for RuleEliminateFilter {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let eval_scalar: Filter = s_expr.plan().clone().try_into()?;
-        // First, de-duplication predicates.
-        let origin_predicates = eval_scalar.predicates.clone();
-        let predicates = origin_predicates
-            .clone()
-            .into_iter()
-            .unique()
-            .collect::<Vec<ScalarExpr>>();
+        let RelOperator::Filter(filter) = s_expr.plan() else {
+            unreachable!("RuleEliminateFilter must match a Filter")
+        };
 
         // Rewrite false filter to be empty scan
-        if predicates.iter().any(is_falsy) {
-            let output_columns = eval_scalar
+        if filter.predicates.iter().any(is_falsy) {
+            let output_columns = filter
                 .derive_relational_prop(&RelExpr::with_s_expr(s_expr))?
                 .output_columns
                 .clone();
@@ -92,8 +87,10 @@ impl Rule for RuleEliminateFilter {
 
         // Delete identically equal predicate
         // After constant fold is ready, we can delete the following code
-        let predicates = predicates
-            .into_iter()
+        let predicates = filter
+            .predicates
+            .iter()
+            .unique()
             .filter(|predicate| match predicate {
                 ScalarExpr::FunctionCall(func) if func.func_name == "eq" => {
                     if let (
@@ -131,16 +128,14 @@ impl Rule for RuleEliminateFilter {
                 }
                 predicate => !is_true(predicate),
             })
-            .collect::<Vec<ScalarExpr>>();
+            .collect::<Vec<_>>();
 
         if predicates.is_empty() {
             state.add_result(s_expr.unary_child().clone());
-        } else if origin_predicates.len() != predicates.len() {
-            state.add_result(
-                s_expr
-                    .unary_child_arc()
-                    .ref_build_unary(Filter { predicates }),
-            );
+        } else if filter.predicates.len() != predicates.len() {
+            state.add_result(s_expr.unary_child_arc().ref_build_unary(Filter {
+                predicates: predicates.into_iter().cloned().collect(),
+            }));
         }
         Ok(())
     }

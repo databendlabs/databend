@@ -453,6 +453,103 @@ SELECT if(block_count BETWEEN 6 AND 12, 1, 0) FROM fuse_snapshot('db_09_0054', '
 ----
 1
 
+# The common write layout prepares the INT table row from a BIGINT input and
+# full-sorts by the physical partition transform before Fuse serialization.
+statement ok
+SET max_threads=4
+
+statement ok
+SET max_block_size=1000
+
+statement ok
+CREATE TABLE hash_partitioned(id INT) PARTITION BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+CREATE TABLE hash_partitioned_none(id INT) PARTITION BY (bucket(16, id)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO hash_partitioned SELECT number::BIGINT FROM numbers(9600)
+
+statement ok
+INSERT INTO hash_partitioned_none SELECT number::BIGINT FROM numbers(9600)
+
+query I
+SELECT count(*) FROM hash_partitioned
+----
+9600
+
+# The base suite also runs against a three-node cluster. Each bucket has about
+# 600 rows, below ROW_PER_BLOCK. GlobalShuffle routes every bucket to one writer
+# before the node-local full sort, keeping the total below 32 after allowing
+# sort block-boundary tails. Without the shuffle, all three writers retain tails
+# for all 16 buckets. The none table also verifies the block-local baseline.
+query II
+SELECT to_int64(h.block_count <= 32), to_int64(h.block_count < n.block_count)
+FROM fuse_snapshot('db_09_0054', 'hash_partitioned') AS h
+CROSS JOIN fuse_snapshot('db_09_0054', 'hash_partitioned_none') AS n
+LIMIT 1
+----
+1 1
+
+# VALUES reaches the same common write layout without a dedicated physical path.
+statement ok
+INSERT INTO hash_partitioned VALUES (40000), (40001)
+
+query I
+SELECT count(*) FROM hash_partitioned WHERE id >= 40000
+----
+2
+
+# In a cluster, a constant SELECT has no original top Merge. Its synthesized
+# hash shuffle must remain below the distributed writer.
+statement ok
+INSERT INTO hash_partitioned SELECT 40002::INT
+
+query I
+SELECT count(*) FROM hash_partitioned WHERE id >= 40000
+----
+3
+
+statement error write_distribution_mode must be either 'none' or 'hash'
+CREATE TABLE invalid_write_distribution(p INT) PARTITION BY (p) WRITE_DISTRIBUTION_MODE='random'
+
+statement error write_distribution_mode='hash' requires PARTITION BY
+CREATE TABLE missing_write_partition(p INT) WRITE_DISTRIBUTION_MODE='hash'
+
+# bucket remains a valid cluster expression without physical partitioning.
+statement ok
+CREATE TABLE bucket_cluster_only(id INT) CLUSTER BY (bucket(16, id))
+
+statement ok
+INSERT INTO bucket_cluster_only SELECT number FROM numbers(100)
+
+query I
+SELECT count(*) FROM bucket_cluster_only
+----
+100
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE invalid_bucket_cluster_count(id BIGINT) CLUSTER BY (bucket(id, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE zero_bucket_cluster_count(id BIGINT) CLUSTER BY (bucket(0, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE excessive_bucket_cluster_count(id BIGINT) CLUSTER BY (bucket(4294967296, id))
+
+# A bucket cluster key does not substitute for a PARTITION BY declaration.
+statement error write_distribution_mode='hash' requires PARTITION BY
+CREATE TABLE bucket_cluster_hash(id INT) CLUSTER BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash'
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE invalid_bucket_count(id BIGINT) PARTITION BY (bucket(id, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE zero_bucket_count(id BIGINT) PARTITION BY (bucket(0, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE excessive_bucket_count(id BIGINT) PARTITION BY (bucket(4294967296, id))
+
 # Like CLUSTER BY, each physical key expression may reference only one source
 # column. Composite partitioning is expressed as PARTITION BY (a, b).
 statement error PARTITION BY expression `a \+ b` is invalid

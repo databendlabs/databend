@@ -18,7 +18,10 @@ use std::collections::HashMap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::Cast;
 use super::ColumnIndex;
+use super::ColumnRef;
+use super::ConstantFolder;
 use super::Expr;
 use super::FunctionCall;
 use super::FunctionContext;
@@ -26,6 +29,7 @@ use super::FunctionDomain;
 use super::FunctionEval;
 use super::FunctionRegistry;
 use super::Scalar;
+use super::conversion::classify_conversion;
 use super::function_stat::DeriveStat;
 use super::stat_distribution::ArgStat;
 use super::stat_distribution::BorrowedDistribution;
@@ -93,8 +97,68 @@ impl<'a> StatEvaluator<'a> {
             Expr::FunctionCall(call) => Ok(self
                 .eval_function_call(call, input_stats)?
                 .map(CowStat::Owned)),
-            Expr::Cast(_) | Expr::LambdaFunctionCall(_) => Ok(None),
+            Expr::Cast(cast) => Ok(self.eval_cast(cast, input_stats)?.map(CowStat::Owned)),
+            Expr::LambdaFunctionCall(_) => Ok(None),
         }
+    }
+
+    fn eval_cast<'s, I: ColumnIndex>(
+        &'a self,
+        cast: &Cast<I>,
+        input_stats: &'s HashMap<I, ArgStat<'_>>,
+    ) -> Result<Option<ReturnStat>> {
+        let src_type = cast.expr.data_type();
+        if cast.is_try || !classify_conversion(src_type, &cast.dest_type).is_lossless_injective() {
+            return Ok(None);
+        }
+
+        let Some(input) = self.eval(&cast.expr, input_stats)? else {
+            return Ok(None);
+        };
+        let input = input.as_ref();
+
+        // Reuse the cast domain implementation without making statistics
+        // evaluation depend on the physical value evaluator. The synthetic
+        // column represents the already-derived statistics of the inner expr.
+        let expr = Expr::Cast(Cast {
+            span: cast.span,
+            is_try: false,
+            expr: Box::new(Expr::ColumnRef(ColumnRef {
+                span: cast.span,
+                id: 0,
+                data_type: src_type.clone(),
+                display_name: String::new(),
+            })),
+            dest_type: cast.dest_type.clone(),
+        });
+        let input_domains = HashMap::from([(0, input.domain.clone())]);
+        let (_, Some(domain)) = ConstantFolder::fold_with_domain(
+            &expr,
+            &input_domains,
+            self.func_ctx,
+            self.fn_registry,
+        ) else {
+            return Ok(None);
+        };
+
+        let stat = ReturnStat {
+            domain,
+            // A lossless injective cast preserves distinct values and NULLs.
+            // Histograms are typed, so their boundaries cannot be reused.
+            ndv: input.ndv,
+            null_count: input.null_count,
+            distribution: OwnedDistribution::Unknown,
+        };
+        if let Err(msg) = stat.check_consistency_with_type(Some(&cast.dest_type)) {
+            if cfg!(debug_assertions) {
+                return Err(ErrorCode::Internal(format!(
+                    "Failed to derive statistics for cast: {msg}"
+                )));
+            }
+            log::warn!(msg; "Derived invalid cast statistics");
+            return Ok(None);
+        }
+        Ok(Some(stat))
     }
 
     fn eval_function_call<'s, I: ColumnIndex>(
@@ -219,6 +283,8 @@ mod tests {
 
     use super::*;
     use crate::types::DataType;
+    use crate::types::NumberDataType;
+    use crate::types::number::NumberScalar;
 
     #[test]
     fn test_constant_null_uses_exact_input_cardinality() {
@@ -236,5 +302,76 @@ mod tests {
         .into_owned();
 
         assert_eq!(stat.null_count, StatCount::exact(7));
+    }
+
+    #[test]
+    fn test_lossless_cast_preserves_basic_statistics() {
+        let src_type = DataType::Number(NumberDataType::UInt8);
+        let dest_type = src_type.clone().wrap_nullable();
+        let expr = Expr::Cast(Cast {
+            span: None,
+            is_try: false,
+            expr: Box::new(Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 0,
+                data_type: src_type.clone(),
+                display_name: "c0".to_string(),
+            })),
+            dest_type: dest_type.clone(),
+        });
+        let domain = crate::Domain::from_min_max(
+            Scalar::Number(NumberScalar::UInt8(1)),
+            Scalar::Number(NumberScalar::UInt8(3)),
+            &src_type,
+        );
+        let input_stats = HashMap::from([(0, ArgStat {
+            domain,
+            ndv: NdvEstimate::exact(3.0),
+            null_count: StatCount::exact(0),
+            distribution: BorrowedDistribution::Unknown,
+        })]);
+
+        let stat = StatEvaluator::run(
+            &expr,
+            &FunctionContext::default(),
+            &FunctionRegistry::empty(),
+            StatCardinality::exact(3),
+            &input_stats,
+        )
+        .unwrap()
+        .unwrap()
+        .into_owned();
+
+        assert!(stat.domain.matches_data_type(&dest_type));
+        assert_eq!(stat.ndv, NdvEstimate::exact(3.0));
+        assert_eq!(stat.null_count, StatCount::exact(0));
+        assert!(matches!(stat.distribution, OwnedDistribution::Unknown));
+    }
+
+    #[test]
+    fn test_lossy_cast_is_not_derived() {
+        let expr = Expr::Cast(Cast {
+            span: None,
+            is_try: false,
+            expr: Box::new(Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 0,
+                data_type: DataType::Number(NumberDataType::Int64),
+                display_name: "c0".to_string(),
+            })),
+            dest_type: DataType::Number(NumberDataType::UInt8),
+        });
+
+        assert!(
+            StatEvaluator::run(
+                &expr,
+                &FunctionContext::default(),
+                &FunctionRegistry::empty(),
+                StatCardinality::exact(3),
+                &HashMap::new(),
+            )
+            .unwrap()
+            .is_none()
+        );
     }
 }

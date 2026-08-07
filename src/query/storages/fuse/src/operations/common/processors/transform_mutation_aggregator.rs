@@ -406,15 +406,6 @@ impl TableMutationAggregator {
             for chunk in &partition_blocks.into_iter().chunks(chunk_size) {
                 let (new_blocks, new_hlls): (Vec<Arc<BlockMeta>>, Vec<Option<RawBlockHLL>>) =
                     chunk.unzip();
-                let new_hlls = if new_hlls.iter().all(|v| v.is_none()) {
-                    None
-                } else {
-                    let hlls = new_hlls
-                        .into_iter()
-                        .map(|x| x.unwrap_or_default())
-                        .collect::<Vec<_>>();
-                    Some(SegmentStatistics::new(hlls, Vec::new()).to_bytes()?)
-                };
                 // Only compaction/reclustering output may be force-marked perfect to keep
                 // those operations at a fixed point. REPLACE/MERGE append after-images
                 // must retain the physical perfect-block count from reduce_block_metas.
@@ -425,17 +416,21 @@ impl TableMutationAggregator {
 
                 let ctx = self.write_segment_ctx.clone();
                 tasks.push(async move {
+                    // SegmentStatistics encoding and Zstd compression are CPU-heavy. Perform them
+                    // in the bounded worker pool rather than serially before the first write.
+                    let new_hlls = generate_segment_stats(new_hlls)?;
                     ctx.write_segment(new_blocks, new_hlls, force_all_blocks_perfect)
                         .await
                 });
             }
         }
 
-        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let worker_count = max_threads.min(tasks.len());
         let new_segments = execute_futures_in_parallel(
             tasks,
-            threads_nums,
-            threads_nums * 2,
+            worker_count,
+            worker_count,
             "fuse-write-segments-worker".to_owned(),
         )
         .await?
@@ -727,31 +722,31 @@ impl TableMutationAggregator {
         );
         let extended_merged_blocks = std::mem::take(&mut self.merged_blocks);
         let mut new_merged_blocks = Vec::with_capacity(extended_merged_blocks.len());
-        for extended_block_meta in extended_merged_blocks.into_iter() {
-            let new_block_meta = if let Some(draft_virtual_block_meta) =
-                &extended_block_meta.draft_virtual_block_meta
+        for extended_block_meta in extended_merged_blocks {
+            let ExtendedBlockMeta {
+                mut block_meta,
+                draft_virtual_block_meta,
+                column_hlls,
+                ..
+            } = Arc::unwrap_or_clone(extended_block_meta);
+
+            if let Some(draft_virtual_block_meta) = draft_virtual_block_meta
+                && let Some(ref mut virtual_column_accumulator) = virtual_column_accumulator
             {
-                let mut new_block_meta = extended_block_meta.block_meta.clone();
+                // Generate ColumnId for virtual columns. Consume the side-car metadata so the
+                // common recluster path can move serialized HLL bytes without cloning them.
+                let virtual_column_metas = virtual_column_accumulator
+                    .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
 
-                if let Some(ref mut virtual_column_accumulator) = virtual_column_accumulator {
-                    // generate ColumnId for virtual columns.
-                    let virtual_column_metas = virtual_column_accumulator
-                        .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
+                block_meta.virtual_block_meta = Some(VirtualBlockMeta {
+                    virtual_column_metas,
+                    virtual_column_size: draft_virtual_block_meta.virtual_column_size,
+                    virtual_location: draft_virtual_block_meta.virtual_location,
+                });
+            }
 
-                    let virtual_block_meta = VirtualBlockMeta {
-                        virtual_column_metas,
-                        virtual_column_size: draft_virtual_block_meta.virtual_column_size,
-                        virtual_location: draft_virtual_block_meta.virtual_location.clone(),
-                    };
-                    new_block_meta.virtual_block_meta = Some(virtual_block_meta);
-                }
-                Arc::new(new_block_meta)
-            } else {
-                Arc::new(extended_block_meta.block_meta.clone())
-            };
-            let column_hlls =
-                BlockHLLState::encode_column_hll(extended_block_meta.column_hlls.clone())?;
-            new_merged_blocks.push((new_block_meta, column_hlls));
+            let column_hlls = BlockHLLState::encode_column_hll(column_hlls)?;
+            new_merged_blocks.push((Arc::new(block_meta), column_hlls));
         }
 
         self.virtual_schema = if let Some(virtual_column_accumulator) = virtual_column_accumulator {

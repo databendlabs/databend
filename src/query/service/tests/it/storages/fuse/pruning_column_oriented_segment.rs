@@ -98,6 +98,7 @@ async fn apply_snapshot_pruning(
         res_tx,
         cache_key,
         schema.clone(),
+        HashSet::new(),
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {

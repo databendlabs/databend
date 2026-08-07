@@ -21,7 +21,6 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::RelOp;
-use crate::plans::Sort;
 
 pub struct RuleEliminateSort {
     id: RuleID,
@@ -49,7 +48,7 @@ impl Rule for RuleEliminateSort {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let sort = s_expr.plan().as_sort().unwrap();
         let input = s_expr.child(0)?;
 
         if sort.limit.is_some() {
@@ -67,7 +66,13 @@ impl Rule for RuleEliminateSort {
                 // avg(number) over (partition by number % 3 order by number + 1)
                 // from numbers(50);
                 if partition == &window.partition_by
-                    && (ordering == &sort.items || sort.sort_items_exclude_partition().is_empty())
+                    && (ordering == &sort.items
+                        || sort.items.iter().all(|item| {
+                            window
+                                .partition_by
+                                .iter()
+                                .any(|partition| partition.index == item.index)
+                        }))
                 {
                     state.add_result(input.clone());
                     return Ok(());
