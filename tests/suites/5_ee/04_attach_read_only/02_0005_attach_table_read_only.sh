@@ -49,6 +49,16 @@ echo "desc attach_read_only;" | bendsql_connect_root
 echo "expects one row, 3 columns"
 echo "select * from attach_read_only order by number;" | bendsql_connect_root
 
+echo "system.columns hides source-side added columns when refresh is disabled (default)"
+echo "select name from system.columns where database='default' and table='attach_read_only' order by name;" | $BENDSQL_CLIENT_CONNECT
+echo "system.columns should reflect the added columns"
+echo "set enable_table_schema_refresh=1; select name from system.columns where database='default' and table='attach_read_only' order by name;" | $BENDSQL_CLIENT_CONNECT
+echo "information_schema.columns should reflect the added columns"
+echo "set enable_table_schema_refresh=1; select column_name from information_schema.columns where table_schema='default' and table_name='attach_read_only' order by column_name;" | $BENDSQL_CLIENT_CONNECT
+
+echo "refresh does NOT persist to meta server: disable refresh again, should still see frozen schema"
+echo "select name from system.columns where database='default' and table='attach_read_only' order by name;" | $BENDSQL_CLIENT_CONNECT
+
 
 echo "alter table drop column"
 echo "alter table base drop column c1;" | bendsql_connect_root
