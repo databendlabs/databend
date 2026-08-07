@@ -34,6 +34,7 @@ use jiff::Zoned;
 use jiff::tz::TimeZone;
 use serde::Deserialize;
 use serde::Serialize;
+use smallvec::SmallVec;
 
 use self::function_factory::FunctionFactoryHelper;
 use crate::Column;
@@ -276,10 +277,10 @@ impl FunctionRegistry {
         name: &str,
         params: &[Scalar],
         args: &[Expr<Index>],
-    ) -> Vec<(FunctionID, Arc<Function>)> {
+    ) -> SmallVec<[(FunctionID, Arc<Function>); 1]> {
         let name = name.to_lowercase();
 
-        let mut candidates = Vec::new();
+        let mut candidates: SmallVec<[(FunctionID, Arc<Function>); 1]> = SmallVec::new();
 
         if let Some(funcs) = self.funcs.get(&name) {
             candidates.extend(funcs.iter().filter_map(|(func, id)| {
