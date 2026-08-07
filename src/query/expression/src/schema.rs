@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -31,6 +32,8 @@ use crate::BlockMetaInfo;
 use crate::BlockMetaInfoDowncast;
 use crate::Scalar;
 use crate::display::display_tuple_field_name;
+use crate::types::AggregateFunctionParam;
+use crate::types::AggregateStateDataType;
 use crate::types::DataType;
 use crate::types::DecimalDataKind;
 use crate::types::NumberDataType;
@@ -355,6 +358,12 @@ pub enum TableDataType {
     Interval,
     Vector(VectorDataType),
     Opaque(usize),
+    AggregateState {
+        function_name: String,
+        params: Vec<AggregateFunctionParam>,
+        argument_types: Vec<TableDataType>,
+        state_type: Box<TableDataType>,
+    },
     // Only used to persist DataType in meta
     StageLocation,
 }
@@ -1064,6 +1073,18 @@ impl TableSchema {
                         next_column_id,
                     );
                 }
+                TableDataType::AggregateState { state_type, .. } => {
+                    let state_type = if ty.is_nullable() {
+                        TableDataType::Nullable(state_type)
+                    } else {
+                        *state_type
+                    };
+                    collect_in_field(
+                        &TableField::new_from_column_id(field.name(), state_type, *next_column_id),
+                        fields,
+                        next_column_id,
+                    );
+                }
                 _ => {
                     *next_column_id += 1;
                     fields.push(field.clone())
@@ -1248,6 +1269,13 @@ impl TableField {
             TableDataType::Map(a) => {
                 Self::build_column_ids_from_data_type(a.as_ref(), column_ids, next_column_id);
             }
+            TableDataType::AggregateState { state_type, .. } => {
+                Self::build_column_ids_from_data_type(
+                    state_type.as_ref(),
+                    column_ids,
+                    next_column_id,
+                );
+            }
             _ => {
                 *next_column_id += 1;
             }
@@ -1372,6 +1400,17 @@ impl From<&TableDataType> for DataType {
             TableDataType::Binary => DataType::Binary,
             TableDataType::String => DataType::String,
             TableDataType::Opaque(size) => DataType::Opaque(*size),
+            TableDataType::AggregateState {
+                function_name,
+                params,
+                argument_types,
+                state_type,
+            } => DataType::AggregateState(Box::new(AggregateStateDataType {
+                function_name: function_name.clone(),
+                params: params.clone(),
+                argument_types: argument_types.iter().map(Into::into).collect(),
+                state_type: Box::new(state_type.as_ref().into()),
+            })),
             TableDataType::Interval => DataType::Interval,
             TableDataType::Number(ty) => DataType::Number(*ty),
             TableDataType::Decimal(ty) => DataType::Decimal(ty.size()),
@@ -1395,6 +1434,60 @@ impl From<&TableDataType> for DataType {
 }
 
 impl TableDataType {
+    pub fn physical_type(&self) -> Cow<'_, TableDataType> {
+        match self {
+            TableDataType::AggregateState { state_type, .. } => Cow::Borrowed(state_type),
+            TableDataType::Nullable(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(TableDataType::Nullable(Box::new(
+                        physical_inner.into_owned(),
+                    )))
+                }
+            }
+            TableDataType::Array(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(TableDataType::Array(Box::new(physical_inner.into_owned())))
+                }
+            }
+            TableDataType::Map(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(TableDataType::Map(Box::new(physical_inner.into_owned())))
+                }
+            }
+            TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                let physical_fields = fields_type
+                    .iter()
+                    .map(|field| field.physical_type())
+                    .collect::<Vec<_>>();
+                if physical_fields
+                    .iter()
+                    .zip(fields_type)
+                    .all(|(physical, logical)| physical.as_ref() == logical)
+                {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(TableDataType::Tuple {
+                        fields_name: fields_name.clone(),
+                        fields_type: physical_fields.into_iter().map(Cow::into_owned).collect(),
+                    })
+                }
+            }
+            _ => Cow::Borrowed(self),
+        }
+    }
+
     pub fn wrap_nullable(&self) -> Self {
         match self {
             TableDataType::Null | TableDataType::Nullable(_) => self.clone(),
@@ -1498,6 +1591,7 @@ impl TableDataType {
             TableDataType::Vector(ty) => format!("VECTOR({})", ty.dimension()),
             TableDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             TableDataType::StageLocation => "STAGE_LOCATION".to_string(),
+            TableDataType::AggregateState { .. } => self.to_string().to_uppercase(),
             _ => self.to_string().to_uppercase(),
         }
     }
@@ -1550,7 +1644,8 @@ impl TableDataType {
                 | TableDataType::Geography
                 | TableDataType::Interval
                 | TableDataType::Vector(_)
-                | TableDataType::StageLocation => ty.sql_name(),
+                | TableDataType::StageLocation
+                | TableDataType::AggregateState { .. } => ty.sql_name(),
             };
             if is_null {
                 format!("{} NULL", s)
@@ -1571,6 +1666,7 @@ impl TableDataType {
                 .iter()
                 .map(|inner_ty| inner_ty.num_leaf_columns())
                 .sum(),
+            TableDataType::AggregateState { state_type, .. } => state_type.num_leaf_columns(),
             _ => 1,
         }
     }
@@ -1690,6 +1786,16 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Binary => Ok(TableDataType::Binary),
         DataType::String => Ok(TableDataType::String),
         DataType::Opaque(size) => Ok(TableDataType::Opaque(*size)),
+        DataType::AggregateState(state) => Ok(TableDataType::AggregateState {
+            function_name: state.function_name.clone(),
+            params: state.params.clone(),
+            argument_types: state
+                .argument_types
+                .iter()
+                .map(infer_schema_type)
+                .collect::<Result<Vec<_>>>()?,
+            state_type: Box::new(infer_schema_type(&state.state_type)?),
+        }),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),
         DataType::Decimal(size) => match size.data_kind() {

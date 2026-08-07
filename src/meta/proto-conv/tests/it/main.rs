@@ -173,3 +173,4 @@ mod v178_storage_config;
 mod v179_task_delete_task_id;
 mod v180_paimon_catalog_option;
 mod v181_materialized_view_meta;
+mod v182_aggregate_state_data_type;

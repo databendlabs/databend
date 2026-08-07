@@ -17,6 +17,11 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::AggregateFunctionParam;
+use databend_common_expression::types::AggregateStateDataType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use jiff::fmt::strtime::BrokenDownTime;
 use jiff::tz;
@@ -25,6 +30,46 @@ use jiff::tz::TimeZone;
 use crate::DataTypeFilter;
 use crate::get_all_test_data_types;
 use crate::rand_block_for_all_types;
+
+#[test]
+fn test_aggregate_state_physical_type() {
+    let state_type = DataType::Tuple(vec![
+        DataType::Number(NumberDataType::UInt64),
+        DataType::Boolean,
+    ]);
+    let aggregate_state = DataType::AggregateState(Box::new(AggregateStateDataType {
+        function_name: "sum".to_string(),
+        params: vec![],
+        argument_types: vec![DataType::Number(NumberDataType::UInt64)],
+        state_type: Box::new(state_type.clone()),
+    }));
+
+    assert_eq!(aggregate_state.physical_type().as_ref(), &state_type);
+    assert_eq!(aggregate_state.sql_name(), "AGGREGATESTATE(SUM, UINT64)");
+    assert_eq!(
+        DataType::Nullable(Box::new(aggregate_state.clone()))
+            .physical_type()
+            .into_owned(),
+        DataType::Nullable(Box::new(state_type.clone()))
+    );
+    assert_eq!(
+        DataType::Tuple(vec![DataType::String, aggregate_state])
+            .physical_type()
+            .into_owned(),
+        DataType::Tuple(vec![DataType::String, state_type])
+    );
+}
+
+#[test]
+fn test_aggregate_function_param_scalar_conversion() {
+    let scalar = databend_common_expression::Scalar::Tuple(vec![
+        databend_common_expression::Scalar::String("param".to_string()),
+        databend_common_expression::Scalar::Number(NumberScalar::UInt64(0)),
+    ]);
+    let param = AggregateFunctionParam::try_from(scalar.clone()).unwrap();
+
+    assert_eq!(databend_common_expression::Scalar::from(param), scalar);
+}
 
 #[test]
 fn test_timestamp_to_string_formats() {

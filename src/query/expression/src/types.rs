@@ -41,8 +41,11 @@ pub mod variant;
 pub mod vector;
 pub mod zero_size_type;
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::hash::Hash;
 use std::iter::TrustedLen;
 use std::ops::Deref;
@@ -51,7 +54,10 @@ use std::ops::Range;
 
 use databend_common_ast::ast::TypeName;
 pub use databend_common_base::base::OrderedFloat;
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz as TimestampTzScalar;
 use databend_common_exception::ErrorCode;
+use databend_common_frozen_api::FrozenAPI;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -111,6 +117,119 @@ use crate::values::Scalar;
 
 pub type GenericMap = [DataType];
 
+/// Aggregate function parameters persisted through an explicitly tagged protobuf representation.
+/// Rust enum ordering and serde layouts are not part of the on-disk format.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FrozenAPI)]
+pub enum AggregateFunctionParam {
+    Null,
+    Number(NumberScalar),
+    Decimal(DecimalScalar),
+    Timestamp(i64),
+    TimestampTz(TimestampTzScalar),
+    Date(i32),
+    Interval(months_days_micros),
+    Boolean(bool),
+    Binary(Vec<u8>),
+    String(String),
+    Bitmap(Vec<u8>),
+    Tuple(Vec<AggregateFunctionParam>),
+    Variant(Vec<u8>),
+    Geometry(Vec<u8>),
+}
+
+impl AggregateFunctionParam {
+    pub fn interval_from_parts(months: i32, days: i32, microseconds: i64) -> Self {
+        Self::Interval(months_days_micros::new(months, days, microseconds))
+    }
+
+    pub fn timestamp_tz_from_parts(timestamp: i64, offset: i32) -> Self {
+        Self::TimestampTz(TimestampTzScalar::new(timestamp, offset))
+    }
+}
+
+impl TryFrom<Scalar> for AggregateFunctionParam {
+    type Error = ErrorCode;
+
+    fn try_from(value: Scalar) -> Result<Self, Self::Error> {
+        Ok(match value {
+            Scalar::Null => Self::Null,
+            Scalar::Number(value) => Self::Number(value),
+            Scalar::Decimal(value) => Self::Decimal(value),
+            Scalar::Timestamp(value) => Self::Timestamp(value),
+            Scalar::TimestampTz(value) => Self::TimestampTz(value),
+            Scalar::Date(value) => Self::Date(value),
+            Scalar::Interval(value) => Self::Interval(value),
+            Scalar::Boolean(value) => Self::Boolean(value),
+            Scalar::Binary(value) => Self::Binary(value),
+            Scalar::String(value) => Self::String(value),
+            Scalar::Bitmap(value) => Self::Bitmap(value),
+            Scalar::Tuple(values) => Self::Tuple(
+                values
+                    .into_iter()
+                    .map(Self::try_from)
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            Scalar::Variant(value) => Self::Variant(value),
+            Scalar::Geometry(value) => Self::Geometry(value),
+            value => {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Aggregate function parameter type '{}' cannot be persisted",
+                    value.as_ref().infer_data_type()
+                )));
+            }
+        })
+    }
+}
+
+impl From<AggregateFunctionParam> for Scalar {
+    fn from(value: AggregateFunctionParam) -> Self {
+        match value {
+            AggregateFunctionParam::Null => Scalar::Null,
+            AggregateFunctionParam::Number(value) => Scalar::Number(value),
+            AggregateFunctionParam::Decimal(value) => Scalar::Decimal(value),
+            AggregateFunctionParam::Timestamp(value) => Scalar::Timestamp(value),
+            AggregateFunctionParam::TimestampTz(value) => Scalar::TimestampTz(value),
+            AggregateFunctionParam::Date(value) => Scalar::Date(value),
+            AggregateFunctionParam::Interval(value) => Scalar::Interval(value),
+            AggregateFunctionParam::Boolean(value) => Scalar::Boolean(value),
+            AggregateFunctionParam::Binary(value) => Scalar::Binary(value),
+            AggregateFunctionParam::String(value) => Scalar::String(value),
+            AggregateFunctionParam::Bitmap(value) => Scalar::Bitmap(value),
+            AggregateFunctionParam::Tuple(values) => {
+                Scalar::Tuple(values.into_iter().map(Scalar::from).collect())
+            }
+            AggregateFunctionParam::Variant(value) => Scalar::Variant(value),
+            AggregateFunctionParam::Geometry(value) => Scalar::Geometry(value),
+        }
+    }
+}
+
+impl Display for AggregateFunctionParam {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&Scalar::from(self.clone()), formatter)
+    }
+}
+
+impl Hash for AggregateFunctionParam {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        Scalar::from(self.clone()).hash(state)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AggregateStateDataType {
+    pub function_name: String,
+    pub params: Vec<AggregateFunctionParam>,
+    pub argument_types: Vec<DataType>,
+    pub state_type: Box<DataType>,
+}
+
+impl AggregateStateDataType {
+    pub fn physical_type(&self) -> &DataType {
+        &self.state_type
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
     Null,
@@ -135,6 +254,7 @@ pub enum DataType {
     Geography,
     Vector(VectorDataType),
     Opaque(usize),
+    AggregateState(Box<AggregateStateDataType>),
 
     // Used internally for generic types
     Generic(usize),
@@ -143,6 +263,70 @@ pub enum DataType {
 }
 
 impl DataType {
+    pub fn physical_type(&self) -> Cow<'_, DataType> {
+        match self {
+            DataType::AggregateState(state) => Cow::Borrowed(state.physical_type()),
+            DataType::Nullable(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(DataType::Nullable(Box::new(physical_inner.into_owned())))
+                }
+            }
+            DataType::Array(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(DataType::Array(Box::new(physical_inner.into_owned())))
+                }
+            }
+            DataType::Map(inner) => {
+                let physical_inner = inner.physical_type();
+                if physical_inner.as_ref() == inner.as_ref() {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(DataType::Map(Box::new(physical_inner.into_owned())))
+                }
+            }
+            DataType::Tuple(fields) => {
+                let physical_fields = fields
+                    .iter()
+                    .map(|field| field.physical_type())
+                    .collect::<Vec<_>>();
+                if physical_fields
+                    .iter()
+                    .zip(fields)
+                    .all(|(physical, logical)| physical.as_ref() == logical)
+                {
+                    Cow::Borrowed(self)
+                } else {
+                    Cow::Owned(DataType::Tuple(
+                        physical_fields.into_iter().map(Cow::into_owned).collect(),
+                    ))
+                }
+            }
+            _ => Cow::Borrowed(self),
+        }
+    }
+
+    pub fn matches_physical_type(&self, data_type: &DataType) -> bool {
+        if self == data_type {
+            return true;
+        }
+
+        match (self, data_type) {
+            (DataType::AggregateState(state), data_type) => {
+                state.physical_type().matches_physical_type(data_type)
+            }
+            (DataType::Nullable(logical), DataType::Nullable(physical)) => {
+                logical.matches_physical_type(physical)
+            }
+            _ => false,
+        }
+    }
+
     pub fn wrap_nullable(&self) -> Self {
         match self {
             DataType::Null | DataType::Nullable(_) => self.clone(),
@@ -223,6 +407,10 @@ impl DataType {
             DataType::Array(ty) => ty.has_generic(),
             DataType::Map(ty) => ty.has_generic(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
+            DataType::AggregateState(state) => {
+                state.argument_types.iter().any(DataType::has_generic)
+                    || state.state_type.has_generic()
+            }
         }
     }
 
@@ -254,6 +442,18 @@ impl DataType {
             DataType::Tuple(tys) => {
                 DataType::Tuple(tys.iter().map(|ty| ty.remove_generics(generics)).collect())
             }
+            DataType::AggregateState(state) => {
+                DataType::AggregateState(Box::new(AggregateStateDataType {
+                    function_name: state.function_name.clone(),
+                    params: state.params.clone(),
+                    argument_types: state
+                        .argument_types
+                        .iter()
+                        .map(|ty| ty.remove_generics(generics))
+                        .collect(),
+                    state_type: Box::new(state.state_type.remove_generics(generics)),
+                }))
+            }
         }
     }
 
@@ -284,6 +484,7 @@ impl DataType {
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
             DataType::Opaque(_) => false,
             DataType::StageLocation => false,
+            DataType::AggregateState(state) => state.state_type.has_nested_nullable(),
         }
     }
 
@@ -446,6 +647,7 @@ impl DataType {
             DataType::String => "VARCHAR".to_string(),
             DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             DataType::TimestampTz => "TIMESTAMP_TZ".to_string(),
+            DataType::AggregateState(_) => self.to_string().to_uppercase(),
             _ => self.to_string().to_uppercase(),
         }
     }
@@ -515,7 +717,8 @@ impl DataType {
             | DataType::EmptyMap
             | DataType::Opaque(_)
             | DataType::Generic(_)
-            | DataType::StageLocation => Err(ErrorCode::BadArguments(format!(
+            | DataType::StageLocation
+            | DataType::AggregateState(_) => Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type {} to sql type",
                 self
             ))),
@@ -532,6 +735,7 @@ impl DataType {
                 .iter()
                 .map(|inner_ty| inner_ty.num_leaf_columns())
                 .sum(),
+            DataType::AggregateState(state) => state.physical_type().num_leaf_columns(),
             _ => 1,
         }
     }
