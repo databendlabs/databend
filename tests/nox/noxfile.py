@@ -423,7 +423,12 @@ def python_client(session, driver_version):
         )
         with session.chdir(str(bindings_dir)):
             for impl in ["blocking", "asyncio", "cursor"]:
-                session.run("behave", f"tests/{impl}", env=merge_env(PYTHON_TEST_ENV, env))
+                session.run(
+                    "behave",
+                    "--format=plain",
+                    f"tests/{impl}",
+                    env=merge_env(PYTHON_TEST_ENV, env),
+                )
     finally:
         current_timezone = get_current_timezone()
         if current_timezone != original_timezone:
