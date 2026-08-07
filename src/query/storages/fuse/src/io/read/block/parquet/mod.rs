@@ -81,20 +81,8 @@ impl BlockReader {
             return Ok(DataBlock::empty_with_schema(&self.data_schema()));
         }
 
-        let array_cache = if self.put_cache {
-            CacheManager::instance().get_table_data_array_cache()
-        } else {
-            None
-        };
-
-        // When the array cache is available, skip parquet-level row selection so we
-        // decode full columns and can cache them. Selection is applied post-decode
-        // via FilterVisitor (same path as the ColumnArray cache-hit branch).
-        let parquet_selection = if array_cache.is_some() {
-            None
-        } else {
-            selection.map(|s| s.selection.clone())
-        };
+        let has_selection = selection.is_some();
+        let parquet_selection = selection.map(|s| s.selection.clone());
         let record_batch = column_chunks_to_record_batch(
             &self.original_schema,
             num_rows,
@@ -104,6 +92,12 @@ impl BlockReader {
         )?;
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
+
+        let array_cache = if self.put_cache && !has_selection {
+            CacheManager::instance().get_table_data_array_cache()
+        } else {
+            None
+        };
 
         for ((i, field), column_node) in self
             .projected_schema
@@ -130,6 +124,7 @@ impl BlockReader {
 
             let value = match column_chunks.get(&field.column_id) {
                 Some(DataItem::RawData(_)) => {
+                    // get the deserialized arrow array, which may be a nested array
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
                     if !column_node.is_nested {
                         if let Some(cache) = &array_cache {
@@ -141,15 +136,7 @@ impl BlockReader {
                             cache.insert(key.into(), (arrow_array.clone(), array_memory_size));
                         }
                     }
-                    let mut value = Value::from_arrow_rs(arrow_array, &data_type)?;
-                    if array_cache.is_some() {
-                        if let Some(sel) = selection {
-                            let mut filter_visitor = FilterVisitor::new(&sel.bitmap);
-                            filter_visitor.visit_value(value)?;
-                            value = filter_visitor.take_result().unwrap();
-                        }
-                    }
-                    value
+                    Value::from_arrow_rs(arrow_array, &data_type)?
                 }
                 Some(DataItem::ColumnArray(cached)) => {
                     if column_node.is_nested {
