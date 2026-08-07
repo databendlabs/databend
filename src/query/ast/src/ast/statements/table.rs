@@ -454,6 +454,9 @@ pub enum AlterTableAction {
     AlterTableClusterKey {
         cluster_by: ClusterOption,
     },
+    AlterTablePartitionBy {
+        partition_by: Vec<Expr>,
+    },
     DropTableClusterKey,
     ReclusterTable {
         is_final: bool,
@@ -535,6 +538,11 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 write!(f, "{cluster_by}")?;
+            }
+            AlterTableAction::AlterTablePartitionBy { partition_by } => {
+                write!(f, "PARTITION BY (")?;
+                write_comma_separated_list(f, partition_by)?;
+                write!(f, ")")?;
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;

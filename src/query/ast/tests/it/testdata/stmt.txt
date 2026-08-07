@@ -16943,6 +16943,90 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t PARTITION BY (date_trunc(day, c1), c2);
+---------- Output ---------
+ALTER TABLE t PARTITION BY (DATE_TRUNC(DAY, c1), c2)
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: AlterTablePartitionBy {
+            partition_by: [
+                DateTrunc {
+                    span: Some(
+                        28..47,
+                    ),
+                    unit: Day,
+                    date: ColumnRef {
+                        span: Some(
+                            44..46,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        44..46,
+                                    ),
+                                    name: "c1",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                },
+                ColumnRef {
+                    span: Some(
+                        49..51,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    49..51,
+                                ),
+                                name: "c2",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t1 swap with t2;
 ---------- Output ---------
 ALTER TABLE t1 SWAP WITH t2
