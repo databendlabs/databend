@@ -30,18 +30,14 @@ alter table mv_rbac_source_0020 rename to mv_rbac_source_0020_renamed;
 revoke select on default.mv_rbac_source_0020_renamed from role mv_priv_role;
 "
 
-echo "=== SELECT, REFRESH, SHOW CREATE, and DESC require only SELECT on the renamed source ==="
+echo "=== SELECT, REFRESH, and SHOW CREATE MATERIALIZED VIEW require only SELECT on the renamed source ==="
 echo "select * from mv_rbac_0020" | $MV_PRIV_USER_CONNECT
 echo "refresh materialized view mv_rbac_0020" | $MV_PRIV_USER_CONNECT
 echo "show create materialized view mv_rbac_0020" | $MV_PRIV_USER_CONNECT
-echo "show create table mv_rbac_0020" | $MV_PRIV_USER_CONNECT
-echo "desc mv_rbac_0020" | $MV_PRIV_USER_CONNECT
 run_root_sql "grant select on default.mv_rbac_source_0020_renamed to role mv_priv_role;"
 echo "select * from mv_rbac_0020" | $MV_PRIV_USER_CONNECT >/dev/null
 echo "refresh materialized view mv_rbac_0020" | $MV_PRIV_USER_CONNECT >/dev/null
 echo "show create materialized view mv_rbac_0020" | $MV_PRIV_USER_CONNECT >/dev/null
-echo "show create table mv_rbac_0020" | $MV_PRIV_USER_CONNECT >/dev/null
-echo "desc mv_rbac_0020" | $MV_PRIV_USER_CONNECT >/dev/null
 
 echo "=== DROP MV requires DROP on the database ==="
 echo "drop materialized view mv_rbac_0020" | $MV_PRIV_USER_CONNECT

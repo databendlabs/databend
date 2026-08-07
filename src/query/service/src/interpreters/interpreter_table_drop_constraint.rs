@@ -57,6 +57,7 @@ impl Interpreter for DropTableConstraintInterpreter {
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         // check mutability
         tbl.check_mutable()?;
+
         let table_info = tbl.get_table_info();
         let engine = table_info.engine();
         let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {

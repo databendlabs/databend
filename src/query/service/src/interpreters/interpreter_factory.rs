@@ -544,7 +544,6 @@ impl InterpreterFactory {
             Plan::DropMaterializedView(drop_view) => Ok(Arc::new(
                 DropMaterializedViewInterpreter::try_create(ctx, *drop_view.clone())?,
             )),
-            Plan::DescribeMaterializedView(_) => todo!(),
             Plan::RefreshMaterializedView(refresh_view) => Ok(Arc::new(
                 RefreshMaterializedViewInterpreter::try_create(ctx, *refresh_view.clone())?,
             )),

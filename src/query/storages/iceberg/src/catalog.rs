@@ -463,7 +463,7 @@ impl Catalog for IcebergMutableCatalog {
         &self,
         _tenant: &Tenant,
         _source_table_id: u64,
-    ) -> Result<u64> {
+    ) -> Result<Option<u64>> {
         Err(ErrorCode::Unimplemented(
             "ICEBERG catalog does not support materialized-view source generations",
         ))

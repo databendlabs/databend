@@ -129,6 +129,7 @@ use super::database_api::DatabaseApi;
 use super::database_util::get_db_or_err;
 use super::garbage_collection_api::ORPHAN_POSTFIX;
 use super::garbage_collection_api::get_history_tables_for_gc;
+use super::materialized_view_api::MaterializedViewApi;
 use super::schema_api::VersionedTable;
 use super::schema_api::build_upsert_table_deduplicated_label;
 use super::schema_api::construct_drop_table_txn_operations;
@@ -1447,9 +1448,8 @@ where
             let generation_ident =
                 MVSourceBindingVersionIdent::new(&update.tenant, update.source_table_id);
             let next_generation = self
-                .get_pb(&generation_ident)
+                .get_mv_source_generation(&update.tenant, update.source_table_id)
                 .await?
-                .map(|record| record.data.current_source_generation)
                 .unwrap_or(0)
                 .checked_add(1)
                 .ok_or_else(|| {

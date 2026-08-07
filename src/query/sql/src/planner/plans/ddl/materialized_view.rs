@@ -42,20 +42,6 @@ pub struct DropMaterializedViewPlan {
 }
 
 #[derive(Clone, Debug)]
-pub struct DescribeMaterializedViewPlan {
-    pub catalog: String,
-    pub database: String,
-    pub view_name: String,
-    pub schema: DataSchemaRef,
-}
-
-impl DescribeMaterializedViewPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
-    }
-}
-
-#[derive(Clone, Debug)]
 pub struct ShowCreateMaterializedViewPlan {
     pub catalog: String,
     pub database: String,
@@ -77,5 +63,4 @@ pub struct RefreshMaterializedViewPlan {
     pub view_name: String,
     pub target: TableMaintenanceTarget,
     pub source_table_id: u64,
-    pub expected_source_generation: u64,
 }

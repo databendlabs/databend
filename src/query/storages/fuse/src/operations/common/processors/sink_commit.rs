@@ -711,7 +711,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
-                let update_result = fuse_table
+                match fuse_table
                     .update_table_meta(
                         self.ctx.as_ref(),
                         catalog.clone(),
@@ -724,8 +724,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         &self.dal,
                         self.deduplicated_label.clone(),
                     )
-                    .await;
-                match update_result {
+                    .await
+                {
                     Ok(_) => {
                         set_compaction_num_block_hint(
                             self.ctx.as_ref(),

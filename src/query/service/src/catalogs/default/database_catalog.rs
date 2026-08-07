@@ -321,7 +321,11 @@ impl Catalog for DatabaseCatalog {
             .await
     }
 
-    async fn get_mv_source_generation(&self, tenant: &Tenant, source_table_id: u64) -> Result<u64> {
+    async fn get_mv_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
         self.mutable_catalog
             .get_mv_source_generation(tenant, source_table_id)
             .await

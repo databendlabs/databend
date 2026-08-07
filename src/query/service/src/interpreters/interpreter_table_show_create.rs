@@ -29,6 +29,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::types::StringType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::ClusterKeyNormalizer;
 use databend_common_sql::plans::ShowCreateTablePlan;
@@ -84,11 +85,18 @@ impl Interpreter for ShowCreateTableInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+
         let table = catalog
             .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
+
+        if is_materialized_view_engine(table.engine()) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} is a MATERIALIZED VIEW, use `SHOW CREATE MATERIALIZED VIEW {}.{}` instead",
+                &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+            )));
+        }
 
         Self::build_result(
             self.ctx.as_ref(),

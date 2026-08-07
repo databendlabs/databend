@@ -93,7 +93,6 @@ use crate::plans::DescProcedurePlan;
 use crate::plans::DescRowAccessPolicyPlan;
 use crate::plans::DescSequencePlan;
 use crate::plans::DescUserPlan;
-use crate::plans::DescribeMaterializedViewPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DescribeViewPlan;
@@ -361,7 +360,6 @@ pub enum Plan {
     CreateMaterializedView(Box<CreateMaterializedViewPlan>),
     ShowCreateMaterializedView(Box<ShowCreateMaterializedViewPlan>),
     DropMaterializedView(Box<DropMaterializedViewPlan>),
-    DescribeMaterializedView(Box<DescribeMaterializedViewPlan>),
     RefreshMaterializedView(Box<RefreshMaterializedViewPlan>),
 
     // Streams
@@ -599,7 +597,6 @@ impl Plan {
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
-            Plan::DescribeMaterializedView(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),

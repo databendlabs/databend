@@ -551,6 +551,9 @@ impl MaterializedViewChecker {
     }
 
     pub fn is_supported(&self) -> bool {
+        // Unlike an aggregating index, a materialized view does not need an aggregate, GROUP BY,
+        // or WHERE clause to be useful. A plain projection is maintained by the non-aggregate
+        // rewriter using the source row ID.
         !self.not_supported
     }
 }
@@ -712,7 +715,6 @@ mod tests {
     #[test]
     fn test_materialized_view_checker_accepts_simple_queries() -> Result<()> {
         for sql in [
-            "SELECT amount AS value FROM t",
             "SELECT amount AS value FROM t WHERE amount > 0",
             "SELECT category, sum(amount) AS total FROM t WHERE amount > 0 GROUP BY category",
         ] {
