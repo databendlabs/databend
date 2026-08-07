@@ -18,7 +18,7 @@ use clap::Command;
 use clap::Error;
 use clap::FromArgMatches;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
-use databend_meta::raft_store::config::RaftConfig;
+use databend_meta::raft_config::config::RaftConfig;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, Args)]

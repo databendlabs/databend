@@ -40,16 +40,16 @@ use databend_meta::meta_service::MetaNode;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::metrics::server_metrics;
 use databend_meta::openraft::MessageSummary;
-use databend_meta::raft_store::config::RaftConfig;
-use databend_meta::raft_store::ondisk::DATA_VERSION;
-use databend_meta::raft_store::ondisk::OnDisk;
+use databend_meta::raft_config::config::RaftConfig;
+use databend_meta::raft_config::data_version::DATA_VERSION;
+use databend_meta::raft_secret::connect_raft_service;
 use databend_meta::raft_version::raft_client_requires;
 use databend_meta::raft_version::raft_server_provides;
 use databend_meta::runtime_api::RuntimeApi;
+use databend_meta::store_compat::ondisk::OnDisk;
 use databend_meta::types::Cmd;
 use databend_meta::types::LogEntry;
 use databend_meta::types::node::Node;
-use databend_meta::types::protobuf::raft_service_client::RaftServiceClient;
 use databend_meta::types::raft_types::NodeId;
 use databend_meta::util::reply_to_api_result;
 use databend_meta_admin::HttpService;
@@ -165,7 +165,7 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
     );
 
     let runtime = RT::new(Some(32), Some("meta-io-rt".to_string())).map_err(|e| {
-        databend_meta::raft_store::MetaStartupError::MetaServiceError(format!(
+        databend_meta::raft_config::MetaStartupError::MetaServiceError(format!(
             "Cannot create meta IO runtime: {}",
             e
         ))
@@ -264,13 +264,14 @@ async fn do_register<RT: RuntimeApi>(
             .ok_or_else(|| anyhow::anyhow!("leader node {} not found", leader_id))?;
         let leader_raft_endpoint = leader_node.endpoint;
 
-        let addr = format!("http://{}", leader_raft_endpoint);
         info!(
             "Forwarding register request to leader {} at {}",
-            leader_id, addr
+            leader_id, leader_raft_endpoint
         );
 
-        let client = RaftServiceClient::connect(addr).await?;
+        // Not the generated stub: a raft RPC that carries no shared secret is
+        // refused by a leader running with `raft_secret_strict` on.
+        let client = connect_raft_service(&leader_raft_endpoint, &config.raft_config).await?;
 
         let max_msg_size = config.raft_config.raft_grpc_max_message_size();
         let mut client = client
