@@ -290,8 +290,12 @@ impl TableRefVisitor {
         }
 
         let func_name = func.name.name.to_lowercase();
-        // If the function is not suitable for caching, we should not cache the plan
-        if !is_cacheable_function(&func_name) {
+        // If the function is not suitable for caching, we should not cache the plan.
+        // Special functions (coalesce, nullif, greatest, etc.) are syntactic sugar that
+        // get rewritten to builtins during type-checking; they are safe to cache.
+        if !is_cacheable_function(&func_name)
+            && !crate::planner::semantic::TypeChecker::<()>::is_special_function(&func_name)
+        {
             self.cache_miss = true;
         }
     }

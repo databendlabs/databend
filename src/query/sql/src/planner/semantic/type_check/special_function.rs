@@ -125,6 +125,12 @@ impl<'a, A> TypeChecker<'a, A> {
         ];
         FUNCTIONS
     }
+
+    pub fn is_special_function(name: &str) -> bool {
+        Self::all_special_functions()
+            .iter()
+            .any(|f| f.as_ref().eq_ignore_ascii_case(name))
+    }
 }
 
 impl<'a> CoreExprArena<'a> {

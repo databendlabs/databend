@@ -39,12 +39,12 @@ pub fn is_builtin_function(name: &str) -> bool {
 }
 
 // The plan of search function, async function and udf contains some arguments defined in meta,
-// which may be modified by user at any time. Those functions are not not suitable for caching.
+// which may be modified by user at any time. Those functions are not suitable for caching.
+// Non-deterministic builtins (now(), current_time, etc.) ARE safe to cache because their
+// plan structure is stable — they are evaluated at runtime, not constant-folded into the plan.
 pub fn is_cacheable_function(name: &str) -> bool {
-    let n = name;
     let name = Ascii::new(name);
-    (BUILTIN_FUNCTIONS.contains(name.into_inner())
-        && !BUILTIN_FUNCTIONS.get_property(n).unwrap().non_deterministic)
+    BUILTIN_FUNCTIONS.contains(name.into_inner())
         || AggregateFunctionFactory::instance().contains(name.into_inner())
         || GENERAL_WINDOW_FUNCTIONS.contains(&name)
         || GENERAL_LAMBDA_FUNCTIONS.contains(&name)
