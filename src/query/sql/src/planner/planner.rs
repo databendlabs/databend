@@ -259,6 +259,9 @@ impl Planner {
                     "Logical plan retrieved from cache, elapsed: {:?}",
                     start.elapsed()
                 );
+                if plan.has_non_deterministic_function {
+                    self.ctx.result_cache_state().set_cacheable(false);
+                }
                 // update for clickhouse handler
                 self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
                 return Ok(plan.plan);

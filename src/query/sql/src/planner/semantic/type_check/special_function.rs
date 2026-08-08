@@ -125,6 +125,52 @@ impl<'a, A> TypeChecker<'a, A> {
         ];
         FUNCTIONS
     }
+
+    pub fn is_special_function(name: &str) -> bool {
+        Self::all_special_functions()
+            .iter()
+            .any(|f| f.as_ref().eq_ignore_ascii_case(name))
+    }
+
+    /// Whether a special function is safe for planner cache.
+    ///
+    /// Only pure syntactic-sugar functions are listed here — they are rewritten to
+    /// builtin expressions during type-checking and produce the same plan structure
+    /// regardless of session state.
+    ///
+    /// Uses a whitelist for safety: unlisted special functions (including any newly
+    /// added ones) default to NOT cacheable, which is the conservative choice.
+    /// A missing entry only causes a performance miss (re-planning), never a
+    /// correctness bug.
+    pub fn is_cacheable_special_function(name: &str) -> bool {
+        static CACHEABLE: &[&str] = &[
+            "coalesce",
+            "ifnull",
+            "nullif",
+            "nvl",
+            "nvl2",
+            "is_null",
+            "isnull",
+            "is_error",
+            "error_or",
+            "iff",
+            "decode",
+            "greatest",
+            "least",
+            "greatest_ignore_nulls",
+            "least_ignore_nulls",
+            "array_sort",
+            "array_aggregate",
+            "to_variant",
+            "try_to_variant",
+            "equal_null",
+            "hex_decode_string",
+            "base64_decode_string",
+            "try_hex_decode_string",
+            "try_base64_decode_string",
+        ];
+        CACHEABLE.iter().any(|f| f.eq_ignore_ascii_case(name))
+    }
 }
 
 impl<'a> CoreExprArena<'a> {

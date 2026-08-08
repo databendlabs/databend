@@ -28,6 +28,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::is_cacheable_function;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::TableMeta;
@@ -53,6 +54,7 @@ pub struct PlanCacheItem {
     pub(crate) plan: Plan,
     pub(crate) setting_changes: Vec<(String, ChangeValue)>,
     pub(crate) variables: HashMap<String, Scalar>,
+    pub(crate) has_non_deterministic_function: bool,
 }
 
 static PLAN_CACHE: LazyLock<InMemoryLruCache<PlanCacheItem>> =
@@ -86,6 +88,7 @@ impl Planner {
             table_snapshots: vec![],
             name_resolution_ctx,
             cache_miss: false,
+            has_non_deterministic_function: false,
             has_security_policy: false,
         };
         stmt.drive(&mut visitor);
@@ -98,6 +101,7 @@ impl Planner {
         Ok(Some(PlanCacheContext {
             cache_key,
             table_snapshots: visitor.table_snapshots,
+            has_non_deterministic_function: visitor.has_non_deterministic_function,
         }))
     }
 
@@ -180,6 +184,7 @@ impl Planner {
             plan,
             setting_changes: self.setting_changes(),
             variables: self.ctx.get_all_variables(),
+            has_non_deterministic_function: cache_ctx.has_non_deterministic_function,
         };
         let cache = LazyLock::force(&PLAN_CACHE);
         cache.insert(cache_ctx.cache_key, plan_item);
@@ -203,12 +208,14 @@ struct TableRefVisitor {
     table_snapshots: Vec<TableSnapshot>,
     name_resolution_ctx: NameResolutionContext,
     cache_miss: bool,
+    has_non_deterministic_function: bool,
     has_security_policy: bool,
 }
 
 pub(crate) struct PlanCacheContext {
     cache_key: String,
     table_snapshots: Vec<TableSnapshot>,
+    pub(crate) has_non_deterministic_function: bool,
 }
 
 impl PlanCacheContext {
@@ -290,9 +297,26 @@ impl TableRefVisitor {
         }
 
         let func_name = func.name.name.to_lowercase();
-        // If the function is not suitable for caching, we should not cache the plan
-        if !is_cacheable_function(&func_name) {
+        // If the function is not suitable for caching, we should not cache the plan.
+        // Special functions (coalesce, nullif, greatest, etc.) are syntactic sugar that
+        // get rewritten to builtins during type-checking; they are safe to cache.
+        if !is_cacheable_function(&func_name)
+            && !crate::planner::semantic::TypeChecker::<()>::is_cacheable_special_function(
+                &func_name,
+            )
+        {
             self.cache_miss = true;
+            return;
+        }
+
+        // Track non-deterministic builtins (now, today, rand, etc.) so that on a
+        // planner cache hit we can still mark the result cache as uncacheable.
+        if !self.has_non_deterministic_function {
+            if let Some(property) = BUILTIN_FUNCTIONS.get_property(&func_name) {
+                if property.non_deterministic {
+                    self.has_non_deterministic_function = true;
+                }
+            }
         }
     }
 
