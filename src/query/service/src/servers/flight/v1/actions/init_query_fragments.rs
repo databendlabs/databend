@@ -25,7 +25,8 @@ use crate::sessions::TableContextCluster;
 pub static INIT_QUERY_FRAGMENTS: &str = "/actions/init_query_fragments";
 
 pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
-    let ctx = DataExchangeManager::instance().get_query_ctx(&fragments.query_id)?;
+    let ctx = DataExchangeManager::instance()
+        .get_query_ctx(&fragments.query_id, &fragments.exchange_session_id)?;
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
@@ -36,6 +37,7 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
 
     // Avoid blocking runtime.
     let query_id = fragments.query_id.clone();
+    let exchange_session_id = fragments.exchange_session_id.clone();
     let join_handler = ctx.try_spawn(tracking_payload.tracking(async move {
         DataExchangeManager::instance().init_query_fragments_plan(&fragments)
     }))?;
@@ -44,7 +46,11 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     let result = join_handler.await.map_err(ErrorCode::from).and_then(|r| r);
 
     if let Err(cause) = result {
-        DataExchangeManager::instance().on_finished_query(&query_id, Some(cause.clone()));
+        DataExchangeManager::instance().on_finished_exchange(
+            &query_id,
+            &exchange_session_id,
+            Some(cause.clone()),
+        );
         return Err(cause);
     }
 

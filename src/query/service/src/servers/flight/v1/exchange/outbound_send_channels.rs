@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::servers::flight::v1::network::DummyOutboundChannel;
+use crate::servers::flight::v1::network::ExchangeSinkBuffer;
 use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 
@@ -25,13 +26,38 @@ pub(super) type OutboundSendResult = (usize, Result<()>);
 pub(super) type OutboundSendResults = Vec<OutboundSendResult>;
 pub(super) type OutboundSendHandle = SyncTaskHandle<'static, OutboundSendResults>;
 
+#[derive(Clone)]
+pub(super) struct SharedOutboundChannels {
+    channels: Vec<Arc<dyn OutboundChannel>>,
+    buffer: Arc<ExchangeSinkBuffer>,
+}
+
+impl SharedOutboundChannels {
+    pub(super) fn create(
+        channels: Vec<Arc<dyn OutboundChannel>>,
+        buffer: Arc<ExchangeSinkBuffer>,
+    ) -> Self {
+        Self { channels, buffer }
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.channels.len()
+    }
+}
+
 pub(super) struct OutboundSendChannels {
     channels: Vec<Arc<dyn OutboundChannel>>,
+    buffer: Arc<ExchangeSinkBuffer>,
+    finished: bool,
 }
 
 impl OutboundSendChannels {
-    pub(super) fn create(channels: Vec<Arc<dyn OutboundChannel>>) -> Self {
-        Self { channels }
+    pub(super) fn create(channels: SharedOutboundChannels) -> Self {
+        Self {
+            channels: channels.channels,
+            buffer: channels.buffer,
+            finished: false,
+        }
     }
 
     pub(super) fn len(&self) -> usize {
@@ -77,10 +103,16 @@ impl OutboundSendChannels {
         }
     }
 
-    pub(super) fn close_all(&mut self) {
+    pub(super) fn finish_all(&mut self) {
+        if self.finished {
+            return;
+        }
+        self.finished = true;
+
         for idx in 0..self.channels.len() {
             self.close(idx);
         }
+        self.buffer.finish_producer();
     }
 
     pub(super) fn handle_send_results(&mut self, results: OutboundSendResults) -> Result<()> {
@@ -95,5 +127,13 @@ impl OutboundSendChannels {
         }
 
         Ok(())
+    }
+}
+
+impl Drop for OutboundSendChannels {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.buffer.abort();
+        }
     }
 }

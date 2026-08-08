@@ -32,6 +32,7 @@ use super::exchange_sorting::ExchangeSorting;
 use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use super::hash_send_sink::HashSendSink;
+use super::outbound_send_channels::SharedOutboundChannels;
 use super::serde::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -216,7 +217,7 @@ pub(super) fn build_broadcast_outbound_channels(
     params: &BroadcastExchangeParams,
     local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
-) -> Result<Vec<Arc<dyn OutboundChannel>>> {
+) -> Result<SharedOutboundChannels> {
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
@@ -240,8 +241,9 @@ pub(super) fn build_broadcast_outbound_channels(
 
     // Create shared ExchangeSinkBuffer: one RemoteInstance per PingPong, N channels each
     let config = ExchangeBufferConfig::default();
-    let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
+    let shared_buffer = Arc::new(ExchangeSinkBuffer::create_with_producers(
         exchanges_seq,
+        local_outbound_channels.len(),
         config,
         &GlobalIORuntime::instance(),
     )?);
@@ -269,7 +271,7 @@ pub(super) fn build_broadcast_outbound_channels(
         remote_idx += 1;
     }
 
-    Ok(channels)
+    Ok(SharedOutboundChannels::create(channels, shared_buffer))
 }
 
 /// Build per-thread OutboundChannels for hash exchange.
@@ -277,7 +279,7 @@ pub(super) fn build_hash_outbound_channels(
     params: &GlobalExchangeParams,
     mut local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
-) -> Result<Vec<Arc<dyn OutboundChannel>>> {
+) -> Result<SharedOutboundChannels> {
     let num_threads = local_outbound_channels.len();
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
@@ -300,8 +302,9 @@ pub(super) fn build_hash_outbound_channels(
     }
 
     let config = ExchangeBufferConfig::default();
-    let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
+    let shared_buffer = Arc::new(ExchangeSinkBuffer::create_with_producers(
         exchanges_seq,
+        num_threads,
         config,
         &GlobalIORuntime::instance(),
     )?);
@@ -327,5 +330,5 @@ pub(super) fn build_hash_outbound_channels(
         remote_idx += 1;
     }
 
-    Ok(channels)
+    Ok(SharedOutboundChannels::create(channels, shared_buffer))
 }

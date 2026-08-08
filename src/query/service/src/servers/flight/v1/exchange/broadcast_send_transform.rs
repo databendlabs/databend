@@ -29,7 +29,7 @@ use petgraph::prelude::NodeIndex;
 
 use super::outbound_send_channels::OutboundSendChannels;
 use super::outbound_send_channels::OutboundSendHandle;
-use crate::servers::flight::v1::network::OutboundChannel;
+use super::outbound_send_channels::SharedOutboundChannels;
 use crate::servers::flight::v1::network::SyncTaskSet;
 
 pub struct BroadcastSendTransform {
@@ -44,10 +44,10 @@ pub struct BroadcastSendTransform {
 }
 
 impl BroadcastSendTransform {
-    pub fn create_item(
+    pub(super) fn create_item(
         worker_id: usize,
         local_pos: usize,
-        channels: Vec<Arc<dyn OutboundChannel>>,
+        channels: SharedOutboundChannels,
         waker: Arc<ExecutorWaker>,
     ) -> PipeItem {
         let input = InputPort::create();
@@ -160,7 +160,7 @@ impl Processor for BroadcastSendTransform {
         if self.input.is_finished() {
             self.output.finish();
 
-            self.channels.close_all();
+            self.channels.finish_all();
             return Ok(Event::Finished);
         }
 

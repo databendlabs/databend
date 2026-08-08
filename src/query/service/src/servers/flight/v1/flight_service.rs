@@ -42,10 +42,12 @@ use tonic::Response as RawResponse;
 use tonic::Status;
 use tonic::Streaming;
 
-use crate::servers::flight::request_builder::RequestGetter;
+use crate::servers::flight::request_getter::RequestGetter;
 use crate::servers::flight::v1::actions::FlightActions;
 use crate::servers::flight::v1::actions::flight_actions;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::network::ExchangePacket;
+use crate::servers::flight::v1::network::NetworkInboundPacketResult;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -109,32 +111,10 @@ impl FlightService for DatabendQueryFlightService {
     type DoGetStream = FlightStream<FlightData>;
 
     #[async_backtrace::framed]
-    async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
-        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
-        let _guard = root.set_local_parent();
-
-        match request.get_metadata("x-type")?.as_str() {
-            "request_server_exchange" => {
-                let target = request.get_metadata("x-target")?;
-                let query_id = request.get_metadata("x-query-id")?;
-                Ok(RawResponse::new(Box::pin(
-                    DataExchangeManager::instance().handle_statistics_exchange(query_id, target)?,
-                )))
-            }
-            "exchange_fragment" => {
-                let query_id = request.get_metadata("x-query-id")?;
-                let channel_id = request.get_metadata("x-channel-id")?;
-
-                Ok(RawResponse::new(Box::pin(
-                    DataExchangeManager::instance()
-                        .handle_exchange_fragment(query_id, channel_id)?,
-                )))
-            }
-            exchange_type => Err(Status::unimplemented(format!(
-                "Unimplemented exchange type: {:?}",
-                exchange_type
-            ))),
-        }
+    async fn do_get(&self, _request: Request<Ticket>) -> Response<Self::DoGetStream> {
+        Err(Status::unimplemented(
+            "DatabendQuery uses do_exchange for query-node streams",
+        ))
     }
 
     type DoPutStream = FlightStream<PutResult>;
@@ -156,29 +136,88 @@ impl FlightService for DatabendQueryFlightService {
 
         let sender = DataExchangeManager::instance().handle_do_exchange(
             &params.query_id,
-            &params.exchange_id,
-            params.num_threads,
+            &params.exchange_session_id,
+            &params.source_id,
+            &params.stream,
         )?;
 
         let mut stream = req.into_inner();
         let (tx, rx) = async_channel::bounded(1);
 
         GlobalIORuntime::instance().spawn(async move {
-            while let Some(result) = stream.next().await {
-                let Ok(flight_data) = result else {
-                    break;
-                };
-
-                if sender.add_data(flight_data).await.is_err() {
-                    break; // Receiver closed
-                }
-
-                // Send pong (empty response signals readiness for next ping)
-                if let Err(_cause) = tx.try_send(Ok(FlightData::default())) {
-                    break;
+            loop {
+                match stream.next().await {
+                    None => {
+                        // Reconnect replaces this physical stream. Only an ordered EndOfStream
+                        // packet is allowed to finish the admitted logical source.
+                        let _ = tx
+                            .send(Err(Status::unavailable(
+                                "do_exchange request stream ended before EndOfStream",
+                            )))
+                            .await;
+                        break;
+                    }
+                    Some(Err(status)) => {
+                        let _ = tx.send(Err(status)).await;
+                        break;
+                    }
+                    Some(Ok(flight_data)) => {
+                        let packet = match ExchangePacket::decode(flight_data) {
+                            Ok(packet) => packet,
+                            Err(cause) => {
+                                let _ = tx.send(Err(cause.into())).await;
+                                break;
+                            }
+                        };
+                        let (sequence, flight_data) = match packet {
+                            ExchangePacket::Data { sequence, payload } => (sequence, payload),
+                            ExchangePacket::Ack { .. } => {
+                                let _ = tx
+                                    .send(Err(Status::invalid_argument(
+                                        "Logical error, received an acknowledgement on the do_exchange request stream",
+                                    )))
+                                    .await;
+                                break;
+                            }
+                            ExchangePacket::EndOfStream { sequence } => {
+                                match sender.finish_sequence(sequence).await {
+                                    Ok(NetworkInboundPacketResult::Accepted)
+                                    | Ok(NetworkInboundPacketResult::Duplicate) => {
+                                        let _ = tx
+                                            .send(Ok(ExchangePacket::ack(sequence).encode()))
+                                            .await;
+                                    }
+                                    Ok(NetworkInboundPacketResult::ReceiverClosed) => {}
+                                    Err(cause) => {
+                                        let _ = tx.send(Err(cause.into())).await;
+                                    }
+                                }
+                                break;
+                            }
+                        };
+                        match sender.add_data(sequence, flight_data).await {
+                            Ok(NetworkInboundPacketResult::Accepted)
+                            | Ok(NetworkInboundPacketResult::Duplicate) => {
+                                if tx
+                                    .send(Ok(ExchangePacket::ack(sequence).encode()))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Ok(NetworkInboundPacketResult::ReceiverClosed) => {
+                                sender.finish();
+                                break;
+                            }
+                            Err(cause) => {
+                                let _ = tx.send(Err(cause.into())).await;
+                                break;
+                            }
+                        }
+                    }
                 }
             }
-            // sender is dropped here → closes sub-queues, notifies processors
         });
 
         Ok(RawResponse::new(Box::pin(rx)))

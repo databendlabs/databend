@@ -15,40 +15,6 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use tonic::Request;
-use tonic::metadata::MetadataKey;
-use tonic::metadata::MetadataValue;
-
-pub struct RequestBuilder<T> {
-    request: Request<T>,
-}
-
-impl<T> RequestBuilder<T> {
-    pub fn create(message: T) -> RequestBuilder<T> {
-        RequestBuilder {
-            request: Request::new(message),
-        }
-    }
-
-    pub fn with_metadata(mut self, key: &'static str, value: &str) -> Result<Self> {
-        match MetadataValue::try_from(value) {
-            Ok(metadata_value) => {
-                let metadata_key = MetadataKey::from_static(key);
-                self.request
-                    .metadata_mut()
-                    .insert(metadata_key, metadata_value);
-                Ok(self)
-            }
-            Err(cause) => Err(ErrorCode::BadBytes(format!(
-                "Cannot parse query id to MetadataValue, {:?}",
-                cause
-            ))),
-        }
-    }
-
-    pub fn build(self) -> Request<T> {
-        self.request
-    }
-}
 
 pub trait RequestGetter {
     fn get_metadata(&self, key: &str) -> Result<String>;

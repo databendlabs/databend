@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
@@ -81,26 +82,42 @@ impl NetworkInboundChannelSet {
     }
 }
 
-/// Network-side handle. Each do_exchange connection gets one.
-///
-/// When dropped, closes this connection's sub-queues and notifies processors.
+/// One admitted logical source, retained across its physical do_exchange connections.
+/// Keeping sequence and queue state here lets a replacement connection resend its
+/// unacknowledged packet without creating another input to the pipeline.
 pub struct NetworkInboundSender {
-    /// This connection's sub-queue in each tid's NetworkInboundChannel.
-    sub_queues: Vec<Arc<SubQueue>>,
+    destination: InboundDestination,
+    sequence_state: tokio::sync::Mutex<InboundSequenceState>,
+    finished: AtomicBool,
+}
+
+enum InboundDestination {
+    Channels(Vec<Arc<SubQueue>>),
+    Packets(Sender<databend_common_exception::Result<FlightData>>),
+}
+
+struct InboundSequenceState {
+    next_sequence: u64,
+    end_sequence: Option<u64>,
+}
+
+pub enum NetworkInboundPacketResult {
+    Accepted,
+    Duplicate,
+    ReceiverClosed,
 }
 
 impl NetworkInboundSender {
-    /// Create a new sender for a connection.
-    /// Adds a sub-queue to each NetworkInboundChannel for this connection.
-    pub fn new(channel_set: &NetworkInboundChannelSet, max_bytes_per_connection: usize) -> Self {
-        let semaphore = Arc::new(Semaphore::new(max_bytes_per_connection));
+    /// Adds one admitted source queue to every channel in the set.
+    pub fn new(channel_set: &NetworkInboundChannelSet, max_bytes_per_source: usize) -> Self {
+        let semaphore = Arc::new(Semaphore::new(max_bytes_per_source));
         let mut sub_queues = Vec::with_capacity(channel_set.channels.len());
 
         for channel in channel_set.channels.iter() {
             channel.sender_count.fetch_add(1, Ordering::AcqRel);
 
             let sub_queue = Arc::new(SubQueue {
-                max_bytes_per_connection,
+                max_bytes_per_connection: max_bytes_per_source,
                 sender: channel.sender.clone(),
                 receiver: channel.receiver.clone(),
                 semaphore: semaphore.clone(),
@@ -110,37 +127,126 @@ impl NetworkInboundSender {
             sub_queues.push(sub_queue);
         }
 
-        Self { sub_queues }
+        Self {
+            destination: InboundDestination::Channels(sub_queues),
+            sequence_state: tokio::sync::Mutex::new(InboundSequenceState {
+                next_sequence: 0,
+                end_sequence: None,
+            }),
+            finished: AtomicBool::new(false),
+        }
     }
 
-    /// Add data to the inbound channel.
-    ///
-    /// Extracts tid from the FlightData, pushes to the appropriate sub-queue,
-    /// and waits for backpressure to clear.
-    ///
-    /// Returns `Err(())` only when ALL receivers are closed (network should disconnect).
-    /// If only the target tid's receiver is closed, discards the data and returns `Ok(())`.
-    pub async fn add_data(&self, data: FlightData) -> Result<(), ()> {
+    pub fn new_packets(
+        queue_capacity: usize,
+    ) -> (
+        Self,
+        Receiver<databend_common_exception::Result<FlightData>>,
+    ) {
+        let (tx, rx) = async_channel::bounded(queue_capacity);
+        (
+            Self {
+                destination: InboundDestination::Packets(tx),
+                sequence_state: tokio::sync::Mutex::new(InboundSequenceState {
+                    next_sequence: 0,
+                    end_sequence: None,
+                }),
+                finished: AtomicBool::new(false),
+            },
+            rx,
+        )
+    }
+
+    /// Serializing sequence validation with queue insertion makes an ACK proof that the
+    /// packet has crossed the receiver's deduplication boundary.
+    pub async fn add_data(
+        &self,
+        sequence: u64,
+        data: FlightData,
+    ) -> Result<NetworkInboundPacketResult, ErrorCode> {
+        if self.finished.load(Ordering::Acquire) {
+            return Ok(NetworkInboundPacketResult::ReceiverClosed);
+        }
+
+        let mut state = self.sequence_state.lock().await;
+        if self.finished.load(Ordering::Acquire) {
+            return Ok(NetworkInboundPacketResult::ReceiverClosed);
+        }
+        if sequence < state.next_sequence {
+            return Ok(NetworkInboundPacketResult::Duplicate);
+        }
+        if sequence > state.next_sequence {
+            return Err(ErrorCode::Internal(format!(
+                "Logical error, out-of-order do_exchange packet: expected {}, got {}",
+                state.next_sequence, sequence
+            )));
+        }
+
+        let accepted = match &self.destination {
+            InboundDestination::Channels(_) => self.add_channel_data(data).await,
+            InboundDestination::Packets(sender) => sender.send(Ok(data)).await.map_err(|_| ()),
+        };
+        state.next_sequence += 1;
+
+        match accepted {
+            Ok(()) => Ok(NetworkInboundPacketResult::Accepted),
+            Err(()) => Ok(NetworkInboundPacketResult::ReceiverClosed),
+        }
+    }
+
+    async fn add_channel_data(&self, data: FlightData) -> Result<(), ()> {
+        let InboundDestination::Channels(sub_queues) = &self.destination else {
+            unreachable!()
+        };
+
         if is_batch(&data) {
-            return self.add_batch_data(data).await;
+            return self.add_batch_data(data, sub_queues).await;
         }
 
         let tid = extract_tid(&data);
-
-        match self.sub_queues[tid].add_data(data).await {
+        match sub_queues[tid].add_data(data).await {
             Ok(()) => Ok(()),
-            Err(()) => match self.all_receivers_closed() {
-                true => Err(()),
-                false => Ok(()),
-            },
+            Err(()) if self.all_receivers_closed() => Err(()),
+            Err(()) => Ok(()),
         }
     }
 
-    async fn add_batch_data(&self, data: FlightData) -> Result<(), ()> {
+    pub async fn finish_sequence(
+        &self,
+        sequence: u64,
+    ) -> Result<NetworkInboundPacketResult, ErrorCode> {
+        // EOS shares the data sequence so its ACK proves that every earlier packet crossed
+        // the deduplication boundary before this source is closed.
+        let mut state = self.sequence_state.lock().await;
+        if self.finished.load(Ordering::Acquire) {
+            return Ok(if state.end_sequence == Some(sequence) {
+                NetworkInboundPacketResult::Duplicate
+            } else {
+                NetworkInboundPacketResult::ReceiverClosed
+            });
+        }
+        if sequence != state.next_sequence {
+            return Err(ErrorCode::Internal(format!(
+                "Logical error, out-of-order do_exchange end of stream: expected {}, got {}",
+                state.next_sequence, sequence
+            )));
+        }
+
+        state.next_sequence += 1;
+        state.end_sequence = Some(sequence);
+        self.finish();
+        Ok(NetworkInboundPacketResult::Accepted)
+    }
+
+    async fn add_batch_data(
+        &self,
+        data: FlightData,
+        sub_queues: &[Arc<SubQueue>],
+    ) -> Result<(), ()> {
         let items = split_batch_flight_data(data);
         for item in items {
             let tid = extract_tid(&item);
-            match self.sub_queues[tid].add_data(item).await {
+            match sub_queues[tid].add_data(item).await {
                 Ok(()) => {}
                 Err(()) => {
                     if self.all_receivers_closed() {
@@ -154,17 +260,41 @@ impl NetworkInboundSender {
 
     /// Check if all channels are closed by receivers.
     pub fn all_receivers_closed(&self) -> bool {
-        self.sub_queues.iter().all(|q| q.sender.is_closed())
+        match &self.destination {
+            InboundDestination::Channels(sub_queues) => {
+                sub_queues.iter().all(|q| q.sender.is_closed())
+            }
+            InboundDestination::Packets(sender) => sender.is_closed(),
+        }
+    }
+
+    pub fn finish(&self) {
+        if self.finished.swap(true, Ordering::AcqRel) {
+            return;
+        }
+
+        match &self.destination {
+            InboundDestination::Channels(sub_queues) => {
+                for sub_queue in sub_queues {
+                    if sub_queue.sender_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                        sub_queue.sender.close();
+                    }
+                }
+            }
+            InboundDestination::Packets(sender) => {
+                sender.close();
+            }
+        }
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.finished.load(Ordering::Acquire)
     }
 }
 
 impl Drop for NetworkInboundSender {
     fn drop(&mut self) {
-        for sub_queue in &self.sub_queues {
-            if sub_queue.sender_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                sub_queue.sender.close();
-            }
-        }
+        self.finish();
     }
 }
 

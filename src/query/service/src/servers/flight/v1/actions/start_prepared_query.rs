@@ -17,15 +17,17 @@ use databend_common_exception::Result;
 use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::packets::ExchangeSession;
 use crate::sessions::TableContextCluster;
 
 pub static START_PREPARED_QUERY: &str = "/actions/start_prepared_query";
 
-pub async fn start_prepared_query(id: String) -> Result<()> {
-    let ctx = DataExchangeManager::instance().get_query_ctx(&id)?;
+pub async fn start_prepared_query(session: ExchangeSession) -> Result<()> {
+    let ctx = DataExchangeManager::instance()
+        .get_query_ctx(&session.query_id, &session.exchange_session_id)?;
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
-    tracking_payload.query_id = Some(id.clone());
+    tracking_payload.query_id = Some(session.query_id.clone());
     tracking_payload.io_stats = Some(std::sync::Arc::new(
         databend_common_base::runtime::IoStats::default(),
     ));
@@ -33,9 +35,15 @@ pub async fn start_prepared_query(id: String) -> Result<()> {
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     let _guard = ThreadTracker::tracking(tracking_payload);
 
-    debug!("start prepared query {}", id);
-    if let Err(cause) = DataExchangeManager::instance().execute_partial_query(&id) {
-        DataExchangeManager::instance().on_finished_query(&id, Some(cause.clone()));
+    debug!("start prepared query {}", session.query_id);
+    if let Err(cause) = DataExchangeManager::instance()
+        .execute_partial_query(&session.query_id, &session.exchange_session_id)
+    {
+        DataExchangeManager::instance().on_finished_exchange(
+            &session.query_id,
+            &session.exchange_session_id,
+            Some(cause.clone()),
+        );
         return Err(cause);
     }
     Ok(())

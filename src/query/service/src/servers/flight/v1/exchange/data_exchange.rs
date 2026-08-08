@@ -15,6 +15,8 @@
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_expression::RemoteExpr;
 
+use crate::servers::flight::v1::packets::ExchangeMode;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DataExchange {
     Merge(MergeExchange),
@@ -67,12 +69,13 @@ impl DataExchange {
         }
     }
 
-    /// Whether this exchange type uses do_exchange (ping-pong) instead of do_get.
-    pub fn use_do_exchange(&self) -> bool {
-        matches!(
-            self,
-            DataExchange::Broadcast(_) | DataExchange::GlobalShuffleExchange(_)
-        )
+    pub fn exchange_mode(&self) -> ExchangeMode {
+        match self {
+            DataExchange::Broadcast(_) | DataExchange::GlobalShuffleExchange(_) => {
+                ExchangeMode::Blocks
+            }
+            DataExchange::Merge(_) | DataExchange::NodeToNodeExchange(_) => ExchangeMode::Packets,
+        }
     }
 
     pub fn get_parallel(&self) -> usize {

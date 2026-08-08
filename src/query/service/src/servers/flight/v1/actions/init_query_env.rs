@@ -60,7 +60,11 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
                 .init_query_env(&env, ctx)
                 .await
             {
-                DataExchangeManager::instance().on_finished_query(&env.query_id, Some(e.clone()));
+                DataExchangeManager::instance().on_finished_exchange(
+                    &env.query_id,
+                    &env.exchange_session_id,
+                    Some(e.clone()),
+                );
                 return Err(e);
             }
 

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod exchange_packet;
+mod flight_sender;
 pub mod inbound_channel;
 pub mod inbound_quota;
 pub mod local_channel;
@@ -21,8 +23,11 @@ pub mod outbound_transport;
 
 pub use databend_common_pipeline::core::SyncTaskHandle;
 pub use databend_common_pipeline::core::SyncTaskSet;
+pub(crate) use exchange_packet::ExchangePacket;
+pub use flight_sender::ReconnectableFlightSender;
 pub use inbound_channel::InboundChannel;
 pub use inbound_channel::NetworkInboundChannelSet;
+pub use inbound_channel::NetworkInboundPacketResult;
 pub use inbound_channel::NetworkInboundReceiver;
 pub use inbound_channel::NetworkInboundSender;
 pub use local_channel::LocalOutboundChannel;
@@ -34,6 +39,7 @@ pub use outbound_channel::OutboundChannel;
 pub use outbound_channel::RemoteChannel;
 pub use outbound_channel::RoundRobinChannel;
 pub use outbound_transport::PingPongCallback;
+pub use outbound_transport::PingPongConnector;
 pub use outbound_transport::PingPongExchange;
 pub use outbound_transport::PingPongExchangeInner;
-pub use outbound_transport::PingPongResponse;
+pub use outbound_transport::PingPongTransport;
