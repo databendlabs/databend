@@ -131,6 +131,8 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
+/// Rewrite functions are pure AST rewrites. They must not depend on session, authorization, or
+/// mutable metadata state.
 pub(super) fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {
     static FUNCTIONS: &[Ascii<&'static str>] = &[
         Ascii::new("nullif"),
@@ -150,6 +152,10 @@ pub(super) fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {
 impl<'a, A> TypeChecker<'a, A> {
     pub fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {
         all_rewrite_functions()
+    }
+
+    pub(crate) fn is_rewrite_function(name: &str) -> bool {
+        rewrite_function_name(name).is_some()
     }
 }
 

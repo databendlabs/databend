@@ -38,13 +38,15 @@ pub fn is_builtin_function(name: &str) -> bool {
         || ASYNC_FUNCTIONS.contains(&name)
 }
 
-// The plan of search function, async function and udf contains some arguments defined in meta,
-// which may be modified by user at any time. Those functions are not not suitable for caching.
-pub fn is_cacheable_function(name: &str) -> bool {
-    let n = name;
+/// Returns whether a registered function can safely reuse its logical plan.
+///
+/// Non-deterministic builtins are included because their runtime values are not folded into the
+/// logical plan cached by the planner. Result-cache eligibility is tracked separately. Search
+/// functions, async functions, and UDFs are excluded because their logical plans may contain
+/// metadata-derived arguments that can change.
+pub fn is_plan_cacheable_function(name: &str) -> bool {
     let name = Ascii::new(name);
-    (BUILTIN_FUNCTIONS.contains(name.into_inner())
-        && !BUILTIN_FUNCTIONS.get_property(n).unwrap().non_deterministic)
+    BUILTIN_FUNCTIONS.contains(name.into_inner())
         || AggregateFunctionFactory::instance().contains(name.into_inner())
         || GENERAL_WINDOW_FUNCTIONS.contains(&name)
         || GENERAL_LAMBDA_FUNCTIONS.contains(&name)
