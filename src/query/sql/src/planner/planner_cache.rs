@@ -28,7 +28,8 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_common_functions::is_cacheable_function;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::is_plan_cacheable_function;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_settings::ChangeValue;
@@ -46,6 +47,7 @@ use crate::NameResolutionContext;
 use crate::Planner;
 use crate::TableEntry;
 use crate::normalize_identifier;
+use crate::planner::semantic::TypeChecker;
 use crate::plans::Plan;
 
 #[derive(Clone)]
@@ -85,12 +87,13 @@ impl Planner {
             ctx: self.ctx.clone(),
             table_snapshots: vec![],
             name_resolution_ctx,
-            cache_miss: false,
+            is_plan_cacheable: true,
+            contains_nondeterministic_function: false,
             has_security_policy: false,
         };
         stmt.drive(&mut visitor);
 
-        if visitor.cache_miss || visitor.table_snapshots.is_empty() {
+        if !visitor.is_plan_cacheable || visitor.table_snapshots.is_empty() {
             return Ok(None);
         }
 
@@ -98,6 +101,7 @@ impl Planner {
         Ok(Some(PlanCacheContext {
             cache_key,
             table_snapshots: visitor.table_snapshots,
+            contains_nondeterministic_function: visitor.contains_nondeterministic_function,
         }))
     }
 
@@ -202,13 +206,15 @@ struct TableRefVisitor {
     ctx: Arc<dyn TableContext>,
     table_snapshots: Vec<TableSnapshot>,
     name_resolution_ctx: NameResolutionContext,
-    cache_miss: bool,
+    is_plan_cacheable: bool,
+    contains_nondeterministic_function: bool,
     has_security_policy: bool,
 }
 
 pub(crate) struct PlanCacheContext {
     cache_key: String,
     table_snapshots: Vec<TableSnapshot>,
+    pub(super) contains_nondeterministic_function: bool,
 }
 
 impl PlanCacheContext {
@@ -285,19 +291,32 @@ impl From<&TableMeta> for SecurityPolicySnapshot {
 
 impl TableRefVisitor {
     fn enter_function_call(&mut self, func: &FunctionCall) {
-        if self.cache_miss {
+        if !self.is_plan_cacheable {
             return;
         }
 
         let func_name = func.name.name.to_lowercase();
-        // If the function is not suitable for caching, we should not cache the plan
-        if !is_cacheable_function(&func_name) {
-            self.cache_miss = true;
+        let is_nondeterministic_builtin = BUILTIN_FUNCTIONS
+            .get_property(&func_name)
+            .is_some_and(|property| property.non_deterministic);
+
+        // Non-deterministic builtins are not folded into constants, so their runtime values do not
+        // become part of the cached logical plan. Track them separately so a plan-cache hit still
+        // disables result caching.
+        if is_nondeterministic_builtin {
+            self.contains_nondeterministic_function = true;
+        }
+
+        let is_plan_cacheable = is_plan_cacheable_function(&func_name)
+            || TypeChecker::<()>::is_rewrite_function(&func_name)
+            || TypeChecker::<()>::is_plan_cacheable_special_function(&func_name);
+        if !is_plan_cacheable {
+            self.is_plan_cacheable = false;
         }
     }
 
     fn enter_table_reference(&mut self, table_ref: &TableReference) {
-        if self.cache_miss {
+        if !self.is_plan_cacheable {
             return;
         }
         if let TableReference::Table {
@@ -308,7 +327,7 @@ impl TableRefVisitor {
         } = table_ref
         {
             if temporal.is_some() || with_options.is_some() {
-                self.cache_miss = true;
+                self.is_plan_cacheable = false;
                 return;
             }
 
@@ -351,7 +370,7 @@ impl TableRefVisitor {
                         return;
                     }
                 }
-                self.cache_miss = true;
+                self.is_plan_cacheable = false;
             });
         }
     }
