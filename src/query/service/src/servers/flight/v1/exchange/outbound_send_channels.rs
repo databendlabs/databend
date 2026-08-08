@@ -13,25 +13,60 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::task::Poll;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use petgraph::prelude::NodeIndex;
 
+use crate::servers::flight::v1::network::BlockOutboundSet;
 use crate::servers::flight::v1::network::DummyOutboundChannel;
 use crate::servers::flight::v1::network::OutboundChannel;
+use crate::servers::flight::v1::network::SendOutcome;
 use crate::servers::flight::v1::network::SyncTaskHandle;
+use crate::servers::flight::v1::network::SyncTaskSet;
 
-pub(super) type OutboundSendResult = (usize, Result<()>);
+pub(super) type OutboundSendResult = (usize, Result<SendOutcome>);
 pub(super) type OutboundSendResults = Vec<OutboundSendResult>;
 pub(super) type OutboundSendHandle = SyncTaskHandle<'static, OutboundSendResults>;
+type OutboundFinishHandle = SyncTaskHandle<'static, Result<()>>;
+
+#[derive(Clone)]
+pub(super) struct SharedOutboundChannels {
+    channels: Vec<Arc<dyn OutboundChannel>>,
+    outbounds: Arc<BlockOutboundSet>,
+}
+
+impl SharedOutboundChannels {
+    pub(super) fn create(
+        channels: Vec<Arc<dyn OutboundChannel>>,
+        outbounds: Arc<BlockOutboundSet>,
+    ) -> Self {
+        Self {
+            channels,
+            outbounds,
+        }
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.channels.len()
+    }
+}
 
 pub(super) struct OutboundSendChannels {
     channels: Vec<Arc<dyn OutboundChannel>>,
+    outbounds: Arc<BlockOutboundSet>,
+    finished: bool,
+    finish_handle: Option<OutboundFinishHandle>,
 }
 
 impl OutboundSendChannels {
-    pub(super) fn create(channels: Vec<Arc<dyn OutboundChannel>>) -> Self {
-        Self { channels }
+    pub(super) fn create(channels: SharedOutboundChannels) -> Self {
+        Self {
+            channels: channels.channels,
+            outbounds: channels.outbounds,
+            finished: false,
+            finish_handle: None,
+        }
     }
 
     pub(super) fn len(&self) -> usize {
@@ -77,23 +112,59 @@ impl OutboundSendChannels {
         }
     }
 
-    pub(super) fn close_all(&mut self) {
-        for idx in 0..self.channels.len() {
-            self.close(idx);
+    pub(super) fn poll_finish(
+        &mut self,
+        tasks: &SyncTaskSet,
+        id: NodeIndex,
+        reset: bool,
+    ) -> Result<Poll<()>> {
+        if self.finished {
+            return Ok(Poll::Ready(()));
+        }
+
+        let mut handle = match self.finish_handle.take() {
+            Some(handle) => handle,
+            None => {
+                for idx in 0..self.channels.len() {
+                    self.close(idx);
+                }
+                let outbounds = self.outbounds.clone();
+                tasks.spawn(
+                    id,
+                    Box::pin(async move { outbounds.finish_producer().await }),
+                )
+            }
+        };
+
+        match handle.poll(reset) {
+            Poll::Ready(result) => {
+                self.finished = true;
+                result.map(|_| Poll::Ready(()))
+            }
+            Poll::Pending => {
+                self.finish_handle = Some(handle);
+                Ok(Poll::Pending)
+            }
         }
     }
 
     pub(super) fn handle_send_results(&mut self, results: OutboundSendResults) -> Result<()> {
         for (idx, result) in results {
             match result {
-                Ok(()) => {}
-                Err(cause) if cause.code() == ErrorCode::ABORTED_QUERY => {
-                    self.close(idx);
-                }
+                Ok(SendOutcome::Accepted) => {}
+                Ok(SendOutcome::ReceiverClosed) => self.close(idx),
                 Err(cause) => return Err(cause),
             }
         }
 
         Ok(())
+    }
+}
+
+impl Drop for OutboundSendChannels {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.outbounds.abort();
+        }
     }
 }

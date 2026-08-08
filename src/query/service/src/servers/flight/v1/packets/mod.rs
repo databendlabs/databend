@@ -27,6 +27,8 @@ pub use packet_fragment::QueryFragment;
 pub use packet_publisher::DataflowDiagram;
 pub use packet_publisher::DataflowDiagramBuilder;
 pub use packet_publisher::Edge;
+pub use packet_publisher::ExchangeMode;
 pub use packet_publisher::ExchangeSession;
+pub use packet_publisher::InboundChannelAdmission;
 pub use packet_publisher::QueryEnv;
 pub use packet_publisher::QueryEnvAdmission;

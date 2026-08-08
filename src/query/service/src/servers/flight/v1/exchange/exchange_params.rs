@@ -164,10 +164,7 @@ impl BroadcastExchangeParams {
         for (destination, channels) in &self.destination_channels {
             for channel in channels {
                 if destination == &self.executor_id {
-                    exchanges.push((
-                        destination.clone(),
-                        FlightSender::create(async_channel::bounded(1).0),
-                    ));
+                    exchanges.push((destination.clone(), FlightSender::create_closed()));
 
                     continue;
                 }
@@ -220,10 +217,7 @@ impl ShuffleExchangeParams {
         for (destination, channels) in &self.destination_channels {
             for channel in channels {
                 if destination == &self.executor_id {
-                    exchanges.push((
-                        destination.clone(),
-                        FlightSender::create(async_channel::bounded(1).0),
-                    ));
+                    exchanges.push((destination.clone(), FlightSender::create_closed()));
 
                     continue;
                 }

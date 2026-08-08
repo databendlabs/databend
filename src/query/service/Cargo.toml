@@ -149,6 +149,7 @@ jwt-simple = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 md-5 = { workspace = true }
+mea = { workspace = true }
 num_cpus = { workspace = true }
 opendal = { workspace = true }
 opensrv-mysql = { workspace = true }

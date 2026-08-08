@@ -26,11 +26,10 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
-use databend_common_pipeline::sinks::Sink;
-use databend_common_pipeline::sinks::Sinker;
 
 use crate::servers::flight::FlightSender;
 use crate::servers::flight::v1::exchange::serde::ExchangeSerializeMeta;
+use crate::servers::flight::v1::network::SendOutcome;
 
 pub struct ExchangeWriterSink {
     flight_sender: FlightSender,
@@ -48,8 +47,7 @@ impl AsyncSink for ExchangeWriterSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        self.flight_sender.close();
-        Ok(())
+        self.flight_sender.finish().await
     }
 
     #[async_backtrace::framed]
@@ -66,12 +64,9 @@ impl AsyncSink for ExchangeWriterSink {
         let mut bytes = 0;
         for packet in serialize_meta.packet {
             bytes += packet.bytes_size();
-            if let Err(error) = self.flight_sender.send(packet).await {
-                if error.code() == ErrorCode::ABORTED_QUERY {
-                    return Ok(true);
-                }
-
-                return Err(error);
+            match self.flight_sender.send(packet).await? {
+                SendOutcome::Accepted => {}
+                SendOutcome::ReceiverClosed => return Ok(true),
             }
         }
 
@@ -89,20 +84,20 @@ pub struct IgnoreExchangeSink {
 
 impl IgnoreExchangeSink {
     pub fn create(input: Arc<InputPort>, flight_sender: FlightSender) -> Box<dyn Processor> {
-        Sinker::create(input, IgnoreExchangeSink { flight_sender })
+        AsyncSinker::create(input, IgnoreExchangeSink { flight_sender })
     }
 }
 
-impl Sink for IgnoreExchangeSink {
-    const NAME: &'static str = "ExchangeWriterSink";
+#[async_trait::async_trait]
+impl AsyncSink for IgnoreExchangeSink {
+    const NAME: &'static str = "IgnoreExchangeSink";
 
-    fn on_finish(&mut self) -> Result<()> {
-        self.flight_sender.close();
-        Ok(())
+    async fn on_finish(&mut self) -> Result<()> {
+        self.flight_sender.finish().await
     }
 
-    fn consume(&mut self, _: DataBlock) -> Result<()> {
-        Ok(())
+    async fn consume(&mut self, _: DataBlock) -> Result<bool> {
+        Ok(false)
     }
 }
 

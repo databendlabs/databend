@@ -121,9 +121,9 @@ impl QueryFragmentsActions {
     pub fn create(ctx: Arc<QueryContext>) -> QueryFragmentsActions {
         QueryFragmentsActions {
             ctx,
-            // A query_id identifies the SQL query and may be reused by multiple distributed
-            // exchanges, such as materialized CTE execution. This ID identifies one exchange
-            // lifecycle so delayed RPCs or cleanup cannot affect a later exchange of that query.
+            // query_id may be supplied by a client and reused across executions. This ID fences one
+            // distributed exchange lifecycle so its delayed RPCs or cleanup cannot affect a later
+            // execution with the same query_id.
             exchange_session_id: Uuid::new_v4().to_string(),
             fragments_actions: Vec::new(),
         }
@@ -249,25 +249,20 @@ impl QueryFragmentsActions {
         for fragment_actions in &self.fragments_actions {
             if let Some(exchange) = &fragment_actions.data_exchange {
                 let destinations = exchange.get_destinations();
-                let use_do_exchange = exchange.use_do_exchange();
+                let exchange_mode = exchange.exchange_mode();
 
                 for fragment_action in &fragment_actions.fragment_actions {
                     let source = fragment_action.executor.to_string();
 
                     for destination in &destinations {
-                        if use_do_exchange {
-                            let channels = exchange.get_channels(destination);
-                            builder.add_exchange_edge(
-                                &source,
-                                destination,
-                                exchange.get_id(),
-                                channels,
-                            )?;
-                        } else {
-                            for channel in exchange.get_channels(destination) {
-                                builder.add_data_edge(&source, destination, &channel)?;
-                            }
-                        }
+                        let channels = exchange.get_channels(destination);
+                        builder.add_exchange_edge(
+                            &source,
+                            destination,
+                            exchange.get_id(),
+                            channels,
+                            exchange_mode,
+                        )?;
                     }
                 }
             }
