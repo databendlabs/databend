@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod exchange_packet;
+mod flight_sender;
 pub mod inbound_channel;
 pub mod inbound_quota;
 pub mod local_channel;
@@ -23,6 +24,7 @@ pub mod outbound_transport;
 pub use databend_common_pipeline::core::SyncTaskHandle;
 pub use databend_common_pipeline::core::SyncTaskSet;
 pub(crate) use exchange_packet::ExchangePacket;
+pub use flight_sender::ReconnectableFlightSender;
 pub use inbound_channel::InboundChannel;
 pub use inbound_channel::NetworkInboundChannelSet;
 pub use inbound_channel::NetworkInboundPacketResult;

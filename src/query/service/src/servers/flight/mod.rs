@@ -15,12 +15,12 @@
 mod flight_client;
 mod flight_service;
 pub(crate) mod keep_alive;
-mod request_builder;
+mod request_getter;
 pub mod v1;
 
 pub use flight_client::DoExchangeParams;
+pub use flight_client::DoExchangeStream;
 pub use flight_client::FlightClient;
-pub use flight_client::FlightExchange;
 pub(crate) use flight_client::FlightOperation;
 pub use flight_client::FlightReceiver;
 pub use flight_client::FlightSender;

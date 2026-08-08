@@ -42,7 +42,7 @@ use tonic::Response as RawResponse;
 use tonic::Status;
 use tonic::Streaming;
 
-use crate::servers::flight::request_builder::RequestGetter;
+use crate::servers::flight::request_getter::RequestGetter;
 use crate::servers::flight::v1::actions::FlightActions;
 use crate::servers::flight::v1::actions::flight_actions;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -111,41 +111,10 @@ impl FlightService for DatabendQueryFlightService {
     type DoGetStream = FlightStream<FlightData>;
 
     #[async_backtrace::framed]
-    async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
-        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
-        let _guard = root.set_local_parent();
-
-        match request.get_metadata("x-type")?.as_str() {
-            "request_server_exchange" => {
-                let target = request.get_metadata("x-target")?;
-                let query_id = request.get_metadata("x-query-id")?;
-                let exchange_session_id = request.get_metadata("x-exchange-session-id")?;
-                Ok(RawResponse::new(Box::pin(
-                    DataExchangeManager::instance().handle_statistics_exchange(
-                        query_id,
-                        exchange_session_id,
-                        target,
-                    )?,
-                )))
-            }
-            "exchange_fragment" => {
-                let query_id = request.get_metadata("x-query-id")?;
-                let exchange_session_id = request.get_metadata("x-exchange-session-id")?;
-                let channel_id = request.get_metadata("x-channel-id")?;
-
-                Ok(RawResponse::new(Box::pin(
-                    DataExchangeManager::instance().handle_exchange_fragment(
-                        query_id,
-                        exchange_session_id,
-                        channel_id,
-                    )?,
-                )))
-            }
-            exchange_type => Err(Status::unimplemented(format!(
-                "Unimplemented exchange type: {:?}",
-                exchange_type
-            ))),
-        }
+    async fn do_get(&self, _request: Request<Ticket>) -> Response<Self::DoGetStream> {
+        Err(Status::unimplemented(
+            "DatabendQuery uses do_exchange for query-node streams",
+        ))
     }
 
     type DoPutStream = FlightStream<PutResult>;
@@ -168,9 +137,8 @@ impl FlightService for DatabendQueryFlightService {
         let sender = DataExchangeManager::instance().handle_do_exchange(
             &params.query_id,
             &params.exchange_session_id,
-            &params.exchange_id,
             &params.source_id,
-            params.num_threads,
+            &params.stream,
         )?;
 
         let mut stream = req.into_inner();

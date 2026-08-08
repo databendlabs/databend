@@ -13,44 +13,45 @@
 // limitations under the License.
 
 use std::str::FromStr;
-use std::sync::Arc;
 
 use arrow_flight::Action;
 use arrow_flight::FlightData;
-use arrow_flight::Ticket;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
-use async_channel::Sender;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use fastrace::Span;
-use fastrace::func_path;
-use fastrace::future::FutureExt;
-use futures::StreamExt;
-use futures_util::future::Either;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::Duration;
 use tonic::Request;
-use tonic::Status;
 use tonic::Streaming;
 use tonic::metadata::AsciiMetadataKey;
 use tonic::metadata::AsciiMetadataValue;
 use tonic::transport::channel::Channel;
 
-use crate::pipelines::executor::WatchNotify;
-use crate::servers::flight::request_builder::RequestBuilder;
+use crate::servers::flight::v1::network::ReconnectableFlightSender;
 use crate::servers::flight::v1::packets::DataPacket;
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum DoExchangeStream {
+    Blocks {
+        exchange_id: String,
+        num_threads: usize,
+    },
+    Packets {
+        channel_id: String,
+    },
+    Statistics,
+}
 
 /// Parameters for a do_exchange RPC call, serialized as JSON in metadata.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DoExchangeParams {
     pub query_id: String,
     pub exchange_session_id: String,
-    pub exchange_id: String,
     pub source_id: String,
-    pub num_threads: usize,
+    pub stream: DoExchangeStream,
 }
 
 pub struct FlightClient {
@@ -63,7 +64,6 @@ pub struct FlightClient {
 pub(crate) enum FlightOperation {
     Connect,
     DoAction,
-    DoGet,
     DoExchange,
 }
 
@@ -72,7 +72,6 @@ impl FlightOperation {
         match self {
             FlightOperation::Connect => "connect",
             FlightOperation::DoAction => "do_action",
-            FlightOperation::DoGet => "do_get",
             FlightOperation::DoExchange => "do_exchange",
         }
     }
@@ -193,125 +192,6 @@ impl FlightClient {
         }
     }
 
-    #[async_backtrace::framed]
-    pub async fn request_server_exchange(
-        &mut self,
-        query_id: &str,
-        exchange_session_id: &str,
-        target: &str,
-    ) -> Result<FlightExchange> {
-        let streaming = self
-            .get_streaming(
-                RequestBuilder::create(Ticket::default())
-                    .with_metadata("x-type", "request_server_exchange")?
-                    .with_metadata("x-target", target)?
-                    .with_metadata("x-query-id", query_id)?
-                    .with_metadata("x-exchange-session-id", exchange_session_id)?
-                    .build(),
-            )
-            .await?;
-
-        let (notify, rx) = Self::streaming_receiver(
-            streaming,
-            self.local_node_id.clone(),
-            self.remote_node_id.clone(),
-        );
-        Ok(FlightExchange::create_receiver(notify, rx))
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    pub async fn do_get(
-        &mut self,
-        query_id: &str,
-        exchange_session_id: &str,
-        channel_id: &str,
-    ) -> Result<FlightExchange> {
-        let request = RequestBuilder::create(Ticket::default())
-            .with_metadata("x-type", "exchange_fragment")?
-            .with_metadata("x-query-id", query_id)?
-            .with_metadata("x-exchange-session-id", exchange_session_id)?
-            .with_metadata("x-channel-id", channel_id)?
-            .build();
-        let request = databend_common_tracing::inject_span_to_tonic_request(request);
-
-        let streaming = self.get_streaming(request).await?;
-
-        let (notify, rx) = Self::streaming_receiver(
-            streaming,
-            self.local_node_id.clone(),
-            self.remote_node_id.clone(),
-        );
-        Ok(FlightExchange::create_receiver(notify, rx))
-    }
-
-    fn streaming_receiver(
-        mut streaming: Streaming<FlightData>,
-        local_node_id: String,
-        remote_node_id: String,
-    ) -> (Arc<WatchNotify>, Receiver<Result<FlightData>>) {
-        let (tx, rx) = async_channel::bounded(1);
-        let notify = Arc::new(WatchNotify::new());
-        let fut = {
-            let notify = notify.clone();
-            async move {
-                let mut notified = Box::pin(notify.notified());
-                let mut streaming_next = streaming.next();
-
-                loop {
-                    match futures::future::select(notified, streaming_next).await {
-                        Either::Left((_, _)) | Either::Right((None, _)) => {
-                            break;
-                        }
-                        Either::Right((Some(message), next_notified)) => {
-                            notified = next_notified;
-                            streaming_next = streaming.next();
-
-                            match message {
-                                Ok(message) => {
-                                    if tx.send(Ok(message)).await.is_err() {
-                                        break;
-                                    }
-                                }
-                                Err(status) => {
-                                    let error = add_flight_error_context(
-                                        ErrorCode::from(status),
-                                        FlightOperation::DoGet,
-                                        &local_node_id,
-                                        &remote_node_id,
-                                    );
-                                    let _ = tx.send(Err(error)).await;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                drop(streaming);
-                tx.close();
-            }
-        }
-        .in_span(Span::enter_with_local_parent(func_path!()));
-
-        databend_common_base::runtime::spawn(fut);
-
-        (notify, rx)
-    }
-
-    #[async_backtrace::framed]
-    async fn get_streaming(&mut self, request: Request<Ticket>) -> Result<Streaming<FlightData>> {
-        match self.inner.do_get(request).await {
-            Ok(res) => Ok(res.into_inner()),
-            Err(status) => Err(add_flight_error_context(
-                ErrorCode::from(status),
-                FlightOperation::DoGet,
-                &self.local_node_id,
-                &self.remote_node_id,
-            )),
-        }
-    }
-
     pub fn do_exchange(
         &mut self,
         request_rx: Receiver<FlightData>,
@@ -343,24 +223,18 @@ impl FlightClient {
 }
 
 pub struct FlightReceiver {
-    notify: Arc<WatchNotify>,
     rx: Receiver<Result<FlightData>>,
 }
 
 impl Drop for FlightReceiver {
     fn drop(&mut self) {
-        drop_guard(move || {
-            self.close();
-        })
+        drop_guard(move || self.close())
     }
 }
 
 impl FlightReceiver {
     pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
-        FlightReceiver {
-            rx,
-            notify: Arc::new(WatchNotify::new()),
-        }
+        FlightReceiver { rx }
     }
 
     #[async_backtrace::framed]
@@ -374,76 +248,53 @@ impl FlightReceiver {
 
     pub fn close(&self) {
         self.rx.close();
-        self.notify.notify_waiters();
     }
+}
+
+enum FlightSenderInner {
+    Closed,
+    Reconnectable(ReconnectableFlightSender),
 }
 
 pub struct FlightSender {
-    tx: Sender<std::result::Result<FlightData, Status>>,
+    inner: FlightSenderInner,
 }
 
 impl FlightSender {
-    pub fn create(tx: Sender<std::result::Result<FlightData, Status>>) -> FlightSender {
-        FlightSender { tx }
+    pub fn create_closed() -> FlightSender {
+        FlightSender {
+            inner: FlightSenderInner::Closed,
+        }
+    }
+
+    pub fn create_reconnectable(sender: ReconnectableFlightSender) -> FlightSender {
+        FlightSender {
+            inner: FlightSenderInner::Reconnectable(sender),
+        }
     }
 
     pub fn is_closed(&self) -> bool {
-        self.tx.is_closed()
+        match &self.inner {
+            FlightSenderInner::Closed => true,
+            FlightSenderInner::Reconnectable(sender) => sender.is_closed(),
+        }
     }
 
     #[async_backtrace::framed]
     pub async fn send(&self, data: DataPacket) -> Result<()> {
-        if let Err(_cause) = self.tx.send(Ok(FlightData::try_from(data)?)).await {
-            return Err(ErrorCode::AbortedQuery(
+        let data = FlightData::try_from(data)?;
+        match &self.inner {
+            FlightSenderInner::Closed => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the remote flight channel is closed.",
-            ));
-        }
-
-        Ok(())
-    }
-
-    pub fn close(&self) {
-        self.tx.close();
-    }
-}
-
-pub enum FlightExchange {
-    Dummy,
-    Receiver {
-        notify: Arc<WatchNotify>,
-        receiver: Receiver<Result<FlightData>>,
-    },
-    Sender(Sender<std::result::Result<FlightData, Status>>),
-}
-
-impl FlightExchange {
-    pub fn create_sender(
-        sender: Sender<std::result::Result<FlightData, Status>>,
-    ) -> FlightExchange {
-        FlightExchange::Sender(sender)
-    }
-
-    pub fn create_receiver(
-        notify: Arc<WatchNotify>,
-        receiver: Receiver<Result<FlightData>>,
-    ) -> FlightExchange {
-        FlightExchange::Receiver { notify, receiver }
-    }
-
-    pub fn convert_to_sender(self) -> FlightSender {
-        match self {
-            FlightExchange::Sender(tx) => FlightSender { tx },
-            _ => unreachable!(),
+            )),
+            FlightSenderInner::Reconnectable(sender) => sender.send(data).await,
         }
     }
 
-    pub fn convert_to_receiver(self) -> FlightReceiver {
-        match self {
-            FlightExchange::Receiver { notify, receiver } => FlightReceiver {
-                notify,
-                rx: receiver,
-            },
-            _ => unreachable!(),
+    pub fn finish(&self) {
+        match &self.inner {
+            FlightSenderInner::Closed => {}
+            FlightSenderInner::Reconnectable(sender) => sender.finish(),
         }
     }
 }

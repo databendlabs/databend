@@ -48,7 +48,7 @@ impl AsyncSink for ExchangeWriterSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        self.flight_sender.close();
+        self.flight_sender.finish();
         Ok(())
     }
 
@@ -97,7 +97,7 @@ impl Sink for IgnoreExchangeSink {
     const NAME: &'static str = "ExchangeWriterSink";
 
     fn on_finish(&mut self) -> Result<()> {
-        self.flight_sender.close();
+        self.flight_sender.finish();
         Ok(())
     }
 

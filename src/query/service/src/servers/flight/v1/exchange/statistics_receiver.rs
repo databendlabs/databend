@@ -24,7 +24,7 @@ use futures_util::future::select;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::broadcast::channel;
 
-use crate::servers::flight::FlightExchange;
+use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::MemoryUpdater;
@@ -44,14 +44,13 @@ pub struct StatisticsReceiver {
 impl StatisticsReceiver {
     pub fn spawn_receiver(
         ctx: &Arc<QueryContext>,
-        statistics_exchanges: HashMap<String, FlightExchange>,
+        statistics_receivers: HashMap<String, FlightReceiver>,
     ) -> Result<StatisticsReceiver> {
         let (shutdown_tx, _shutdown_rx) = channel(2);
-        let mut exchange_handler = Vec::with_capacity(statistics_exchanges.len());
+        let mut exchange_handler = Vec::with_capacity(statistics_receivers.len());
         let runtime = Runtime::with_worker_threads(2, Some(String::from("StatisticsReceiver")))?;
 
-        for (source_target, exchange) in statistics_exchanges.into_iter() {
-            let rx = exchange.convert_to_receiver();
+        for (source_target, rx) in statistics_receivers {
             exchange_handler.push(runtime.spawn({
                 let ctx = ctx.clone();
                 let shutdown_rx = shutdown_tx.subscribe();

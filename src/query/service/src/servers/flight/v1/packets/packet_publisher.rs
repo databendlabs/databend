@@ -52,14 +52,21 @@ use crate::sessions::TableContextQueryIdentity;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {
     Statistics,
-    /// do_get based channel (unidirectional: receiver pulls from sender)
-    Fragment(String),
-    /// do_exchange based channel (bidirectional: sender pushes via ping-pong)
-    /// One edge per node pair, identified by exchange_id, carrying all channel_ids.
+    /// A remote exchange edge. Block mode multiplexes its channels over one logical stream;
+    /// packet mode keeps one logical stream per channel for the existing DataPacket pipeline.
     ExchangeFragment {
         exchange_id: String,
         channels: Vec<String>,
+        mode: ExchangeMode,
     },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ExchangeMode {
+    /// Block exchanges route by tid and may batch multiple FlightData messages.
+    Blocks,
+    /// Merge and node-shuffle exchanges preserve their existing DataPacket stream.
+    Packets,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -103,20 +110,18 @@ impl DataflowDiagramBuilder {
         }
     }
 
-    pub fn add_data_edge(&mut self, source: &str, destination: &str, channel: &str) -> Result<()> {
-        self.add_edge_inner(source, destination, Edge::Fragment(channel.to_string()))
-    }
-
     pub fn add_exchange_edge(
         &mut self,
         source: &str,
         destination: &str,
         exchange_id: &str,
         channels: Vec<String>,
+        mode: ExchangeMode,
     ) -> Result<()> {
         self.add_edge_inner(source, destination, Edge::ExchangeFragment {
             exchange_id: exchange_id.to_string(),
             channels,
+            mode,
         })
     }
 
@@ -180,12 +185,18 @@ pub struct QueryEnvAdmission {
     pub query_id: String,
     pub exchange_session_id: String,
     pub inbound_channels: HashMap<String, InboundChannelAdmission>,
+    pub statistics_sources: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InboundChannelAdmission {
-    pub num_threads: usize,
-    pub source_ids: Vec<String>,
+pub enum InboundChannelAdmission {
+    Blocks {
+        num_threads: usize,
+        source_ids: Vec<String>,
+    },
+    Packets {
+        source_ids: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -264,37 +275,79 @@ impl QueryEnv {
 
         for index in self.dataflow_diagram.node_indices() {
             let mut inbound_channels: HashMap<String, InboundChannelAdmission> = HashMap::new();
+            let mut statistics_sources = Vec::new();
             for edge in self
                 .dataflow_diagram
                 .edges_directed(index, Direction::Incoming)
             {
-                if let Edge::ExchangeFragment {
-                    exchange_id,
-                    channels,
-                } = edge.weight()
-                {
-                    let source_id = self.dataflow_diagram[edge.source()].id.clone();
-                    match inbound_channels.entry(exchange_id.clone()) {
+                let source_id = self.dataflow_diagram[edge.source()].id.clone();
+                match edge.weight() {
+                    Edge::Statistics => {
+                        if !statistics_sources.contains(&source_id) {
+                            statistics_sources.push(source_id);
+                        }
+                    }
+                    Edge::ExchangeFragment {
+                        exchange_id,
+                        channels,
+                        mode: ExchangeMode::Blocks,
+                    } => match inbound_channels.entry(exchange_id.clone()) {
                         std::collections::hash_map::Entry::Vacant(entry) => {
-                            entry.insert(InboundChannelAdmission {
+                            entry.insert(InboundChannelAdmission::Blocks {
                                 num_threads: channels.len(),
                                 source_ids: vec![source_id],
                             });
                         }
-                        std::collections::hash_map::Entry::Occupied(mut entry)
-                            if entry.get().num_threads == channels.len() =>
-                        {
-                            if !entry.get().source_ids.contains(&source_id) {
-                                entry.get_mut().source_ids.push(source_id);
+                        std::collections::hash_map::Entry::Occupied(mut entry) => {
+                            let InboundChannelAdmission::Blocks {
+                                num_threads,
+                                source_ids,
+                            } = entry.get_mut()
+                            else {
+                                return Err(ErrorCode::Internal(format!(
+                                    "Conflicting do_exchange modes for exchange {}",
+                                    exchange_id
+                                )));
+                            };
+                            if *num_threads != channels.len() {
+                                return Err(ErrorCode::Internal(format!(
+                                    "Conflicting do_exchange admission for exchange {}: {} and {} channels",
+                                    exchange_id,
+                                    num_threads,
+                                    channels.len()
+                                )));
+                            }
+                            if !source_ids.contains(&source_id) {
+                                source_ids.push(source_id);
                             }
                         }
-                        std::collections::hash_map::Entry::Occupied(entry) => {
-                            return Err(ErrorCode::Internal(format!(
-                                "Conflicting do_exchange admission for exchange {}: {} and {} channels",
-                                exchange_id,
-                                entry.get().num_threads,
-                                channels.len()
-                            )));
+                    },
+                    Edge::ExchangeFragment {
+                        channels,
+                        mode: ExchangeMode::Packets,
+                        ..
+                    } => {
+                        for channel_id in channels {
+                            match inbound_channels.entry(channel_id.clone()) {
+                                std::collections::hash_map::Entry::Vacant(entry) => {
+                                    entry.insert(InboundChannelAdmission::Packets {
+                                        source_ids: vec![source_id.clone()],
+                                    });
+                                }
+                                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                                    let InboundChannelAdmission::Packets { source_ids } =
+                                        entry.get_mut()
+                                    else {
+                                        return Err(ErrorCode::Internal(format!(
+                                            "Conflicting do_exchange modes for channel {}",
+                                            channel_id
+                                        )));
+                                    };
+                                    if !source_ids.contains(&source_id) {
+                                        source_ids.push(source_id.clone());
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -304,6 +357,7 @@ impl QueryEnv {
                 query_id: self.query_id.clone(),
                 exchange_session_id: self.exchange_session_id.clone(),
                 inbound_channels,
+                statistics_sources,
             });
         }
 
