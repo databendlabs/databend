@@ -30,7 +30,7 @@ use petgraph::graph::NodeIndex;
 
 use super::outbound_send_channels::OutboundSendChannels;
 use super::outbound_send_channels::OutboundSendHandle;
-use crate::servers::flight::v1::network::OutboundChannel;
+use super::outbound_send_channels::SharedOutboundChannels;
 use crate::servers::flight::v1::network::SyncTaskSet;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
@@ -47,11 +47,11 @@ pub struct HashSendTransform {
 }
 
 impl HashSendTransform {
-    pub fn create_item(
+    pub(super) fn create_item(
         worker_id: usize,
         local_pos: usize,
         scatter: Arc<Box<dyn FlightScatter>>,
-        channels: Vec<Arc<dyn OutboundChannel>>,
+        channels: SharedOutboundChannels,
         waker: Arc<ExecutorWaker>,
         rows_threshold: usize,
         bytes_threshold: usize,
@@ -200,7 +200,7 @@ impl Processor for HashSendTransform {
             }
 
             if futures.is_empty() {
-                self.channels.close_all();
+                self.channels.finish_all();
                 return Ok(Event::Finished);
             }
 
@@ -215,7 +215,7 @@ impl Processor for HashSendTransform {
                 }
             }
 
-            self.channels.close_all();
+            self.channels.finish_all();
             return Ok(Event::Finished);
         }
 

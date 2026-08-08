@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use arrow_flight::FlightData;
 use bytes::BufMut;
@@ -29,8 +31,6 @@ use tonic::Status;
 
 use super::outbound_transport::PingPongCallback;
 use super::outbound_transport::PingPongExchange;
-use super::outbound_transport::PingPongResponse;
-use super::outbound_transport::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
 use crate::servers::flight::FlightOperation;
 use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::v1::network::inbound_quota::RemoteQueueItem;
@@ -131,6 +131,7 @@ struct RemoteInstanceState {
     channels: Vec<Channel>,
     /// Last error from the exchange, returned on next poll_send call
     last_error: Option<ErrorCode>,
+    finished: bool,
 }
 
 impl RemoteInstanceState {
@@ -143,6 +144,16 @@ impl RemoteInstanceState {
             channel.pending_queue.close();
         }
 
+        for channel in &self.channels {
+            while channel.pending_queue.pop().is_ok() {}
+        }
+    }
+
+    fn finish(&mut self) {
+        self.finished = true;
+        for channel in &self.channels {
+            channel.pending_queue.close();
+        }
         for channel in &self.channels {
             while channel.pending_queue.pop().is_ok() {}
         }
@@ -164,6 +175,7 @@ impl RemoteInstance {
             state: Mutex::new(RemoteInstanceState {
                 channels,
                 last_error: None,
+                finished: false,
             }),
         }
     }
@@ -190,7 +202,10 @@ struct ExchangeSinkBufferInner {
 impl Drop for ExchangeSinkBufferInner {
     fn drop(&mut self) {
         for remote in &self.state.remotes {
-            remote.exchange.shutdown.notify_waiters();
+            let state = remote.state.lock();
+            if !state.finished && !remote.exchange.finish.has_notified() {
+                remote.exchange.shutdown.notify_waiters();
+            }
         }
     }
 }
@@ -211,37 +226,14 @@ impl ExchangeSinkBufferSharedState {
         )
     }
 
-    fn try_flush_remote(&self, dest_idx: usize, status: Option<Status>) {
+    fn pop_pending(&self, dest_idx: usize) -> Option<FlightData> {
         let remote = &self.remotes[dest_idx];
         let mut state = remote.state.lock();
-
-        let Some(status) = status else {
-            let Some(channel) = state.channels.iter_mut().max_by_key(|x| x.remaining()) else {
-                return remote.exchange.ready_send();
-            };
-
-            let Some(flight) = channel.pop_front(self.config.max_batch_bytes) else {
-                return remote.exchange.ready_send();
-            };
-
-            let Err(status) = remote.exchange.force_send(flight) else {
-                return;
-            };
-
-            state.close(Self::status_to_error(
-                status,
-                remote.exchange.local_node_id(),
-                remote.exchange.remote_node_id(),
-            ));
-            remote.exchange.ready_send();
-            return;
-        };
-
-        state.close(Self::status_to_error(
-            status,
-            remote.exchange.local_node_id(),
-            remote.exchange.remote_node_id(),
-        ));
+        state
+            .channels
+            .iter_mut()
+            .max_by_key(|channel| channel.remaining())
+            .and_then(|channel| channel.pop_front(self.config.max_batch_bytes))
     }
 }
 
@@ -252,22 +244,21 @@ struct SinkBufferCallback {
 }
 
 impl PingPongCallback for SinkBufferCallback {
-    fn has_pending(&self) -> bool {
-        let state = self.buffer.remotes[self.dest_idx].state.lock();
-        state.channels.iter().any(|x| !x.pending_queue.is_empty())
+    fn pop_pending(&self) -> Option<FlightData> {
+        self.buffer.pop_pending(self.dest_idx)
     }
 
-    fn on_response(&self, response: PingPongResponse) {
-        self.buffer
-            .try_flush_remote(self.dest_idx, response.data.err());
-    }
-
-    fn on_closed(&self) {
+    fn on_remote_finished(&self) {
         let remote = &self.buffer.remotes[self.dest_idx];
         let mut state = remote.state.lock();
-        state.close(add_flight_error_context(
-            ErrorCode::AbortedQuery(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE),
-            FlightOperation::DoExchange,
+        state.finish();
+    }
+
+    fn on_error(&self, status: Status) {
+        let remote = &self.buffer.remotes[self.dest_idx];
+        let mut state = remote.state.lock();
+        state.close(ExchangeSinkBufferSharedState::status_to_error(
+            status,
             remote.exchange.local_node_id(),
             remote.exchange.remote_node_id(),
         ));
@@ -277,16 +268,25 @@ impl PingPongCallback for SinkBufferCallback {
 pub struct ExchangeSinkBuffer {
     semaphore: Arc<Semaphore>,
     inner: Arc<ExchangeSinkBufferInner>,
+    remaining_producers: AtomicUsize,
 }
 
 impl ExchangeSinkBuffer {
     /// Create a new ExchangeSinkBuffer.
     ///
     /// - `exchanges`: Pre-created PingPongExchange instances (not yet started).
-    /// - `num_threads`: Number of channels per remote instance.
     /// - `config`: Buffer configuration.
     pub fn create(
         exchanges: Vec<PingPongExchange>,
+        config: ExchangeBufferConfig,
+        runtime: &Runtime,
+    ) -> Result<Self> {
+        Self::create_with_producers(exchanges, 1, config, runtime)
+    }
+
+    pub fn create_with_producers(
+        exchanges: Vec<PingPongExchange>,
+        num_producers: usize,
         config: ExchangeBufferConfig,
         runtime: &Runtime,
     ) -> Result<Self> {
@@ -319,7 +319,24 @@ impl ExchangeSinkBuffer {
             inner: Arc::new(ExchangeSinkBufferInner {
                 state: shared_state,
             }),
+            remaining_producers: AtomicUsize::new(num_producers),
         })
+    }
+
+    pub fn finish_producer(&self) {
+        if self.remaining_producers.fetch_sub(1, Ordering::AcqRel) != 1 {
+            return;
+        }
+
+        for remote in &self.inner.state.remotes {
+            remote.exchange.request_finish();
+        }
+    }
+
+    pub fn abort(&self) {
+        for remote in &self.inner.state.remotes {
+            remote.exchange.shutdown.notify_waiters();
+        }
     }
 
     pub async fn add_data(&self, tid: usize, dest_idx: usize, data: FlightData) -> Result<()> {
@@ -329,6 +346,9 @@ impl ExchangeSinkBuffer {
             let state = remote.state.lock();
             if let Some(status) = state.last_error.clone() {
                 return Err(status);
+            }
+            if state.finished {
+                return Ok(());
             }
         }
 
@@ -346,35 +366,30 @@ impl ExchangeSinkBuffer {
             }
         };
 
+        let semaphore = self.semaphore.clone();
+        let owned_semaphore_permit = semaphore.acquire_owned().await.unwrap();
+
         {
-            // Failed to send (in-flight or channel full), queue the data
-            let semaphore = self.semaphore.clone();
-            let owned_semaphore_permit = semaphore.acquire_owned().await.unwrap();
-
-            let mut state = remote.state.lock();
-
-            // Check for previous error
+            let state = remote.state.lock();
             if let Some(status) = state.last_error.clone() {
                 return Err(status);
             }
-
-            // Try to send again
-            match remote.exchange.try_send(data) {
-                Ok(None) => {}
-                Ok(Some(data)) => {
-                    let item = RemoteQueueItem::new(data, owned_semaphore_permit);
-                    let _ = state.channels[tid].pending_queue.push(item);
-                }
-                Err(status) => {
-                    let error = ExchangeSinkBufferSharedState::status_to_error(
-                        status,
-                        remote.exchange.local_node_id(),
-                        remote.exchange.remote_node_id(),
-                    );
-                    remote.close_state_and_notify(&mut state, error.clone());
-                    return Err(error);
-                }
+            if state.finished {
+                return Ok(());
             }
+        }
+
+        if let Err(status) = remote.exchange.send_or_enqueue(data, |data| {
+            let state = remote.state.lock();
+            let item = RemoteQueueItem::new(data, owned_semaphore_permit);
+            let _ = state.channels[tid].pending_queue.push(item);
+        }) {
+            let error = ExchangeSinkBufferSharedState::status_to_error(
+                status,
+                remote.exchange.local_node_id(),
+                remote.exchange.remote_node_id(),
+            );
+            return Err(self.close_remote(dest_idx, error));
         }
 
         Ok(())
@@ -394,7 +409,7 @@ impl ExchangeSinkBuffer {
     pub fn is_closed(&self, dest_idx: usize) -> bool {
         let remote = &self.inner.state.remotes[dest_idx];
         let state = remote.state.lock();
-        state.last_error.is_some()
+        state.finished || state.last_error.is_some()
     }
 }
 
@@ -654,7 +669,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_stream_closed_path_closes_buffer_and_rejects_later_data() {
+    async fn test_clean_stream_close_finishes_remote_without_error() {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
         let buffer =
@@ -670,8 +685,7 @@ mod tests {
             loop {
                 let closed = {
                     let state = buffer.inner.state.remotes[0].state.lock();
-                    state.last_error.is_some()
-                        && state.channels.iter().all(|x| x.pending_queue.is_closed())
+                    state.finished && state.channels.iter().all(|x| x.pending_queue.is_closed())
                 };
 
                 if closed {
@@ -690,10 +704,9 @@ mod tests {
         )
         .await;
         assert!(result.is_ok(), "add_data should not block on the semaphore");
-        let error = result
+        result
             .unwrap()
-            .expect_err("closed stream should be reported as an error");
-        assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
+            .expect("a clean stream close should be treated as early completion");
         assert!(
             send_rx.try_recv().is_err(),
             "data rejected after stream close should not be sent"
@@ -701,7 +714,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_force_send_error_drains_remaining_pending_queue() {
+    async fn test_response_error_drains_remaining_pending_queue() {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
         let buffer = ExchangeSinkBuffer::create(
@@ -725,8 +738,10 @@ mod tests {
             assert_eq!(state.channels[0].pending_queue.len(), 2);
         }
 
-        drop(send_rx);
-        pong_tx.send(Ok(FlightData::default())).await.unwrap();
+        pong_tx
+            .send(Err(Status::aborted("test transport failure")))
+            .await
+            .unwrap();
 
         tokio::time::timeout(Duration::from_secs(2), async {
             loop {
@@ -743,7 +758,7 @@ mod tests {
             }
         })
         .await
-        .expect("force_send failure should set last_error");
+        .expect("response failure should set last_error");
 
         {
             let state = buffer.inner.state.remotes[0].state.lock();
@@ -751,11 +766,11 @@ mod tests {
             assert_eq!(
                 state.channels[0].pending_queue.len(),
                 0,
-                "force_send error should drain the rest of the pending queue"
+                "response error should drain the rest of the pending queue"
             );
             assert!(
                 state.channels[0].pending_queue.is_closed(),
-                "force_send error should close the pending queue"
+                "response error should close the pending queue"
             );
         }
 
@@ -772,7 +787,7 @@ mod tests {
         .await;
         assert!(
             result.is_ok(),
-            "add_data should not block after force_send error"
+            "add_data should not block after a response error"
         );
         let error = result
             .unwrap()
@@ -781,35 +796,38 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_direct_send_closed_returns_aborted_query() {
+    async fn test_response_error_returns_aborted_query() {
         let rt = test_runtime();
-        let (exchange, send_rx, _pong_tx) = create_mock_exchange(1);
+        let (exchange, _send_rx, pong_tx) = create_mock_exchange(1);
         let buffer =
             ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
                 .unwrap();
 
-        drop(send_rx);
+        pong_tx
+            .send(Err(Status::aborted("test transport failure")))
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !buffer.is_closed(0) {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("response failure should close the remote");
 
         let error = buffer
             .add_data(0, 0, make_flight_data(1))
             .await
-            .expect_err("closed request channel should abort the exchange");
+            .expect_err("response failure should abort the exchange");
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
-        assert_eq!(
-            error.message(),
-            format!(
-                "{}\n(flight do_exchange, client=query-node-0, service=query-node-1)",
-                REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE
-            )
-        );
         assert!(
             buffer.is_closed(0),
-            "direct send failure should mark the remote as closed"
+            "response failure should mark the remote as closed"
         );
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_force_send_error_unblocks_waiting_add_data() {
+    async fn test_response_error_unblocks_waiting_add_data() {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
         let buffer = Arc::new(
@@ -839,14 +857,16 @@ mod tests {
             "third add_data should wait for the pending-queue semaphore"
         );
 
-        drop(send_rx);
-        pong_tx.send(Ok(FlightData::default())).await.unwrap();
+        pong_tx
+            .send(Err(Status::aborted("test transport failure")))
+            .await
+            .unwrap();
 
         let result = tokio::time::timeout(Duration::from_secs(2), blocked)
             .await
             .expect("blocked add_data should be released after remote close")
             .unwrap();
-        let error = result.expect_err("released add_data should observe exchange abort");
+        let error = result.expect_err("released add_data should observe the response error");
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
         assert_eq!(
             buffer.semaphore.available_permits(),
@@ -892,8 +912,7 @@ mod tests {
             .await
             .expect("blocked add_data should be released after response stream close")
             .unwrap();
-        let error = result.expect_err("released add_data should observe exchange abort");
-        assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
+        result.expect("clean response close should stop the remote without an error");
         assert_eq!(
             buffer.semaphore.available_permits(),
             1,

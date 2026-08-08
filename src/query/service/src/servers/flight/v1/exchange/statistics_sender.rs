@@ -52,6 +52,7 @@ pub struct StatisticsSender {
 impl StatisticsSender {
     pub fn spawn(
         query_id: &str,
+        exchange_session_id: &str,
         ctx: Arc<QueryContext>,
         exchange: FlightExchange,
         executor: Arc<PipelineExecutor>,
@@ -65,6 +66,7 @@ impl StatisticsSender {
         let handle = spawner
             .try_spawn(ThreadTracker::tracking_future({
                 let query_id = query_id.to_string();
+                let exchange_session_id = exchange_session_id.to_string();
 
                 async move {
                     let mut cnt = 0;
@@ -102,8 +104,11 @@ impl StatisticsSender {
 
                                 if let Err(cause) = Self::send_progress(&ctx, &mem_stat, &tx).await
                                 {
-                                    ctx.get_exchange_manager()
-                                        .shutdown_query(&query_id, Some(cause));
+                                    ctx.get_exchange_manager().shutdown_exchange(
+                                        &query_id,
+                                        &exchange_session_id,
+                                        Some(cause),
+                                    );
                                     return;
                                 }
 

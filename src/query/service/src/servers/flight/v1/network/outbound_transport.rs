@@ -12,47 +12,83 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
-use std::time::Instant;
 
 use arrow_flight::FlightData;
 use async_channel::Sender;
 use async_channel::TrySendError;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::Runtime;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use futures::StreamExt;
-use futures::future::Either;
-use futures::future::select;
 use futures::stream::BoxStream;
 use parking_lot::Mutex;
 use tokio::task::JoinHandle;
 use tonic::Status;
 
-pub const REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE: &str =
-    "Aborted query, because the remote flight channel is closed.";
+use super::ExchangePacket;
 
-/// Response from a ping-pong exchange.
-pub struct PingPongResponse {
-    pub data: Result<FlightData, Status>,
-    pub rtt: Duration,
-}
+type FlightDataStream = BoxStream<'static, std::result::Result<FlightData, Status>>;
 
 /// Callback trait for handling ping-pong responses.
 pub trait PingPongCallback: Send + Sync + 'static {
-    fn has_pending(&self) -> bool;
-    fn on_response(&self, response: PingPongResponse);
-    fn on_closed(&self);
+    fn pop_pending(&self) -> Option<FlightData>;
+    fn on_remote_finished(&self);
+    fn on_error(&self, status: Status);
+}
+
+/// One physical do_exchange stream. Reconnect replaces this while the owning
+/// PingPongExchange keeps the logical sequence and in-flight packet.
+pub struct PingPongTransport {
+    pub send_tx: Sender<FlightData>,
+    pub response_stream: FlightDataStream,
+}
+
+pub type PingPongConnector =
+    Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<PingPongTransport>> + Send>> + Send + Sync>;
+
+struct InFlightPacket {
+    kind: InFlightKind,
+    sequence: u64,
+    data: FlightData,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InFlightKind {
+    Data,
+    EndOfStream,
+}
+
+enum AcknowledgeResult {
+    Ignored,
+    Data,
+    EndOfStream,
+}
+
+enum ReconnectOutcome {
+    Reconnected(FlightDataStream),
+    RemoteFinished,
+    Aborted,
+    Failed(Status),
+}
+
+struct SendState {
+    send_tx: Option<Sender<FlightData>>,
+    in_flight: Option<InFlightPacket>,
+    next_sequence: u64,
+    finishing: bool,
+    terminal: Option<std::result::Result<(), Status>>,
 }
 
 pub struct PingPongExchangeInner {
-    in_flight: AtomicBool,
-    send_time: Mutex<Option<Instant>>,
-    send_tx: Sender<FlightData>,
+    send_state: Mutex<SendState>,
     local_node_id: String,
     remote_node_id: String,
+    pub finish: WatchNotify,
     pub shutdown: WatchNotify,
 }
 
@@ -64,7 +100,10 @@ pub struct PingPongExchangeInner {
 pub struct PingPongExchange {
     pub num_threads: usize,
     inner: Arc<PingPongExchangeInner>,
-    response_stream: Mutex<Option<BoxStream<'static, Result<FlightData, Status>>>>,
+    response_stream: Mutex<Option<FlightDataStream>>,
+    connector: Option<PingPongConnector>,
+    retry_times: u64,
+    retry_interval: Duration,
 }
 
 impl Drop for PingPongExchange {
@@ -81,80 +120,305 @@ impl std::ops::Deref for PingPongExchange {
     }
 }
 
+// Lifecycle vocabulary for one logical exchange:
+// - request_finish: normal pipeline completion; non-terminal while draining and sending EOS.
+// - finish_remote: successful terminal state, such as an EOS ACK or LIMIT early stop.
+// - fail: protocol violation or exhausted reconnects; error terminal reported via callback.
+// - abort: forced local cancellation, such as KILL QUERY; stop without EOS or callback.
 impl PingPongExchangeInner {
-    pub fn get_rtt(&self) -> Duration {
-        self.send_time
-            .lock()
-            .take()
-            .map(|t| t.elapsed())
-            .unwrap_or_default()
-    }
     /// Try to send data through the exchange.
     ///
     /// Returns:
     /// - `Ok(None)`: Data was sent successfully
     /// - `Ok(Some(data))`: A request is already in-flight, data is returned to caller
     /// - `Err(status)`: The exchange is closed
-    pub fn try_send(&self, data: FlightData) -> Result<Option<FlightData>, Status> {
-        if self.in_flight.fetch_or(true, Ordering::SeqCst) {
-            return Ok(Some(data));
-        }
-
-        self.force_send(data)
+    pub fn try_send(&self, data: FlightData) -> std::result::Result<Option<FlightData>, Status> {
+        let mut pending = None;
+        self.send_or_enqueue(data, |data| pending = Some(data))?;
+        Ok(pending)
     }
 
-    pub(crate) fn force_send(&self, data: FlightData) -> Result<Option<FlightData>, Status> {
-        *self.send_time.lock() = Some(Instant::now());
-        match self.send_tx.try_send(data) {
-            Ok(_) => Ok(None),
-            Err(TrySendError::Closed(_)) => {
-                *self.send_time.lock() = None;
-                self.in_flight.store(false, Ordering::SeqCst);
-                Err(Status::aborted(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE))
-            }
-            Err(TrySendError::Full(data)) => {
-                *self.send_time.lock() = None;
-                self.in_flight.store(false, Ordering::SeqCst);
-                Ok(Some(data))
+    pub fn send_or_enqueue(
+        &self,
+        data: FlightData,
+        enqueue: impl FnOnce(FlightData),
+    ) -> std::result::Result<(), Status> {
+        // ACK handling takes this lock before inspecting the pending queue. Making the
+        // send-or-enqueue decision under the same lock prevents an ACK from observing an
+        // empty queue and clearing in_flight immediately before a producer enqueues data.
+        let mut state = self.send_state.lock();
+        if let Some(terminal) = &state.terminal {
+            return terminal.clone();
+        }
+        if state.finishing {
+            return Err(Status::failed_precondition(
+                "cannot send data after do_exchange producer completion",
+            ));
+        }
+        if state.in_flight.is_some() {
+            enqueue(data);
+            return Ok(());
+        }
+
+        let sequence = state.next_sequence;
+        let encoded = ExchangePacket::data(sequence, data.clone()).encode();
+        state.next_sequence += 1;
+        state.in_flight = Some(InFlightPacket {
+            kind: InFlightKind::Data,
+            sequence,
+            data: encoded.clone(),
+        });
+
+        let Some(send_tx) = &state.send_tx else {
+            return Ok(());
+        };
+        match send_tx.try_send(encoded) {
+            Ok(()) | Err(TrySendError::Closed(_)) => Ok(()),
+            Err(TrySendError::Full(_)) => {
+                state.in_flight = None;
+                state.next_sequence -= 1;
+                enqueue(data);
+                Ok(())
             }
         }
     }
 
+    fn acknowledge_and_advance(
+        &self,
+        sequence: u64,
+        pop_pending: impl FnOnce() -> Option<FlightData>,
+    ) -> std::result::Result<AcknowledgeResult, Status> {
+        let mut state = self.send_state.lock();
+        let Some(in_flight) = &state.in_flight else {
+            return Ok(AcknowledgeResult::Ignored);
+        };
+        if sequence < in_flight.sequence {
+            return Ok(AcknowledgeResult::Ignored);
+        }
+        if sequence > in_flight.sequence {
+            return Err(Status::invalid_argument(format!(
+                "Logical error, unexpected do_exchange ACK sequence {}, expected {}",
+                sequence, in_flight.sequence
+            )));
+        }
+        if in_flight.kind == InFlightKind::EndOfStream {
+            state.in_flight = None;
+            return Ok(AcknowledgeResult::EndOfStream);
+        }
+
+        let Some(data) = pop_pending() else {
+            state.in_flight = None;
+            return Ok(AcknowledgeResult::Data);
+        };
+
+        let sequence = state.next_sequence;
+        let encoded = ExchangePacket::data(sequence, data).encode();
+        state.next_sequence += 1;
+        state.in_flight = Some(InFlightPacket {
+            kind: InFlightKind::Data,
+            sequence,
+            data: encoded.clone(),
+        });
+
+        let Some(send_tx) = &state.send_tx else {
+            return Ok(AcknowledgeResult::Data);
+        };
+        match send_tx.try_send(encoded) {
+            Ok(()) => Ok(AcknowledgeResult::Data),
+            Err(TrySendError::Closed(_)) => Ok(AcknowledgeResult::Data),
+            Err(TrySendError::Full(_)) => Err(Status::resource_exhausted(
+                "do_exchange request channel is unexpectedly full after an acknowledgement",
+            )),
+        }
+    }
+
+    #[cfg(test)]
     pub fn ready_send(&self) {
-        self.in_flight.store(false, Ordering::SeqCst);
+        self.send_state.lock().in_flight = None;
+    }
+
+    fn has_in_flight(&self) -> bool {
+        self.send_state.lock().in_flight.is_some()
+    }
+
+    pub fn request_finish(&self) {
+        {
+            let mut state = self.send_state.lock();
+            if state.terminal.is_some() {
+                return;
+            }
+            state.finishing = true;
+        }
+        self.finish.notify_waiters();
+    }
+
+    fn send_end_of_stream(&self) -> std::result::Result<(), Status> {
+        let mut state = self.send_state.lock();
+        if let Some(terminal) = &state.terminal {
+            return terminal.clone();
+        }
+        if state.in_flight.is_some() {
+            return Ok(());
+        }
+        if !state.finishing {
+            return Err(Status::failed_precondition(
+                "cannot end do_exchange before producer completion",
+            ));
+        }
+
+        let sequence = state.next_sequence;
+        let encoded = ExchangePacket::end_of_stream(sequence).encode();
+        state.next_sequence += 1;
+        state.in_flight = Some(InFlightPacket {
+            kind: InFlightKind::EndOfStream,
+            sequence,
+            data: encoded.clone(),
+        });
+
+        let Some(send_tx) = &state.send_tx else {
+            return Err(Status::unavailable(
+                "do_exchange transport is unavailable while sending EndOfStream",
+            ));
+        };
+        match send_tx.try_send(encoded) {
+            Ok(()) | Err(TrySendError::Closed(_)) => Ok(()),
+            Err(TrySendError::Full(_)) => Err(Status::resource_exhausted(
+                "do_exchange request channel is unexpectedly full while sending EndOfStream",
+            )),
+        }
+    }
+
+    fn disconnect(&self) {
+        self.send_state.lock().send_tx = None;
+    }
+
+    fn install_transport(&self, send_tx: Sender<FlightData>) -> std::result::Result<(), Status> {
+        let mut state = self.send_state.lock();
+        if state.terminal.is_some() {
+            send_tx.close();
+            return Ok(());
+        }
+        if let Some(in_flight) = &state.in_flight {
+            match send_tx.try_send(in_flight.data.clone()) {
+                Ok(()) => {}
+                Err(TrySendError::Full(_)) => {
+                    return Err(Status::resource_exhausted(
+                        "new do_exchange transport is unexpectedly full",
+                    ));
+                }
+                Err(TrySendError::Closed(_)) => {
+                    return Err(Status::unavailable(
+                        "new do_exchange transport closed before resend",
+                    ));
+                }
+            }
+        }
+        state.send_tx = Some(send_tx);
+        Ok(())
+    }
+
+    async fn reconnect(
+        &self,
+        connector: Option<&PingPongConnector>,
+        status: Status,
+        retry_times: u64,
+        retry_interval: Duration,
+    ) -> ReconnectOutcome {
+        let Some(connector) = connector else {
+            return ReconnectOutcome::Failed(status);
+        };
+
+        if !is_retryable_status(&status) || retry_times == 0 {
+            return ReconnectOutcome::Failed(status);
+        }
+
+        self.disconnect();
+        let mut last_error = status.to_string();
+
+        for attempt in 0..retry_times {
+            if attempt > 0 && !retry_interval.is_zero() {
+                tokio::select! {
+                    _ = self.shutdown.notified() => return ReconnectOutcome::Aborted,
+                    _ = tokio::time::sleep(retry_interval) => {}
+                }
+            }
+
+            let transport = tokio::select! {
+                _ = self.shutdown.notified() => return ReconnectOutcome::Aborted,
+                result = connector() => result,
+            };
+
+            match transport {
+                Ok(transport) => {
+                    if let Err(status) = self.install_transport(transport.send_tx) {
+                        last_error = status.to_string();
+                        continue;
+                    }
+                    return ReconnectOutcome::Reconnected(transport.response_stream);
+                }
+                Err(error) if error.code() == ErrorCode::CLOSED_QUERY => {
+                    return ReconnectOutcome::RemoteFinished;
+                }
+                Err(error) => last_error = error.to_string(),
+            }
+        }
+
+        ReconnectOutcome::Failed(Status::unavailable(format!(
+            "do_exchange reconnect exhausted: {}",
+            last_error
+        )))
+    }
+
+    fn finish_remote(&self) {
+        let mut state = self.send_state.lock();
+        state.send_tx = None;
+        state.in_flight = None;
+        state.terminal = Some(Ok(()));
+    }
+
+    fn fail(&self, status: Status) {
+        let mut state = self.send_state.lock();
+        state.send_tx = None;
+        state.in_flight = None;
+        state.terminal = Some(Err(status));
+    }
+
+    fn abort(&self) {
+        let mut state = self.send_state.lock();
+        state.send_tx = None;
+        state.in_flight = None;
+        state.terminal = Some(Err(Status::cancelled("do_exchange was cancelled")));
     }
 }
 
 impl PingPongExchange {
-    pub fn from_parts(
-        num_threads: usize,
-        send_tx: async_channel::Sender<FlightData>,
-        response_stream: tonic::Streaming<FlightData>,
-        local_node_id: String,
-        remote_node_id: String,
-    ) -> Self {
-        Self::from_stream(
-            num_threads,
-            send_tx,
-            response_stream,
-            local_node_id,
-            remote_node_id,
-        )
-    }
-
+    #[cfg(test)]
     pub fn from_stream(
         num_threads: usize,
         send_tx: async_channel::Sender<FlightData>,
-        stream: impl futures::Stream<Item = Result<FlightData, Status>> + Send + 'static,
+        stream: impl futures::Stream<Item = std::result::Result<FlightData, Status>> + Send + 'static,
         local_node_id: impl Into<String>,
         remote_node_id: impl Into<String>,
     ) -> Self {
+        let mut next_ack = 0;
+        let stream = stream.map(move |response| {
+            response.map(|_| {
+                let ack = ExchangePacket::ack(next_ack).encode();
+                next_ack += 1;
+                ack
+            })
+        });
         let inner = Arc::new(PingPongExchangeInner {
-            in_flight: AtomicBool::new(false),
-            send_time: Mutex::new(None),
-            send_tx,
+            send_state: Mutex::new(SendState {
+                send_tx: Some(send_tx),
+                in_flight: None,
+                next_sequence: 0,
+                finishing: false,
+                terminal: None,
+            }),
             local_node_id: local_node_id.into(),
             remote_node_id: remote_node_id.into(),
+            finish: WatchNotify::new(),
             shutdown: WatchNotify::new(),
         });
 
@@ -162,6 +426,41 @@ impl PingPongExchange {
             inner,
             num_threads,
             response_stream: Mutex::new(Some(Box::pin(stream))),
+            connector: None,
+            retry_times: 0,
+            retry_interval: Duration::ZERO,
+        }
+    }
+
+    pub fn from_reconnectable(
+        num_threads: usize,
+        transport: PingPongTransport,
+        connector: PingPongConnector,
+        retry_times: u64,
+        retry_interval: Duration,
+        local_node_id: String,
+        remote_node_id: String,
+    ) -> Self {
+        let inner = Arc::new(PingPongExchangeInner {
+            send_state: Mutex::new(SendState {
+                send_tx: Some(transport.send_tx),
+                in_flight: None,
+                next_sequence: 0,
+                finishing: false,
+                terminal: None,
+            }),
+            local_node_id,
+            remote_node_id,
+            finish: WatchNotify::new(),
+            shutdown: WatchNotify::new(),
+        });
+        Self {
+            inner,
+            num_threads,
+            response_stream: Mutex::new(Some(transport.response_stream)),
+            connector: Some(connector),
+            retry_times,
+            retry_interval,
         }
     }
 
@@ -183,61 +482,137 @@ impl PingPongExchange {
         &self,
         callback: Arc<dyn PingPongCallback>,
         runtime: &Runtime,
-    ) -> Result<JoinHandle<()>, Status> {
+    ) -> std::result::Result<JoinHandle<()>, Status> {
         let Some(mut stream) = self.response_stream.lock().take() else {
             return Err(Status::already_exists("Receiver already started"));
         };
 
         let inner = self.inner.clone();
+        let connector = self.connector.clone();
+        let retry_times = self.retry_times;
+        let retry_interval = self.retry_interval;
         Ok(runtime.spawn(async move {
             enum Event {
-                Shutdown,
-                Response(Option<Result<FlightData, Status>>),
+                Abort,
+                Finish,
+                Response(Option<std::result::Result<FlightData, Status>>),
             }
 
-            let mut finished = false;
+            let mut finishing = false;
 
             loop {
-                if finished && !callback.has_pending() {
-                    inner.send_tx.close();
+                if finishing && !inner.has_in_flight() {
+                    if let Err(status) = inner.send_end_of_stream() {
+                        inner.fail(status.clone());
+                        callback.on_error(status);
+                        break;
+                    }
                 }
 
-                let event = if finished {
-                    // WatchNotify is sticky; calling notified() again would spin forever.
-                    Event::Response(stream.next().await)
+                let event = if finishing {
+                    tokio::select! {
+                        _ = inner.shutdown.notified() => Event::Abort,
+                        response = stream.next() => Event::Response(response),
+                    }
                 } else {
-                    let shutdown_fut = Box::pin(inner.shutdown.notified());
-                    match select(shutdown_fut, stream.next()).await {
-                        Either::Left(_) => Event::Shutdown,
-                        Either::Right((response, _)) => Event::Response(response),
+                    tokio::select! {
+                        _ = inner.shutdown.notified() => Event::Abort,
+                        _ = inner.finish.notified() => Event::Finish,
+                        response = stream.next() => Event::Response(response),
                     }
                 };
 
                 match event {
-                    Event::Shutdown => finished = true,
+                    Event::Abort => {
+                        inner.abort();
+                        break;
+                    }
+                    Event::Finish => finishing = true,
                     Event::Response(None) => {
-                        callback.on_closed();
+                        inner.finish_remote();
+                        callback.on_remote_finished();
                         break;
                     }
                     Event::Response(Some(Ok(data))) => {
-                        let rtt = inner.get_rtt();
-                        callback.on_response(PingPongResponse {
-                            data: Ok(data),
-                            rtt,
-                        });
+                        let sequence = match ExchangePacket::decode(data) {
+                            Ok(ExchangePacket::Ack { sequence }) => sequence,
+                            Ok(ExchangePacket::Data { .. })
+                            | Ok(ExchangePacket::EndOfStream { .. }) => {
+                                let status: Status = ErrorCode::Internal(
+                                    "Logical error, received a request packet on the do_exchange response stream",
+                                )
+                                .into();
+                                inner.fail(status.clone());
+                                callback.on_error(status);
+                                break;
+                            }
+                            Err(cause) => {
+                                let status: Status = cause.into();
+                                inner.fail(status.clone());
+                                callback.on_error(status);
+                                break;
+                            }
+                        };
+                        match inner.acknowledge_and_advance(sequence, || callback.pop_pending()) {
+                            Ok(AcknowledgeResult::Ignored) => continue,
+                            Err(status) => {
+                                inner.fail(status.clone());
+                                callback.on_error(status);
+                                break;
+                            }
+                            Ok(AcknowledgeResult::Data) => {}
+                            Ok(AcknowledgeResult::EndOfStream) => {
+                                inner.finish_remote();
+                                callback.on_remote_finished();
+                                break;
+                            }
+                        }
                     }
                     Event::Response(Some(Err(status))) => {
-                        let rtt = inner.get_rtt();
-                        callback.on_response(PingPongResponse {
-                            data: Err(status),
-                            rtt,
-                        });
-                        break;
+                        match inner
+                            .reconnect(
+                                connector.as_ref(),
+                                status,
+                                retry_times,
+                                retry_interval,
+                            )
+                            .await
+                        {
+                            ReconnectOutcome::Reconnected(response_stream) => {
+                                stream = response_stream;
+                            }
+                            ReconnectOutcome::RemoteFinished => {
+                                inner.finish_remote();
+                                callback.on_remote_finished();
+                                break;
+                            }
+                            ReconnectOutcome::Aborted => {
+                                inner.abort();
+                                break;
+                            }
+                            ReconnectOutcome::Failed(status) => {
+                                inner.fail(status.clone());
+                                callback.on_error(status);
+                                break;
+                            }
+                        }
                     }
                 }
             }
         }))
     }
+}
+
+fn is_retryable_status(status: &Status) -> bool {
+    status.details().is_empty()
+        && matches!(
+            status.code(),
+            tonic::Code::Cancelled
+                | tonic::Code::Unknown
+                | tonic::Code::DeadlineExceeded
+                | tonic::Code::Internal
+                | tonic::Code::Unavailable
+        )
 }
 
 #[cfg(test)]
@@ -250,13 +625,13 @@ mod tests {
     struct NoPendingCallback;
 
     impl PingPongCallback for NoPendingCallback {
-        fn has_pending(&self) -> bool {
-            false
+        fn pop_pending(&self) -> Option<FlightData> {
+            None
         }
 
-        fn on_response(&self, _response: PingPongResponse) {}
+        fn on_remote_finished(&self) {}
 
-        fn on_closed(&self) {}
+        fn on_error(&self, _status: Status) {}
     }
 
     fn create_mock_exchange(
@@ -264,7 +639,7 @@ mod tests {
     ) -> (
         PingPongExchange,
         async_channel::Receiver<FlightData>,
-        async_channel::Sender<Result<FlightData, Status>>,
+        async_channel::Sender<std::result::Result<FlightData, Status>>,
     ) {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
@@ -323,19 +698,6 @@ mod tests {
 
         // Now send should succeed again
         assert!(exchange.try_send(make_flight_data(3)).unwrap().is_none());
-    }
-
-    #[tokio::test]
-    async fn test_ping_pong_closed_returns_error() {
-        let (exchange, send_rx, _pong_tx) = create_mock_exchange(1);
-
-        // Drop the receiver to close the channel
-        drop(send_rx);
-
-        let result = exchange.try_send(make_flight_data(1));
-        let status = result.expect_err("closed request channel should abort the exchange");
-        assert_eq!(status.code(), tonic::Code::Aborted);
-        assert_eq!(status.message(), REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE);
     }
 
     // Regression test for https://github.com/databendlabs/databend/issues/20228.

@@ -35,6 +35,7 @@ use petgraph::Direction;
 use petgraph::Graph;
 use petgraph::dot::Dot;
 use petgraph::graph::NodeIndex;
+use petgraph::visit::EdgeRef;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -178,7 +179,13 @@ pub struct QueryEnv {
 pub struct QueryEnvAdmission {
     pub query_id: String,
     pub exchange_session_id: String,
-    pub inbound_channels: HashMap<String, usize>,
+    pub inbound_channels: HashMap<String, InboundChannelAdmission>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InboundChannelAdmission {
+    pub num_threads: usize,
+    pub source_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -256,7 +263,7 @@ impl QueryEnv {
         let mut admissions = HashMap::with_capacity(self.dataflow_diagram.node_count());
 
         for index in self.dataflow_diagram.node_indices() {
-            let mut inbound_channels = HashMap::new();
+            let mut inbound_channels: HashMap<String, InboundChannelAdmission> = HashMap::new();
             for edge in self
                 .dataflow_diagram
                 .edges_directed(index, Direction::Incoming)
@@ -266,16 +273,29 @@ impl QueryEnv {
                     channels,
                 } = edge.weight()
                 {
-                    match inbound_channels.insert(exchange_id.clone(), channels.len()) {
-                        Some(num_threads) if num_threads != channels.len() => {
+                    let source_id = self.dataflow_diagram[edge.source()].id.clone();
+                    match inbound_channels.entry(exchange_id.clone()) {
+                        std::collections::hash_map::Entry::Vacant(entry) => {
+                            entry.insert(InboundChannelAdmission {
+                                num_threads: channels.len(),
+                                source_ids: vec![source_id],
+                            });
+                        }
+                        std::collections::hash_map::Entry::Occupied(mut entry)
+                            if entry.get().num_threads == channels.len() =>
+                        {
+                            if !entry.get().source_ids.contains(&source_id) {
+                                entry.get_mut().source_ids.push(source_id);
+                            }
+                        }
+                        std::collections::hash_map::Entry::Occupied(entry) => {
                             return Err(ErrorCode::Internal(format!(
                                 "Conflicting do_exchange admission for exchange {}: {} and {} channels",
                                 exchange_id,
-                                num_threads,
+                                entry.get().num_threads,
                                 channels.len()
                             )));
                         }
-                        _ => {}
                     }
                 }
             }
