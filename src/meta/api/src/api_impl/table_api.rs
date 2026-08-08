@@ -129,6 +129,7 @@ use super::database_api::DatabaseApi;
 use super::database_util::get_db_or_err;
 use super::garbage_collection_api::ORPHAN_POSTFIX;
 use super::garbage_collection_api::get_history_tables_for_gc;
+use super::materialized_view_api::MaterializedViewApi;
 use super::schema_api::VersionedTable;
 use super::schema_api::build_upsert_table_deduplicated_label;
 use super::schema_api::construct_drop_table_txn_operations;
@@ -1299,6 +1300,7 @@ where
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
+            update_mv_source_bindings,
             copied_files,
             update_stream_metas,
             deduplicated_labels,
@@ -1383,6 +1385,49 @@ where
             });
 
             new_table_meta_map.insert(req.table_id, new_table_meta);
+        }
+
+        // The query layer marks only source schema changes that invalidate existing MV bindings.
+        // Each generation increment must be committed with an update of the same source TableMeta:
+        // its exact sequence condition serializes concurrent invalidating DDL, so the generation
+        // value does not need a second CAS condition.
+        for update in &update_mv_source_bindings {
+            if !update_table_metas
+                .iter()
+                .any(|(req, _)| req.table_id == update.source_table_id)
+            {
+                // A standalone generation update would bypass the source TableMeta serialization
+                // invariant and could lose a concurrent increment.
+                return Err(KVAppError::AppError(
+                    InvalidMaterializedView::new(format!(
+                        "MV source binding update for source {} has no matching table metadata update",
+                        update.source_table_id
+                    ))
+                    .into(),
+                ));
+            }
+
+            let generation_ident =
+                MVSourceBindingVersionIdent::new(&update.tenant, update.source_table_id);
+            let next_generation = self
+                .get_mv_source_generation(&update.tenant, update.source_table_id)
+                .await?
+                .unwrap_or(0)
+                .checked_add(1)
+                .ok_or_else(|| {
+                    KVAppError::AppError(
+                        InvalidMaterializedView::new(format!(
+                            "source table {} binding generation overflow",
+                            update.source_table_id
+                        ))
+                        .into(),
+                    )
+                })?;
+
+            txn.if_then
+                .push(txn_put_pb(&generation_ident, &MVSourceBindingVersion {
+                    current_source_generation: next_generation,
+                }));
         }
 
         // `remove_table_copied_files` and `upsert_table_copied_file_info`

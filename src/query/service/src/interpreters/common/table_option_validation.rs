@@ -131,6 +131,7 @@ pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
         let mut r = HashSet::new();
         r.insert(OPT_KEY_DATABASE_ID);
         r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+        r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
         r
     });
 

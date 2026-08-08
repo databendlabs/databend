@@ -5022,6 +5022,7 @@ dependencies = [
  "databend-common-storages-paimon",
  "databend-common-storages-stream",
  "databend-storages-common-index",
+ "databend-storages-common-table-meta",
 ]
 
 [[package]]

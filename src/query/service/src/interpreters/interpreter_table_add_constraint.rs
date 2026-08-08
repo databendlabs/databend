@@ -57,7 +57,6 @@ impl Interpreter for AddTableConstraintInterpreter {
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         // check mutability
         tbl.check_mutable()?;
-
         let table_info = tbl.get_table_info();
         let engine = table_info.engine();
         let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
@@ -79,7 +78,7 @@ impl Interpreter for AddTableConstraintInterpreter {
             self.plan.constraint.clone(),
         )?;
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-        update_table_meta(fuse_table, &new_table_meta, catalog).await?;
+        update_table_meta(fuse_table, &new_table_meta, catalog, self.ctx.get_tenant()).await?;
         Ok(PipelineBuildResult::create())
     }
 }

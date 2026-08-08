@@ -35,6 +35,7 @@ use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReq;
+use databend_common_meta_app::schema::UpdateMVSourceBindingReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_metrics::storage::*;
@@ -97,6 +98,40 @@ enum State {
     Finish,
 }
 
+/// Metadata updates committed atomically with the table snapshot.
+#[derive(Clone, Default)]
+pub struct CommitMetaUpdates {
+    /// Stream metadata advanced by the write and committed with the table snapshot.
+    update_stream_meta: Vec<UpdateStreamMetaReq>,
+    /// Existing materialized-view bindings invalidated at the same atomic boundary
+    /// as a schema-changing snapshot commit.
+    update_mv_source_binding: Option<UpdateMVSourceBindingReq>,
+}
+
+impl CommitMetaUpdates {
+    pub fn with_mv_source_binding_update(mut self, update: UpdateMVSourceBindingReq) -> Self {
+        self.update_mv_source_binding = Some(update);
+        self
+    }
+
+    pub(crate) fn update_stream_meta(&self) -> &[UpdateStreamMetaReq] {
+        &self.update_stream_meta
+    }
+
+    pub(crate) fn mv_source_binding_update(&self) -> Option<&UpdateMVSourceBindingReq> {
+        self.update_mv_source_binding.as_ref()
+    }
+}
+
+impl From<Vec<UpdateStreamMetaReq>> for CommitMetaUpdates {
+    fn from(update_stream_meta: Vec<UpdateStreamMetaReq>) -> Self {
+        Self {
+            update_stream_meta,
+            ..Default::default()
+        }
+    }
+}
+
 // Gathers all the segments and commits to the meta server.
 pub struct CommitSink<F: SnapshotGenerator> {
     state: State,
@@ -126,7 +161,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     enable_auto_analyze: bool,
 
     change_tracking: bool,
-    update_stream_meta: Vec<UpdateStreamMetaReq>,
+    commit_meta_updates: CommitMetaUpdates,
     deduplicated_label: Option<String>,
     table_meta_timestamps: TableMetaTimestamps,
     vacuum_handler: Option<Arc<VacuumHandlerWrapper>>,
@@ -150,7 +185,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         copied_files: Option<UpsertTableCopiedFileReq>,
-        update_stream_meta: Vec<UpdateStreamMetaReq>,
+        commit_meta_updates: CommitMetaUpdates,
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
@@ -193,7 +228,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             enable_auto_analyze,
             prev_snapshot_id,
             change_tracking: table.change_tracking_enabled(),
-            update_stream_meta,
+            commit_meta_updates,
             deduplicated_label,
             table_meta_timestamps,
             vacuum_handler,
@@ -691,7 +726,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
-                match fuse_table
+                let update_result = fuse_table
                     .update_table_meta(
                         self.ctx.as_ref(),
                         catalog.clone(),
@@ -700,12 +735,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         snapshot,
                         location,
                         &self.copied_files,
-                        &self.update_stream_meta,
+                        &self.commit_meta_updates,
                         &self.dal,
                         self.deduplicated_label.clone(),
                     )
-                    .await
-                {
+                    .await;
+                match update_result {
                     Ok(_) => {
                         set_compaction_num_block_hint(
                             self.ctx.as_ref(),
@@ -770,7 +805,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             let tbl = (&table_info.name, table_info.ident, &table_info.meta.engine);
 
                             let stream_descriptions = self
-                                .update_stream_meta
+                                .commit_meta_updates
+                                .update_stream_meta()
                                 .iter()
                                 .map(|s| (s.stream_id, s.seq, "stream"))
                                 .collect::<Vec<_>>();

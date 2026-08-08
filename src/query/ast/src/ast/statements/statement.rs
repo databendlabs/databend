@@ -221,8 +221,11 @@ pub enum Statement {
 
     // Materialized Views
     CreateMaterializedView(CreateMaterializedViewStmt),
+    AlterMaterializedView(AlterMaterializedViewStmt),
+    OptimizeMaterializedView(OptimizeTableStmt),
     DropMaterializedView(DropMaterializedViewStmt),
     RefreshMaterializedView(RefreshMaterializedViewStmt),
+    ShowCreateMaterializedView(ShowCreateMaterializedViewStmt),
     ShowMaterializedViews(ShowMaterializedViewsStmt),
 
     // Streams
@@ -549,6 +552,7 @@ impl Statement {
             | Statement::ShowTablesStatus(..)
             | Statement::ShowDropTables(..)
             | Statement::OptimizeTable(..)
+            | Statement::OptimizeMaterializedView(..)
             | Statement::VacuumTable(..)
             | Statement::VacuumDropTable(..)
             | Statement::VacuumTemporaryFiles(..)
@@ -621,6 +625,7 @@ impl Statement {
             | Statement::AlterTable(..)
             | Statement::AlterObjectTag(..)
             | Statement::AlterView(..)
+            | Statement::AlterMaterializedView(..)
             | Statement::AlterUser(..)
             | Statement::AlterDatabase(..)
             | Statement::DropDatabase(..)
@@ -629,6 +634,7 @@ impl Statement {
             | Statement::DropMaterializedView(..)
             | Statement::CreateMaterializedView(..)
             | Statement::RefreshMaterializedView(..)
+            | Statement::ShowCreateMaterializedView(..)
             | Statement::DropIndex(..)
             | Statement::DropSequence(..)
             | Statement::DropDictionary(..)
@@ -943,8 +949,13 @@ impl Display for Statement {
             Statement::ShowViews(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeView(stmt) => write!(f, "{stmt}")?,
             Statement::CreateMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::OptimizeMaterializedView(stmt) => {
+                stmt.fmt_with_target(f, "MATERIALIZED VIEW")?
+            }
             Statement::DropMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowCreateMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::ShowMaterializedViews(stmt) => write!(f, "{stmt}")?,
             Statement::CreateStream(stmt) => write!(f, "{stmt}")?,
             Statement::DropStream(stmt) => write!(f, "{stmt}")?,

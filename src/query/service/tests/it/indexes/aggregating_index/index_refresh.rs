@@ -237,13 +237,28 @@ async fn test_refresh_agg_index_with_limit() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sync_agg_index() -> anyhow::Result<()> {
-    test_sync_agg_index_after_update().await?;
-    test_sync_agg_index_after_insert().await?;
-    test_sync_agg_index_after_copy_into().await?;
+#[test]
+fn test_sync_agg_index() -> anyhow::Result<()> {
+    let handle = std::thread::Builder::new()
+        .name("test_sync_agg_index".to_string())
+        .stack_size(4 * 1024 * 1024)
+        .spawn(|| -> anyhow::Result<()> {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
 
-    Ok(())
+            runtime.block_on(async {
+                test_sync_agg_index_after_update().await?;
+                test_sync_agg_index_after_insert().await?;
+                test_sync_agg_index_after_copy_into().await?;
+
+                Ok(())
+            })
+        })?;
+
+    handle
+        .join()
+        .map_err(|_| anyhow::anyhow!("test_sync_agg_index thread panicked"))?
 }
 
 async fn test_sync_agg_index_after_update() -> anyhow::Result<()> {

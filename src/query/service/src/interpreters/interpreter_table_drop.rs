@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -100,6 +101,12 @@ impl Interpreter for DropTableInterpreter {
                 engine,
                 &self.plan.database,
                 &self.plan.table
+            )));
+        }
+        if is_materialized_view_engine(tbl.engine()) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW {}.{}` instead",
+                &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
             )));
         }
         let catalog = self.ctx.get_catalog(catalog_name).await?;

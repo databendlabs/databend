@@ -1,6 +1,6 @@
 1
 Error: APIError: QueryFailed: [1301]table option snapshot_location is invalid for alter table statement
-Error: APIError: QueryFailed: [1301]table option snapshot_loc is invalid for alter table statement
+Error: APIError: QueryFailed: [1301]table option 'snapshot_loc' is reserved and cannot be modified
 Error: APIError: QueryFailed: [1301]table option extrenal_location is invalid for alter table statement
 Error: APIError: QueryFailed: [1301]table option abc is invalid for alter table statement
 Error: APIError: QueryFailed: [1301]invalid block_per_segment option, can't be over 1000

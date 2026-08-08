@@ -104,6 +104,7 @@ use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::UpdateMVSourceBindingReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -277,6 +278,21 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             self.name()
         )))
     }
+
+    /// Get the current semantic source generation, if its record exists.
+    async fn get_mv_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>>;
+
+    /// Point-read the immutable source generation on one materialized-view binding.
+    async fn get_mv_bound_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<u64>>;
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(
@@ -557,24 +573,48 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn update_single_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateTableMetaReq,
-        table_info: &TableInfo,
+        current_table_info: &TableInfo,
     ) -> Result<UpdateTableMetaReply> {
         let mut update_table_metas = vec![];
+        let mut update_mv_source_bindings = vec![];
         let mut update_temp_tables = vec![];
-        if table_info.meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+        if current_table_info
+            .meta
+            .options
+            .contains_key(OPT_KEY_TEMP_PREFIX)
+        {
             let req = UpdateTempTableReq {
                 table_id: req.table_id,
-                desc: table_info.desc.clone(),
+                desc: current_table_info.desc.clone(),
                 new_table_meta: req.new_table_meta,
                 copied_files: Default::default(),
             };
             update_temp_tables.push(req);
         } else {
-            update_table_metas.push((req, table_info.clone()));
+            if current_table_info
+                .meta
+                .schema
+                .fields()
+                .iter()
+                .any(|old_field| {
+                    req.new_table_meta
+                        .schema
+                        .fields()
+                        .iter()
+                        .find(|new_field| new_field.column_id == old_field.column_id)
+                        != Some(old_field)
+                })
+            {
+                update_mv_source_bindings
+                    .push(UpdateMVSourceBindingReq::new(tenant.clone(), req.table_id));
+            }
+            update_table_metas.push((req, current_table_info.clone()));
         }
         self.update_multi_table_meta(UpdateMultiTableMetaReq {
             update_table_metas,
+            update_mv_source_bindings,
             update_temp_tables,
             ..Default::default()
         })

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::RowAccessPolicy;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -61,6 +62,7 @@ impl Interpreter for DropTableRowAccessPolicyInterpreter {
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 
         let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        table.check_mutable()?;
 
         let table_info = table.get_table_info();
         let table_id = table_info.ident.table_id;

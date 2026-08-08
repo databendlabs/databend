@@ -1,0 +1,10 @@
+=== CREATE MV requires CREATE on the database and SELECT on the source ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Create] is required on 'default'.'default'.* for user 'mv-priv-user'@'%' with roles [mv_priv_role]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'mv_rbac_source_0020' for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]
+=== SELECT, REFRESH, and SHOW CREATE MATERIALIZED VIEW require only SELECT on the renamed source ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'mv_rbac_source_0020_renamed' for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'mv_rbac_source_0020_renamed' for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'mv_rbac_source_0020_renamed' for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]
+=== DROP MV requires DROP on the database ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Drop] is required on 'default'.'default'.* for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Drop] is required on 'default'.'default'.* for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object

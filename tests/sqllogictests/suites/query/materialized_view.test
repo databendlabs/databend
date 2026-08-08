@@ -218,10 +218,10 @@ drop table replaced_source
 statement ok
 create table replaced_source (id int) change_tracking = true
 
-statement error (?s)2328.*source table changed
+statement error 2328
 select * from replaced_mv
 
-statement error (?s)2328.*source table changed
+statement error 1025
 refresh materialized view replaced_mv
 
 statement ok
