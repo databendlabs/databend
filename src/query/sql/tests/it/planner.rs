@@ -12,16 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
@@ -35,6 +41,7 @@ use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
 use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::run_test_case_core;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 use crate::framework::LiteTableContext;
 use crate::framework::golden::open_golden_file;
@@ -567,6 +574,88 @@ async fn plan_sql(fixture: &Arc<LiteTableContext>, sql: &str) -> Result<Plan> {
     let mut planner = Planner::new(fixture.clone());
     let (plan, _) = planner.plan_sql(sql).await?;
     Ok(plan)
+}
+
+fn query_metadata(plan: &Plan) -> &MetadataRef {
+    let Plan::Query { metadata, .. } = plan else {
+        panic!("expected query plan")
+    };
+    metadata
+}
+
+fn register_planner_cache_table(fixture: &Arc<LiteTableContext>, table_name: &str) -> Result<()> {
+    fixture.register_table_with_stats(
+        "default",
+        table_name,
+        vec![TableField::new(
+            "a",
+            TableDataType::Number(NumberDataType::Int64),
+        )],
+        None,
+        HashMap::new(),
+        HashMap::new(),
+        // Planner-cache hits use this option as the table snapshot identity. This test does not
+        // read an actual snapshot file.
+        BTreeMap::from([(
+            OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+            format!("planner-cache-test/{table_name}"),
+        )]),
+    )
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn planner_cache_accepts_rewrite_and_cacheable_special_functions() -> Result<()> {
+    let fixture = LiteTableContext::create().await?;
+    fixture
+        .get_settings()
+        .set_setting("enable_planner_cache".to_string(), "1".to_string())?;
+    register_planner_cache_table(&fixture, "cache_function_classification")?;
+
+    let sql = "SELECT coalesce(a, 0), ifnull(a, 0) FROM cache_function_classification";
+    let first = plan_sql(&fixture, sql).await?;
+    let second = plan_sql(&fixture, sql).await?;
+    assert!(
+        Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+        "rewrite and cacheable special functions should reuse the cached plan"
+    );
+
+    let sql = "SELECT current_user() FROM cache_function_classification";
+    let first = plan_sql(&fixture, sql).await?;
+    let second = plan_sql(&fixture, sql).await?;
+    assert!(
+        !Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+        "session-dependent special functions must not reuse a cached plan"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn planner_cache_hit_preserves_nondeterministic_result_cache_state() -> Result<()> {
+    let fixture = LiteTableContext::create().await?;
+    fixture
+        .get_settings()
+        .set_setting("enable_planner_cache".to_string(), "1".to_string())?;
+    fixture
+        .get_settings()
+        .set_setting("enable_query_result_cache".to_string(), "1".to_string())?;
+    register_planner_cache_table(&fixture, "cache_nondeterministic_function")?;
+
+    let sql = "SELECT now() FROM cache_nondeterministic_function";
+    let first = plan_sql(&fixture, sql).await?;
+    assert!(!fixture.result_cache_state().cacheable());
+
+    // A real query gets a fresh state. Reset this shared test context to model the next query.
+    fixture.result_cache_state().set_cacheable(true);
+    let second = plan_sql(&fixture, sql).await?;
+    assert!(
+        Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+        "non-deterministic builtins should reuse the cached plan"
+    );
+    assert!(
+        !fixture.result_cache_state().cacheable(),
+        "a plan-cache hit must not make a non-deterministic query result-cacheable"
+    );
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

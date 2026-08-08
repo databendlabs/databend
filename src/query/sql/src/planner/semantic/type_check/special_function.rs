@@ -38,6 +38,38 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
+const ARRAY_AGGREGATE: &str = "array_aggregate";
+const ARRAY_SORT: &str = "array_sort";
+const BASE64_DECODE_STRING: &str = "base64_decode_string";
+const COALESCE: &str = "coalesce";
+const DECODE: &str = "decode";
+const GREATEST: &str = "greatest";
+const GREATEST_IGNORE_NULLS: &str = "greatest_ignore_nulls";
+const HEX_DECODE_STRING: &str = "hex_decode_string";
+const LEAST: &str = "least";
+const LEAST_IGNORE_NULLS: &str = "least_ignore_nulls";
+const TO_VARIANT: &str = "to_variant";
+const TRY_BASE64_DECODE_STRING: &str = "try_base64_decode_string";
+const TRY_HEX_DECODE_STRING: &str = "try_hex_decode_string";
+const TRY_TO_VARIANT: &str = "try_to_variant";
+
+const PLAN_CACHEABLE_SPECIAL_FUNCTIONS: &[&str] = &[
+    COALESCE,
+    DECODE,
+    ARRAY_SORT,
+    ARRAY_AGGREGATE,
+    TO_VARIANT,
+    TRY_TO_VARIANT,
+    GREATEST,
+    LEAST,
+    GREATEST_IGNORE_NULLS,
+    LEAST_IGNORE_NULLS,
+    HEX_DECODE_STRING,
+    BASE64_DECODE_STRING,
+    TRY_HEX_DECODE_STRING,
+    TRY_BASE64_DECODE_STRING,
+];
+
 pub(super) enum SpecialFunction {
     Namespace(NamespaceFunction),
     Session(SessionFunction<'static>),
@@ -105,25 +137,31 @@ impl<'a, A> TypeChecker<'a, A> {
             Ascii::new("connection_id"),
             Ascii::new("client_session_id"),
             Ascii::new("timezone"),
-            Ascii::new("coalesce"),
-            Ascii::new("decode"),
+            Ascii::new(COALESCE),
+            Ascii::new(DECODE),
             Ascii::new("last_query_id"),
-            Ascii::new("array_sort"),
-            Ascii::new("array_aggregate"),
-            Ascii::new("to_variant"),
-            Ascii::new("try_to_variant"),
-            Ascii::new("greatest"),
-            Ascii::new("least"),
-            Ascii::new("greatest_ignore_nulls"),
-            Ascii::new("least_ignore_nulls"),
+            Ascii::new(ARRAY_SORT),
+            Ascii::new(ARRAY_AGGREGATE),
+            Ascii::new(TO_VARIANT),
+            Ascii::new(TRY_TO_VARIANT),
+            Ascii::new(GREATEST),
+            Ascii::new(LEAST),
+            Ascii::new(GREATEST_IGNORE_NULLS),
+            Ascii::new(LEAST_IGNORE_NULLS),
             Ascii::new("stream_has_data"),
             Ascii::new("getvariable"),
-            Ascii::new("hex_decode_string"),
-            Ascii::new("base64_decode_string"),
-            Ascii::new("try_hex_decode_string"),
-            Ascii::new("try_base64_decode_string"),
+            Ascii::new(HEX_DECODE_STRING),
+            Ascii::new(BASE64_DECODE_STRING),
+            Ascii::new(TRY_HEX_DECODE_STRING),
+            Ascii::new(TRY_BASE64_DECODE_STRING),
         ];
         FUNCTIONS
+    }
+
+    pub(crate) fn is_plan_cacheable_special_function(name: &str) -> bool {
+        PLAN_CACHEABLE_SPECIAL_FUNCTIONS
+            .iter()
+            .any(|candidate| candidate.eq_ignore_ascii_case(name))
     }
 }
 
@@ -206,19 +244,19 @@ impl<'a> CoreExprArena<'a> {
                         .transpose()?,
                 }
             }
-            "coalesce" => {
+            COALESCE => {
                 check_function_arity(span, func_name, args.len(), 1, None)?;
                 SpecialFunction::Coalesce {
                     args: self.lower_display_expr_args(args)?,
                 }
             }
-            "decode" => {
+            DECODE => {
                 check_function_arity(span, func_name, args.len(), 3, None)?;
                 SpecialFunction::Decode {
                     args: self.lower_display_expr_args(args)?,
                 }
             }
-            "array_sort" => {
+            ARRAY_SORT => {
                 check_function_arity(span, func_name, args.len(), 1, Some(3))?;
                 SpecialFunction::ArraySort {
                     array: self.lower_display_expr_arg(&args[0])?,
@@ -232,57 +270,57 @@ impl<'a> CoreExprArena<'a> {
                         .transpose()?,
                 }
             }
-            "array_aggregate" => {
+            ARRAY_AGGREGATE => {
                 check_function_arity(span, func_name, args.len(), 2, Some(2))?;
                 SpecialFunction::ArrayAggregate {
                     array: self.lower_display_expr_arg(&args[0])?,
                     function: self.lower_display_expr_arg(&args[1])?,
                 }
             }
-            "to_variant" => {
+            TO_VARIANT => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
                 SpecialFunction::CastToVariant {
-                    func_name: "to_variant",
+                    func_name: TO_VARIANT,
                     arg: self.lower_display_expr_arg(&args[0])?,
                     is_try: false,
                 }
             }
-            "try_to_variant" => {
+            TRY_TO_VARIANT => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
                 SpecialFunction::CastToVariant {
-                    func_name: "try_to_variant",
+                    func_name: TRY_TO_VARIANT,
                     arg: self.lower_display_expr_arg(&args[0])?,
                     is_try: true,
                 }
             }
-            "greatest" => {
+            GREATEST => {
                 check_function_arity(span, func_name, args.len(), 1, None)?;
                 SpecialFunction::GreatestOrLeast {
-                    func_name: "greatest",
+                    func_name: GREATEST,
                     args: self.lower_display_expr_args(args)?,
                     ignore_nulls: false,
                 }
             }
-            "least" => {
+            LEAST => {
                 check_function_arity(span, func_name, args.len(), 1, None)?;
                 SpecialFunction::GreatestOrLeast {
-                    func_name: "least",
+                    func_name: LEAST,
                     args: self.lower_display_expr_args(args)?,
                     ignore_nulls: false,
                 }
             }
-            "greatest_ignore_nulls" => {
+            GREATEST_IGNORE_NULLS => {
                 check_function_arity(span, func_name, args.len(), 1, None)?;
                 SpecialFunction::GreatestOrLeast {
-                    func_name: "greatest_ignore_nulls",
+                    func_name: GREATEST_IGNORE_NULLS,
                     args: self.lower_display_expr_args(args)?,
                     ignore_nulls: true,
                 }
             }
-            "least_ignore_nulls" => {
+            LEAST_IGNORE_NULLS => {
                 check_function_arity(span, func_name, args.len(), 1, None)?;
                 SpecialFunction::GreatestOrLeast {
-                    func_name: "least_ignore_nulls",
+                    func_name: LEAST_IGNORE_NULLS,
                     args: self.lower_display_expr_args(args)?,
                     ignore_nulls: true,
                 }
@@ -293,31 +331,31 @@ impl<'a> CoreExprArena<'a> {
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
             }
-            "hex_decode_string" => {
+            HEX_DECODE_STRING => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
                 SpecialFunction::DecodeString {
-                    func_name: "hex_decode_string",
+                    func_name: HEX_DECODE_STRING,
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
             }
-            "try_hex_decode_string" => {
+            TRY_HEX_DECODE_STRING => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
                 SpecialFunction::DecodeString {
-                    func_name: "try_hex_decode_string",
+                    func_name: TRY_HEX_DECODE_STRING,
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
             }
-            "base64_decode_string" => {
+            BASE64_DECODE_STRING => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
                 SpecialFunction::DecodeString {
-                    func_name: "base64_decode_string",
+                    func_name: BASE64_DECODE_STRING,
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
             }
-            "try_base64_decode_string" => {
+            TRY_BASE64_DECODE_STRING => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
                 SpecialFunction::DecodeString {
-                    func_name: "try_base64_decode_string",
+                    func_name: TRY_BASE64_DECODE_STRING,
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
             }
@@ -748,7 +786,7 @@ where A: TypeCheckAdapter
         args: &[(&str, ScalarExpr, DataType)],
         ignore_nulls: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let array_func = if name.starts_with("greatest") {
+        let array_func = if name.starts_with(GREATEST) {
             "array_max"
         } else {
             "array_min"
@@ -821,5 +859,33 @@ where A: TypeCheckAdapter
             target_type: Box::new(target_type.clone()),
         });
         Ok(Box::new((scalar, target_type)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+
+    #[test]
+    fn plan_cacheable_special_functions_are_classified_as_special_functions() {
+        let plan_cacheable_functions = PLAN_CACHEABLE_SPECIAL_FUNCTIONS
+            .iter()
+            .copied()
+            .map(Ascii::new)
+            .collect::<HashSet<_>>();
+        let special_functions = TypeChecker::<()>::all_special_functions()
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>();
+
+        assert!(
+            plan_cacheable_functions.is_subset(&special_functions),
+            "plan-cacheable functions not classified as special functions: {:?}",
+            plan_cacheable_functions
+                .difference(&special_functions)
+                .collect::<Vec<_>>()
+        );
     }
 }
