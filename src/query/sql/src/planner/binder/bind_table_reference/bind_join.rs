@@ -986,6 +986,7 @@ impl<'a> JoinConditionResolver<'a> {
 
             if Some(index) == asof_range_column {
                 non_equi_conditions.push(ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: *span,
                     func_name: ASOF_USING_RANGE_FUNC.to_string(),
                     params: vec![],

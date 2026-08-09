@@ -613,6 +613,7 @@ impl RuleEliminateSelfJoin {
         );
         for cond in equi_conditions.into_iter() {
             predicates.push(ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                 params: vec![],

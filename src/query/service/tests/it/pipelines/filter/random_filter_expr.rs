@@ -104,6 +104,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 and_args.push(child_expr);
             }
             ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "and".to_string(),
                 params: vec![],
@@ -117,6 +118,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 or_args.push(child_expr);
             }
             ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "or".to_string(),
                 params: vec![],
@@ -126,6 +128,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
         PredicateNode::Not(child) => {
             let child_expr = convert_predicate_tree_to_scalar_expr(*child, data_type);
             ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "not".to_string(),
                 params: vec![],
@@ -158,6 +161,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
             };
             let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
             ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: op.to_string(),
                 params: vec![],

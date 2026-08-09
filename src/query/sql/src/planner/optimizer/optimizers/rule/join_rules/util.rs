@@ -24,6 +24,7 @@ pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
         .iter()
         .map(|equi_condition| {
             Ok(ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "eq".to_string(),
                 params: vec![],

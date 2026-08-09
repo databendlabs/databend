@@ -1515,6 +1515,7 @@ mod tests {
         let join = Join {
             join_type: JoinType::Inner,
             non_equi_conditions: vec![ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "gt".to_string(),
                 params: vec![],

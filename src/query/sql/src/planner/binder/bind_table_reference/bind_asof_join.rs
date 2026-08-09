@@ -203,6 +203,7 @@ fn make_asof_interval_end_condition(
     func_name: &str,
 ) -> ScalarExpr {
     let compare = ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span,
         func_name: func_name.to_string(),
         params: vec![],
@@ -210,11 +211,13 @@ fn make_asof_interval_end_condition(
     });
 
     ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span,
         func_name: "if".to_string(),
         params: vec![],
         arguments: vec![
             ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span,
                 func_name: "is_not_null".to_string(),
                 params: vec![],

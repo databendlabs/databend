@@ -897,6 +897,7 @@ pub fn generate_update_list(
                 // see `cast_data_type_for_merge()`.
 
                 ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: None,
                     func_name: "if".to_string(),
                     params: vec![],
@@ -984,6 +985,7 @@ pub fn mutation_update_expr(
             };
 
             let scalar = ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "if".to_string(),
                 params: vec![],

@@ -463,6 +463,7 @@ impl InsertMultiTableInterpreter {
 
 fn and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
     ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span: None,
         func_name: "and".to_string(),
         params: vec![],
@@ -472,6 +473,7 @@ fn and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
 
 fn not(expr: ScalarExpr) -> ScalarExpr {
     ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span: None,
         func_name: "not".to_string(),
         params: vec![],

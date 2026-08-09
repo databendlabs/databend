@@ -232,12 +232,14 @@ impl CollectStatisticsOptimizer {
                                 row_level.sample_probability(stats.num_rows)?
                         {
                             let rand_expr = ScalarExpr::FunctionCall(FunctionCall {
+                                derived_from: None,
                                 span: None,
                                 func_name: "rand".to_string(),
                                 params: vec![],
                                 arguments: vec![],
                             });
                             let filter = ScalarExpr::FunctionCall(FunctionCall {
+                                derived_from: None,
                                 span: None,
                                 func_name: "lte".to_string(),
                                 params: vec![],

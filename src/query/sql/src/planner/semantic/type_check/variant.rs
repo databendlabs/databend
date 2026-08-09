@@ -376,6 +376,7 @@ where A: super::TypeCheckAdapter
                     .into();
 
                     let value = FunctionCall {
+                        derived_from: None,
                         span,
                         params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                         arguments: vec![scalar.clone()],
@@ -399,6 +400,7 @@ where A: super::TypeCheckAdapter
                     "json_object_keep_null".to_string()
                 };
                 FunctionCall {
+                    derived_from: None,
                     span,
                     params: vec![],
                     arguments: args,
@@ -413,6 +415,7 @@ where A: super::TypeCheckAdapter
                     "to_variant".to_string()
                 };
                 FunctionCall {
+                    derived_from: None,
                     span,
                     params: vec![],
                     arguments: vec![scalar.clone()],
@@ -499,6 +502,7 @@ where A: super::TypeCheckAdapter
                 };
                 table_data_type = fields_type.get(idx).unwrap().clone();
                 scalar = FunctionCall {
+                    derived_from: None,
                     span: expr_span,
                     func_name: "get".to_string(),
                     params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
@@ -513,6 +517,7 @@ where A: super::TypeCheckAdapter
             }
             table_data_type = table_data_type.wrap_nullable();
             scalar = FunctionCall {
+                derived_from: None,
                 span: path_scalar.span(),
                 func_name: "get".to_string(),
                 params: vec![],
@@ -645,6 +650,7 @@ where A: super::TypeCheckAdapter
                 let mut scalar: ScalarExpr = BoundColumnRef { span, column }.into();
                 while let Some((idx, table_data_type)) = index_with_types.pop_front() {
                     scalar = FunctionCall {
+                        derived_from: None,
                         span,
                         params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
                         arguments: vec![scalar.clone()],
@@ -764,6 +770,7 @@ where A: super::TypeCheckAdapter
 
         Ok(Box::new((
             ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "get_by_keypath".to_string(),
                 params: vec![],

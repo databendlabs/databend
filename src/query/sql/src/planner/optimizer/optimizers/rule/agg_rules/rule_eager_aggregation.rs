@@ -1228,6 +1228,7 @@ impl EagerAnalysis {
         };
 
         let multiplied_scalar = ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: "multiply".to_string(),
             params: vec![],

@@ -128,6 +128,7 @@ impl RuleNormalizeAggregateOptimizer {
 
                     let scalar = if nullable {
                         let not_null_check = ScalarExpr::FunctionCall(FunctionCall {
+                            derived_from: None,
                             span: None,
                             func_name: "is_not_null".to_string(),
                             params: vec![],
@@ -135,6 +136,7 @@ impl RuleNormalizeAggregateOptimizer {
                         });
 
                         ScalarExpr::FunctionCall(FunctionCall {
+                            derived_from: None,
                             span: None,
                             func_name: "if".to_string(),
                             params: vec![],

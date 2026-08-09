@@ -475,6 +475,7 @@ where A: TypeCheckAdapter
         };
 
         let wrap_new_arg = ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: func.span,
             func_name: "to_variant".to_string(),
             params: vec![],
@@ -484,6 +485,7 @@ where A: TypeCheckAdapter
         new_arguments[constant_arg_index] = wrap_new_arg;
 
         let new_func = ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: func.span,
             func_name: func.func_name.clone(),
             params: func.params.clone(),
@@ -732,6 +734,7 @@ where A: TypeCheckAdapter
 
         Ok(Box::new((
             FunctionCall {
+                derived_from: None,
                 span,
                 params,
                 arguments: folded_args,

@@ -361,6 +361,7 @@ impl Binder {
                     })
                     .collect::<Result<Vec<_>>>()?;
                 Ok(ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: func.span,
                     func_name: func.func_name.clone(),
                     params: func.params.clone(),

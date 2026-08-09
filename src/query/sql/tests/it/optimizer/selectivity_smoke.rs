@@ -77,6 +77,7 @@ fn comparison_expr(func_name: &str, left: ScalarExpr, right: ScalarExpr) -> Scal
 
 fn function_expr(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
     ScalarExpr::FunctionCall(ScalarFunctionCall {
+        derived_from: None,
         span: None,
         func_name: func_name.to_string(),
         params: vec![],

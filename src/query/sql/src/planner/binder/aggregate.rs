@@ -751,6 +751,7 @@ impl AggregateInfo {
         }
 
         Ok(FunctionCall {
+            derived_from: None,
             span: function.span,
             func_name: function.func_name.clone(),
             params: replaced_params,
@@ -1523,6 +1524,7 @@ mod tests {
 
     fn add_one(expr: ScalarExpr) -> ScalarExpr {
         FunctionCall {
+            derived_from: None,
             span: None,
             func_name: "plus".to_string(),
             params: vec![],

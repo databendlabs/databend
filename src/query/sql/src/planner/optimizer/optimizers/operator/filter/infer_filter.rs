@@ -690,6 +690,7 @@ impl<'a> InferFilterOptimizer<'a> {
             let parent_predicates = &self.expr_predicates[parent_index];
             for predicate in parent_predicates.iter() {
                 result.push(ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: None,
                     func_name: String::from(predicate.op.to_func_name()),
                     params: vec![],
@@ -712,6 +713,7 @@ impl<'a> InferFilterOptimizer<'a> {
                     for i in 0..equal_indexes_len {
                         for j in i + 1..equal_indexes_len {
                             result.push(ScalarExpr::FunctionCall(FunctionCall {
+                                derived_from: None,
                                 span: None,
                                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                                 params: vec![],

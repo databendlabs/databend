@@ -122,6 +122,7 @@ where A: super::TypeCheckAdapter
         let (arguments, _) = arguments_result?;
 
         let srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span,
             func_name: func_name.to_string(),
             params: vec![],
@@ -139,6 +140,7 @@ where A: super::TypeCheckAdapter
             (srf_scalar, srf_expr.data_type().clone())
         } else {
             let child_scalar = ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span,
                 func_name: "get".to_string(),
                 params: vec![Scalar::Number(NumberScalar::Int64(1))],

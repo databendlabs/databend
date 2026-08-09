@@ -766,6 +766,7 @@ impl PhysicalPlanBuilder {
                     .cloned()
                     .reduce(|lhs, rhs| {
                         ScalarExpr::FunctionCall(FunctionCall {
+                            derived_from: None,
                             span: None,
                             func_name: "and_filters".to_string(),
                             params: vec![],
@@ -973,6 +974,7 @@ impl PhysicalPlanBuilder {
 
         let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
             ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "and".to_string(),
                 params: vec![],

@@ -145,6 +145,7 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                 }
 
                 let replaced_expr: ScalarExpr = FunctionCall {
+                    derived_from: None,
                     span: func.span,
                     func_name: func.func_name.clone(),
                     params: func.params.clone(),

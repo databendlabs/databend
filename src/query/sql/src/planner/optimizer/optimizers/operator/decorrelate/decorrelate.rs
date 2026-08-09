@@ -820,6 +820,7 @@ impl SubqueryDecorrelatorOptimizer {
                                 arguments.push(*child_expr.clone());
                             }
                             let func = ScalarExpr::FunctionCall(FunctionCall {
+                                derived_from: None,
                                 span: subquery.span,
                                 func_name: "contains".to_string(),
                                 params: vec![],
@@ -835,6 +836,7 @@ impl SubqueryDecorrelatorOptimizer {
                                 value,
                             });
                             let func = ScalarExpr::FunctionCall(FunctionCall {
+                                derived_from: None,
                                 span: subquery.span,
                                 func_name: "eq".to_string(),
                                 params: vec![],
@@ -849,6 +851,7 @@ impl SubqueryDecorrelatorOptimizer {
                                     None => acc = Some(func),
                                     Some(acc) => {
                                         *acc = ScalarExpr::FunctionCall(FunctionCall {
+                                            derived_from: None,
                                             span: subquery.span,
                                             func_name: "or".to_string(),
                                             params: vec![],

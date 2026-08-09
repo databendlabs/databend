@@ -276,6 +276,7 @@ mod tests {
         let up = EvalScalar {
             items: vec![ScalarItem {
                 scalar: ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: None,
                     func_name: "is_not_null".to_string(),
                     params: vec![],
@@ -308,6 +309,7 @@ mod tests {
         let up = EvalScalar {
             items: vec![ScalarItem {
                 scalar: ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: None,
                     func_name: "is_not_null".to_string(),
                     params: vec![],
@@ -348,6 +350,7 @@ mod tests {
         let down = EvalScalar {
             items: vec![ScalarItem {
                 scalar: ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: None,
                     func_name: "is_not_null".to_string(),
                     params: vec![],

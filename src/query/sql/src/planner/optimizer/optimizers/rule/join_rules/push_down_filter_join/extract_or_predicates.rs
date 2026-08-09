@@ -145,6 +145,7 @@ fn make_and_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
         return scalars.pop().unwrap();
     }
     FunctionCall {
+        derived_from: None,
         span: None,
         func_name: "and_filters".to_string(),
         params: vec![],
@@ -159,6 +160,7 @@ fn make_or_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
         return scalars.pop().unwrap();
     }
     FunctionCall {
+        derived_from: None,
         span: None,
         func_name: "or_filters".to_string(),
         params: vec![],
