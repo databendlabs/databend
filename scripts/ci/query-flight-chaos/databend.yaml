@@ -104,6 +104,10 @@ data:
     name = "root"
     auth_type = "no_password"
 
+    [query.settings]
+    flight_connection_max_retry_times = 10
+    flight_connection_retry_interval = 1
+
     [log]
     [log.stderr]
     on = true
@@ -166,6 +170,9 @@ spec:
               mountPath: /etc/databend
             - name: data
               mountPath: /var/lib/databend
+            - name: tpch-data
+              mountPath: /tmp/tpch_1
+              readOnly: true
           readinessProbe:
             tcpSocket:
               port: 3307
@@ -182,5 +189,13 @@ spec:
         - name: query-config
           configMap:
             name: query-config
+        # All query pods run on one Kind node; shared paths let remote fragments
+        # read the same table files and generated TPC-H input.
         - name: data
-          emptyDir: {}
+          hostPath:
+            path: /var/lib/databend-chaos/data
+            type: DirectoryOrCreate
+        - name: tpch-data
+          hostPath:
+            path: /var/lib/databend-chaos/tpch_1
+            type: DirectoryOrCreate

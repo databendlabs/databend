@@ -15,6 +15,8 @@ readonly CLUSTER_NAME="databend-query-chaos-${GITHUB_RUN_ID:-local}-${GITHUB_RUN
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 readonly LOG_DIR="${REPO_DIR}/.databend/query-flight-chaos"
+readonly TPCH_DATA_DIR="/tmp/tpch_1"
+readonly TPCH_NODE_DATA_DIR="/var/lib/databend-chaos/tpch_1"
 
 tools_dir="$(mktemp -d)"
 build_context="$(mktemp -d)"
@@ -42,7 +44,7 @@ cleanup() {
 	fi
 	kind delete cluster --name "${CLUSTER_NAME}"
 	docker image rm "${IMAGE}" >/dev/null 2>&1 || true
-	rm -rf -- "${tools_dir}" "${build_context}"
+	rm -rf -- "${tools_dir}" "${build_context}" "${TPCH_DATA_DIR}"
 	exit "${status}"
 }
 
@@ -105,10 +107,34 @@ kubectl -n "${NAMESPACE}" label pod databend-query-0 chaos-role=coordinator --ov
 kubectl -n "${NAMESPACE}" label pod databend-query-1 databend-query-2 chaos-role=worker --overwrite
 
 mkdir -p "${LOG_DIR}"
-kubectl -n "${NAMESPACE}" port-forward pod/databend-query-0 3307:3307 \
+kubectl -n "${NAMESPACE}" port-forward pod/databend-query-0 3307:3307 8000:8000 \
 	>"${LOG_DIR}/port-forward.log" 2>&1 &
 port_forward_pid=$!
 
+http_ready=false
+for _ in {1..60}; do
+	if curl --fail --silent http://127.0.0.1:8000/health >/dev/null; then
+		http_ready=true
+		break
+	fi
+	sleep 1
+done
+if [[ "${http_ready}" != "true" ]]; then
+	echo "Databend HTTP handler did not become ready" >&2
+	exit 1
+fi
+
+rm -rf -- "${TPCH_DATA_DIR}"
+python "${REPO_DIR}/tests/sqllogictests/scripts/prepare_duckdb_tpch_data.py" 1
+docker exec "${CLUSTER_NAME}-control-plane" mkdir -p "${TPCH_NODE_DATA_DIR}"
+docker cp "${TPCH_DATA_DIR}/." \
+	"${CLUSTER_NAME}-control-plane:${TPCH_NODE_DATA_DIR}/"
+TPCH_SKIP_DATA_GENERATION=1 \
+	bash "${REPO_DIR}/tests/sqllogictests/scripts/prepare_tpch_data.sh" tpch_test 1
+
 python "${REPO_DIR}/tests/query-flight-chaos/test_reconnect.py" \
 	--namespace "${NAMESPACE}" \
-	--network-chaos "${SCRIPT_DIR}/network-chaos.yaml"
+	--network-chaos "${SCRIPT_DIR}/network-chaos.yaml" \
+	--sqllogictests "${REPO_DIR}/target/${BUILD_PROFILE}/databend-sqllogictests" \
+	--tpch-suite "${REPO_DIR}/tests/sqllogictests/suites/tpch/queries.test" \
+	--operation-log "${LOG_DIR}/operations.log"

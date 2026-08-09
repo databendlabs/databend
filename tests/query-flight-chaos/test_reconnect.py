@@ -2,12 +2,15 @@
 
 import argparse
 import queue
+import random
 import subprocess
 import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +21,9 @@ MYSQL_PORT = 3307
 QUERY_START_TIMEOUT = 30
 QUERY_RESULT_TIMEOUT = 180
 KEEPALIVE_DETECTION_TIMEOUT = 10
+TPCH_REPLACEMENT_TIMEOUT = 15
+MIN_TPCH_CHAOS_OPERATIONS = 3
+MAX_TPCH_CHAOS_OPERATIONS = 12
 POLL_INTERVAL = 0.1
 WORKER_PODS = ("databend-query-1", "databend-query-2")
 
@@ -31,6 +37,22 @@ def run(command: list[str], *, check: bool = True) -> subprocess.CompletedProces
 class QueryIdentity:
     query_id: str
     connection_id: int
+
+
+class ChaosOperationLog:
+    def __init__(self, path: Path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._file = path.open("w", encoding="utf-8", buffering=1)
+        self._lock = threading.Lock()
+
+    def record(self, message: str) -> None:
+        line = f"{datetime.now(UTC).isoformat()} {message}"
+        with self._lock:
+            print(f"[cluster-chaos] {line}", flush=True)
+            self._file.write(f"{line}\n")
+
+    def close(self) -> None:
+        self._file.close()
 
 
 class QueryTask:
@@ -107,7 +129,7 @@ class NetworkFault:
             check=check,
         )
 
-    def _apply_partition(self) -> None:
+    def apply_partition(self) -> None:
         if self._active:
             raise AssertionError("network fault is already active")
         run(["kubectl", "apply", "-f", str(self._manifest)])
@@ -128,7 +150,7 @@ class NetworkFault:
             self.recover()
             raise
 
-    def _reset_connections(self) -> None:
+    def reset_connections(self) -> None:
         # A partition blocks retries but does not reset established TCP streams. Put
         # the RST rule first so the active Flight transports fail immediately.
         for pod in WORKER_PODS:
@@ -139,7 +161,7 @@ class NetworkFault:
                 "-j REJECT --reject-with tcp-reset",
             )
 
-    def _clear_resets(self) -> None:
+    def clear_resets(self) -> None:
         rule = (
             "iptables -D OUTPUT "
             f"-p tcp -d {self._coordinator_ip} --dport 9090 "
@@ -149,7 +171,7 @@ class NetworkFault:
             self._exec_worker(pod, f"while {rule} 2>/dev/null; do :; done", check=False)
 
     def recover(self) -> None:
-        self._clear_resets()
+        self.clear_resets()
         if self._active:
             run(
                 [
@@ -166,11 +188,11 @@ class NetworkFault:
 
     @contextmanager
     def reset_then_partition(self) -> Iterator[None]:
-        self._apply_partition()
+        self.apply_partition()
         try:
-            self._reset_connections()
+            self.reset_connections()
             time.sleep(1)
-            self._clear_resets()
+            self.clear_resets()
             yield
         finally:
             self.recover()
@@ -178,12 +200,12 @@ class NetworkFault:
     @contextmanager
     def reset_for_retry(self) -> Iterator[None]:
         try:
-            self._reset_connections()
+            self.reset_connections()
             time.sleep(1)
-            self._clear_resets()
+            self.clear_resets()
             yield
         finally:
-            self._clear_resets()
+            self.clear_resets()
 
     @contextmanager
     def keepalive_partition(self) -> Iterator[None]:
@@ -194,7 +216,7 @@ class NetworkFault:
             for pod in WORKER_PODS:
                 self._exec_worker(pod, "kill -STOP 1", container="query")
                 paused.append(pod)
-            self._apply_partition()
+            self.apply_partition()
             yield
         finally:
             try:
@@ -406,6 +428,206 @@ def wait_for_replacement_connections(
     )
 
 
+def active_workload_query(cursor: Any) -> tuple[str, str] | None:
+    cursor.execute(
+        "SELECT current_query_id, extra_info FROM system.processes "
+        "WHERE extra_info NOT LIKE '%system.processes%' LIMIT 1"
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    sql = " ".join(str(row[1]).split())[:240]
+    return str(row[0]), sql
+
+
+def format_endpoints(endpoints: dict[str, set[str]]) -> str:
+    return " ".join(
+        f"{pod}=[{','.join(sorted(endpoints[pod]))}]" for pod in WORKER_PODS
+    )
+
+
+class TpchChaosInjector:
+    def __init__(
+        self,
+        namespace: str,
+        coordinator_ip: str,
+        fault: NetworkFault,
+        stop: threading.Event,
+        operations: ChaosOperationLog,
+    ):
+        self._namespace = namespace
+        self._coordinator_ip = coordinator_ip
+        self._fault = fault
+        self._stop = stop
+        self._operations = operations
+        self._random = random.SystemRandom()
+        self._modes: list[str] = []
+        self.attempted = 0
+        self.confirmed = 0
+        self.error: Exception | None = None
+
+    def _next_mode(self) -> str:
+        if not self._modes:
+            self._modes = ["rst", "rst+partition"]
+            self._random.shuffle(self._modes)
+        return self._modes.pop()
+
+    def _wait_for_workload_transport(self, cursor: Any) -> bool:
+        while not self._stop.is_set():
+            if active_workload_query(cursor) is not None:
+                endpoints = flight_endpoints(self._namespace, self._coordinator_ip)
+                if all(endpoints[pod] for pod in WORKER_PODS):
+                    return True
+            self._stop.wait(POLL_INTERVAL)
+        return False
+
+    def _wait_for_disconnect(
+        self, before: dict[str, set[str]], timeout: float
+    ) -> dict[str, set[str]] | None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline and not self._stop.is_set():
+            current = flight_endpoints(self._namespace, self._coordinator_ip)
+            removed = {pod: before[pod] - current[pod] for pod in WORKER_PODS}
+            if all(removed[pod] for pod in WORKER_PODS):
+                return removed
+            self._stop.wait(POLL_INTERVAL)
+        return None
+
+    def _wait_for_replacement(
+        self, before: dict[str, set[str]]
+    ) -> dict[str, set[str]] | None:
+        deadline = time.monotonic() + TPCH_REPLACEMENT_TIMEOUT
+        while time.monotonic() < deadline and not self._stop.is_set():
+            current = flight_endpoints(self._namespace, self._coordinator_ip)
+            replacements = {pod: current[pod] - before[pod] for pod in WORKER_PODS}
+            if all(replacements[pod] for pod in WORKER_PODS):
+                return replacements
+            self._stop.wait(POLL_INTERVAL)
+        return None
+
+    def _inject(
+        self,
+        operation: int,
+        mode: str,
+        before: dict[str, set[str]],
+        rst_timeout: float,
+        partition_duration: float,
+    ) -> None:
+        partition_applied = False
+        removed: dict[str, set[str]] | None = None
+        try:
+            if mode == "rst+partition":
+                self._fault.apply_partition()
+                partition_applied = True
+                self._operations.record(f"operation={operation} partition=applied")
+
+            self._fault.reset_connections()
+            self._operations.record(f"operation={operation} rst=applied")
+            removed = self._wait_for_disconnect(before, rst_timeout)
+        finally:
+            self._fault.clear_resets()
+            self._operations.record(f"operation={operation} rst=removed")
+            if partition_applied:
+                if removed is not None and not self._stop.is_set():
+                    self._operations.record(
+                        f"operation={operation} "
+                        f"partition_hold={partition_duration:.3f}s"
+                    )
+                    self._stop.wait(partition_duration)
+                self._fault.recover()
+                self._operations.record(f"operation={operation} partition=recovered")
+
+        if removed is None:
+            self._operations.record(
+                f"operation={operation} result=no_old_connection_closed"
+            )
+            return
+
+        self._operations.record(
+            f"operation={operation} old_connections_closed "
+            f"{format_endpoints(removed)}"
+        )
+        replacements = self._wait_for_replacement(before)
+        if replacements is None:
+            self._operations.record(
+                f"operation={operation} result=no_replacement_observed"
+            )
+            return
+
+        self.confirmed += 1
+        self._operations.record(
+            f"operation={operation} result=reconnected "
+            f"{format_endpoints(replacements)}"
+        )
+
+    def run(self, workload_started: threading.Event) -> None:
+        connection = None
+        cursor = None
+        try:
+            connection = connect_mysql()
+            cursor = connection.cursor()
+            while not workload_started.wait(POLL_INTERVAL):
+                if self._stop.is_set():
+                    return
+            self._operations.record("injector=started")
+
+            while (
+                not self._stop.is_set()
+                and self.attempted < MAX_TPCH_CHAOS_OPERATIONS
+            ):
+                if not self._wait_for_workload_transport(cursor):
+                    return
+
+                delay = self._random.uniform(0.5, 3.0)
+                if self._stop.wait(delay):
+                    return
+                active_query = active_workload_query(cursor)
+                if active_query is None:
+                    continue
+
+                before = flight_endpoints(self._namespace, self._coordinator_ip)
+                if not all(before[pod] for pod in WORKER_PODS):
+                    continue
+
+                self.attempted += 1
+                mode = self._next_mode()
+                rst_timeout = self._random.uniform(0.8, 1.5)
+                partition_duration = (
+                    self._random.uniform(0.5, 2.5) if mode == "rst+partition" else 0
+                )
+                query_id, sql = active_query
+                self._operations.record(
+                    f"operation={self.attempted} mode={mode} delay={delay:.3f}s "
+                    f"rst_timeout={rst_timeout:.3f}s "
+                    f"partition_duration={partition_duration:.3f}s "
+                    f"query_id={query_id} sql={sql!r} "
+                    f"before={format_endpoints(before)}"
+                )
+                self._inject(
+                    self.attempted,
+                    mode,
+                    before,
+                    rst_timeout,
+                    partition_duration,
+                )
+            if self.attempted == MAX_TPCH_CHAOS_OPERATIONS:
+                self._operations.record(
+                    f"injector=completed max_operations={self.attempted}"
+                )
+        except Exception as error:
+            self.error = error
+            self._operations.record(
+                f"injector=failed error={type(error).__name__}: {error}"
+            )
+            self._stop.set()
+        finally:
+            self._fault.recover()
+            if cursor is not None:
+                cursor.close()
+            if connection is not None:
+                connection.close()
+
+
 class ReconnectHarness:
     def __init__(
         self,
@@ -584,10 +806,98 @@ def test_keepalive_reconnect(harness: ReconnectHarness) -> None:
     assert rows == [(100003, 1000000000)], rows
 
 
+def test_tpch_queries(
+    sqllogictests: Path,
+    suite: Path,
+    operation_log: Path,
+    namespace: str,
+    coordinator_ip: str,
+    fault: NetworkFault,
+) -> None:
+    # 1. Run the complete TPC-H result suite through one MySQL session.
+    # 2. Wait for an active query and its worker Flight sockets before each fault.
+    # 3. Randomly reset the sockets, sometimes holding reconnects behind a partition.
+    # 4. Record every action and require several observed physical replacements.
+    # 5. Let sqllogictest verify every query result for loss or replay.
+    print("=== complete TPC-H queries under random network faults ===", flush=True)
+    operations = ChaosOperationLog(operation_log)
+    stop = threading.Event()
+    workload_started = threading.Event()
+    injector = TpchChaosInjector(
+        namespace, coordinator_ip, fault, stop, operations
+    )
+    command = [
+        str(sqllogictests),
+        "--handlers",
+        "mysql",
+        "--run",
+        str(suite),
+        "--parallel",
+        "1",
+    ]
+    operations.record(f"workload=starting command={' '.join(command)}")
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    injector_thread = threading.Thread(
+        target=injector.run,
+        args=(workload_started,),
+        name="tpch-chaos-injector",
+        daemon=True,
+    )
+    injector_thread.start()
+
+    try:
+        assert process.stdout is not None
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            if "Running MySQL test for file:" in line:
+                workload_started.set()
+        return_code = process.wait()
+    except BaseException:
+        process.terminate()
+        process.wait(timeout=10)
+        raise
+    finally:
+        stop.set()
+        workload_started.set()
+        injector_thread.join(timeout=30)
+        fault.recover()
+
+    if injector_thread.is_alive():
+        operations.record("injector=failed error=did not stop within 30 seconds")
+        raise AssertionError("TPC-H chaos injector did not stop")
+
+    operations.record(
+        f"workload=finished exit_code={return_code} "
+        f"attempted={injector.attempted} confirmed={injector.confirmed}"
+    )
+    operations.close()
+
+    if return_code != 0:
+        raise AssertionError(f"TPC-H sqllogictest exited with status {return_code}")
+    if injector.error is not None:
+        raise AssertionError(
+            f"TPC-H chaos injector failed: {injector.error}"
+        ) from injector.error
+    if injector.confirmed < MIN_TPCH_CHAOS_OPERATIONS:
+        raise AssertionError(
+            "TPC-H workload completed without enough confirmed reconnects: "
+            f"{injector.confirmed} < {MIN_TPCH_CHAOS_OPERATIONS}"
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--namespace", required=True)
     parser.add_argument("--network-chaos", required=True, type=Path)
+    parser.add_argument("--sqllogictests", required=True, type=Path)
+    parser.add_argument("--tpch-suite", required=True, type=Path)
+    parser.add_argument("--operation-log", required=True, type=Path)
     args = parser.parse_args()
 
     coordinator_ip = subprocess.check_output(
@@ -626,6 +936,15 @@ def main() -> None:
         test_limit_early_stop(harness)
         test_keepalive_reconnect(harness)
         test_kill_during_reconnect(harness)
+        test_tpch_queries(
+            args.sqllogictests,
+            args.tpch_suite,
+            args.operation_log,
+            args.namespace,
+            coordinator_ip,
+            fault,
+        )
+        harness.assert_healthy()
     finally:
         fault.recover()
         control_cursor.close()
