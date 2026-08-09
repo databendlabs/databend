@@ -386,6 +386,7 @@ impl InsertInterpreter {
             keys: hash_keys,
             ignore_exchange: false,
             allow_adjust_parallelism: true,
+            destination_parallelism: None,
         });
         Ok((exchange, true))
     }
