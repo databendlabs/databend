@@ -1030,6 +1030,7 @@ impl AggIndexRewriter {
                                 value: lower_val.clone(),
                             });
                             let pred = ScalarExpr::FunctionCall(FunctionCall {
+                                derived_from: None,
                                 span: None,
                                 func_name: "eq".to_string(),
                                 params: vec![],
@@ -1046,6 +1047,7 @@ impl AggIndexRewriter {
                             value: lower_val,
                         });
                         let pred = ScalarExpr::FunctionCall(FunctionCall {
+                            derived_from: None,
                             span: None,
                             func_name: func_name.to_string(),
                             params: vec![],
@@ -1059,6 +1061,7 @@ impl AggIndexRewriter {
                             value: upper_val,
                         });
                         let pred = ScalarExpr::FunctionCall(FunctionCall {
+                            derived_from: None,
                             span: None,
                             func_name: func_name.to_string(),
                             params: vec![],

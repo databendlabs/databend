@@ -549,6 +549,7 @@ fn test_empty_or_arguments() -> anyhow::Result<()> {
     // Since ExprBuilder doesn't directly support creating an empty OR function call,
     // we'll create it manually
     let or_expr = ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span: None,
         func_name: "or".to_string(),
         params: vec![],
@@ -596,6 +597,7 @@ fn test_single_or_argument() -> anyhow::Result<()> {
     // Since ExprBuilder doesn't directly support creating an OR function call with a single argument,
     // we'll create it manually
     let or_expr = ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span: None,
         func_name: "or".to_string(),
         params: vec![],
@@ -819,6 +821,7 @@ fn test_normalize_predicate_scalar_boundary() -> anyhow::Result<()> {
     // Since ExprBuilder doesn't directly support creating an AND function call with a single argument,
     // we'll create it manually
     let and_expr = ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span: None,
         func_name: "and".to_string(),
         params: vec![],

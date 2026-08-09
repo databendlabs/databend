@@ -464,6 +464,7 @@ mod tests {
         let stats = derive(
             vec![ScalarItem {
                 scalar: ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: None,
                     func_name: "plus".to_string(),
                     params: vec![],

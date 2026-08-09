@@ -522,6 +522,7 @@ impl SubqueryDecorrelatorOptimizer {
                 {
                     // convert count aggregate function to `if(count() is not null, count(), 0)`
                     let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
+                        derived_from: None,
                         span: subquery.span,
                         func_name: "is_not_null".to_string(),
                         params: vec![],
@@ -543,6 +544,7 @@ impl SubqueryDecorrelatorOptimizer {
                         span: subquery.span,
                         is_try: true,
                         argument: Box::new(ScalarExpr::FunctionCall(FunctionCall {
+                            derived_from: None,
                             span: subquery.span,
                             func_name: "if".to_string(),
                             params: vec![],
@@ -556,10 +558,12 @@ impl SubqueryDecorrelatorOptimizer {
                     // Not exists subquery should be rewritten to `not(is_true(column_ref))`
                     // not null mark value will consider as:  not [null] ---> not [false] ---> true
                     ScalarExpr::FunctionCall(FunctionCall {
+                        derived_from: None,
                         span: subquery.span,
                         func_name: "not".to_string(),
                         params: vec![],
                         arguments: vec![ScalarExpr::FunctionCall(FunctionCall {
+                            derived_from: None,
                             span: subquery.span,
                             func_name: "is_true".to_string(),
                             params: vec![],
@@ -569,6 +573,7 @@ impl SubqueryDecorrelatorOptimizer {
                 } else if subquery.typ == SubqueryType::Exists {
                     // null value will consider as false
                     ScalarExpr::FunctionCall(FunctionCall {
+                        derived_from: None,
                         span: subquery.span,
                         func_name: "is_true".to_string(),
                         params: vec![],
@@ -641,6 +646,7 @@ impl SubqueryDecorrelatorOptimizer {
                 };
 
                 let compare = FunctionCall {
+                    derived_from: None,
                     span: subquery.span,
                     func_name: if subquery.typ == SubqueryType::Exists {
                         "eq".to_string()

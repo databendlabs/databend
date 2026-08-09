@@ -2037,6 +2037,7 @@ mod tests {
 
     fn plus(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
         FunctionCall {
+            derived_from: None,
             span: None,
             func_name: "plus".to_string(),
             params: vec![],

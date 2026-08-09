@@ -202,11 +202,13 @@ impl AddStreamColumn {
             };
 
             let new_stream_column_scalar_expr = ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "if".to_string(),
                 params: vec![],
                 arguments: vec![
                     ScalarExpr::FunctionCall(FunctionCall {
+                        derived_from: None,
                         span: None,
                         func_name: "is_not_null".to_string(),
                         params: vec![],

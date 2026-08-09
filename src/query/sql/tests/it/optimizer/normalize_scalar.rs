@@ -95,6 +95,7 @@ fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> Scala
         RawExpr::FunctionCall {
             name, args, params, ..
         } => ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: name.clone(),
             params: params.clone(),

@@ -126,6 +126,7 @@ impl PullUpFilterOptimizer {
         if left_need_pull_up && right_need_pull_up {
             for condition in std::mem::take(&mut join.equi_conditions) {
                 let predicate = ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: None,
                     func_name: "eq".to_string(),
                     params: vec![],

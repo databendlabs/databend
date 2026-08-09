@@ -89,6 +89,7 @@ fn flatten_conjuncts(predicate: &ScalarExpr) -> Vec<ScalarExpr> {
 fn build_conjunction(predicates: Vec<ScalarExpr>) -> Option<ScalarExpr> {
     predicates.into_iter().reduce(|acc, predicate| {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: Span::None,
             func_name: "and".to_string(),
             params: vec![],
@@ -100,6 +101,7 @@ fn build_conjunction(predicates: Vec<ScalarExpr>) -> Option<ScalarExpr> {
 fn build_disjunction(predicates: Vec<ScalarExpr>) -> Option<ScalarExpr> {
     predicates.into_iter().reduce(|acc, predicate| {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: Span::None,
             func_name: "or".to_string(),
             params: vec![],
@@ -210,6 +212,7 @@ impl CTEFilterPushdownOptimizer {
                         filter.predicates[0].clone(),
                         |acc, pred| {
                             ScalarExpr::FunctionCall(FunctionCall {
+                                derived_from: None,
                                 span: Span::None,
                                 func_name: "and".to_string(),
                                 params: vec![],
@@ -342,6 +345,7 @@ mod tests {
 
     fn eq_string(index: usize, table_index: usize, name: &str, value: &str) -> ScalarExpr {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: Span::None,
             func_name: "eq".to_string(),
             params: vec![],
@@ -365,6 +369,7 @@ mod tests {
         right_name: &str,
     ) -> ScalarExpr {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: Span::None,
             func_name: "eq".to_string(),
             params: vec![],
@@ -380,6 +385,7 @@ mod tests {
             .into_iter()
             .reduce(|acc, arg| {
                 ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: Span::None,
                     func_name: "and".to_string(),
                     params: vec![],
@@ -394,6 +400,7 @@ mod tests {
             .into_iter()
             .reduce(|acc, arg| {
                 ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: Span::None,
                     func_name: "or".to_string(),
                     params: vec![],

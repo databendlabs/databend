@@ -159,6 +159,22 @@ impl ScalarExpr {
         )
     }
 
+    /// If this expression was derived by an optimizer rule, return the name
+    /// of the rule that derived it. See `FunctionCall::derived_from`.
+    pub fn derived_from(&self) -> Option<&'static str> {
+        match self {
+            ScalarExpr::FunctionCall(func) => func.derived_from,
+            _ => None,
+        }
+    }
+
+    /// Whether this expression was derived by an optimizer rule rather than
+    /// written in the query. Derived expressions are semantically redundant
+    /// and must be evaluated in non-throwing mode.
+    pub fn is_derived(&self) -> bool {
+        self.derived_from().is_some()
+    }
+
     pub fn data_type(&self) -> Result<DataType> {
         match self {
             ScalarExpr::BoundColumnRef(column) => Ok((*column.column.data_type).clone()),
@@ -998,6 +1014,7 @@ impl SubqueryComparisonOp {
                 }))
             }
             return FunctionCall {
+                derived_from: None,
                 span,
                 func_name: "like".to_string(),
                 params: vec![],
@@ -1005,6 +1022,7 @@ impl SubqueryComparisonOp {
             };
         }
         FunctionCall {
+            derived_from: None,
             span,
             func_name: self.to_func_name().to_string(),
             params: vec![],
@@ -1160,6 +1178,29 @@ pub struct FunctionCall {
     pub func_name: String,
     pub params: Vec<Scalar>,
     pub arguments: Vec<ScalarExpr>,
+    /// Provenance of an optimizer-derived expression: the name of the rule
+    /// that derived it (e.g. `Some("null_addition")`), or `None` for
+    /// expressions coming from the query itself.
+    ///
+    /// Derived predicates are semantically redundant: rows failing them would
+    /// be discarded by the originating operator anyway. Therefore they must
+    /// never introduce new evaluation errors (e.g. a derived
+    /// `is_not_null(a / b)` must not fail on `b = 0` when another conjunct
+    /// would have removed that row), and downstream consumers should evaluate
+    /// them in non-throwing mode.
+    ///
+    /// Excluded from Hash/PartialEq (like `span`): provenance is metadata,
+    /// not expression identity, so a derived expression and its non-derived
+    /// counterpart remain interchangeable in the memo.
+    #[educe(Hash(ignore), PartialEq(ignore))]
+    pub derived_from: Option<&'static str>,
+}
+
+impl FunctionCall {
+    /// Whether this expression was derived by an optimizer rule.
+    pub fn is_derived(&self) -> bool {
+        self.derived_from.is_some()
+    }
 }
 
 #[derive(Clone, Debug, Educe)]

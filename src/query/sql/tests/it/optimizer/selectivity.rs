@@ -220,6 +220,7 @@ fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> Scala
         RawExpr::FunctionCall {
             name, args, params, ..
         } => ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: name.clone(),
             params: params.clone(),
@@ -698,6 +699,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         number_stats.clone(),
     )?;
     let typed_number_predicate = ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span: None,
         func_name: ComparisonOp::Equal.to_func_name().to_string(),
         params: vec![],
@@ -974,6 +976,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     };
     let float_predicate = |op: ComparisonOp, value| {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: op.to_func_name().to_string(),
             params: vec![],

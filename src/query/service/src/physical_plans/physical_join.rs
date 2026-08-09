@@ -223,6 +223,7 @@ impl PhysicalPlanBuilder {
                 .cloned()
                 .chain(join.equi_conditions.iter().cloned().map(|condition| {
                     FunctionCall {
+                        derived_from: None,
                         span: condition.left.span(),
                         func_name: "eq".to_string(),
                         params: vec![],

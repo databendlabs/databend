@@ -425,6 +425,7 @@ impl Binder {
                 let mut items = Vec::with_capacity(fields.len());
                 for (i, field) in fields.into_iter().enumerate() {
                     let field_expr = ScalarExpr::FunctionCall(FunctionCall {
+                        derived_from: None,
                         span: *span,
                         func_name: "get".to_string(),
                         params: vec![Scalar::Number(NumberScalar::Int64((i + 1) as i64))],

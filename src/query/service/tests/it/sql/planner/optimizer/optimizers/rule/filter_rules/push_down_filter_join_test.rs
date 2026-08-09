@@ -214,12 +214,14 @@ fn normalize_string(s: &str) -> String {
 
 fn is_null(expr: ScalarExpr) -> ScalarExpr {
     let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span: None,
         func_name: "is_not_null".to_string(),
         params: vec![],
         arguments: vec![expr],
     });
     ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span: None,
         func_name: "not".to_string(),
         params: vec![],

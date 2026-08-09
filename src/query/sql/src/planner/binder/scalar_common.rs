@@ -215,6 +215,7 @@ mod tests {
 
     fn and(lhs: ScalarExpr, rhs: ScalarExpr) -> ScalarExpr {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: "and".to_string(),
             params: vec![],
@@ -235,6 +236,7 @@ mod tests {
     #[test]
     fn test_conjunctions_handles_and_filters() {
         let expr = ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: "and_filters".to_string(),
             params: vec![],
@@ -348,6 +350,7 @@ fn fold_or_arguments(iter: impl Iterator<Item = ScalarExpr>) -> ScalarExpr {
         .into(),
         |acc, arg| {
             FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "or".to_string(),
                 params: vec![],

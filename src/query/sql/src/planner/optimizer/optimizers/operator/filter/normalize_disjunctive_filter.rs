@@ -111,6 +111,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
         PredicateScalar::And(args) => {
             assert!(args.len() >= 2);
             ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "and_filters".to_string(),
                 params: vec![],
@@ -120,6 +121,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
         PredicateScalar::Or(args) => {
             assert!(args.len() >= 2);
             ScalarExpr::FunctionCall(FunctionCall {
+                derived_from: None,
                 span: None,
                 func_name: "or_filters".to_string(),
                 params: vec![],
@@ -153,6 +155,7 @@ mod tests {
 
     fn binary_filter(func_name: &str, lhs: ScalarExpr, rhs: ScalarExpr) -> ScalarExpr {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: func_name.to_string(),
             params: vec![],

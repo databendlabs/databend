@@ -117,6 +117,7 @@ pub fn create_table_bound_column_ref(
 /// Creates a column reference with the given name
 pub fn create_column_function_call(name: &str) -> ScalarExpr {
     ScalarExpr::FunctionCall(FunctionCall {
+        derived_from: None,
         span: None,
         func_name: "column".to_string(),
         params: vec![],
@@ -450,6 +451,7 @@ impl ExprBuilder {
     /// Create an AND expression
     pub fn and(&self, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: "and".to_string(),
             params: vec![],
@@ -460,6 +462,7 @@ impl ExprBuilder {
     /// Create an OR expression
     pub fn or(&self, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: "or".to_string(),
             params: vec![],
@@ -471,6 +474,7 @@ impl ExprBuilder {
     pub fn comparison(&self, left: ScalarExpr, right: ScalarExpr, op: ComparisonOp) -> ScalarExpr {
         let func_name = op.to_func_name().to_string();
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name,
             arguments: vec![left, right],
@@ -486,6 +490,7 @@ impl ExprBuilder {
         else_expr: ScalarExpr,
     ) -> ScalarExpr {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: "if".to_string(),
             arguments: vec![condition, then_expr, else_expr],

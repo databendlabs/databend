@@ -182,6 +182,7 @@ mod tests {
 
     fn function_call(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
         ScalarExpr::FunctionCall(FunctionCall {
+            derived_from: None,
             span: None,
             func_name: func_name.to_string(),
             params: vec![],

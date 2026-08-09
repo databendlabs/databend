@@ -92,6 +92,7 @@ impl SubqueryDecorrelatorOptimizer {
                     .map(|arg| self.flatten_scalar(arg, correlated_columns, derived_columns))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(ScalarExpr::FunctionCall(FunctionCall {
+                    derived_from: None,
                     span: func.span,
                     func_name: func.func_name.clone(),
                     params: func.params.clone(),

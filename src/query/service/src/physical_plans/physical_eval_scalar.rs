@@ -396,6 +396,7 @@ impl PhysicalPlanBuilder {
                     }
 
                     srf_item.scalar = ScalarExpr::FunctionCall(FunctionCall {
+                        derived_from: None,
                         span: srf_func.span,
                         func_name: srf_func.func_name.clone(),
                         params: visitor.params.into_iter().collect::<Vec<_>>(),

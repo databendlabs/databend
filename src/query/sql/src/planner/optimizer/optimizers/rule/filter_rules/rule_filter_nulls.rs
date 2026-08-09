@@ -183,6 +183,10 @@ fn join_key_null_filter(key: &ScalarExpr) -> ScalarExpr {
         func_name: "is_not_null".to_string(),
         params: vec![],
         arguments: vec![key.clone()],
+        // Derived from the join condition: rows violating this predicate
+        // would be dropped by the join anyway, so it must be evaluated in
+        // non-throwing mode.
+        derived_from: Some("filter_nulls"),
     })
 }
 
