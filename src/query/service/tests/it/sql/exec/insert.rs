@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use chrono::Duration;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_sql::ColumnBindingBuilder;
@@ -27,11 +28,11 @@ use databend_query::interpreters::build_insert_select_physical_plan;
 use databend_query::physical_plans::ConstantTableScan;
 use databend_query::physical_plans::DistributedInsertSelect;
 use databend_query::physical_plans::Exchange;
-use databend_query::physical_plans::PaimonWritePrepare;
 use databend_query::physical_plans::PaimonWriteRoute;
 use databend_query::physical_plans::PhysicalPlan;
 use databend_query::physical_plans::PhysicalPlanCast;
 use databend_query::physical_plans::PhysicalPlanMeta;
+use databend_query::physical_plans::TableWritePrepare;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use paimon::Catalog;
 use paimon::catalog::Identifier;
@@ -124,6 +125,22 @@ fn wrap_with_merge_exchange(input: PhysicalPlan) -> PhysicalPlan {
     })
 }
 
+fn wrap_with_global_shuffle(input: PhysicalPlan) -> PhysicalPlan {
+    PhysicalPlan::new(Exchange {
+        input,
+        kind: FragmentKind::GlobalShuffle,
+        keys: vec![RemoteExpr::ColumnRef {
+            span: None,
+            id: 0,
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: "partition_key".to_string(),
+        }],
+        allow_adjust_parallelism: true,
+        ignore_exchange: false,
+        meta: PhysicalPlanMeta::new("Exchange"),
+    })
+}
+
 fn assert_pk_write_route_shape(plan: &PhysicalPlan) {
     let plan_text = format_plan(plan);
     assert!(
@@ -158,7 +175,7 @@ fn assert_pk_write_route_shape(plan: &PhysicalPlan) {
     let route = PaimonWriteRoute::from_physical_plan(&shuffle.input)
         .expect("GlobalShuffle must wrap PaimonWriteRoute");
     assert!(
-        PaimonWritePrepare::from_physical_plan(&route.input).is_some(),
+        TableWritePrepare::from_physical_plan(&route.input).is_some(),
         "route input must be cast/fill/reorder prepared"
     );
     assert!(
@@ -183,6 +200,7 @@ async fn test_paimon_write_route_plan() -> databend_common_exception::Result<()>
         pk_schema,
         pk_table,
         false,
+        false,
         TableMetaTimestamps::new(None, Duration::hours(1)),
         true,
     )?;
@@ -199,6 +217,7 @@ async fn test_paimon_write_route_plan() -> databend_common_exception::Result<()>
         pk_bindings,
         pk_schema,
         pk_table,
+        false,
         false,
         TableMetaTimestamps::new(None, Duration::hours(1)),
         false,
@@ -220,6 +239,7 @@ async fn test_paimon_write_route_plan() -> databend_common_exception::Result<()>
         append_bindings,
         append_schema,
         append_table,
+        false,
         false,
         TableMetaTimestamps::new(None, Duration::hours(1)),
         true,
@@ -261,6 +281,7 @@ async fn test_paimon_write_route_plan_preserves_select_merge()
         pk_schema,
         pk_table,
         false,
+        false,
         TableMetaTimestamps::new(None, Duration::hours(1)),
         true,
     )?;
@@ -276,6 +297,7 @@ async fn test_paimon_write_route_plan_preserves_select_merge()
         append_bindings,
         append_schema,
         append_table,
+        false,
         false,
         TableMetaTimestamps::new(None, Duration::hours(1)),
         true,
@@ -296,6 +318,40 @@ async fn test_paimon_write_route_plan_preserves_select_merge()
         DistributedInsertSelect::from_physical_plan(&outer.input).is_some(),
         "append Merge must wrap DistributedInsertSelect"
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_prepared_global_shuffle_stays_below_insert() -> databend_common_exception::Result<()>
+{
+    let warehouse = TestWarehouse::new();
+    let (_, append_id) = setup_tables(&warehouse.warehouse).await;
+    let table = databend_table(&warehouse.warehouse, &append_id).await;
+    let (select, bindings) = dummy_select_plan(2);
+    let schema = select.output_schema()?;
+    let shuffle = wrap_with_global_shuffle(select);
+
+    let plan = build_insert_select_physical_plan(
+        shuffle,
+        schema.clone(),
+        bindings,
+        schema,
+        table,
+        false,
+        true,
+        TableMetaTimestamps::new(None, Duration::hours(1)),
+        true,
+    )?;
+
+    let outer = Exchange::from_physical_plan(&plan)
+        .expect("distributed insert must synthesize a commit-gather Merge");
+    assert_eq!(outer.kind, FragmentKind::Merge);
+    let insert = DistributedInsertSelect::from_physical_plan(&outer.input)
+        .expect("Merge must wrap DistributedInsertSelect");
+    let shuffle = Exchange::from_physical_plan(&insert.input)
+        .expect("prepared GlobalShuffle must remain below the insert");
+    assert_eq!(shuffle.kind, FragmentKind::GlobalShuffle);
 
     Ok(())
 }

@@ -454,6 +454,9 @@ pub enum AlterTableAction {
     AlterTableClusterKey {
         cluster_by: ClusterOption,
     },
+    AlterTablePartitionBy {
+        partition_by: Vec<Expr>,
+    },
     DropTableClusterKey,
     ReclusterTable {
         is_final: bool,
@@ -535,6 +538,11 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 write!(f, "{cluster_by}")?;
+            }
+            AlterTableAction::AlterTablePartitionBy { partition_by } => {
+                write!(f, "PARTITION BY (")?;
+                write_comma_separated_list(f, partition_by)?;
+                write!(f, ")")?;
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;
@@ -879,6 +887,7 @@ pub enum Engine {
     Null,
     Memory,
     Fuse,
+    MaterializedView,
     View,
     Random,
     Iceberg,
@@ -893,6 +902,7 @@ impl Display for Engine {
             Engine::Null => write!(f, "NULL"),
             Engine::Memory => write!(f, "MEMORY"),
             Engine::Fuse => write!(f, "FUSE"),
+            Engine::MaterializedView => write!(f, "MATERIALIZED_VIEW"),
             Engine::View => write!(f, "VIEW"),
             Engine::Random => write!(f, "RANDOM"),
             Engine::Iceberg => write!(f, "ICEBERG"),
@@ -909,6 +919,7 @@ impl From<&str> for Engine {
             "null" => Engine::Null,
             "memory" => Engine::Memory,
             "fuse" => Engine::Fuse,
+            "materialized_view" => Engine::MaterializedView,
             "view" => Engine::View,
             "random" => Engine::Random,
             "iceberg" => Engine::Iceberg,

@@ -31,7 +31,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
-use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
+use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
@@ -396,7 +396,7 @@ impl Table for StreamTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        (BASE_BLOCK_IDS_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
+        (BASE_BLOCK_IDS_COLUMN_ID..=CHANGE_ROW_ID_COLUMN_ID).contains(&column_id)
     }
 
     /// whether column prune(projection) can help in table read
@@ -477,7 +477,7 @@ impl Table for StreamTable {
         let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
         let table_desc =
             format!("{quote}{database_name}{quote}.{quote}{table_name}{quote}{with_options}");
-        fuse_table
+        let changes_query = fuse_table
             .get_changes_query(
                 ctx,
                 &self.mode(),
@@ -485,7 +485,8 @@ impl Table for StreamTable {
                 table_desc,
                 self.offset()?,
             )
-            .await
+            .await?;
+        Ok(changes_query.query)
     }
 }
 

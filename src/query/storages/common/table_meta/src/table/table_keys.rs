@@ -16,11 +16,11 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::str::FromStr;
 use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
-use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 
 use crate::meta::ColumnCountMinSketch;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
@@ -28,6 +28,10 @@ pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
 pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION: &str =
+    "materialized_view_source_snapshot_location";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID: &str = "materialized_view_source_table_id";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ: &str = "materialized_view_source_table_seq";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
 pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
@@ -77,9 +81,30 @@ pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
 /// The normalized Fuse partition expressions. This is set by CREATE TABLE
 /// PARTITION BY and is not a user-settable table option.
 pub const OPT_KEY_PARTITION_BY: &str = "partition_by";
+pub const OPT_KEY_WRITE_DISTRIBUTION_MODE: &str = "write_distribution_mode";
 pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WriteDistributionMode {
+    None,
+    Hash,
+}
+
+impl FromStr for WriteDistributionMode {
+    type Err = ErrorCode;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "none" => Ok(Self::None),
+            "hash" => Ok(Self::Hash),
+            _ => Err(ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_WRITE_DISTRIBUTION_MODE} must be either 'none' or 'hash', got: {value}"
+            ))),
+        }
+    }
+}
 
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specify this option keys in DDL
@@ -88,10 +113,12 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     let mut r = HashSet::new();
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
-    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r
 });
 
@@ -106,6 +133,9 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r
 });
 
@@ -198,6 +228,12 @@ mod tests {
     fn test_materialized_view_source_table_id_is_reserved() {
         assert!(is_reserved_opt_key(
             OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID
+        ));
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ
         ));
     }
 

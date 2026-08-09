@@ -1802,6 +1802,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::AlterTableClusterKey(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
+            Plan::AlterTablePartitionBy(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
+            }
             Plan::DropTableClusterKey(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
@@ -2368,6 +2371,11 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
+            // TODO
+            Plan::CreateMaterializedView(_) => {},
+            Plan::DropMaterializedView(_) => {},
+            Plan::DescribeMaterializedView(_) => {},
+            Plan::RefreshMaterializedView(_) => {},
         }
 
         Ok(())

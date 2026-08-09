@@ -95,10 +95,9 @@ impl DeferredAggregateRewriter<'_> {
     fn find_registered_aggregate_scalar(&self, index: crate::Symbol) -> Option<ScalarExpr> {
         self.bind_context
             .aggregate_info
-            .aggregate_calls_for_plan()
-            .into_iter()
+            .aggregate_calls()
             .find(|item| item.index == index)
-            .map(|item| item.scalar)
+            .map(|item| item.scalar.clone())
     }
 }
 

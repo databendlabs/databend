@@ -16,6 +16,7 @@ use std::any::Any;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
@@ -96,6 +97,9 @@ impl IPhysicalPlan for DistributedInsertSelect {
 
         let select_schema = &self.select_schema;
         let insert_schema = &self.insert_schema;
+        let table = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
         // should render result for select
         if !self.input_prepared {
             PipelineBuilder::build_result_projection(
@@ -106,7 +110,9 @@ impl IPhysicalPlan for DistributedInsertSelect {
                 false,
             )?;
         } else {
-            let projection = (0..insert_schema.num_fields()).collect::<Vec<_>>();
+            let table_schema = table.schema().remove_virtual_computed_fields();
+            let prepared_schema = DataSchema::from(&table_schema);
+            let projection = (0..prepared_schema.num_fields()).collect::<Vec<_>>();
             let num_input_columns = self.input.output_schema()?.num_fields();
             builder.main_pipeline.add_transformer(|| {
                 CompoundBlockOperator::new(
@@ -129,10 +135,6 @@ impl IPhysicalPlan for DistributedInsertSelect {
             })?;
         }
 
-        let table = builder
-            .ctx
-            .build_table_by_table_info(&self.table_info, None)?;
-
         let source_schema = insert_schema;
         if !self.input_prepared {
             PipelineBuilder::fill_and_reorder_columns(
@@ -142,6 +144,11 @@ impl IPhysicalPlan for DistributedInsertSelect {
                 source_schema.clone(),
             )?;
         }
+        PipelineBuilder::build_table_write_layout(
+            builder.ctx.clone(),
+            &mut builder.main_pipeline,
+            table.clone(),
+        )?;
 
         table.append_data(
             builder.ctx.clone(),

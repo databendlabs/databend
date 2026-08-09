@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
+use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -36,12 +37,12 @@ use crate::ColumnSet;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
+use crate::binder::Any;
 use crate::binder::Binder;
-use crate::binder::Finder;
 use crate::binder::InternalColumnBinding;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
-use crate::binder::split_conjunctions;
+use crate::binder::into_conjunctions;
 use crate::binder::util::TableIdentifier;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
@@ -101,9 +102,23 @@ impl MutationExpression {
                 let (source_s_expr, mut source_context) =
                     binder.bind_table_reference(bind_context, source)?;
 
-                // Bind target table reference.
-                let (mut target_s_expr, mut target_context) =
-                    binder.bind_table_reference(bind_context, target)?;
+                // Mutation targets must use their physical table schema. In particular, an MV
+                // target cannot use normal MV read binding because that hides internal columns.
+                let target_alias = match target {
+                    TableReference::Table { alias, .. } => alias,
+                    _ => {
+                        return Err(ErrorCode::Internal(
+                            "mutation target must be a physical table",
+                        ));
+                    }
+                };
+                let (mut target_s_expr, mut target_context) = binder.bind_physical_table(
+                    bind_context,
+                    &target_table_identifier.database_name(),
+                    target_table_identifier.table_name_alias(),
+                    target_table.clone(),
+                    target_alias,
+                )?;
 
                 // Get target table index.
                 let target_table_index = binder
@@ -211,9 +226,22 @@ impl MutationExpression {
                 from,
                 filter,
             } => {
-                // Bind target table reference.
-                let (mut s_expr, mut bind_context) =
-                    binder.bind_table_reference(bind_context, target)?;
+                // Mutation targets must use their physical table schema.
+                let target_alias = match target {
+                    TableReference::Table { alias, .. } => alias,
+                    _ => {
+                        return Err(ErrorCode::Internal(
+                            "mutation target must be a physical table",
+                        ));
+                    }
+                };
+                let (mut s_expr, mut bind_context) = binder.bind_physical_table(
+                    bind_context,
+                    &target_table_identifier.database_name(),
+                    target_table_identifier.table_name_alias(),
+                    target_table.clone(),
+                    target_alias,
+                )?;
 
                 // Note: We intentionally get target table index before binding source table,
                 // because source table may contain tables with same name as target table,
@@ -502,6 +530,40 @@ impl MutationExpression {
 }
 
 impl Binder {
+    /// Bind a mutation target as its concrete physical table.
+    ///
+    /// Mutation targets are not ordinary read-side table references: they cannot be table
+    /// functions or subqueries, and View/MV expansion would expose a logical query rather than
+    /// the storage rows that UPDATE/DELETE/MERGE must locate. Binding the already-resolved table
+    /// directly also preserves physical-only columns such as an MV's `_mv_source_row_id` and the
+    /// internal `_row_id` used by the mutation pipeline.
+    fn bind_physical_table(
+        &mut self,
+        bind_context: &BindContext,
+        database: &str,
+        table_alias_name: Option<String>,
+        table: Arc<dyn Table>,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        let table_index = self.metadata.write().add_table(
+            table.get_table_info().catalog().to_string(),
+            database.to_string(),
+            table,
+            None,
+            table_alias_name,
+            false,
+            false,
+            false,
+            None,
+        );
+        let (s_expr, mut target_context) =
+            self.bind_base_table(bind_context, database, table_index, None, &None, true)?;
+        if let Some(alias) = alias {
+            target_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+        }
+        Ok((s_expr, target_context))
+    }
+
     fn add_row_id_column(
         &mut self,
         bind_context: &mut BindContext,
@@ -572,7 +634,7 @@ impl Binder {
             } else {
                 MutationStrategy::MatchedOnly
             };
-            let predicates = split_conjunctions(&scalar);
+            let predicates = into_conjunctions(scalar).collect();
             Ok((strategy, predicates))
         } else {
             Ok((MutationStrategy::Direct, vec![]))
@@ -610,9 +672,9 @@ impl Binder {
             ) || scalar.is_aggregate()
         };
 
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
+        let mut any = Any::new(&f);
+        any.visit(scalar)?;
+        Ok(!any.result())
     }
 }
 

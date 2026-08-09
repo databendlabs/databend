@@ -33,6 +33,7 @@ use log::info;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::Metadata;
 use crate::ScalarExpr;
 use crate::Symbol;
 use crate::Visibility;
@@ -51,7 +52,7 @@ use crate::plans::SortItem;
 pub fn try_rewrite(
     table_index: IndexType,
     table_name: &str,
-    base_columns: &[ColumnEntry],
+    metadata: &Metadata,
     s_expr: &SExpr,
     index_plans: &[(u64, String, SExpr)],
 ) -> Result<Option<SExpr>> {
@@ -59,11 +60,21 @@ pub fn try_rewrite(
         return Ok(None);
     }
 
-    let query_info = QueryInfo::new(table_index, table_name, base_columns, s_expr)?;
+    let query_info = QueryInfo::new(
+        table_index,
+        table_name,
+        metadata.columns_by_table_index(table_index),
+        s_expr,
+    )?;
     let agg_index_rewriter = AggIndexRewriter::new(query_info);
 
     for (index_id, sql, view_s_expr) in index_plans.iter() {
-        let view_info = ViewInfo::new(table_index, table_name, base_columns, view_s_expr)?;
+        let view_info = ViewInfo::new(
+            table_index,
+            table_name,
+            metadata.columns_by_table_index(table_index),
+            view_s_expr,
+        )?;
         if let Some(result) =
             agg_index_rewriter.try_rewrite_index(s_expr, *index_id, sql, &view_info)?
         {
@@ -86,10 +97,10 @@ struct QueryInfo {
 }
 
 impl QueryInfo {
-    fn new(
+    fn new<'a>(
         table_index: IndexType,
         table_name: &str,
-        base_columns: &[ColumnEntry],
+        base_columns: impl IntoIterator<Item = &'a ColumnEntry>,
         s_expr: &SExpr,
     ) -> Result<QueryInfo> {
         if let RelOperator::EvalScalar(eval) = s_expr.plan() {
@@ -361,10 +372,10 @@ struct ViewInfo {
 }
 
 impl ViewInfo {
-    fn new(
+    fn new<'a>(
         table_index: IndexType,
         table_name: &str,
-        base_columns: &[ColumnEntry],
+        base_columns: impl IntoIterator<Item = &'a ColumnEntry>,
         s_expr: &SExpr,
     ) -> Result<ViewInfo> {
         let query_info = QueryInfo::new(table_index, table_name, base_columns, s_expr)?;

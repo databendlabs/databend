@@ -1074,6 +1074,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .map(|v| {
                 if v.engine().to_uppercase() == "VIEW" {
                     "VIEW".to_string()
+                } else if v.engine().to_uppercase() == "MATERIALIZED_VIEW" {
+                    "MATERIALIZED VIEW".to_string()
                 } else {
                     "BASE TABLE".to_string()
                 }

@@ -47,7 +47,7 @@ use databend_common_meta_app::principal::StageFileFormatType;
 use databend_storages_common_table_meta::table::is_stream_name;
 use log::warn;
 
-use super::Finder;
+use super::Any;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::MetadataRef;
@@ -349,6 +349,17 @@ impl Binder {
             Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
             Statement::ShowViews(stmt) => self.bind_show_views(bind_context, stmt).await?,
             Statement::DescribeView(stmt) => self.bind_describe_view(stmt).await?,
+            Statement::CreateMaterializedView(stmt) => {
+                self.bind_create_materialized_view(stmt).await?
+            }
+            Statement::DropMaterializedView(stmt) => self.bind_drop_materialized_view(stmt).await?,
+            Statement::RefreshMaterializedView(stmt) => {
+                self.bind_refresh_materialized_view(stmt).await?
+            }
+            Statement::ShowMaterializedViews(stmt) => {
+                self.bind_show_materialized_views(bind_context, stmt)
+                    .await?
+            }
 
             // Indexes
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
@@ -1077,9 +1088,9 @@ impl Binder {
                     | ScalarExpr::AsyncFunctionCall(_)
             ) || scalar.is_aggregate()
         };
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
+        let mut any = Any::new(&f);
+        any.visit(scalar)?;
+        Ok(!any.result())
     }
 
     pub(crate) fn check_allowed_scalar_expr_with_subquery_for_copy_table(
@@ -1098,9 +1109,9 @@ impl Binder {
                 .unwrap_or(true),
             _ => false,
         };
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
+        let mut any = Any::new(&f);
+        any.visit(scalar)?;
+        Ok(!any.result())
     }
 
     pub(crate) fn add_bound_columns_into_expr(

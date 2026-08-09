@@ -465,6 +465,15 @@ drop table if exists crt1
 statement error 1006
 create temp table t as select number/0 from numbers(1);
 
+# repeated failures must not accumulate CTAS staging entries
+statement error 1006
+create temp table t as select number/0 from numbers(1);
+
+query I
+select count(*) from system.temporary_tables where is_current_session = true and (name = 't' or name like '__tmp_orphan@%');
+----
+0
+
 # table t should not be created
 # expects:  ERROR 1105 (HY000): UnknownTable. Code: 1025, Text = error: ...
 statement error 1025

@@ -728,15 +728,284 @@ pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
         return Ok(0);
     }
 
-    if buf.len() > 3
-        && buf[3] == HYBRID_KIND_LARGE
-        && buf[..2] == HYBRID_MAGIC
-        && buf[2] == HYBRID_VERSION
-    {
+    if is_hybrid_large(buf) {
         Ok(reader::bitmap_len(&buf[HYBRID_HEADER_LEN..])? as u64)
     } else {
         Ok(deserialize_bitmap(buf)?.len())
     }
+}
+
+fn is_hybrid(buf: &[u8]) -> bool {
+    buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION
+}
+
+fn is_hybrid_large(buf: &[u8]) -> bool {
+    is_hybrid(buf) && buf[3] == HYBRID_KIND_LARGE
+}
+
+fn as_roaring(buf: &[u8]) -> Option<&[u8]> {
+    if is_hybrid_large(buf) {
+        Some(&buf[HYBRID_HEADER_LEN..])
+    } else if !is_hybrid(buf) {
+        Some(buf) // Legacy
+    } else {
+        None // HybridSmall
+    }
+}
+
+struct SmallReader<'a> {
+    len: usize,
+    values: &'a [u8],
+}
+
+impl<'a> SmallReader<'a> {
+    fn new(buf: &'a [u8]) -> Result<Self> {
+        let payload = &buf[HYBRID_HEADER_LEN..];
+        let (len, bytes) = decode_small_payload(payload)?;
+        Ok(Self { len, values: bytes })
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    fn get(&self, i: usize) -> u64 {
+        read_u64_le(&self.values[i * 8..i * 8 + 8])
+    }
+
+    fn min(&self) -> Option<u64> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.get(0))
+        }
+    }
+
+    fn max(&self) -> Option<u64> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.get(self.len - 1))
+        }
+    }
+
+    fn contains(&self, value: u64) -> bool {
+        let mut lo = 0;
+        let mut hi = self.len;
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            match self.get(mid).cmp(&value) {
+                std::cmp::Ordering::Less => lo = mid + 1,
+                std::cmp::Ordering::Greater => hi = mid,
+                std::cmp::Ordering::Equal => return true,
+            }
+        }
+        false
+    }
+
+    fn has_any_with(&self, other: &SmallReader) -> bool {
+        let mut i = 0;
+        let mut j = 0;
+        while i < self.len && j < other.len {
+            let lv = self.get(i);
+            let rv = other.get(j);
+            if lv < rv {
+                i += 1;
+            } else if rv < lv {
+                j += 1;
+            } else {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn has_all_with(&self, other: &SmallReader) -> bool {
+        if self.len < other.len {
+            return false;
+        }
+        let mut i = 0;
+        let mut j = 0;
+        while j < other.len {
+            if i >= self.len {
+                return false;
+            }
+            let lv = self.get(i);
+            let rv = other.get(j);
+            if lv < rv {
+                i += 1;
+            } else if lv == rv {
+                i += 1;
+                j += 1;
+            } else {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+/// Validate that a serialized bitmap buffer has minimum length.
+///
+/// Different from [`validate_serialized_bitmap`], this one does not check payload to be
+/// lightweight.
+pub(crate) fn validate_serialized_bitmap_header_and_length(buf: &[u8]) -> Result<()> {
+    if buf.is_empty() {
+        return Ok(());
+    } else if is_hybrid(buf) {
+        match buf[3] {
+            HYBRID_KIND_SMALL => {
+                // HybridSmall payload: at least 1 byte (length byte)
+                if buf.len() < HYBRID_HEADER_LEN + 1 {
+                    return Err(ErrorCode::BadBytes("hybrid small bitmap: buffer too short"));
+                }
+            }
+            HYBRID_KIND_LARGE => {
+                // HybridLarge payload: at least 8 bytes (u64 prefix bucket count)
+                if buf.len() < HYBRID_HEADER_LEN + 8 {
+                    return Err(ErrorCode::BadBytes("hybrid large bitmap: buffer too short"));
+                }
+            }
+            kind => {
+                return Err(ErrorCode::BadBytes(format!(
+                    "hybrid bitmap: invalid kind {kind}"
+                )));
+            }
+        }
+    } else if buf.len() < 8 {
+        // Legacy RoaringTreemap: minimum 8 bytes (u64 prefix bucket count)
+        return Err(ErrorCode::BadBytes("bitmap: buffer too short"));
+    }
+
+    Ok(())
+}
+
+pub fn bitmap_contains(buf: &[u8], value: u64) -> Result<bool> {
+    // Fast path: empty bitmap contains nothing
+    if buf.is_empty() {
+        return Ok(false);
+    }
+    validate_serialized_bitmap_header_and_length(buf)?;
+    if let Some(roaring_buf) = as_roaring(buf) {
+        Ok(reader::bitmap_contains(roaring_buf, value)?)
+    } else {
+        Ok(SmallReader::new(buf)?.contains(value))
+    }
+}
+
+pub fn bitmap_min(buf: &[u8]) -> Result<Option<u64>> {
+    // Fast path: empty bitmap has no minimum
+    if buf.is_empty() {
+        return Ok(None);
+    }
+    validate_serialized_bitmap_header_and_length(buf)?;
+    if let Some(roaring_buf) = as_roaring(buf) {
+        Ok(reader::bitmap_min(roaring_buf)?)
+    } else {
+        Ok(SmallReader::new(buf)?.min())
+    }
+}
+
+pub fn bitmap_max(buf: &[u8]) -> Result<Option<u64>> {
+    // Fast path: empty bitmap has no maximum
+    if buf.is_empty() {
+        return Ok(None);
+    }
+    validate_serialized_bitmap_header_and_length(buf)?;
+    if let Some(roaring_buf) = as_roaring(buf) {
+        Ok(reader::bitmap_max(roaring_buf)?)
+    } else {
+        Ok(SmallReader::new(buf)?.max())
+    }
+}
+
+pub fn bitmap_has_all(lhs: &[u8], rhs: &[u8]) -> Result<bool> {
+    // Fast path: empty rhs is subset of anything
+    if rhs.is_empty() {
+        return Ok(true);
+    }
+    // Fast path: empty lhs cannot contain non-empty rhs
+    if lhs.is_empty() {
+        return Ok(bitmap_len(rhs)? == 0);
+    }
+    validate_serialized_bitmap_header_and_length(lhs)?;
+    validate_serialized_bitmap_header_and_length(rhs)?;
+
+    // Both HybridLarge or Legacy: use visitor (zero-copy)
+    if let (Some(lhs_buf), Some(rhs_buf)) = (as_roaring(lhs), as_roaring(rhs)) {
+        return Ok(reader::bitmap_has_all(lhs_buf, rhs_buf)?);
+    }
+
+    // Both HybridSmall: two-pointer subset check
+    if as_roaring(lhs).is_none() && as_roaring(rhs).is_none() {
+        let lhs = SmallReader::new(lhs)?;
+        let rhs = SmallReader::new(rhs)?;
+        return Ok(lhs.has_all_with(&rhs));
+    }
+
+    // Fast path: HybridSmall lhs, HybridLarge or Legacy rhs cardinality check
+    // We need to check cardinality here because: (1) it might be a legacy tree,
+    // and (2) we don't always demote HybridBitmap after reducing its cardinality immediately.
+    if as_roaring(lhs).is_none() && as_roaring(rhs).is_some() {
+        let lhs_small = SmallReader::new(lhs)?;
+        let rhs_roaring = as_roaring(rhs).unwrap();
+        // Fast path: rhs has more values than lhs, impossible to contain
+        if reader::bitmap_len_above(rhs_roaring, lhs_small.len())? {
+            return Ok(false);
+        }
+        // rhs has <= lhs_small.len() values, but still need to check containment
+        let lhs_bm = deserialize_bitmap(lhs)?;
+        let rhs_bm = deserialize_bitmap(rhs)?;
+        return Ok(lhs_bm.is_superset(&rhs_bm));
+    }
+
+    // lhs is HybridLarge/Legacy, rhs is HybridSmall: probe
+    let roaring_buf = as_roaring(lhs).unwrap();
+    let rhs_small = SmallReader::new(rhs)?;
+    for i in 0..rhs_small.len() {
+        if !reader::bitmap_contains(roaring_buf, rhs_small.get(i))? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+pub fn bitmap_has_any(lhs: &[u8], rhs: &[u8]) -> Result<bool> {
+    // Fast path: empty bitmap has no intersection
+    if lhs.is_empty() || rhs.is_empty() {
+        return Ok(false);
+    }
+    validate_serialized_bitmap_header_and_length(lhs)?;
+    validate_serialized_bitmap_header_and_length(rhs)?;
+
+    // Both HybridLarge or Legacy: use visitor (zero-copy)
+    if let (Some(lhs_buf), Some(rhs_buf)) = (as_roaring(lhs), as_roaring(rhs)) {
+        return Ok(reader::bitmap_has_any(lhs_buf, rhs_buf)?);
+    }
+
+    // Both HybridSmall: two-pointer intersection
+    if as_roaring(lhs).is_none() && as_roaring(rhs).is_none() {
+        let lhs = SmallReader::new(lhs)?;
+        let rhs = SmallReader::new(rhs)?;
+        return Ok(lhs.has_any_with(&rhs));
+    }
+
+    // One side HybridLarge/Legacy, the other HybridSmall: probe
+    let (roaring_buf, small) = if let Some(rb) = as_roaring(lhs) {
+        (rb, SmallReader::new(rhs)?)
+    } else {
+        (as_roaring(rhs).unwrap(), SmallReader::new(lhs)?)
+    };
+    for i in 0..small.len() {
+        if reader::bitmap_contains(roaring_buf, small.get(i))? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn parse_bitmap_rhs(buf: &[u8]) -> Result<BitmapRhsView<'_>> {
@@ -744,7 +1013,7 @@ fn parse_bitmap_rhs(buf: &[u8]) -> Result<BitmapRhsView<'_>> {
         return Ok(BitmapRhsView::Empty);
     }
 
-    if buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION {
+    if is_hybrid(buf) {
         let payload = &buf[HYBRID_HEADER_LEN..];
         match buf[3] {
             HYBRID_KIND_SMALL => {
@@ -768,7 +1037,7 @@ fn validate_serialized_bitmap(buf: &[u8]) -> Result<()> {
         return Ok(());
     }
 
-    if buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION {
+    if is_hybrid(buf) {
         let payload = &buf[HYBRID_HEADER_LEN..];
         match buf[3] {
             HYBRID_KIND_SMALL => {
@@ -1154,6 +1423,7 @@ fn small_intersection_len(lhs: &SmallBitmap, rhs: &SmallBitmap) -> u64 {
 
 #[cfg(test)]
 mod tests {
+
     use smallvec::smallvec;
 
     use super::*;
@@ -1428,5 +1698,637 @@ mod tests {
 
         let decoded = deserialize_bitmap(&legacy).unwrap();
         assert_eq!(decoded.into_iter().collect::<Vec<_>>(), vec![1, 5, 42]);
+    }
+
+    // Tests for minimum deserialize bitmap functions.
+    //
+    // Cover public functions by comparing against RoaringTreemap:
+    //  - [x] bitmap_contains
+    //  - [x] bitmap_min
+    //  - [x] bitmap_max
+    //  - [x] bitmap_has_any
+    //  - [x] bitmap_has_all
+    //
+    // Fixtures:
+    //  - `for_each_fixture` for single-bitmap tests (contains, min, max)
+    //  - `for_each_fixture_pair` for two-bitmap tests (has_any, has_all)
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand::rngs::SmallRng;
+
+    fn create_bitmap(seed: u64) -> RoaringTreemap {
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let mut bitmap = RoaringTreemap::new();
+        for _ in 0..50 {
+            let v = rng.r#gen::<u64>();
+            bitmap.insert(v);
+        }
+        for _ in 0..50 {
+            let v = rng.r#gen::<u64>();
+            bitmap.insert(v & u32::MAX as u64);
+        }
+        for _ in 0..50 {
+            let v = rng.r#gen::<u64>();
+            bitmap.insert(v & u16::MAX as u64);
+        }
+        bitmap
+    }
+
+    fn make_buf(tree: &RoaringTreemap) -> Vec<u8> {
+        let bm = HybridBitmap::from_iter(tree.iter());
+        let mut buf = Vec::new();
+        bm.serialize_into(&mut buf).unwrap();
+        buf
+    }
+
+    fn for_each_fixture<F>(mut f: F)
+    where F: FnMut(&str, &[u8], &RoaringTreemap, u64) {
+        let fixtures: Vec<(&str, RoaringTreemap, u64)> = vec![
+            // HL multi-prefix random
+            ("random", create_bitmap(123), u64::MAX),
+            // HS single-prefix
+            ("format: HS", (0..31u64).collect(), 50),
+            // HS multi-prefix sparse
+            (
+                "format: HS multi-prefix",
+                RoaringTreemap::from_iter([0u64, 65535, 65536, (1u64 << 32) + 500]),
+                1,
+            ),
+            // boundary: 4095 (array threshold-)
+            ("boundary: 4095", (0..4095u64).collect(), 4095),
+            // boundary: 4096 (array threshold)
+            ("boundary: 4096", (0..4096u64).collect(), 4096),
+            // boundary: 4097 (array threshold+, becomes bitmap)
+            ("boundary: 4097", (0..4097u64).collect(), 4097),
+            // boundary: 65535 (near-full container)
+            ("boundary: 65535", (0..65535u64).collect(), 65535),
+            // boundary: 65536 (full container)
+            ("boundary: 65536", (0..65536u64).collect(), 65536),
+            // boundary: 65537 (full+ container, splits to 2 containers)
+            ("boundary: 65537", (0..65537u64).collect(), 65537),
+        ];
+        for (name, tree, miss) in fixtures {
+            let buf = make_buf(&tree);
+            f(name, &buf, &tree, miss);
+        }
+        // empty buffer
+        f("format: empty", &[], &RoaringTreemap::new(), 0);
+        // HE serialized empty
+        let he_tree = RoaringTreemap::new();
+        let he_buf = make_buf(&he_tree);
+        f("format: HE", &he_buf, &he_tree, 0);
+    }
+
+    fn for_each_fixture_pair<F>(mut f: F)
+    where F: FnMut(&str, &[u8], &[u8], &RoaringTreemap, &RoaringTreemap) {
+        let scenarios: Vec<(&str, RoaringTreemap, RoaringTreemap)> = vec![
+            // lhs: HL | rhs: HL overlap
+            (
+                "format: HL+HL overlap",
+                (0..50000u64).collect(),
+                (30000..80000u64).collect(),
+            ),
+            // lhs: HL | rhs: HL disjoint
+            (
+                "format: HL+HL disjoint",
+                (0..50000u64).collect(),
+                (100000..150000u64).collect(),
+            ),
+            // lhs: HL | rhs: HL superset
+            (
+                "format: HL+HL superset",
+                (0..50000u64).collect(),
+                (0..100u64).collect(),
+            ),
+            // lhs: HL | rhs: HL not superset
+            (
+                "format: HL+HL not superset",
+                (0..50000u64).collect(),
+                (40000..90000u64).collect(),
+            ),
+            // lhs: HL | rhs: HL self
+            (
+                "format: HL+HL self",
+                (0..50000u64).collect(),
+                (0..50000u64).collect(),
+            ),
+            // lhs: HL | rhs: HS subset
+            (
+                "format: HL+HS subset",
+                (0..50000u64).collect(),
+                (5..15u64).collect(),
+            ),
+            // lhs: HL | rhs: HS not subset
+            (
+                "format: HL+HS not subset",
+                (0..50000u64).collect(),
+                (49990..50010u64).collect(),
+            ),
+            // lhs: HS | rhs: HL overlap
+            (
+                "format: HS+HL overlap",
+                (0..31u64).collect(),
+                (0..50000u64).collect(),
+            ),
+            // lhs: HS | rhs: HL disjoint
+            (
+                "format: HS+HL disjoint",
+                (0..31u64).collect(),
+                (100000..150000u64).collect(),
+            ),
+            // lhs: HS | rhs: HS overlap
+            (
+                "format: HS+HS overlap",
+                (0..31u64).collect(),
+                (20..51u64).collect(),
+            ),
+            // lhs: HS | rhs: HS disjoint
+            (
+                "format: HS+HS disjoint",
+                (0..15u64).collect(),
+                (20..35u64).collect(),
+            ),
+            // lhs: HS | rhs: HS subset
+            (
+                "format: HS+HS subset",
+                (0..31u64).collect(),
+                (5..15u64).collect(),
+            ),
+            // lhs: HS | rhs: HS not subset
+            (
+                "format: HS+HS not subset",
+                (0..15u64).collect(),
+                (10..25u64).collect(),
+            ),
+            // lhs: p0 | rhs: p0, p1 rhs-only prefix
+            (
+                "prefix: rhs-only",
+                (0u64..0x10000).step_by(7).collect(),
+                (0u64..0x10000)
+                    .step_by(5)
+                    .chain(((1u64 << 32)..(1u64 << 32) + 0x10000).step_by(5))
+                    .collect(),
+            ),
+            // lhs: p0, p1 | rhs: p0 lhs-only prefix
+            (
+                "prefix: lhs-only",
+                (0u64..0x10000)
+                    .step_by(7)
+                    .chain(((1u64 << 32)..(1u64 << 32) + 0x10000).step_by(7))
+                    .collect(),
+                (0u64..0x10000).step_by(5).collect(),
+            ),
+            // lhs: p0 | rhs: p1 disjoint prefixes
+            (
+                "prefix: disjoint",
+                (0u64..0x10000).step_by(7).collect(),
+                ((1u64 << 32)..(1u64 << 32) + 0x10000).step_by(5).collect(),
+            ),
+            // lhs: p0, p1 | rhs: p1, p2 overlap prefixes
+            (
+                "prefix: overlap",
+                (0u64..0x10000)
+                    .step_by(7)
+                    .chain(((1u64 << 32)..(1u64 << 32) + 0x10000).step_by(7))
+                    .collect(),
+                ((1u64 << 32)..(1u64 << 32) + 0x10000)
+                    .step_by(5)
+                    .chain(((2u64 << 32)..(2u64 << 32) + 0x10000).step_by(5))
+                    .collect(),
+            ),
+            // boundary: 4095 + 4096
+            (
+                "boundary: 4095+4096",
+                (0..4095u64).collect(),
+                (0..4096u64).collect(),
+            ),
+            // boundary: 4096 + 4097
+            (
+                "boundary: 4096+4097",
+                (0..4096u64).collect(),
+                (0..4097u64).collect(),
+            ),
+            // boundary: 4097 + 4097
+            (
+                "boundary: 4097+4097",
+                (0..4097u64).collect(),
+                (0..4097u64).collect(),
+            ),
+            // boundary: 65535 + 65536
+            (
+                "boundary: 65535+65536",
+                (0..65535u64).collect(),
+                (0..65536u64).collect(),
+            ),
+            // boundary: 65536 + 65536
+            (
+                "boundary: 65536+65536",
+                (0..65536u64).collect(),
+                (0..65536u64).collect(),
+            ),
+            // boundary: 65537 + 65537
+            (
+                "boundary: 65537+65537",
+                (0..65537u64).collect(),
+                (0..65537u64).collect(),
+            ),
+            // boundary: 65535 + 65537
+            (
+                "boundary: 65535+65537",
+                (0..65535u64).collect(),
+                (0..65537u64).collect(),
+            ),
+            // boundary: 4095 + 65535
+            (
+                "boundary: 4095+65535",
+                (0..4095u64).collect(),
+                (0..65535u64).collect(),
+            ),
+            // boundary: 4095 + 65536
+            (
+                "boundary: 4095+65536",
+                (0..4095u64).collect(),
+                (0..65536u64).collect(),
+            ),
+            // boundary: 4095 + 65537
+            (
+                "boundary: 4095+65537",
+                (0..4095u64).collect(),
+                (0..65537u64).collect(),
+            ),
+            // boundary: 4096 + 65535
+            (
+                "boundary: 4096+65535",
+                (0..4096u64).collect(),
+                (0..65535u64).collect(),
+            ),
+            // boundary: 4096 + 65536
+            (
+                "boundary: 4096+65536",
+                (0..4096u64).collect(),
+                (0..65536u64).collect(),
+            ),
+            // boundary: 4096 + 65537
+            (
+                "boundary: 4096+65537",
+                (0..4096u64).collect(),
+                (0..65537u64).collect(),
+            ),
+            // boundary: 4097 + 65535
+            (
+                "boundary: 4097+65535",
+                (0..4097u64).collect(),
+                (0..65535u64).collect(),
+            ),
+            // boundary: 4097 + 65536
+            (
+                "boundary: 4097+65536",
+                (0..4097u64).collect(),
+                (0..65536u64).collect(),
+            ),
+            // boundary: 4097 + 65537
+            (
+                "boundary: 4097+65537",
+                (0..4097u64).collect(),
+                (0..65537u64).collect(),
+            ),
+        ];
+        for (name, lhs_tree, rhs_tree) in scenarios {
+            let lhs_buf = make_buf(&lhs_tree);
+            let rhs_buf = make_buf(&rhs_tree);
+            f(name, &lhs_buf, &rhs_buf, &lhs_tree, &rhs_tree);
+        }
+        // Empty scenarios
+        let hl_tree: RoaringTreemap = (0..50000u64).collect();
+        let hl_buf = make_buf(&hl_tree);
+        let hs_tree: RoaringTreemap = (0..31u64).collect();
+        let hs_buf = make_buf(&hs_tree);
+        let he_tree: RoaringTreemap = RoaringTreemap::new();
+        let he_buf = make_buf(&he_tree);
+        // lhs: empty | rhs: HL
+        f(
+            "format: Empty+HL",
+            &[],
+            &hl_buf,
+            &RoaringTreemap::new(),
+            &hl_tree,
+        );
+        // lhs: HE | rhs: HL
+        f("format: HE+HL", &he_buf, &hl_buf, &he_tree, &hl_tree);
+        // lhs: empty | rhs: HS
+        f(
+            "format: Empty+HS",
+            &[],
+            &hs_buf,
+            &RoaringTreemap::new(),
+            &hs_tree,
+        );
+        // lhs: HE | rhs: HS
+        f("format: HE+HS", &he_buf, &hs_buf, &he_tree, &hs_tree);
+        // lhs: HL | rhs: empty
+        f(
+            "format: HL+Empty",
+            &hl_buf,
+            &[],
+            &hl_tree,
+            &RoaringTreemap::new(),
+        );
+        // lhs: HL | rhs: HE
+        f("format: HL+HE", &hl_buf, &he_buf, &hl_tree, &he_tree);
+        // lhs: HS | rhs: empty
+        f(
+            "format: HS+Empty",
+            &hs_buf,
+            &[],
+            &hs_tree,
+            &RoaringTreemap::new(),
+        );
+        // lhs: HS | rhs: HE
+        f("format: HS+HE", &hs_buf, &he_buf, &hs_tree, &he_tree);
+        // lhs: empty | rhs: empty
+        f(
+            "format: Empty+Empty",
+            &[],
+            &[],
+            &RoaringTreemap::new(),
+            &RoaringTreemap::new(),
+        );
+        // lhs: empty | rhs: HE
+        f(
+            "format: Empty+HE",
+            &[],
+            &he_buf,
+            &RoaringTreemap::new(),
+            &he_tree,
+        );
+        // lhs: HE | rhs: empty
+        f(
+            "format: HE+Empty",
+            &he_buf,
+            &[],
+            &he_tree,
+            &RoaringTreemap::new(),
+        );
+        // lhs: HE | rhs: HE
+        f("format: HE+HE", &he_buf, &he_buf, &he_tree, &he_tree);
+    }
+
+    #[test]
+    fn test_bitmap_contains() {
+        for_each_fixture(|name, buf, tree, miss_value| {
+            if let Some(hit) = tree.min() {
+                let expected = tree.contains(hit);
+                let actual = bitmap_contains(buf, hit).unwrap();
+                assert_eq!(
+                    actual, expected,
+                    "bitmap_contains hit: fixture={name}, val={hit}"
+                );
+            }
+            let miss = miss_value;
+            let expected = tree.contains(miss);
+            let actual = bitmap_contains(buf, miss).unwrap();
+            assert_eq!(
+                actual, expected,
+                "bitmap_contains miss: fixture={name}, val={miss}"
+            );
+        });
+    }
+
+    #[test]
+    fn test_bitmap_min() {
+        for_each_fixture(|name, buf, tree, _miss_value| {
+            let expected = tree.min();
+            let actual = bitmap_min(buf).unwrap();
+            assert_eq!(actual, expected, "bitmap_min: fixture={name}");
+        });
+    }
+
+    #[test]
+    fn test_bitmap_max() {
+        for_each_fixture(|name, buf, tree, _miss_value| {
+            let expected = tree.max();
+            let actual = bitmap_max(buf).unwrap();
+            assert_eq!(actual, expected, "bitmap_max: fixture={name}");
+        });
+    }
+
+    #[test]
+    fn test_bitmap_has_any() {
+        for_each_fixture_pair(|name, lhs_buf, rhs_buf, lhs_tree, rhs_tree| {
+            let expected = !(lhs_tree & rhs_tree).is_empty();
+            let actual = bitmap_has_any(lhs_buf, rhs_buf).unwrap();
+            assert_eq!(actual, expected, "bitmap_has_any: fixture={name}");
+        });
+    }
+
+    #[test]
+    fn test_bitmap_has_all() {
+        for_each_fixture_pair(|name, lhs_buf, rhs_buf, lhs_tree, rhs_tree| {
+            let expected = lhs_tree.is_superset(rhs_tree);
+            let actual = bitmap_has_all(lhs_buf, rhs_buf).unwrap();
+            assert_eq!(actual, expected, "bitmap_has_all: fixture={name}");
+        });
+    }
+
+    /// proptests for bitmap functions:
+    ///
+    ///  - [x] bitmap_contains
+    ///  - [x] bitmap_min
+    ///  - [x] bitmap_max
+    ///  - [x] bitmap_has_any
+    ///  - [x] bitmap_has_all
+    ///
+    /// According to comment in src/common/column/tests/it/bitmap/assign_ops.rs,
+    /// following prop tests are ignored when using `miri`.
+    #[cfg_attr(miri, ignore)]
+    mod proptests {
+        use proptest::collection::btree_map;
+        use proptest::prelude::*;
+        use rand::Rng;
+        use rand::SeedableRng;
+        use rand::rngs::SmallRng;
+        use roaring::RoaringBitmap;
+
+        use super::*;
+
+        const CONTAINER_BITS: usize = u16::MAX as usize + 1;
+        const CONTAINER_BYTES: usize = CONTAINER_BITS / u8::BITS as usize;
+
+        #[derive(Clone, Copy, Debug)]
+        enum ContainerSpec {
+            Array { size: usize, seed: u64 },
+            Bitmap { seed: u64 },
+        }
+
+        impl ContainerSpec {
+            fn fill(self, bytes: &mut [u8]) {
+                match self {
+                    ContainerSpec::Array { size, seed } => {
+                        let mut rng = SmallRng::seed_from_u64(seed);
+                        let mut values = vec![0; size];
+                        rng.fill(&mut values[..]);
+                        for value in values {
+                            bytes[value as usize / u8::BITS as usize] |=
+                                1 << (value % u8::BITS as u16);
+                        }
+                    }
+                    ContainerSpec::Bitmap { seed } => {
+                        let mut rng = SmallRng::seed_from_u64(seed);
+                        loop {
+                            rng.fill(&mut bytes[..]);
+                            let count: usize =
+                                bytes.iter().map(|byte| byte.count_ones() as usize).sum();
+                            if count > 4096 {
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        fn bitmap_from_specs(
+            specs: impl IntoIterator<Item = (u16, ContainerSpec)>,
+        ) -> RoaringBitmap {
+            let specs: Vec<_> = specs.into_iter().collect();
+            let Some((last_key, _)) = specs.last() else {
+                return RoaringBitmap::new();
+            };
+            let mut bytes = vec![0; (*last_key as usize + 1) * CONTAINER_BYTES];
+            for (key, spec) in specs {
+                let start = key as usize * CONTAINER_BYTES;
+                spec.fill(&mut bytes[start..start + CONTAINER_BYTES]);
+            }
+            RoaringBitmap::from_lsb0_bytes(0, &bytes)
+        }
+
+        #[test]
+        fn test_seeded_container_buffer() {
+            let specs = [
+                (3, ContainerSpec::Array {
+                    size: 4096,
+                    seed: 42,
+                }),
+                (7, ContainerSpec::Bitmap { seed: 42 }),
+            ];
+            let bitmap = bitmap_from_specs(specs);
+            assert_eq!(bitmap, bitmap_from_specs(specs));
+            assert_eq!(bitmap.min().map(|value| value >> 16), Some(3));
+            assert_eq!(bitmap.max().map(|value| value >> 16), Some(7));
+        }
+
+        /// The container strategy.
+        ///
+        /// Generates:
+        ///     50% array container from 1 to 4096 random u16 candidates
+        ///     50% bitmap container from 65536 random bits
+        fn container_strategy() -> impl Strategy<Value = ContainerSpec> {
+            prop_oneof![
+                (1usize..=4096, any::<u64>())
+                    .prop_map(|(size, seed)| ContainerSpec::Array { size, seed }),
+                any::<u64>().prop_map(|seed| ContainerSpec::Bitmap { seed }),
+            ]
+        }
+
+        /// The RoaringBitmap strategy.
+        ///
+        /// Generate 0 to 16 containers, with containers from [`container_strategy`].
+        fn bitmap_strategy() -> impl Strategy<Value = RoaringBitmap> {
+            btree_map(0u16..=16, container_strategy(), 0usize..=16).prop_map(bitmap_from_specs)
+        }
+
+        /// The RoaringTreemap strategy.
+        ///
+        /// Generate 0 to 16 RoaringBitmaps, each generated by [`bitmap_strategy`].
+        fn tree_strategy() -> impl Strategy<Value = RoaringTreemap> {
+            btree_map(0u32..=16, bitmap_strategy(), 0usize..=16).prop_map(|map| {
+                RoaringTreemap::from_bitmaps(
+                    map.into_iter().filter(|(_, bitmap)| !bitmap.is_empty()),
+                )
+            })
+        }
+
+        /// The serialization strategy.
+        ///
+        /// Serialize RoaringTreemap from [`tree_strategy`] into `Vec<u8>`:
+        ///     80% HybridBitmap
+        ///     10% Legacy
+        ///     10% Empty
+        fn serialization_strategy() -> impl Strategy<Value = (Vec<u8>, RoaringTreemap)> {
+            prop_oneof![
+                8 => tree_strategy().prop_map(|tree| {
+                    let bm = HybridBitmap::from_iter(tree.iter());
+                    let mut buf = Vec::new();
+                    bm.serialize_into(&mut buf).unwrap();
+                    (buf, tree)
+                }),
+                1 => tree_strategy().prop_map(|tree| {
+                    let mut buf = Vec::new();
+                    tree.serialize_into(&mut buf).unwrap();
+                    (buf, tree)
+                }),
+                1 => Just((Vec::new(), RoaringTreemap::new())),
+            ]
+        }
+
+        /// The probe strategy, picks random value for bitmap_contains to probe.
+        ///
+        /// 50% hit: probe = random value from tree (via nth)
+        /// 50% miss: probe = random u64
+        fn probe_strategy() -> impl Strategy<Value = (Vec<u8>, RoaringTreemap, u64)> {
+            (serialization_strategy(), any::<bool>(), any::<u64>()).prop_map(
+                |((buf, tree), is_hit, random_value)| {
+                    let probe = if is_hit && !tree.is_empty() {
+                        let idx = (random_value % tree.len()) as usize;
+                        tree.iter().nth(idx).unwrap_or(random_value)
+                    } else {
+                        random_value
+                    };
+                    (buf, tree, probe)
+                },
+            )
+        }
+
+        proptest! {
+            // Make the test run faster by limiting the number of cases, running 32 cases
+            // took ~16 seconds in release, and ~160 in debug.
+            // One can override this by setting the `PROPTEST_CASES` environment variable.
+            #![proptest_config(ProptestConfig::with_cases(32))]
+
+            #[test]
+            fn prop_bitmap_contains((buf, tree, value) in probe_strategy()) {
+                let expected = tree.contains(value);
+                let actual = bitmap_contains(&buf, value).unwrap();
+                assert_eq!(actual, expected);
+            }
+
+            #[test]
+            fn prop_bitmap_min((buf, tree) in serialization_strategy()) {
+                assert_eq!(bitmap_min(&buf).unwrap(), tree.min());
+            }
+
+            #[test]
+            fn prop_bitmap_max((buf, tree) in serialization_strategy()) {
+                assert_eq!(bitmap_max(&buf).unwrap(), tree.max());
+            }
+
+            #[test]
+            fn prop_bitmap_has_any(
+                ((lhs_buf, lhs_tree), (rhs_buf, rhs_tree)) in (serialization_strategy(), serialization_strategy())
+            ) {
+                let expected = !(lhs_tree & rhs_tree).is_empty();
+                let actual = bitmap_has_any(&lhs_buf, &rhs_buf).unwrap();
+                assert_eq!(actual, expected);
+            }
+
+            #[test]
+            fn prop_bitmap_has_all(
+                ((lhs_buf, lhs_tree), (rhs_buf, rhs_tree)) in (serialization_strategy(), serialization_strategy())
+            ) {
+                let expected = lhs_tree.is_superset(&rhs_tree);
+                let actual = bitmap_has_all(&lhs_buf, &rhs_buf).unwrap();
+                assert_eq!(actual, expected);
+            }
+        }
     }
 }

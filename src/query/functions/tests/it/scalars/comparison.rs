@@ -27,6 +27,7 @@ fn test_comparison() {
 
     test_eq(file);
     test_noteq(file);
+    test_singleton_domain_equality(file);
     test_lt(file);
     test_lte(file);
     test_gt(file);
@@ -34,6 +35,29 @@ fn test_comparison() {
     test_like(file);
     test_regexp(file);
     test_decimal(file);
+}
+
+fn test_singleton_domain_equality(file: &mut impl Write) {
+    let numeric = [
+        ("lhs", UInt8Type::from_data(vec![7u8, 7])),
+        ("rhs", UInt8Type::from_data(vec![7u8, 7])),
+    ];
+    run_ast(file, "lhs = rhs", &numeric);
+    run_ast(file, "lhs != rhs", &numeric);
+
+    let strings = [
+        ("lhs", StringType::from_data(vec!["databend", "databend"])),
+        ("rhs", StringType::from_data(vec!["databend", "databend"])),
+    ];
+    run_ast(file, "lhs = rhs", &strings);
+    run_ast(file, "lhs != rhs", &strings);
+
+    let nullable = [
+        ("lhs", Int64Type::from_opt_data(vec![Some(7), None])),
+        ("rhs", Int64Type::from_opt_data(vec![Some(7), None])),
+    ];
+    run_ast(file, "lhs = rhs", &nullable);
+    run_ast(file, "lhs != rhs", &nullable);
 }
 
 fn test_eq(file: &mut impl Write) {
