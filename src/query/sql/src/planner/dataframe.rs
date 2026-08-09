@@ -234,11 +234,7 @@ impl Dataframe {
         let alias_catalog = select_list.alias_catalog();
         let aliases = alias_catalog.all_aliases();
 
-        let group_by_aliases = alias_catalog.group_by_bindings(
-            self.query_ctx
-                .get_settings()
-                .get_enable_group_by_column_first()?,
-        );
+        let group_by_aliases = alias_catalog.group_by_bindings();
         self.binder.analyze_group_items(
             &mut self.bind_context,
             &select_list,

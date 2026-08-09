@@ -26,7 +26,6 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FunctionKind;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::type_check::common_super_type;
@@ -68,10 +67,8 @@ pub struct SelectList<'a> {
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ClauseAliasBindings {
-    preferred: Vec<(String, ScalarExpr)>,
     available: Vec<(String, ScalarExpr)>,
     prior_group_aliases: Vec<(String, ScalarExpr)>,
-    group_by_column_first: bool,
 }
 
 pub(crate) type ClauseAliasLookup<'a> = (
@@ -91,8 +88,8 @@ impl ClauseAliasBindings {
         // `SELECT i AS k FROM t GROUP BY k` may bind `k` as the alias for `i`.
         // `SELECT 1 AS k FROM t GROUP BY k + 1` may bind `k` from the SELECT
         // list if there is no input column named `k`.
-        // `GROUP BY k, abs(k)` should still prefer the earlier GROUP BY item
-        // alias inside later complex items, even if an input column conflicts.
+        // Once `k` falls back to a SELECT alias, `GROUP BY k, abs(k)` should
+        // reuse that earlier GROUP BY item alias inside the later expression.
         if Self::simple_unqualified_column_name(expr).is_none() {
             // GROUPING SETS keep prior alias reuse scoped to the current
             // generated set. A complex item in a later set must not bypass that
@@ -110,25 +107,16 @@ impl ClauseAliasBindings {
             );
         }
 
-        // With `enable_group_by_column_first`, the first binding pass should
-        // use input columns only. Alias fallback is still available for simple
+        // Bind input columns first. Alias fallback remains available for simple
         // names that do not exist in the input scope.
         //
-        // GROUPING SETS items (disable_select_alias_fallback = true) also prefer
-        // input columns: a SELECT alias like `if(grouping(x)=1, 0, x) AS x`
-        // must not shadow the underlying column `x` inside GROUP BY sets.
-        if self.group_by_column_first || disable_select_alias_fallback {
-            return (
-                None,
-                (!self.available.is_empty()).then_some(self.available.as_slice()),
-            );
-        }
-
-        let preferred = (!self.preferred.is_empty()).then_some(self.preferred.as_slice());
-        let fallback =
-            (self.preferred.len() != self.available.len()).then_some(self.available.as_slice());
-
-        (preferred, fallback)
+        // GROUPING SETS items also prefer input columns: a SELECT alias like
+        // `if(grouping(x)=1, 0, x) AS x` must not shadow the underlying column
+        // `x` inside GROUP BY sets.
+        (
+            None,
+            (!self.available.is_empty()).then_some(self.available.as_slice()),
+        )
     }
 
     pub(crate) fn matched_group_item_alias(
@@ -201,40 +189,10 @@ impl SelectClauseFact {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum GroupByAliasPolicy {
-    Preferred,
-    FallbackOnly,
-}
-
-impl GroupByAliasPolicy {
-    fn from_item(item: &SelectItem<'_>) -> Self {
-        if item.used_functions.iter().any(|name| {
-            BUILTIN_FUNCTIONS
-                .get_property(name)
-                .map(|property| property.kind == FunctionKind::SRF)
-                .unwrap_or(false)
-        }) {
-            return Self::FallbackOnly;
-        }
-
-        let mut finder = Finder::new(&|expr| {
-            expr.is_aggregate() || matches!(expr, ScalarExpr::WindowFunction(_))
-        });
-        finder.visit(&item.scalar).unwrap();
-        if finder.scalars().is_empty() {
-            Self::Preferred
-        } else {
-            Self::FallbackOnly
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 struct SelectAliasEntry {
     alias_index: usize,
     explicit_expr_alias: bool,
-    group_by_policy: GroupByAliasPolicy,
     aggregate_expr_info: Option<AggregateExprInfo>,
 }
 
@@ -246,7 +204,6 @@ impl SelectAliasEntry {
                 alias: Some(_),
                 ..
             }),
-            group_by_policy: GroupByAliasPolicy::from_item(item),
             aggregate_expr_info: None,
         }
     }
@@ -264,21 +221,16 @@ impl SelectAliasCatalog {
         &self.aliases
     }
 
-    pub(crate) fn group_by_bindings(&self, group_by_column_first: bool) -> ClauseAliasBindings {
-        let mut bindings = ClauseAliasBindings {
-            group_by_column_first,
-            ..Default::default()
-        };
+    pub(crate) fn group_by_bindings(&self) -> ClauseAliasBindings {
+        let mut bindings = ClauseAliasBindings::default();
         for item in &self.items {
             if !item.explicit_expr_alias {
                 continue;
             }
 
-            let entry = self.aliases[item.alias_index].clone();
-            if item.group_by_policy == GroupByAliasPolicy::Preferred {
-                bindings.preferred.push(entry.clone());
-            }
-            bindings.available.push(entry);
+            bindings
+                .available
+                .push(self.aliases[item.alias_index].clone());
         }
         bindings
     }
