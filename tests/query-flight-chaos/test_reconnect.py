@@ -22,8 +22,9 @@ QUERY_START_TIMEOUT = 30
 QUERY_RESULT_TIMEOUT = 180
 KEEPALIVE_DETECTION_TIMEOUT = 10
 TPCH_REPLACEMENT_TIMEOUT = 15
-MIN_TPCH_CHAOS_OPERATIONS = 3
+MIN_TPCH_CONFIRMED_RECONNECTS = 3
 MAX_TPCH_CHAOS_OPERATIONS = 12
+MAX_TPCH_ROUNDS = 5
 POLL_INTERVAL = 0.1
 WORKER_PODS = ("databend-query-1", "databend-query-2")
 
@@ -431,7 +432,8 @@ def wait_for_replacement_connections(
 def active_workload_query(cursor: Any) -> tuple[str, str] | None:
     cursor.execute(
         "SELECT current_query_id, extra_info FROM system.processes "
-        "WHERE extra_info NOT LIKE '%system.processes%' LIMIT 1"
+        "WHERE current_query_id != '' AND extra_info != '' "
+        "AND extra_info NOT LIKE '%system.processes%' LIMIT 1"
     )
     row = cursor.fetchone()
     if row is None:
@@ -814,11 +816,11 @@ def test_tpch_queries(
     coordinator_ip: str,
     fault: NetworkFault,
 ) -> None:
-    # 1. Run the complete TPC-H result suite through one MySQL session.
+    # 1. Run complete TPC-H result rounds serially.
     # 2. Wait for an active query and its worker Flight sockets before each fault.
     # 3. Randomly reset the sockets, sometimes holding reconnects behind a partition.
-    # 4. Record every action and require several observed physical replacements.
-    # 5. Let sqllogictest verify every query result for loss or replay.
+    # 4. Repeat full rounds until three physical replacements have been observed.
+    # 5. Let sqllogictest verify every result in every round for loss or replay.
     print("=== complete TPC-H queries under random network faults ===", flush=True)
     operations = ChaosOperationLog(operation_log)
     stop = threading.Event()
@@ -835,13 +837,10 @@ def test_tpch_queries(
         "--parallel",
         "1",
     ]
-    operations.record(f"workload=starting command={' '.join(command)}")
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
+    operations.record(
+        f"workload=starting max_rounds={MAX_TPCH_ROUNDS} "
+        f"target_confirmed={MIN_TPCH_CONFIRMED_RECONNECTS} "
+        f"command={' '.join(command)}"
     )
     injector_thread = threading.Thread(
         target=injector.run,
@@ -851,16 +850,42 @@ def test_tpch_queries(
     )
     injector_thread.start()
 
+    process: subprocess.Popen[str] | None = None
+    return_code = 0
+    completed_rounds = 0
     try:
-        assert process.stdout is not None
-        for line in process.stdout:
-            print(line, end="", flush=True)
-            if "Running MySQL test for file:" in line:
-                workload_started.set()
-        return_code = process.wait()
+        while (
+            completed_rounds < MAX_TPCH_ROUNDS
+            and injector.confirmed < MIN_TPCH_CONFIRMED_RECONNECTS
+            and not stop.is_set()
+        ):
+            round_number = completed_rounds + 1
+            operations.record(f"workload_round={round_number} starting")
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            assert process.stdout is not None
+            for line in process.stdout:
+                print(line, end="", flush=True)
+                if "Running MySQL test for file:" in line:
+                    workload_started.set()
+            return_code = process.wait()
+            completed_rounds = round_number
+            operations.record(
+                f"workload_round={round_number} finished exit_code={return_code} "
+                f"attempted={injector.attempted} confirmed={injector.confirmed}"
+            )
+            process = None
+            if return_code != 0:
+                break
     except BaseException:
-        process.terminate()
-        process.wait(timeout=10)
+        if process is not None:
+            process.terminate()
+            process.wait(timeout=10)
         raise
     finally:
         stop.set()
@@ -873,7 +898,7 @@ def test_tpch_queries(
         raise AssertionError("TPC-H chaos injector did not stop")
 
     operations.record(
-        f"workload=finished exit_code={return_code} "
+        f"workload=finished rounds={completed_rounds} exit_code={return_code} "
         f"attempted={injector.attempted} confirmed={injector.confirmed}"
     )
     operations.close()
@@ -884,10 +909,11 @@ def test_tpch_queries(
         raise AssertionError(
             f"TPC-H chaos injector failed: {injector.error}"
         ) from injector.error
-    if injector.confirmed < MIN_TPCH_CHAOS_OPERATIONS:
+    if injector.confirmed < MIN_TPCH_CONFIRMED_RECONNECTS:
         raise AssertionError(
-            "TPC-H workload completed without enough confirmed reconnects: "
-            f"{injector.confirmed} < {MIN_TPCH_CHAOS_OPERATIONS}"
+            f"TPC-H workload completed {completed_rounds} rounds without enough "
+            "confirmed reconnects: "
+            f"{injector.confirmed} < {MIN_TPCH_CONFIRMED_RECONNECTS}"
         )
 
 
