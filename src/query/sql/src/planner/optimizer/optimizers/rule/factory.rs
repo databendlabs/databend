@@ -37,6 +37,7 @@ use crate::optimizer::optimizers::rule::RuleMergeFilter;
 use crate::optimizer::optimizers::rule::RuleMergeFilterIntoMutation;
 use crate::optimizer::optimizers::rule::RuleMergeLimit;
 use crate::optimizer::optimizers::rule::RuleNormalizeScalarFilter;
+use crate::optimizer::optimizers::rule::RuleNullAddition;
 use crate::optimizer::optimizers::rule::RulePtr;
 use crate::optimizer::optimizers::rule::RulePushDownFilterAggregate;
 use crate::optimizer::optimizers::rule::RulePushDownFilterEvalScalar;
@@ -75,6 +76,7 @@ impl RuleFactory {
             RuleID::FilterNulls => Ok(Box::new(RuleFilterNulls::new(
                 ctx.get_enable_distributed_optimization(),
             ))),
+            RuleID::NullAddition => Ok(Box::new(RuleNullAddition::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(metadata))),

@@ -15,12 +15,12 @@ EvalScalar
     ├── other filters: []
     ├── Scan
     │   ├── table: default.statistics_trace_t (#1)
-    │   ├── filters: []
+    │   ├── filters: [is_not_null(statistics_trace_t.a (#1))]
     │   ├── order by: []
     │   └── limit: NONE
     └── Scan
         ├── table: default.statistics_trace_t (#0)
-        ├── filters: []
+        ├── filters: [is_not_null(statistics_trace_t.a (#0))]
         ├── order by: []
         └── limit: NONE
 
