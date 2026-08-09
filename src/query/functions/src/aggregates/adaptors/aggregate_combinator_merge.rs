@@ -27,6 +27,7 @@ use databend_common_expression::types::AggregateFunctionParam;
 use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalSize;
 
 use super::AggrState;
 use super::AggrStateLoc;
@@ -275,8 +276,18 @@ fn find_legacy_signature_with_arity(
                 sort_descs.to_vec(),
             )
             .ok()?;
-        return (nested.serialize_data_type() == *state_type)
-            .then(|| (nested, argument_types.clone()));
+        if nested.serialize_data_type() != *state_type
+            || legacy_signature_has_ambiguous_decimal_scale(
+                nested_name,
+                params,
+                state_type,
+                sort_descs,
+                argument_types,
+            )
+        {
+            return None;
+        }
+        return Some((nested, argument_types.clone()));
     }
 
     for candidate in candidates {
@@ -300,6 +311,82 @@ fn find_legacy_signature_with_arity(
         argument_types.pop();
     }
     None
+}
+
+fn legacy_signature_has_ambiguous_decimal_scale(
+    nested_name: &str,
+    params: &[Scalar],
+    state_type: &DataType,
+    sort_descs: &[AggregateFunctionSortDesc],
+    argument_types: &[DataType],
+) -> bool {
+    if nested_name.eq_ignore_ascii_case("sum")
+        && argument_types.iter().any(is_legacy_decimal_sum_argument)
+    {
+        return true;
+    }
+
+    argument_types.iter().enumerate().any(|(index, data_type)| {
+        alternate_decimal_scales(data_type)
+            .into_iter()
+            .any(|alternate_type| {
+                let mut alternate_arguments = argument_types.to_vec();
+                alternate_arguments[index] = alternate_type;
+                AggregateFunctionFactory::instance()
+                    .get(
+                        nested_name,
+                        params.to_vec(),
+                        alternate_arguments,
+                        sort_descs.to_vec(),
+                    )
+                    .is_ok_and(|nested| nested.serialize_data_type() == *state_type)
+            })
+    })
+}
+
+fn is_legacy_decimal_sum_argument(data_type: &DataType) -> bool {
+    match data_type {
+        DataType::Decimal(size) => size.scale() == 0 && matches!(size.precision(), 18 | 38 | 76),
+        DataType::Nullable(inner) => is_legacy_decimal_sum_argument(inner),
+        _ => false,
+    }
+}
+
+fn alternate_decimal_scales(data_type: &DataType) -> Vec<DataType> {
+    match data_type {
+        DataType::Decimal(size) => {
+            let alternate_scale = if size.scale() == 0 { 1 } else { 0 };
+            DecimalSize::new(size.precision(), alternate_scale)
+                .map(|size| vec![DataType::Decimal(size)])
+                .unwrap_or_default()
+        }
+        DataType::Nullable(inner) => alternate_decimal_scales(inner)
+            .into_iter()
+            .map(|alternate| DataType::Nullable(Box::new(alternate)))
+            .collect(),
+        DataType::Array(inner) => alternate_decimal_scales(inner)
+            .into_iter()
+            .map(|alternate| DataType::Array(Box::new(alternate)))
+            .collect(),
+        DataType::Map(inner) => alternate_decimal_scales(inner)
+            .into_iter()
+            .map(|alternate| DataType::Map(Box::new(alternate)))
+            .collect(),
+        DataType::Tuple(fields) => fields
+            .iter()
+            .enumerate()
+            .flat_map(|(index, field)| {
+                alternate_decimal_scales(field)
+                    .into_iter()
+                    .map(move |alternate| {
+                        let mut alternate_fields = fields.clone();
+                        alternate_fields[index] = alternate;
+                        DataType::Tuple(alternate_fields)
+                    })
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 fn persist_params(params: &[Scalar]) -> Result<Vec<AggregateFunctionParam>> {
@@ -410,19 +497,6 @@ impl AggregateFunction for AggregateMergeCombinator {
 
     unsafe fn drop_state(&self, place: AggrState) {
         unsafe { self.nested.drop_state(place) }
-    }
-
-    fn get_own_null_adaptor(
-        &self,
-        _nested_function: AggregateFunctionRef,
-        _params: Vec<Scalar>,
-        _arguments: Vec<DataType>,
-    ) -> Result<Option<AggregateFunctionRef>> {
-        if self.returns_state {
-            Ok(Some(Arc::new(self.clone())))
-        } else {
-            Ok(None)
-        }
     }
 }
 

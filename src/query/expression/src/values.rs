@@ -890,8 +890,10 @@ impl ScalarRef<'_> {
         match (self, data_type) {
             (ScalarRef::Null, DataType::Null) => true,
             (ScalarRef::Null, DataType::Nullable(_)) => true,
-            (_, DataType::AggregateState(state)) => self.is_value_of_type(state.physical_type()),
             _ => match (self, data_type.remove_nullable()) {
+                (_, DataType::AggregateState(state)) => {
+                    self.is_value_of_type(state.physical_type())
+                }
                 (ScalarRef::EmptyArray, DataType::EmptyArray) => true,
                 (ScalarRef::EmptyMap, DataType::EmptyMap) => true,
                 (ScalarRef::Number(_), DataType::Number(_)) => true,

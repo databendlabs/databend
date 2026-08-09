@@ -764,6 +764,7 @@ fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
         | (DataType::Map(box inner_src_ty), DataType::Map(box inner_dest_ty)) => {
             can_cast_to(inner_src_ty, inner_dest_ty)
         }
+        (DataType::AggregateState(state), dest_ty) => can_cast_to(state.physical_type(), dest_ty),
 
         (src_ty, dest_ty) => get_simple_cast_function(false, src_ty, dest_ty).is_some(),
     }

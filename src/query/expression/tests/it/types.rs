@@ -15,6 +15,7 @@
 use arrow_schema::Schema;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Scalar;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::AggregateFunctionParam;
@@ -53,10 +54,36 @@ fn test_aggregate_state_physical_type() {
         DataType::Nullable(Box::new(state_type.clone()))
     );
     assert_eq!(
-        DataType::Tuple(vec![DataType::String, aggregate_state])
+        DataType::Tuple(vec![DataType::String, aggregate_state.clone()])
             .physical_type()
             .into_owned(),
-        DataType::Tuple(vec![DataType::String, state_type])
+        DataType::Tuple(vec![DataType::String, state_type.clone()])
+    );
+
+    let logical_container = DataType::Tuple(vec![
+        DataType::Array(Box::new(aggregate_state.clone())),
+        DataType::Map(Box::new(DataType::Tuple(vec![
+            DataType::String,
+            aggregate_state.clone(),
+        ]))),
+    ]);
+    let physical_container = DataType::Tuple(vec![
+        DataType::Array(Box::new(state_type.clone())),
+        DataType::Map(Box::new(DataType::Tuple(vec![
+            DataType::String,
+            state_type.clone(),
+        ]))),
+    ]);
+    assert!(logical_container.matches_physical_type(&physical_container));
+
+    let scalar = Scalar::Tuple(vec![
+        Scalar::Number(NumberScalar::UInt64(1)),
+        Scalar::Boolean(true),
+    ]);
+    assert!(
+        scalar
+            .as_ref()
+            .is_value_of_type(&DataType::Nullable(Box::new(aggregate_state)))
     );
 }
 

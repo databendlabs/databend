@@ -234,6 +234,40 @@ from (
 ----
 4
 
+query I
+select sum_merge(merged_state)
+from (
+    select sum_merge_state(sum_state) as merged_state
+    from aggregate_state_combinator_test
+);
+----
+4950
+
+query I
+select array_length(array(sum_state))
+from aggregate_state_combinator_test
+limit 1;
+----
+1
+
+statement ok
+drop table if exists legacy_state_cast_test
+
+statement ok
+create table legacy_state_cast_test(state tuple(uint64, boolean) null)
+
+statement ok
+insert into legacy_state_cast_test
+select sum_state(number) from numbers(10)
+
+query I
+select count() from legacy_state_cast_test;
+----
+1
+
+statement ok
+drop table legacy_state_cast_test
+
 statement ok
 drop table aggregate_state_combinator_test
 
@@ -275,6 +309,12 @@ select sum_merge(sum_state),
 from legacy_aggregate_state_combinator_test;
 ----
 4950 0 99 100 99
+
+statement error 1010
+select sum_merge(tuple(to_decimal(4500, 38, 0), true));
+
+statement error 1010
+select avg_merge(tuple(to_decimal(4500, 38, 0), 10::uint64, true));
 
 statement ok
 drop table legacy_aggregate_state_combinator_test

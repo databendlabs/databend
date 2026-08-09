@@ -323,6 +323,18 @@ impl DataType {
             (DataType::Nullable(logical), DataType::Nullable(physical)) => {
                 logical.matches_physical_type(physical)
             }
+            (DataType::Array(logical), DataType::Array(physical))
+            | (DataType::Map(logical), DataType::Map(physical)) => {
+                logical.matches_physical_type(physical)
+            }
+            (DataType::Tuple(logical), DataType::Tuple(physical))
+                if logical.len() == physical.len() =>
+            {
+                logical
+                    .iter()
+                    .zip(physical)
+                    .all(|(logical, physical)| logical.matches_physical_type(physical))
+            }
             _ => false,
         }
     }
@@ -647,7 +659,6 @@ impl DataType {
             DataType::String => "VARCHAR".to_string(),
             DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             DataType::TimestampTz => "TIMESTAMP_TZ".to_string(),
-            DataType::AggregateState(_) => self.to_string().to_uppercase(),
             _ => self.to_string().to_uppercase(),
         }
     }

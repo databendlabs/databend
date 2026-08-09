@@ -408,6 +408,9 @@ impl<'a> Evaluator<'a> {
         if src_type == dest_type {
             return Ok(value);
         }
+        if src_type.matches_physical_type(dest_type) {
+            return Ok(value);
+        }
 
         if let Some(cast_fn) = get_simple_cast_function(false, src_type, dest_type) {
             if let Some(new_value) = self.run_simple_cast(
@@ -627,6 +630,15 @@ impl<'a> Evaluator<'a> {
                     Ok(Value::Column(NullableColumn::new_column(column, validity)))
                 }
             },
+            (DataType::AggregateState(state), _) => self.run_cast(
+                span,
+                state.physical_type(),
+                dest_type,
+                value,
+                validity,
+                expr_display,
+                options,
+            ),
 
             (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::EmptyArray) => {
