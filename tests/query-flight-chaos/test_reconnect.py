@@ -24,7 +24,7 @@ KEEPALIVE_DETECTION_TIMEOUT = 10
 TPCH_REPLACEMENT_TIMEOUT = 15
 MIN_TPCH_CONFIRMED_RECONNECTS = 3
 MAX_TPCH_CHAOS_OPERATIONS = 12
-MAX_TPCH_ROUNDS = 5
+TPCH_CHAOS_TIMEOUT = 120
 POLL_INTERVAL = 0.1
 WORKER_PODS = ("databend-query-1", "databend-query-2")
 
@@ -819,7 +819,7 @@ def test_tpch_queries(
     # 1. Run complete TPC-H result rounds serially.
     # 2. Wait for an active query and its worker Flight sockets before each fault.
     # 3. Randomly reset the sockets, sometimes holding reconnects behind a partition.
-    # 4. Repeat full rounds until three physical replacements have been observed.
+    # 4. Repeat full rounds until three replacements or the time budget is reached.
     # 5. Let sqllogictest verify every result in every round for loss or replay.
     print("=== complete TPC-H queries under random network faults ===", flush=True)
     operations = ChaosOperationLog(operation_log)
@@ -838,7 +838,7 @@ def test_tpch_queries(
         "1",
     ]
     operations.record(
-        f"workload=starting max_rounds={MAX_TPCH_ROUNDS} "
+        f"workload=starting timeout={TPCH_CHAOS_TIMEOUT}s "
         f"target_confirmed={MIN_TPCH_CONFIRMED_RECONNECTS} "
         f"command={' '.join(command)}"
     )
@@ -853,10 +853,11 @@ def test_tpch_queries(
     process: subprocess.Popen[str] | None = None
     return_code = 0
     completed_rounds = 0
+    deadline = time.monotonic() + TPCH_CHAOS_TIMEOUT
     try:
         while (
-            completed_rounds < MAX_TPCH_ROUNDS
-            and injector.confirmed < MIN_TPCH_CONFIRMED_RECONNECTS
+            injector.confirmed < MIN_TPCH_CONFIRMED_RECONNECTS
+            and time.monotonic() < deadline
             and not stop.is_set()
         ):
             round_number = completed_rounds + 1
@@ -911,8 +912,8 @@ def test_tpch_queries(
         ) from injector.error
     if injector.confirmed < MIN_TPCH_CONFIRMED_RECONNECTS:
         raise AssertionError(
-            f"TPC-H workload completed {completed_rounds} rounds without enough "
-            "confirmed reconnects: "
+            f"TPC-H workload completed {completed_rounds} rounds within "
+            f"{TPCH_CHAOS_TIMEOUT}s without enough confirmed reconnects: "
             f"{injector.confirmed} < {MIN_TPCH_CONFIRMED_RECONNECTS}"
         )
 
