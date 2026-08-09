@@ -1212,6 +1212,10 @@ fn test_calendar_monotonicity_check() {
         has_null: true,
         value: Some(Box::new(clear.clone())),
     });
+    let all_null = Domain::Nullable(NullableDomain {
+        has_null: true,
+        value: None,
+    });
 
     for name in [
         "to_start_of_day",
@@ -1248,6 +1252,12 @@ fn test_calendar_monotonicity_check() {
         assert_eq!(
             check(&st_johns, std::slice::from_ref(&nullable_clear)),
             Some(0)
+        );
+        assert_eq!(
+            check(&st_johns, std::slice::from_ref(&all_null)),
+            Some(0),
+            "{}: an all-NULL domain projects to one value",
+            name
         );
     }
 

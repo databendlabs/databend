@@ -264,6 +264,11 @@ impl Walk for AlterTableStmt {
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 try_walk!(cluster_by.walk(visitor));
             }
+            AlterTableAction::AlterTablePartitionBy { partition_by } => {
+                for expr in partition_by {
+                    try_walk!(expr.walk(visitor));
+                }
+            }
             AlterTableAction::ReclusterTable { selection, .. } => {
                 if let Some(selection) = selection {
                     try_walk!(selection.walk(visitor));
@@ -367,6 +372,11 @@ impl WalkMut for AlterTableStmt {
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 try_walk!(cluster_by.walk_mut(visitor));
+            }
+            AlterTableAction::AlterTablePartitionBy { partition_by } => {
+                for expr in partition_by {
+                    try_walk!(expr.walk_mut(visitor));
+                }
             }
             AlterTableAction::ReclusterTable { selection, .. } => {
                 if let Some(selection) = selection {

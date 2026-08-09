@@ -110,6 +110,104 @@ out stats     :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 0.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 0.0, null_count: 0, histogram: None }
 
+=== missing_stats_logical_predicates ===
+description: Boolean predicates should use an equal true/false distribution, while numeric estimates below the lower-bound threshold should take priority over AND fallbacks.
+expr          : and_filters(flag, number = 1)
+cardinality   : 100
+estimated     : 25
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(1), max: UInt(1), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : and_filters(flag = true, number = 1)
+cardinality   : 100
+estimated     : 25
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(1), max: UInt(1), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : or_filters(flag, number = 1)
+cardinality   : 100
+estimated     : 62.5
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: ~3.99999999991029[..4.0], null_count: 0, histogram: None }
+
+expr          : or_filters(flag = true, number = 1)
+cardinality   : 100
+estimated     : 62.5
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: ~3.99999999991029[..4.0], null_count: 0, histogram: None }
+
+expr          : flag > true
+cardinality   : 100
+estimated     : 0
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+
+expr          : flag >= false
+cardinality   : 100
+estimated     : 100
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+
+expr          : nullable_flag >= false
+cardinality   : 100
+estimated     : 20
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: ~3.984888427254817[..4.0], null_count: 0, histogram: None }
+
+expr          : and_filters(missing = 1, number = 1)
+cardinality   : 100
+estimated     : 25
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(1), max: UInt(1), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : and_filters(is_not_null(nullable_missing), number = 1)
+cardinality   : 100
+estimated     : 25
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(1), max: UInt(1), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : and_filters(flag, is_not_null(nullable_missing))
+cardinality   : 100
+estimated     : 20
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: ~3.984888427254817[..4.0], null_count: 0, histogram: None }
+
+expr          : and_filters(missing = 1, number != 1)
+cardinality   : 100
+estimated     : 50
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: ~3.9999998807907104[..4.0], null_count: 0, histogram: None }
+
+expr          : and_filters(is_not_null(nullable_missing), number != 1)
+cardinality   : 100
+estimated     : 20
+in stats      :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+1 ColumnStat { min: UInt(0), max: UInt(3), ndv: ~3.984888427254817[..4.0], null_count: 0, histogram: None }
+
 === histogram_logical_predicates ===
 description: AND constraints should be visible to later predicates, while OR and NOT should only affect final selectivity.
 expr          : a > 3, a > 4

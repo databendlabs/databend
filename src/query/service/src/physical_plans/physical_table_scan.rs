@@ -206,14 +206,14 @@ impl IPhysicalPlan for TableScan {
             true,
         )?;
 
+        let schema = self.source.schema();
         // Fill internal columns if needed.
         if let Some(internal_columns) = &self.internal_column {
-            builder
-                .main_pipeline
-                .add_transformer(|| TransformAddInternalColumns::new(internal_columns.clone()));
+            builder.main_pipeline.add_transformer(|| {
+                TransformAddInternalColumns::new(internal_columns.clone(), schema.clone())
+            });
         }
 
-        let schema = self.source.schema();
         let mut projection = self
             .name_mapping
             .keys()
@@ -307,7 +307,6 @@ impl PhysicalPlanBuilder {
                 let read_guard = self.metadata.read();
                 let virtual_column_id_set = read_guard
                     .virtual_columns_by_table_index(scan.table_index)
-                    .iter()
                     .map(|column| column.index())
                     .collect::<HashSet<_>>();
                 for required_column_id in required_column_ids {

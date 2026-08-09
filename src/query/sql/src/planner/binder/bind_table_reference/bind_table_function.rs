@@ -63,6 +63,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 
 impl Binder {
+    /// Bind a base table.
     /// Bind a table function.
     pub(crate) fn bind_table_function(
         &mut self,

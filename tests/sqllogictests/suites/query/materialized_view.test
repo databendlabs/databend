@@ -1,0 +1,238 @@
+# Materialized view DDL and explicit refresh over Fuse CHANGE_TRACKING.
+
+statement ok
+drop database if exists test_materialized_view
+
+statement ok
+create database test_materialized_view
+
+statement ok
+use test_materialized_view
+
+statement ok
+create table source (
+    id int,
+    amount int,
+    category string,
+    active boolean
+) change_tracking = true
+
+# Explicit MV column names are exposed to users.
+statement ok
+create materialized view mv_detail (item_id, doubled_amount) as
+select id, amount * 2 from source where active
+
+# Aggregating MVs persist states internally and expose finalized values.
+statement ok
+create materialized view mv_aggregate (category_name, total_amount, row_count, average_amount) as
+select category, sum(amount), count(*), avg(amount)
+from source
+where active
+group by category
+
+query I
+select count(*)
+from system.tables
+where database = 'test_materialized_view'
+  and table_type = 'MATERIALIZED VIEW'
+  and name in ('mv_detail', 'mv_aggregate')
+----
+2
+
+# CREATE leaves MV storage empty. The first explicit refresh consumes the full endpoint.
+statement ok
+insert into source values
+    (1, 10, 'a', true),
+    (2, 20, 'a', false),
+    (3, 30, 'b', true)
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+3 60
+
+query TIIR
+select category_name, total_amount, row_count, average_amount
+from mv_aggregate
+order by category_name
+----
+a 10 1 10.0
+b 30 1 30.0
+
+# INSERT-only changes use incremental refresh. Aggregate states are appended and merged on read.
+statement ok
+insert into source values
+    (4, 40, 'a', true),
+    (5, 50, 'b', true),
+    (6, 60, 'c', false)
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+3 60
+4 80
+5 100
+
+query TIIR
+select category_name, total_amount, row_count, average_amount
+from mv_aggregate
+order by category_name
+----
+a 50 2 25.0
+b 80 2 40.0
+
+# UPDATE uses the Standard changes path. Detail MV is maintained by MERGE;
+# aggregate MV is rebuilt from the current source endpoint.
+statement ok
+update source set amount = 25, active = true where id = 2
+
+statement ok
+update source set amount = 35, category = 'a' where id = 3
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+2 50
+3 70
+4 80
+5 100
+
+query TIIR
+select category_name, total_amount, row_count, average_amount
+from mv_aggregate
+order by category_name
+----
+a 110 4 27.5
+b 50 1 50.0
+
+# DELETE also uses Standard changes. Aggregate refresh falls back to a full rebuild.
+statement ok
+delete from source where id in (1, 5)
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+2 50
+3 70
+4 80
+
+query TIIR
+select category_name, total_amount, row_count, round(average_amount, 2)
+from mv_aggregate
+order by category_name
+----
+a 100 3 33.33
+
+query III
+select count(*), sum(amount), count_if(active) from source
+----
+4 160 3
+
+# TRUNCATE produces an empty source endpoint. Refresh must remove all previously materialized rows.
+statement ok
+truncate table source
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query I
+select count(*) from mv_detail
+----
+0
+
+query I
+select count(*) from mv_aggregate
+----
+0
+
+query I
+select count(*) from source
+----
+0
+
+statement ok
+drop materialized view mv_detail
+
+statement ok
+drop materialized view if exists mv_detail
+
+statement ok
+drop materialized view mv_aggregate
+
+query I
+select count(*)
+from system.tables
+where database = 'test_materialized_view'
+  and table_type = 'MATERIALIZED VIEW'
+  and name in ('mv_detail', 'mv_aggregate')
+----
+0
+
+# A persisted definition resolving to a same-named replacement table must not read old MV storage
+# or execute against the replacement source.
+statement ok
+create table replaced_source (id int) change_tracking = true
+
+statement ok
+create materialized view replaced_mv as select id from replaced_source where id > 0
+
+statement ok
+insert into replaced_source values (1)
+
+statement ok
+refresh materialized view replaced_mv
+
+statement ok
+drop table replaced_source
+
+statement ok
+create table replaced_source (id int) change_tracking = true
+
+statement error (?s)2328.*source table changed
+select * from replaced_mv
+
+statement error (?s)2328.*source table changed
+refresh materialized view replaced_mv
+
+statement ok
+drop materialized view replaced_mv
+
+statement ok
+drop table replaced_source
+
+statement ok
+use default
+
+statement ok
+drop database test_materialized_view
+

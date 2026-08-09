@@ -47,10 +47,10 @@ use tokio::runtime::Handle;
 use super::name_resolution::NameResolutionContext;
 use crate::BindContext;
 use crate::MetadataRef;
+use crate::binder::AliasLookup;
 use crate::optimizer::ir::SExpr;
 use crate::planner::expression::UdfValidationConfig;
 use crate::plans::DictGetFunctionArgument;
-use crate::plans::ScalarExpr;
 
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
@@ -429,8 +429,8 @@ pub struct TypeChecker<'a, A> {
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
-    aliases: &'a [(String, ScalarExpr)],
-    fallback_aliases: Option<&'a [(String, ScalarExpr)]>,
+    aliases: AliasLookup<'a>,
+    fallback_aliases: Option<AliasLookup<'a>>,
 
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.

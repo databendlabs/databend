@@ -1042,6 +1042,32 @@ async fn test_select_segments_covers_candidates() -> anyhow::Result<()> {
     assert_eq!(total, covered.len());
     assert_eq!(covered.len(), 7);
 
+    let compact_segment = compact_segments[0].1.clone();
+    let oversized_segments = (0..129)
+        .map(|segment_idx| {
+            (
+                SegmentLocation {
+                    segment_idx,
+                    location: (
+                        format!("oversized-segment-{segment_idx}"),
+                        SegmentInfo::VERSION,
+                    ),
+                    snapshot_loc: None,
+                },
+                compact_segment.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let windows = mutator.select_segments(&oversized_segments[..128], 32)?;
+    assert_eq!(windows.len(), 1);
+    assert_eq!(windows[0].len(), 128);
+
+    let windows = mutator.select_segments(&oversized_segments, 32)?;
+    assert_eq!(windows.len(), 2);
+    assert_eq!(windows[0].len(), 65);
+    assert_eq!(windows[1].len(), 64);
+
     // `RECLUSTER LIMIT 1`: each window holds at most one segment (segments on
     // distinct cluster-key points are never grouped), so the limit is honored.
     let limit_one_windows = mutator.select_segments(&compact_segments, 1)?;

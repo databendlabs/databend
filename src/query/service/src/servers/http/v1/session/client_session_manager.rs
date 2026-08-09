@@ -193,8 +193,8 @@ impl ClientSessionManager {
         let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
         client_session_api
             .upsert_client_session_id(
-                client_session_id,
                 &user_name,
+                client_session_id,
                 self.max_idle_time + self.min_refresh_interval + TTL_GRACE_PERIOD_META,
             )
             .await?;
@@ -283,8 +283,8 @@ impl ClientSessionManager {
         // client session id
         client_session_api
             .upsert_client_session_id(
-                &client_session_id,
                 &claim.user,
+                &client_session_id,
                 self.max_idle_time + self.min_refresh_interval + TTL_GRACE_PERIOD_META,
             )
             .await?;
@@ -347,7 +347,7 @@ impl ClientSessionManager {
     ) -> Result<()> {
         let client_session_api = UserApiProvider::instance().client_session_api(tenant);
         client_session_api
-            .drop_client_session_id(session_id, user_name)
+            .drop_client_session_id(user_name, session_id)
             .await
             .ok();
         let state_key = Self::state_key(tenant, session_id, user_name);

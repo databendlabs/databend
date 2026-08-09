@@ -45,6 +45,7 @@ use crate::plans::AlterPasswordPolicyPlan;
 use crate::plans::AlterRolePlan;
 use crate::plans::AlterStagePlan;
 use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AlterTablePartitionByPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
@@ -62,6 +63,7 @@ use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateDynamicTablePlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateIndexPlan;
+use crate::plans::CreateMaterializedViewPlan;
 use crate::plans::CreateNetworkPolicyPlan;
 use crate::plans::CreateNotificationPlan;
 use crate::plans::CreatePasswordPolicyPlan;
@@ -91,6 +93,7 @@ use crate::plans::DescProcedurePlan;
 use crate::plans::DescRowAccessPolicyPlan;
 use crate::plans::DescSequencePlan;
 use crate::plans::DescUserPlan;
+use crate::plans::DescribeMaterializedViewPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DescribeViewPlan;
@@ -101,6 +104,7 @@ use crate::plans::DropDatabasePlan;
 use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropIndexPlan;
+use crate::plans::DropMaterializedViewPlan;
 use crate::plans::DropNetworkPolicyPlan;
 use crate::plans::DropNotificationPlan;
 use crate::plans::DropPasswordPolicyPlan;
@@ -145,6 +149,7 @@ use crate::plans::PresignPlan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshDatabaseCachePlan;
 use crate::plans::RefreshIndexPlan;
+use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RefreshTableCachePlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
@@ -302,6 +307,7 @@ pub enum Plan {
     AddTableConstraint(Box<AddTableConstraintPlan>),
     DropTableConstraint(Box<DropTableConstraintPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
+    AlterTablePartitionBy(Box<AlterTablePartitionByPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable(Box<ReclusterPlan>),
     RevertTable(Box<RevertTablePlan>),
@@ -349,6 +355,12 @@ pub enum Plan {
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
     DescribeView(Box<DescribeViewPlan>),
+
+    // Materialized Views
+    CreateMaterializedView(Box<CreateMaterializedViewPlan>),
+    DropMaterializedView(Box<DropMaterializedViewPlan>),
+    DescribeMaterializedView(Box<DescribeMaterializedViewPlan>),
+    RefreshMaterializedView(Box<RefreshMaterializedViewPlan>),
 
     // Streams
     CreateStream(Box<CreateStreamPlan>),
@@ -584,6 +596,7 @@ impl Plan {
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
+            Plan::DescribeMaterializedView(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),

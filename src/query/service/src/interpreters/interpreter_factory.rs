@@ -426,6 +426,12 @@ impl InterpreterFactory {
             Plan::AlterTableClusterKey(alter_table_cluster_key) => Ok(Arc::new(
                 AlterTableClusterKeyInterpreter::try_create(ctx, *alter_table_cluster_key.clone())?,
             )),
+            Plan::AlterTablePartitionBy(alter_table_partition_by) => {
+                Ok(Arc::new(AlterTablePartitionByInterpreter::try_create(
+                    ctx,
+                    *alter_table_partition_by.clone(),
+                )?))
+            }
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
@@ -516,6 +522,18 @@ impl InterpreterFactory {
                 ctx,
                 *describe_view.clone(),
             )?)),
+
+            // Materialized Views
+            Plan::CreateMaterializedView(create_view) => Ok(Arc::new(
+                CreateMaterializedViewInterpreter::try_create(ctx, *create_view.clone())?,
+            )),
+            Plan::DropMaterializedView(drop_view) => Ok(Arc::new(
+                DropMaterializedViewInterpreter::try_create(ctx, *drop_view.clone())?,
+            )),
+            Plan::DescribeMaterializedView(_) => todo!(),
+            Plan::RefreshMaterializedView(refresh_view) => Ok(Arc::new(
+                RefreshMaterializedViewInterpreter::try_create(ctx, *refresh_view.clone())?,
+            )),
 
             // Streams
             Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(

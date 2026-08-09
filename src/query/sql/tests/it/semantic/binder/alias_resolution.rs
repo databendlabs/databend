@@ -18,7 +18,6 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
-use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::plans::Plan;
 use serde::Deserialize;
@@ -126,16 +125,7 @@ struct AliasMatrixYamlCase {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct AliasMatrixYamlRun {
-    #[serde(default)]
-    settings: AliasMatrixYamlSettings,
     sql: String,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct AliasMatrixYamlSettings {
-    #[serde(default)]
-    enable_group_by_column_first: bool,
 }
 
 impl AliasMatrixFile {
@@ -725,28 +715,8 @@ impl AliasMatrixYamlCase {
         }
         let multi_run = self.runs.len() > 1;
         for (index, run) in self.runs.iter().enumerate() {
-            ctx.get_settings().set_setting(
-                "enable_group_by_column_first".to_string(),
-                if run.settings.enable_group_by_column_first {
-                    "1"
-                } else {
-                    "0"
-                }
-                .to_string(),
-            )?;
-
             let run_name = if multi_run {
-                format!(
-                    "{}__{}__group_by_column_first_{}__run_{}",
-                    matrix.matrix,
-                    self.name,
-                    if run.settings.enable_group_by_column_first {
-                        "on"
-                    } else {
-                        "off"
-                    },
-                    index + 1,
-                )
+                format!("{}__{}__run_{}", matrix.matrix, self.name, index + 1,)
             } else {
                 format!("{}__{}", matrix.matrix, self.name)
             };
@@ -754,15 +724,6 @@ impl AliasMatrixYamlCase {
             write_case_title(file, &run_name, "")?;
             writeln!(file, "matrix: {}", matrix.matrix)?;
             writeln!(file, "key: {}", self.key)?;
-            writeln!(
-                file,
-                "setting: enable_group_by_column_first={}",
-                if run.settings.enable_group_by_column_first {
-                    1
-                } else {
-                    0
-                }
-            )?;
             writeln!(file, "sql: {}", run.sql)?;
             let outcome = match ctx.bind_sql(&run.sql).await {
                 Ok(plan) => SqlTestOutcome::Plan(plan.format_indent(Default::default())?),

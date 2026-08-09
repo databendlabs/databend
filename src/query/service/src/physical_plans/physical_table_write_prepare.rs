@@ -15,6 +15,7 @@
 use std::any::Any;
 
 use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
@@ -26,8 +27,10 @@ use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 
+/// Normalize a table-write input to the destination table schema before
+/// distribution-specific routing is applied.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct PaimonWritePrepare {
+pub struct TableWritePrepare {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
     pub table_info: TableInfo,
@@ -38,7 +41,7 @@ pub struct PaimonWritePrepare {
 }
 
 #[typetag::serde]
-impl IPhysicalPlan for PaimonWritePrepare {
+impl IPhysicalPlan for TableWritePrepare {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -49,7 +52,8 @@ impl IPhysicalPlan for PaimonWritePrepare {
         &mut self.meta
     }
     fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.insert_schema.clone())
+        let table_schema = self.table_info.schema().remove_virtual_computed_fields();
+        Ok(DataSchema::from(&table_schema).into())
     }
     fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))

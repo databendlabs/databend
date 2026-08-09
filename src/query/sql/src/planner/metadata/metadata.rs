@@ -38,7 +38,7 @@ use parking_lot::RwLock;
 
 use crate::optimizer::ir::SExpr;
 
-/// Planner use [`usize`] as it's index type.
+/// Planner use [`usize`] as its index type.
 ///
 /// This type will be used across the whole planner.
 pub type IndexType = usize;
@@ -234,36 +234,20 @@ impl Metadata {
         materialized_cte_id
     }
 
-    pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
+    pub fn columns_by_table_index(&self, index: IndexType) -> impl Iterator<Item = &ColumnEntry> {
         self.columns
             .iter()
-            .filter(|column| match column {
-                ColumnEntry::BaseTableColumn(BaseTableColumn { table_index, .. }) => {
-                    index == *table_index
-                }
-                ColumnEntry::InternalColumn(TableInternalColumn { table_index, .. }) => {
-                    index == *table_index
-                }
-                ColumnEntry::VirtualColumn(VirtualColumn { table_index, .. }) => {
-                    index == *table_index
-                }
-                _ => false,
-            })
-            .cloned()
-            .collect()
+            .filter(move |column| column.table_index() == Some(index))
     }
 
-    pub fn virtual_columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
-        self.columns
-            .iter()
-            .filter(|column| match column {
-                ColumnEntry::VirtualColumn(VirtualColumn { table_index, .. }) => {
-                    index == *table_index
-                }
-                _ => false,
-            })
-            .cloned()
-            .collect()
+    pub fn virtual_columns_by_table_index(
+        &self,
+        index: IndexType,
+    ) -> impl Iterator<Item = &ColumnEntry> {
+        self.columns.iter().filter(move |column| match column {
+            ColumnEntry::VirtualColumn(VirtualColumn { table_index, .. }) => index == *table_index,
+            _ => false,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]

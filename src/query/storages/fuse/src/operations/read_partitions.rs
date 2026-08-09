@@ -319,6 +319,16 @@ impl FuseTable {
     ) -> Result<Option<Pipeline>> {
         let snapshot = plan.statistics.snapshot.clone();
         let table_schema = self.schema_with_stream();
+        let internal_column_names = plan
+            .internal_columns
+            .as_ref()
+            .map(|columns| {
+                columns
+                    .values()
+                    .map(|column| column.column_name().clone())
+                    .collect::<HashSet<_>>()
+            })
+            .unwrap_or_default();
         let dal = self.operator.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
         let mut segment_format = FuseSegmentFormat::Row;
@@ -420,6 +430,7 @@ impl FuseTable {
                     part_info_tx,
                     derterministic_cache_key.clone(),
                     table_schema.clone(),
+                    internal_column_names.clone(),
                 )?;
             }
         }
@@ -822,6 +833,7 @@ impl FuseTable {
         part_info_tx: Sender<Result<PartInfoPtr>>,
         _derterministic_cache_key: Option<String>,
         table_schema: TableSchemaRef,
+        internal_column_names: HashSet<String>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let push_down = &pruner.push_down;
@@ -829,10 +841,14 @@ impl FuseTable {
         let runtime_filter_prune_context =
             RuntimeFilterPruneContext::try_create(ctx.clone(), scan_id, table_schema.clone())?;
 
-        // Only the columns that are used in the push down will be read, cached and passed to the next pipeline.
+        // Only physical columns have `meta_<id>` and `stat_<id>` entries in a
+        // column-oriented segment. Internal columns are materialized later from block metadata;
+        // their physical dependencies have already been added to the pushdown projection.
+        let is_physical_column =
+            |column_id| !databend_common_expression::is_internal_column_id(column_id);
         let projection_column_ids = {
-            let arrow_schema = self.schema().as_ref().into();
-            let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema()));
+            let arrow_schema = table_schema.as_ref().into();
+            let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&table_schema));
             let column_nodes = match push_down.as_ref().and_then(|p| p.projection.as_ref()) {
                 Some(projection) => {
                     match push_down.as_ref().and_then(|p| p.output_columns.as_ref()) {
@@ -847,6 +863,7 @@ impl FuseTable {
             column_nodes
                 .iter()
                 .flat_map(|c| c.leaf_column_ids.clone())
+                .filter(|column_id| is_physical_column(*column_id))
                 .collect::<Vec<_>>()
         };
         let filter_column_ids = match push_down
@@ -858,9 +875,14 @@ impl FuseTable {
                 let filter = &filters.filter.as_expr(&BUILTIN_FUNCTIONS);
                 let column_refs = filter.column_refs();
                 for (column_name, _) in column_refs {
+                    if internal_column_names.contains(&column_name) {
+                        continue;
+                    }
                     let field = table_schema.field_with_name(&column_name)?;
                     for column_id in field.leaf_column_ids() {
-                        column_ids.insert(column_id);
+                        if is_physical_column(column_id) {
+                            column_ids.insert(column_id);
+                        }
                     }
                 }
                 column_ids
@@ -875,16 +897,17 @@ impl FuseTable {
         }
         if let Some(runtime_filter_prune_context) = &runtime_filter_prune_context {
             for column_id in runtime_filter_prune_context.statistics_column_ids() {
-                if !block_prune_column_ids.contains(column_id) {
+                if is_physical_column(*column_id) && !block_prune_column_ids.contains(column_id) {
                     block_prune_column_ids.push(*column_id);
                 }
             }
         }
         let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
-        if let Some((_, order)) = runtime_scan_filters.preferred_filter() {
-            if !block_prune_column_ids.contains(&order.column_id) {
-                block_prune_column_ids.push(order.column_id);
-            }
+        if let Some((_, order)) = runtime_scan_filters.preferred_filter()
+            && is_physical_column(order.column_id)
+            && !block_prune_column_ids.contains(&order.column_id)
+        {
+            block_prune_column_ids.push(order.column_id);
         }
 
         let mut segment_column_projection = HashSet::new();

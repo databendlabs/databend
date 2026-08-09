@@ -39,10 +39,11 @@ use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::SegmentLocation;
-use crate::operations::ReclusterCandidateKind;
-use crate::operations::ReclusterFinalCarry;
-use crate::operations::ReclusterMutator;
-use crate::operations::ReclusterSelectionStats;
+use crate::operations::recluster::ReclusterCandidateKind;
+use crate::operations::recluster::ReclusterFinalCarry;
+use crate::operations::recluster::ReclusterMode;
+use crate::operations::recluster::ReclusterMutator;
+use crate::operations::recluster::ReclusterSelectionStats;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 
@@ -63,12 +64,6 @@ fn preferred_candidate_kind(
     } else {
         None
     }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ReclusterMode {
-    Conservative,
-    Aggressive,
 }
 
 impl FuseTable {
@@ -120,15 +115,15 @@ impl FuseTable {
         // Carry is tied to the current cluster key because cached block metas
         // may be normalized during candidate probing.
         let carry_has_state = !carry.pending.is_empty() || carry.scan_cursor != 0;
-        if carry_has_state && carry.cluster_key_id != mutator.cluster_key_id {
+        if carry_has_state && carry.cluster_key_id != mutator.properties.cluster_key_id {
             debug!(
                 "recluster: reset carry reason=cluster_key_changed old_cluster_key_id={} new_cluster_key_id={}",
-                carry.cluster_key_id, mutator.cluster_key_id,
+                carry.cluster_key_id, mutator.properties.cluster_key_id,
             );
             carry.scan_cursor = 0;
             carry.pending.clear();
         }
-        carry.cluster_key_id = mutator.cluster_key_id;
+        carry.cluster_key_id = mutator.properties.cluster_key_id;
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let segment_limit = limit.unwrap_or(DEFAULT_RECLUSTER_SEGMENT_LIMIT);
@@ -172,6 +167,14 @@ impl FuseTable {
                 })
                 .collect::<Vec<_>>();
 
+            // Count only stable windows inherited from the previous round. Windows found by the
+            // verification scan below are not counted until another `do_recluster` call, so
+            // clearing this cache can trigger at most one immediate retry of the current range.
+            let cached_stable_window_count = valid_carry
+                .iter()
+                .filter(|window| !window.has_tasks())
+                .count();
+            let has_cached_stable_windows = cached_stable_window_count > 0;
             let scan_start = carry.scan_cursor.min(number_segments);
             let scan_end = scan_start.saturating_add(chunk_size).min(number_segments);
 
@@ -410,7 +413,7 @@ impl FuseTable {
 
                 info!(
                     "recluster: candidate selection summary block_reduction_enabled={} scanned_blocks={} eligible_blocks={} depth_candidates={} reduction_candidates={} repack_candidates={} selected_kind={} selected_tasks={} selected_blocks={} max_tasks={} skipped_negative_level_blocks={} skipped_terminal_level_blocks={} skipped_terminal_level_bytes={}",
-                    mutator.enable_block_reduction,
+                    mutator.properties.enable_block_reduction,
                     selection_stats.scanned_blocks,
                     selection_stats.eligible_blocks,
                     depth_candidates,
@@ -462,27 +465,33 @@ impl FuseTable {
             recluster_blocks_count += block_count;
 
             if !parts.is_empty() {
-                // Keep unselected windows as coverage for this fixed FINAL scan range.
-                // A successful task consumes only the selected window. We intentionally do
-                // not invalidate unrelated probed windows for overlaps with newly written
-                // segments; doing so would turn FINAL into an expensive fixed-point rescan
-                // over its own intermediate output.
+                // Keep unselected windows as best-effort continuation state for this scan range.
+                // Empty windows cache stable probes while other tasks are still being rewritten.
+                // Once real tasks are exhausted, the branch below drops this cache and verifies the
+                // whole range once against the latest snapshot before declaring it stable.
                 carry.pending = pending_windows;
                 carry.scan_cursor = scan_start;
                 break parts;
             }
 
-            // Step 5: stable range, advance to the next fixed scan range.
+            if has_cached_stable_windows {
+                debug!(
+                    "recluster: verify candidate range without stable-window cache scan_start={} scan_end={} stable_windows={}",
+                    scan_start, scan_end, cached_stable_window_count,
+                );
+                carry.pending.clear();
+                continue;
+            }
+
+            // Step 5: stable range, advance to the next scan range.
             carry.pending.clear();
-            let next_scan_start = scan_end;
-            carry.scan_cursor = next_scan_start;
+            carry.scan_cursor = scan_end;
             debug!(
-                "recluster: candidate stable chunk advanced next_scan_start={} number_segments={}",
-                next_scan_start, number_segments,
+                "recluster: candidate stable range advanced next_scan_start={} number_segments={}",
+                scan_end, number_segments,
             );
             // LIMIT stops after the first non-pruned scan range.
-            if next_scan_start >= number_segments || (limit.is_some() && scan_had_compact_segments)
-            {
+            if scan_end >= number_segments || (limit.is_some() && scan_had_compact_segments) {
                 break parts;
             }
         };
@@ -547,37 +556,40 @@ impl FuseTable {
         pruning_ctx: Arc<PruningContext>,
         segment_pruner: Arc<SegmentPruner>,
         max_concurrency: usize,
-        mut segment_locs: Vec<SegmentLocation>,
+        segment_locs: Vec<SegmentLocation>,
     ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
         if segment_locs.is_empty() {
             return Ok(Vec::new());
         }
 
-        let mut remain = segment_locs.len() % max_concurrency;
-        let batch_size = segment_locs.len() / max_concurrency;
-        let mut works = Vec::with_capacity(max_concurrency);
+        // Keep segment metadata pruning bounded for large snapshot ranges. Results are accumulated
+        // in input order so strategy tie-breaking remains deterministic across pruning waves.
+        let wave_size = max_concurrency.saturating_mul(4).max(1);
+        let mut metas = Vec::new();
+        let mut segment_locs = segment_locs.into_iter();
+        loop {
+            let wave = segment_locs.by_ref().take(wave_size).collect::<Vec<_>>();
+            if wave.is_empty() {
+                break;
+            }
 
-        while !segment_locs.is_empty() {
-            let gap_size = std::cmp::min(1, remain);
-            let batch_size = batch_size + gap_size;
-            remain -= gap_size;
+            let worker_count = max_concurrency.min(wave.len()).max(1);
+            let batch_size = wave.len().div_ceil(worker_count);
+            let works = wave.chunks(batch_size).map(|batch| {
+                pruning_ctx.pruning_runtime.spawn({
+                    let segment_pruner = segment_pruner.clone();
+                    let batch = batch.to_vec();
+                    async move {
+                        let pruned_segments = segment_pruner.pruning(batch).await?;
+                        Result::<_>::Ok(pruned_segments)
+                    }
+                })
+            });
 
-            let batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(pruning_ctx.pruning_runtime.spawn({
-                let segment_pruner = segment_pruner.clone();
-
-                async move {
-                    let pruned_segments = segment_pruner.pruning(batch).await?;
-                    Result::<_>::Ok(pruned_segments)
-                }
-            }));
-        }
-
-        let mut metas = vec![];
-        let workers = futures::future::try_join_all(works).await?;
-        for worker in workers {
-            let res = worker?;
-            metas.extend(res);
+            let workers = futures::future::try_join_all(works).await?;
+            for worker in workers {
+                metas.extend(worker?);
+            }
         }
 
         Ok(metas)

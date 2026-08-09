@@ -680,6 +680,8 @@ impl<T: Ord> SimpleDomainCmp for SimpleDomain<T> {
     fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType> {
         if self.min > other.max || self.max < other.min {
             FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else if self.min == self.max && other.min == other.max && self.min == other.min {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
         } else {
             FunctionDomain::Full
         }
@@ -688,6 +690,8 @@ impl<T: Ord> SimpleDomainCmp for SimpleDomain<T> {
     fn domain_noteq(&self, other: &Self) -> FunctionDomain<BooleanType> {
         if self.min > other.max || self.max < other.min {
             FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else if self.min == self.max && other.min == other.max && self.min == other.min {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
         } else {
             FunctionDomain::Full
         }
@@ -804,4 +808,64 @@ pub fn unify_string(
             max: rhs.max.clone().unwrap_or_else(|| max.clone()),
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_domain_equality_for_singletons() {
+        let singleton = SimpleDomain { min: 7, max: 7 };
+
+        assert_eq!(
+            singleton.domain_eq(&singleton),
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        );
+        assert_eq!(
+            singleton.domain_noteq(&singleton),
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        );
+    }
+
+    #[test]
+    fn test_domain_equality_keeps_existing_range_results() {
+        let lhs = SimpleDomain { min: 1, max: 3 };
+        let overlapping = SimpleDomain { min: 2, max: 4 };
+        let disjoint = SimpleDomain { min: 5, max: 7 };
+
+        assert_eq!(lhs.domain_eq(&overlapping), FunctionDomain::Full);
+        assert_eq!(lhs.domain_noteq(&overlapping), FunctionDomain::Full);
+        assert_eq!(
+            lhs.domain_eq(&disjoint),
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        );
+        assert_eq!(
+            lhs.domain_noteq(&disjoint),
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        );
+    }
+
+    #[test]
+    fn test_string_domain_equality_for_singletons_and_unbounded_ranges() {
+        let singleton = StringDomain {
+            min: "databend".to_string(),
+            max: Some("databend".to_string()),
+        };
+        let unbounded = StringDomain {
+            min: "".to_string(),
+            max: None,
+        };
+
+        assert_eq!(
+            singleton.domain_eq(&singleton),
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        );
+        assert_eq!(
+            singleton.domain_noteq(&singleton),
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        );
+        assert_eq!(unbounded.domain_eq(&unbounded), FunctionDomain::Full);
+        assert_eq!(unbounded.domain_noteq(&unbounded), FunctionDomain::Full);
+    }
 }
