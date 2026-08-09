@@ -31,7 +31,7 @@ use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::TableIdList;
 use databend_common_proto_conv::FromToProto;
-use databend_meta::raft_store::key_spaces::RaftStoreEntry;
+use databend_meta::store_compat::sled_compat::key_spaces::RaftStoreEntry;
 use databend_meta::types::SeqV;
 use serde::de::DeserializeOwned;
 
@@ -1220,7 +1220,7 @@ mod tests {
     use databend_common_meta_app::schema::IndexNameIdentRaw;
     use databend_common_meta_app::schema::TableMeta;
     use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
-    use databend_meta::raft_store::key_spaces::RaftStoreEntry;
+    use databend_meta::store_compat::sled_compat::key_spaces::RaftStoreEntry;
     use databend_meta::types::SeqV;
 
     use super::*;

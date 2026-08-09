@@ -23,12 +23,11 @@ use std::io::Lines;
 use std::path::Path;
 use std::str::FromStr;
 
+use databend_meta::log_store;
 use databend_meta::openraft::storage::RaftLogStorageExt;
 use databend_meta::openraft::storage::RaftSnapshotBuilder;
-use databend_meta::raft_store::config::RaftConfig;
-use databend_meta::raft_store::ondisk::DataVersion;
-use databend_meta::raft_store::raft_log::api::raft_log_writer::RaftLogWriter;
-use databend_meta::raft_store::raft_log_v004;
+use databend_meta::raft_config::config::RaftConfig;
+use databend_meta::raft_config::data_version::DataVersion;
 use databend_meta::runtime_api::SpawnApi;
 use databend_meta::sled_store::init_get_sled_db;
 use databend_meta::store::RaftStore;
@@ -44,6 +43,7 @@ use databend_meta::types::raft_types::NodeId;
 use databend_meta::types::raft_types::StoredMembership;
 use databend_meta::types::raft_types::new_log_id;
 use display_more::display_option::DisplayOptionExt;
+use raft_log::api::raft_log_writer::RaftLogWriter;
 use url::Url;
 
 use crate::args::ImportArgs;
@@ -207,7 +207,7 @@ async fn init_new_cluster<SP: SpawnApi>(
     let sto = RaftStore::<SP>::open(&raft_config).await?;
 
     let last_applied = {
-        let sm2 = sto.get_sm_v003();
+        let sm2 = sto.get_state_machine();
         *sm2.sys_data().last_applied_ref()
     };
 
@@ -218,12 +218,12 @@ async fn init_new_cluster<SP: SpawnApi>(
 
     // Update snapshot: Replace nodes set and membership config.
     {
-        let sm2 = sto.get_sm_v003();
+        let sm2 = sto.get_state_machine();
 
         // It must set membership to state machine because
         // the snapshot may contain more logs than the last_log_id.
         // In which case, logs will be purged upon startup.
-        sm2.with_sys_data(|s| {
+        sm2.data().with_sys_data(|s| {
             *s.nodes_mut() = nodes.clone();
             *s.last_membership_mut() = StoredMembership::new(last_applied, membership.clone());
         });
@@ -272,10 +272,10 @@ async fn init_new_cluster<SP: SpawnApi>(
     // Reset node id
     {
         let mut log = sto.log().write().await;
-        log.save_user_data(Some(raft_log_v004::LogStoreMeta {
+        log.save_user_data(Some(log_store::LogStoreMeta {
             node_id: Some(args.id),
         }))?;
-        raft_log_v004::util::blocking_flush(&mut log).await?;
+        log_store::util::blocking_flush(&mut log).await?;
     }
 
     Ok(())

@@ -236,7 +236,7 @@ impl SpawnApi for DatabendRuntime {
         })
     }
 
-    fn resolve(hostname: &str) -> BoxFuture<'static, std::io::Result<Vec<IpAddr>>> {
+    fn lookup_host(hostname: &str) -> BoxFuture<'static, std::io::Result<Vec<IpAddr>>> {
         let hostname = hostname.to_string();
         Box::pin(async move {
             let resolver: Arc<databend_common_grpc::DNSResolver> =
