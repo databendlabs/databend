@@ -110,6 +110,9 @@ fn test_calc_rows_for_recluster() {
         (500, 800_000)
     );
 
+    // The smallest valid byte size still keeps the selected block count nonzero.
+    assert_eq!(t.calc_rows_for_recluster(2_000, 1, 300_000), (2_000, 1));
+
     // The compressed-size target is within the byte-size range.
     assert_eq!(
         t.calc_rows_for_recluster(4_000, 10_000_000, 600_000),

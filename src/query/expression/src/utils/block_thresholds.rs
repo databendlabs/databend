@@ -168,7 +168,7 @@ impl BlockThresholds {
         total_bytes: usize,
         total_compressed: usize,
     ) -> (usize, usize) {
-        debug_assert!(total_rows > 0);
+        debug_assert!(total_rows > 0 && total_bytes > 0 && total_compressed > 0);
 
         let default_bytes_per_block = self
             .max_bytes_per_block
@@ -199,6 +199,7 @@ impl BlockThresholds {
                 (total_bytes / self.min_bytes_per_block).max(min_block_num_by_bytes);
             block_num_by_compressed.clamp(min_block_num_by_bytes, max_block_num_by_bytes)
         };
+        let block_nums = block_nums.max(1);
 
         (
             total_rows.div_ceil(block_nums),
