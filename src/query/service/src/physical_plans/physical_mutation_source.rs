@@ -22,7 +22,6 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
@@ -59,6 +58,8 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextSettings;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationSource {
@@ -139,9 +140,12 @@ impl IPhysicalPlan for MutationSource {
                         conflict_resolve_context: ConflictResolveContext::None,
                         new_segment_locs: vec![],
                         table_id: table.get_id(),
+                        logical_updated_rows: 0,
+                        logical_deleted_rows: 0,
                         virtual_schema: None,
                         virtual_schema_mode: VirtualSchemaMode::Merge,
                         hll: HashMap::new(),
+                        top_n: HashMap::new(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));
                     OneBlockSource::create(output, block)

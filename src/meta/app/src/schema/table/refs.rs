@@ -18,9 +18,14 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_meta_client::kvapi;
 use databend_meta_client::types::MatchSeq;
 
 use super::TableLvtCheck;
+use crate::KeyExistsBuilder;
+use crate::KeyUnknownBuilder;
+use crate::app_error::ReferenceAlreadyExists;
+use crate::app_error::UnknownReference;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableTag {
@@ -30,7 +35,9 @@ pub struct TableTag {
     pub snapshot_loc: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+/// `__fd_table_tag/<tb_id>/<tag_name> -> TableTag`
+#[derive(Clone, Debug, Eq, PartialEq, Hash, kvapi::StructKey)]
+#[structkey(prefix = "__fd_table_tag")]
 pub struct TableIdTagName {
     pub table_id: u64,
     pub tag_name: String,
@@ -55,6 +62,25 @@ impl Display for TableIdTagName {
     }
 }
 
+impl KeyUnknownBuilder for TableIdTagName {
+    type UnknownError = UnknownReference;
+
+    fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
+        UnknownReference::new(format!("Unknown tag: '{}'; when:({})", self.tag_name, ctx))
+    }
+}
+
+impl KeyExistsBuilder for TableIdTagName {
+    type ExistError = ReferenceAlreadyExists;
+
+    fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
+        ReferenceAlreadyExists::new(format!(
+            "Tag already exists: '{}'; when:({})",
+            self.tag_name, ctx
+        ))
+    }
+}
+
 // -- Req types for RefApi --
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -72,7 +98,7 @@ pub struct CreateTableTagReq {
 pub struct DropTableTagReq {
     pub table_id: u64,
     pub tag_name: String,
-    pub seq: MatchSeq,
+    pub seq: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -90,42 +116,39 @@ pub struct ListTableTagsReq {
 
 mod kvapi_key_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::KeyBuilder;
-    use databend_meta_client::kvapi::KeyError;
-    use databend_meta_client::kvapi::KeyParser;
 
-    use crate::schema::TableId;
     use crate::schema::table::TableIdTagName;
     use crate::schema::table::TableTag;
 
-    impl kvapi::KeyCodec for TableIdTagName {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id).push_str(&self.tag_name)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, KeyError> {
-            let table_id = b.next_u64()?;
-            let tag_name = b.next_str()?;
-            Ok(Self { table_id, tag_name })
-        }
-    }
-
-    /// "__fd_table_tag/<tb_id>/<tag_name> -> TableTag"
     impl kvapi::Key for TableIdTagName {
-        const PREFIX: &'static str = "__fd_table_tag";
-
         type ValueType = TableTag;
+    }
+}
 
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
+#[cfg(test)]
+mod tests {
+    use databend_meta_client::kvapi::testing::assert_round_trip;
+
+    use super::TableIdTagName;
+    use crate::KeyExistsBuilder;
+    use crate::KeyUnknownBuilder;
+
+    #[test]
+    fn test_table_id_tag_name_key_format() {
+        assert_round_trip(TableIdTagName::new(9, "tag/a"), "__fd_table_tag/9/tag%2fa");
     }
 
-    impl kvapi::Value for TableTag {
-        type KeyType = TableIdTagName;
+    #[test]
+    fn test_table_id_tag_name_error_builder() {
+        let ident = TableIdTagName::new(9, "tag");
 
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
+        assert_eq!(
+            ident.unknown_error("ctx").to_string(),
+            "UnknownReference: `Unknown tag: 'tag'; when:(ctx)`"
+        );
+        assert_eq!(
+            ident.exist_error("ctx").to_string(),
+            "ReferenceAlreadyExists: Tag already exists: 'tag'; when:(ctx)"
+        );
     }
 }

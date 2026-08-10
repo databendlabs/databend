@@ -26,7 +26,6 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_args::string_value;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -67,6 +66,7 @@ use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 
 use crate::meta_service_error;
+use crate::sessions::TableContext;
 
 const TAG_REFERENCES_FUNC: &str = "tag_references";
 const TAG_REFERENCES_ENGINE: &str = "TAG_REFERENCES";

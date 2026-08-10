@@ -34,7 +34,12 @@ use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextSettings;
 
 // Query plan fragment with executor name
 #[derive(Debug)]

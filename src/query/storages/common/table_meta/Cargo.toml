@@ -22,15 +22,17 @@ databend-common-expression = { workspace = true }
 databend-common-frozen-api = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
-databend-common-native = { workspace = true }
+databend-common-meta-app = { workspace = true }
 databend-common-statistics = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-common-vector = { workspace = true }
 enum-as-inner = { workspace = true }
 log = { workspace = true }
 parquet = { workspace = true }
 rmp-serde = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+siphasher = { workspace = true }
 snap = { workspace = true, optional = true }
 typetag = { workspace = true }
 uuid = { workspace = true }

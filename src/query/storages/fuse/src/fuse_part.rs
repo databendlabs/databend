@@ -34,7 +34,6 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::SpatialStatistics;
 
 /// Fuse table partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
@@ -43,14 +42,11 @@ pub struct FuseBlockPartInfo {
 
     pub bloom_filter_index_location: Option<Location>,
     pub bloom_filter_index_size: u64,
-    pub spatial_index_location: Option<Location>,
-    pub spatial_index_size: u64,
 
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
     pub columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
-    pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
     pub compression: Compression,
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
@@ -86,12 +82,9 @@ impl FuseBlockPartInfo {
         location: String,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
-        spatial_index_location: Option<Location>,
-        spatial_index_size: u64,
         rows_count: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
-        spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
@@ -101,8 +94,6 @@ impl FuseBlockPartInfo {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
-            spatial_index_location,
-            spatial_index_size,
             create_on,
             columns_meta,
             nums_rows: rows_count as usize,
@@ -110,7 +101,6 @@ impl FuseBlockPartInfo {
             sort_min_max,
             block_meta_index,
             columns_stat,
-            spatial_stats,
         }))
     }
 
@@ -130,13 +120,6 @@ impl FuseBlockPartInfo {
 
     pub fn block_meta_index(&self) -> Option<&BlockMetaIndex> {
         self.block_meta_index.as_ref()
-    }
-
-    pub fn page_size(&self) -> usize {
-        self.block_meta_index
-            .as_ref()
-            .map(|meta| meta.page_size)
-            .unwrap_or(self.nums_rows)
     }
 }
 

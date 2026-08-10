@@ -15,16 +15,16 @@
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
-use derive_visitor::VisitorMut;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
 
-#[derive(Debug, Clone, Default, VisitorMut)]
-#[visitor(TableReference(enter))]
+#[derive(Debug, Clone, Default)]
 pub struct ViewRewriter {
     pub current_database: String,
 }
 
-impl ViewRewriter {
-    fn enter_table_reference(&mut self, table_ref: &mut TableReference) {
+impl VisitorMut for ViewRewriter {
+    fn visit_table_reference(&mut self, table_ref: &mut TableReference) -> Result<VisitControl, !> {
         if let TableReference::Table {
             span,
             table,
@@ -60,5 +60,7 @@ impl ViewRewriter {
                 }
             }
         }
+
+        Ok(VisitControl::Continue)
     }
 }

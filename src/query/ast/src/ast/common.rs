@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use ethnum::i256;
@@ -137,7 +139,7 @@ impl Display for ColumnID {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DatabaseRef {
     pub catalog: Option<Identifier>,
     pub database: Identifier,
@@ -153,7 +155,7 @@ impl Display for DatabaseRef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct TableRef {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -236,13 +238,13 @@ pub(crate) fn write_comma_separated_list(
 /// Write input items into `'a', 'b', 'c'`
 pub(crate) fn write_comma_separated_string_list(
     f: &mut Formatter,
-    items: impl IntoIterator<Item = impl Display>,
+    items: impl IntoIterator<Item = impl AsRef<str>>,
 ) -> std::fmt::Result {
     for (i, item) in items.into_iter().enumerate() {
         if i > 0 {
             write!(f, ", ")?;
         }
-        write!(f, "'{item}'")?;
+        write!(f, "{}", QuotedString(item, '\''))?;
     }
     Ok(())
 }

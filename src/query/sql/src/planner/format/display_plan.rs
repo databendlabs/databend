@@ -93,6 +93,7 @@ impl Plan {
             Plan::AddTableConstraint(_) => Ok("AddTableConstraint".to_string()),
             Plan::DropTableConstraint(_) => Ok("DropTableConstraint".to_string()),
             Plan::AlterTableClusterKey(_) => Ok("AlterTableClusterKey".to_string()),
+            Plan::AlterTablePartitionBy(_) => Ok("AlterTablePartitionBy".to_string()),
             Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
             Plan::RefreshTableCache(_) => Ok("RefreshTableCache".to_string()),
             Plan::ReclusterTable(_) => Ok("ReclusterTable".to_string()),
@@ -120,6 +121,12 @@ impl Plan {
             Plan::AlterView(_) => Ok("AlterView".to_string()),
             Plan::DropView(_) => Ok("DropView".to_string()),
             Plan::DescribeView(_) => Ok("DescribeView".to_string()),
+
+            // Materialized Views
+            Plan::CreateMaterializedView(_) => Ok("CreateMaterializedView".to_string()),
+            Plan::DropMaterializedView(_) => Ok("DropMaterializedView".to_string()),
+            Plan::RefreshMaterializedView(_) => Ok("RefreshMaterializedView".to_string()),
+            Plan::DescribeMaterializedView(_) => Ok("DescribeMaterializedViewStmt".to_string()),
 
             // Streams
             Plan::CreateStream(_) => Ok("CreateStream".to_string()),
@@ -184,6 +191,7 @@ impl Plan {
             Plan::DropUDF(_) => Ok("DropUDF".to_string()),
             Plan::AlterUser(_) => Ok("AlterUser".to_string()),
             Plan::DescUser(_) => Ok("DescUser".to_string()),
+            Plan::ShowPublicKeys(_) => Ok("ShowPublicKeys".to_string()),
             Plan::CreateRole(_) => Ok("CreateRole".to_string()),
             Plan::DropRole(_) => Ok("DropRole".to_string()),
             Plan::Presign(_) => Ok("Presign".to_string()),

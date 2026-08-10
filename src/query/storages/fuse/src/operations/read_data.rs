@@ -19,6 +19,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -37,8 +38,6 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         projection: Projection,
-        query_internal_columns: bool,
-        update_stream_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         let table_schema = self.schema_with_stream();
@@ -47,8 +46,6 @@ impl FuseTable {
             self.operator.clone(),
             table_schema,
             projection,
-            query_internal_columns,
-            update_stream_columns,
             put_cache,
         )
     }
@@ -66,8 +63,6 @@ impl FuseTable {
                 &self.schema_with_stream(),
                 plan.push_downs.as_ref(),
             ),
-            plan.internal_columns.is_some(),
-            plan.update_stream_columns,
             put_cache,
         )
     }
@@ -102,12 +97,6 @@ impl FuseTable {
 
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
-
-        let topk = plan
-            .push_downs
-            .as_ref()
-            .filter(|_| self.is_native()) // Only native format supports topk push down.
-            .and_then(|x| x.top_k(plan.schema().as_ref()));
 
         let index_reader = Arc::new(
             plan.push_downs
@@ -163,10 +152,12 @@ impl FuseTable {
                                 table_schema,
                                 lazy_init_segments,
                                 0,
+                                ReadPartitionsPruningMode::Normal,
+                                None,
                             )
                             .await
                         {
-                            Ok((_, partitions)) => {
+                            Ok((_, partitions, _)) => {
                                 for part in partitions.partitions {
                                     // the sql may be killed or early stop, ignore the error
                                     if let Err(_e) = tx.send(Ok(part)).await {
@@ -204,7 +195,6 @@ impl FuseTable {
             block_reader,
             max_threads,
             plan,
-            topk,
             max_io_requests,
             index_reader,
             virtual_reader,

@@ -1,5 +1,11 @@
 # see also list_stage.test
 
+statement error local filesystem paths must use fs:///path/ instead of /path/
+create stage local_path_stage url = '/tmp/'
+
+statement error local filesystem paths must use fs:///path/ instead of file:///path/
+create stage file_path_stage url = 'file:///tmp/'
+
 statement error path in URL must end with '/' when CREATE STAGE. Got '/tmp'.
 create stage t1 url = 'fs:///tmp'
 

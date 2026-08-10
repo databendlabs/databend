@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::OutputPort;
@@ -25,6 +24,8 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storages_basic::RecursiveCteMemoryTable;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextTableAccess;
 
 pub struct TransformRecursiveCteScan {
     ctx: Arc<QueryContext>,

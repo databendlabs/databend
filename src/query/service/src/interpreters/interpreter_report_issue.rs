@@ -28,7 +28,6 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -49,10 +48,14 @@ use super::InterpreterFactory;
 use super::ShowCreateQuerySettings;
 use super::ShowCreateTableInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Plan;
 
 pub struct ReportIssueInterpreter {
@@ -141,7 +144,10 @@ impl ReportIssueInterpreter {
             }
         };
 
-        let mut data_stream = match interpreter.execute(self.ctx.clone()).await {
+        let mut data_stream = match interpreter
+            .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+            .await
+        {
             Ok(data_stream) => data_stream,
             Err(error) => {
                 report_context.add_report_error(error);

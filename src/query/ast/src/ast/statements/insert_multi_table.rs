@@ -14,6 +14,8 @@
 
 use std::fmt::Display;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -21,7 +23,7 @@ use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::write_comma_separated_list;
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct IntoClause {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -30,7 +32,7 @@ pub struct IntoClause {
     pub source_columns: Vec<SourceExpr>,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 #[allow(clippy::large_enum_variant)]
 pub enum SourceExpr {
     Expr(Expr),
@@ -71,7 +73,7 @@ impl Display for IntoClause {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct WhenClause {
     pub condition: Expr,
     pub into_clauses: Vec<IntoClause>,
@@ -89,7 +91,7 @@ impl Display for WhenClause {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ElseClause {
     pub into_clauses: Vec<IntoClause>,
 }
@@ -104,7 +106,7 @@ impl Display for ElseClause {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct InsertMultiTableStmt {
     pub overwrite: bool,
     pub is_first: bool,

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::basic::create_resize_item;
 use databend_common_pipeline::core::Pipe;
@@ -40,6 +39,7 @@ use crate::servers::flight::v1::exchange::exchange_sink::build_hash_outbound_cha
 use crate::servers::flight::v1::network::create_local_channels;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub struct ExchangeTransform;
 
@@ -144,7 +144,11 @@ impl ExchangeTransform {
         let exchange_id = &params.exchange_id;
         let exchange_manager = DataExchangeManager::instance();
 
-        let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+        let channel_set = exchange_manager.get_or_create_exchange_channel_set(
+            query_id,
+            exchange_id,
+            local_threads,
+        )?;
 
         assert_eq!(channel_set.channels.len(), local_threads);
 
@@ -205,7 +209,11 @@ impl ExchangeTransform {
         let exchange_id = &params.exchange_id;
         let exchange_manager = DataExchangeManager::instance();
 
-        let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+        let channel_set = exchange_manager.get_or_create_exchange_channel_set(
+            query_id,
+            exchange_id,
+            local_threads,
+        )?;
         assert_eq!(channel_set.channels.len(), local_threads);
 
         let local_outbound = create_local_channels(&channel_set);

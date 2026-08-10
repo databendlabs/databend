@@ -689,24 +689,6 @@ impl DataBlock {
         res
     }
 
-    pub fn split_by_rows_if_needed_no_tail(&self, rows_per_block: usize) -> Vec<Self> {
-        // Since rows_per_block represents the expected number of rows per block,
-        // and the minimum number of rows per block is 0.8 * rows_per_block,
-        // the maximum is taken as 1.8 * rows_per_block.
-        let max_rows_per_block = (rows_per_block * 9).div_ceil(5);
-        let mut res = vec![];
-        let mut offset = 0;
-        let mut remain_rows = self.num_rows;
-        while remain_rows >= max_rows_per_block {
-            let cut = self.slice(offset..(offset + rows_per_block));
-            res.push(cut);
-            offset += rows_per_block;
-            remain_rows -= rows_per_block;
-        }
-        res.push(self.slice(offset..(offset + remain_rows)));
-        res
-    }
-
     #[inline]
     pub fn merge_block(&mut self, block: DataBlock) {
         self.entries.reserve(block.num_columns());
@@ -978,10 +960,15 @@ impl DataBlock {
 
     /// Calculates the memory size of a `DataBlock` for writing purposes.
     /// This function is used to estimate the memory footprint of a `DataBlock` when writing it to storage.
-    pub fn estimate_block_size(&self) -> usize {
+    /// `num_columns` is the number of leading columns to include in the estimate.
+    /// Temporary columns appended for sorting/statistics, such as extra cluster key columns,
+    /// should not be included when they are not written.
+    pub fn estimate_block_size(&self, num_columns: usize) -> usize {
+        debug_assert!(num_columns <= self.entries.len());
         let num_rows = self.num_rows();
         self.columns()
             .iter()
+            .take(num_columns)
             .map(|entry| match entry {
                 BlockEntry::Column(Column::Nullable(col)) if col.validity().true_count() == 0 => {
                     // For `Nullable` columns with no valid values,

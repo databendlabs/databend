@@ -21,7 +21,6 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::Result;
 use databend_common_sql::NameResolutionContext;
-use databend_common_sql::normalize_identifier;
 
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_title;
@@ -32,7 +31,7 @@ fn write_normalized_identifier(
     ident: &Identifier,
     context: &NameResolutionContext,
 ) -> Result<()> {
-    let normalized = normalize_identifier(ident, context);
+    let normalized = context.normalize_identifier(ident);
     let quote = normalized.quote.unwrap_or('-');
     writeln!(file, "{label}: name={} quote={quote}", normalized.name)?;
     Ok(())
@@ -118,9 +117,9 @@ fn test_identifier_semantics() -> Result<()> {
         quote: Some('"'),
         ident_type: Default::default(),
     };
-    let first = normalize_identifier(&original, &case_insensitive_context);
-    let second = normalize_identifier(&first, &mixed_sensitivity_context);
-    let third = normalize_identifier(&second, &case_insensitive_context);
+    let first = case_insensitive_context.normalize_identifier(&original);
+    let second = mixed_sensitivity_context.normalize_identifier(&first);
+    let third = case_insensitive_context.normalize_identifier(&second);
     writeln!(
         file,
         "phase1: name={} quote={}",

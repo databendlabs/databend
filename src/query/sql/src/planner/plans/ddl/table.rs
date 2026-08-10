@@ -57,6 +57,7 @@ pub struct CreateTablePlan {
     pub table_properties: Option<TableOptions>,
     pub table_partition: Option<Vec<String>>,
     pub field_comments: Vec<String>,
+    pub field_stats_truncate_len: Vec<Option<u64>>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
@@ -221,6 +222,9 @@ pub struct AnalyzeTablePlan {
     pub database: String,
     pub table: String,
     pub no_scan: bool,
+    pub histogram_requested: bool,
+    pub histogram_algorithm: Option<String>,
+    pub histogram_kll_relative_error: Option<f64>,
 }
 
 impl AnalyzeTablePlan {
@@ -532,10 +536,26 @@ pub struct AlterTableClusterKeyPlan {
     pub table: String,
     pub branch: Option<String>,
     pub cluster_keys: Vec<String>,
-    pub cluster_type: String,
 }
 
 impl AlterTableClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AlterTablePartitionByPlan {
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    /// `None` when `IF EXISTS` resolves a missing table during binding.
+    pub table_id: Option<u64>,
+    pub partition_keys: Vec<String>,
+}
+
+impl AlterTablePartitionByPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

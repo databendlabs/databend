@@ -23,12 +23,14 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropRowAccessPolicyPlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::PolicyType;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
 
 pub struct DropRowAccessPolicyInterpreter {
     ctx: Arc<QueryContext>,
@@ -80,6 +82,11 @@ impl Interpreter for DropRowAccessPolicyInterpreter {
         }
 
         if let Some(policy_id) = policy_id {
+            SecurityPolicyCacheManager::instance().invalidate(
+                PolicyType::RowAccessPolicy,
+                &tenant,
+                policy_id,
+            );
             let role_api = UserApiProvider::instance().role_api(&tenant);
             role_api
                 .revoke_ownership(&OwnershipObject::RowAccessPolicy { policy_id })

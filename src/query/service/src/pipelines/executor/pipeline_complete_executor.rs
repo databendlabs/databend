@@ -13,19 +13,26 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
+use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
 use fastrace::func_path;
 use fastrace::prelude::*;
+use tokio::sync::oneshot;
+use tokio::time::sleep;
+use tokio::time::timeout;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
+
+const COMPLETE_EXECUTOR_JOIN_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub struct PipelineCompleteExecutor {
     executor: Arc<PipelineExecutor>,
@@ -89,16 +96,35 @@ impl PipelineCompleteExecutor {
         self.executor.finish(cause);
     }
 
+    /// Runs the complete pipeline without blocking a Tokio worker.
     #[fastrace::trace]
-    pub fn execute(&self) -> Result<()> {
+    pub async fn execute(&self) -> Result<()> {
         let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
+        let (tx, rx) = oneshot::channel();
+        let thread_function = self.thread_function();
 
-        Thread::named_spawn(
-            Some(String::from("CompleteExecutor")),
-            self.thread_function(),
-        )
-        .join()
-        .flatten()
+        let join_handle = Thread::named_spawn(Some(String::from("CompleteExecutor")), move || {
+            let _ = tx.send(Result::flatten(catch_unwind(thread_function)));
+        });
+
+        let res = rx.await.map_err(|_| {
+            ErrorCode::Internal("Complete executor thread exited without returning result")
+        })?;
+
+        let Ok(_) = timeout(COMPLETE_EXECUTOR_JOIN_TIMEOUT, async {
+            while !join_handle.is_finished() {
+                sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        else {
+            return Err(ErrorCode::Internal(
+                "Complete executor thread did not exit within 3s after returning result",
+            ));
+        };
+
+        join_handle.join()?;
+        res
     }
 
     fn thread_function(&self) -> impl Fn() -> Result<()> + use<> {

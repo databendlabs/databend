@@ -309,6 +309,29 @@ select * from t2;
 1 2
 3 4
 
+# when clause supports constant scalar subquery
+statement ok
+create or replace table t1(c1 int, c2 int);
+
+statement ok
+create or replace table s(c3 int, c4 int);
+
+statement ok
+insert into s values(1,2),(3,4),(5,6);
+
+query I
+INSERT ALL
+    WHEN c3 = (SELECT 5) THEN
+      INTO t1
+SELECT * from s;
+----
+1
+
+query II
+select * from t1 order by c1;
+----
+5 6
+
 # test multi-statement transaction
 statement ok 
 create or replace table t1(c1 bigint,c2 int) cluster by (c1 + 1);
@@ -614,3 +637,145 @@ select * from t2 order by c1;
 ----
 1 2
 3 4
+
+# Regression test for issue #19716:
+# INSERT ALL with SELECT * ... WHERE ... LIMIT caused column mapping error
+# due to lazy materialization reordering physical output columns.
+
+statement ok
+create or replace table src_19716 (id int, name varchar, created_at timestamp);
+
+statement ok
+insert into src_19716 values
+  (0, 'alice', '2026-04-10 08:00:00'),
+  (1, 'bob',   '2026-04-12 08:00:00');
+
+statement ok
+create or replace table dst1_19716 like src_19716;
+
+statement ok
+create or replace table dst2_19716 like src_19716;
+
+# Case 1: no WHERE, no LIMIT
+statement ok
+INSERT ALL
+  WHEN id = 0 THEN INTO dst1_19716
+  WHEN id = 1 THEN INTO dst2_19716
+SELECT * FROM src_19716;
+
+query ITT
+select id, name, created_at from dst1_19716 order by id;
+----
+0 alice 2026-04-10 08:00:00.000000
+
+query ITT
+select id, name, created_at from dst2_19716 order by id;
+----
+1 bob 2026-04-12 08:00:00.000000
+
+statement ok
+truncate table dst1_19716;
+
+statement ok
+truncate table dst2_19716;
+
+# Case 2: WHERE only
+statement ok
+INSERT ALL
+  WHEN id = 0 THEN INTO dst1_19716
+  WHEN id = 1 THEN INTO dst2_19716
+SELECT * FROM src_19716
+WHERE created_at >= '2026-04-01' AND created_at < '2026-04-15';
+
+query ITT
+select id, name, created_at from dst1_19716 order by id;
+----
+0 alice 2026-04-10 08:00:00.000000
+
+query ITT
+select id, name, created_at from dst2_19716 order by id;
+----
+1 bob 2026-04-12 08:00:00.000000
+
+statement ok
+truncate table dst1_19716;
+
+statement ok
+truncate table dst2_19716;
+
+# Case 3: LIMIT only
+statement ok
+INSERT ALL
+  WHEN id = 0 THEN INTO dst1_19716
+  WHEN id = 1 THEN INTO dst2_19716
+SELECT * FROM src_19716
+LIMIT 2;
+
+query ITT
+select id, name, created_at from dst1_19716 order by id;
+----
+0 alice 2026-04-10 08:00:00.000000
+
+query ITT
+select id, name, created_at from dst2_19716 order by id;
+----
+1 bob 2026-04-12 08:00:00.000000
+
+statement ok
+truncate table dst1_19716;
+
+statement ok
+truncate table dst2_19716;
+
+# Case 4: WHERE + LIMIT — previously failed with column mapping error
+statement ok
+INSERT ALL
+  WHEN id = 0 THEN INTO dst1_19716
+  WHEN id = 1 THEN INTO dst2_19716
+SELECT * FROM src_19716
+WHERE created_at >= '2026-04-01' AND created_at < '2026-04-15'
+LIMIT 2;
+
+query ITT
+select id, name, created_at from dst1_19716 order by id;
+----
+0 alice 2026-04-10 08:00:00.000000
+
+query ITT
+select id, name, created_at from dst2_19716 order by id;
+----
+1 bob 2026-04-12 08:00:00.000000
+
+statement ok
+truncate table dst1_19716;
+
+statement ok
+truncate table dst2_19716;
+
+# Case 5: WHERE + LIMIT with subquery WHEN keeps source column order
+statement ok
+INSERT ALL
+  WHEN id = (SELECT 0) THEN INTO dst1_19716
+  WHEN id = (SELECT 1) THEN INTO dst2_19716
+SELECT * FROM src_19716
+WHERE created_at >= '2026-04-01' AND created_at < '2026-04-15'
+LIMIT 2;
+
+query ITT
+select id, name, created_at from dst1_19716 order by id;
+----
+0 alice 2026-04-10 08:00:00.000000
+
+query ITT
+select id, name, created_at from dst2_19716 order by id;
+----
+1 bob 2026-04-12 08:00:00.000000
+
+statement ok
+drop table src_19716;
+
+statement ok
+drop table dst1_19716;
+
+statement ok
+drop table dst2_19716;

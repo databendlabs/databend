@@ -14,3 +14,4 @@
 
 mod binder;
 mod identifier;
+mod type_check;

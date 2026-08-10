@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_base::hints::assume;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,6 +25,7 @@ use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::with_join_hash_method;
+use databend_common_pipeline::core::check_interrupt;
 
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
@@ -41,6 +41,7 @@ use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::OneBlockJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub struct AntiLeftHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,
@@ -242,6 +243,8 @@ impl<'a> JoinStream for LeftAntiFilterHashJoinStream<'a> {
         let mut selected = vec![true; num_rows];
 
         loop {
+            check_interrupt()?;
+
             self.probed_rows.clear();
             let max_rows = self.probed_rows.matched_probe.capacity();
             self.probe_keys_stream.advance(self.probed_rows, max_rows)?;

@@ -18,7 +18,6 @@ use chrono::DateTime;
 use chrono::Utc;
 pub use kvapi_impl::SequenceRsc;
 
-use super::CreateOption;
 use crate::tenant::Tenant;
 use crate::tenant_key::ident::TIdent;
 
@@ -65,7 +64,7 @@ impl From<CreateSequenceReq> for SequenceMeta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateSequenceReq {
-    pub create_option: CreateOption,
+    pub override_existing: bool,
     pub ident: SequenceIdent,
     pub create_on: DateTime<Utc>,
     pub start: u64,
@@ -77,7 +76,9 @@ pub struct CreateSequenceReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CreateSequenceReply {}
+pub struct CreateSequenceReply {
+    pub success: bool,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceNextValueReq {
@@ -132,8 +133,6 @@ pub struct DropSequenceReply {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use super::SequenceMeta;
     use crate::tenant_key::resource::TenantResource;
 
@@ -143,18 +142,12 @@ mod kvapi_impl {
         const HAS_TENANT: bool = true;
         type ValueType = SequenceMeta;
     }
-
-    impl kvapi::Value for SequenceMeta {
-        type KeyType = super::SequenceIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::schema::SequenceIdent;
     use crate::tenant::Tenant;
@@ -163,11 +156,7 @@ mod tests {
     fn test_sequence_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = SequenceIdent::new_generic(tenant, "3".to_string());
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_sequence/dummy/3");
-
-        assert_eq!(ident, SequenceIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_sequence/dummy/3");
     }
 
     #[test]

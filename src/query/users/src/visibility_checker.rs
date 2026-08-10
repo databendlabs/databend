@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_exception::Result;
 use databend_common_hashtable::HashMap as FastHashMap;
 use databend_common_hashtable::HashSet as FastHashSet;
 use databend_common_hashtable::HashtableKeyable;
@@ -27,10 +28,14 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::tenant::Tenant;
 use enumflags2::BitFlags;
 use itertools::Itertools;
+use log::trace;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+
+use crate::UserApiProvider;
 
 pub enum Object {
     Stage,
@@ -283,7 +288,11 @@ pub fn is_table_visible_with_owner(
 }
 
 impl GrantObjectVisibilityChecker {
-    pub fn new(user: &UserInfo, roles: &[RoleInfo], ownership_objects: &[OwnershipInfo]) -> Self {
+    /// Construct a grant-only checker from user and effective roles.
+    /// No ownership data is loaded — ownership-related collections remain empty.
+    /// This is the formal API for the grant-first path; equivalent to
+    /// `new(user, roles, &[])` but with clearer intent.
+    pub fn new_from_grants(user: &UserInfo, roles: &[RoleInfo]) -> Self {
         let mut granted_global_udf = false;
         let mut granted_global_ws = false;
         let mut granted_global_c = false;
@@ -295,21 +304,10 @@ impl GrantObjectVisibilityChecker {
         let mut granted_global_masking_policy = false;
         let mut granted_global_row_access_policy = false;
         let mut catalog_pool = CatalogIdPool::new();
-        let total_objects = ownership_objects.len();
-        // Most deployments use only the default catalog
+
         let estimated_catalogs = 1;
-        let estimated_dbs_per_catalog = (total_objects / estimated_catalogs / 10).max(16);
-        // Adaptive initial capacity based on total objects:
-        // - Small datasets (< 10K): 16 (minimal memory overhead)
-        // - Medium datasets (10K-1M): 64 (good balance)
-        // - Large datasets (> 1M): 128 (reduce rehashing for large single-DB cases)
-        let estimated_tables_per_db = if total_objects < 10_000 {
-            16
-        } else if total_objects < 1_000_000 {
-            64
-        } else {
-            128
-        };
+        let estimated_dbs_per_catalog = 16;
+        let estimated_tables_per_db = 16;
 
         let mut granted_databases_id: FastHashMap<u32, FastHashSet<u64>> =
             FastHashMap::with_capacity(estimated_catalogs);
@@ -321,12 +319,9 @@ impl GrantObjectVisibilityChecker {
         let mut granted_masking_policies_id: FastHashSet<u64> = FastHashSet::with_capacity(16);
         let mut granted_row_access_policies_id: FastHashSet<u64> = FastHashSet::with_capacity(16);
 
-        let mut granted_databases: FxHashSet<(Arc<str>, Arc<str>)> =
-            FxHashSet::with_capacity_and_hasher(total_objects / 10, Default::default());
-        let mut extra_databases: FxHashSet<(Arc<str>, Arc<str>)> =
-            FxHashSet::with_capacity_and_hasher(total_objects / 10, Default::default());
-        let mut granted_tables: FxHashSet<(Arc<str>, Arc<str>, Arc<str>)> =
-            FxHashSet::with_capacity_and_hasher(total_objects, Default::default());
+        let mut granted_databases: FxHashSet<(Arc<str>, Arc<str>)> = FxHashSet::default();
+        let mut extra_databases: FxHashSet<(Arc<str>, Arc<str>)> = FxHashSet::default();
+        let mut granted_tables: FxHashSet<(Arc<str>, Arc<str>, Arc<str>)> = FxHashSet::default();
 
         let mut granted_udfs: FxHashSet<Arc<str>> = FxHashSet::default();
         let mut granted_write_stages: FxHashSet<Arc<str>> = FxHashSet::default();
@@ -534,75 +529,7 @@ impl GrantObjectVisibilityChecker {
             }
         }
 
-        for ownership in ownership_objects {
-            match &ownership.object {
-                OwnershipObject::Database {
-                    catalog_name,
-                    db_id,
-                } => {
-                    let catalog_id = catalog_pool.get_or_insert(catalog_name);
-                    let db_set =
-                        fast_map_get_or_insert(&mut granted_databases_id, catalog_id, || {
-                            FastHashSet::with_capacity(estimated_dbs_per_catalog)
-                        });
-                    let _ = db_set.set_insert(*db_id);
-                    let extra_set =
-                        fast_map_get_or_insert(&mut extra_databases_id, catalog_id, || {
-                            FastHashSet::with_capacity(estimated_dbs_per_catalog)
-                        });
-                    let _ = extra_set.set_insert(*db_id);
-                }
-                OwnershipObject::Table {
-                    catalog_name,
-                    db_id,
-                    table_id,
-                } => {
-                    let catalog_id = catalog_pool.get_or_insert(catalog_name);
-                    let db_map = fast_map_get_or_insert(&mut granted_tables_id, catalog_id, || {
-                        FastHashMap::with_capacity(estimated_dbs_per_catalog)
-                    });
-                    let table_set = fast_map_get_or_insert(db_map, *db_id, || {
-                        FastHashSet::with_capacity(estimated_tables_per_db)
-                    });
-                    let _ = table_set.set_insert(*table_id);
-
-                    // if table is visible, the table's database is also treated as visible
-                    let extra_set =
-                        fast_map_get_or_insert(&mut extra_databases_id, catalog_id, || {
-                            FastHashSet::with_capacity(estimated_dbs_per_catalog)
-                        });
-                    let _ = extra_set.set_insert(*db_id);
-                }
-                OwnershipObject::Stage { name } => {
-                    let name: Arc<str> = Arc::from(name.as_str());
-                    granted_write_stages.insert(name.clone());
-                    granted_read_stages.insert(name);
-                }
-                OwnershipObject::UDF { name } => {
-                    granted_udfs.insert(Arc::from(name.as_str()));
-                }
-                OwnershipObject::Warehouse { id } => {
-                    granted_ws.insert(Arc::from(id.as_str()));
-                }
-                OwnershipObject::Connection { name } => {
-                    granted_c.insert(Arc::from(name.as_str()));
-                }
-                OwnershipObject::Sequence { name } => {
-                    granted_seq.insert(Arc::from(name.as_str()));
-                }
-                OwnershipObject::Procedure { procedure_id } => {
-                    let _ = granted_procedures_id.set_insert(*procedure_id);
-                }
-                OwnershipObject::MaskingPolicy { policy_id } => {
-                    let _ = granted_masking_policies_id.set_insert(*policy_id);
-                }
-                OwnershipObject::RowAccessPolicy { policy_id } => {
-                    let _ = granted_row_access_policies_id.set_insert(*policy_id);
-                }
-            }
-        }
-
-        // Phase 4: Add system databases
+        // Add system databases
         let mut sys_databases: FxHashSet<(Arc<str>, Arc<str>)> =
             FxHashSet::with_capacity_and_hasher(2, Default::default());
         let default_catalog: Arc<str> = Arc::from("default");
@@ -640,6 +567,97 @@ impl GrantObjectVisibilityChecker {
             granted_masking_policies_id,
             granted_row_access_policies_id,
         }
+    }
+
+    /// Legacy/full constructor: grant processing + ownership injection.
+    /// Kept for `Object::All`, `show_grants`, and other paths that supply
+    /// a pre-loaded ownership slice.
+    pub fn new(user: &UserInfo, roles: &[RoleInfo], ownership_objects: &[OwnershipInfo]) -> Self {
+        let mut checker = Self::new_from_grants(user, roles);
+
+        let total_objects = ownership_objects.len();
+        let estimated_dbs_per_catalog = (total_objects / 10).max(16);
+        let estimated_tables_per_db = if total_objects < 10_000 {
+            16
+        } else if total_objects < 1_000_000 {
+            64
+        } else {
+            128
+        };
+
+        for ownership in ownership_objects {
+            match &ownership.object {
+                OwnershipObject::Database {
+                    catalog_name,
+                    db_id,
+                } => {
+                    let catalog_id = checker.catalog_pool.get_or_insert(catalog_name);
+                    let db_set = fast_map_get_or_insert(
+                        &mut checker.granted_databases_id,
+                        catalog_id,
+                        || FastHashSet::with_capacity(estimated_dbs_per_catalog),
+                    );
+                    let _ = db_set.set_insert(*db_id);
+                    let extra_set =
+                        fast_map_get_or_insert(&mut checker.extra_databases_id, catalog_id, || {
+                            FastHashSet::with_capacity(estimated_dbs_per_catalog)
+                        });
+                    let _ = extra_set.set_insert(*db_id);
+                }
+                OwnershipObject::Table {
+                    catalog_name,
+                    db_id,
+                    table_id,
+                } => {
+                    let catalog_id = checker.catalog_pool.get_or_insert(catalog_name);
+                    let db_map =
+                        fast_map_get_or_insert(&mut checker.granted_tables_id, catalog_id, || {
+                            FastHashMap::with_capacity(estimated_dbs_per_catalog)
+                        });
+                    let table_set = fast_map_get_or_insert(db_map, *db_id, || {
+                        FastHashSet::with_capacity(estimated_tables_per_db)
+                    });
+                    let _ = table_set.set_insert(*table_id);
+
+                    // if table is visible, the table's database is also treated as visible
+                    let extra_set =
+                        fast_map_get_or_insert(&mut checker.extra_databases_id, catalog_id, || {
+                            FastHashSet::with_capacity(estimated_dbs_per_catalog)
+                        });
+                    let _ = extra_set.set_insert(*db_id);
+                }
+                OwnershipObject::Stage { name } => {
+                    let name: Arc<str> = Arc::from(name.as_str());
+                    checker.granted_write_stages.insert(name.clone());
+                    checker.granted_read_stages.insert(name);
+                }
+                OwnershipObject::UDF { name } => {
+                    checker.granted_udfs.insert(Arc::from(name.as_str()));
+                }
+                OwnershipObject::Warehouse { id } => {
+                    checker.granted_ws.insert(Arc::from(id.as_str()));
+                }
+                OwnershipObject::Connection { name } => {
+                    checker.granted_c.insert(Arc::from(name.as_str()));
+                }
+                OwnershipObject::Sequence { name } => {
+                    checker.granted_seq.insert(Arc::from(name.as_str()));
+                }
+                OwnershipObject::Procedure { procedure_id } => {
+                    let _ = checker.granted_procedures_id.set_insert(*procedure_id);
+                }
+                OwnershipObject::MaskingPolicy { policy_id } => {
+                    let _ = checker.granted_masking_policies_id.set_insert(*policy_id);
+                }
+                OwnershipObject::RowAccessPolicy { policy_id } => {
+                    let _ = checker
+                        .granted_row_access_policies_id
+                        .set_insert(*policy_id);
+                }
+            }
+        }
+
+        checker
     }
 
     #[inline(always)]
@@ -947,4 +965,139 @@ impl GrantObjectVisibilityChecker {
             );
         Some(dbs)
     }
+}
+
+// ============================================================================
+// Public DB/Table lazy visibility helper
+// ============================================================================
+
+/// Lightweight description of a table candidate for visibility checking.
+/// Used by the public helper so it doesn't depend on catalog traits.
+pub struct TableVisibilityTarget<'a> {
+    pub table_name: &'a str,
+    pub table_id: u64,
+}
+
+/// Result of `filter_db_tables_by_visibility`.
+pub struct DbTableVisibilityResult {
+    /// Indexes into the input `tables` slice that are visible.
+    pub visible_table_indexes: Vec<usize>,
+    /// Whether the database itself is visible. True when:
+    /// - db grant hit, OR
+    /// - db ownership hit, OR
+    /// - any table grant/ownership hit (table visibility implies parent db visibility)
+    pub db_visible: bool,
+}
+
+/// Maximum batch size for `mget_ownerships` calls to avoid oversized RPC payloads.
+/// Aligned with `KVPbApi::CHUNK_SIZE = 256` as the default batch size.
+const MGET_OWNERSHIP_BATCH_SIZE: usize = 256;
+
+/// Filter tables under a single database by visibility using grant-first + lazy ownership.
+///
+/// This is the public helper extracted from `system::util::filter_tables_with_optimized_path`.
+/// It only does judgment — callers keep their own object types and use the returned indexes
+/// to pick visible items from their original collections.
+///
+/// Logic:
+/// 1. Check each table against the grant-only checker; collect visible + unresolved.
+/// 2. If unresolved remain, check database ownership via `get_ownership` (preserves
+///    "missing owner role → ACCOUNT_ADMIN" semantics).
+/// 3. If still unresolved, batch-query table ownerships via `mget_ownerships`.
+/// 4. Any table hit (grant or ownership) makes the parent database visible.
+pub async fn filter_db_tables_by_visibility(
+    checker: &GrantObjectVisibilityChecker,
+    effective_roles: &[RoleInfo],
+    tenant: &Tenant,
+    catalog_name: &str,
+    db_name: &str,
+    db_id: u64,
+    tables: &[TableVisibilityTarget<'_>],
+) -> Result<DbTableVisibilityResult> {
+    let mut visible_table_indexes = Vec::with_capacity(tables.len());
+    let mut unresolved: Vec<usize> = Vec::new();
+    let mut db_visible = false;
+
+    // Phase 1: grant check
+    for (i, t) in tables.iter().enumerate() {
+        if checker.check_table_visibility(catalog_name, db_name, t.table_name, db_id, t.table_id) {
+            visible_table_indexes.push(i);
+            db_visible = true;
+        } else {
+            unresolved.push(i);
+        }
+    }
+
+    if unresolved.is_empty() {
+        return Ok(DbTableVisibilityResult {
+            visible_table_indexes,
+            db_visible,
+        });
+    }
+
+    // Phase 2: database ownership check (uses get_ownership to preserve role-existence semantics)
+    let user_api = UserApiProvider::instance();
+    let t = std::time::Instant::now();
+    let db_ownership = user_api
+        .get_ownership(tenant, &OwnershipObject::Database {
+            catalog_name: catalog_name.to_string(),
+            db_id,
+        })
+        .await?;
+    trace!(
+        "filter_db_tables_by_visibility: get_ownership(db '{}') took {:?}",
+        db_name,
+        t.elapsed()
+    );
+
+    if let Some(db_owner_info) = db_ownership {
+        if is_role_owner(Some(&db_owner_info.role), effective_roles) {
+            // Database owner can see all tables
+            db_visible = true;
+            for idx in unresolved {
+                visible_table_indexes.push(idx);
+            }
+            return Ok(DbTableVisibilityResult {
+                visible_table_indexes,
+                db_visible,
+            });
+        }
+    }
+
+    // Phase 3: batch table ownership check
+    for batch_start in (0..unresolved.len()).step_by(MGET_OWNERSHIP_BATCH_SIZE) {
+        let batch_end = (batch_start + MGET_OWNERSHIP_BATCH_SIZE).min(unresolved.len());
+        let batch = &unresolved[batch_start..batch_end];
+
+        let ownership_objects: Vec<OwnershipObject> = batch
+            .iter()
+            .map(|&idx| OwnershipObject::Table {
+                catalog_name: catalog_name.to_string(),
+                db_id,
+                table_id: tables[idx].table_id,
+            })
+            .collect();
+
+        let t = std::time::Instant::now();
+        let ownerships = user_api.mget_ownerships(tenant, &ownership_objects).await?;
+        trace!(
+            "filter_db_tables_by_visibility: mget_ownerships({}) took {:?}",
+            ownership_objects.len(),
+            t.elapsed()
+        );
+
+        for (batch_idx, ownership) in ownerships.into_iter().enumerate() {
+            if let Some(owner_info) = ownership {
+                if is_role_owner(Some(&owner_info.role), effective_roles) {
+                    visible_table_indexes.push(batch[batch_idx]);
+                    db_visible = true;
+                }
+            }
+        }
+    }
+
+    Ok(DbTableVisibilityResult {
+        visible_table_indexes,
+        db_visible,
+    })
 }

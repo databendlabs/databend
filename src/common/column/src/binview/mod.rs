@@ -658,7 +658,7 @@ impl From<Utf8ViewColumn> for ArrayData {
                 column
                     .buffers
                     .iter()
-                    .map(|x| x.clone().into())
+                    .map(|buffer| arrow_buffer::Buffer::from(buffer.clone()))
                     .collect::<Vec<_>>(),
             );
         unsafe { builder.build_unchecked() }
@@ -674,7 +674,7 @@ impl From<BinaryViewColumn> for ArrayData {
                 column
                     .buffers
                     .iter()
-                    .map(|x| x.clone().into())
+                    .map(|buffer| arrow_buffer::Buffer::from(buffer.clone()))
                     .collect::<Vec<_>>(),
             );
         unsafe { builder.build_unchecked() }
@@ -686,8 +686,8 @@ impl From<ArrayData> for Utf8ViewColumn {
         let views = data.buffers()[0].clone();
         let buffers = data.buffers()[1..]
             .iter()
-            .map(|x| x.clone().into())
-            .collect();
+            .map(|buffer| crate::buffer::Buffer::from(buffer.clone()))
+            .collect::<Arc<[crate::buffer::Buffer<u8>]>>();
 
         unsafe { Utf8ViewColumn::new_unchecked_unknown_md(views.into(), buffers, None) }
     }

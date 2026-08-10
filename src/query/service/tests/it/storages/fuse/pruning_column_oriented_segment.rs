@@ -48,6 +48,7 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::storages::fuse::io::MetaReaders;
@@ -78,6 +79,7 @@ async fn apply_snapshot_pruning(
         op,
         schema.clone(),
         push_down,
+        None,
         bloom_index_cols,
         vec![],
         HashSet::new(),
@@ -91,10 +93,12 @@ async fn apply_snapshot_pruning(
         fuse_pruner.clone(),
         &mut prune_pipeline,
         ctx.clone(),
+        0,
         segment_rx,
         res_tx,
         cache_key,
         schema.clone(),
+        HashSet::new(),
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {
@@ -176,6 +180,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         ]
         .into(),
         field_comments: vec![],
+        field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
         table_indexes: None,

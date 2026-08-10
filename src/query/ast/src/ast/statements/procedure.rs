@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -24,7 +26,7 @@ use crate::ast::Identifier;
 use crate::ast::TypeName;
 use crate::ast::write_comma_separated_list;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ExecuteImmediateStmt {
     pub script: Expr,
 }
@@ -36,7 +38,7 @@ impl Display for ExecuteImmediateStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ProcedureType {
     pub name: Option<String>,
     pub data_type: TypeName,
@@ -52,7 +54,7 @@ impl Display for ProcedureType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum ProcedureLanguage {
     SQL,
 }
@@ -65,7 +67,7 @@ impl Display for ProcedureLanguage {
     }
 }
 
-#[derive(Clone, PartialEq, Drive, DriveMut)]
+#[derive(Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ProcedureIdentity {
     pub name: String,
     pub args_type: Vec<TypeName>,
@@ -103,7 +105,7 @@ impl Display for ProcedureIdentity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct CreateProcedureStmt {
     pub create_option: CreateOption,
     pub name: ProcedureIdentity,
@@ -166,7 +168,7 @@ impl Display for CreateProcedureStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DropProcedureStmt {
     pub if_exists: bool,
     pub name: ProcedureIdentity,
@@ -183,7 +185,7 @@ impl Display for DropProcedureStmt {
         Ok(())
     }
 }
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DescProcedureStmt {
     pub name: ProcedureIdentity,
 }
@@ -195,7 +197,7 @@ impl Display for DescProcedureStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct CallProcedureStmt {
     pub name: Identifier,
     pub args: Vec<Expr>,

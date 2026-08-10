@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::DerivedColumnScope;
 use crate::ColumnSet;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
@@ -29,22 +30,23 @@ use crate::plans::UDFCall;
 impl SubqueryDecorrelatorOptimizer {
     #[recursive::recursive]
     pub(crate) fn flatten_scalar(
-        &mut self,
+        &self,
         scalar: &ScalarExpr,
         correlated_columns: &ColumnSet,
+        derived_columns: &DerivedColumnScope,
     ) -> Result<ScalarExpr> {
         match scalar {
             ScalarExpr::BoundColumnRef(bound_column) => {
                 let column_binding = bound_column.column.clone();
                 if correlated_columns.contains(&column_binding.index) {
-                    let index = self.derived_columns.get(&column_binding.index).unwrap();
+                    let index = derived_columns.must_resolve(column_binding.index)?;
                     let metadata = self.metadata.read();
-                    let column_entry = metadata.column(*index);
+                    let column_entry = metadata.column(index);
                     return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: scalar.span(),
                         column: ColumnBindingBuilder::new(
                             column_entry.name(),
-                            *index,
+                            index,
                             Box::new(column_entry.data_type()),
                             column_binding.visibility,
                         )
@@ -57,12 +59,16 @@ impl SubqueryDecorrelatorOptimizer {
             ScalarExpr::AggregateFunction(agg) => {
                 let mut args = Vec::with_capacity(agg.args.len());
                 for arg in &agg.args {
-                    args.push(self.flatten_scalar(arg, correlated_columns)?);
+                    args.push(self.flatten_scalar(arg, correlated_columns, derived_columns)?);
                 }
                 let mut sort_descs = Vec::with_capacity(agg.sort_descs.len());
                 for desc in &agg.sort_descs {
                     sort_descs.push(AggregateFunctionScalarSortDesc {
-                        expr: self.flatten_scalar(&desc.expr, correlated_columns)?,
+                        expr: self.flatten_scalar(
+                            &desc.expr,
+                            correlated_columns,
+                            derived_columns,
+                        )?,
                         is_reuse_index: desc.is_reuse_index,
                         nulls_first: desc.nulls_first,
                         asc: desc.asc,
@@ -83,7 +89,7 @@ impl SubqueryDecorrelatorOptimizer {
                 let arguments = func
                     .arguments
                     .iter()
-                    .map(|arg| self.flatten_scalar(arg, correlated_columns))
+                    .map(|arg| self.flatten_scalar(arg, correlated_columns, derived_columns))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(ScalarExpr::FunctionCall(FunctionCall {
                     span: func.span,
@@ -93,7 +99,8 @@ impl SubqueryDecorrelatorOptimizer {
                 }))
             }
             ScalarExpr::CastExpr(cast_expr) => {
-                let scalar = self.flatten_scalar(&cast_expr.argument, correlated_columns)?;
+                let scalar =
+                    self.flatten_scalar(&cast_expr.argument, correlated_columns, derived_columns)?;
                 Ok(ScalarExpr::CastExpr(CastExpr {
                     span: cast_expr.span,
                     is_try: cast_expr.is_try,
@@ -105,7 +112,7 @@ impl SubqueryDecorrelatorOptimizer {
                 let arguments = udf
                     .arguments
                     .iter()
-                    .map(|arg| self.flatten_scalar(arg, correlated_columns))
+                    .map(|arg| self.flatten_scalar(arg, correlated_columns, derived_columns))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(ScalarExpr::UDFCall(UDFCall {
                     span: udf.span,

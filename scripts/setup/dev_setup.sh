@@ -192,6 +192,7 @@ function install_protobuf {
 		curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-${arch}.zip
 		unzip protoc-3.15.8-linux-${arch}.zip -d protoc-3.15.8
 		"${PRE_COMMAND[@]}" cp protoc-3.15.8/bin/protoc /usr/local/bin/
+		"${PRE_COMMAND[@]}" cp -r protoc-3.15.8/include /usr/local/
 		"${PRE_COMMAND[@]}" rm -rf protoc-3.15.8*
 		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/protoc
 		;;
@@ -659,6 +660,17 @@ function install_typos_cli {
 	"${typos_bin}/typos" --version
 }
 
+function install_cargo_valgrind {
+	echo "==> installing cargo-valgrind..."
+	if cargo valgrind --version &>/dev/null; then
+		echo "cargo-valgrind is already installed"
+		return
+	fi
+
+	cargo install cargo-valgrind
+	cargo valgrind --version
+}
+
 function usage {
 	cat <<EOF
     usage: $0 [options]
@@ -694,6 +706,7 @@ Build tools (since -b or no option was provided):
   * protobuf-compiler
   * openjdk
   * python3-dev
+  * cargo-valgrind
 EOF
 	fi
 
@@ -881,6 +894,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	install_sccache "v0.12.0"
 	install_cargo_nextest
+	install_cargo_valgrind
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then

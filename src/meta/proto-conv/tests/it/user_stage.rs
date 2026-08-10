@@ -442,6 +442,7 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
                 access_key_id: "access_key_id".to_string(),
                 access_key_secret: "access_key_secret".to_string(),
                 server_side_encryption_key_id: "".to_string(),
+                role_arn: "".to_string(),
                 network_config: None,
             }),
         },

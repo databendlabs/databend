@@ -116,6 +116,8 @@ use crate::with_opaque_size;
 use crate::with_opaque_size_mapped;
 use crate::with_opaque_type;
 
+pub const LARGE_STRING_BYTES_THRESHOLD: usize = 256;
+
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Value<T: AccessType> {
     Scalar(T::Scalar),
@@ -567,6 +569,47 @@ impl Scalar {
             },
             _ => None,
         }
+    }
+
+    // Convert a scalar distance into a conservative f64 upper bound.
+    //
+    // Decimal values and large integers may lose precision when converted to f64,
+    // so those cases are rounded upward to the next representable f64.
+    pub fn to_distance_threshold(&self) -> Option<f64> {
+        let (threshold, needs_upper_bound) = match self {
+            Scalar::Number(number) => match number {
+                NumberScalar::Int8(v) => (*v as f64, false),
+                NumberScalar::Int16(v) => (*v as f64, false),
+                NumberScalar::Int32(v) => (*v as f64, false),
+                NumberScalar::Int64(v) => (*v as f64, *v > (1_i64 << 53)),
+                NumberScalar::UInt8(v) => (*v as f64, false),
+                NumberScalar::UInt16(v) => (*v as f64, false),
+                NumberScalar::UInt32(v) => (*v as f64, false),
+                NumberScalar::UInt64(v) => (*v as f64, *v > (1_u64 << 53)),
+                NumberScalar::Float32(v) => (v.0 as f64, false),
+                NumberScalar::Float64(v) => (v.0, false),
+            },
+            Scalar::Decimal(decimal) => (
+                match decimal {
+                    DecimalScalar::Decimal64(_, _)
+                    | DecimalScalar::Decimal128(_, _)
+                    | DecimalScalar::Decimal256(_, _) => decimal.to_float64(),
+                },
+                true,
+            ),
+            _ => return None,
+        };
+
+        if !threshold.is_finite() || threshold < 0.0 {
+            return None;
+        }
+
+        let threshold = if needs_upper_bound && threshold != f64::MAX {
+            threshold.next_up()
+        } else {
+            threshold
+        };
+        Some(threshold)
     }
 
     pub fn as_bytes(&self) -> Option<&[u8]> {
@@ -1872,7 +1915,7 @@ impl Column {
         }
     }
 
-    /// Checks if the average length of a string column exceeds 256 bytes.
+    /// Checks if the average length of a string column exceeds LARGE_STRING_BYTES_THRESHOLD bytes.
     /// If it does, the bloom index for the column will not be established.
     pub fn check_large_string(&self) -> bool {
         let (inner, len) = if let Column::Nullable(c) = self {
@@ -1882,7 +1925,7 @@ impl Column {
         };
         if let Column::String(v) = inner {
             let bytes_per_row = v.total_bytes_len() / len.max(1);
-            if bytes_per_row > 256 {
+            if bytes_per_row > LARGE_STRING_BYTES_THRESHOLD {
                 return true;
             }
         }

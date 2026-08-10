@@ -9,6 +9,7 @@ edition = { workspace = true }
 repository = "https://github.com/datafuselabs/databend/tree/main/src/query/ast"
 
 [dependencies]
+databend-common-ast-visit-derive = { workspace = true }
 derive-visitor = { workspace = true }
 educe = { workspace = true }
 enum-as-inner = { workspace = true }

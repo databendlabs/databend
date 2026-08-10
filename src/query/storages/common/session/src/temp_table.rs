@@ -19,6 +19,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::TableEngineMismatch;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
@@ -41,7 +43,8 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_storage::DataOperator;
-use databend_common_storage::init_operator;
+use databend_common_storage::EndpointPolicyScope;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
@@ -55,9 +58,24 @@ use parking_lot::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct TempTblMgr {
+    // User-visible temporary tables.
     name_to_id: HashMap<String, u64>,
     id_to_table: HashMap<u64, TempTable>,
     next_id: u64,
+
+    // Atomic CTAS tables that have not been published yet.
+    staged_tables: HashMap<u64, TempTable>,
+}
+
+impl Default for TempTblMgr {
+    fn default() -> Self {
+        TempTblMgr {
+            name_to_id: HashMap::new(),
+            id_to_table: HashMap::new(),
+            staged_tables: HashMap::new(),
+            next_id: TEMP_TBL_ID_BEGIN,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -74,11 +92,7 @@ impl TempTblMgr {
     }
 
     pub fn init() -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(TempTblMgr {
-            name_to_id: HashMap::new(),
-            id_to_table: HashMap::new(),
-            next_id: TEMP_TBL_ID_BEGIN,
-        }))
+        Arc::new(Mutex::new(Self::default()))
     }
 
     fn inc_next_id(&mut self) {
@@ -88,8 +102,8 @@ impl TempTblMgr {
         }
     }
 
-    pub fn is_empty(&mut self) -> bool {
-        self.id_to_table.is_empty()
+    pub fn is_empty(&self) -> bool {
+        self.id_to_table.is_empty() && self.staged_tables.is_empty()
     }
 
     pub fn create_table(
@@ -104,41 +118,53 @@ impl TempTblMgr {
             as_dropped,
             ..
         } = req;
-        let orphan_table_name = as_dropped.then(|| format!("orphan@{}", name_ident.table_name));
-
         let Some(db_id) = table_meta.options.get(OPT_KEY_DATABASE_ID) else {
-            return Err(ErrorCode::Internal(format!(
-                "Database id not set in table options"
-            )));
+            return Err(ErrorCode::Internal("Database id not set in table options"));
         };
         let db_id = db_id.parse::<u64>()?;
 
         let desc = Self::temp_table_desc(&name_ident.db_name, &name_ident.table_name);
+        let existing_id = self.name_to_id.get(&desc).copied();
         let engine = table_meta.engine.to_string();
         let table_id = self.next_id;
-        let new_table = match (self.name_to_id.contains_key(&desc), create_option) {
-            (true, CreateOption::Create) => {
+        let new_table = match (existing_id, create_option) {
+            (Some(_), CreateOption::Create) => {
                 return Err(ErrorCode::TableAlreadyExists(format!(
                     "Temporary table {} already exists",
                     desc
                 )));
             }
-            (true, CreateOption::CreateIfNotExists) => false,
-            _ => {
-                let desc = orphan_table_name
-                    .as_ref()
-                    .map(|o| Self::temp_table_desc(&name_ident.db_name, o))
-                    .unwrap_or(desc);
-                let old_id = self.name_to_id.insert(desc.clone(), table_id);
-                if let Some(old_id) = old_id {
-                    self.id_to_table.remove(&old_id);
+            (Some(_), CreateOption::CreateIfNotExists) => false,
+            (existing_id, _) => {
+                if let Some(existing_id) = existing_id {
+                    let existing_table = self.id_to_table.get(&existing_id).ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Got temporary table id {existing_id}, but its metadata was not found"
+                        ))
+                    })?;
+                    TableEngineMismatch::ensure(
+                        &name_ident.table_name,
+                        &existing_table.meta.engine,
+                        &table_meta.engine,
+                    )
+                    .map_err(|e| ErrorCode::from(AppError::from(e)))?;
                 }
-                self.id_to_table.insert(table_id, TempTable {
+
+                let table = TempTable {
                     db_name: name_ident.db_name,
-                    table_name: orphan_table_name.clone().unwrap_or(name_ident.table_name),
+                    table_name: name_ident.table_name,
                     meta: table_meta,
                     copied_files: BTreeMap::new(),
-                });
+                };
+                if as_dropped {
+                    self.staged_tables.insert(table_id, table);
+                } else {
+                    let old_id = self.name_to_id.insert(desc.clone(), table_id);
+                    if let Some(old_id) = old_id {
+                        self.id_to_table.remove(&old_id);
+                    }
+                    self.id_to_table.insert(table_id, table);
+                }
                 self.inc_next_id();
                 info!(
                     "[TEMP TABLE] session={prefix} created {} table {desc}, id = {db_id}.{table_id}.",
@@ -153,33 +179,47 @@ impl TempTblMgr {
             table_id_seq: Some(0),
             db_id,
             new_table,
-            prev_table_id: None,
-            orphan_table_name,
+            // The commit guard must compare against the visible table observed during prepare.
+            // Direct, single-phase creates do not need this value.
+            prev_table_id: as_dropped.then_some(existing_id).flatten(),
+            // Persistent tables use an orphan name in meta-service. Temporary CTAS tables are
+            // staged by ID in this manager and do not need an internal name.
+            orphan_table_name: None,
         })
     }
 
     pub fn commit_table_meta(&mut self, req: &CommitTableMetaReq) -> Result<CommitTableMetaReply> {
-        let orphan_desc = Self::temp_table_desc(
-            &req.name_ident.db_name,
-            req.orphan_table_name.as_ref().unwrap(),
-        );
         let desc = Self::temp_table_desc(&req.name_ident.db_name, &req.name_ident.table_name);
-        match self.name_to_id.remove(&orphan_desc) {
-            Some(id) => {
-                if let Some(old_id) = self.name_to_id.insert(desc, id) {
-                    self.id_to_table.remove(&old_id);
-                }
-                let table = self.id_to_table.get_mut(&id).unwrap();
-                table.db_name = req.name_ident.db_name.clone();
-                table.table_name = req.name_ident.table_name.clone();
-
-                Ok(CommitTableMetaReply {})
-            }
-            None => Err(ErrorCode::UnknownTable(format!(
-                "Temporary table {}.{} not found",
-                req.name_ident.db_name, req.name_ident.table_name
-            ))),
+        if !self.staged_tables.contains_key(&req.table_id) {
+            return Err(ErrorCode::UnknownTable(format!(
+                "Staged temporary table id {} not found",
+                req.table_id
+            )));
         }
+
+        // Do not overwrite a visible table that changed while the CTAS pipeline was running.
+        let current_id = self.name_to_id.get(&desc).copied();
+        if current_id != req.prev_table_id {
+            return Err(ErrorCode::TableVersionMismatched(format!(
+                "Temporary table {desc} changed while CTAS was running"
+            )));
+        }
+
+        let mut table = self.staged_tables.remove(&req.table_id).unwrap();
+        table.db_name = req.name_ident.db_name.clone();
+        table.table_name = req.name_ident.table_name.clone();
+        if let Some(old_id) = self.name_to_id.insert(desc, req.table_id) {
+            self.id_to_table.remove(&old_id);
+        }
+        self.id_to_table.insert(req.table_id, table);
+
+        Ok(CommitTableMetaReply {})
+    }
+
+    /// Discard a CTAS table that has not been published. This is idempotent and cannot remove a
+    /// visible temporary table.
+    fn abort_staged_table(&mut self, table_id: u64) -> Option<TempTable> {
+        self.staged_tables.remove(&table_id)
     }
 
     pub fn rename_table(&mut self, req: &RenameTableReq) -> Result<Option<RenameTableReply>> {
@@ -190,15 +230,18 @@ impl TempTblMgr {
             new_table_name,
         } = req;
         let desc = Self::temp_table_desc(&name_ident.db_name, &name_ident.table_name);
-        match self.name_to_id.remove(&desc) {
+        // Keep the source mapping intact until all destination checks pass.
+        match self.name_to_id.get(&desc).copied() {
             Some(id) => {
                 let new_desc = Self::temp_table_desc(new_db_name, new_table_name);
-                if self.name_to_id.contains_key(&new_desc) {
+                // A no-op rename finds the source itself and is not a destination collision.
+                if new_desc != desc && self.name_to_id.contains_key(&new_desc) {
                     return Err(ErrorCode::TableAlreadyExists(format!(
                         "Temporary table {} already exists",
                         new_desc
                     )));
                 }
+                self.name_to_id.remove(&desc);
                 self.name_to_id.insert(new_desc, id);
                 let table = self.id_to_table.get_mut(&id).unwrap();
                 table.db_name = new_db_name.clone();
@@ -213,15 +256,26 @@ impl TempTblMgr {
         Err(ErrorCode::Unimplemented("Cannot swap tmp table"))
     }
 
-    pub fn get_table_meta_by_id(&self, id: u64) -> Result<Option<SeqV<TableMeta>>> {
-        Ok(self
-            .id_to_table
+    fn table_by_id(&self, id: u64) -> Option<&TempTable> {
+        self.id_to_table
             .get(&id)
-            .map(|t| SeqV::new(0, t.meta.clone())))
+            .or_else(|| self.staged_tables.get(&id))
+    }
+
+    fn table_by_id_mut(&mut self, id: u64) -> Option<&mut TempTable> {
+        if self.id_to_table.contains_key(&id) {
+            self.id_to_table.get_mut(&id)
+        } else {
+            self.staged_tables.get_mut(&id)
+        }
+    }
+
+    pub fn get_table_meta_by_id(&self, id: u64) -> Result<Option<SeqV<TableMeta>>> {
+        Ok(self.table_by_id(id).map(|t| SeqV::new(0, t.meta.clone())))
     }
 
     pub fn get_table_name_by_id(&self, id: u64) -> Option<String> {
-        self.id_to_table.get(&id).map(|t| t.table_name.clone())
+        self.table_by_id(id).map(|t| t.table_name.clone())
     }
 
     pub fn is_temp_table(&self, database_name: &str, table_name: &str) -> bool {
@@ -272,7 +326,7 @@ impl TempTblMgr {
                 copied_files,
                 ..
             } = r;
-            let table = self.id_to_table.get_mut(&table_id).unwrap();
+            let table = self.table_by_id_mut(table_id).unwrap();
             table.meta = new_table_meta;
             table.copied_files.extend(copied_files);
         }
@@ -285,7 +339,7 @@ impl TempTblMgr {
         let UpsertTableOptionReq {
             table_id, options, ..
         } = req;
-        let table = self.id_to_table.get_mut(&table_id);
+        let table = self.table_by_id_mut(table_id);
         let Some(table) = table else {
             return Err(ErrorCode::UnknownTable(format!(
                 "Temporary table id {} not found",
@@ -303,7 +357,7 @@ impl TempTblMgr {
     }
 
     pub fn truncate_table(&mut self, id: u64) -> Result<TruncateTableReply> {
-        let table = self.id_to_table.get_mut(&id);
+        let table = self.table_by_id_mut(id);
         let Some(table) = table else {
             return Err(ErrorCode::UnknownTable(format!(
                 "Temporary table id {} not found",
@@ -318,7 +372,7 @@ impl TempTblMgr {
         &self,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        let Some(table) = self.id_to_table.get(&req.table_id) else {
+        let Some(table) = self.table_by_id(req.table_id) else {
             return Err(ErrorCode::UnknownTable(format!(
                 "Temporary table id {} not found",
                 req.table_id
@@ -334,7 +388,7 @@ impl TempTblMgr {
     }
 
     pub fn list_table_copied_file_info(&self, table_id: u64) -> Result<ListTableCopiedFileReply> {
-        let Some(table) = self.id_to_table.get(&table_id) else {
+        let Some(table) = self.table_by_id(table_id) else {
             return Err(ErrorCode::UnknownTable(format!(
                 "Temporary table id {} not found",
                 table_id
@@ -351,12 +405,54 @@ fn get_table_operator_for_drop_operation(table_meta: &TableMeta) -> Result<Opera
     // Check if the table has custom storage parameters
     if let Some(storage_params) = &table_meta.storage_params {
         // Use the custom storage parameters to create an operator
-        init_operator(storage_params)
+        init_operator_with_policy_scope(storage_params, EndpointPolicyScope::External)
             .map_err(|e| ErrorCode::StorageUnavailable(format!("Failed to init operator: {}", e)))
     } else {
         // Use the default operator
         Ok(DataOperator::instance().operator())
     }
+}
+
+async fn cleanup_temp_table_data(
+    table_id: u64,
+    table_meta: &TableMeta,
+    temp_prefix: &str,
+) -> Result<()> {
+    match table_meta.engine.as_str() {
+        "FUSE" => {
+            let dir = parse_storage_prefix(&table_meta.options, table_id)?;
+            let op = get_table_operator_for_drop_operation(table_meta)?;
+            op.remove_all(&dir).await?;
+        }
+        "MEMORY" => {
+            let key = InMemoryDataKey {
+                temp_prefix: Some(temp_prefix.to_string()),
+                table_id,
+            };
+            IN_MEMORY_DATA.write().remove(&key);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+pub async fn abort_staged_temp_table(
+    mgr: TempTblMgrRef,
+    table_id: u64,
+    temp_prefix: &str,
+) -> Result<()> {
+    let Some(table_meta) = mgr
+        .lock()
+        .staged_tables
+        .get(&table_id)
+        .map(|table| table.meta.clone())
+    else {
+        return Ok(());
+    };
+
+    cleanup_temp_table_data(table_id, &table_meta, temp_prefix).await?;
+    mgr.lock().abort_staged_table(table_id);
+    Ok(())
 }
 
 pub async fn drop_table_by_id(
@@ -441,7 +537,7 @@ pub async fn drop_all_temp_tables(
         let mut guard = mgr.lock();
         let mut fuse_table_data = Vec::new(); // (dir, table_meta)
         let mut mem_tbl_ids = Vec::new();
-        for (id, table) in &guard.id_to_table {
+        for (id, table) in guard.id_to_table.iter().chain(&guard.staged_tables) {
             let engine = table.meta.engine.as_str();
             if engine == "FUSE" {
                 // Parse the storage prefix to get the directory path for each table
@@ -461,6 +557,7 @@ pub async fn drop_all_temp_tables(
             }
         }
         guard.id_to_table.clear();
+        guard.staged_tables.clear();
         guard.name_to_id.clear();
         (fuse_table_data, mem_tbl_ids)
     };
@@ -512,3 +609,243 @@ pub async fn drop_all_temp_tables(
 }
 
 pub type TempTblMgrRef = Arc<Mutex<TempTblMgr>>;
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::schema::TableNameIdent;
+    use databend_common_meta_app::tenant::Tenant;
+
+    use super::*;
+
+    fn table_name_ident(table_name: &str) -> TableNameIdent {
+        TableNameIdent {
+            tenant: Tenant::new_literal("tenant"),
+            db_name: "db".to_string(),
+            table_name: table_name.to_string(),
+        }
+    }
+
+    fn create_table_req(
+        table_name: &str,
+        engine: &str,
+        create_option: CreateOption,
+        as_dropped: bool,
+    ) -> CreateTableReq {
+        let mut table_meta = TableMeta {
+            engine: engine.to_string(),
+            ..Default::default()
+        };
+        table_meta
+            .options
+            .insert(OPT_KEY_DATABASE_ID.to_string(), "1".to_string());
+
+        CreateTableReq {
+            create_option,
+            catalog_name: None,
+            name_ident: table_name_ident(table_name),
+            table_meta,
+            as_dropped,
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        }
+    }
+
+    fn rename_table_req(table_name: &str, new_table_name: &str) -> RenameTableReq {
+        RenameTableReq {
+            if_exists: false,
+            name_ident: table_name_ident(table_name),
+            new_db_name: "db".to_string(),
+            new_table_name: new_table_name.to_string(),
+        }
+    }
+
+    fn commit_table_req(table_name: &str, reply: &CreateTableReply) -> CommitTableMetaReq {
+        CommitTableMetaReq {
+            name_ident: table_name_ident(table_name),
+            db_id: reply.db_id,
+            table_id: reply.table_id,
+            prev_table_id: reply.prev_table_id,
+            orphan_table_name: reply.orphan_table_name.clone(),
+        }
+    }
+
+    #[test]
+    fn test_ctas_commit_preserves_temporary_tables_when_visible_table_changed() {
+        let mut mgr = TempTblMgr::default();
+        let table_name = "t";
+        let desc = TempTblMgr::temp_table_desc("db", table_name);
+
+        let visible = mgr
+            .create_table(
+                create_table_req(table_name, "FUSE", CreateOption::Create, false),
+                "session".to_string(),
+            )
+            .unwrap();
+        let replacement = mgr
+            .create_table(
+                create_table_req(table_name, "FUSE", CreateOption::CreateOrReplace, true),
+                "session".to_string(),
+            )
+            .unwrap();
+        assert_eq!(replacement.prev_table_id, Some(visible.table_id));
+        assert!(
+            !mgr.name_to_id
+                .values()
+                .any(|id| *id == replacement.table_id)
+        );
+        assert!(mgr.staged_tables.contains_key(&replacement.table_id));
+
+        mgr.name_to_id.remove(&desc);
+        mgr.id_to_table.remove(&visible.table_id);
+        let current = mgr
+            .create_table(
+                create_table_req(table_name, "MEMORY", CreateOption::Create, false),
+                "session".to_string(),
+            )
+            .unwrap();
+
+        let current_meta = mgr.id_to_table.get(&current.table_id).unwrap().meta.clone();
+        let replacement_meta = mgr
+            .staged_tables
+            .get(&replacement.table_id)
+            .unwrap()
+            .meta
+            .clone();
+
+        let err = mgr
+            .commit_table_meta(&commit_table_req(table_name, &replacement))
+            .unwrap_err();
+        let expected = ErrorCode::TableVersionMismatched(format!(
+            "Temporary table {desc} changed while CTAS was running"
+        ));
+        assert_eq!(
+            (err.code(), err.message()),
+            (expected.code(), expected.message())
+        );
+
+        assert_eq!(mgr.name_to_id.get(&desc), Some(&current.table_id));
+        assert_eq!(
+            mgr.id_to_table.get(&current.table_id).unwrap().meta,
+            current_meta
+        );
+        assert_eq!(
+            mgr.staged_tables.get(&replacement.table_id).unwrap().meta,
+            replacement_meta
+        );
+    }
+
+    #[test]
+    fn test_ctas_commit_publishes_its_own_temporary_table() {
+        let mut mgr = TempTblMgr::default();
+        let table_name = "t";
+        let desc = TempTblMgr::temp_table_desc("db", table_name);
+
+        let visible = mgr
+            .create_table(
+                create_table_req(table_name, "FUSE", CreateOption::Create, false),
+                "session".to_string(),
+            )
+            .unwrap();
+        let first = mgr
+            .create_table(
+                create_table_req(table_name, "FUSE", CreateOption::CreateOrReplace, true),
+                "session".to_string(),
+            )
+            .unwrap();
+        let second = mgr
+            .create_table(
+                create_table_req(table_name, "FUSE", CreateOption::CreateOrReplace, true),
+                "session".to_string(),
+            )
+            .unwrap();
+
+        assert_eq!(first.prev_table_id, Some(visible.table_id));
+        assert_eq!(second.prev_table_id, Some(visible.table_id));
+        assert_eq!(first.orphan_table_name, None);
+        assert_eq!(second.orphan_table_name, None);
+        assert_eq!(mgr.name_to_id.len(), 1);
+        assert_eq!(mgr.id_to_table.len(), 1);
+        assert_eq!(mgr.list_tables().unwrap().len(), 1);
+        assert!(mgr.staged_tables.contains_key(&first.table_id));
+        assert!(mgr.staged_tables.contains_key(&second.table_id));
+
+        let name_to_id_before = mgr.name_to_id.clone();
+        let staged_before: HashMap<_, _> = mgr
+            .staged_tables
+            .iter()
+            .map(|(id, table)| (*id, table.meta.clone()))
+            .collect();
+        let mut unknown_req = commit_table_req(table_name, &first);
+        unknown_req.table_id = first.table_id + 100;
+        let err = mgr.commit_table_meta(&unknown_req).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::UNKNOWN_TABLE);
+        assert_eq!(mgr.name_to_id, name_to_id_before);
+        assert_eq!(
+            mgr.staged_tables
+                .iter()
+                .map(|(id, table)| (*id, table.meta.clone()))
+                .collect::<HashMap<_, _>>(),
+            staged_before
+        );
+
+        mgr.commit_table_meta(&commit_table_req(table_name, &first))
+            .unwrap();
+
+        assert_eq!(mgr.name_to_id.get(&desc), Some(&first.table_id));
+        assert!(!mgr.id_to_table.contains_key(&visible.table_id));
+        assert!(mgr.id_to_table.contains_key(&first.table_id));
+        assert!(!mgr.id_to_table.contains_key(&second.table_id));
+        assert!(!mgr.staged_tables.contains_key(&first.table_id));
+        assert!(mgr.staged_tables.contains_key(&second.table_id));
+        assert_eq!(mgr.list_tables().unwrap().len(), 1);
+
+        let err = mgr
+            .commit_table_meta(&commit_table_req(table_name, &second))
+            .unwrap_err();
+        let expected = ErrorCode::TableVersionMismatched(format!(
+            "Temporary table {desc} changed while CTAS was running"
+        ));
+        assert_eq!(
+            (err.code(), err.message()),
+            (expected.code(), expected.message())
+        );
+        assert_eq!(mgr.name_to_id.get(&desc), Some(&first.table_id));
+        assert!(mgr.id_to_table.contains_key(&first.table_id));
+        assert!(mgr.staged_tables.contains_key(&second.table_id));
+
+        assert!(mgr.abort_staged_table(second.table_id).is_some());
+        assert!(mgr.abort_staged_table(second.table_id).is_none());
+        assert_eq!(mgr.name_to_id.get(&desc), Some(&first.table_id));
+        assert!(mgr.id_to_table.contains_key(&first.table_id));
+    }
+
+    #[test]
+    fn test_ctas_internal_prefix_is_available_to_users() {
+        let mut mgr = TempTblMgr::default();
+        let internal_like_name = "__tmp_orphan@user";
+
+        let created = mgr
+            .create_table(
+                create_table_req(internal_like_name, "MEMORY", CreateOption::Create, false),
+                "session".to_string(),
+            )
+            .unwrap();
+        assert_eq!(
+            mgr.name_to_id
+                .get(&TempTblMgr::temp_table_desc("db", internal_like_name)),
+            Some(&created.table_id)
+        );
+
+        assert!(
+            mgr.rename_table(&rename_table_req(internal_like_name, "renamed"))
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(
+            mgr.name_to_id
+                .get(&TempTblMgr::temp_table_desc("db", "renamed")),
+            Some(&created.table_id)
+        );
+    }
+}

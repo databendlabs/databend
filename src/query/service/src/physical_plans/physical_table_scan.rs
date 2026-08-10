@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -30,7 +31,6 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_catalog::plan::VirtualColumnInfo;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -67,9 +67,12 @@ use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::need_reserve_block_info;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::thread_rng;
+use sha2::Digest;
+use sha2::Sha256;
 
 use crate::physical_plans::AddStreamColumn;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -80,6 +83,9 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableFactory;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
@@ -200,14 +206,14 @@ impl IPhysicalPlan for TableScan {
             true,
         )?;
 
+        let schema = self.source.schema();
         // Fill internal columns if needed.
         if let Some(internal_columns) = &self.internal_column {
-            builder
-                .main_pipeline
-                .add_transformer(|| TransformAddInternalColumns::new(internal_columns.clone()));
+            builder.main_pipeline.add_transformer(|| {
+                TransformAddInternalColumns::new(internal_columns.clone(), schema.clone())
+            });
         }
 
-        let schema = self.source.schema();
         let mut projection = self
             .name_mapping
             .keys()
@@ -301,7 +307,6 @@ impl PhysicalPlanBuilder {
                 let read_guard = self.metadata.read();
                 let virtual_column_id_set = read_guard
                     .virtual_columns_by_table_index(scan.table_index)
-                    .iter()
                     .map(|column| column.index())
                     .collect::<HashSet<_>>();
                 for required_column_id in required_column_ids {
@@ -313,6 +318,15 @@ impl PhysicalPlanBuilder {
 
             let mut prewhere = scan.prewhere.clone();
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
+
+            // Secure predicates reference columns that must survive pruning,
+            // even if they are not in the query output. Without this, a policy
+            // on tenant_id would fail when the query only selects id.
+            if let Some(secure_preds) = &scan.secure_predicates {
+                for pred in secure_preds {
+                    used = used.union(&pred.used_columns()).cloned().collect();
+                }
+            }
 
             let supported_lazy_materialize = {
                 self.metadata
@@ -398,7 +412,7 @@ impl PhysicalPlanBuilder {
         let table = table_entry.table();
 
         if !table.result_can_be_cached() {
-            self.ctx.set_cacheable(false);
+            self.ctx.result_cache_state().set_cacheable(false);
         }
 
         let mut table_schema = table.schema_with_stream();
@@ -421,6 +435,41 @@ impl PhysicalPlanBuilder {
             has_inner_column,
         )?;
 
+        // Generate secure cache key extra for Row Access Policy predicates.
+        // Constant-fold so session-dependent functions (e.g. GETVARIABLE)
+        // resolve to concrete values. Include scan.table_index so that two
+        // scans on different tables with identical policy text produce
+        // distinct cache-key extras.
+        if scan
+            .secure_predicates
+            .as_ref()
+            .is_some_and(|p| !p.is_empty())
+        {
+            let metadata = self.metadata.read().clone();
+            let secure_preds = scan.secure_predicates.as_deref().unwrap_or_default();
+            let mut serialized: Vec<String> = Vec::with_capacity(secure_preds.len());
+            for pred in secure_preds {
+                let expr = pred
+                    .as_raw_expr()
+                    .type_check(&metadata)?
+                    .project_column_ref(|col| Ok(col.column_name.clone()))?;
+                let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let remote = folded.as_remote_expr();
+                serialized.push(serde_json::to_string(&remote).map_err(|e| {
+                    ErrorCode::Internal(format!(
+                        "Failed to serialize secure predicate for cache key: {}",
+                        e
+                    ))
+                })?);
+            }
+            serialized.sort();
+            let combined = format!("{}|{}", scan.table_index, serialized.join("|"));
+            let hash = format!("{:x}", Sha256::digest(combined.as_bytes()));
+            self.ctx
+                .result_cache_state()
+                .add_cache_key_extra(format!("secure:{}", hash));
+        }
+
         let mut source = table
             .read_plan(
                 self.ctx.clone(),
@@ -434,7 +483,7 @@ impl PhysicalPlanBuilder {
                 self.dry_run,
             )
             .await?;
-        if let Some(sample) = scan.sample
+        if let Some(ref sample) = scan.sample
             && !table.use_own_sample_block()
         {
             if let Some(block_sample_value) = sample.block_level {
@@ -459,6 +508,8 @@ impl PhysicalPlanBuilder {
         }
         source.table_index = scan.table_index;
         source.scan_id = scan.scan_id;
+        source.block_meta_options.reserve_block_index =
+            need_reserve_block_info(self.ctx.clone(), scan.table_index).0;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();
@@ -482,7 +533,7 @@ impl PhysicalPlanBuilder {
             name_mapping,
             Box::new(source),
             Some(scan.table_index),
-            Some(stat_info),
+            Some(stat_info.clone()),
             internal_column,
         );
 
@@ -494,6 +545,54 @@ impl PhysicalPlanBuilder {
                 scan.table_index,
                 table.get_table_info().ident.seq,
             )?;
+        }
+
+        if let Some(secure_preds) = &scan.secure_predicates {
+            if !secure_preds.is_empty() && scan.has_secure_predicates_not_applied_by_prewhere() {
+                let input_schema = plan.output_schema()?;
+                let retained = self.metadata.read().get_retained_column().clone();
+                let mut projections = BTreeSet::new();
+                for col in required.union(&retained) {
+                    if let Some((index, _)) = input_schema.column_with_name(&col.to_string()) {
+                        projections.insert(index);
+                    }
+                }
+                let predicates = secure_preds
+                    .iter()
+                    .map(|scalar| {
+                        let expr = scalar
+                            .as_raw_expr()
+                            .type_check(&metadata)?
+                            .project_column_ref(|col| {
+                                input_schema.index_of(&col.index.to_string())
+                            })?;
+                        let expr = cast_expr_to_non_null_boolean(expr)?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        Ok(expr.as_remote_expr())
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                // After constant folding, skip the Filter if all predicates
+                // folded to constant true (e.g. current_role() matched).
+                let all_true = predicates.iter().all(|p| {
+                    matches!(
+                        p,
+                        RemoteExpr::Constant { scalar, .. }
+                            if scalar == &databend_common_expression::Scalar::Boolean(true)
+                    )
+                });
+                if !all_true {
+                    plan = PhysicalPlan::new(crate::physical_plans::Filter {
+                        meta: PhysicalPlanMeta::new("Filter"),
+                        projections,
+                        input: plan,
+                        predicates,
+                        stat_info: Some(stat_info.clone()),
+                        is_secure: true,
+                    });
+                }
+            }
         }
 
         Ok(plan)
@@ -541,7 +640,7 @@ impl PhysicalPlanBuilder {
 
                 // Check if the source table supports result caching at all.
                 if !source_table.result_can_be_cached() {
-                    self.ctx.set_cacheable(false);
+                    self.ctx.result_cache_state().set_cacheable(false);
                     break;
                 }
 
@@ -550,10 +649,11 @@ impl PhysicalPlanBuilder {
                 // we conservatively disable caching to avoid returning stale results.
                 if let Ok(fuse_table) = FuseTable::try_from_table(source_table.as_ref()) {
                     self.ctx
+                        .result_cache_state()
                         .add_partitions_sha(fuse_table.query_result_cache_id());
                 } else {
                     // Non-FuseTable (system table, memory table, etc.), disable caching.
-                    self.ctx.set_cacheable(false);
+                    self.ctx.result_cache_state().set_cacheable(false);
                     break;
                 }
             }
@@ -608,42 +708,22 @@ impl PhysicalPlanBuilder {
             None
         };
 
-        let mut is_deterministic = true;
-        let push_down_filter = scan
-            .push_down_predicates
-            .as_ref()
-            .filter(|p| !p.is_empty())
-            .map(|predicates: &Vec<ScalarExpr>| -> Result<Filters> {
-                let predicates = predicates
-                    .iter()
-                    .map(|p| {
-                        p.as_raw_expr()
-                            .type_check(&metadata)?
-                            .project_column_ref(|col| Ok(col.column_name.clone()))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
+        let user_predicates = scan.push_down_predicates.as_deref().unwrap_or_default();
+        let secure_predicates = scan.secure_predicates.as_deref().unwrap_or_default();
 
-                let expr = predicates
-                    .into_iter()
-                    .try_reduce(|lhs, rhs| {
-                        check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-                    })?
-                    .unwrap();
-
-                let expr = cast_expr_to_non_null_boolean(expr)?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-
-                is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
-
-                let inverted_filter =
-                    check_function(None, "not", &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?;
-
-                Ok(Filters {
-                    filter: expr.as_remote_expr(),
-                    inverted_filter: inverted_filter.as_remote_expr(),
-                })
-            })
-            .transpose()?;
+        let (secure_filters, secure_is_deterministic) = if secure_predicates.is_empty() {
+            (None, true)
+        } else {
+            let preds = secure_predicates.iter().collect::<Vec<_>>();
+            self.create_scan_push_down_filters(&metadata, &preds)?
+        };
+        let (user_filters, user_is_deterministic) = if user_predicates.is_empty() {
+            (None, true)
+        } else {
+            let preds = user_predicates.iter().collect::<Vec<_>>();
+            self.create_scan_push_down_filters(&metadata, &preds)?
+        };
+        let is_deterministic = user_is_deterministic && secure_is_deterministic;
 
         let prewhere_info = scan
             .prewhere
@@ -700,6 +780,7 @@ impl PhysicalPlanBuilder {
                         .type_check(&metadata)?
                         .project_column_ref(|col| Ok(col.column_name.clone()))?,
                 )?;
+                let (filter, _) = ConstantFolder::fold(&filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = filter.as_remote_expr();
                 let virtual_column_ids =
                     self.build_prewhere_virtual_column_ids(&prewhere.prewhere_columns);
@@ -766,7 +847,7 @@ impl PhysicalPlanBuilder {
         Ok(PushDownInfo {
             projection: Some(projection),
             output_columns,
-            filters: push_down_filter,
+            filters: user_filters,
             is_deterministic,
             prewhere: prewhere_info,
             limit,
@@ -778,7 +859,50 @@ impl PhysicalPlanBuilder {
             inverted_index: scan.inverted_index.clone(),
             vector_index: scan.vector_index.clone(),
             sample: scan.sample.clone(),
+            read_partitions_pruning_mode: Default::default(),
+            secure_filters,
         })
+    }
+
+    fn create_scan_push_down_filters(
+        &self,
+        metadata: &Metadata,
+        predicates: &[&ScalarExpr],
+    ) -> Result<(Option<Filters>, bool)> {
+        if predicates.is_empty() {
+            return Ok((None, true));
+        }
+
+        let predicates = predicates
+            .iter()
+            .map(|p| {
+                p.as_raw_expr()
+                    .type_check(metadata)?
+                    .project_column_ref(|col| Ok(col.column_name.clone()))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let expr = predicates
+            .into_iter()
+            .try_reduce(|lhs, rhs| {
+                check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+            })?
+            .unwrap();
+
+        let expr = cast_expr_to_non_null_boolean(expr)?;
+        let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+
+        let is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
+        let inverted_filter =
+            check_function(None, "not", &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?;
+
+        Ok((
+            Some(Filters {
+                filter: expr.as_remote_expr(),
+                inverted_filter: inverted_filter.as_remote_expr(),
+            }),
+            is_deterministic,
+        ))
     }
 
     fn build_prewhere_virtual_column_ids(&self, indices: &ColumnSet) -> Option<Vec<u32>> {

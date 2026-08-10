@@ -15,9 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::TableDataType;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_formats::SeparatedTextDecoder;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_storage::FileParseError;
@@ -290,5 +292,30 @@ impl RowDecoder for TextDecoder {
             }
         }
         Ok(())
+    }
+
+    fn flush(&self, columns: Vec<Column>, num_rows: usize) -> Vec<Column> {
+        // When the query prunes data columns (e.g. only metadata$* columns are
+        // needed by the outer query), `pos_projection` excludes those columns and
+        // `read_row` never pushes values into their builders, leaving them shorter
+        // than `num_rows`. Rebuild the non-projected columns at the right length so
+        // all columns in the output block agree on row count.
+        if let Some(projection) = &self.load_context.pos_projection {
+            let empty_strings =
+                Column::String(StringColumnBuilder::repeat_default(num_rows).build());
+            columns
+                .into_iter()
+                .enumerate()
+                .map(|(i, c)| {
+                    if projection.contains(&i) {
+                        c
+                    } else {
+                        empty_strings.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+        } else {
+            columns
+        }
     }
 }

@@ -68,6 +68,40 @@ EvalScalar
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 1.00
 
+query T
+explain select grouping(number % 2), grouping(number % 2, number % 3) from numbers(1) group by cube(number % 2, number % 3);
+----
+EvalScalar
+├── output columns: [grouping(number % 2) (#6), grouping(number % 2, number % 3) (#7)]
+├── expressions: [grouping(0)(_grouping_id (#5)), grouping(0, 1)(_grouping_id (#5))]
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── output columns: [number % 2 (#1), number % 3 (#2), _grouping_id (#5)]
+    ├── group by: [number % 2, number % 3, _grouping_id]
+    ├── aggregate functions: []
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: [number % 2, number % 3, _grouping_id]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.00
+        └── AggregateExpand
+            ├── output columns: [number % 2 (#1), number % 3 (#2), _dup_group_item_0 (#3), _dup_group_item_1 (#4), _grouping_id (#5)]
+            ├── grouping sets: [(), (number % 2), (number % 3), (number % 2, number % 3)]
+            ├── estimated rows: 1.00
+            └── EvalScalar
+                ├── output columns: [number % 2 (#1), number % 3 (#2)]
+                ├── expressions: [numbers.number (#0) % 2, numbers.number (#0) % 3]
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── scan id: 0
+                    ├── output columns: [number (#0)]
+                    ├── read rows: 1
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 1.00
 
 statement ok
 set grouping_sets_to_union = 1;

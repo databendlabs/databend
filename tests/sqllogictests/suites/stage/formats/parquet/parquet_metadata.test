@@ -7,7 +7,7 @@ parquet/ii/f2.parquet 3 0 3
 
 
 query TIII
-select metadata$filename, c1, metadata$file_row_number, id from @data_s3/parquet/ii/ where metadata$file_row_number = 0 and id > 1;
+select metadata$filename, c1, metadata$file_row_number, id from @data_s3/parquet/ii/ where metadata$file_row_number = 0 and id > 1 order by metadata$filename;
 ----
 parquet/ii/f2.parquet 3 0 3
 parquet/ii/f3.parquet 5 0 5

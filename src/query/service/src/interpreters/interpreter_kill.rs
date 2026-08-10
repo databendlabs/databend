@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::KillPlan;
@@ -27,6 +26,8 @@ use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::KILL_QUERY;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 pub struct KillInterpreter {
     ctx: Arc<QueryContext>,

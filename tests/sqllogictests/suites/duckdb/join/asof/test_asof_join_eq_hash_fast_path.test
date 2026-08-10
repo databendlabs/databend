@@ -52,6 +52,20 @@ order by t.id
 3 20
 4 11
 
+# ASOF USING treats the final USING column as the range key and the
+# preceding USING columns as equality keys.
+query I?II
+select *
+from asof_eq_trades t
+asof join asof_eq_prices p
+    using (symbol, wh)
+order by id
+----
+1 2020-01-01 00:00:01.000000 1 10
+2 2020-01-01 00:00:03.000000 2 20
+3 2020-01-01 00:00:05.000000 2 20
+4 2020-01-01 00:00:06.000000 1 11
+
 # Left ASOF should preserve unmatched rows as NULL while keeping the same
 # nearest-predecessor semantics for matched rows.
 query II
@@ -59,6 +73,20 @@ select t.id, p.price
 from asof_eq_trades t
 asof left join asof_eq_prices p
     on t.symbol = p.symbol and t.wh >= p.wh
+order by t.id
+----
+1 10
+2 20
+3 20
+4 11
+5 NULL
+6 NULL
+
+query II
+select t.id, p.price
+from asof_eq_trades t
+asof left join asof_eq_prices p
+    using (symbol, wh)
 order by t.id
 ----
 1 10
@@ -82,6 +110,51 @@ order by p.price, t.id
 20 2
 20 3
 21 NULL
+
+# Full ASOF should preserve unmatched rows from both original sides after
+# ASOF nearest-predecessor matching.
+query II
+select t.id, p.price
+from asof_eq_trades t
+asof full join asof_eq_prices p
+    on t.symbol = p.symbol and t.wh >= p.wh
+order by t.id, p.price
+----
+1 10
+2 20
+3 20
+4 11
+5 NULL
+6 NULL
+NULL 21
+
+query II
+select p.price, t.id
+from asof_eq_trades t
+asof right join asof_eq_prices p
+    using (symbol, wh)
+order by p.price, t.id
+----
+10 1
+11 4
+20 2
+20 3
+21 NULL
+
+query II
+select t.id, p.price
+from asof_eq_trades t
+asof full join asof_eq_prices p
+    using (symbol, wh)
+order by t.id, p.price
+----
+1 10
+2 20
+3 20
+4 11
+5 NULL
+6 NULL
+NULL 21
 
 statement ok
 drop table asof_eq_trades

@@ -19,12 +19,12 @@ use std::sync::PoisonError;
 
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::ProgressValues;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
@@ -39,6 +39,8 @@ use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state:
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextSpillProgress;
 use crate::spillers::Layout;
 use crate::spillers::SpillAdapter;
 use crate::spillers::SpillTarget;
@@ -46,12 +48,15 @@ use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataReader;
 use crate::spillers::SpillsDataWriter;
 
+const BYTES_PER_MIB: usize = 1024 * 1024;
+
 pub struct GraceHashJoin<T: GraceMemoryJoin> {
     pub(crate) desc: Arc<HashJoinDesc>,
     pub(crate) hash_method_kind: HashMethodKind,
     pub(crate) function_context: FunctionContext,
 
     pub(crate) location_prefix: String,
+    pub(crate) writer_pool_bytes: usize,
     pub(crate) shift_bits: usize,
 
     pub(crate) stage: RestoreStage,
@@ -81,6 +86,7 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
         };
 
         for (id, data_block) in ready_partitions {
+            check_interrupt()?;
             self.partitions[id].writer.write(data_block)?;
             self.partitions[id].writer.flush()?;
         }
@@ -93,19 +99,23 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
 
         let mut ready_partitions = Vec::with_capacity(self.partitions.len());
         for id in 0..self.partitions.len() {
-            let mut partition = GraceJoinPartition::create(&self.location_prefix)?;
+            check_interrupt()?;
+            let mut partition =
+                GraceJoinPartition::create(&self.location_prefix, self.writer_pool_bytes)?;
 
             std::mem::swap(&mut self.partitions[id], &mut partition);
             ready_partitions.push(partition);
         }
 
         for (id, partition) in ready_partitions.into_iter().enumerate() {
+            check_interrupt()?;
             let path = partition.path;
             let (written, row_groups) = partition.writer.close()?;
 
             self.state
                 .ctx
                 .add_spill_file(Location::Remote(path.clone()), Layout::Parquet, written);
+            record_join_spill_progress(&self.state.ctx, written, &row_groups);
 
             if !row_groups.is_empty() {
                 partitions_meta.push((id, SpillMetadata { path, row_groups }));
@@ -135,6 +145,7 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
         let ready_partitions = self.partition_probe_data(data)?;
 
         for (id, data_block) in ready_partitions {
+            check_interrupt()?;
             self.partitions[id].writer.write(data_block)?;
             self.partitions[id].writer.flush()?;
         }
@@ -160,7 +171,9 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
             }
             RestoreStage::RestoreBuildFinal => {
                 self.stage = RestoreStage::RestoreProbe;
-                while let Some(_x) = self.memory_hash_join.final_build()? {}
+                while let Some(_x) = self.memory_hash_join.final_build()? {
+                    check_interrupt()?;
+                }
                 Ok(Some(Box::new(EmptyJoinStream)))
             }
             RestoreStage::RestoreProbe => {
@@ -206,11 +219,17 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         let rows = settings.get_max_block_size()? as usize;
         let bytes = settings.get_max_block_bytes()? as usize;
         let location_prefix = ctx.query_id_spill_prefix();
+        let writer_pool_bytes = settings
+            .get_spill_writer_memory_pool_size_mb()?
+            .saturating_mul(BYTES_PER_MIB);
 
         let mut partitions = Vec::with_capacity(16);
 
         for _ in 0..16 {
-            partitions.push(GraceJoinPartition::create(&location_prefix)?);
+            partitions.push(GraceJoinPartition::create(
+                &location_prefix,
+                writer_pool_bytes,
+            )?);
         }
 
         Ok(GraceHashJoin {
@@ -218,6 +237,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
             state,
             shift_bits,
             location_prefix,
+            writer_pool_bytes,
             hash_method_kind,
             memory_hash_join,
             function_context: function_ctx,
@@ -278,9 +298,14 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
                 self.desc.build_schema.clone(),
                 data.row_groups,
                 target,
+                self.read_settings,
             )?;
 
-            while let Some(data_block) = reader.read(self.read_settings)? {
+            loop {
+                check_interrupt()?;
+                let Some(data_block) = reader.read()? else {
+                    break;
+                };
                 self.memory_hash_join.add_block(Some(data_block))?;
             }
         }
@@ -303,7 +328,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         )?;
 
         for hash in hashes.iter_mut() {
-            *hash = ((*hash << self.shift_bits) >> 60) & 0b1111;
+            *hash = Self::get_partition_id(*hash, self.shift_bits);
         }
 
         Ok(self.build_partition_stream.partition(hashes, data, true))
@@ -324,7 +349,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         )?;
 
         for hash in hashes.iter_mut() {
-            *hash = ((*hash << self.shift_bits) >> 60) & 0b1111;
+            *hash = Self::get_partition_id(*hash, self.shift_bits);
         }
 
         Ok(self.probe_partition_stream.partition(hashes, data, true))
@@ -345,6 +370,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         let ready_partitions_id = self.probe_partition_stream.partition_ids();
 
         for id in ready_partitions_id {
+            check_interrupt()?;
             if let Some(data_block) = self.probe_partition_stream.finalize_partition(id) {
                 self.partitions[id].writer.write(data_block)?;
                 self.partitions[id].writer.flush()?;
@@ -355,12 +381,14 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         let mut partitions_meta = Vec::with_capacity(self.partitions.len());
 
         for (id, partition) in ready_partitions.into_iter().enumerate() {
+            check_interrupt()?;
             let path = partition.path;
             let (written, row_groups) = partition.writer.close()?;
 
             self.state
                 .ctx
                 .add_spill_file(Location::Remote(path.clone()), Layout::Parquet, written);
+            record_join_spill_progress(&self.state.ctx, written, &row_groups);
 
             if !row_groups.is_empty() {
                 partitions_meta.push((id, SpillMetadata { path, row_groups }));
@@ -385,6 +413,20 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
 
         Ok(())
     }
+
+    #[inline(always)]
+    #[cfg(target_feature = "sse4.2")]
+    fn get_partition_id(hash: u64, shift_bits: usize) -> u64 {
+        // On SSE4.2, _mm_crc32_u64 only sets the low 32 bits; high 32 bits are always 0.
+        // Extract partition bits from the low 32 bits to avoid all rows landing in partition 0.
+        (hash << shift_bits >> 28) & 0b1111
+    }
+
+    #[inline(always)]
+    #[cfg(not(target_feature = "sse4.2"))]
+    fn get_partition_id(hash: u64, shift_bits: usize) -> u64 {
+        (hash << shift_bits >> 60) & 0b1111
+    }
 }
 
 pub enum RestoreStage {
@@ -401,20 +443,39 @@ pub struct GraceJoinPartition {
 }
 
 impl GraceJoinPartition {
-    pub fn create(prefix: &str) -> Result<GraceJoinPartition> {
+    pub fn create(prefix: &str, writer_pool_bytes: usize) -> Result<GraceJoinPartition> {
         let data_operator = DataOperator::instance();
-        let target = SpillTarget::from_storage_params(data_operator.spill_params());
 
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
-        let spills_data_writer = buffer_pool.writer(operator, file_path.clone(), target)?;
+        let spills_data_writer =
+            buffer_pool.writer(operator, file_path.clone(), writer_pool_bytes, target)?;
 
         Ok(GraceJoinPartition {
             path: file_path,
             writer: spills_data_writer,
         })
     }
+}
+
+fn record_join_spill_progress(
+    ctx: &Arc<QueryContext>,
+    written: usize,
+    row_groups: &[parquet::file::metadata::RowGroupMetaData],
+) {
+    if written == 0 && row_groups.is_empty() {
+        return;
+    }
+
+    ctx.get_join_spill_progress().incr(&ProgressValues {
+        rows: row_groups
+            .iter()
+            .map(|row_group| row_group.num_rows() as usize)
+            .sum(),
+        bytes: written,
+    });
 }
 
 pub struct RestoreProbeStream<'a, T: GraceMemoryJoin> {
@@ -470,6 +531,7 @@ impl<'a, T: GraceMemoryJoin> JoinStream for RestoreProbeStream<'a, T> {
 impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
     fn next_probe_block(&mut self) -> Result<Option<DataBlock>> {
         loop {
+            check_interrupt()?;
             if self.spills_reader.is_none() {
                 while let Some(data) = self.steal_restore_probe_task() {
                     if data.row_groups.is_empty() {
@@ -486,6 +548,7 @@ impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
                         self.join.desc.probe_schema.clone(),
                         data.row_groups,
                         target,
+                        self.join.read_settings,
                     )?;
                     self.spills_reader = Some(reader);
                     break;
@@ -497,7 +560,7 @@ impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
             }
 
             if let Some(mut spills_reader) = self.spills_reader.take() {
-                if let Some(v) = spills_reader.read(self.join.read_settings)? {
+                if let Some(v) = spills_reader.read()? {
                     self.spills_reader = Some(spills_reader);
                     return Ok(Some(v));
                 }

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnRef;
@@ -24,9 +25,12 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
 use databend_common_expression::LimitType;
-use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_compact_block_pipeline;
@@ -35,14 +39,17 @@ use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::FuseTable;
 use crate::io::StreamBlockProperties;
 use crate::operations::TransformBlockBuilder;
 use crate::operations::TransformBlockWriter;
+use crate::operations::TransformPartitionBy;
 use crate::operations::TransformSerializeBlock;
+use crate::operations::TransformVectorCluster;
 use crate::statistics::ClusterStatsGenerator;
+use crate::statistics::VectorClusterOperator;
+use crate::statistics::vector_cluster_info_from_column;
 
 impl FuseTable {
     pub fn do_append_data(
@@ -51,7 +58,10 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        let enable_stream_block_write = self.enable_stream_block_write(ctx.clone())?;
+        // Stream block writing does not expose a partition-boundary split point.
+        // Use the regular append pipeline for partitioned tables.
+        let enable_stream_block_write =
+            self.partition_key_count() == 0 && self.enable_stream_block_write(ctx.clone())?;
         if enable_stream_block_write {
             let properties = StreamBlockProperties::try_create(
                 ctx.clone(),
@@ -99,8 +109,9 @@ impl FuseTable {
         transform_len: usize,
         need_match: bool,
     ) -> Result<ClusterStatsGenerator> {
+        let input_schema = DataSchema::from(self.schema_with_stream()).into();
         let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, None)?;
+            self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, input_schema)?;
 
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
@@ -122,24 +133,54 @@ impl FuseTable {
             pipeline.add_pipe(builder.finalize());
         }
 
-        let cluster_keys = &cluster_stats_gen.cluster_key_index;
-        if !cluster_keys.is_empty() {
-            let sort_desc: Vec<SortColumnDescription> = cluster_keys
-                .iter()
-                .map(|index| SortColumnDescription {
-                    offset: *index,
-                    asc: true,
-                    nulls_first: false,
-                })
-                .collect();
-            let sort_desc: Arc<[_]> = sort_desc.into();
+        if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+            let rows_per_block = block_thresholds.max_rows_per_block;
+            let mut builder = pipeline.add_transform_with_specified_len(
+                move |input, output| {
+                    Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                        input,
+                        output,
+                        TransformVectorCluster::new(
+                            vector_operator.vector_column_input_offset,
+                            vector_operator.info.dimension,
+                            vector_operator.info.distance_type,
+                            rows_per_block,
+                        ),
+                    )))
+                },
+                transform_len,
+            )?;
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
+            pipeline.add_pipe(builder.finalize());
+        }
 
+        let sort_desc: Arc<[_]> = cluster_stats_gen.sort_descs().into();
+        if !sort_desc.is_empty() {
             let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 || {
                     Ok(TransformSortPartial::new(
                         LimitType::None,
                         sort_desc.clone(),
                     ))
+                },
+                transform_len,
+            )?;
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
+            pipeline.add_pipe(builder.finalize());
+        }
+        let partition_key_indices: Arc<[_]> = cluster_stats_gen.partition_key_index.clone().into();
+        if !partition_key_indices.is_empty() {
+            let mut builder = pipeline.add_transform_with_specified_len(
+                move |input, output| {
+                    Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                        input,
+                        output,
+                        TransformPartitionBy::new(partition_key_indices.clone()),
+                    )))
                 },
                 transform_len,
             )?;
@@ -158,8 +199,31 @@ impl FuseTable {
         block_thresholds: BlockThresholds,
         modified_schema: Option<Arc<DataSchema>>,
     ) -> Result<ClusterStatsGenerator> {
+        self.cluster_gen_for_append_impl(ctx, pipeline, block_thresholds, modified_schema, false)
+    }
+
+    pub fn cluster_gen_for_update(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        block_thresholds: BlockThresholds,
+        modified_schema: Option<Arc<DataSchema>>,
+    ) -> Result<ClusterStatsGenerator> {
+        self.cluster_gen_for_append_impl(ctx, pipeline, block_thresholds, modified_schema, true)
+    }
+
+    fn cluster_gen_for_append_impl(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        block_thresholds: BlockThresholds,
+        modified_schema: Option<Arc<DataSchema>>,
+        rewrite_replaced_block: bool,
+    ) -> Result<ClusterStatsGenerator> {
+        let input_schema =
+            modified_schema.unwrap_or(DataSchema::from(self.schema_with_stream()).into());
         let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, modified_schema)?;
+            self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, input_schema)?;
 
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
@@ -171,19 +235,36 @@ impl FuseTable {
             });
         }
 
-        let cluster_keys = &cluster_stats_gen.cluster_key_index;
-        if !cluster_keys.is_empty() {
-            let sort_desc: Vec<SortColumnDescription> = cluster_keys
-                .iter()
-                .map(|index| SortColumnDescription {
-                    offset: *index,
-                    asc: true,
-                    nulls_first: false,
-                })
-                .collect();
-            let sort_desc: Arc<[_]> = sort_desc.into();
-            pipeline
-                .add_transformer(|| TransformSortPartial::new(LimitType::None, sort_desc.clone()));
+        if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+            let rows_per_block = block_thresholds.max_rows_per_block;
+            pipeline.add_accumulating_transformer(move || {
+                TransformVectorCluster::new(
+                    vector_operator.vector_column_input_offset,
+                    vector_operator.info.dimension,
+                    vector_operator.info.distance_type,
+                    rows_per_block,
+                )
+            });
+        }
+
+        let sort_desc: Arc<[_]> = cluster_stats_gen.sort_descs().into();
+        if !sort_desc.is_empty() {
+            pipeline.add_transformer({
+                let sort_desc = sort_desc.clone();
+                move || TransformSortPartial::new(LimitType::None, sort_desc.clone())
+            });
+        }
+        let partition_key_indices: Arc<[_]> = cluster_stats_gen.partition_key_index.clone().into();
+        if !partition_key_indices.is_empty() {
+            if rewrite_replaced_block {
+                pipeline.add_accumulating_transformer(move || {
+                    TransformPartitionBy::new_for_update(partition_key_indices.clone())
+                });
+            } else {
+                pipeline.add_accumulating_transformer(move || {
+                    TransformPartitionBy::new(partition_key_indices.clone())
+                });
+            }
         }
         Ok(cluster_stats_gen)
     }
@@ -193,27 +274,69 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         level: i32,
         block_thresholds: BlockThresholds,
-        modified_schema: Option<Arc<DataSchema>>,
+        input_schema: Arc<DataSchema>,
     ) -> Result<ClusterStatsGenerator> {
-        let cluster_type = self.cluster_type();
-        if cluster_type.is_none_or(|v| v == ClusterType::Hilbert) {
+        let partition_keys = self.linear_partition_keys(ctx.clone());
+        let cluster_keys = self.linear_cluster_keys(ctx.clone());
+        if partition_keys.is_empty() && cluster_keys.is_empty() {
             return Ok(ClusterStatsGenerator::default());
         }
 
-        let input_schema =
-            modified_schema.unwrap_or(DataSchema::from(self.schema_with_stream()).into());
         let mut merged = input_schema.fields().clone();
-
-        let cluster_keys = self.linear_cluster_keys(ctx.clone());
+        let mut partition_key_index = Vec::with_capacity(partition_keys.len());
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
 
-        let mut exprs = Vec::with_capacity(cluster_keys.len());
+        let mut exprs = Vec::with_capacity(partition_keys.len() + cluster_keys.len());
+        let mut vector_cluster_info = None;
+        let mut vector_column_input_offset = None;
 
-        for remote_expr in &cluster_keys {
+        let keys = partition_keys.iter().map(|expr| (None, expr)).chain(
+            cluster_keys
+                .iter()
+                .enumerate()
+                .map(|(index, expr)| (Some(index), expr)),
+        );
+        for (cluster_key_position, remote_expr) in keys {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
                 .project_column_ref(|name| input_schema.index_of(name))?;
+            if let (Some(key_index), DataType::Vector(vector_ty)) =
+                (cluster_key_position, expr.data_type().remove_nullable())
+            {
+                let Expr::ColumnRef(ColumnRef { id, .. }) = &expr else {
+                    return Err(ErrorCode::InvalidClusterKeys(
+                        "Vector cluster key only supports direct column reference",
+                    ));
+                };
+                if vector_cluster_info.is_some() {
+                    return Err(ErrorCode::InvalidClusterKeys(
+                        "Only one vector column is supported in cluster by",
+                    ));
+                }
+                let input_field = input_schema.field(*id);
+                let schema = self.schema();
+                let field = schema.field_with_name(input_field.name())?;
+                let dimension: usize = vector_ty.dimension().try_into().map_err(|_| {
+                    ErrorCode::InvalidClusterKeys(
+                        "Vector cluster key dimension is too large for kmeans",
+                    )
+                })?;
+                if dimension == 0 {
+                    return Err(ErrorCode::InvalidClusterKeys(
+                        "Vector cluster key dimension must be greater than zero",
+                    ));
+                }
+                let vector_info = vector_cluster_info_from_column(
+                    &self.table_info.meta.indexes,
+                    key_index,
+                    field.column_id(),
+                    field.name(),
+                    dimension,
+                )?;
+                vector_column_input_offset = Some(*id);
+                vector_cluster_info = Some(vector_info);
+            }
             let index = match &expr {
                 Expr::ColumnRef(ColumnRef { id, .. }) => *id,
                 _ => {
@@ -226,7 +349,11 @@ impl FuseTable {
                     offset
                 }
             };
-            cluster_key_index.push(index);
+            if cluster_key_position.is_some() {
+                cluster_key_index.push(index);
+            } else {
+                partition_key_index.push(index);
+            }
         }
 
         let operators = if exprs.is_empty() {
@@ -237,18 +364,42 @@ impl FuseTable {
                 projections: None,
             }]
         };
+        let mut vector_operator = None;
+        if let Some(vector_info) = vector_cluster_info {
+            if vector_info.key_index < cluster_key_index.len() {
+                if let Some(vector_column_input_offset) = vector_column_input_offset {
+                    let cluster_id_offset = merged.len();
+                    merged.push(DataField::new(
+                        "_vector_cluster_sort_key",
+                        DataType::Number(NumberDataType::UInt64),
+                    ));
+                    extra_key_num += 1;
+                    // Keep the original CLUSTER BY order. For CLUSTER BY (a, embedding, b),
+                    // sorting should use (a, _vector_cluster_sort_key, b), not append the
+                    // vector sort key after all scalar keys.
+                    cluster_key_index[vector_info.key_index] = cluster_id_offset;
+                    vector_operator = Some(VectorClusterOperator {
+                        info: vector_info,
+                        vector_column_input_offset,
+                        vector_cluster_id_offset: cluster_id_offset,
+                    });
+                }
+            }
+        }
 
-        Ok(ClusterStatsGenerator::new(
-            self.cluster_key_id().unwrap(),
+        let mut generator = ClusterStatsGenerator::new(
+            self.cluster_key_id().unwrap_or(0),
             cluster_key_index,
             extra_key_num,
-            self.get_max_page_size(),
             level,
             block_thresholds,
             operators,
+            vector_operator,
             merged,
             ctx.get_function_context()?,
-        ))
+        );
+        generator.partition_key_index = partition_key_index;
+        Ok(generator)
     }
 
     pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {

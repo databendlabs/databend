@@ -15,12 +15,15 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::Expr;
+use crate::ast::quote::QuotedString;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum ShowLimit {
     Like { pattern: String },
     Where { selection: Box<Expr> },
@@ -29,7 +32,7 @@ pub enum ShowLimit {
 impl Display for ShowLimit {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            ShowLimit::Like { pattern } => write!(f, "LIKE '{pattern}'"),
+            ShowLimit::Like { pattern } => write!(f, "LIKE {}", QuotedString(pattern, '\'')),
             ShowLimit::Where { selection } => write!(f, "WHERE {selection}"),
         }
     }

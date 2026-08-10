@@ -34,6 +34,7 @@ pub struct TableSnapshotStatistics {
     /// id of snapshot
     pub snapshot_id: SnapshotId,
     pub hll: HashMap<ColumnId, MetaHLL12>,
+    #[serde(with = "crate::meta::histogram_serde")]
     pub histograms: HashMap<ColumnId, Histogram>,
 }
 

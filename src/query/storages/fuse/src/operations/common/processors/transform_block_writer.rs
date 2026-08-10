@@ -97,7 +97,7 @@ impl TransformBlockBuilder {
     }
 
     fn split_input(&self, input: DataBlock) -> Vec<DataBlock> {
-        let block_size = input.estimate_block_size();
+        let block_size = input.estimate_block_size(input.num_columns());
         let num_rows = input.num_rows();
         let average_row_size = block_size.div_ceil(num_rows);
         let max_rows = self
@@ -184,7 +184,7 @@ impl Processor for TransformBlockBuilder {
                 block.check_valid()?;
                 self.input_num_rows += block.num_rows();
                 for block in self.split_input(block) {
-                    let block_size = block.estimate_block_size();
+                    let block_size = block.estimate_block_size(block.num_columns());
                     self.input_data_size += block_size;
                     self.input_data.push_back((block_size, block));
                 }
@@ -274,17 +274,14 @@ impl AsyncAccumulatingTransform for TransformBlockWriter {
                 });
 
                 // appending new data block
-                if let Some(tid) = self.table_id {
-                    self.ctx.update_multi_table_insert_status(
-                        tid,
-                        extended_block_meta.block_meta.row_count,
-                    );
-                } else {
-                    self.ctx.add_mutation_status(MutationStatus {
-                        insert_rows: extended_block_meta.block_meta.row_count,
-                        update_rows: 0,
-                        deleted_rows: 0,
-                    });
+                if self.table_id.is_none() {
+                    self.ctx
+                        .mutation_state()
+                        .add_mutation_status(MutationStatus {
+                            insert_rows: extended_block_meta.block_meta.row_count,
+                            update_rows: 0,
+                            deleted_rows: 0,
+                        });
                 }
 
                 let output = if matches!(self.kind, MutationKind::Insert) {
@@ -297,7 +294,9 @@ impl AsyncAccumulatingTransform for TransformBlockWriter {
                     DataBlock::empty_with_meta(Box::new(MutationLogs {
                         entries: vec![MutationLogEntry::AppendBlock {
                             block_meta: Arc::new(extended_block_meta),
+                            merge_hll: false,
                         }],
+                        ..Default::default()
                     }))
                 };
 

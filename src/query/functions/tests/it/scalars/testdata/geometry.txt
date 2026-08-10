@@ -1802,3 +1802,156 @@ output domain  : {2326440618..=2326440618}
 output         : 2326440618
 
 
+ast            : ST_ASWKT(ST_SIMPLIFY(TO_GEOMETRY('LINESTRING(0 0, 1 0, 1 1, 2 1)'), 0.5))
+raw expr       : ST_ASWKT(ST_SIMPLIFY(TO_GEOMETRY('LINESTRING(0 0, 1 0, 1 1, 2 1)'), 0.5))
+checked expr   : st_aswkt<Geometry>(st_simplify<Geometry, Float64>(CAST<String>("LINESTRING(0 0, 1 0, 1 1, 2 1)" AS Geometry), CAST<Decimal(1, 1)>(0.5_d64(1,1) AS Float64)))
+optimized expr : "LINESTRING(0 0,2 1)"
+output type    : String
+output domain  : {"LINESTRING(0 0,2 1)"..="LINESTRING(0 0,2 1)"}
+output         : 'LINESTRING(0 0,2 1)'
+
+
+ast            : ST_ASWKT(ST_SIMPLIFY(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0.5 0.5, 0 1, 0 0))'), 0.6))
+raw expr       : ST_ASWKT(ST_SIMPLIFY(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0.5 0.5, 0 1, 0 0))'), 0.6))
+checked expr   : st_aswkt<Geometry>(st_simplify<Geometry, Float64>(CAST<String>("POLYGON((0 0, 1 0, 1 1, 0.5 0.5, 0 1, 0 0))" AS Geometry), CAST<Decimal(1, 1)>(0.6_d64(1,1) AS Float64)))
+optimized expr : "POLYGON((0 0,1 0,1 1,0 1,0 0))"
+output type    : String
+output domain  : {"POLYGON((0 0,1 0,1 1,0 1,0 0))"..="POLYGON((0 0,1 0,1 1,0 1,0 0))"}
+output         : 'POLYGON((0 0,1 0,1 1,0 1,0 0))'
+
+
+ast            : ST_ISVALID(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'))
+raw expr       : ST_ISVALID(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'))
+checked expr   : st_isvalid<Geometry>(CAST<String>("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))" AS Geometry))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_ISVALID(TO_GEOMETRY('POLYGON((0 0, 2 2, 2 0, 0 2, 0 0))'))
+raw expr       : ST_ISVALID(TO_GEOMETRY('POLYGON((0 0, 2 2, 2 0, 0 2, 0 0))'))
+checked expr   : st_isvalid<Geometry>(CAST<String>("POLYGON((0 0, 2 2, 2 0, 0 2, 0 0))" AS Geometry))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : ST_COVERS(TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'), TO_GEOMETRY('POINT(1 1)'))
+raw expr       : ST_COVERS(TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'), TO_GEOMETRY('POINT(1 1)'))
+checked expr   : st_covers<Geometry, Geometry>(CAST<String>("POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))" AS Geometry), CAST<String>("POINT(1 1)" AS Geometry))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_COVERS(TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'), TO_GEOMETRY('POINT(5 5)'))
+raw expr       : ST_COVERS(TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'), TO_GEOMETRY('POINT(5 5)'))
+checked expr   : st_covers<Geometry, Geometry>(CAST<String>("POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))" AS Geometry), CAST<String>("POINT(5 5)" AS Geometry))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : ST_COVEREDBY(TO_GEOMETRY('POINT(1 1)'), TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'))
+raw expr       : ST_COVEREDBY(TO_GEOMETRY('POINT(1 1)'), TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'))
+checked expr   : st_coveredby<Geometry, Geometry>(CAST<String>("POINT(1 1)" AS Geometry), CAST<String>("POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))" AS Geometry))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_COVEREDBY(TO_GEOMETRY('POINT(5 5)'), TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'))
+raw expr       : ST_COVEREDBY(TO_GEOMETRY('POINT(5 5)'), TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'))
+checked expr   : st_coveredby<Geometry, Geometry>(CAST<String>("POINT(5 5)" AS Geometry), CAST<String>("POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))" AS Geometry))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : ST_PERIMETER(TO_GEOMETRY('POLYGON((0 0, 0 3, 4 3, 4 0, 0 0))'))
+raw expr       : ST_PERIMETER(TO_GEOMETRY('POLYGON((0 0, 0 3, 4 3, 4 0, 0 0))'))
+checked expr   : st_perimeter<Geometry>(CAST<String>("POLYGON((0 0, 0 3, 4 3, 4 0, 0 0))" AS Geometry))
+optimized expr : 14_f64
+output type    : Float64
+output domain  : {14..=14}
+output         : 14
+
+
+ast            : ST_PERIMETER(TO_GEOMETRY('POINT(1 1)'))
+raw expr       : ST_PERIMETER(TO_GEOMETRY('POINT(1 1)'))
+checked expr   : st_perimeter<Geometry>(CAST<String>("POINT(1 1)" AS Geometry))
+optimized expr : 0_f64
+output type    : Float64
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : ST_AZIMUTH(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 0)'))
+raw expr       : ST_AZIMUTH(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 0)'))
+checked expr   : st_azimuth<Geometry, Geometry>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("POINT(1 0)" AS Geometry))
+optimized expr : 1.570796327_f64
+output type    : Float64 NULL
+output domain  : {1.570796327..=1.570796327}
+output         : 1.570796327
+
+
+ast            : ST_AZIMUTH(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))
+raw expr       : ST_AZIMUTH(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))
+checked expr   : st_azimuth<Geometry, Geometry>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("POINT(1 1)" AS Geometry))
+optimized expr : 0.785398163_f64
+output type    : Float64 NULL
+output domain  : {0.785398163..=0.785398163}
+output         : 0.785398163
+
+
+ast            : ST_HAUSDORFFDISTANCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(0 1)'))
+raw expr       : ST_HAUSDORFFDISTANCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(0 1)'))
+checked expr   : st_hausdorffdistance<Geometry, Geometry>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("POINT(0 1)" AS Geometry))
+optimized expr : 1_f64
+output type    : Float64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : ST_HAUSDORFFDISTANCE(TO_GEOMETRY('LINESTRING(0 0, 1 0)'), TO_GEOMETRY('LINESTRING(0 1, 1 1)'))
+raw expr       : ST_HAUSDORFFDISTANCE(TO_GEOMETRY('LINESTRING(0 0, 1 0)'), TO_GEOMETRY('LINESTRING(0 1, 1 1)'))
+checked expr   : st_hausdorffdistance<Geometry, Geometry>(CAST<String>("LINESTRING(0 0, 1 0)" AS Geometry), CAST<String>("LINESTRING(0 1, 1 1)" AS Geometry))
+optimized expr : 1_f64
+output type    : Float64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : ST_ASWKT(ST_MAKEPOLYGONORIENTED(TO_GEOMETRY('LINESTRING(0 0, 1 0, 1 2, 0 2, 0 0)')))
+raw expr       : ST_ASWKT(ST_MAKEPOLYGONORIENTED(TO_GEOMETRY('LINESTRING(0 0, 1 0, 1 2, 0 2, 0 0)')))
+checked expr   : st_aswkt<Geometry>(st_makepolygonoriented<Geometry>(CAST<String>("LINESTRING(0 0, 1 0, 1 2, 0 2, 0 0)" AS Geometry)))
+optimized expr : "POLYGON((0 0,1 0,1 2,0 2,0 0))"
+output type    : String
+output domain  : {"POLYGON((0 0,1 0,1 2,0 2,0 0))"..="POLYGON((0 0,1 0,1 2,0 2,0 0))"}
+output         : 'POLYGON((0 0,1 0,1 2,0 2,0 0))'
+
+
+ast            : ST_BUFFER(TO_GEOMETRY('POINT(0 0)'), 1) IS NOT NULL
+raw expr       : is_not_null(ST_BUFFER(TO_GEOMETRY('POINT(0 0)'), 1))
+checked expr   : is_not_null<T0=Geometry><T0 NULL>(st_buffer<Geometry, Float64>(CAST<String>("POINT(0 0)" AS Geometry), CAST<UInt8>(1_u8 AS Float64)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_ASWKT(ST_BUFFER(TO_GEOMETRY('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), 0))
+raw expr       : ST_ASWKT(ST_BUFFER(TO_GEOMETRY('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), 0))
+checked expr   : st_aswkt<Geometry NULL>(st_buffer<Geometry, Float64>(CAST<String>("POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))" AS Geometry), CAST<UInt8>(0_u8 AS Float64)))
+optimized expr : "MULTIPOLYGON(((0 0,0 2,2 2,2 0,0 0)))"
+output type    : String NULL
+output domain  : {"MULTIPOLYGON(((0 0,0 2,2 2,2 0,0 0)))"..="MULTIPOLYGON(((0 0,0 2,2 2,2 0,0 0)))"}
+output         : 'MULTIPOLYGON(((0 0,0 2,2 2,2 0,0 0)))'
+
+

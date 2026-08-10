@@ -44,12 +44,13 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storages_fuse::FuseBlockPartInfo;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::DataItem;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::operations::ReadState;
+use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextRuntimeFilter;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
@@ -225,9 +226,8 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
 
     let write_settings = WriteSettings::default();
     let compression: Compression = write_settings.table_compression.into();
-    let mut buf = Vec::new();
-    let column_metas = serialize_block(&write_settings, &schema, block, &mut buf)?;
-    let parquet_bytes = bytes::Bytes::from(buf);
+    let (column_metas, buf) = serialize_block(&write_settings, &schema, block)?;
+    let parquet_bytes = buf.to_bytes();
 
     // Create operator (memory-based for testing)
     let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
@@ -320,8 +320,6 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         schema.clone(),
         prewhere_info.output_columns.clone(),
         false,
-        false,
-        false,
     )?;
 
     // Extract column chunks from parquet bytes
@@ -332,13 +330,10 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         location: "test_block".to_string(),
         bloom_filter_index_location: None,
         bloom_filter_index_size: 0,
-        spatial_index_location: None,
-        spatial_index_size: 0,
         create_on: None,
         nums_rows: num_rows,
         columns_meta: column_metas.clone(),
         columns_stat: None,
-        spatial_stats: None,
         compression,
         sort_min_max: None,
         block_meta_index: None,
@@ -362,7 +357,6 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
                     column_name: "y".to_string(),
                     filter: Arc::new(bloom_y),
                 }),
-                spatial: None,
                 inlist: None,
                 inlist_value_count: 0,
                 min_max: None,
@@ -382,7 +376,6 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
                     column_name: "d".to_string(),
                     filter: Arc::new(bloom_d),
                 }),
-                spatial: None,
                 inlist: None,
                 inlist_value_count: 0,
                 min_max: None,

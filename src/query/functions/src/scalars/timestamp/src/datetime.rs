@@ -17,6 +17,7 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::FormattingOptions;
 use std::io::Write;
+use std::sync::Arc;
 
 use chrono::Datelike;
 use chrono::NaiveDate;
@@ -24,14 +25,21 @@ use databend_common_base::runtime::catch_unwind;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::Column;
+use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::error_to_null;
 use databend_common_expression::serialize::EPOCH_DAYS_FROM_CE;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -40,6 +48,7 @@ use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -76,9 +85,13 @@ use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_4_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_timezone::fast_components_from_timestamp;
+use databend_common_timezone::fast_utc_from_local;
 use dtparse::parse;
+use jiff::SignedDuration;
+use jiff::Span;
 use jiff::Timestamp;
 use jiff::Unit;
 use jiff::civil::Date;
@@ -88,6 +101,8 @@ use jiff::fmt::strtime::BrokenDownTime;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone;
 use num_traits::AsPrimitive;
+
+const MONTHS_PER_YEAR: i64 = 12;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cast(xx AS timestamp)
@@ -142,6 +157,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // convert_timezone( target_timezone, 'timestamp')
     register_convert_timezone(registry);
+
+    // date_from_parts(year, month, day)
+    // timestamp_from_parts(year, month, day, hour, minute, second [, nanosecond])
+    // timestamp_tz_from_parts(year, month, day, hour, minute, second [, nanosecond] [, time_zone])
+    register_date_from_parts(registry);
+    register_timestamp_from_parts(registry);
+    register_timestamp_tz_from_parts(registry);
 }
 
 /// calc int32 domain to timestamp domain
@@ -2120,13 +2142,10 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default().non_deterministic(),
     );
 
-    for name in &[
-        "to_timestamp",
-        "to_timestamp_tz",
-        "to_date",
-        "to_yyyymm",
-        "to_yyyymmdd",
-    ] {
+    // NOTE: `to_timestamp`/`to_timestamp_tz`/`to_date` keep their pre-existing global
+    // monotonicity flags; they carry the same time-zone caveat as the calendar
+    // projections below and should eventually migrate to `monotonicity_check` too.
+    for name in &["to_timestamp", "to_timestamp_tz", "to_date"] {
         registry
             .properties
             .insert(name.to_string(), FunctionProperty::default().monotonicity());
@@ -2193,11 +2212,98 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
     );
 }
 
+/// Date -> calendar-number projection is unconditionally safe for end-point domain
+/// evaluation: `i32::to_date` ignores the session time zone and maps epoch days to a
+/// proleptic Gregorian date, which is non-decreasing in the day number.
+fn date_to_u32_domain<T: DateToNumber<u32>>(
+    ctx: &FunctionContext,
+    domain: &SimpleDomain<i32>,
+) -> FunctionDomain<UInt32Type> {
+    match (
+        ToNumberImpl::eval_date::<T, _>(domain.min, &ctx.tz),
+        ToNumberImpl::eval_date::<T, _>(domain.max, &ctx.tz),
+    ) {
+        (Ok(min), Ok(max)) => FunctionDomain::Domain(SimpleDomain { min, max }),
+        _ => FunctionDomain::MayThrow,
+    }
+}
+
+/// End-point domain evaluation is only sound when the wall clock is monotonic over the
+/// whole range: a DST fallback inside `[min, max]` can rewind local time across a day or
+/// month boundary (e.g. America/St_Johns 2009-11-01 00:01 NDT -> 10-31 23:01 NST), making
+/// `[f(min), f(max)]` exclude reachable outputs. Fail open to `Full` in that case.
+fn timestamp_to_u32_domain<T: ToNumber<u32>>(
+    ctx: &FunctionContext,
+    domain: &SimpleDomain<i64>,
+) -> FunctionDomain<UInt32Type> {
+    if !tz_wall_clock_single_segment(&ctx.tz, domain.min, domain.max) {
+        return FunctionDomain::Full;
+    }
+    FunctionDomain::Domain(SimpleDomain {
+        min: ToNumberImpl::eval_timestamp::<T, _>(domain.min, &ctx.tz),
+        max: ToNumberImpl::eval_timestamp::<T, _>(domain.max, &ctx.tz),
+    })
+}
+
+/// Whether `[min_us, max_us]` lies within one offset segment of `tz`, i.e. contains no
+/// time-zone transition. The wall clock is then strictly increasing over the range, so
+/// calendar projections are monotonic and end-point evaluation is exact.
+fn tz_wall_clock_single_segment(tz: &TimeZone, min_us: i64, max_us: i64) -> bool {
+    if tz.to_fixed_offset().is_ok() {
+        return true;
+    }
+    let (Ok(min_ts), Ok(max_ts)) = (
+        Timestamp::from_microsecond(min_us),
+        Timestamp::from_microsecond(max_us),
+    ) else {
+        return false;
+    };
+    match tz.following(min_ts).next() {
+        None => true,
+        // A transition exactly at `max` already applies to `f(max)`; require it to lie
+        // strictly after the range.
+        Some(transition) => transition.timestamp() > max_ts,
+    }
+}
+
+/// Range-sensitive monotonicity for calendar projections (`to_yyyymm`, `to_start_of_day`,
+/// ...): date inputs are always monotonic, while timestamp inputs are monotonic only when
+/// the range crosses no time-zone transition of the session time zone. Nullable domains
+/// are judged by their non-null range; NULLs map to NULL and carry no ordering.
+fn calendar_monotonicity(ctx: &FunctionContext, args: &[Domain]) -> Option<usize> {
+    let [domain] = args else {
+        return None;
+    };
+    calendar_domain_monotonic(ctx, domain).then_some(0)
+}
+
+fn calendar_domain_monotonic(ctx: &FunctionContext, domain: &Domain) -> bool {
+    match domain {
+        Domain::Date(_) => true,
+        Domain::Timestamp(simple) => tz_wall_clock_single_segment(&ctx.tz, simple.min, simple.max),
+        Domain::Nullable(nullable) => match &nullable.value {
+            Some(inner) => calendar_domain_monotonic(ctx, inner),
+            // An all-NULL input projects to a single NULL output.
+            None => true,
+        },
+        _ => false,
+    }
+}
+
 fn register_to_number_functions(registry: &mut FunctionRegistry) {
+    // Conditionally monotonic: guarded by the session time zone, see
+    // `calendar_monotonicity`.
+    for name in ["to_yyyymm", "to_yyyymmdd"] {
+        registry.properties.insert(
+            name.to_string(),
+            FunctionProperty::default().monotonicity_check(calendar_monotonicity),
+        );
+    }
+
     // date
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _>(
         "to_yyyymm",
-        |_, _| FunctionDomain::Full,
+        date_to_u32_domain::<ToYYYYMM>,
         vectorize_with_builder_1_arg::<DateType, UInt32Type>(|val, output, ctx| {
             match ToNumberImpl::eval_date::<ToYYYYMM, _>(val, &ctx.func_ctx.tz) {
                 Ok(t) => output.push(t),
@@ -2210,7 +2316,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _>(
         "to_yyyymmdd",
-        |_, _| FunctionDomain::Full,
+        date_to_u32_domain::<ToYYYYMMDD>,
         vectorize_with_builder_1_arg::<DateType, UInt32Type>(|val, output, ctx| {
             match ToNumberImpl::eval_date::<ToYYYYMMDD, _>(val, &ctx.func_ctx.tz) {
                 Ok(t) => output.push(t),
@@ -2369,12 +2475,12 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     // timestamp
     registry.register_1_arg::<TimestampType, UInt32Type, _>(
         "to_yyyymm",
-        |_, _| FunctionDomain::Full,
+        timestamp_to_u32_domain::<ToYYYYMM>,
         |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMM, _>(val, &ctx.func_ctx.tz),
     );
     registry.register_1_arg::<TimestampType, UInt32Type, _>(
         "to_yyyymmdd",
-        |_, _| FunctionDomain::Full,
+        timestamp_to_u32_domain::<ToYYYYMMDD>,
         |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMMDD, _>(val, &ctx.func_ctx.tz),
     );
     registry.register_1_arg::<TimestampType, UInt64Type, _>(
@@ -2445,7 +2551,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<TimestampType, Int64Type, _>(
         "to_unix_timestamp",
         |_, _| FunctionDomain::Full,
-        |val, ctx| ToNumberImpl::eval_timestamp::<ToUnixTimestamp, _>(val, &ctx.func_ctx.tz),
+        |val, _| val.div_euclid(MICROS_PER_SEC),
     );
 
     registry.register_1_arg::<TimestampType, Float64Type, _>(
@@ -2485,6 +2591,48 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     );
 }
 
+// Compute a correct date domain from a raw arithmetic range.
+// `clamp_date` maps out-of-range values to DATE_MIN (non-monotonic), so naively
+// clamping endpoints can produce a reversed domain. This function accounts for
+// partial overlap with the valid date range.
+fn clamp_date_domain(raw_min: i64, raw_max: i64) -> SimpleDomain<i32> {
+    if raw_min >= DATE_MIN as i64 && raw_max <= DATE_MAX as i64 {
+        SimpleDomain {
+            min: raw_min as i32,
+            max: raw_max as i32,
+        }
+    } else if raw_min > DATE_MAX as i64 || raw_max < DATE_MIN as i64 {
+        SimpleDomain {
+            min: DATE_MIN,
+            max: DATE_MIN,
+        }
+    } else {
+        SimpleDomain {
+            min: DATE_MIN,
+            max: raw_max.min(DATE_MAX as i64) as i32,
+        }
+    }
+}
+
+fn clamp_timestamp_domain(raw_min: i64, raw_max: i64) -> SimpleDomain<i64> {
+    if raw_min >= TIMESTAMP_MIN && raw_max <= TIMESTAMP_MAX {
+        SimpleDomain {
+            min: raw_min,
+            max: raw_max,
+        }
+    } else if raw_min > TIMESTAMP_MAX || raw_max < TIMESTAMP_MIN {
+        SimpleDomain {
+            min: TIMESTAMP_MIN,
+            max: TIMESTAMP_MIN,
+        }
+    } else {
+        SimpleDomain {
+            min: TIMESTAMP_MIN,
+            max: raw_max.min(TIMESTAMP_MAX),
+        }
+    }
+}
+
 fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
         "plus",
@@ -2495,15 +2643,14 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let rm = rhs.max;
                 let rn = rhs.min;
 
-                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
-                    min: clamp_date(ln + rn),
-                    max: clamp_date(lm + rm),
-                }))
+                let raw_min = ln.saturating_add(rn);
+                let raw_max = lm.saturating_add(rm);
+                Some(FunctionDomain::Domain(clamp_date_domain(raw_min, raw_max)))
             })()
             .unwrap_or(FunctionDomain::MayThrow)
         },
         vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, _| {
-            output.push(clamp_date((a as i64) + b))
+            output.push(clamp_date((a as i64).saturating_add(b)))
         }),
     );
 
@@ -2515,17 +2662,17 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let ln = lhs.min;
                 let rm = rhs.max;
                 let rn = rhs.min;
-                let mut min = ln + rn;
-                clamp_timestamp(&mut min);
-                let mut max = lm + rm;
-                clamp_timestamp(&mut max);
-                Some(FunctionDomain::Domain(SimpleDomain::<i64> { min, max }))
+                let raw_min = ln.saturating_add(rn);
+                let raw_max = lm.saturating_add(rm);
+                Some(FunctionDomain::Domain(clamp_timestamp_domain(
+                    raw_min, raw_max,
+                )))
             }
             .unwrap_or(FunctionDomain::MayThrow)
         },
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
             |a, b, output, _| {
-                let mut sum = a + b;
+                let mut sum = a.saturating_add(b);
                 clamp_timestamp(&mut sum);
                 output.push(sum);
             },
@@ -2541,15 +2688,14 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let rm = rhs.max;
                 let rn = rhs.min;
 
-                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
-                    min: clamp_date(ln - rn),
-                    max: clamp_date(lm - rm),
-                }))
+                let raw_min = ln.saturating_sub(rm);
+                let raw_max = lm.saturating_sub(rn);
+                Some(FunctionDomain::Domain(clamp_date_domain(raw_min, raw_max)))
             })()
             .unwrap_or(FunctionDomain::MayThrow)
         },
         vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, _| {
-            output.push(clamp_date((a as i64) - b));
+            output.push(clamp_date((a as i64).saturating_sub(b)));
         }),
     );
 
@@ -2561,17 +2707,17 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let ln = lhs.min;
                 let rm = rhs.max;
                 let rn = rhs.min;
-                let mut min = ln - rn;
-                clamp_timestamp(&mut min);
-                let mut max = lm - rm;
-                clamp_timestamp(&mut max);
-                Some(FunctionDomain::Domain(SimpleDomain::<i64> { min, max }))
+                let raw_min = ln.saturating_sub(rm);
+                let raw_max = lm.saturating_sub(rn);
+                Some(FunctionDomain::Domain(clamp_timestamp_domain(
+                    raw_min, raw_max,
+                )))
             }
             .unwrap_or(FunctionDomain::MayThrow)
         },
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
             |a, b, output, _| {
-                let mut minus = a - b;
+                let mut minus = a.saturating_sub(b);
                 clamp_timestamp(&mut minus);
                 output.push(minus);
             },
@@ -2580,6 +2726,25 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
 }
 
 fn register_rounder_functions(registry: &mut FunctionRegistry) {
+    // Calendar rounders are monotonic only while the wall clock is monotonic; the check
+    // rejects timestamp ranges that cross a time-zone transition (DST fallbacks can
+    // rewind local time across a day boundary). Sub-day rounders stay unregistered
+    // because every fallback breaks them.
+    for name in [
+        "to_start_of_day",
+        "to_monday",
+        "to_start_of_week",
+        "to_start_of_month",
+        "to_start_of_quarter",
+        "to_start_of_year",
+        "to_start_of_iso_year",
+    ] {
+        registry.properties.insert(
+            name.to_string(),
+            FunctionProperty::default().monotonicity_check(calendar_monotonicity),
+        );
+    }
+
     // timestamp -> timestamp
     registry.register_1_arg::<TimestampType, TimestampType, _>(
         "to_start_of_second",
@@ -2613,7 +2778,17 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     );
     registry.register_1_arg::<TimestampType, TimestampType, _>(
         "to_start_of_day",
-        |_, _| FunctionDomain::Full,
+        |ctx, domain| {
+            // End-point rounding is an under-approximation when a DST fallback
+            // inside the range rewinds the wall clock across midnight.
+            if !tz_wall_clock_single_segment(&ctx.tz, domain.min, domain.max) {
+                return FunctionDomain::Full;
+            }
+            FunctionDomain::Domain(SimpleDomain {
+                min: round_timestamp(domain.min, &ctx.tz, Round::Day),
+                max: round_timestamp(domain.max, &ctx.tz, Round::Day),
+            })
+        },
         |val, ctx| round_timestamp(val, &ctx.func_ctx.tz, Round::Day),
     );
     registry.register_1_arg::<TimestampType, TimestampType, _>(
@@ -2720,7 +2895,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
 }
 
 fn rounder_functions_helper<T>(registry: &mut FunctionRegistry, name: &str)
-where T: ToNumber<i32> {
+where T: DateToNumber<i32> {
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _>(
         name,
         |_, _| FunctionDomain::Full,
@@ -2748,4 +2923,421 @@ fn prepare_format_string(format: &str, date_format_style: &str) -> String {
         format.to_string()
     };
     replace_time_format(&processed_format).to_string()
+}
+
+fn normalize_date_parts(year: i64, month: i64, day: i64) -> std::result::Result<Date, String> {
+    let month_offset = month
+        .checked_sub(1)
+        .ok_or_else(|| format!("Date parts out of bounds: year={year}, month={month}"))?;
+    let total_months = year
+        .checked_mul(MONTHS_PER_YEAR)
+        .and_then(|y| y.checked_add(month_offset))
+        .ok_or_else(|| format!("Date parts out of bounds: year={year}, month={month}"))?;
+
+    let norm_year_i64 = total_months.div_euclid(MONTHS_PER_YEAR);
+    let norm_month = (total_months.rem_euclid(MONTHS_PER_YEAR) + 1) as i8;
+    let norm_year =
+        i16::try_from(norm_year_i64).map_err(|_| format!("Year out of bounds: {norm_year_i64}"))?;
+
+    let base = Date::new(norm_year, norm_month, 1)
+        .map_err(|_| format!("Invalid date: year={year}, month={month}, day={day}"))?;
+    let day_offset = day
+        .checked_sub(1)
+        .ok_or_else(|| format!("Day value out of bounds: {day}"))?;
+    let days = Span::new()
+        .try_days(day_offset)
+        .map_err(|_| format!("Day value out of bounds: {day}"))?;
+
+    base.checked_add(days)
+        .map_err(|_| format!("Date out of range: year={year}, month={month}, day={day}"))
+}
+
+fn duration_from_time_parts(
+    ctx: &mut EvalContext,
+    row: usize,
+    hour: i64,
+    minute: i64,
+    second: i64,
+    nanosecond: i64,
+) -> Option<SignedDuration> {
+    let hour_duration = match SignedDuration::try_from_hours(hour) {
+        Some(duration) => duration,
+        None => {
+            ctx.set_error(
+                row,
+                ErrorCode::BadArguments("Timestamp hour component is out of range"),
+            );
+            return None;
+        }
+    };
+    let minute_duration = match SignedDuration::try_from_mins(minute) {
+        Some(duration) => duration,
+        None => {
+            ctx.set_error(
+                row,
+                ErrorCode::BadArguments("Timestamp minute component is out of range"),
+            );
+            return None;
+        }
+    };
+
+    match hour_duration
+        .checked_add(minute_duration)
+        .and_then(|d| d.checked_add(SignedDuration::from_secs(second)))
+        .and_then(|d| d.checked_add(SignedDuration::from_nanos(nanosecond)))
+    {
+        Some(duration) => Some(duration),
+        None => {
+            ctx.set_error(
+                row,
+                ErrorCode::BadArguments("Timestamp components overflow"),
+            );
+            None
+        }
+    }
+}
+
+fn validate_timestamp_bounds(ctx: &mut EvalContext, row: usize, utc_micros: i64) -> Option<i64> {
+    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&utc_micros) {
+        Some(utc_micros)
+    } else {
+        ctx.set_error(
+            row,
+            ErrorCode::BadArguments(format!("Timestamp out of range: {utc_micros}")),
+        );
+        None
+    }
+}
+
+fn timestamp_from_parts_to_micros(
+    ctx: &mut EvalContext,
+    row: usize,
+    year: i64,
+    month: i64,
+    day: i64,
+    hour: i64,
+    minute: i64,
+    second: i64,
+    nanosecond: i64,
+    tz: &TimeZone,
+) -> Option<i64> {
+    let base_date = match normalize_date_parts(year, month, day) {
+        Ok(date) => date,
+        Err(e) => {
+            ctx.set_error(
+                row,
+                ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")),
+            );
+            return None;
+        }
+    };
+    let duration = duration_from_time_parts(ctx, row, hour, minute, second, nanosecond)?;
+    let local_dt = base_date
+        .at(0, 0, 0, 0)
+        .checked_add(duration)
+        .map_err(|e| ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")));
+    let local_dt = match local_dt {
+        Ok(local_dt) => local_dt,
+        Err(e) => {
+            ctx.set_error(row, e);
+            return None;
+        }
+    };
+
+    if let Some(micros) = fast_utc_from_local(
+        tz,
+        local_dt.year() as i32,
+        local_dt.month() as u8,
+        local_dt.day() as u8,
+        local_dt.hour() as u8,
+        local_dt.minute() as u8,
+        local_dt.second() as u8,
+        (local_dt.subsec_nanosecond() / 1_000) as u32,
+    ) {
+        return validate_timestamp_bounds(ctx, row, micros);
+    }
+
+    match tz.to_zoned(local_dt) {
+        Ok(zoned) => validate_timestamp_bounds(ctx, row, zoned.timestamp().as_microsecond()),
+        Err(e) => {
+            ctx.set_error(
+                row,
+                ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")),
+            );
+            None
+        }
+    }
+}
+
+fn register_date_from_parts(registry: &mut FunctionRegistry) {
+    registry.register_aliases("date_from_parts", &["datefromparts"]);
+
+    registry
+        .register_passthrough_nullable_3_arg::<Int64Type, Int64Type, Int64Type, DateType, _, _>(
+            "date_from_parts",
+            |_, _, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_3_arg::<Int64Type, Int64Type, Int64Type, DateType>(
+                |year, month, day, output, ctx| match normalize_date_parts(year, month, day) {
+                    Ok(date) => {
+                        let days = date
+                            .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+                            .unwrap()
+                            .get_days();
+                        if (DATE_MIN as i64..=DATE_MAX as i64).contains(&(days as i64)) {
+                            output.push(days);
+                        } else {
+                            ctx.set_error(output.len(), format!("Date out of range: {days}"));
+                            output.push(0);
+                        }
+                    }
+                    Err(e) => {
+                        ctx.set_error(output.len(), format!("cannot create date from parts: {e}"));
+                        output.push(0);
+                    }
+                },
+            ),
+        );
+}
+
+fn register_timestamp_from_parts(registry: &mut FunctionRegistry) {
+    registry.register_aliases("timestamp_from_parts", &["timestampfromparts"]);
+
+    let factory = FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let int64_type = DataType::Number(NumberDataType::Int64);
+
+        let (sig_args, func): (
+            Vec<DataType>,
+            fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType>,
+        ) = match args_type.len() {
+            // 6 args: year, month, day, hour, minute, second
+            6 => (vec![int64_type; 6], |args, ctx| {
+                timestamp_from_parts_fn(args, ctx, false)
+            }),
+
+            // 7 args: includes nanosecond
+            7 => (vec![int64_type; 7], |args, ctx| {
+                timestamp_from_parts_fn(args, ctx, true)
+            }),
+
+            _ => return None,
+        };
+
+        let signature = FunctionSignature {
+            name: "timestamp_from_parts".to_string(),
+            args_type: sig_args,
+            return_type: DataType::Timestamp,
+        };
+
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::MayThrow,
+            func,
+            None,
+            has_null,
+        )))
+    }));
+
+    registry.register_function_factory("timestamp_from_parts", factory);
+}
+
+fn register_timestamp_tz_from_parts(registry: &mut FunctionRegistry) {
+    registry.register_aliases("timestamp_tz_from_parts", &["timestamptzfromparts"]);
+
+    let factory = FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let int64_type = DataType::Number(NumberDataType::Int64);
+
+        let (sig_args, func): (
+            Vec<DataType>,
+            fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType>,
+        ) = match args_type.len() {
+            // 6 args: no nanoseconds, no timezone
+            6 => (vec![int64_type; 6], |args, ctx| {
+                timestamp_tz_from_parts_fn(args, ctx, false, false)
+            }),
+
+            // 7 args: timezone provided
+            7 if args_type[6].remove_nullable() == DataType::String => {
+                let mut v = vec![int64_type; 6];
+                v.push(DataType::String);
+
+                // year, month, day, hour, minute, second, timezone
+                (v, |args, ctx| {
+                    timestamp_tz_from_parts_fn(args, ctx, false, true)
+                })
+            }
+
+            // 7 args: nanoseconds
+            7 => (vec![int64_type; 7], |args, ctx| {
+                timestamp_tz_from_parts_fn(args, ctx, true, false)
+            }),
+
+            // 8 args: nanoseconds + timezone
+            8 => {
+                let mut v = vec![int64_type; 7];
+                v.push(DataType::String);
+
+                // year, month, day, hour, minute, second, nanosecond, timezone
+                (v, |args, ctx| {
+                    timestamp_tz_from_parts_fn(args, ctx, true, true)
+                })
+            }
+
+            _ => return None,
+        };
+
+        let signature = FunctionSignature {
+            name: "timestamp_tz_from_parts".to_string(),
+            args_type: sig_args,
+            return_type: DataType::TimestampTz,
+        };
+
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::MayThrow,
+            func,
+            None,
+            has_null,
+        )))
+    }));
+
+    registry.register_function_factory("timestamp_tz_from_parts", factory);
+}
+
+fn build_timestamp_parts(
+    args: &[Value<AnyType>],
+    ctx: &mut EvalContext,
+    has_nano: bool,
+    has_tz: bool,
+) -> (Vec<i64>, Vec<i32>, Option<usize>) {
+    let len = args.iter().find_map(|arg| match arg {
+        Value::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
+    let year_arg = args[0].try_downcast::<Int64Type>().unwrap();
+    let month_arg = args[1].try_downcast::<Int64Type>().unwrap();
+    let day_arg = args[2].try_downcast::<Int64Type>().unwrap();
+    let hour_arg = args[3].try_downcast::<Int64Type>().unwrap();
+    let minute_arg = args[4].try_downcast::<Int64Type>().unwrap();
+    let second_arg = args[5].try_downcast::<Int64Type>().unwrap();
+
+    let nanosecond_arg = if has_nano {
+        Some(args[6].try_downcast::<Int64Type>().unwrap())
+    } else {
+        None
+    };
+
+    let tz_arg = if has_tz {
+        let idx = if has_nano { 7 } else { 6 };
+        Some(args[idx].try_downcast::<StringType>().unwrap())
+    } else {
+        None
+    };
+
+    let size = len.unwrap_or(1);
+
+    let mut ts_values = Vec::with_capacity(size);
+    let mut offset_values = Vec::with_capacity(size);
+
+    for idx in 0..size {
+        let year = unsafe { year_arg.index_unchecked(idx) };
+        let month = unsafe { month_arg.index_unchecked(idx) };
+        let day = unsafe { day_arg.index_unchecked(idx) };
+        let hour = unsafe { hour_arg.index_unchecked(idx) };
+        let minute = unsafe { minute_arg.index_unchecked(idx) };
+        let second = unsafe { second_arg.index_unchecked(idx) };
+
+        let nanosecond = nanosecond_arg
+            .as_ref()
+            .map(|a| unsafe { a.index_unchecked(idx) })
+            .unwrap_or(0);
+
+        let tz = if let Some(ref tz_arg) = tz_arg {
+            let tz_str = unsafe { tz_arg.index_unchecked(idx) };
+            match TimeZone::get(tz_str) {
+                Ok(tz) => tz,
+                Err(e) => {
+                    ctx.set_error(ts_values.len(), format!("cannot parse timezone: {e}"));
+                    ts_values.push(0);
+                    offset_values.push(0);
+                    continue;
+                }
+            }
+        } else {
+            ctx.func_ctx.tz.clone()
+        };
+
+        match timestamp_from_parts_to_micros(
+            ctx,
+            ts_values.len(),
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            nanosecond,
+            &tz,
+        ) {
+            Some(utc_micros) => match Timestamp::from_microsecond(utc_micros) {
+                Ok(ts) => {
+                    let offset = tz.to_offset(ts);
+                    ts_values.push(utc_micros);
+                    offset_values.push(offset.seconds());
+                }
+                Err(e) => {
+                    ctx.set_error(ts_values.len(), format!("{e}"));
+                    ts_values.push(0);
+                    offset_values.push(0);
+                }
+            },
+            None => {
+                ts_values.push(0);
+                offset_values.push(0);
+            }
+        }
+    }
+
+    (ts_values, offset_values, len)
+}
+
+fn timestamp_from_parts_fn(
+    args: &[Value<AnyType>],
+    ctx: &mut EvalContext,
+    has_nano: bool,
+) -> Value<AnyType> {
+    let (ts_values, _, len) = build_timestamp_parts(args, ctx, has_nano, false);
+
+    match len {
+        Some(_) => Value::Column(Column::Timestamp(ts_values.into())),
+        None => Value::Scalar(Scalar::Timestamp(ts_values[0])),
+    }
+}
+
+fn timestamp_tz_from_parts_fn(
+    args: &[Value<AnyType>],
+    ctx: &mut EvalContext,
+    has_nano: bool,
+    has_tz: bool,
+) -> Value<AnyType> {
+    let (ts_values, offset_values, len) = build_timestamp_parts(args, ctx, has_nano, has_tz);
+
+    match len {
+        Some(_) => {
+            let col = Column::TimestampTz(
+                ts_values
+                    .iter()
+                    .zip(offset_values.iter())
+                    .map(|(&ts, &off)| timestamp_tz::new(ts, off))
+                    .collect(),
+            );
+            Value::Column(col)
+        }
+        None => Value::Scalar(Scalar::TimestampTz(timestamp_tz::new(
+            ts_values[0],
+            offset_values[0],
+        ))),
+    }
 }

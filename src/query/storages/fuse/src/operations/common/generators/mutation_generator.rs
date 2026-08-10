@@ -24,7 +24,6 @@ use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
-use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 
 use crate::operations::common::ConflictResolveContext;
@@ -39,6 +38,7 @@ pub struct MutationGenerator {
     conflict_resolve_ctx: ConflictResolveContext,
 
     pub(crate) mutation_kind: MutationKind,
+    logical_change_delta: (u64, u64),
 }
 
 impl MutationGenerator {
@@ -47,6 +47,7 @@ impl MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: ConflictResolveContext::None,
             mutation_kind,
+            logical_change_delta: (0, 0),
         }
     }
 }
@@ -60,11 +61,18 @@ impl SnapshotGenerator for MutationGenerator {
         self.conflict_resolve_ctx = ctx;
     }
 
+    fn set_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) {
+        self.logical_change_delta = (updated_rows, deleted_rows);
+    }
+
+    fn logical_change_delta(&self, _previous: &Option<Arc<TableSnapshot>>) -> (u64, u64) {
+        self.logical_change_delta
+    }
+
     fn do_generate_new_snapshot(
         &self,
         table_info: &TableInfo,
         cluster_key_meta: Option<ClusterKey>,
-        cluster_type: Option<ClusterType>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
@@ -108,7 +116,6 @@ impl SnapshotGenerator for MutationGenerator {
                         new_summary,
                         new_segments,
                         cluster_key_meta,
-                        cluster_type,
                         table_statistics_location,
                         table_meta_timestamps,
                     )?;

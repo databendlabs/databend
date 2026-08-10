@@ -74,6 +74,7 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
         ]
         .into(),
         field_comments: vec![],
+        field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
         table_indexes: None,
@@ -363,7 +364,6 @@ fn get_test_suites() -> Vec<TestSuite> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_query_rewrite() -> anyhow::Result<()> {
     test_query_rewrite_impl("parquet").await?;
-    test_query_rewrite_impl("native").await?;
     Ok(())
 }
 

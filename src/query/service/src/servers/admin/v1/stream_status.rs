@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownTableId;
@@ -81,6 +82,23 @@ pub async fn stream_status_handler(
     let tenant = Tenant::new_or_err(tenant, func_name!()).map_err(poem::error::BadRequest)?;
 
     let resp = check_stream_status(&tenant, params)
+        .await
+        .map_err(poem::error::InternalServerError)?;
+    Ok(Json(resp))
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn stream_status_local_handler(
+    params: Query<StreamStatusQuery>,
+) -> poem::Result<impl IntoResponse> {
+    let tenant = &GlobalConfig::instance().query.tenant_id;
+    debug!(
+        "check_stream_status(local): tenant: {:?}, params: {:?}",
+        tenant, params
+    );
+
+    let resp = check_stream_status(tenant, params)
         .await
         .map_err(poem::error::InternalServerError)?;
     Ok(Json(resp))

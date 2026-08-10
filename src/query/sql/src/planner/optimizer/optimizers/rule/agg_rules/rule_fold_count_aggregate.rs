@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
+use databend_common_statistics::StatCount;
 
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
@@ -83,26 +84,23 @@ impl Rule for RuleFoldCountAggregate {
         ) {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {
-                if let ScalarExpr::AggregateFunction(agg_func) = item.scalar.clone() {
-                    if agg_func.args.is_empty() {
-                        item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
-                            span: item.scalar.span(),
-                            value: Scalar::Number(NumberScalar::UInt64(*table_card)),
-                        });
-                    } else if let ScalarExpr::BoundColumnRef(col) = &agg_func.args[0] {
-                        if let Some(card) = column_stats.get(&col.column.index) {
-                            item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
-                                span: item.scalar.span(),
-                                value: Scalar::Number(NumberScalar::UInt64(
-                                    table_card - card.null_count,
-                                )),
-                            });
-                        } else {
-                            return Ok(());
-                        }
-                    } else {
-                        return Ok(());
-                    }
+                let ScalarExpr::AggregateFunction(agg_func) = item.scalar.clone() else {
+                    return Ok(());
+                };
+                if agg_func.args.is_empty() {
+                    item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: item.scalar.span(),
+                        value: Scalar::Number(NumberScalar::UInt64(*table_card)),
+                    });
+                } else if let ScalarExpr::BoundColumnRef(col) = &agg_func.args[0]
+                    && let Some(card) = column_stats.get(&col.column.index)
+                    && let StatCount::Exact(null_count) = card.null_count
+                    && let Some(card) = table_card.checked_sub(null_count)
+                {
+                    item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: item.scalar.span(),
+                        value: Scalar::Number(NumberScalar::UInt64(card)),
+                    });
                 } else {
                     return Ok(());
                 }

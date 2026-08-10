@@ -394,11 +394,13 @@ impl Processor for MatchedSplitProcessor {
 
             if !current_block.is_empty() {
                 // add updated row_ids
-                self.ctx.add_mutation_status(MutationStatus {
-                    insert_rows: 0,
-                    update_rows: current_block.num_rows() as u64,
-                    deleted_rows: 0,
-                });
+                self.ctx
+                    .mutation_state()
+                    .add_mutation_status(MutationStatus {
+                        insert_rows: 0,
+                        update_rows: current_block.num_rows() as u64,
+                        deleted_rows: 0,
+                    });
 
                 // for target build optimization, there is only one matched clause without condition. we won't read rowid.
                 if !self.target_build_optimization {
@@ -407,6 +409,15 @@ impl Processor for MatchedSplitProcessor {
                         current_block.num_rows(),
                         Some(Box::new(RowIdKind::Update)),
                     ));
+                } else {
+                    // Local plans consume this in MatchedAggregator. Distributed
+                    // plans route it as a mutation log to the final aggregator.
+                    self.output_data_row_id_data
+                        .push(DataBlock::empty_with_meta(Box::new(MutationLogs {
+                            entries: vec![],
+                            logical_updated_rows: current_block.num_rows() as u64,
+                            logical_deleted_rows: 0,
+                        })));
                 }
 
                 let op = BlockOperator::Project {

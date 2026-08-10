@@ -29,14 +29,15 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::With;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::Walk;
+use databend_common_ast::visit::WalkMut;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::convert_to_type_name;
-use derive_visitor::Drive;
-use derive_visitor::DriveMut;
-use derive_visitor::Visitor;
-use derive_visitor::VisitorMut;
 
 use crate::NameResolutionContext;
 use crate::normalize_identifier;
@@ -48,21 +49,25 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::SortItem;
-#[derive(Debug, Default, Visitor)]
-#[visitor(TableReference(enter))]
+
+#[derive(Debug, Default)]
 struct CTERefCounter {
     cte_ref_count: HashMap<String, usize>,
     name_resolution_ctx: NameResolutionContext,
 }
 
-impl CTERefCounter {
-    fn enter_table_reference(&mut self, table_ref: &TableReference) {
+impl Visitor for CTERefCounter {
+    fn visit_table_reference(
+        &mut self,
+        table_ref: &TableReference,
+    ) -> std::result::Result<VisitControl, !> {
         if let TableReference::Table { table, .. } = table_ref {
             let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
             if let Some(count) = self.cte_ref_count.get_mut(&table_name) {
                 *count += 1;
             }
         }
+        Ok(VisitControl::Continue)
     }
 }
 
@@ -74,6 +79,7 @@ impl Binder {
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         let mut with = query.with.clone();
+        bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
         if self.ctx.get_settings().get_enable_auto_materialize_cte()? {
             if let Some(with) = &mut with {
                 if !with.recursive {
@@ -82,6 +88,22 @@ impl Binder {
             }
         }
 
+        bind_context.cte_context.virtual_column_outputs.clear();
+        let rewritten_body = if bind_context.allow_virtual_column {
+            if let Some(with) = &mut with {
+                let mut body = query.body.clone();
+                let virtual_column_outputs =
+                    self.rewrite_materialized_cte_virtual_columns(bind_context, with, &mut body);
+                bind_context.cte_context.virtual_column_outputs = virtual_column_outputs;
+                Some(body)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let body = rewritten_body.as_ref().unwrap_or(&query.body);
+
         self.init_cte(bind_context, &with)?;
 
         // Extract limit and offset from query.
@@ -89,7 +111,7 @@ impl Binder {
 
         // Bind query body.
         let (mut s_expr, mut bind_context) =
-            self.bind_set_expr(bind_context, &query.body, &query.order_by, limit, None)?;
+            self.bind_set_expr(bind_context, body, &query.order_by, limit, None)?;
 
         // Bind order by for `SetOperation` and `Values`.
         s_expr = self.bind_query_order_by(&mut bind_context, query, s_expr)?;
@@ -104,6 +126,13 @@ impl Binder {
         bind_context.reset_result_column_positions();
 
         Ok((s_expr, bind_context))
+    }
+
+    pub(crate) fn is_virtual_column_rewrite_enabled(&self) -> bool {
+        self.ctx
+            .get_settings()
+            .get_enable_experimental_virtual_column()
+            .unwrap_or_default()
     }
 
     fn auto_materialize_cte(&mut self, with: &mut With, query: &Query) -> Result<()> {
@@ -140,7 +169,7 @@ impl Binder {
             cte_ref_count,
             name_resolution_ctx: self.name_resolution_ctx.clone(),
         };
-        query.drive(&mut visitor);
+        query.walk(&mut visitor)?;
 
         Ok(visitor.cte_ref_count)
     }
@@ -258,7 +287,7 @@ impl Binder {
         } else {
             None
         };
-        as_query.drive_mut(&mut expr_replacer);
+        as_query.walk_mut(&mut expr_replacer)?;
 
         let source = if cte.alias.columns.is_empty() {
             None
@@ -281,6 +310,7 @@ impl Binder {
                             expr: None,
                             check: None,
                             comment: None,
+                            stats_truncate_len: None,
                         }
                     })
                     .collect(),
@@ -301,7 +331,7 @@ impl Binder {
             uri_location: None,
             cluster_by: None,
             table_options: Default::default(),
-            iceberg_table_partition: None,
+            partition_by: None,
             table_properties: Default::default(),
             as_query: Some(as_query),
             table_type: TableType::Temporary,
@@ -326,12 +356,36 @@ impl Binder {
     }
 }
 
-#[derive(VisitorMut)]
-#[visitor(TableReference(enter), Expr(enter))]
 pub struct TableNameReplacer {
     database: String,
     new_name: HashMap<String, String>,
     name_resolution_ctx: NameResolutionContext,
+}
+
+impl VisitorMut for TableNameReplacer {
+    fn visit_table_reference(
+        &mut self,
+        table_reference: &mut TableReference,
+    ) -> std::result::Result<VisitControl, !> {
+        if let TableReference::Table { table, .. } = table_reference {
+            if table.database.is_none() || table.database.as_ref().unwrap().name == self.database {
+                self.replace_identifier(&mut table.table);
+            }
+        }
+        Ok(VisitControl::Continue)
+    }
+
+    fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
+        if let Expr::ColumnRef { column, .. } = expr {
+            if column.database.is_none() || column.database.as_ref().unwrap().name == self.database
+            {
+                if let Some(table_identifier) = &mut column.table {
+                    self.replace_identifier(table_identifier);
+                }
+            }
+        }
+        Ok(VisitControl::Continue)
+    }
 }
 
 impl TableNameReplacer {
@@ -351,27 +405,6 @@ impl TableNameReplacer {
         let name = normalize_identifier(identifier, &self.name_resolution_ctx).name;
         if let Some(new_name) = self.new_name.get(&name) {
             identifier.name = new_name.clone();
-        }
-    }
-
-    #[recursive::recursive]
-    fn enter_table_reference(&mut self, table_reference: &mut TableReference) {
-        if let TableReference::Table { table, .. } = table_reference {
-            if table.database.is_none() || table.database.as_ref().unwrap().name == self.database {
-                self.replace_identifier(&mut table.table);
-            }
-        }
-    }
-
-    #[recursive::recursive]
-    fn enter_expr(&mut self, expr: &mut Expr) {
-        if let Expr::ColumnRef { column, .. } = expr {
-            if column.database.is_none() || column.database.as_ref().unwrap().name == self.database
-            {
-                if let Some(table_identifier) = &mut column.table {
-                    self.replace_identifier(table_identifier);
-                }
-            }
         }
     }
 }

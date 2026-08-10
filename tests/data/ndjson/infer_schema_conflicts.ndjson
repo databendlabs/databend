@@ -1,0 +1,2 @@
+{"scalar_conflict":1,"int_float":1,"scalar_array_conflict":1,"object_conflict":{"a":1},"nested":{"leaf":{"x":1}},"arr":[1],"empty_arr":[],"nullable_num":null,"nullable_bool":null}
+{"scalar_conflict":"text","int_float":1.5,"scalar_array_conflict":[1],"object_conflict":"text","nested":{"leaf":{"y":"s"}},"arr":["s"],"nullable_num":1,"nullable_bool":true}

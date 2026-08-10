@@ -19,7 +19,6 @@ use std::time::Duration;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::Lock;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::LockKey;
@@ -33,6 +32,7 @@ use tokio::sync::mpsc;
 
 use crate::locks::lock_holder::LockHolder;
 use crate::locks::table_lock::TableLock;
+use crate::sessions::TableContext;
 
 pub struct LockManager {
     active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,

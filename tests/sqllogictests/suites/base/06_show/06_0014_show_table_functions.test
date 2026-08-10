@@ -10,6 +10,7 @@ SHOW TABLE_FUNCTIONS LIKE 'fuse%'
 ----
 fuse_amend
 fuse_block
+fuse_block_statistics
 fuse_column
 fuse_dump_snapshots
 fuse_encoding

@@ -23,7 +23,6 @@ use chrono::Utc;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -38,6 +37,8 @@ use databend_common_sql::Planner;
 use databend_common_sql::plans::Plan;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use derive_visitor::DriveMut;
@@ -643,7 +644,7 @@ async fn create_index(
         let tenant = ctx.get_tenant();
 
         let create_index_req = CreateIndexReq {
-            create_option: plan.create_option,
+            override_existing: plan.create_option.is_overriding(),
             name_ident: IndexNameIdent::new(tenant, index_name),
             meta: IndexMeta {
                 table_id: plan.table_id,

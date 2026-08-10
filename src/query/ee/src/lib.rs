@@ -22,7 +22,6 @@ pub mod attach_table;
 pub mod data_mask;
 pub mod enterprise_services;
 pub mod fail_safe;
-pub mod hilbert_clustering;
 pub mod license;
 pub mod resource_management;
 pub mod row_access_policy;
@@ -31,7 +30,6 @@ pub mod storages;
 pub mod stream;
 pub mod table_ref;
 pub mod test_kits;
-pub mod virtual_column;
 
 /// Convert a meta service error to an ErrorCode.
 pub(crate) fn meta_service_error(

@@ -24,7 +24,6 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -65,8 +64,10 @@ use crate::history_tables::external::get_external_storage_connection;
 use crate::history_tables::meta::HistoryMetaHandle;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextLicense;
 
 const DEAD_IN_SECS: u64 = 60;
 
@@ -205,6 +206,9 @@ impl GlobalHistoryLog {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         let query_id = Uuid::new_v4().to_string();
         tracking_payload.query_id = Some(query_id.clone());
+        tracking_payload.io_stats = Some(std::sync::Arc::new(
+            databend_common_base::runtime::IoStats::default(),
+        ));
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
         // prevent log table from logging its own logs
         tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
@@ -220,7 +224,9 @@ impl GlobalHistoryLog {
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
         let executor = InterpreterFactory::get(context.clone(), &plan).await?;
-        let stream = executor.execute(context).await?;
+        let stream = executor
+            .execute_with_hooks(context, QueryFinishHooks::nested_with_hooks())
+            .await?;
         let _: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
         Ok(())
     }

@@ -44,6 +44,7 @@ const OPT_NAN_DISPLAY: &str = "nan_display";
 const OPT_NULL_DISPLAY: &str = "null_display";
 const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
+const OPT_QUOTE_STYLE: &str = "quote_style";
 const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
 const OPT_ALLOW_QUOTED_NULLS: &str = "allow_quoted_nulls";
@@ -74,6 +75,8 @@ pub enum FileFormatParams {
     Orc(OrcFileFormatParams),
     Avro(AvroFileFormatParams),
     Lance(LanceFileFormatParams),
+    Arrow(ArrowFileFormatParams),
+    ArrowStream(ArrowFileFormatParams),
 }
 
 impl FileFormatParams {
@@ -88,6 +91,8 @@ impl FileFormatParams {
             FileFormatParams::Orc(_) => StageFileFormatType::Orc,
             FileFormatParams::Avro(_) => StageFileFormatType::Avro,
             FileFormatParams::Lance(_) => StageFileFormatType::Lance,
+            FileFormatParams::Arrow(_) => StageFileFormatType::Arrow,
+            FileFormatParams::ArrowStream(_) => StageFileFormatType::ArrowStream,
         }
     }
 
@@ -102,6 +107,8 @@ impl FileFormatParams {
             FileFormatParams::Orc(_) => ".orc",
             FileFormatParams::Avro(_) => ".avro",
             FileFormatParams::Lance(_) => ".lance",
+            FileFormatParams::Arrow(_) => ".arrow",
+            FileFormatParams::ArrowStream(_) => ".arrow_stream",
         }
     }
 
@@ -112,6 +119,8 @@ impl FileFormatParams {
                 | FileFormatParams::Text(_)
                 | FileFormatParams::NdJson(_)
                 | FileFormatParams::Parquet(_)
+                | FileFormatParams::Arrow(_)
+                | FileFormatParams::ArrowStream(_)
         )
     }
 
@@ -137,6 +146,12 @@ impl FileFormatParams {
             StageFileFormatType::Lance => {
                 Ok(FileFormatParams::Lance(LanceFileFormatParams::default()))
             }
+            StageFileFormatType::Arrow => {
+                Ok(FileFormatParams::Arrow(ArrowFileFormatParams::default()))
+            }
+            StageFileFormatType::ArrowStream => Ok(FileFormatParams::ArrowStream(
+                ArrowFileFormatParams::default(),
+            )),
             _ => Err(ErrorCode::IllegalFileFormat(format!(
                 "Unsupported file format type: {:?}",
                 format_type
@@ -155,6 +170,9 @@ impl FileFormatParams {
             FileFormatParams::Orc(_) => StageFileCompression::None,
             FileFormatParams::Avro(_) => StageFileCompression::None,
             FileFormatParams::Lance(_) => StageFileCompression::None,
+            FileFormatParams::Arrow(_) | FileFormatParams::ArrowStream(_) => {
+                StageFileCompression::None
+            }
         }
     }
 
@@ -188,6 +206,9 @@ impl FileFormatParams {
             FileFormatParams::NdJson(v) => {
                 v.null_field_as == NullAs::FieldDefault
                     || v.missing_field_as == NullAs::FieldDefault
+            }
+            FileFormatParams::Arrow(v) | FileFormatParams::ArrowStream(v) => {
+                v.missing_field_as == NullAs::FieldDefault
             }
             _ => true,
         }
@@ -252,6 +273,18 @@ impl FileFormatParams {
                 )?)
             }
             StageFileFormatType::Lance => FileFormatParams::Lance(LanceFileFormatParams::default()),
+            StageFileFormatType::Arrow => {
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                FileFormatParams::Arrow(ArrowFileFormatParams::try_create(
+                    missing_field_as.as_deref(),
+                )?)
+            }
+            StageFileFormatType::ArrowStream => {
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                FileFormatParams::ArrowStream(ArrowFileFormatParams::try_create(
+                    missing_field_as.as_deref(),
+                )?)
+            }
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
                 let compression = reader.take_compression_default_none()?;
@@ -263,6 +296,7 @@ impl FileFormatParams {
                 let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
                 let escape = reader.take_string(OPT_ESCAPE, default.escape);
                 let quote = reader.take_string(OPT_QUOTE, default.quote);
+                let quote_style = reader.take_csv_quote_style(default.quote_style)?;
                 let null_display = reader.take_string(OPT_NULL_DISPLAY, default.null_display);
                 let encoding = reader.take_string(OPT_ENCODING, default.encoding);
                 let encoding_error_mode =
@@ -302,6 +336,7 @@ impl FileFormatParams {
                     nan_display,
                     escape,
                     quote,
+                    quote_style,
                     error_on_column_count_mismatch,
                     allow_quoted_nulls,
                     trim_space,
@@ -357,11 +392,6 @@ impl FileFormatParams {
                     empty_field_as,
                     output_header,
                 })
-            }
-            _ => {
-                return Err(ErrorCode::IllegalFileFormat(format!(
-                    "Unsupported file format {typ:?}"
-                )));
             }
         };
         if old {
@@ -523,6 +553,13 @@ impl FileFormatOptionsReader {
             None => Ok(default),
         }
     }
+
+    fn take_csv_quote_style(&mut self, default: CsvQuoteStyle) -> Result<CsvQuoteStyle> {
+        match self.options.remove(OPT_QUOTE_STYLE) {
+            Some(v) => CsvQuoteStyle::from_str(&v).map_err(ErrorCode::IllegalFileFormat),
+            None => Ok(default),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -534,6 +571,9 @@ pub struct CsvFileFormatParams {
     pub record_delimiter: String,
     pub escape: String,
     pub quote: String,
+    /// Controls whether CSV output quotes every field or only fields that require quoting.
+    #[serde(default)]
+    pub quote_style: CsvQuoteStyle,
     pub error_on_column_count_mismatch: bool,
     #[serde(default)]
     pub trim_space: bool,
@@ -567,6 +607,7 @@ impl Default for CsvFileFormatParams {
             record_delimiter: "\n".to_string(),
             escape: "".to_string(),
             quote: "\"".to_string(),
+            quote_style: CsvQuoteStyle::default(),
             error_on_column_count_mismatch: true,
             trim_space: false,
             allow_quoted_nulls: false,
@@ -697,6 +738,46 @@ pub enum EmptyFieldAs {
     Null,
     String,
     FieldDefault,
+}
+
+/// Controls how CSV values are quoted during output.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CsvQuoteStyle {
+    /// Quote every non-NULL field in the CSV output.
+    #[default]
+    QuoteNotNull,
+    /// Quote a field only when required by the CSV output format.
+    QuoteMinimal,
+}
+
+impl CsvQuoteStyle {
+    pub fn is_quote_minimal(self) -> bool {
+        matches!(self, Self::QuoteMinimal)
+    }
+}
+
+impl FromStr for CsvQuoteStyle {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "quote_not_null" => Ok(Self::QuoteNotNull),
+            "quote_minimal" => Ok(Self::QuoteMinimal),
+            _ => Err(format!(
+                "Invalid option value: QUOTE_STYLE is set to {s}. The valid values are QUOTE_NOT_NULL | QUOTE_MINIMAL."
+            )),
+        }
+    }
+}
+
+impl Display for CsvQuoteStyle {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Self::QuoteNotNull => write!(f, "quote_not_null"),
+            Self::QuoteMinimal => write!(f, "quote_minimal"),
+        }
+    }
 }
 
 impl FromStr for EmptyFieldAs {
@@ -973,6 +1054,18 @@ impl OrcFileFormatParams {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LanceFileFormatParams {}
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArrowFileFormatParams {
+    pub missing_field_as: NullAs,
+}
+
+impl ArrowFileFormatParams {
+    pub fn try_create(missing_field_as: Option<&str>) -> Result<Self> {
+        let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
+        Ok(Self { missing_field_as })
+    }
+}
+
 impl Display for FileFormatParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -980,7 +1073,7 @@ impl Display for FileFormatParams {
                 write!(
                     f,
                     "TYPE = CSV COMPRESSION = {:?} \
-                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' QUOTE_STYLE = {} ESCAPE = '{}' \
                      SKIP_HEADER= {} OUTPUT_HEADER= {} \
                      NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' ENCODING = '{}' ENCODING_ERROR_MODE = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
                      ERROR_ON_COLUMN_COUNT_MISMATCH = {} TRIM_SPACE = {} ALLOW_QUOTED_NULLS = {} QUOTED_EMPTY_FIELD_AS = {}",
@@ -988,6 +1081,7 @@ impl Display for FileFormatParams {
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
                     escape_string(&params.quote),
+                    params.quote_style,
                     escape_string(&params.escape),
                     params.headers,
                     params.output_header,
@@ -1062,6 +1156,20 @@ impl Display for FileFormatParams {
             }
             FileFormatParams::Lance(_) => {
                 write!(f, "TYPE = LANCE")
+            }
+            FileFormatParams::Arrow(params) => {
+                write!(
+                    f,
+                    "TYPE = ARROW MISSING_FIELD_AS = {}",
+                    params.missing_field_as
+                )
+            }
+            FileFormatParams::ArrowStream(params) => {
+                write!(
+                    f,
+                    "TYPE = ARROW_STREAM MISSING_FIELD_AS = {}",
+                    params.missing_field_as
+                )
             }
         }
     }
@@ -1247,6 +1355,16 @@ mod tests {
 
         let params = get_csv_params(options);
         assert!(params.trim_space);
+    }
+
+    #[test]
+    fn test_csv_quote_style_option() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "CSV".to_string());
+        options.insert("quote_style".to_string(), "quote_minimal".to_string());
+
+        let params = get_csv_params(options);
+        assert_eq!(params.quote_style, CsvQuoteStyle::QuoteMinimal);
     }
 
     #[test]

@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 
+use crate::ColumnSet;
 use crate::optimizer::ir::RelationalProperty;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -33,12 +34,12 @@ use crate::plans::walk_expr;
 pub const GROUPING_FUNC_NAME: &str = "grouping";
 pub const GROUPING_ID_COLUMN_NAME: &str = "_grouping_id";
 
-// Visitor that find Expressions that match a particular predicate
+// Visitor that collects references to expressions that match a predicate.
 pub struct Finder<'a, F>
 where F: Fn(&ScalarExpr) -> bool
 {
     find_fn: &'a F,
-    scalars: Vec<ScalarExpr>,
+    scalars: Vec<&'a ScalarExpr>,
 }
 
 impl<'a, F> Finder<'a, F>
@@ -51,7 +52,7 @@ where F: Fn(&ScalarExpr) -> bool
         }
     }
 
-    pub fn scalars(&self) -> &[ScalarExpr] {
+    pub fn scalars(&self) -> &[&'a ScalarExpr] {
         &self.scalars
     }
 
@@ -69,10 +70,51 @@ where F: Fn(&ScalarExpr) -> bool
 {
     fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
         if (self.find_fn)(expr) {
-            if !(self.scalars.contains(expr)) {
-                self.scalars.push((*expr).clone())
-            }
+            self.scalars.push(expr);
             // stop recursing down this expr once we find a match
+        } else {
+            walk_expr(self, expr)?;
+        }
+        Ok(())
+    }
+}
+
+/// Visitor that checks whether any expression matches a predicate.
+pub struct Any<'a, F>
+where F: Fn(&ScalarExpr) -> bool
+{
+    find_fn: &'a F,
+    result: bool,
+}
+
+impl<'a, F> Any<'a, F>
+where F: Fn(&ScalarExpr) -> bool
+{
+    pub fn new(find_fn: &'a F) -> Self {
+        Self {
+            find_fn,
+            result: false,
+        }
+    }
+
+    pub fn result(&self) -> bool {
+        self.result
+    }
+
+    pub fn reset(&mut self) {
+        self.result = false;
+    }
+}
+
+impl<'a, F> Visitor<'a> for Any<'_, F>
+where F: Fn(&ScalarExpr) -> bool
+{
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        if self.result {
+            return Ok(());
+        }
+        if (self.find_fn)(expr) {
+            self.result = true;
         } else {
             walk_expr(self, expr)?;
         }
@@ -109,9 +151,9 @@ pub fn reject_grouping_functions<'a>(
     clause_name: &str,
 ) -> Result<()> {
     for scalar in scalars {
-        let mut grouping_finder = Finder::new(&is_grouping_function);
-        grouping_finder.visit(scalar)?;
-        if let Some(ScalarExpr::FunctionCall(func)) = grouping_finder.scalars().first() {
+        let mut finder = Finder::new(&is_grouping_function);
+        finder.visit(scalar)?;
+        if let Some(ScalarExpr::FunctionCall(func)) = finder.scalars().first().copied() {
             return Err(grouping_clause_error(func, clause_name));
         }
     }
@@ -119,16 +161,143 @@ pub fn reject_grouping_functions<'a>(
     Ok(())
 }
 
-pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
-    match scalar {
-        ScalarExpr::FunctionCall(func) if func.func_name == "and" => [
-            split_conjunctions(&func.arguments[0]),
-            split_conjunctions(&func.arguments[1]),
-        ]
-        .concat(),
-        _ => {
-            vec![scalar.clone()]
+#[inline]
+fn conjunctions_with<T>(
+    scalar: T,
+    mut expand: impl FnMut(T, &mut Vec<T>) -> Option<T>,
+) -> impl Iterator<Item = T> {
+    let mut stack = vec![scalar];
+
+    std::iter::from_fn(move || {
+        loop {
+            let scalar = stack.pop()?;
+            if let Some(scalar) = expand(scalar, &mut stack) {
+                return Some(scalar);
+            }
         }
+    })
+}
+
+fn is_conjunction(func: &FunctionCall) -> bool {
+    matches!(func.func_name.as_str(), "and" | "and_filters")
+}
+
+pub fn conjunctions(scalar: &ScalarExpr) -> impl Iterator<Item = &ScalarExpr> {
+    conjunctions_with(scalar, |scalar, stack| match scalar {
+        ScalarExpr::FunctionCall(func) if is_conjunction(func) => {
+            stack.extend(func.arguments.iter().rev());
+            None
+        }
+        _ => Some(scalar),
+    })
+}
+
+pub fn into_conjunctions(scalar: ScalarExpr) -> impl Iterator<Item = ScalarExpr> {
+    conjunctions_with(scalar, |scalar, stack| match scalar {
+        ScalarExpr::FunctionCall(func) if is_conjunction(&func) => {
+            stack.extend(func.arguments.into_iter().rev());
+            None
+        }
+        _ => Some(scalar),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bool_constant(value: bool) -> ScalarExpr {
+        ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::Boolean(value),
+        })
+    }
+
+    fn and(lhs: ScalarExpr, rhs: ScalarExpr) -> ScalarExpr {
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "and".to_string(),
+            params: vec![],
+            arguments: vec![lhs, rhs],
+        })
+    }
+
+    #[test]
+    fn test_conjunctions_handles_deep_and_chain() {
+        let mut expr = bool_constant(true);
+        for _ in 0..1024 {
+            expr = and(expr, bool_constant(true));
+        }
+
+        assert_eq!(conjunctions(&expr).count(), 1025);
+    }
+
+    #[test]
+    fn test_conjunctions_handles_and_filters() {
+        let expr = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "and_filters".to_string(),
+            params: vec![],
+            arguments: vec![
+                bool_constant(true),
+                and(bool_constant(true), bool_constant(true)),
+                bool_constant(false),
+            ],
+        });
+
+        assert_eq!(conjunctions(&expr).count(), 4);
+        assert_eq!(into_conjunctions(expr).count(), 4);
+    }
+
+    #[test]
+    fn test_finder_borrows_matches() {
+        let expr = and(
+            bool_constant(false),
+            and(bool_constant(false), bool_constant(true)),
+        );
+        let ScalarExpr::FunctionCall(function) = &expr else {
+            unreachable!();
+        };
+        let expected = &function.arguments[0];
+
+        let predicate = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Boolean(false),
+                    ..
+                })
+            )
+        };
+        let mut finder = Finder::new(&predicate);
+        finder.visit(&expr).unwrap();
+        let found = finder.scalars()[0];
+
+        assert!(std::ptr::eq(found, expected));
+    }
+
+    #[test]
+    fn test_any_stops_after_first_match() {
+        let expr = and(
+            bool_constant(false),
+            and(bool_constant(false), bool_constant(true)),
+        );
+        let visits = std::cell::Cell::new(0);
+        let predicate = |scalar: &ScalarExpr| {
+            visits.set(visits.get() + 1);
+            matches!(
+                scalar,
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Boolean(false),
+                    ..
+                })
+            )
+        };
+        let mut any = Any::new(&predicate);
+        any.visit(&expr).unwrap();
+
+        assert!(any.result());
+        assert_eq!(visits.get(), 2);
     }
 }
 
@@ -142,7 +311,11 @@ pub fn split_equivalent_predicate(scalar: &ScalarExpr) -> Option<(ScalarExpr, Sc
 }
 
 pub fn satisfied_by(scalar: &ScalarExpr, prop: &RelationalProperty) -> bool {
-    scalar.used_columns().is_subset(&prop.output_columns) && !scalar.used_columns().is_empty()
+    satisfied_by_columns(&scalar.used_columns(), prop)
+}
+
+fn satisfied_by_columns(columns: &ColumnSet, prop: &RelationalProperty) -> bool {
+    !columns.is_empty() && columns.is_subset(&prop.output_columns)
 }
 
 /// Helper to determine join condition type from a scalar expression.
@@ -191,15 +364,16 @@ impl<'a> JoinPredicate<'a> {
         left_prop: &RelationalProperty,
         right_prop: &RelationalProperty,
     ) -> Self {
-        if scalar.used_columns().is_empty() {
+        let used_columns = scalar.used_columns();
+        if used_columns.is_empty() {
             return Self::ALL(scalar);
         }
 
-        if satisfied_by(scalar, left_prop) {
+        if satisfied_by_columns(&used_columns, left_prop) {
             return Self::Left(scalar);
         }
 
-        if satisfied_by(scalar, right_prop) {
+        if satisfied_by_columns(&used_columns, right_prop) {
             return Self::Right(scalar);
         }
 
@@ -209,9 +383,10 @@ impl<'a> JoinPredicate<'a> {
                 let mut right_exprs = Vec::new();
 
                 for expr in func.arguments.iter() {
-                    if satisfied_by(expr, left_prop) {
+                    let used_columns = expr.used_columns();
+                    if satisfied_by_columns(&used_columns, left_prop) {
                         left_exprs.push(expr.clone());
-                    } else if satisfied_by(expr, right_prop) {
+                    } else if satisfied_by_columns(&used_columns, right_prop) {
                         right_exprs.push(expr.clone());
                     } else {
                         return Self::Other(scalar);
@@ -235,8 +410,12 @@ impl<'a> JoinPredicate<'a> {
                 let is_equal_op = func.func_name.as_str() == "eq";
                 let left = &func.arguments[0];
                 let right = &func.arguments[1];
+                let left_used_columns = left.used_columns();
+                let right_used_columns = right.used_columns();
 
-                if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
+                if satisfied_by_columns(&left_used_columns, left_prop)
+                    && satisfied_by_columns(&right_used_columns, right_prop)
+                {
                     return Self::Both {
                         left: Box::new(Cow::Borrowed(left)),
                         right: Box::new(Cow::Borrowed(right)),
@@ -244,7 +423,9 @@ impl<'a> JoinPredicate<'a> {
                     };
                 }
 
-                if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
+                if satisfied_by_columns(&right_used_columns, left_prop)
+                    && satisfied_by_columns(&left_used_columns, right_prop)
+                {
                     return Self::Both {
                         left: Box::new(Cow::Borrowed(right)),
                         right: Box::new(Cow::Borrowed(left)),

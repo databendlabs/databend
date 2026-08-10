@@ -13,16 +13,15 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use ahash::HashMap;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
-use crate::IndexType;
-use crate::MetadataRef;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+
+pub type RelationId = usize;
+pub type RelationSet = Box<[RelationId]>;
 
 pub struct JoinRelation {
     s_expr: SExpr,
@@ -39,11 +38,7 @@ impl JoinRelation {
         self.s_expr.clone()
     }
 
-    pub async fn cardinality(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _metadata: MetadataRef,
-    ) -> Result<f64> {
+    pub fn cardinality(&self) -> Result<f64> {
         let rel_expr = RelExpr::with_s_expr(&self.s_expr);
         let card = rel_expr.derive_cardinality()?.cardinality;
         Ok(card)
@@ -52,9 +47,9 @@ impl JoinRelation {
 
 #[derive(Default, Clone)]
 struct RelationSetNode {
-    relations: Vec<IndexType>,
+    relations: RelationSet,
     // Key is relation id
-    children: HashMap<IndexType, RelationSetNode>,
+    children: HashMap<RelationId, RelationSetNode>,
 }
 // The tree is initialized by join conditions' relation sets
 // Such as condition: t1.a + t2.b == t3.b , the tree will be
@@ -69,23 +64,23 @@ pub struct RelationSetTree {
 }
 
 impl RelationSetTree {
-    pub fn get_relation_set_by_index(&mut self, idx: usize) -> Result<Vec<IndexType>> {
-        self.get_relation_set(&[idx as IndexType].iter().cloned().collect())
+    pub fn get_relation_set_by_index(&mut self, idx: RelationId) -> Result<RelationSet> {
+        self.get_relation_set(&HashSet::from([idx]))
     }
 
-    pub fn get_relation_set(&mut self, idx_set: &HashSet<IndexType>) -> Result<Vec<IndexType>> {
-        let mut relations: Vec<IndexType> = idx_set.iter().copied().collect();
+    pub fn get_relation_set(&mut self, idx_set: &HashSet<RelationId>) -> Result<RelationSet> {
+        let mut relations: Vec<RelationId> = idx_set.iter().copied().collect();
         // Make relations ordered
         relations.sort();
         let mut node = &mut self.root;
-        for idx in relations.iter() {
+        for idx in &relations {
             if !node.children.contains_key(idx) {
                 node.children.insert(*idx, RelationSetNode::default());
             }
             node = node.children.get_mut(idx).unwrap();
         }
         if node.relations.is_empty() {
-            node.relations = relations;
+            node.relations = relations.into_boxed_slice();
         }
         Ok(node.relations.clone())
     }

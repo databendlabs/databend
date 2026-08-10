@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
@@ -27,13 +29,13 @@ use crate::ast::TypeName;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum UDFArgs {
     Types(Vec<TypeName>),
     NameWithTypes(Vec<(Identifier, TypeName)>),
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum LambdaUDFParams {
     Names(Vec<Identifier>),
     NameWithTypes(Vec<(Identifier, TypeName)>),
@@ -389,7 +391,7 @@ impl Display for UDAFStateField {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct CreateUDFStmt {
     pub create_option: CreateOption,
     pub udf_name: Identifier,
@@ -415,7 +417,7 @@ impl Display for CreateUDFStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct AlterUDFStmt {
     pub udf_name: Identifier,
     pub description: Option<String>,

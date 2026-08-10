@@ -32,21 +32,6 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::string::StringColumnBuilder;
 
 #[test]
-fn test_split_block() {
-    let value = "abc";
-    let n = 10;
-    let block = DataBlock::new_from_columns(vec![Column::String(
-        StringColumnBuilder::repeat(value, n).build(),
-    )]);
-    let sizes = block
-        .split_by_rows_if_needed_no_tail(3)
-        .iter()
-        .map(|b| b.num_rows())
-        .collect::<Vec<_>>();
-    assert_eq!(sizes, vec![3, 3, 4]);
-}
-
-#[test]
 fn test_box_render_block() {
     let value = "abc";
     let n = 10;

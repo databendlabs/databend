@@ -32,7 +32,8 @@ use databend_common_sql::plans::ShowCreateDictionaryPlan;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 pub struct ShowCreateDictionaryInterpreter {
     ctx: Arc<QueryContext>,

@@ -477,9 +477,10 @@ fn eval_boolean_to_string(val: Value<BooleanType>, ctx: &mut EvalContext) -> Val
 
 fn eval_string_to_boolean(val: Value<StringType>, ctx: &mut EvalContext) -> Value<BooleanType> {
     vectorize_with_builder_1_arg::<StringType, BooleanType>(|val, output, ctx| {
-        if val.eq_ignore_ascii_case("true") {
+        let val = val.trim();
+        if val.eq_ignore_ascii_case("true") || val == "1" {
             output.push(true);
-        } else if val.eq_ignore_ascii_case("false") {
+        } else if val.eq_ignore_ascii_case("false") || val == "0" {
             output.push(false);
         } else {
             ctx.set_error(output.len(), "cannot parse to type `BOOLEAN`");

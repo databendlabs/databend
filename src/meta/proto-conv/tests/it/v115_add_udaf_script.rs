@@ -14,8 +14,8 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::DataField;
-use databend_common_expression::types::DataType;
+use databend_common_expression::TableDataType as DataType;
+use databend_common_expression::TableField as DataField;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;

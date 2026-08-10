@@ -31,7 +31,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
-use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
+use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
@@ -45,6 +45,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::StreamBacklog;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
@@ -56,11 +57,6 @@ use databend_storages_common_table_meta::table::StreamMode;
 use futures::TryStreamExt;
 
 pub const STREAM_ENGINE: &str = "STREAM";
-
-pub enum StreamStatus {
-    MayHaveData,
-    NoData,
-}
 
 pub struct StreamTable {
     info: TableInfo,
@@ -142,6 +138,7 @@ impl StreamTable {
         source_db_name: &str,
         source_tb_name: &str,
         batch_limit: Option<u64>,
+        enable_snapshot_forward_scan: bool,
         s3_storage_class: S3StorageClass,
     ) -> Result<Arc<dyn Table>> {
         let stream_desc = &self.info.desc;
@@ -173,12 +170,49 @@ impl StreamTable {
         let fuse_table = FuseTable::try_from_table(source.as_ref())?;
         fuse_table.check_changes_valid(source_desc, self.offset()?)?;
 
-        let (base_row_count, base_timsestamp) = if let Some(base_loc) = self.snapshot_loc() {
+        let base_snapshot = if let Some(base_loc) = self.snapshot_loc() {
             let base = fuse_table.changes_read_offset_snapshot(&base_loc).await?;
-            (base.summary.row_count, base.timestamp)
+            Some(base)
         } else {
-            (0, None)
+            None
         };
+        let base_row_count = base_snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.summary.row_count);
+        let base_timestamp = base_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.timestamp);
+
+        let start = Instant::now();
+        if enable_snapshot_forward_scan && self.mode() == StreamMode::AppendOnly {
+            match fuse_table
+                .try_find_stream_batch_snapshot_v4(base_snapshot.as_deref(), batch_limit)
+                .await
+            {
+                Ok(Some((snapshot, format_version))) => {
+                    log::info!(
+                        "Stream {} searched UUID-v7 snapshots of source table {} forward, cost:{:?}",
+                        stream_desc,
+                        source_desc,
+                        start.elapsed(),
+                    );
+                    return Ok(fuse_table.load_table_by_snapshot(
+                        snapshot.as_ref(),
+                        format_version,
+                        s3_storage_class,
+                    )?);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    log::warn!(
+                        "Stream {} failed to search UUID-v7 snapshots of source table {} forward, fallback to snapshot history traversal: {}",
+                        stream_desc,
+                        source_desc,
+                        error
+                    );
+                }
+            }
+        }
 
         let Some(location) = fuse_table.snapshot_loc() else {
             return Ok(source);
@@ -192,9 +226,8 @@ impl StreamTable {
         );
 
         let mut instant = None;
-        let start = Instant::now();
         while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
-            if snapshot_with_version.0.timestamp <= base_timsestamp {
+            if snapshot_with_version.0.timestamp <= base_timestamp {
                 break;
             }
 
@@ -337,6 +370,15 @@ impl StreamTable {
         };
         Ok(status)
     }
+
+    #[fastrace::trace]
+    pub async fn stream_backlog(&self, ctx: Arc<dyn TableContext>) -> Result<StreamBacklog> {
+        let table = self.source_table(ctx.clone()).await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        fuse_table
+            .stream_backlog(ctx, &self.mode(), &self.snapshot_loc(), self.offset()?)
+            .await
+    }
 }
 
 #[async_trait::async_trait]
@@ -354,7 +396,7 @@ impl Table for StreamTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        (BASE_BLOCK_IDS_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
+        (BASE_BLOCK_IDS_COLUMN_ID..=CHANGE_ROW_ID_COLUMN_ID).contains(&column_id)
     }
 
     /// whether column prune(projection) can help in table read
@@ -435,7 +477,7 @@ impl Table for StreamTable {
         let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
         let table_desc =
             format!("{quote}{database_name}{quote}.{quote}{table_name}{quote}{with_options}");
-        fuse_table
+        let changes_query = fuse_table
             .get_changes_query(
                 ctx,
                 &self.mode(),
@@ -443,6 +485,38 @@ impl Table for StreamTable {
                 table_desc,
                 self.offset()?,
             )
-            .await
+            .await?;
+        Ok(changes_query.query)
     }
+}
+
+pub enum StreamStatus {
+    MayHaveData,
+    NoData,
+}
+
+pub(crate) fn extract_fully_qualified_stream_name(
+    ctx: &dyn TableContext,
+    target: &str,
+) -> Result<(String, String, String)> {
+    let stream_name_vec: Vec<&str> = target.split('.').collect();
+    let (catalog, database, stream) = match stream_name_vec.as_slice() {
+        [stream] => (
+            ctx.get_current_catalog(),
+            ctx.get_current_database(),
+            (*stream).to_owned(),
+        ),
+        [db, stream] => (
+            ctx.get_current_catalog(),
+            (*db).to_owned(),
+            (*stream).to_owned(),
+        ),
+        [cat, db, stream] => ((*cat).to_owned(), (*db).to_owned(), (*stream).to_owned()),
+        _ => {
+            return Err(ErrorCode::BadArguments(
+                "Invalid stream name. Use the format '[catalog.][database.]stream'",
+            ));
+        }
+    };
+    Ok((catalog, database, stream))
 }

@@ -88,7 +88,7 @@ SELECT a+b FROM db2.test2
 query TTTTT
 DESCRIBE db2.test2
 ----
-a INT NO 0 (empty)
+a INT NO NULL (empty)
 b INT YES NULL (empty)
 
 statement ok
@@ -158,7 +158,7 @@ create temp table db2.test6(id Int8 not null, a Int8 not null DEFAULT 1 + 2, cre
 query TTTTT
 desc db2.test6
 ----
-id TINYINT NO 0 (empty)
+id TINYINT NO NULL (empty)
 a TINYINT NO 3 (empty)
 created TIMESTAMP NO now() (empty)
 
@@ -179,26 +179,26 @@ create temp table db2.test7(tiny TINYINT(10) not null, tiny_unsigned TINYINT(10)
 query TTTTT
 desc db2.test7
 ----
-tiny TINYINT NO 0 (empty)
-tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
-smallint SMALLINT NO 0 (empty)
-smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
-int INT NO 0 (empty)
-int_unsigned INT UNSIGNED NO 0 (empty)
-bigint BIGINT NO 0 (empty)
-bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
-float FLOAT NO 0 (empty)
-double DOUBLE NO 0 (empty)
-date DATE NO '1970-01-01' (empty)
-datetime TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
+tiny TINYINT NO NULL (empty)
+tiny_unsigned TINYINT UNSIGNED NO NULL (empty)
+smallint SMALLINT NO NULL (empty)
+smallint_unsigned SMALLINT UNSIGNED NO NULL (empty)
+int INT NO NULL (empty)
+int_unsigned INT UNSIGNED NO NULL (empty)
+bigint BIGINT NO NULL (empty)
+bigint_unsigned BIGINT UNSIGNED NO NULL (empty)
+float FLOAT NO NULL (empty)
+double DOUBLE NO NULL (empty)
+date DATE NO NULL (empty)
+datetime TIMESTAMP NO NULL (empty)
+ts TIMESTAMP NO NULL (empty)
 str VARCHAR NO '3' (empty)
-bool BOOLEAN NO false (empty)
-arr ARRAY(INT32) NO [] (empty)
-tup TUPLE(1 INT32, 2 BOOLEAN) NO (NULL, NULL) (empty)
-map MAP(INT32, STRING) NO {} (empty)
-bitmap BITMAP NO '' (empty)
-variant VARIANT NO 'null' (empty)
+bool BOOLEAN NO NULL (empty)
+arr ARRAY(INT32) NO NULL (empty)
+tup TUPLE(1 INT32, 2 BOOLEAN) NO NULL (empty)
+map MAP(INT32, STRING) NO NULL (empty)
+bitmap BITMAP NO NULL (empty)
+variant VARIANT NO NULL (empty)
 
 statement ok
 create transient table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(VARCHAR) not null, tup TUPLE(DOUBLE, INT) not null, map MAP(STRING, Date) not null, bitmap BITMAP not null, variant VARIANT not null)
@@ -206,26 +206,26 @@ create transient table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UN
 query TTTTT
 desc db2.test8
 ----
-tiny TINYINT NO 0 (empty)
-tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
-smallint SMALLINT NO 0 (empty)
-smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
-int INT NO 0 (empty)
-int_unsigned INT UNSIGNED NO 0 (empty)
-bigint BIGINT NO 0 (empty)
-bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
-float FLOAT NO 0 (empty)
-double DOUBLE NO 0 (empty)
-date DATE NO '1970-01-01' (empty)
-datetime TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
+tiny TINYINT NO NULL (empty)
+tiny_unsigned TINYINT UNSIGNED NO NULL (empty)
+smallint SMALLINT NO NULL (empty)
+smallint_unsigned SMALLINT UNSIGNED NO NULL (empty)
+int INT NO NULL (empty)
+int_unsigned INT UNSIGNED NO NULL (empty)
+bigint BIGINT NO NULL (empty)
+bigint_unsigned BIGINT UNSIGNED NO NULL (empty)
+float FLOAT NO NULL (empty)
+double DOUBLE NO NULL (empty)
+date DATE NO NULL (empty)
+datetime TIMESTAMP NO NULL (empty)
+ts TIMESTAMP NO NULL (empty)
 str VARCHAR NO '3' (empty)
-bool BOOLEAN NO false (empty)
-arr ARRAY(STRING) NO [] (empty)
-tup TUPLE(1 FLOAT64, 2 INT32) NO (NULL, NULL) (empty)
-map MAP(STRING, DATE) NO {} (empty)
-bitmap BITMAP NO '' (empty)
-variant VARIANT NO 'null' (empty)
+bool BOOLEAN NO NULL (empty)
+arr ARRAY(STRING) NO NULL (empty)
+tup TUPLE(1 FLOAT64, 2 INT32) NO NULL (empty)
+map MAP(STRING, DATE) NO NULL (empty)
+bitmap BITMAP NO NULL (empty)
+variant VARIANT NO NULL (empty)
 
 
 statement ok
@@ -406,6 +406,12 @@ create or replace temp table IF NOT EXISTS replace_test(b int);
 statement ok
 create or replace temp table replace_test(b int);
 
+statement error 1302
+create or replace temp table replace_test(c int) engine=memory;
+
+statement ok
+select b from replace_test;
+
 statement error 1065
 select a from replace_test;
 
@@ -458,6 +464,15 @@ drop table if exists crt1
 # CASE: no (visible)table should be created if anything fails
 statement error 1006
 create temp table t as select number/0 from numbers(1);
+
+# repeated failures must not accumulate CTAS staging entries
+statement error 1006
+create temp table t as select number/0 from numbers(1);
+
+query I
+select count(*) from system.temporary_tables where is_current_session = true and (name = 't' or name like '__tmp_orphan@%');
+----
+0
 
 # table t should not be created
 # expects:  ERROR 1105 (HY000): UnknownTable. Code: 1025, Text = error: ...

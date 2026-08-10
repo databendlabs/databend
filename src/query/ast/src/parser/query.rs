@@ -24,6 +24,7 @@ use pratt::Precedence;
 
 use crate::Range;
 use crate::ast::*;
+use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::parser::common::*;
 use crate::parser::expr::*;
@@ -45,7 +46,18 @@ pub fn query(i: Input) -> IResult<Query> {
 }
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
-    let (rest, set_operation_elements) = rule! { #set_operation_element+ }.parse(i)?;
+    let (rest, mut set_operation_elements) = rule! { #set_operation_element+ }.parse(i)?;
+    if matches!(set_operation_elements.as_slice(), [WithSpan {
+        elem: SetOperationElement::Group(_)
+            | SetOperationElement::SelectStmt { .. }
+            | SetOperationElement::Values(_),
+        ..
+    }]) {
+        return Ok((
+            rest,
+            set_operation_primary(set_operation_elements.pop().unwrap()),
+        ));
+    }
     run_pratt_parser(SetOperationParser, set_operation_elements, rest, i)
 }
 
@@ -108,7 +120,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         },
         |(_from, from_block)| {
             if from_block.len() != 1 {
-                return Err(nom::Err::Failure(ErrorKind::Other(
+                return Err(nom::Err::Failure(ErrorKind::other(
                     "FROM query only support query one table",
                 )));
             }
@@ -156,7 +168,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             opt_qualify_block,
         )| {
             if opt_from_block_first.is_some() && opt_from_block_second.is_some() {
-                return Err(nom::Err::Failure(ErrorKind::Other(
+                return Err(nom::Err::Failure(ErrorKind::other(
                     "duplicated FROM clause",
                 )));
             }
@@ -236,6 +248,45 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
 
 struct SetOperationParser;
 
+fn set_operation_primary(input: WithSpan<SetOperationElement>) -> SetExpr {
+    match input.elem {
+        SetOperationElement::Group(expr) => {
+            let mut query = expr.into_query();
+            query.span = transform_span(input.span.tokens);
+            SetExpr::Query(Box::new(query))
+        }
+        SetOperationElement::SelectStmt {
+            hints,
+            distinct,
+            top_n,
+            select_list,
+            from,
+            selection,
+            group_by,
+            having,
+            window_list,
+            qualify,
+        } => SetExpr::Select(Box::new(SelectStmt {
+            span: transform_span(input.span.tokens),
+            hints,
+            top_n,
+            distinct,
+            select_list,
+            from,
+            selection,
+            group_by,
+            having,
+            window_list,
+            qualify,
+        })),
+        SetOperationElement::Values(values) => SetExpr::Values {
+            span: transform_span(input.span.tokens),
+            values,
+        },
+        _ => unreachable!(),
+    }
+}
+
 impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
     for SetOperationParser
 {
@@ -267,43 +318,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
     }
 
     fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
-        let set_expr = match input.elem {
-            SetOperationElement::Group(expr) => {
-                let mut query = expr.into_query();
-                query.span = transform_span(input.span.tokens);
-                SetExpr::Query(Box::new(query))
-            }
-            SetOperationElement::SelectStmt {
-                hints,
-                distinct,
-                top_n,
-                select_list,
-                from,
-                selection,
-                group_by,
-                having,
-                window_list,
-                qualify,
-            } => SetExpr::Select(Box::new(SelectStmt {
-                span: transform_span(input.span.tokens),
-                hints,
-                top_n,
-                distinct,
-                select_list,
-                from,
-                selection,
-                group_by,
-                having,
-                window_list,
-                qualify,
-            })),
-            SetOperationElement::Values(values) => SetExpr::Values {
-                span: transform_span(input.span.tokens),
-                values,
-            },
-            _ => unreachable!(),
-        };
-        Ok(set_expr)
+        Ok(set_operation_primary(input))
     }
 
     fn infix(
@@ -445,13 +460,13 @@ pub fn exclude_col(i: Input) -> IResult<Vec<Identifier>> {
 #[allow(clippy::type_complexity)]
 pub fn select_target(i: Input) -> IResult<SelectTarget> {
     fn qualified_wildcard_transform(
-        res: Option<(Identifier, &Token<'_>, Option<(Identifier, &Token<'_>)>)>,
+        res: Option<(Identifier, Option<Identifier>)>,
         star: &Token<'_>,
         opt_exclude: Option<(&Token<'_>, Vec<Identifier>)>,
     ) -> SelectTarget {
         let column_filter = opt_exclude.map(|(_, exclude)| ColumnFilter::Excludes(exclude));
         match res {
-            Some((fst, _, Some((snd, _)))) => SelectTarget::StarColumns {
+            Some((fst, Some(snd))) => SelectTarget::StarColumns {
                 qualified: vec![
                     Indirection::Identifier(fst),
                     Indirection::Identifier(snd),
@@ -459,7 +474,7 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
                 ],
                 column_filter,
             },
-            Some((fst, _, None)) => SelectTarget::StarColumns {
+            Some((fst, None)) => SelectTarget::StarColumns {
                 qualified: vec![
                     Indirection::Identifier(fst),
                     Indirection::Star(Some(star.span)),
@@ -477,14 +492,14 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         // select * exclude ...
         map(
             rule! {
-               ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
+               #wildcard_qualification ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
             },
             |(res, star, opt_exclude)| qualified_wildcard_transform(res, star, opt_exclude),
         ),
         // select columns(* exclude ...)
         map(
             rule! {
-              COLUMNS ~ "(" ~  ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )? ~ ")"
+              COLUMNS ~ "(" ~ #wildcard_qualification ~ "*" ~ ( EXCLUDE ~ #exclude_col )? ~ ")"
             },
             |(_, _, res, star, opt_exclude, _)| {
                 qualified_wildcard_transform(res, star, opt_exclude)
@@ -572,8 +587,8 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
 
 pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
     let at_snapshot = map(
-        rule! { "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
-        |(_, _, _, s, _)| TimeTravelPoint::Snapshot(s),
+        rule! { "(" ~ SNAPSHOT ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, e, _)| TimeTravelPoint::Snapshot(Box::new(e)),
     );
     let at_timestamp = map(
         rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
@@ -599,9 +614,9 @@ pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
 pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
     let time_travel = map(
         rule! {
-            AT ~ ^#travel_point
+            AT ~ ^#travel_point_with_no_check
         },
-        |(_, travel_point)| TemporalClause::TimeTravel(travel_point),
+        |(_, (point, no_check))| TemporalClause::TimeTravel { point, no_check },
     );
 
     let changes = map(
@@ -625,11 +640,66 @@ pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
     .parse(i)
 }
 
+fn no_check_option(i: Input) -> IResult<bool> {
+    map(
+        rule! { "," ~ NO_CHECK ~ "=>" ~ ( TRUE | FALSE ) },
+        |(_, _, _, val)| matches!(val.kind, TRUE),
+    )
+    .parse(i)
+}
+
+fn travel_point_with_no_check(i: Input) -> IResult<(TimeTravelPoint, bool)> {
+    let at_snapshot = map(
+        rule! { "(" ~ SNAPSHOT ~ "=>" ~ #expr ~ #no_check_option? ~ ")" },
+        |(_, _, _, e, no_check, _)| {
+            (
+                TimeTravelPoint::Snapshot(Box::new(e)),
+                no_check.unwrap_or(false),
+            )
+        },
+    );
+    let at_timestamp = map(
+        rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ #no_check_option? ~ ")" },
+        |(_, _, _, e, no_check, _)| {
+            (
+                TimeTravelPoint::Timestamp(Box::new(e)),
+                no_check.unwrap_or(false),
+            )
+        },
+    );
+    let at_offset = map(
+        rule! { "(" ~ OFFSET ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, e, _)| (TimeTravelPoint::Offset(Box::new(e)), false),
+    );
+    let at_tag = map(
+        rule! { "(" ~ TAG ~ "=>" ~ #ident ~ ")" },
+        |(_, _, _, name, _)| (TimeTravelPoint::TableTag(name), false),
+    );
+    let at_stream = map(
+        rule! { "(" ~ STREAM ~ "=>" ~ #dot_separated_idents_1_to_3 ~ ")" },
+        |(_, _, _, (catalog, database, name), _)| {
+            (
+                TimeTravelPoint::Stream {
+                    catalog,
+                    database,
+                    name,
+                },
+                false,
+            )
+        },
+    );
+
+    rule!(
+        #at_snapshot | #at_timestamp | #at_offset | #at_tag | #at_stream
+    )
+    .parse(i)
+}
+
 pub fn alias_name(i: Input) -> IResult<Identifier> {
     let short_alias = map(
         rule! {
             #ident
-            ~ #error_hint(
+            ~ ^#error_hint(
                 rule! { AS },
                 "an alias without `AS` keyword has already been defined before this one, \
                     please remove one of them"
@@ -706,6 +776,7 @@ pub fn join_operator(i: Input) -> IResult<JoinOperator> {
         value(JoinOperator::CrossJoin, rule! { CROSS }),
         value(JoinOperator::LeftAsof, rule! { ASOF ~ LEFT }),
         value(JoinOperator::RightAsof, rule! { ASOF ~ RIGHT }),
+        value(JoinOperator::FullAsof, rule! { ASOF ~ FULL ~ OUTER? }),
         value(JoinOperator::Asof, rule! { ASOF }),
     ))
     .parse(i)
@@ -733,7 +804,20 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 }
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
-    let (rest, table_reference_elements) = rule! { #table_reference_element+ }.parse(i)?;
+    let (rest, mut table_reference_elements) = rule! { #table_reference_element+ }.parse(i)?;
+    if matches!(table_reference_elements.as_slice(), [WithSpan {
+        elem: TableReferenceElement::Group(_)
+            | TableReferenceElement::Table { .. }
+            | TableReferenceElement::TableFunction { .. }
+            | TableReferenceElement::Subquery { .. }
+            | TableReferenceElement::Stage { .. },
+        ..
+    }]) {
+        return Ok((
+            rest,
+            table_reference_primary(table_reference_elements.pop().unwrap()),
+        ));
+    }
     run_pratt_parser(TableReferenceParser, table_reference_elements, rest, i)
 }
 
@@ -1009,6 +1093,89 @@ fn get_table_sample(
 
 struct TableReferenceParser;
 
+fn table_reference_primary(input: WithSpan<TableReferenceElement>) -> TableReference {
+    match input.elem {
+        TableReferenceElement::Group(table_ref) => table_ref,
+        TableReferenceElement::Table {
+            table,
+            alias,
+            temporal,
+            with_options,
+            pivot,
+            unpivot,
+            sample,
+        } => TableReference::Table {
+            span: transform_span(input.span.tokens),
+            table,
+            alias,
+            temporal,
+            with_options,
+            pivot,
+            unpivot,
+            sample,
+        },
+        TableReferenceElement::TableFunction {
+            lateral,
+            name,
+            params,
+            alias,
+            sample,
+        } => {
+            let normal_params = params
+                .iter()
+                .filter_map(|p| match p {
+                    TableFunctionParam::Normal(p) => Some(p.clone()),
+                    _ => None,
+                })
+                .collect();
+            let named_params = params
+                .into_iter()
+                .filter_map(|p| match p {
+                    TableFunctionParam::Named { name, value } => Some((name, value)),
+                    _ => None,
+                })
+                .collect();
+            TableReference::TableFunction {
+                span: transform_span(input.span.tokens),
+                lateral,
+                name,
+                params: normal_params,
+                named_params,
+                alias,
+                sample,
+            }
+        }
+        TableReferenceElement::Subquery {
+            lateral,
+            subquery,
+            alias,
+            pivot,
+            unpivot,
+        } => TableReference::Subquery {
+            span: transform_span(input.span.tokens),
+            lateral,
+            subquery,
+            alias,
+            pivot,
+            unpivot,
+        },
+        TableReferenceElement::Stage {
+            location,
+            options,
+            alias,
+        } => {
+            let options = SelectStageOptions::from(options);
+            TableReference::Location {
+                span: transform_span(input.span.tokens),
+                location,
+                options,
+                alias,
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
 impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
     for TableReferenceParser
 {
@@ -1026,87 +1193,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
     }
 
     fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
-        let table_ref = match input.elem {
-            TableReferenceElement::Group(table_ref) => table_ref,
-            TableReferenceElement::Table {
-                table,
-                alias,
-                temporal,
-                with_options,
-                pivot,
-                unpivot,
-                sample,
-            } => TableReference::Table {
-                span: transform_span(input.span.tokens),
-                table,
-                alias,
-                temporal,
-                with_options,
-                pivot,
-                unpivot,
-                sample,
-            },
-            TableReferenceElement::TableFunction {
-                lateral,
-                name,
-                params,
-                alias,
-                sample,
-            } => {
-                let normal_params = params
-                    .iter()
-                    .filter_map(|p| match p {
-                        TableFunctionParam::Normal(p) => Some(p.clone()),
-                        _ => None,
-                    })
-                    .collect();
-                let named_params = params
-                    .into_iter()
-                    .filter_map(|p| match p {
-                        TableFunctionParam::Named { name, value } => Some((name, value)),
-                        _ => None,
-                    })
-                    .collect();
-                TableReference::TableFunction {
-                    span: transform_span(input.span.tokens),
-                    lateral,
-                    name,
-                    params: normal_params,
-                    named_params,
-                    alias,
-                    sample,
-                }
-            }
-            TableReferenceElement::Subquery {
-                lateral,
-                subquery,
-                alias,
-                pivot,
-                unpivot,
-            } => TableReference::Subquery {
-                span: transform_span(input.span.tokens),
-                lateral,
-                subquery,
-                alias,
-                pivot,
-                unpivot,
-            },
-            TableReferenceElement::Stage {
-                location,
-                options,
-                alias,
-            } => {
-                let options = SelectStageOptions::from(options);
-                TableReference::Location {
-                    span: transform_span(input.span.tokens),
-                    location,
-                    options,
-                    alias,
-                }
-            }
-            _ => unreachable!(),
-        };
-        Ok(table_ref)
+        Ok(table_reference_primary(input))
     }
 
     fn infix(
@@ -1252,10 +1339,20 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
     .parse(i)
 }
 
+fn existing_window_name(i: Input) -> IResult<Identifier> {
+    match i.tokens.first().map(|token| token.kind) {
+        Some(ROWS | RANGE) => Err(nom::Err::Error(Error::from_error_kind(
+            i,
+            ErrorKind::ExpectToken(Ident),
+        ))),
+        _ => ident(i),
+    }
+}
+
 pub fn window_spec(i: Input) -> IResult<WindowSpec> {
     map(
         rule! {
-            #ident?
+            #existing_window_name?
             ~ ( PARTITION ~ ^BY ~ ^#comma_separated_list1(subexpr(0)) )?
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( (ROWS | RANGE) ~ ^#window_frame_between )?

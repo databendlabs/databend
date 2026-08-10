@@ -23,8 +23,10 @@ use databend_common_sql::plans::RenameTableColumnPlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -34,7 +36,7 @@ use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct RenameTableColumnInterpreter {
     ctx: Arc<QueryContext>,
@@ -122,6 +124,24 @@ impl Interpreter for RenameTableColumnInterpreter {
             )?;
         }
         if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+            rename_column_in_comma_separated_ident(
+                self.ctx.as_ref(),
+                value,
+                &self.plan.old_column,
+                &self.plan.new_column,
+            )?;
+        }
+        if let Some(value) = opts.get_mut(OPT_KEY_PARTITION_BY)
+            && let Some(new_partition_key) = rename_column_in_cluster_key(
+                self.ctx.as_ref(),
+                value,
+                &self.plan.old_column,
+                &self.plan.new_column,
+            )?
+        {
+            *value = new_partition_key;
+        }
+        if let Some(value) = opts.get_mut(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
             rename_column_in_comma_separated_ident(
                 self.ctx.as_ref(),
                 value,

@@ -1,0 +1,13 @@
+=== column_name_resolves_binding ===
+description: A named column reference should resolve through BindContext name lookup.
+sql: number
+status: ok
+scalar: number (#0)
+type: Int64 NULL
+
+=== column_position_resolves_binding ===
+description: A positional column reference should preserve the old BindContext position lookup.
+sql: $1
+status: ok
+scalar: number (#0)
+type: Int64 NULL

@@ -72,6 +72,7 @@ fn test_basic_parse() -> anyhow::Result<()> {
 
     assert_eq!(remote_log_element.cluster_id, "cluster_id1");
     assert_eq!(remote_log_element.node_id, "node_id1");
+    assert_eq!(remote_log_element.warehouse_id, None);
     assert_eq!(
         remote_log_element.path,
         "databend_query::sessions::query_ctx: query_ctx.rs:656"

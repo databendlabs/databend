@@ -13,14 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use arrow_array::ArrayRef;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -32,17 +29,7 @@ use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::read::block::block_reader_merge_io::DataItem;
-
-pub enum DeserializedArray<'a> {
-    Cached(&'a Arc<SizedColumnArray>),
-    Deserialized((ColumnId, ArrayRef, usize)),
-    NoNeedToCache(ArrayRef),
-}
-
-pub struct FieldDeserializationContext<'a> {
-    pub(crate) column_metas: &'a HashMap<ColumnId, ColumnMeta>,
-    pub(crate) column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
-}
+use crate::unsupported_storage_format_error;
 
 impl BlockReader {
     /// Deserialize column chunks data from parquet format to DataBlock.
@@ -82,9 +69,7 @@ impl BlockReader {
                 block_path,
                 None,
             ),
-            FuseStorageFormat::Native => {
-                self.deserialize_native_chunks(block_path, num_rows, column_metas, column_chunks)
-            }
+            FuseStorageFormat::Unsupported => Err(unsupported_storage_format_error()),
         }
     }
 
@@ -124,12 +109,7 @@ impl BlockReader {
                 &meta.location,
                 None,
             ),
-            FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
-                &meta.location,
-                num_rows,
-                &meta.col_metas,
-                column_chunks,
-            ),
+            FuseStorageFormat::Unsupported => Err(unsupported_storage_format_error()),
         }
     }
 }

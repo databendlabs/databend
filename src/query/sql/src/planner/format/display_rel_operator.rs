@@ -26,17 +26,20 @@ use crate::plans::Exchange;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
+use crate::plans::MaterializedCTE;
+use crate::plans::MaterializedCTERef;
 use crate::plans::Mutation;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
-use crate::plans::SecureFilter;
 use crate::plans::Sort;
+use crate::plans::TopN;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
+use crate::plans::WindowGroup;
 
 impl<I: IdHumanizer> OperatorHumanizer<I> for DefaultOperatorHumanizer {
     fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> FormatTreeNode {
@@ -52,17 +55,22 @@ fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &RelOperator) -> FormatT
         RelOperator::Scan(op) => scan_to_format_tree(id_humanizer, op),
         RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(id_humanizer, op),
         RelOperator::Filter(op) => filter_to_format_tree(id_humanizer, op),
-        RelOperator::SecureFilter(op) => secure_filter_to_format_tree(id_humanizer, op),
         RelOperator::Aggregate(op) => aggregate_to_format_tree(id_humanizer, op),
         RelOperator::Window(op) => window_to_format_tree(id_humanizer, op),
+        RelOperator::WindowGroup(op) => window_group_to_format_tree(id_humanizer, op),
         RelOperator::Udf(op) => udf_to_format_tree(id_humanizer, op),
         RelOperator::AsyncFunction(op) => async_func_to_format_tree(id_humanizer, op),
         RelOperator::Sort(op) => sort_to_format_tree(id_humanizer, op),
         RelOperator::Limit(op) => limit_to_format_tree(id_humanizer, op),
+        RelOperator::TopN(op) => top_n_to_format_tree(id_humanizer, op),
         RelOperator::Exchange(op) => exchange_to_format_tree(id_humanizer, op),
         RelOperator::ConstantTableScan(op) => constant_scan_to_format_tree(id_humanizer, op),
         RelOperator::UnionAll(op) => union_all_to_format_tree(id_humanizer, op),
         RelOperator::Mutation(op) => merge_into_to_format_tree(id_humanizer, op),
+        RelOperator::MaterializedCTE(op) => materialized_cte_to_format_tree(op),
+        RelOperator::MaterializedCTERef(op) => {
+            materialized_cte_ref_to_format_tree(id_humanizer, op)
+        }
         _ => FormatTreeNode::with_children(format!("{:?}", op), vec![]),
     }
 }
@@ -111,15 +119,17 @@ fn format_scalar<I: IdHumanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> Strin
             )
         }
         ScalarExpr::FunctionCall(func) => {
-            format!(
-                "{}({})",
-                &func.func_name,
-                func.arguments
-                    .iter()
-                    .map(|arg| format_scalar(id_humanizer, arg))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            )
+            let params = func.params.iter().map(|param| param.to_string()).join(", ");
+            let arguments = func
+                .arguments
+                .iter()
+                .map(|arg| format_scalar(id_humanizer, arg))
+                .join(", ");
+            if params.is_empty() {
+                format!("{}({})", &func.func_name, arguments)
+            } else {
+                format!("{}({})({})", &func.func_name, params, arguments)
+            }
         }
         ScalarExpr::CastExpr(cast) => {
             format!(
@@ -163,7 +173,7 @@ fn format_scalar_item<I: IdHumanizer>(id_humanizer: &I, item: &ScalarItem) -> St
 }
 
 fn scan_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Scan) -> FormatTreeNode {
-    FormatTreeNode::with_children("Scan".to_string(), vec![
+    let mut children = vec![
         FormatTreeNode::new(format!(
             "table: {}",
             id_humanizer.humanize_table_id(op.table_index)
@@ -195,7 +205,11 @@ fn scan_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Scan) -> FormatTre
             "limit: {}",
             op.limit.map_or("NONE".to_string(), |l| l.to_string())
         )),
-    ])
+    ];
+    if op.secure_predicates.is_some() {
+        children.push(FormatTreeNode::new("ROW ACCESS POLICY APPLIED".to_string()));
+    }
+    FormatTreeNode::with_children("Scan".to_string(), children)
 }
 
 fn join_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Join) -> FormatTreeNode {
@@ -276,12 +290,33 @@ fn window_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Window) -> Forma
 
     let frame = op.frame.to_string();
 
-    FormatTreeNode::with_children("Window".to_string(), vec![
+    let mut children = vec![
         FormatTreeNode::new(format!("aggregate function: {}", op.function.func_name())),
         FormatTreeNode::new(format!("partition items: [{}]", partition_by_items)),
         FormatTreeNode::new(format!("order by items: [{}]", order_by_items)),
         FormatTreeNode::new(format!("frame: [{}]", frame)),
-    ])
+    ];
+    if let Some(top) = op.top {
+        children.push(FormatTreeNode::new(format!("top: {}", top)));
+    }
+
+    FormatTreeNode::with_children("Window".to_string(), children)
+}
+
+fn window_group_to_format_tree<I: IdHumanizer>(
+    id_humanizer: &I,
+    op: &WindowGroup,
+) -> FormatTreeNode {
+    if op.windows.len() == 1 {
+        return window_to_format_tree(id_humanizer, &op.windows[0]);
+    }
+
+    let children = op
+        .windows
+        .iter()
+        .map(|window| window_to_format_tree(id_humanizer, window))
+        .collect();
+    FormatTreeNode::with_children("WindowGroup".to_string(), children)
 }
 
 fn udf_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Udf) -> FormatTreeNode {
@@ -329,20 +364,6 @@ fn filter_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Filter) -> Forma
         "filters: [{}]",
         scalars
     ))])
-}
-
-fn secure_filter_to_format_tree<I: IdHumanizer>(
-    id_humanizer: &I,
-    op: &SecureFilter,
-) -> FormatTreeNode {
-    let scalars = op
-        .predicates
-        .iter()
-        .map(|expr| format_scalar(id_humanizer, expr))
-        .join(", ");
-    FormatTreeNode::with_children("SecureFilter".to_string(), vec![FormatTreeNode::new(
-        format!("secure filters: [{}]", scalars),
-    )])
 }
 
 fn eval_scalar_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &EvalScalar) -> FormatTreeNode {
@@ -421,6 +442,28 @@ fn limit_to_format_tree<I: IdHumanizer>(_: &I, op: &Limit) -> FormatTreeNode {
     ])
 }
 
+fn top_n_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &TopN) -> FormatTreeNode {
+    let scalars = op
+        .items
+        .iter()
+        .map(|item| {
+            format!(
+                "{} {} NULLS {}",
+                id_humanizer.humanize_column_id(item.index),
+                if item.asc { "ASC" } else { "DESC" },
+                if item.nulls_first { "FIRST" } else { "LAST" }
+            )
+        })
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    FormatTreeNode::with_children("TopN".to_string(), vec![
+        FormatTreeNode::new(format!("sort keys: [{}]", scalars)),
+        FormatTreeNode::new(format!("limit: [{}]", op.limit)),
+        FormatTreeNode::new(format!("offset: [{}]", op.offset)),
+    ])
+}
+
 fn exchange_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Exchange) -> FormatTreeNode {
     let payload = match op {
         Exchange::Broadcast => "Exchange(Broadcast)",
@@ -486,6 +529,44 @@ fn union_all_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &UnionAll) -> 
     ];
 
     FormatTreeNode::with_children(format!("{:?}", op.rel_op()), children)
+}
+
+fn materialized_cte_to_format_tree(op: &MaterializedCTE) -> FormatTreeNode {
+    FormatTreeNode::with_children("MaterializedCTE".to_string(), vec![
+        FormatTreeNode::new(format!("cte_name: {}", op.cte_name)),
+        FormatTreeNode::new(format!("ref_count: {}", op.ref_count)),
+        FormatTreeNode::new(format!("channel_size: {:?}", op.channel_size)),
+    ])
+}
+
+fn materialized_cte_ref_to_format_tree<I: IdHumanizer>(
+    id_humanizer: &I,
+    op: &MaterializedCTERef,
+) -> FormatTreeNode {
+    let output_columns = op
+        .output_columns
+        .iter()
+        .map(|idx| id_humanizer.humanize_column_id(*idx))
+        .join(", ");
+
+    let column_mapping = op
+        .column_mapping
+        .iter()
+        .sorted_by_key(|(from, to)| (**from, **to))
+        .map(|(from, to)| {
+            format!(
+                "{} -> {}",
+                id_humanizer.humanize_column_id(*from),
+                id_humanizer.humanize_column_id(*to)
+            )
+        })
+        .join(", ");
+
+    FormatTreeNode::with_children("MaterializedCTERef".to_string(), vec![
+        FormatTreeNode::new(format!("cte_name: {}", op.cte_name)),
+        FormatTreeNode::new(format!("output columns: [{}]", output_columns)),
+        FormatTreeNode::new(format!("column mapping: [{}]", column_mapping)),
+    ])
 }
 
 fn merge_into_to_format_tree<I: IdHumanizer>(

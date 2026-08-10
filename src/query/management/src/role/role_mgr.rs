@@ -22,6 +22,7 @@ use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_del;
 use databend_common_meta_api::txn_put_pb;
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
@@ -38,10 +39,10 @@ use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_meta_client::ClientHandle;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
-use databend_meta_client::kvapi::Key;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListKVReply;
 use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::kvapi::UpsertKVReply;
 use databend_meta_client::types::ConditionResult::Eq;
 use databend_meta_client::types::MatchSeq;
@@ -362,7 +363,7 @@ impl RoleApi for RoleMgr {
                     if_then.push(txn_put_pb(&owner_key, &OwnershipInfo {
                         object,
                         role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
-                    })?);
+                    }));
                 }
             }
 
@@ -403,7 +404,7 @@ impl RoleApi for RoleMgr {
             let mut if_then = vec![txn_put_pb(&owner_key, &OwnershipInfo {
                 object: object.clone(),
                 role: new_role.to_string(),
-            })?];
+            })];
 
             if let Some(ref old_role) = old_role {
                 // BUILTIN role or Dropped role may get err, no need to revoke
@@ -417,7 +418,7 @@ impl RoleApi for RoleMgr {
                     );
                     old_role_info.update_role_time();
                     condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                    if_then.push(txn_put_pb(&old_key, &old_role_info)?);
+                    if_then.push(txn_put_pb(&old_key, &old_role_info));
                 }
             }
 
@@ -528,7 +529,7 @@ impl RoleApi for RoleMgr {
                         );
                         old_role_info.update_role_time();
                         condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                        if_then.push(txn_put_pb(&old_key, &old_role_info)?);
+                        if_then.push(txn_put_pb(&old_key, &old_role_info));
                     }
                 }
             }

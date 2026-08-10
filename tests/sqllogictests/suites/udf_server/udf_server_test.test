@@ -511,11 +511,31 @@ DROP FUNCTION wait;
 statement ok
 DROP FUNCTION wait_concurrent;
 
-statement error 1065
-update web_traffic_data set id = 2 where map_access(traffic_info, 'ip') = '192.168.1.2'
+## test update and delete with UDF expressions
+statement ok
+CREATE OR REPLACE FUNCTION dml_url_len (VARCHAR) RETURNS BIGINT LANGUAGE python HANDLER = 'url_len' ADDRESS = 'http://0.0.0.0:8815';
 
-statement error 1065
-delete from web_traffic_data where map_access(traffic_info, 'ip') = '192.168.1.2'
+statement ok
+update web_traffic_data set id = dml_url_len(map_access(traffic_info, 'url')) where map_access(traffic_info, 'ip') = '192.168.1.2'
+
+query IT
+select id, map_access(traffic_info, 'url') from web_traffic_data order by id, map_access(traffic_info, 'url');
+----
+1 example.com/home
+3 example.com/contact
+17 example.com/about
+
+statement ok
+delete from web_traffic_data where dml_url_len(map_access(traffic_info, 'url')) = 17
+
+query IT
+select id, map_access(traffic_info, 'ip') from web_traffic_data order by id;
+----
+1 192.168.1.1
+3 192.168.1.1
+
+statement ok
+DROP FUNCTION dml_url_len;
 
 statement ok
 DROP FUNCTION map_access;
@@ -530,11 +550,34 @@ create or replace table target_udf(a string,b string,c string);
 statement ok
 create or replace table source_udf(a2 string,b2 string,c2 string);
 
-statement error 1065
-merge into target_udf using source_udf on target_udf.a = source_udf.a2 when not matched then insert (a) values(split_and_join(source_udf.a2, '; ', ':'));
+statement ok
+insert into target_udf values('1', 'old1', 'old'), ('2', 'old2', 'old');
+
+statement ok
+insert into source_udf values('1', 'new; 1', 'update'), ('3', 'new; 3', 'insert'), ('4', 'new; 4', 'skip');
+
+query II
+merge into target_udf using source_udf on target_udf.a = source_udf.a2
+when matched and split_and_join(source_udf.c2, '; ', ':') = 'update' then update set target_udf.b = split_and_join(source_udf.b2, '; ', ':')
+when not matched and split_and_join(source_udf.c2, '; ', ':') = 'insert' then insert (a, b, c) values(source_udf.a2, split_and_join(source_udf.b2, '; ', ':'), split_and_join(source_udf.c2, '; ', ':'));
+----
+1 1
+
+query TTT
+select * from target_udf order by a;
+----
+1 new:1 old
+2 old2 old
+3 new:3 insert
 
 statement ok
 DROP FUNCTION split_and_join;
+
+statement ok
+DROP TABLE target_udf;
+
+statement ok
+DROP TABLE source_udf;
 
 ### enable udf for copy into table
 statement ok

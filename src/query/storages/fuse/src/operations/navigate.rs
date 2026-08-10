@@ -17,7 +17,6 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationPoint;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -32,6 +31,8 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -226,6 +227,168 @@ impl FuseTable {
         // let's instantiate it
         let table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
         Ok(table.into())
+    }
+
+    #[async_backtrace::framed]
+    pub async fn navigate_to_point_unchecked(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        point: &NavigationPoint,
+    ) -> Result<Arc<FuseTable>> {
+        match point {
+            NavigationPoint::SnapshotID(snapshot_id) => {
+                self.navigate_to_snapshot_unchecked(ctx, snapshot_id.as_str())
+                    .await
+            }
+            NavigationPoint::TimePoint(time_point) => {
+                self.navigate_to_time_point_unchecked(ctx, *time_point)
+                    .await
+            }
+            _ => self.navigate_to_point(ctx, point).await,
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn navigate_to_snapshot_unchecked(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        snapshot_id: &str,
+    ) -> Result<Arc<FuseTable>> {
+        let prefix = self.snapshot_prefix();
+        let op = self.get_operator();
+        let s3_storage_class = ctx.get_settings().get_s3_storage_class()?;
+
+        let vacuum_prefixes = [VACUUM2_OBJECT_KEY_PREFIX, ""];
+        let suffixes = ["_v4.mpk", "_v3.bincode", "_v2.json", "_v1.json", ""];
+
+        for vac_prefix in &vacuum_prefixes {
+            for suffix in &suffixes {
+                let location = format!("{}{}{}{}", prefix, vac_prefix, snapshot_id, suffix);
+                match SnapshotsIO::read_snapshot(location, op.clone(), true).await {
+                    Ok((snapshot, format_version)) => {
+                        return self.load_table_by_snapshot(
+                            snapshot.as_ref(),
+                            format_version,
+                            s3_storage_class,
+                        );
+                    }
+                    Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+
+        Err(ErrorCode::TableHistoricalDataNotFound(
+            "Snapshot not found with NO_CHECK",
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn navigate_to_time_point_unchecked(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        time_point: DateTime<Utc>,
+    ) -> Result<Arc<FuseTable>> {
+        let snapshot_prefix = self.snapshot_prefix();
+        let op = self.get_operator();
+        let s3_storage_class = ctx.get_settings().get_s3_storage_class()?;
+
+        // NO_CHECK only works with V4 snapshots (UUID v7 temporal ordering).
+        if let Some(loc) = self.snapshot_loc() {
+            if !loc.ends_with("_v4.mpk") {
+                return Err(ErrorCode::TableHistoricalDataNotFound(
+                    "NO_CHECK requires V4 format snapshots (UUID v7)",
+                ));
+            }
+        }
+
+        let ts_millis = time_point.timestamp_millis();
+        if ts_millis < 0 {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "NO_CHECK does not support timestamps before 1970-01-01",
+            ));
+        }
+        // Use all-zero random bytes to produce the minimum UUID for this millisecond.
+        // This is intentional: any snapshot at the same millisecond sorts after this
+        // boundary, so we always return its predecessor (ts < time_point semantics).
+        let target_uuid =
+            uuid::Builder::from_unix_timestamp_millis(ts_millis as u64, &[0u8; 10]).into_uuid();
+        let start_after_key = format!(
+            "{}{}{}",
+            snapshot_prefix,
+            VACUUM2_OBJECT_KEY_PREFIX,
+            target_uuid.as_simple()
+        );
+
+        let has_start_after = op.info().full_capability().list_with_start_after;
+
+        let mut lister = if has_start_after {
+            op.lister_with(&snapshot_prefix)
+                .start_after(&start_after_key)
+                .await?
+        } else {
+            op.lister_with(&snapshot_prefix).await?
+        };
+
+        let abort_checker = ctx.clone().get_abort_checker();
+        let mut first_snapshot_after = None;
+        while let Some(entry) = lister.try_next().await? {
+            abort_checker
+                .try_check_aborting()
+                .with_context(|| "navigate_to_time_point_unchecked")?;
+            if entry.metadata().mode() == EntryMode::FILE {
+                let path = entry.path().to_string();
+                if path.ends_with("_v4.mpk") {
+                    if !has_start_after && path.as_str() <= start_after_key.as_str() {
+                        continue;
+                    }
+                    first_snapshot_after = Some(path);
+                    break;
+                }
+            }
+        }
+
+        match first_snapshot_after {
+            Some(location) => {
+                let (snapshot, _format_version) =
+                    SnapshotsIO::read_snapshot(location, op.clone(), true).await?;
+
+                match snapshot.prev_snapshot_id {
+                    Some((prev_id, prev_ver)) => {
+                        if prev_ver < TableSnapshot::VERSION {
+                            return Err(ErrorCode::TableHistoricalDataNotFound(
+                                "NO_CHECK cannot navigate to pre-V4 snapshots \
+                                 in mixed-format tables",
+                            ));
+                        }
+                        let prev_location = self
+                            .meta_location_generator()
+                            .gen_snapshot_location(&prev_id, prev_ver)?;
+                        let (prev_snapshot, prev_format_version) =
+                            SnapshotsIO::read_snapshot(prev_location, op, true).await?;
+                        self.load_table_by_snapshot(
+                            prev_snapshot.as_ref(),
+                            prev_format_version,
+                            s3_storage_class,
+                        )
+                    }
+                    None => Err(ErrorCode::TableHistoricalDataNotFound(
+                        "No historical data found at given point \
+                         (timestamp is before the earliest snapshot)",
+                    )),
+                }
+            }
+            None => {
+                let Some(location) = self.snapshot_loc() else {
+                    return Err(ErrorCode::TableHistoricalDataNotFound(
+                        "Empty Table has no historical data",
+                    ));
+                };
+                let (snapshot, format_version) =
+                    SnapshotsIO::read_snapshot(location, op, true).await?;
+                self.load_table_by_snapshot(snapshot.as_ref(), format_version, s3_storage_class)
+            }
+        }
     }
 
     #[async_backtrace::framed]
@@ -593,33 +756,18 @@ impl FuseTable {
         snapshot: &TableSnapshot,
     ) -> Result<bool> {
         let snapshot_cluster_key_meta = snapshot.cluster_key_meta.clone();
-        let cluster_type = if let Some(cluster_type) = snapshot.cluster_type {
-            Some(cluster_type)
-        } else if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_v2 {
-            // Historical snapshots written before cluster_type was persisted may still share the
-            // same cluster-key version as the current table. Reuse the current cluster_type only
-            // in that compatibility case.
-            self.cluster_type()
-        } else {
-            // Intentionally do not expose partial cluster metadata here. Historical snapshots
-            // written before cluster_type persistence may only carry cluster_key_meta, which is
-            // not enough to safely reconstruct the exact historical clustering mode once the
-            // table has moved to a different cluster-key generation or non-linear clustering
-            // implementation. Clearing both cluster key and cluster type in that case is a
-            // deliberate fallback to avoid fabricating misleading metadata during navigation.
-            None
+        let cluster_key_meta = match snapshot.cluster_type {
+            Some(ClusterType::Linear) => snapshot_cluster_key_meta,
+            Some(ClusterType::Hilbert) => None,
+            None if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_meta() => {
+                snapshot_cluster_key_meta
+            }
+            None => None,
         };
 
-        if let Some(cluster_type) = cluster_type {
-            table_meta.cluster_key_v2 = snapshot_cluster_key_meta;
-            table_meta.options.insert(
-                OPT_KEY_CLUSTER_TYPE.to_owned(),
-                cluster_type.to_string().to_lowercase(),
-            );
-        } else {
-            table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
-            table_meta.cluster_key_v2 = None;
-        }
+        table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+        table_meta.cluster_key = None;
+        table_meta.cluster_key_v2 = cluster_key_meta;
 
         let mut historical_schema = snapshot.schema.clone();
         historical_schema.next_column_id = self

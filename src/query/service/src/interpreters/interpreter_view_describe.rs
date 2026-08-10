@@ -23,13 +23,13 @@ use databend_common_expression::types::StringType;
 use databend_common_sql::plans::DescribeViewPlan;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::util::generate_desc_schema;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::Planner;
 
 pub struct DescribeViewInterpreter {

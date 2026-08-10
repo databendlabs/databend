@@ -66,8 +66,7 @@ impl FuseTable {
             };
         let projection = Projection::Columns(col_indices.clone());
         let update_stream_columns = self.change_tracking_enabled();
-        let block_reader =
-            self.create_block_reader(ctx.clone(), projection, false, update_stream_columns, false)?;
+        let block_reader = self.create_block_reader(ctx.clone(), projection, false)?;
 
         let schema = block_reader.schema().as_ref().clone();
         let filter_expr = Arc::new(filter.map(|v| {
@@ -96,8 +95,6 @@ impl FuseTable {
                     ctx.clone(),
                     Projection::Columns(remain_column_indices),
                     false,
-                    update_stream_columns,
-                    false,
                 )?)
                 .clone(),
             ))
@@ -123,6 +120,7 @@ impl FuseTable {
                     remain_reader.clone(),
                     ops.clone(),
                     self.storage_format,
+                    update_stream_columns,
                 )
             },
             max_threads,
@@ -193,6 +191,7 @@ impl FuseTable {
             self.operator.clone(),
             self.schema_with_stream(),
             &push_down,
+            self.partition_pruning_info(ctx.clone()),
             self.bloom_index_cols(),
             Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?,
             spatial_index_columns,
@@ -249,7 +248,6 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let (statistics, inner_parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             self.schema_with_stream(),
             None,
             &range_block_metas,

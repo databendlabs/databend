@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -23,39 +22,38 @@ use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
 
-use super::FuseBlockFormat;
 use super::ReadBlockMeta;
 use crate::io::BlockReadContext;
+use crate::io::BlockReadResult;
 use crate::io::build_columns_meta;
-use crate::operations::read::raw_data_source::RawDataSource;
 
 pub struct FuseParquetBlockFormat;
 
 impl FuseParquetBlockFormat {
-    pub fn create() -> Arc<dyn FuseBlockFormat> {
-        Arc::new(Self)
+    pub fn create() -> Self {
+        Self
     }
-}
 
-#[async_trait::async_trait]
-impl FuseBlockFormat for FuseParquetBlockFormat {
-    #[async_backtrace::framed]
-    async fn read_data_by_merge_io(
+    /// Reads raw column data from the given block location.
+    pub async fn read_data_by_merge_io(
         &self,
         read_ctx: &BlockReadContext,
         settings: &ReadSettings,
         location: &str,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
-    ) -> Result<RawDataSource> {
-        let source = read_ctx
+    ) -> Result<BlockReadResult> {
+        read_ctx
             .read_columns_data_by_merge_io(settings, location, columns_meta, ignore_column_ids)
-            .await?;
-
-        Ok(RawDataSource::Parquet(source))
+            .await
     }
 
-    async fn read_block_meta(&self, operator: &Operator, location: &str) -> Option<ReadBlockMeta> {
+    /// Reads the metadata needed to fetch an arbitrary block location.
+    pub async fn read_block_meta(
+        &self,
+        operator: &Operator,
+        location: &str,
+    ) -> Option<ReadBlockMeta> {
         let metadata = read_metadata_async(location, operator, None).await.ok()?;
         debug_assert_eq!(metadata.num_row_groups(), 1);
         let row_group = &metadata.row_groups()[0];

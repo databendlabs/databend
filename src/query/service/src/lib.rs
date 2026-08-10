@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(int_roundings)]
 #![allow(internal_features)]
 #![allow(
     clippy::derivable_impls,
@@ -26,6 +25,8 @@
     clippy::uninlined_format_args,
     clippy::useless_asref
 )]
+#![feature(int_roundings)]
+#![feature(never_type)]
 #![feature(iter_map_windows)]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]

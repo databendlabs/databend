@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use educe::Educe;
@@ -183,6 +185,7 @@ pub enum Expr {
     CountAll {
         span: Span,
         qualified: Vec<Indirection>,
+        filter: Option<Box<Expr>>,
         window: Option<Window>,
     },
     /// `(foo, bar)`
@@ -703,6 +706,9 @@ impl Display for Expr {
                     write_expr(left, Some(affix), true, f)?;
                     write!(f, " {op} ")?;
                     write_expr(right, Some(affix), false, f)?;
+                    if let Some(escape) = op.escape() {
+                        write!(f, " ESCAPE {}", QuotedString(escape, '\''))?;
+                    }
                 }
                 Expr::JsonOp {
                     op, left, right, ..
@@ -771,11 +777,17 @@ impl Display for Expr {
                     write!(f, "{value}")?;
                 }
                 Expr::CountAll {
-                    window, qualified, ..
+                    filter,
+                    window,
+                    qualified,
+                    ..
                 } => {
                     write!(f, "COUNT(")?;
                     write_dot_separated_list(f, qualified)?;
                     write!(f, ")")?;
+                    if let Some(filter) = filter {
+                        write!(f, " FILTER ( WHERE {filter} )")?;
+                    }
                     if let Some(window) = window {
                         write!(f, " OVER {window}")?;
                     }
@@ -1103,6 +1115,7 @@ pub struct FunctionCall {
     pub args: Vec<Expr>,
     pub params: Vec<Expr>,
     pub order_by: Vec<OrderByExpr>,
+    pub filter: Option<Box<Expr>>,
     pub window: Option<WindowDesc>,
     pub lambda: Option<Lambda>,
 }
@@ -1115,6 +1128,7 @@ impl Default for FunctionCall {
             args: vec![],
             params: vec![],
             order_by: vec![],
+            filter: None,
             window: None,
             lambda: None,
         }
@@ -1129,6 +1143,7 @@ impl Display for FunctionCall {
             args,
             params,
             order_by,
+            filter,
             window,
             lambda,
         } = self;
@@ -1152,6 +1167,9 @@ impl Display for FunctionCall {
             write!(f, " WITHIN GROUP ( ORDER BY ")?;
             write_comma_separated_list(f, &self.order_by)?;
             write!(f, " )")?;
+        }
+        if let Some(filter) = filter {
+            write!(f, " FILTER ( WHERE {filter} )")?;
         }
         if let Some(window) = window {
             if let Some(ignore_null) = window.ignore_nulls {
@@ -1178,7 +1196,7 @@ pub enum MapAccessor {
     Colon { key: Identifier },
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum TypeName {
     Boolean,
     UInt8,
@@ -1384,7 +1402,7 @@ pub struct WindowDesc {
     pub window: Window,
 }
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner, Drive, DriveMut, Walk, WalkMut)]
 pub enum Window {
     WindowReference(WindowRef),
     WindowSpec(WindowSpec),
@@ -1399,7 +1417,7 @@ impl Display for Window {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct WindowDefinition {
     pub name: Identifier,
     pub spec: WindowSpec,
@@ -1411,7 +1429,7 @@ impl Display for WindowDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct WindowRef {
     pub window_name: Identifier,
 }
@@ -1422,7 +1440,7 @@ impl Display for WindowRef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct WindowSpec {
     pub existing_window_name: Option<Identifier>,
     pub partition_by: Vec<Expr>,
@@ -1494,21 +1512,21 @@ impl Display for WindowSpec {
 }
 
 /// `RANGE UNBOUNDED PRECEDING` or `ROWS BETWEEN 5 PRECEDING AND CURRENT ROW`.
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct WindowFrame {
     pub units: WindowFrameUnits,
     pub start_bound: WindowFrameBound,
     pub end_bound: WindowFrameBound,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumAsInner, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumAsInner, Drive, DriveMut, Walk, WalkMut)]
 pub enum WindowFrameUnits {
     Rows,
     Range,
 }
 
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
@@ -1518,7 +1536,7 @@ pub enum WindowFrameBound {
     Following(Option<Box<Expr>>),
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct Lambda {
     pub params: Vec<Identifier>,
     pub expr: Box<Expr>,
@@ -1566,7 +1584,11 @@ pub enum BinaryOperator {
     Like(Option<String>),
     NotLike(Option<String>),
     LikeAny(Option<String>),
+    ILike(Option<String>),
+    NotILike(Option<String>),
+    ILikeAny(Option<String>),
     Regexp,
+    PgRegexpMatch,
     RLike,
     NotRegexp,
     NotRLike,
@@ -1611,10 +1633,25 @@ impl BinaryOperator {
             BinaryOperator::L2Distance => "l2_distance".to_string(),
             BinaryOperator::LikeAny(_) => "like_any".to_string(),
             BinaryOperator::Like(_) => "like".to_string(),
+            BinaryOperator::ILike(_) => "ilike".to_string(),
+            BinaryOperator::ILikeAny(_) => "ilike_any".to_string(),
+            BinaryOperator::PgRegexpMatch => "regexp".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
             }
+        }
+    }
+
+    fn escape(&self) -> Option<&str> {
+        match self {
+            BinaryOperator::Like(escape)
+            | BinaryOperator::NotLike(escape)
+            | BinaryOperator::LikeAny(escape)
+            | BinaryOperator::ILike(escape)
+            | BinaryOperator::NotILike(escape)
+            | BinaryOperator::ILikeAny(escape) => escape.as_deref(),
+            _ => None,
         }
     }
 }
@@ -1682,11 +1719,23 @@ impl Display for BinaryOperator {
             BinaryOperator::LikeAny(_) => {
                 write!(f, "LIKE ANY")
             }
+            BinaryOperator::ILike(_) => {
+                write!(f, "ILIKE")
+            }
+            BinaryOperator::ILikeAny(_) => {
+                write!(f, "ILIKE ANY")
+            }
             BinaryOperator::NotLike(_) => {
                 write!(f, "NOT LIKE")
             }
+            BinaryOperator::NotILike(_) => {
+                write!(f, "NOT ILIKE")
+            }
             BinaryOperator::Regexp => {
                 write!(f, "REGEXP")
+            }
+            BinaryOperator::PgRegexpMatch => {
+                write!(f, "~")
             }
             BinaryOperator::RLike => {
                 write!(f, "RLIKE")

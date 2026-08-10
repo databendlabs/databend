@@ -15,12 +15,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::ClientConfig;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_exception::Result;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 pub fn get_notification_client_config(
     ctx: Arc<QueryContext>,

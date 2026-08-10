@@ -19,10 +19,11 @@ use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 
+use super::BATCH_SIZE;
 use super::RowID;
 use super::RowLayout;
+use super::RowMut;
 use super::RowPtr;
-use crate::BATCH_SIZE;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ProjectedBlock;
@@ -84,7 +85,7 @@ pub(super) unsafe fn serialize_column_to_rowformat(
     arena: &Bump,
     column: &Column,
     select_vector: &[RowID],
-    address: &mut [RowPtr; BATCH_SIZE],
+    address: &mut [RowMut; BATCH_SIZE],
     offset: usize,
     scratch: &mut Vec<u8>,
 ) {
@@ -207,7 +208,7 @@ pub(super) unsafe fn serialize_const_column_to_rowformat(
     scalar: &Scalar,
     data_type: &DataType,
     select_vector: &[RowID],
-    address: &mut [RowPtr; BATCH_SIZE],
+    address: &mut [RowMut; BATCH_SIZE],
     offset: usize,
     scratch: &mut Vec<u8>,
 ) {
@@ -299,7 +300,7 @@ pub(super) unsafe fn serialize_const_column_to_rowformat(
 unsafe fn serialize_fixed_size_column_to_rowformat<T>(
     column: &T::Column,
     select_vector: &[RowID],
-    address: &mut [RowPtr; BATCH_SIZE],
+    address: &mut [RowMut; BATCH_SIZE],
     offset: usize,
 ) where
     T: AccessType<Scalar: Copy>,
@@ -635,9 +636,9 @@ mod tests {
 
         let mut row0 = vec![0u8; row_size];
         let mut row1 = vec![0u8; row_size];
-        let mut addresses = [RowPtr::null(); BATCH_SIZE];
-        addresses[0] = RowPtr::new(row0.as_mut_ptr());
-        addresses[1] = RowPtr::new(row1.as_mut_ptr());
+        let mut row_muts: [RowMut; BATCH_SIZE] = std::array::from_fn(|_| RowMut::dangling());
+        row_muts[0] = RowMut::new(row0.as_mut_ptr());
+        row_muts[1] = RowMut::new(row1.as_mut_ptr());
 
         let select_vector = [RowID::from(0), RowID::from(1)];
         let mut scratch = Vec::new();
@@ -646,14 +647,15 @@ mod tests {
                 &arena,
                 &column,
                 &select_vector,
-                &mut addresses,
+                &mut row_muts,
                 0,
                 &mut scratch,
             );
         }
 
-        let bytes0 = unsafe { addresses[0].read_bytes(0) };
-        let bytes1 = unsafe { addresses[1].read_bytes(0) };
+        let row_refs = row_muts.map(RowMut::into_ref);
+        let bytes0 = unsafe { row_refs[0].read_bytes(0) };
+        let bytes1 = unsafe { row_refs[1].read_bytes(0) };
 
         assert_eq!(bytes0, bytes1);
         assert!(bytes0.starts_with(b"HB"));

@@ -31,8 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check spelling
         env:
           CLICOLOR: 1
-        uses: crate-ci/typos@v1.33.1
+        uses: crate-ci/typos@v1.47.2

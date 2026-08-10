@@ -15,13 +15,17 @@
 use std::convert::TryFrom;
 
 use databend_common_statistics::Datum;
-use databend_common_statistics::Histogram;
-pub use databend_common_statistics::Ndv;
 
+pub use super::stat_distribution::ReturnStat;
+pub use super::stat_distribution::StatArgs;
+use super::stat_distribution::StatBinaryArg;
+use super::stat_distribution::StatCardinality;
+use super::stat_distribution::StatUnaryArg;
 use crate::Domain;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::Scalar;
+use crate::ScalarRef;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
@@ -34,6 +38,31 @@ use crate::types::number::F32;
 use crate::types::number::F64;
 use crate::types::number::NumberScalar;
 
+macro_rules! scalar_to_datum {
+    ($value:expr, $scalar:ident, $binary_to_bytes:expr, $string_to_bytes:expr) => {
+        match $value {
+            $scalar::Boolean(v) => Some(Datum::Bool(v)),
+            $scalar::Number(NumberScalar::Int8(v)) => Some(Datum::Int(v as i64)),
+            $scalar::Number(NumberScalar::Int16(v)) => Some(Datum::Int(v as i64)),
+            $scalar::Number(NumberScalar::Int32(v)) | $scalar::Date(v) => {
+                Some(Datum::Int(v as i64))
+            }
+            $scalar::Number(NumberScalar::Int64(v)) | $scalar::Timestamp(v) => Some(Datum::Int(v)),
+            $scalar::TimestampTz(v) => Some(Datum::Int(v.timestamp())),
+            $scalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(v as u64)),
+            $scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(v as u64)),
+            $scalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(v as u64)),
+            $scalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(v)),
+            $scalar::Number(NumberScalar::Float32(v)) => Some(Datum::Float(F64::from(v.0 as f64))),
+            $scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(v)),
+            $scalar::Decimal(v) => Some(Datum::Float(F64::from(v.to_float64()))),
+            $scalar::Binary(v) => Some(Datum::Bytes($binary_to_bytes(v))),
+            $scalar::String(v) => Some(Datum::Bytes($string_to_bytes(v))),
+            _ => None,
+        }
+    };
+}
+
 pub trait ScalarFunctionStat: Send + Sync + 'static {
     fn stat_eval(
         &self,
@@ -44,7 +73,7 @@ pub trait ScalarFunctionStat: Send + Sync + 'static {
 
 #[derive(Clone, Copy)]
 pub enum DeriveStat {
-    Nullary(fn(cardinality: f64, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
+    Nullary(fn(StatCardinality, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
     Unary(fn(StatUnaryArg, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
     Binary(fn(StatBinaryArg, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
     Other(fn(StatArgs, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
@@ -80,59 +109,17 @@ impl ScalarFunctionStat for DeriveStat {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ArgStat<'a> {
-    pub domain: Domain,
-    pub ndv: Ndv,
-    pub null_count: u64,
-    pub histogram: Option<&'a Histogram>,
-}
-
-#[derive(Debug, Clone)]
-pub struct StatUnaryArg<'a> {
-    pub cardinality: f64,
-    pub args: &'a [ArgStat<'a>; 1],
-}
-
-#[derive(Debug, Clone)]
-pub struct StatBinaryArg<'a> {
-    pub cardinality: f64,
-    pub args: &'a [ArgStat<'a>; 2],
-}
-
-#[derive(Debug, Clone)]
-pub struct StatArgs<'a> {
-    pub cardinality: f64,
-    pub args: &'a [ArgStat<'a>],
-}
-
-#[derive(Debug)]
-pub struct ReturnStat {
-    pub domain: Domain,
-    pub ndv: Ndv,
-    pub null_count: u64,
-    pub histogram: Option<Histogram>,
-}
-
 impl Scalar {
     pub fn to_datum(self) -> Option<Datum> {
-        match self {
-            Scalar::Boolean(v) => Some(Datum::Bool(v)),
-            Scalar::Number(NumberScalar::Int8(v)) => Some(Datum::Int(v as i64)),
-            Scalar::Number(NumberScalar::Int16(v)) => Some(Datum::Int(v as i64)),
-            Scalar::Number(NumberScalar::Int32(v)) | Scalar::Date(v) => Some(Datum::Int(v as i64)),
-            Scalar::Number(NumberScalar::Int64(v)) | Scalar::Timestamp(v) => Some(Datum::Int(v)),
-            Scalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(v as u64)),
-            Scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(v as u64)),
-            Scalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(v as u64)),
-            Scalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(v)),
-            Scalar::Number(NumberScalar::Float32(v)) => Some(Datum::Float(F64::from(v.0 as f64))),
-            Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(v)),
-            Scalar::Decimal(v) => Some(Datum::Float(F64::from(v.to_float64()))),
-            Scalar::Binary(v) => Some(Datum::Bytes(v)),
-            Scalar::String(v) => Some(Datum::Bytes(v.as_bytes().to_vec())),
-            _ => None,
-        }
+        scalar_to_datum!(self, Scalar, |v| v, |v: String| v.into_bytes())
+    }
+}
+
+impl ScalarRef<'_> {
+    pub fn to_datum(self) -> Option<Datum> {
+        scalar_to_datum!(self, ScalarRef, |v: &[u8]| v.to_vec(), |v: &str| v
+            .as_bytes()
+            .to_vec())
     }
 }
 
@@ -143,6 +130,11 @@ impl Domain {
         max: Datum,
         has_null: bool,
     ) -> Result<Domain, String> {
+        if data_type.has_generic() {
+            return Err(format!(
+                "Statistics conversion requires concrete data type, got {data_type:?}"
+            ));
+        }
         let mut domain = Domain::full(data_type);
         match &mut domain {
             Domain::Number(domain) => match domain {
@@ -367,4 +359,25 @@ fn datum_to_decimal<T: Decimal>(value: &Datum, size: DecimalSize) -> Result<T, S
 
 fn type_mismatch(expected: &str, actual: &Datum) -> String {
     format!("Cannot convert {actual:?} to {}", expected)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_column::types::timestamp_tz;
+
+    use super::*;
+
+    #[test]
+    fn timestamp_tz_to_datum_uses_timestamp_micros() {
+        let value = timestamp_tz::new(1_234_567, 8 * 3600);
+
+        assert_eq!(
+            Scalar::TimestampTz(value).to_datum(),
+            Some(Datum::Int(1_234_567))
+        );
+        assert_eq!(
+            ScalarRef::TimestampTz(value).to_datum(),
+            Some(Datum::Int(1_234_567))
+        );
+    }
 }

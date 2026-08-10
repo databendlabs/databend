@@ -13,8 +13,8 @@
 //  limitations under the License.
 
 use databend_common_sql::Planner;
-use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 

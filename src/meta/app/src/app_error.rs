@@ -19,6 +19,9 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_meta_client::types::MatchSeq;
 
+use crate::KeyExistsBuilder;
+use crate::KeyUnknownBuilder;
+use crate::UnknownOrExistsError;
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::ProcedureIdentity;
 use crate::principal::procedure_name_ident;
@@ -30,7 +33,6 @@ use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
-use crate::tenant_key::ident::TIdent;
 
 /// Output message for end users, with sensitive info stripped.
 pub trait AppErrorMessage: Display {
@@ -148,6 +150,36 @@ impl CommitTableMetaError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("InvalidMaterializedView: {reason}")]
+pub struct InvalidMaterializedView {
+    reason: String,
+}
+
+impl InvalidMaterializedView {
+    pub fn new(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("MaterializedViewAlreadyExists: {view_name} while {context}")]
+pub struct MaterializedViewAlreadyExists {
+    view_name: String,
+    context: String,
+}
+
+impl MaterializedViewAlreadyExists {
+    pub fn new(view_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            view_name: view_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("TableAlreadyExists: {table_name} while {context}")]
 pub struct TableAlreadyExists {
     table_name: String,
@@ -160,6 +192,38 @@ impl TableAlreadyExists {
             table_name: table_name.into(),
             context: context.into(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "Cannot replace '{table_name}': existing table uses engine {existing_engine}, but the new table uses engine {new_engine}"
+)]
+pub struct TableEngineMismatch {
+    table_name: String,
+    existing_engine: String,
+    new_engine: String,
+}
+
+impl TableEngineMismatch {
+    pub fn new(
+        table_name: impl Into<String>,
+        existing_engine: impl Into<String>,
+        new_engine: impl Into<String>,
+    ) -> Self {
+        Self {
+            table_name: table_name.into(),
+            existing_engine: existing_engine.into(),
+            new_engine: new_engine.into(),
+        }
+    }
+
+    pub fn ensure(table_name: &str, existing_engine: &str, new_engine: &str) -> Result<(), Self> {
+        if existing_engine.eq_ignore_ascii_case(new_engine) {
+            return Ok(());
+        }
+
+        Err(Self::new(table_name, existing_engine, new_engine))
     }
 }
 
@@ -855,7 +919,16 @@ pub enum AppError {
     CommitTableMetaError(#[from] CommitTableMetaError),
 
     #[error(transparent)]
+    InvalidMaterializedView(#[from] InvalidMaterializedView),
+
+    #[error(transparent)]
+    MaterializedViewAlreadyExists(#[from] MaterializedViewAlreadyExists),
+
+    #[error(transparent)]
     TableAlreadyExists(#[from] TableAlreadyExists),
+
+    #[error(transparent)]
+    TableEngineMismatch(#[from] TableEngineMismatch),
 
     #[error(transparent)]
     ViewAlreadyExists(#[from] ViewAlreadyExists),
@@ -1018,22 +1091,33 @@ pub enum AppError {
 }
 
 impl AppError {
-    /// Create an `unknown` TIdent error.
-    pub fn unknown<R, N>(ident: &TIdent<R, N>, ctx: impl Display) -> AppError
+    /// Create an `unknown` meta-service key error.
+    pub fn unknown<K>(key: &K, ctx: impl Display) -> AppError
     where
-        N: Clone,
-        AppError: From<UnknownError<R, N>>,
+        K: KeyUnknownBuilder,
+        AppError: From<K::UnknownError>,
     {
-        AppError::from(ident.unknown_error(ctx))
+        AppError::from(key.unknown_error(ctx))
     }
 
-    /// Create an `exist` TIdent error.
-    pub fn exists<R, N>(ident: &TIdent<R, N>, ctx: impl Display) -> AppError
+    /// Create an `exist` meta-service key error.
+    pub fn exists<K>(key: &K, ctx: impl Display) -> AppError
     where
-        N: Clone,
-        AppError: From<ExistError<R, N>>,
+        K: KeyExistsBuilder,
+        AppError: From<K::ExistError>,
     {
-        AppError::from(ident.exist_error(ctx))
+        AppError::from(key.exist_error(ctx))
+    }
+}
+
+impl<UnknownError, ExistError> From<UnknownOrExistsError<UnknownError, ExistError>> for AppError
+where AppError: From<UnknownError> + From<ExistError>
+{
+    fn from(error: UnknownOrExistsError<UnknownError, ExistError>) -> Self {
+        match error {
+            UnknownOrExistsError::Unknown(error) => AppError::from(error),
+            UnknownOrExistsError::Exists(error) => AppError::from(error),
+        }
     }
 }
 
@@ -1136,11 +1220,21 @@ impl AppErrorMessage for CommitTableMetaError {
     }
 }
 
+impl AppErrorMessage for InvalidMaterializedView {}
+
+impl AppErrorMessage for MaterializedViewAlreadyExists {
+    fn message(&self) -> String {
+        format!("Materialized view '{}' already exists", self.view_name)
+    }
+}
+
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
         format!("Table '{}' already exists", self.table_name)
     }
 }
+
+impl AppErrorMessage for TableEngineMismatch {}
 
 impl AppErrorMessage for ViewAlreadyExists {
     fn message(&self) -> String {
@@ -1348,7 +1442,14 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
             AppError::CommitTableMetaError(err) => ErrorCode::CommitTableMetaError(err.message()),
+            AppError::InvalidMaterializedView(err) => {
+                ErrorCode::InvalidMaterializedView(err.message())
+            }
+            AppError::MaterializedViewAlreadyExists(err) => {
+                ErrorCode::MaterializedViewAlreadyExists(err.message())
+            }
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
+            AppError::TableEngineMismatch(err) => ErrorCode::TableEngineNotSupported(err.message()),
             AppError::ViewAlreadyExists(err) => ErrorCode::ViewAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {
                 ErrorCode::CreateTableWithDropTime(err.message())

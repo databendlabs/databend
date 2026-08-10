@@ -19,6 +19,7 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
+databend-common-statistics = { workspace = true }
 databend-common-vector = { workspace = true }
 databend-functions-scalar-arithmetic = { workspace = true }
 databend-functions-scalar-datetime = { workspace = true }
@@ -61,7 +62,7 @@ uuid = { workspace = true }
 anyhow = { workspace = true }
 comfy-table = { workspace = true }
 databend-common-ast = { workspace = true }
-databend-common-sql-test-support = { workspace = true }
+databend-common-expression-test-support = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
 

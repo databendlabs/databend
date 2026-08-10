@@ -17,6 +17,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -184,7 +186,7 @@ impl Display for CreateWorkloadGroupStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DropWorkloadGroupStmt {
     pub name: Identifier,
     pub if_exists: bool,
@@ -202,7 +204,7 @@ impl Display for DropWorkloadGroupStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct RenameWorkloadGroupStmt {
     pub name: Identifier,
     pub new_name: Identifier,
@@ -259,12 +261,22 @@ impl Display for UnsetWorkloadGroupQuotasStmt {
         if !self.quotas.is_empty() {
             write!(f, " UNSET")?;
 
-            for (idx, name) in self.quotas.iter().enumerate() {
-                if idx != 0 {
-                    write!(f, ",")?;
+            if self.quotas.len() > 1 {
+                write!(f, " (")?;
+                for (idx, name) in self.quotas.iter().enumerate() {
+                    if idx != 0 {
+                        write!(f, ", ")?;
+                    } else {
+                        write!(f, "{}", name)?;
+                        continue;
+                    }
+                    write!(f, "{}", name)?;
                 }
-
-                write!(f, " {}", name)?;
+                write!(f, ")")?;
+            } else {
+                for name in &self.quotas {
+                    write!(f, " {}", name)?;
+                }
             }
         }
 

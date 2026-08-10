@@ -4,14 +4,14 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 run_root_sql() {
-  cat <<SQL | $BENDSQL_CLIENT_CONNECT
+  cat <<SQL | bendsql_connect_root
 $1
 SQL
 }
 
-export USER_A_CONNECT="bendsql -A --user=a --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_B_CONNECT="bendsql -A --user=b --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_C_CONNECT="bendsql -A --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_A_CONNECT="bendsql_connect_user a 123 -A"
+export USER_B_CONNECT="bendsql_connect_user b 123 -A"
+export USER_C_CONNECT="bendsql_connect_user c 123 -A"
 
 run_user_a() {
   cat <<SQL | $USER_A_CONNECT
@@ -31,8 +31,8 @@ $1
 SQL
 }
 
-for seq in $(echo "select name from show_sequences();" | $BENDSQL_CLIENT_CONNECT); do
-  echo "drop sequence if exists \`$seq\`;" | $BENDSQL_CLIENT_CONNECT
+for seq in $(echo "select name from show_sequences();" | bendsql_connect_root); do
+  echo "drop sequence if exists \`$seq\`;" | bendsql_connect_root
 done
 
 echo "=== OLD LOGIC: user has super privileges can operator all sequences with enable_experimental_sequence_privilege_check=0 ==="

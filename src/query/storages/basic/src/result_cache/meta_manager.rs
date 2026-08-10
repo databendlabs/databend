@@ -28,6 +28,7 @@ use databend_meta_client::types::UpsertKV;
 
 use crate::meta_service_error;
 use crate::result_cache::common::ResultCacheValue;
+use crate::result_cache::common::truncate_sql;
 
 pub struct ResultCacheMetaManager {
     ttl: u64,
@@ -67,7 +68,8 @@ impl ResultCacheMetaManager {
         match raw {
             None => Ok(None),
             Some(SeqV { data, .. }) => {
-                let value = serde_json::from_slice(&data)?;
+                let mut value: ResultCacheValue = serde_json::from_slice(&data)?;
+                value.sql = truncate_sql(&value.sql);
                 Ok(Some(value))
             }
         }
@@ -83,8 +85,8 @@ impl ResultCacheMetaManager {
 
         let mut r = vec![];
         for (_key, val) in result {
-            let u = serde_json::from_slice::<ResultCacheValue>(&val.data)?;
-
+            let mut u = serde_json::from_slice::<ResultCacheValue>(&val.data)?;
+            u.sql = truncate_sql(&u.sql);
             r.push(u);
         }
 

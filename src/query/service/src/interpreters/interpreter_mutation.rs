@@ -37,7 +37,6 @@ use databend_common_sql::plans;
 use databend_common_sql::plans::Mutation;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
 
@@ -52,6 +51,11 @@ use crate::physical_plans::create_push_down_filters;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 use crate::stream::DataBlockStream;
 
 pub struct MutationInterpreter {
@@ -59,6 +63,7 @@ pub struct MutationInterpreter {
     s_expr: SExpr,
     schema: DataSchemaRef,
     metadata: MetadataRef,
+    materialized_view_refresh_target: Option<u64>,
 }
 
 impl MutationInterpreter {
@@ -73,6 +78,23 @@ impl MutationInterpreter {
             s_expr,
             schema,
             metadata,
+            materialized_view_refresh_target: None,
+        })
+    }
+
+    pub(crate) fn try_create_materialized_view_refresh(
+        ctx: Arc<QueryContext>,
+        s_expr: SExpr,
+        schema: DataSchemaRef,
+        metadata: MetadataRef,
+        target_table_id: u64,
+    ) -> Result<MutationInterpreter> {
+        Ok(MutationInterpreter {
+            ctx,
+            s_expr,
+            schema,
+            metadata,
+            materialized_view_refresh_target: Some(target_table_id),
         })
     }
 }
@@ -169,7 +191,13 @@ impl MutationInterpreter {
         dry_run: bool,
     ) -> Result<PhysicalPlan> {
         // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-        let mutation_build_info = build_mutation_info(self.ctx.clone(), mutation, dry_run).await?;
+        let mutation_build_info = build_mutation_info(
+            self.ctx.clone(),
+            mutation,
+            dry_run,
+            self.materialized_view_refresh_target,
+        )
+        .await?;
         // Build physical plan.
         let mut builder =
             PhysicalPlanBuilder::new(mutation.metadata.clone(), self.ctx.clone(), dry_run);
@@ -180,8 +208,8 @@ impl MutationInterpreter {
     }
 
     fn get_mutation_table_result(&self) -> Result<Vec<DataBlock>> {
-        let binding = self.ctx.get_mutation_status();
-        let status = binding.read();
+        let binding = self.ctx.mutation_state().mutation_status();
+        let status = binding.read().unwrap();
         let mut columns = Vec::new();
         for field in self.schema.as_ref().fields() {
             match field.name().as_str() {
@@ -201,6 +229,7 @@ pub async fn build_mutation_info(
     ctx: Arc<QueryContext>,
     mutation: &Mutation,
     dry_run: bool,
+    materialized_view_refresh_target: Option<u64>,
 ) -> Result<MutationBuildInfo> {
     let table = ctx
         .get_table(
@@ -210,7 +239,9 @@ pub async fn build_mutation_info(
         )
         .await?;
     // Check if the table supports mutation.
-    table.check_mutable()?;
+    if materialized_view_refresh_target != Some(table.get_id()) {
+        table.check_mutable()?;
+    }
     let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
         ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support {}",

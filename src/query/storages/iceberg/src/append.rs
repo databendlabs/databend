@@ -532,14 +532,20 @@ impl AsyncSink for IcebergCommitSink {
             .map_err(|e| ErrorCode::Internal(format!("Failed to commit transaction: {e:?}")))?;
 
         // Report mutation status
-        self.ctx.add_mutation_status(MutationStatus {
-            insert_rows,
-            update_rows: 0,
-            deleted_rows: 0,
-        });
+        self.ctx
+            .mutation_state()
+            .add_mutation_status(MutationStatus {
+                insert_rows,
+                update_rows: 0,
+                deleted_rows: 0,
+            });
 
         // Invalidate cache after successful commit so that subsequent reads see the new data
-        let cache_key = format!("{}{}{}", self.db_name, cache::SEP_STR, self.table_name);
+        let cache_key = cache::table_cache_key(
+            self.catalog_info.catalog_name(),
+            &self.db_name,
+            &self.table_name,
+        );
         let params = LoadParams {
             location: cache_key,
             len_hint: None,

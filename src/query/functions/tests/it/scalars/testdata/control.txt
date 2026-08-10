@@ -64,18 +64,18 @@ output         : NULL
 ast            : if(true, 1, 1 / 0)
 raw expr       : if(true, 1, divide(1, 0))
 checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST<Boolean>(true AS Boolean NULL), CAST<UInt8>(1_u8 AS Float64), divide<UInt8, UInt8>(1_u8, 0_u8))
-optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(true, 1_f64, divide<UInt8, UInt8>(1_u8, 0_u8))
+optimized expr : 1_f64
 output type    : Float64
-output domain  : Unknown
+output domain  : {1..=1}
 output         : 1
 
 
 ast            : if(false, 1 / 0, 1)
 raw expr       : if(false, divide(1, 0), 1)
 checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST<Boolean>(false AS Boolean NULL), divide<UInt8, UInt8>(1_u8, 0_u8), CAST<UInt8>(1_u8 AS Float64))
-optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(false, divide<UInt8, UInt8>(1_u8, 0_u8), 1_f64)
+optimized expr : 1_f64
 output type    : Float64
-output domain  : Unknown
+output domain  : {1..=1}
 output         : 1
 
 

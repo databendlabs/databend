@@ -37,9 +37,10 @@ use futures_util::TryStreamExt;
 use itertools::Itertools;
 
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
 
 pub fn check_system_history(
     catalog: &Arc<dyn Catalog>,
@@ -97,8 +98,7 @@ pub fn generate_desc_schema(
             }
 
             None => {
-                let value = Scalar::default_value(&field.data_type().into());
-                default_exprs.push(value.to_string());
+                default_exprs.push("NULL".to_string());
             }
         }
         let extra = match field.computed_expr() {
@@ -160,7 +160,9 @@ impl Client for ScriptClient {
         let plan = planner.plan_stmt(&extras.statement, false).await?;
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
-        let stream = interpreter.execute(ctx.clone()).await?;
+        let stream = interpreter
+            .execute_with_hooks(ctx.clone(), QueryFinishHooks::nested_with_hooks())
+            .await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
         let mut schema = plan.schema();
         if let Some(real_schema) = interpreter.get_dynamic_schema().await {

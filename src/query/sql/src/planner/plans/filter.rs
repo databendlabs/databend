@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::stat_distribution::StatCardinality;
 
 use crate::ColumnSet;
 use crate::optimizer::ir::RelExpr;
@@ -34,11 +35,11 @@ pub struct Filter {
 
 impl Filter {
     pub fn used_columns(&self) -> Result<ColumnSet> {
-        Ok(self
-            .predicates
-            .iter()
-            .map(|scalar| scalar.used_columns())
-            .fold(ColumnSet::new(), |acc, x| acc.union(&x).cloned().collect()))
+        let mut used_columns = ColumnSet::new();
+        for predicate in &self.predicates {
+            predicate.collect_used_columns(&mut used_columns);
+        }
+        Ok(used_columns)
     }
 }
 
@@ -57,19 +58,14 @@ impl Operator for Filter {
 
         // Derive outer columns
         let mut outer_columns = input_prop.outer_columns.clone();
-        for scalar in self.predicates.iter() {
-            let used_columns = scalar.used_columns();
-            let outer = used_columns
-                .difference(&output_columns)
-                .cloned()
-                .collect::<ColumnSet>();
-            outer_columns = outer_columns.union(&outer).cloned().collect();
+        for scalar in &self.predicates {
+            scalar.collect_used_columns(&mut outer_columns);
         }
-        outer_columns = outer_columns.difference(&output_columns).cloned().collect();
+        outer_columns.retain(|column| !output_columns.contains(column));
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(input_prop.used_columns.clone());
+        used_columns.extend(input_prop.used_columns.iter().copied());
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();
@@ -87,10 +83,15 @@ impl Operator for Filter {
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
         // Derive cardinality
-        let mut sb = SelectivityEstimator::new(
-            stat_info.statistics.column_stats.clone(),
-            stat_info.cardinality,
-        );
+        let input_cardinality = stat_info
+            .statistics
+            .precise_cardinality
+            .map(StatCardinality::exact)
+            .unwrap_or_else(|| StatCardinality::estimate(stat_info.cardinality));
+        let mut sb =
+            SelectivityEstimator::new(stat_info.statistics.column_stats.clone(), input_cardinality)
+                .with_top_n(stat_info.statistics.top_n.clone())
+                .with_count_min_sketch(stat_info.statistics.count_min_sketch.clone());
         let cardinality = sb.apply(&self.predicates)?;
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
@@ -103,6 +104,8 @@ impl Operator for Filter {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }

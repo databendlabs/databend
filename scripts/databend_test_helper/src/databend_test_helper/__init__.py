@@ -4,9 +4,13 @@ A Python library for starting and stopping Databend processes during testing.
 Provides utilities for managing databend-meta and databend-query instances.
 """
 
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 
-__version__ = version("databend-test-helper")
+try:
+    __version__ = version("databend-test-helper")
+except PackageNotFoundError:
+    # Imported straight from the source tree without `pip install`.
+    __version__ = "0.0.0+uninstalled"
 
 from .meta import DatabendMeta
 from .query import DatabendQuery

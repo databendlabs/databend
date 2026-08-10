@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
+use databend_common_base::runtime::GlobalControlRuntime;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_catalog::catalog::CatalogCreator;
@@ -40,6 +41,7 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_resources_management::DummyResourcesManagement;
 use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_cache::CacheManager;
@@ -50,8 +52,10 @@ use crate::builtin::BuiltinUDFs;
 use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
 use crate::catalogs::IcebergCreator;
+use crate::catalogs::PaimonCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::history_tables::GlobalHistoryLog;
+use crate::interpreters::TableHookScheduler;
 use crate::locks::LockManager;
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -109,12 +113,13 @@ impl GlobalServices {
 
         // 3. runtime init.
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
+        GlobalControlRuntime::init()?;
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
         // 4. cluster discovery init.
         ClusterDiscovery::init(config, version).await?;
 
-        SpillsBufferPool::init();
+        SpillsBufferPool::init(&config.spill)?;
         // TODO(xuanwo):
         //
         // This part is a bit complex because catalog are used widely in different
@@ -129,6 +134,7 @@ impl GlobalServices {
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),
                 (CatalogType::Hive, Arc::new(HiveCreator)),
+                (CatalogType::Paimon, Arc::new(PaimonCreator)),
             ];
 
             CatalogManager::init(config, Arc::new(default_catalog), catalog_creator, version)
@@ -141,6 +147,7 @@ impl GlobalServices {
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
         LockManager::init()?;
+        TableHookScheduler::init(config.query.common.table_hook_async_max_concurrency)?;
         AuthMgr::init(config, version)?;
 
         // Init user manager.
@@ -164,6 +171,7 @@ impl GlobalServices {
             .await?;
         }
         RoleCacheManager::init()?;
+        SecurityPolicyCacheManager::init()?;
 
         DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
         ShareTableConfig::init(

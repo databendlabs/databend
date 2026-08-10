@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package billingproto;
+
+message BillingError {
+  string kind = 1;
+  string message = 2;
+  int32 code = 3;
+}
+
+message GetBillingUsageDailyRequest {
+  string tenant_id = 1;
+  string start_date = 2; // YYYY-MM-DD
+  string end_date = 3; // YYYY-MM-DD, empty means start_date
+  string sql_user = 4; // audit only, empty means absent
+  string query_id = 5; // audit only, empty means absent
+}
+
+message BillingUsageDailyRow {
+  // Billing date in YYYY-MM-DD format.
+  string usage_date = 1;
+
+  // Top-level billing category, aligned with Snowflake naming where practical.
+  // Examples: compute, storage, cloud services.
+  string usage_type = 2;
+
+  // More specific service category.
+  // Examples: WAREHOUSE_METERING, STORAGE, CLOUD_SERVICES.
+  string service_type = 3;
+
+  // Logical billable resource name when applicable, such as warehouse name.
+  // Empty string means absent.
+  string resource_name = 4;
+
+  // Billable usage quantity encoded as a decimal string to avoid float precision loss.
+  string usage = 5;
+
+  // Unit for usage.
+  // Examples: second, byte, request.
+  string usage_unit = 6;
+
+  // Reserved billing unit price field.
+  // Empty string means the rate is intentionally undisclosed.
+  string rate = 7;
+
+  // Billing dimension unit for the reserved rate field.
+  // Examples: second, tb_day, k_request.
+  // Returned when the billing dimension is known.
+  string rate_unit = 8;
+
+  // Final billed amount encoded as a decimal string.
+  string usage_in_currency = 9;
+
+  // Settlement currency, for example USD.
+  string currency = 10;
+
+  // Resource tags when the underlying usage is associated with a tagged resource.
+  map<string, string> tags = 11;
+
+  // JSON object string for category-specific or future-compatible extension fields.
+  // Examples:
+  //   {"cluster_name":"cl-00000","max_clusters":1,"size":"XSmall"}
+  //   {}
+  string details = 12;
+}
+
+message GetBillingUsageDailyResponse {
+  repeated BillingUsageDailyRow rows = 1;
+  optional BillingError error = 2;
+}
+
+service BillingService {
+  rpc GetBillingUsageDaily(GetBillingUsageDailyRequest) returns (GetBillingUsageDailyResponse);
+}

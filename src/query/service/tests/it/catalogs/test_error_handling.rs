@@ -63,7 +63,7 @@ async fn test_get_table_error_handling() -> anyhow::Result<()> {
 
     // Create a test database and table
     let req = CreateDatabaseReq {
-        create_option: CreateOption::Create,
+        override_existing: false,
         catalog_name: None,
         name_ident: DatabaseNameIdent::new(&tenant, "test_db"),
         meta: DatabaseMeta::default(),
@@ -89,6 +89,7 @@ async fn test_get_table_error_handling() -> anyhow::Result<()> {
             ..TableMeta::default()
         },
         as_dropped: false,
+        materialized_view: None,
         table_properties: None,
         table_partition: None,
     };
@@ -126,7 +127,7 @@ async fn test_get_table_history_error_handling() -> anyhow::Result<()> {
 
     // Create a test database
     let req = CreateDatabaseReq {
-        create_option: CreateOption::Create,
+        override_existing: false,
         catalog_name: None,
         name_ident: DatabaseNameIdent::new(&tenant, "history_test_db"),
         meta: DatabaseMeta::default(),
@@ -197,7 +198,7 @@ async fn test_get_table_by_info_error_handling() -> anyhow::Result<()> {
 
     // Create a test database and table
     let req = CreateDatabaseReq {
-        create_option: CreateOption::Create,
+        override_existing: false,
         catalog_name: None,
         name_ident: DatabaseNameIdent::new(&tenant, "info_test_db"),
         meta: DatabaseMeta::default(),
@@ -223,6 +224,7 @@ async fn test_get_table_by_info_error_handling() -> anyhow::Result<()> {
             ..TableMeta::default()
         },
         as_dropped: false,
+        materialized_view: None,
         table_properties: None,
         table_partition: None,
     };
@@ -254,7 +256,7 @@ async fn test_delegation_between_catalogs() -> anyhow::Result<()> {
 
     // Test that user-created databases are handled by mutable catalog
     let req = CreateDatabaseReq {
-        create_option: CreateOption::Create,
+        override_existing: false,
         catalog_name: None,
         name_ident: DatabaseNameIdent::new(&tenant, "user_db"),
         meta: DatabaseMeta::default(),

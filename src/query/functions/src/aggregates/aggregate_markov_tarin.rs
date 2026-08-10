@@ -174,12 +174,32 @@ impl AggregateFunction for MarkovTarin {
     fn merge_result(
         &self,
         place: AggrState,
-        _read_only: bool,
+        read_only: bool,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
-        let model = place.get::<MarkovModel>();
-        model.finalize(&self.params);
+        if read_only {
+            let mut model = place.get::<MarkovModel>().clone();
+            model.finalize(&self.params);
+            self.append_model_result(&model, builder)
+        } else {
+            let model = place.get::<MarkovModel>();
+            model.finalize(&self.params);
+            self.append_model_result(model, builder)
+        }
+    }
 
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: AggrState) {
+        let state = place.get::<MarkovModel>();
+        unsafe { std::ptr::drop_in_place(state) };
+    }
+}
+
+impl MarkovTarin {
+    fn append_model_result(&self, model: &MarkovModel, builder: &mut ColumnBuilder) -> Result<()> {
         let ColumnBuilder::Array(box array_builder) = builder else {
             unreachable!()
         };
@@ -206,15 +226,6 @@ impl AggregateFunction for MarkovTarin {
         }
         array_builder.commit_row();
         Ok(())
-    }
-
-    fn need_manual_drop_state(&self) -> bool {
-        true
-    }
-
-    unsafe fn drop_state(&self, place: AggrState) {
-        let state = place.get::<MarkovModel>();
-        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 
@@ -303,7 +314,7 @@ impl Histogram {
     }
 }
 
-#[derive(Default, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Default, BorshSerialize, BorshDeserialize)]
 struct MarkovModel {
     table: BTreeMap<NGramHash, Histogram>,
 }

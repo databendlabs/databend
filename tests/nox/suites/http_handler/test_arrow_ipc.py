@@ -10,6 +10,7 @@ def do_query(query, session, pagination):
     url = f"http://localhost:8000/v1/query"
     payload = {
         "sql": query,
+        "arrow_result_version_max": 999,
     }
     if session:
         payload["session"] = session

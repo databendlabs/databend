@@ -24,7 +24,6 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -35,6 +34,8 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextStream;
 
 pub async fn dml_build_update_stream_req(
     ctx: Arc<QueryContext>,

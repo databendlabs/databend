@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
@@ -33,6 +32,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::sessions::TableContext;
 
 pub struct PhysicalPlanBuilder {
     pub metadata: MetadataRef,
@@ -43,6 +43,7 @@ pub struct PhysicalPlanBuilder {
     pub mutation_build_info: Option<MutationBuildInfo>,
     pub cte_required_columns: HashMap<String, ColumnSet>,
     pub is_cte_required_columns_collected: bool,
+    pub build_depth: usize,
 }
 
 impl PhysicalPlanBuilder {
@@ -56,6 +57,7 @@ impl PhysicalPlanBuilder {
             mutation_build_info: None,
             cte_required_columns: HashMap::new(),
             is_cte_required_columns_collected: false,
+            build_depth: 0,
         }
     }
 
@@ -69,15 +71,39 @@ impl PhysicalPlanBuilder {
     }
 
     pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
+        let is_root_build = self.build_depth == 0;
+        if is_root_build {
+            self.ctx.clear_pruned_partitions_stats();
+        }
+
         if !self.is_cte_required_columns_collected {
             self.collect_cte_required_columns(s_expr, required.clone())?;
             self.is_cte_required_columns_collected = true;
         }
 
-        let mut plan = self.build_physical_plan(s_expr, required).await?;
-        plan.adjust_plan_id(&mut 0);
+        self.build_depth += 1;
+        let build_result = self.build_physical_plan(s_expr, required).await;
+        self.build_depth -= 1;
+
+        let mut plan = build_result?;
+        if is_root_build {
+            plan.adjust_plan_id(&mut 0);
+            self.publish_synchronous_pruning_stats(&plan);
+        }
 
         Ok(plan)
+    }
+
+    fn publish_synchronous_pruning_stats(&self, plan: &PhysicalPlan) {
+        let mut sources = Vec::new();
+        plan.get_all_data_source(&mut sources);
+
+        for (plan_id, source) in sources {
+            if source.statistics.pruning_stats != Default::default() {
+                self.ctx
+                    .set_pruned_partitions_stats(plan_id, source.statistics);
+            }
+        }
     }
 
     #[async_recursion::async_recursion(#[recursive::recursive])]
@@ -101,17 +127,18 @@ impl PhysicalPlanBuilder {
             RelOperator::Filter(filter) => {
                 self.build_filter(s_expr, filter, required, stat_info).await
             }
-            RelOperator::SecureFilter(secure_filter) => {
-                self.build_secure_filter(s_expr, secure_filter, required, stat_info)
-                    .await
-            }
             RelOperator::Aggregate(agg) => {
                 self.build_aggregate(s_expr, agg, required, stat_info).await
             }
             RelOperator::Window(window) => {
                 self.build_window(s_expr, window, required, stat_info).await
             }
+            RelOperator::WindowGroup(window_group) => {
+                self.build_window_group(s_expr, window_group, required, stat_info)
+                    .await
+            }
             RelOperator::Sort(sort) => self.build_sort(s_expr, sort, required, stat_info).await,
+            RelOperator::TopN(top_n) => self.build_top_n(s_expr, top_n, required, stat_info).await,
             RelOperator::Limit(limit) => self.build_limit(s_expr, limit, required, stat_info).await,
             RelOperator::Exchange(exchange) => {
                 self.build_exchange(s_expr, exchange, required).await
@@ -198,12 +225,6 @@ impl PhysicalPlanBuilder {
                     req.extend(predicate.used_columns());
                 }
             }
-            RelOperator::SecureFilter(filter) => {
-                let req = &mut child_required[0];
-                for predicate in &filter.predicates {
-                    req.extend(predicate.used_columns());
-                }
-            }
             RelOperator::Aggregate(agg) => {
                 let req = &mut child_required[0];
                 for item in &agg.group_items {
@@ -235,9 +256,39 @@ impl PhysicalPlanBuilder {
                     req.insert(item.order_by_item.index);
                 }
             }
+            RelOperator::WindowGroup(window_group) => {
+                let req = &mut child_required[0];
+                for window in &window_group.windows {
+                    req.remove(&window.index);
+                }
+                for item in &window_group.scalar_items {
+                    req.extend(item.scalar.used_columns());
+                    req.insert(item.index);
+                }
+                for window in &window_group.windows {
+                    for item in &window.arguments {
+                        req.extend(item.scalar.used_columns());
+                        req.insert(item.index);
+                    }
+                    for item in &window.partition_by {
+                        req.extend(item.scalar.used_columns());
+                        req.insert(item.index);
+                    }
+                    for item in &window.order_by {
+                        req.extend(item.order_by_item.scalar.used_columns());
+                        req.insert(item.order_by_item.index);
+                    }
+                }
+            }
             RelOperator::Sort(sort) => {
                 let req = &mut child_required[0];
                 for item in &sort.items {
+                    req.insert(item.index);
+                }
+            }
+            RelOperator::TopN(top_n) => {
+                let req = &mut child_required[0];
+                for item in &top_n.items {
                     req.insert(item.index);
                 }
             }

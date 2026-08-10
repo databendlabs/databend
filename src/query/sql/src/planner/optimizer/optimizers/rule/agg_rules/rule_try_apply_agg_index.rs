@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 use super::agg_index;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::match_op;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
@@ -34,96 +35,14 @@ pub struct RuleTryApplyAggIndex {
 impl RuleTryApplyAggIndex {
     fn sorted_matchers() -> Vec<Matcher> {
         vec![
-            // Expression
-            //     |
-            //    Sort
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Scan,
-                        children: vec![],
-                    }],
-                }],
-            },
-            // Expression
-            //     |
-            //    Sort
-            //     |
-            //   Filter
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Filter,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Scan,
-                            children: vec![],
-                        }],
-                    }],
-                }],
-            },
-            // Expression
-            //     |
-            //    Sort
-            //     |
-            // Aggregation
-            //     |
-            // Expression
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::EvalScalar,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Scan,
-                                children: vec![],
-                            }],
-                        }],
-                    }],
-                }],
-            },
-            // Expression
-            //     |
-            //    Sort
-            //     |
-            // Aggregation
-            //     |
-            // Expression
-            //     |
-            //   Filter
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::EvalScalar,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Filter,
-                                children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::Scan,
-                                    children: vec![],
-                                }],
-                            }],
-                        }],
-                    }],
-                }],
-            },
+            match_op!(EvalScalar -> Sort -> Scan),
+            match_op!(EvalScalar -> Sort -> Filter -> Scan),
+            match_op!(EvalScalar -> Sort -> Aggregate -> EvalScalar -> Scan),
+            match_op!(EvalScalar -> Sort -> Aggregate -> EvalScalar -> Filter -> Scan),
+            match_op!(EvalScalar -> TopN -> Scan),
+            match_op!(EvalScalar -> TopN -> Filter -> Scan),
+            match_op!(EvalScalar -> TopN -> Aggregate -> EvalScalar -> Scan),
+            match_op!(EvalScalar -> TopN -> Aggregate -> EvalScalar -> Filter -> Scan),
         ]
     }
 
@@ -227,6 +146,13 @@ impl Rule for RuleTryApplyAggIndex {
         s_expr: &SExpr,
         state: &mut crate::optimizer::optimizers::rule::TransformResult,
     ) -> Result<()> {
+        // Row access policy tables must not use agg index rewrites, because
+        // the pre-aggregated results were computed over the full table without
+        // applying the policy's row-level filter.
+        if self.scan_has_secure_predicates(s_expr) {
+            return Ok(());
+        }
+
         let (table_index, table_name) = self.get_table(s_expr);
         let metadata = self.metadata.read();
         let index_plans = metadata.get_agg_indices(&table_name);
@@ -239,11 +165,10 @@ impl Rule for RuleTryApplyAggIndex {
             return Ok(());
         }
 
-        let base_columns = metadata.columns_by_table_index(table_index);
         let table_name = metadata.table(table_index).name();
 
         if let Some(mut result) =
-            agg_index::try_rewrite(table_index, table_name, &base_columns, s_expr, index_plans)?
+            agg_index::try_rewrite(table_index, table_name, &metadata, s_expr, index_plans)?
         {
             result.set_applied_rule(&self.id);
             state.add_result(result);
@@ -269,6 +194,19 @@ impl RuleTryApplyAggIndex {
                 )
             }
             _ => self.get_table(s_expr.child(0).unwrap()),
+        }
+    }
+
+    fn scan_has_secure_predicates(&self, s_expr: &SExpr) -> bool {
+        match s_expr.plan() {
+            RelOperator::Scan(scan) => scan.secure_predicates.is_some(),
+            _ => {
+                if let Ok(child) = s_expr.child(0) {
+                    self.scan_has_secure_predicates(child)
+                } else {
+                    false
+                }
+            }
         }
     }
 }

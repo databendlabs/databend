@@ -25,13 +25,16 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
-use crate::plans::SecureFilter;
-use crate::plans::Sort;
+use crate::plans::SortItem;
+use crate::plans::TopN;
 
-/// Matches: Sort -> [EvalScalar ->] [SecureFilter ->] Scan
+/// Matches: (Sort | TopN) -> [EvalScalar ->] Scan
 ///
-/// Push down order_by and limit from Sort to Scan. SecureFilter (from row access policy)
-/// is preserved in the plan tree if present.
+/// Push down order_by and limit from Sort/TopN to Scan.
+/// When `secure_predicates` has not been applied by prewhere, limit is not
+/// pushed down because storage TopK pruning would return N rows before RAP row
+/// selection, then secure predicates filter them further, yielding fewer rows
+/// than requested.
 pub struct RulePushDownSortScan {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -43,9 +46,9 @@ impl RulePushDownSortScan {
             id: RuleID::PushDownSortScan,
             matchers: vec![
                 match_op!(Sort -> Scan),
-                match_op!(Sort -> SecureFilter -> Scan),
                 match_op!(Sort -> EvalScalar -> Scan),
-                match_op!(Sort -> EvalScalar -> SecureFilter -> Scan),
+                match_op!(TopN -> Scan),
+                match_op!(TopN -> EvalScalar -> Scan),
             ],
         }
     }
@@ -57,63 +60,46 @@ impl Rule for RulePushDownSortScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let (sort_items, sort_limit): (Vec<SortItem>, Option<usize>) = match s_expr.plan() {
+            RelOperator::Sort(sort) => (sort.items.clone(), sort.limit),
+            RelOperator::TopN(top_n) => {
+                let top_n: TopN = top_n.clone();
+                (top_n.items.clone(), Some(top_n.candidate_count()))
+            }
+            _ => unreachable!(),
+        };
         let child = s_expr.child(0)?;
 
-        let (eval_scalar, secure_filter, mut scan) = match child.plan() {
-            RelOperator::Scan(scan) => (None, None, scan.clone()),
-            RelOperator::SecureFilter(_) => {
-                let secure_filter: SecureFilter = child.plan().clone().try_into()?;
-                let scan: Scan = child.child(0)?.plan().clone().try_into()?;
-                (None, Some(secure_filter), scan)
-            }
+        let (eval_scalar, mut scan) = match child.plan() {
+            RelOperator::Scan(scan) => (None, scan.clone()),
             RelOperator::EvalScalar(eval_scalar) => {
                 let grand_child = child.child(0)?;
-                match grand_child.plan() {
-                    RelOperator::Scan(scan) => (Some(eval_scalar.clone()), None, scan.clone()),
-                    RelOperator::SecureFilter(_) => {
-                        let secure_filter: SecureFilter = grand_child.plan().clone().try_into()?;
-                        let scan: Scan = grand_child.child(0)?.plan().clone().try_into()?;
-                        (Some(eval_scalar.clone()), Some(secure_filter), scan)
-                    }
-                    _ => unreachable!(),
-                }
+                let scan: Scan = grand_child.plan().clone().try_into()?;
+                (Some(eval_scalar.clone()), scan)
             }
             _ => unreachable!(),
         };
 
         if scan.order_by.is_none() {
-            scan.order_by = Some(sort.items);
+            scan.order_by = Some(sort_items);
         }
 
-        // When SecureFilter exists, pushing limit is always unsafe because push_down_predicates
-        // never contains SecureFilter predicates. Storage TopK pruning would return N rows based
-        // only on user predicates, then SecureFilter filters them further, yielding fewer rows
-        // than the requested LIMIT.
-        let can_push_limit = secure_filter.is_none();
+        let can_push_limit = !scan.has_secure_predicates_not_applied_by_prewhere();
 
         if can_push_limit {
-            if let Some(limit) = sort.limit {
+            if let Some(limit) = sort_limit {
                 scan.limit = Some(scan.limit.map_or(limit, |c| cmp::max(c, limit)));
             }
         }
 
         let scan_expr = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
-        let scan_parent_expr = if let Some(secure_filter) = secure_filter {
+        let new_child_expr = if let Some(eval_scalar) = eval_scalar {
             SExpr::create_unary(
-                Arc::new(RelOperator::SecureFilter(secure_filter)),
+                Arc::new(RelOperator::EvalScalar(eval_scalar)),
                 Arc::new(scan_expr),
             )
         } else {
             scan_expr
-        };
-        let new_child_expr = if let Some(eval_scalar) = eval_scalar {
-            SExpr::create_unary(
-                Arc::new(RelOperator::EvalScalar(eval_scalar)),
-                Arc::new(scan_parent_expr),
-            )
-        } else {
-            scan_parent_expr
         };
 
         let mut result = s_expr.replace_children(vec![Arc::new(new_child_expr)]);

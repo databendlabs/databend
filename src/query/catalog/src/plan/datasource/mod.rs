@@ -16,4 +16,5 @@ mod datasource_info;
 mod datasource_plan;
 
 pub use datasource_info::*;
+pub use datasource_plan::BlockMetaOptions;
 pub use datasource_plan::DataSourcePlan;

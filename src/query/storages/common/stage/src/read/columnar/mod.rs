@@ -19,4 +19,5 @@ mod projection;
 pub use arrow_to_variant::read_record_batch_to_variant_column;
 pub use arrow_to_variant::record_batch_to_variant_block;
 pub use internal_columns::add_internal_columns;
+pub use internal_columns::add_internal_columns_with_meta;
 pub use projection::project_columnar;

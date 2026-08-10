@@ -1,0 +1,639 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0054
+
+statement ok
+CREATE DATABASE db_09_0054
+
+statement ok
+USE db_09_0054
+
+# Keep accepting table options before PARTITION BY for both explicit and default Fuse.
+statement ok
+CREATE TABLE explicit_fuse_option_order(a INT) ENGINE=FUSE ROW_PER_BLOCK=1 PARTITION BY (a)
+
+statement ok
+CREATE TABLE default_fuse_option_order(a INT) ROW_PER_BLOCK=1 PARTITION BY (a)
+
+# partition_by is internal metadata and cannot be supplied as a raw table option.
+statement error table option partition_by reserved
+CREATE TABLE raw_partition_option(a INT) PARTITION_BY='(a)'
+
+statement ok
+CREATE TABLE t(p INT, c INT, v STRING) PARTITION BY (p % 3) CLUSTER BY (c) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+SET hide_options_in_show_create_table=0
+
+# SHOW CREATE TABLE must emit clauses in the same order accepted by CREATE TABLE.
+query TT
+SHOW CREATE TABLE t
+----
+t <slt:ignore>PARTITION BY (p % 3)<slt:ignore>CLUSTER BY (c)<slt:ignore>BLOCK_PER_SEGMENT='1000'<slt:ignore>ROW_PER_BLOCK='1000'<slt:ignore>
+
+statement ok
+SET hide_options_in_show_create_table=1
+
+statement ok
+INSERT INTO t VALUES (0, 30, 'a0'), (1, 20, 'a1'), (2, 10, 'a2')
+
+statement ok
+INSERT INTO t VALUES (3, 31, 'b0'), (4, 21, 'b1'), (5, 11, 'b2')
+
+# PARTITION BY is not an implicit prefix of the user-visible cluster key.
+query T
+SELECT cluster_key FROM clustering_information('db_09_0054', 't')
+----
+(c)
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 't') LIMIT 1
+----
+6 6
+
+# A partition expression may also be a cluster-key expression. Sorting by
+# (c, p % 2) produces partition runs 1, 0, 1 for this input, whereas an implicit
+# partition prefix would produce only the runs 0, 1.
+statement ok
+SET max_threads=1
+
+statement ok
+CREATE TABLE overlapping_keys(p INT, c INT) PARTITION BY (p % 2) CLUSTER BY (c, p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO overlapping_keys VALUES (0, 30), (1, 10), (2, 20), (3, 40)
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'overlapping_keys') LIMIT 1
+----
+3 3
+
+# The three cluster-ordered runs still carry exact partition metadata.
+query T
+EXPLAIN SELECT p, c FROM overlapping_keys WHERE p % 2 = 0
+----
+<slt:ignore>partitions total: 3<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 3 to 1<slt:ignore>
+
+statement ok
+UNSET max_threads
+
+# Segment compaction may combine metadata only inside one physical partition.
+statement ok
+OPTIMIZE TABLE t COMPACT SEGMENT
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 't') LIMIT 1
+----
+3 6
+
+# Block compaction may merge the two small blocks in each partition, but never
+# merge blocks from different partition values.
+statement ok
+OPTIMIZE TABLE t COMPACT
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 't') LIMIT 1
+----
+3 3
+
+# The exact partition expression is evaluated against independent segment
+# partition statistics before BlockMeta is read.
+query T
+EXPLAIN SELECT p, c, v FROM t WHERE p % 3 = 1
+----
+<slt:ignore>partitions total: 3<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 3 to 1<slt:ignore>
+
+# An equality on the source column is projected through the partition expression.
+query T
+EXPLAIN SELECT p, c, v FROM t WHERE p = 4
+----
+<slt:ignore>partitions total: 3<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 3 to 1<slt:ignore>
+
+# Conjunctive source-column ranges are combined before being projected through
+# the partition expression.
+statement ok
+CREATE TABLE range_partitioned(p INT, v STRING) PARTITION BY (abs(p)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO range_partitioned VALUES (-5, 'n5'), (5, 'p5'), (-4, 'n4'), (4, 'p4'), (-3, 'n3'), (3, 'p3'), (-2, 'n2'), (2, 'p2'), (-1, 'n1'), (1, 'p1'), (0, 'z')
+
+query T
+EXPLAIN SELECT p, v FROM range_partitioned WHERE p >= 3 AND p <= 4
+----
+<slt:ignore>partitions total: 6<slt:ignore>partitions scanned: 2<slt:ignore>range pruning: 6 to 2<slt:ignore>
+
+# Range pruning must not remove matching rows.
+query II rowsort
+SELECT p, length(v) FROM range_partitioned WHERE p >= 3 AND p <= 4
+----
+3 2
+4 2
+
+# Strict bounds with constants on the left are normalized before projection.
+query T
+EXPLAIN SELECT p, v FROM range_partitioned WHERE 4 > p AND 2 < p
+----
+<slt:ignore>partitions total: 6<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 6 to 1<slt:ignore>
+
+query I
+SELECT p FROM range_partitioned WHERE 4 > p AND 2 < p
+----
+3
+
+# Comparisons inside OR are simplified independently, never merged as an AND range.
+query T
+EXPLAIN SELECT p, v FROM range_partitioned WHERE p = 3 OR p = -5
+----
+<slt:ignore>partitions total: 6<slt:ignore>partitions scanned: 2<slt:ignore>range pruning: 6 to 2<slt:ignore>
+
+query IS rowsort
+SELECT p, v FROM range_partitioned WHERE p = 3 OR p = -5
+----
+-5 n5
+3 p3
+
+# A timestamp range on the source column is projected through its day expression.
+statement ok
+CREATE TABLE timestamp_partitioned(order_time TIMESTAMP, label STRING) PARTITION BY (date_trunc(day, order_time)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO timestamp_partitioned VALUES ('2026-07-07 12:00:00', 'previous'), ('2026-07-08 00:00:00', 'start'), ('2026-07-08 23:59:59', 'end'), ('2026-07-09 00:00:00', 'next')
+
+query T
+EXPLAIN SELECT label FROM timestamp_partitioned WHERE order_time >= TIMESTAMP '2026-07-08' AND order_time < TIMESTAMP '2026-07-09'
+----
+<slt:ignore>partitions total: 3<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 3 to 1<slt:ignore>
+
+query T rowsort
+SELECT label FROM timestamp_partitioned WHERE order_time >= TIMESTAMP '2026-07-08' AND order_time < TIMESTAMP '2026-07-09'
+----
+end
+start
+
+# Each source-column predicate is projected through its matching partition key.
+statement ok
+CREATE TABLE multi_partitioned(a INT, b INT) PARTITION BY (a % 2, b % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO multi_partitioned VALUES (0, 0), (2, 2), (0, 1), (2, 3), (1, 0), (3, 2), (1, 1), (3, 3)
+
+query T
+EXPLAIN SELECT a, b FROM multi_partitioned WHERE a = 2 AND b = 3
+----
+<slt:ignore>partitions total: 4<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 4 to 1<slt:ignore>
+
+query II
+SELECT a, b FROM multi_partitioned WHERE a = 2 AND b = 3
+----
+2 3
+
+# OR keeps every partition that can satisfy either partition-key dimension.
+query T
+EXPLAIN SELECT a, b FROM multi_partitioned WHERE a = 2 OR b = 3
+----
+<slt:ignore>partitions total: 4<slt:ignore>partitions scanned: 3<slt:ignore>range pruning: 4 to 3<slt:ignore>
+
+query II rowsort
+SELECT a, b FROM multi_partitioned WHERE a = 2 OR b = 3
+----
+2 2
+2 3
+3 3
+
+query IIT rowsort
+SELECT p, c, v FROM t
+----
+0 30 a0
+1 20 a1
+2 10 a2
+3 31 b0
+4 21 b1
+5 11 b2
+
+statement ok
+UPDATE t SET p = p + 1 WHERE p = 0
+
+query IIT rowsort
+SELECT p, c, v FROM t
+----
+1 20 a1
+1 30 a0
+2 10 a2
+3 31 b0
+4 21 b1
+5 11 b2
+
+# Existing rows written before PARTITION BY have no partition statistics. They
+# must remain visible after adding a partition key, while subsequent writes use
+# the partitioned layout. A pre-existing CLUSTER BY also verifies that its
+# statistics are not mistaken for partition statistics.
+statement ok
+CREATE TABLE alter_partitioned(p INT, c INT) CLUSTER BY (c) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO alter_partitioned VALUES (1, 100), (2, 200)
+
+statement ok
+ALTER TABLE alter_partitioned PARTITION BY (p % 2)
+
+query TT
+SHOW CREATE TABLE alter_partitioned
+----
+alter_partitioned <slt:ignore>PARTITION BY (p % 2)<slt:ignore>CLUSTER BY (c)<slt:ignore>
+
+statement ok
+INSERT INTO alter_partitioned VALUES (3, 300), (4, 400)
+
+query II rowsort
+SELECT p, c FROM alter_partitioned WHERE p % 2 = 1
+----
+1 100
+3 300
+
+# Repeating the normalized definition is idempotent, but changing an existing
+# partition key would reinterpret persisted partition statistics and is rejected.
+statement ok
+ALTER TABLE alter_partitioned PARTITION BY (p % 2)
+
+statement error PARTITION BY is already defined
+ALTER TABLE alter_partitioned PARTITION BY (p % 3)
+
+statement ok
+CREATE TABLE alter_memory(p INT) ENGINE=MEMORY
+
+statement error ALTER TABLE PARTITION BY is not supported for engine MEMORY
+ALTER TABLE alter_memory PARTITION BY (p)
+
+statement ok
+CREATE TABLE alter_invalid_partition(a INT, b INT)
+
+statement error PARTITION BY expression `a \+ b` is invalid
+ALTER TABLE alter_invalid_partition PARTITION BY (a + b)
+
+# IF EXISTS must skip partition-key binding when the table is absent.
+statement ok
+ALTER TABLE IF EXISTS alter_missing_partition PARTITION BY (missing_column)
+
+# Moving a row to another partition must preserve physical partition boundaries.
+statement ok
+OPTIMIZE TABLE t COMPACT
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 't') LIMIT 1
+----
+3 3
+
+statement error PARTITION BY is already defined
+ALTER TABLE t PARTITION BY (c)
+
+statement error referenced by partition key
+ALTER TABLE t DROP COLUMN p
+
+statement ok
+ALTER TABLE t RENAME COLUMN p TO part
+
+statement ok
+INSERT INTO t VALUES (6, 32, 'c0')
+
+query I
+SELECT count(*) FROM t
+----
+7
+
+statement ok
+CREATE TABLE partition_only(p INT, v STRING) PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO partition_only VALUES (0, 'a'), (1, 'b'), (2, 'c'), (3, 'd')
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'partition_only') LIMIT 1
+----
+4 4
+
+query II rowsort
+SELECT p, length(v) FROM partition_only
+----
+0 1
+1 1
+2 1
+3 1
+
+statement ok
+CREATE TABLE replace_partitioned(id INT, p INT) PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+REPLACE INTO replace_partitioned ON(id) VALUES (1, 0), (2, 1), (3, 2), (4, 3)
+
+# REPLACE INTO does not regroup partition-only input, so interleaved partition
+# values produce one block and segment per adjacent partition run.
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'replace_partitioned') LIMIT 1
+----
+4 4
+
+query II rowsort
+SELECT id, p FROM replace_partitioned
+----
+1 0
+2 1
+3 2
+4 3
+
+statement ok
+CREATE TABLE merge_partitioned(id INT, p INT) PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO merge_partitioned VALUES (1, 0), (2, 0), (3, 1)
+
+statement ok
+MERGE INTO merge_partitioned AS t USING (SELECT 1 AS id, 1 AS p) AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.p = s.p
+
+query II rowsort
+SELECT id, p FROM merge_partitioned
+----
+1 1
+2 0
+3 1
+
+statement ok
+OPTIMIZE TABLE merge_partitioned COMPACT
+
+# Compaction respects existing partition boundaries without reordering segments.
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'merge_partitioned') LIMIT 1
+----
+3 3
+
+# Recluster overlapping cluster-key ranges inside each partition without ever
+# selecting or rewriting blocks across the physical partition boundary.
+statement ok
+CREATE TABLE recluster_partitioned(p INT, c INT) PARTITION BY (p % 2) CLUSTER BY (c) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO recluster_partitioned VALUES (0, 30), (1, 30), (2, 10), (3, 10)
+
+statement ok
+INSERT INTO recluster_partitioned VALUES (4, 31), (5, 31), (6, 11), (7, 11)
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'recluster_partitioned') LIMIT 1
+----
+8 8
+
+statement ok
+ALTER TABLE recluster_partitioned RECLUSTER FINAL
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'recluster_partitioned') LIMIT 1
+----
+2 2
+
+query II rowsort
+SELECT p, c FROM recluster_partitioned
+----
+0 30
+1 30
+2 10
+3 10
+4 31
+5 31
+6 11
+7 11
+
+query T
+EXPLAIN SELECT p, c FROM recluster_partitioned WHERE p % 2 = 1
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 1<slt:ignore>
+
+# The last block can be held pending while the preceding partition segment is
+# serialized. If the input finishes in the meantime, the pending block must
+# immediately flush its own segment instead of waiting for more input forever.
+statement ok
+SET max_threads=2
+
+statement ok
+SET max_block_size=10000
+
+statement ok
+CREATE TABLE segment_finish_race(event_time TIMESTAMP, id BIGINT) PARTITION BY (date_trunc(day, event_time)) ROW_PER_BLOCK=10000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO segment_finish_race SELECT to_timestamp(1767225600000000 + (number DIV 25000) * 86400000000 + number % 25000), number FROM numbers(200000)
+
+query I
+SELECT row_count FROM fuse_snapshot('db_09_0054', 'segment_finish_race') LIMIT 1
+----
+200000
+
+# The number of blocks depends on pipeline and cluster scheduling. Assert the
+# physical invariant directly: no block may span two day partitions.
+query I
+SELECT count_if(date_trunc(day, statistics:min::timestamp) != date_trunc(day, statistics:max::timestamp))
+FROM fuse_block_statistics('db_09_0054', 'segment_finish_race')
+WHERE column_name = 'event_time'
+----
+0
+
+# Partition splitting is local to each input block and does not regroup rows.
+# The exact block count therefore depends on parallel input scheduling.
+statement ok
+SET max_threads=4
+
+statement ok
+SET max_block_size=2
+
+statement ok
+CREATE TABLE fragmented_input(p INT) PARTITION BY (p % 2) ROW_PER_BLOCK=4 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO fragmented_input SELECT number FROM numbers(12)
+
+query I
+SELECT if(block_count BETWEEN 6 AND 12, 1, 0) FROM fuse_snapshot('db_09_0054', 'fragmented_input') LIMIT 1
+----
+1
+
+# The common write layout prepares the INT table row from a BIGINT input and
+# full-sorts by the physical partition transform before Fuse serialization.
+statement ok
+SET max_threads=4
+
+statement ok
+SET max_block_size=1000
+
+statement ok
+CREATE TABLE hash_partitioned(id INT) PARTITION BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+CREATE TABLE hash_partitioned_none(id INT) PARTITION BY (bucket(16, id)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO hash_partitioned SELECT number::BIGINT FROM numbers(9600)
+
+statement ok
+INSERT INTO hash_partitioned_none SELECT number::BIGINT FROM numbers(9600)
+
+query I
+SELECT count(*) FROM hash_partitioned
+----
+9600
+
+# The base suite also runs against a three-node cluster. Each bucket has about
+# 600 rows, below ROW_PER_BLOCK. GlobalShuffle routes every bucket to one writer
+# before the node-local full sort, keeping the total below 32 after allowing
+# sort block-boundary tails. Without the shuffle, all three writers retain tails
+# for all 16 buckets. The none table also verifies the block-local baseline.
+query II
+SELECT to_int64(h.block_count <= 32), to_int64(h.block_count < n.block_count)
+FROM fuse_snapshot('db_09_0054', 'hash_partitioned') AS h
+CROSS JOIN fuse_snapshot('db_09_0054', 'hash_partitioned_none') AS n
+LIMIT 1
+----
+1 1
+
+# VALUES reaches the same common write layout without a dedicated physical path.
+statement ok
+INSERT INTO hash_partitioned VALUES (40000), (40001)
+
+query I
+SELECT count(*) FROM hash_partitioned WHERE id >= 40000
+----
+2
+
+# In a cluster, a constant SELECT has no original top Merge. Its synthesized
+# hash shuffle must remain below the distributed writer.
+statement ok
+INSERT INTO hash_partitioned SELECT 40002::INT
+
+query I
+SELECT count(*) FROM hash_partitioned WHERE id >= 40000
+----
+3
+
+statement error write_distribution_mode must be either 'none' or 'hash'
+CREATE TABLE invalid_write_distribution(p INT) PARTITION BY (p) WRITE_DISTRIBUTION_MODE='random'
+
+statement error write_distribution_mode='hash' requires PARTITION BY
+CREATE TABLE missing_write_partition(p INT) WRITE_DISTRIBUTION_MODE='hash'
+
+# bucket remains a valid cluster expression without physical partitioning.
+statement ok
+CREATE TABLE bucket_cluster_only(id INT) CLUSTER BY (bucket(16, id))
+
+statement ok
+INSERT INTO bucket_cluster_only SELECT number FROM numbers(100)
+
+query I
+SELECT count(*) FROM bucket_cluster_only
+----
+100
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE invalid_bucket_cluster_count(id BIGINT) CLUSTER BY (bucket(id, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE zero_bucket_cluster_count(id BIGINT) CLUSTER BY (bucket(0, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE excessive_bucket_cluster_count(id BIGINT) CLUSTER BY (bucket(4294967296, id))
+
+# A bucket cluster key does not substitute for a PARTITION BY declaration.
+statement error write_distribution_mode='hash' requires PARTITION BY
+CREATE TABLE bucket_cluster_hash(id INT) CLUSTER BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash'
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE invalid_bucket_count(id BIGINT) PARTITION BY (bucket(id, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE zero_bucket_count(id BIGINT) PARTITION BY (bucket(0, id))
+
+statement error must use bucket with a constant count between 1 and 4294967295
+CREATE TABLE excessive_bucket_count(id BIGINT) PARTITION BY (bucket(4294967296, id))
+
+# Like CLUSTER BY, each physical key expression may reference only one source
+# column. Composite partitioning is expressed as PARTITION BY (a, b).
+statement error PARTITION BY expression `a \+ b` is invalid
+CREATE TABLE multi_column_expr(a INT, b INT) PARTITION BY (a + b)
+
+# SET OPTIONS cannot overwrite the internal partition_by metadata.
+statement error can't change partition_by
+ALTER TABLE t SET OPTIONS (partition_by='(part % 2)')
+
+# MODIFY COLUMN on a partition-key-referenced column is rejected.
+statement error referenced by partition key
+ALTER TABLE t MODIFY COLUMN part BIGINT
+
+# MODIFY COLUMN on an unrelated column is allowed.
+statement ok
+ALTER TABLE t MODIFY COLUMN c BIGINT
+
+# A filter with no correlation to the partition key must not prune any partition.
+statement ok
+CREATE TABLE unrelated_filter(p INT, v STRING) PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO unrelated_filter VALUES (0, 'a'), (2, 'm'), (1, 'm'), (3, 'z')
+
+# v is not a partition key, and both partitions contain the matching value, so
+# ordinary range and bloom pruning cannot mask incorrect partition pruning.
+query T
+EXPLAIN SELECT p, v FROM unrelated_filter WHERE v = 'm'
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 2<slt:ignore>
+
+query IS rowsort
+SELECT p, v FROM unrelated_filter WHERE v = 'm'
+----
+1 m
+2 m
+
+# DELETE preserves physical partition boundaries after compaction.
+statement ok
+CREATE TABLE delete_partitioned(p INT, v STRING) PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO delete_partitioned VALUES (0, 'a'), (1, 'b'), (2, 'c'), (3, 'd')
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'delete_partitioned') LIMIT 1
+----
+4 4
+
+statement ok
+DELETE FROM delete_partitioned WHERE v = 'b'
+
+# After deleting one row from partition 1, compact must not merge the two partitions.
+statement ok
+OPTIMIZE TABLE delete_partitioned COMPACT
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'delete_partitioned') LIMIT 1
+----
+2 2
+
+query II rowsort
+SELECT p, length(v) FROM delete_partitioned
+----
+0 1
+2 1
+3 1
+
+# CREATE TABLE AS SELECT with PARTITION BY applies partition boundaries during the initial write.
+statement ok
+CREATE TABLE ctas_partitioned PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+AS SELECT p, v FROM delete_partitioned
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'ctas_partitioned') LIMIT 1
+----
+2 2
+
+query II rowsort
+SELECT p, length(v) FROM ctas_partitioned
+----
+0 1
+2 1
+3 1
+
+statement ok
+DROP DATABASE db_09_0054

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::session_type::SessionType;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use http::StatusCode;
 use log::warn;
@@ -36,6 +35,7 @@ use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
+use crate::sessions::TableContextSettings;
 
 #[derive(Clone)]
 pub struct HttpQueryContext {
@@ -176,11 +176,10 @@ impl HttpQueryContext {
             .upgrade_session(session_type)
             .map_err(|err| ErrorCode::Internal(format!("Failed to upgrade session: {err}")))?;
 
-        if let Some(cid) = session.get_client_session_id() {
-            ClientSessionManager::instance().on_query_start(&cid, &self.user_name, &session);
-        };
         if let Some(session_conf) = http_session_conf {
             session_conf.restore(&session, self).await?;
+        } else {
+            self.restore_client_session_state(&session);
         };
         let user_agent = &self.user_agent;
         session.set_client_host(self.client_host.clone());
@@ -200,6 +199,17 @@ impl HttpQueryContext {
         }
         ctx.update_init_query_id(self.query_id.clone());
         Ok((session, ctx))
+    }
+
+    pub(crate) fn restore_client_session_state(&self, session: &Arc<Session>) {
+        if let Some(cid) = session.get_client_session_id() {
+            ClientSessionManager::instance().on_query_start(
+                &session.get_current_tenant(),
+                &cid,
+                &self.user_name,
+                session,
+            );
+        };
     }
 }
 

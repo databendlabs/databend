@@ -336,6 +336,50 @@ select distinct try_cast(flag as int) as f from t2 order by f;
 statement ok
 select * from numbers(10000) a left join numbers(10000) b on a.number % 5 > 1 and b.number % 5 <= 2 and a.number = b.number;
 
+statement ok
+DROP TABLE IF EXISTS limit_outer_l;
+
+statement ok
+DROP TABLE IF EXISTS limit_outer_r;
+
+statement ok
+CREATE TABLE limit_outer_l(a int);
+
+statement ok
+CREATE TABLE limit_outer_r(a int);
+
+statement ok
+INSERT INTO limit_outer_l VALUES (1);
+
+statement ok
+INSERT INTO limit_outer_r VALUES (1), (1), (1);
+
+query I
+SELECT COUNT(*) FROM (
+  SELECT l.a FROM limit_outer_l AS l LEFT JOIN limit_outer_r AS r ON l.a = r.a LIMIT 1 OFFSET 2
+) AS q;
+----
+1
+
+query I
+SELECT COUNT(*) FROM (
+  SELECT l.a FROM limit_outer_r AS r RIGHT JOIN limit_outer_l AS l ON l.a = r.a LIMIT 1 OFFSET 2
+) AS q;
+----
+1
+
+query I
+SELECT COUNT(*) FROM (
+  SELECT l.a FROM limit_outer_l AS l LEFT JOIN limit_outer_r AS r ON l.a = r.a LIMIT 1 OFFSET 18446744073709551615
+) AS q;
+----
+0
+
+statement ok
+DROP TABLE IF EXISTS limit_outer_l;
+
+statement ok
+DROP TABLE IF EXISTS limit_outer_r;
 
 statement ok
 DROP TABLE IF EXISTS t1;

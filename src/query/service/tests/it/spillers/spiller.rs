@@ -14,13 +14,13 @@
 
 use std::assert_matches::assert_matches;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberScalar;
 use databend_common_storage::DataOperator;
+use databend_query::sessions::TableContextSettings;
 use databend_query::spillers::Location;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
@@ -38,6 +38,10 @@ async fn test_spill_with_partition() -> anyhow::Result<()> {
         location_prefix,
         disk_spill: None,
         use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+        writer_pool_bytes: ctx
+            .get_settings()
+            .get_spill_writer_memory_pool_size_mb()?
+            .saturating_mul(1024 * 1024),
     };
     let operator = DataOperator::instance().spill_operator();
 

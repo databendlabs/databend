@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 import sys
 import getopt
-import os
 import random
+import subprocess
 import time
 import logging
 
 CHAOS_FILE = "/tmp/chaos.yaml"
+CMD_TIMEOUT = 30
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -35,6 +36,31 @@ class ChaosParams:
 
         content = content.replace("${NODE}", node)
         return content
+
+
+def run_cmd(cmd, timeout=CMD_TIMEOUT):
+    """Run a shell command with timeout, return stdout. Never raises."""
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, timeout=timeout
+        )
+        return result.stdout
+    except subprocess.TimeoutExpired:
+        logging.warning("command timed out after %ds: %s", timeout, cmd)
+        return ""
+    except Exception as e:
+        logging.warning("command failed: %s, error: %s", cmd, e)
+        return ""
+
+
+def run_cmd_no_capture(cmd, timeout=CMD_TIMEOUT):
+    """Run a shell command with timeout, inherit stdout/stderr. Never raises."""
+    try:
+        subprocess.run(cmd, shell=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        logging.warning("command timed out after %ds: %s", timeout, cmd)
+    except Exception as e:
+        logging.warning("command failed: %s, error: %s", cmd, e)
 
 
 class IoDelayParams(ChaosParams):
@@ -78,7 +104,7 @@ class MetaChaos:
         cmd = "kubectl exec -i databend-metaverifier -n databend -- "
         for node, addr in self.node_port_map.items():
             curl_cmd = cmd + "curl " + addr + "/v1/cluster/status"
-            content = os.popen(curl_cmd).read()
+            content = run_cmd(curl_cmd)
             logging.debug("curl cmd output:" + str(content))
             if get_leader:
                 if content.find('"state":"Leader"') != -1:
@@ -102,7 +128,7 @@ class MetaChaos:
 
     def exec_cat_meta_verifier(self):
         cmd = "kubectl exec -i databend-metaverifier -n databend -- cat /tmp/meta-verifier"
-        content = os.popen(cmd).read().strip()
+        content = run_cmd(cmd).strip()
         logging.debug("exec cat meta-verifier: " + str(content))
 
         return content
@@ -122,15 +148,29 @@ class MetaChaos:
         logging.error("databend-metaverifier has not started, exit")
         sys.exit(-1)
 
+    def dump_diagnostics(self):
+        """Dump k8s diagnostics before exiting on failure."""
+        logging.info("=== Dumping diagnostics ===")
+        for cmd_desc, cmd in [
+            ("pod status", "kubectl get pods -n databend -o wide"),
+            ("verifier logs (last 50)", "kubectl logs databend-metaverifier -n databend --tail=50"),
+            ("iochaos resources", "kubectl get iochaos -n databend -o yaml"),
+            ("events", "kubectl get events -n databend --sort-by='.lastTimestamp'"),
+        ]:
+            logging.info("--- %s ---", cmd_desc)
+            content = run_cmd(cmd)
+            logging.info("%s", content)
+
     def is_verifier_end(self):
-        cmd = "kubectl logs databend-metaverifier -n databend | tail -10"
-        content = os.popen(cmd).read()
+        cmd = "kubectl logs databend-metaverifier -n databend --tail=10"
+        content = run_cmd(cmd)
         logging.debug(
             "kubectl logs databend-metaverifier -n databend:\n" + str(content)
         )
         content = self.exec_cat_meta_verifier()
         if content == "ERROR":
             logging.error("databend-metaverifier return error")
+            self.dump_diagnostics()
             sys.exit(-1)
 
         return content == "END"
@@ -182,7 +222,7 @@ class MetaChaos:
 
             # apply chaos
             cmd = "kubectl apply -f " + CHAOS_FILE
-            os.system(cmd)
+            run_cmd_no_capture(cmd)
             logging.debug("apply chaos..")
 
             # wait some time
@@ -190,7 +230,7 @@ class MetaChaos:
 
             # delete chaos
             cmd = "kubectl delete -f " + CHAOS_FILE
-            os.system(cmd)
+            run_cmd_no_capture(cmd)
             logging.debug("remove chaos..")
 
             # wait some time
@@ -208,6 +248,7 @@ class MetaChaos:
                 logging.error(
                     "databend-metaverifier is not completed in total time, exit -1"
                 )
+                self.dump_diagnostics()
                 sys.exit(-1)
 
 

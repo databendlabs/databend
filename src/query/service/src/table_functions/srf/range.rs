@@ -48,8 +48,9 @@ use databend_common_pipeline::sources::SyncSource;
 use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_sql::validate_function_arg;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::TableContext;
 use itertools::Itertools;
+
+use crate::sessions::TableContext;
 
 pub struct RangeTable {
     table_info: TableInfo,

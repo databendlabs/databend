@@ -19,7 +19,6 @@ mod interface;
 mod local_builder;
 mod merge;
 mod packet;
-mod spatial;
 
 pub use convert::build_runtime_filter_infos;
 pub use global::get_global_runtime_filter_packet;

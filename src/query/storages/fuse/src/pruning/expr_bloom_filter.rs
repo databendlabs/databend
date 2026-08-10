@@ -29,6 +29,7 @@ impl<'a> ExprBloomFilter<'a> {
     }
 
     pub fn apply(&self, column: Column) -> Result<MutableBitmap> {
+        let column = column.remove_nullable();
         let data_type = column.data_type();
         let num_rows = column.len();
         let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;

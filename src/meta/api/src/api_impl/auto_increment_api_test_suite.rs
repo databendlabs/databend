@@ -34,8 +34,8 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::Key;
 use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use fastrace::func_name;
 use log::info;
@@ -129,6 +129,7 @@ impl AutoIncrementApiTestSuite {
                 },
                 table_meta: drop_table_meta(created_on),
                 as_dropped: true,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -166,7 +167,7 @@ impl AutoIncrementApiTestSuite {
             // assert auto increment current is 1 after next val
             let seqv = mt.get_pb(&auto_increment_sequence_storage).await?;
             assert!(seqv.as_ref().unwrap().seq != 0);
-            assert_eq!(seqv.as_ref().unwrap().data.inner().0, 1);
+            assert_eq!(*seqv.as_ref().unwrap().data, 1);
 
             // assert auto increment exists
             let seqv = mt
@@ -240,7 +241,7 @@ where MT: AutoIncrementApi + kvapi::KVApi<Error = MetaError>
 
     async fn create_db(&mut self) -> anyhow::Result<()> {
         let plan = CreateDatabaseReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: DatabaseNameIdent::new(self.tenant(), self.db_name()),
             meta: DatabaseMeta {

@@ -19,6 +19,7 @@ use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::TableDataType;
 use databend_common_expression::serialize::read_decimal_from_json;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
@@ -78,10 +79,15 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    pub fn read_field(&self, column: &mut ColumnBuilder, value: &Value) -> Result<()> {
+    pub fn read_field_with_data_type(
+        &self,
+        column: &mut ColumnBuilder,
+        value: &Value,
+        data_type: &TableDataType,
+    ) -> Result<()> {
         match column {
             ColumnBuilder::Null { len } => self.read_null(len, value),
-            ColumnBuilder::Nullable(c) => self.read_nullable(c, value),
+            ColumnBuilder::Nullable(c) => self.read_nullable(c, value, nullable_inner(data_type)),
             ColumnBuilder::Boolean(c) => self.read_bool(c, value),
             ColumnBuilder::Number(c) => with_number_mapped_type!(|NUM_TYPE| match c {
                 NumberColumnBuilder::NUM_TYPE(c) => {
@@ -102,9 +108,9 @@ impl FieldJsonAstDecoder {
             ColumnBuilder::TimestampTz(c) => self.read_timestamp_tz(c, value),
             ColumnBuilder::Binary(_c) => unimplemented!("binary literal is not supported"),
             ColumnBuilder::String(c) => self.read_string(c, value),
-            ColumnBuilder::Array(c) => self.read_array(c, value),
-            ColumnBuilder::Map(c) => self.read_map(c, value),
-            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value),
+            ColumnBuilder::Array(c) => self.read_array(c, value, array_inner(data_type)),
+            ColumnBuilder::Map(c) => self.read_map(c, value, map_fields(data_type)),
+            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value, tuple_fields(data_type)),
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, value),
             ColumnBuilder::Variant(c) => self.read_variant(c, value),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, value),
@@ -148,13 +154,14 @@ impl FieldJsonAstDecoder {
         &self,
         column: &mut NullableColumnBuilder<AnyType>,
         value: &Value,
+        inner_type: &TableDataType,
     ) -> Result<()> {
         match value {
             Value::Null => {
                 column.push_null();
             }
             other => {
-                self.read_field(&mut column.builder, other)?;
+                self.read_field_with_data_type(&mut column.builder, other, inner_type)?;
                 column.validity.push(true);
             }
         }
@@ -414,11 +421,16 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_array(&self, column: &mut ArrayColumnBuilder<AnyType>, value: &Value) -> Result<()> {
+    fn read_array(
+        &self,
+        column: &mut ArrayColumnBuilder<AnyType>,
+        value: &Value,
+        inner_type: &TableDataType,
+    ) -> Result<()> {
         match value {
             Value::Array(vals) => {
                 for val in vals {
-                    self.read_field(&mut column.builder, val)?;
+                    self.read_field_with_data_type(&mut column.builder, val, inner_type)?;
                 }
                 column.commit_row();
                 Ok(())
@@ -427,16 +439,28 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_map(&self, column: &mut ArrayColumnBuilder<AnyType>, value: &Value) -> Result<()> {
+    fn read_map(
+        &self,
+        column: &mut ArrayColumnBuilder<AnyType>,
+        value: &Value,
+        fields_type: &[TableDataType],
+    ) -> Result<()> {
         const KEY: usize = 0;
         const VALUE: usize = 1;
         let map_builder = column.builder.as_tuple_mut().unwrap();
+        if fields_type.len() != 2 {
+            return Err(ErrorCode::BadBytes(
+                "Incorrect json value for map, missing map field types",
+            ));
+        }
+        let key_type = &fields_type[KEY];
+        let value_type = &fields_type[VALUE];
         match value {
             Value::Object(obj) => {
                 for (key, val) in obj.iter() {
                     let key = Value::String(key.to_string());
-                    self.read_field(&mut map_builder[KEY], &key)?;
-                    self.read_field(&mut map_builder[VALUE], val)?;
+                    self.read_field_with_data_type(&mut map_builder[KEY], &key, key_type)?;
+                    self.read_field_with_data_type(&mut map_builder[VALUE], val, value_type)?;
                 }
                 column.commit_row();
                 Ok(())
@@ -445,7 +469,12 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_tuple(&self, fields: &mut [ColumnBuilder], value: &Value) -> Result<()> {
+    fn read_tuple(
+        &self,
+        fields: &mut [ColumnBuilder],
+        value: &Value,
+        tuple_fields: Option<(&[String], &[TableDataType])>,
+    ) -> Result<()> {
         match value {
             Value::Object(obj) => {
                 if fields.len() != obj.len() {
@@ -455,9 +484,23 @@ impl FieldJsonAstDecoder {
                         obj.len()
                     )));
                 }
-                for (field, item) in fields.iter_mut().zip(obj.iter()) {
-                    let (_, val) = item;
-                    self.read_field(field, val)?;
+                if let Some((fields_name, fields_type)) = tuple_fields {
+                    for (idx, (field, field_name)) in
+                        fields.iter_mut().zip(fields_name.iter()).enumerate()
+                    {
+                        let val = object_value(obj, field_name, self.ident_case_sensitive)
+                            .ok_or_else(|| {
+                                ErrorCode::BadBytes(format!(
+                                    "Incorrect json value for tuple, missing field {}",
+                                    field_name
+                                ))
+                            })?;
+                        self.read_field_with_data_type(field, val, &fields_type[idx])?;
+                    }
+                } else {
+                    return Err(ErrorCode::BadBytes(
+                        "Incorrect json value for tuple object, missing tuple field names",
+                    ));
                 }
                 Ok(())
             }
@@ -469,8 +512,16 @@ impl FieldJsonAstDecoder {
                         values.len()
                     )));
                 }
-                for (field, val) in fields.iter_mut().zip(values.iter()) {
-                    self.read_field(field, val)?;
+                let fields_type = tuple_fields.map(|(_, fields_type)| fields_type);
+                for (idx, (field, val)) in fields.iter_mut().zip(values.iter()).enumerate() {
+                    let field_type = fields_type.and_then(|types| types.get(idx)).ok_or_else(
+                        || {
+                            ErrorCode::BadBytes(
+                                "Incorrect json value for tuple array, missing tuple field types",
+                            )
+                        },
+                    )?;
+                    self.read_field_with_data_type(field, val, field_type)?;
                 }
                 Ok(())
             }
@@ -508,5 +559,134 @@ impl FieldJsonAstDecoder {
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be array")),
         }
+    }
+}
+
+fn nullable_inner(data_type: &TableDataType) -> &TableDataType {
+    match data_type {
+        TableDataType::Nullable(inner) => inner.as_ref(),
+        other => other,
+    }
+}
+
+fn array_inner(data_type: &TableDataType) -> &TableDataType {
+    match nullable_inner(data_type) {
+        TableDataType::Array(inner) => inner.as_ref(),
+        other => other,
+    }
+}
+
+fn map_fields(data_type: &TableDataType) -> &[TableDataType] {
+    match nullable_inner(data_type) {
+        TableDataType::Map(inner) => match inner.as_ref() {
+            TableDataType::Tuple { fields_type, .. } => fields_type.as_slice(),
+            _ => &[],
+        },
+        _ => &[],
+    }
+}
+
+fn tuple_fields(data_type: &TableDataType) -> Option<(&[String], &[TableDataType])> {
+    match nullable_inner(data_type) {
+        TableDataType::Tuple {
+            fields_name,
+            fields_type,
+        } => Some((fields_name.as_slice(), fields_type.as_slice())),
+        _ => None,
+    }
+}
+
+fn object_value<'a>(
+    object: &'a serde_json::Map<String, Value>,
+    field_name: &str,
+    case_sensitive: bool,
+) -> Option<&'a Value> {
+    if case_sensitive {
+        object.get(field_name)
+    } else {
+        let field_name = field_name.to_lowercase();
+        object
+            .iter()
+            .find_map(|(key, value)| (key.to_lowercase() == field_name).then_some(value))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_io::prelude::InputFormatSettings;
+
+    use super::*;
+
+    #[test]
+    fn test_read_tuple_object_by_field_name() -> Result<()> {
+        let decoder = FieldJsonAstDecoder::create(&InputFormatSettings::default(), false);
+        let data_type = TableDataType::Tuple {
+            fields_name: vec!["a".to_string(), "b".to_string()],
+            fields_type: vec![
+                TableDataType::Number(NumberDataType::Int64),
+                TableDataType::String,
+            ],
+        };
+        let mut builder = ColumnBuilder::with_capacity(&DataType::from(&data_type), 1);
+        let value = serde_json::json!({"b": "x", "a": 1});
+
+        decoder.read_field_with_data_type(&mut builder, &value, &data_type)?;
+        let column = builder.build();
+        let ScalarRef::Tuple(fields) = column.index(0).unwrap() else {
+            unreachable!()
+        };
+        assert_eq!(fields[0], ScalarRef::Number(NumberScalar::Int64(1)));
+        assert_eq!(fields[1], ScalarRef::String("x"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_tuple_object_by_unicode_field_name_case_insensitive() -> Result<()> {
+        let decoder = FieldJsonAstDecoder::create(&InputFormatSettings::default(), false);
+        let data_type = TableDataType::Tuple {
+            fields_name: vec!["Å".to_string()],
+            fields_type: vec![TableDataType::Number(NumberDataType::Int64)],
+        };
+        let mut builder = ColumnBuilder::with_capacity(&DataType::from(&data_type), 1);
+        let value = serde_json::json!({"å": 1});
+
+        decoder.read_field_with_data_type(&mut builder, &value, &data_type)?;
+        let column = builder.build();
+        let ScalarRef::Tuple(fields) = column.index(0).unwrap() else {
+            unreachable!()
+        };
+        assert_eq!(fields[0], ScalarRef::Number(NumberScalar::Int64(1)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_array_tuple_object_by_field_name() -> Result<()> {
+        let decoder = FieldJsonAstDecoder::create(&InputFormatSettings::default(), false);
+        let tuple_type = TableDataType::Tuple {
+            fields_name: vec!["a".to_string(), "b".to_string()],
+            fields_type: vec![
+                TableDataType::Number(NumberDataType::Int64),
+                TableDataType::String,
+            ],
+        };
+        let data_type = TableDataType::Array(Box::new(tuple_type));
+        let mut builder = ColumnBuilder::with_capacity(&DataType::from(&data_type), 1);
+        let value = serde_json::json!([{"b": "x", "a": 1}]);
+
+        decoder.read_field_with_data_type(&mut builder, &value, &data_type)?;
+        let column = builder.build();
+        let ScalarRef::Array(array) = column.index(0).unwrap() else {
+            unreachable!()
+        };
+        let ScalarRef::Tuple(fields) = array.index(0).unwrap() else {
+            unreachable!()
+        };
+        assert_eq!(fields[0], ScalarRef::Number(NumberScalar::Int64(1)));
+        assert_eq!(fields[1], ScalarRef::String("x"));
+        Ok(())
     }
 }

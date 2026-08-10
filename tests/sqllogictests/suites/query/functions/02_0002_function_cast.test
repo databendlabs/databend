@@ -117,6 +117,16 @@ SELECT '33'::unsigned = 33
 ----
 1
 
+query RI
+SELECT CAST('   1e1' AS DOUBLE), CAST('  1e1' AS INTEGER)
+----
+10.0 10
+
+query II
+SELECT CAST('  -42 ' AS INTEGER), CAST(' 42 ' AS UNSIGNED)
+----
+-42 42
+
 
 
 statement error 1006
@@ -143,6 +153,16 @@ query B
 select 'false'::boolean = not 'true'::boolean
 ----
 1
+
+query BBBB
+select '1'::boolean, '0'::boolean, ' true '::boolean, ' false '::boolean
+----
+1 0 1 0
+
+query BBBB
+select true='1', false='0', ' 1 '=true, ' 0 '=false
+----
+1 1 1 1
 
 query B
 SELECT  to_timestamp('2021-03-05 01:01:01') + 1 = to_timestamp('2021-03-05 01:01:01.000001')

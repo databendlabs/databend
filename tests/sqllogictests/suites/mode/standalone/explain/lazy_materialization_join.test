@@ -100,7 +100,7 @@ RowFetch
             │   ├── read size: < 1 KiB
             │   ├── partitions total: 1
             │   ├── partitions scanned: 1
-            │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             │   ├── push downs: [filters: [is_true(lazy_join_t1.create_time (#3) >= '2021-01-02 00:00:00.000000')], limit: NONE]
             │   └── estimated rows: 2.67
             └── TableScan(Probe)
@@ -111,7 +111,7 @@ RowFetch
                 ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: NONE]
                 ├── apply join filters: [#0]
                 └── estimated rows: 3.00
@@ -159,7 +159,7 @@ RowFetch
             │       ├── read size: < 1 KiB
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
-            │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             │       ├── push downs: [filters: [is_true(lazy_join_t1.create_time (#3) >= '2021-01-02 00:00:00.000000')], limit: 3]
             │       └── estimated rows: 2.67
             └── TableScan(Probe)
@@ -170,7 +170,7 @@ RowFetch
                 ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: NONE]
                 ├── apply join filters: [#0]
                 └── estimated rows: 3.00

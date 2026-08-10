@@ -21,13 +21,14 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_sql::plans::DropSequencePlan;
-use databend_common_storages_fuse::TableContext;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 pub struct DropSequenceInterpreter {
     ctx: Arc<QueryContext>,

@@ -330,6 +330,39 @@ DROP TABLE t_scalar_subquery;
 statement ok
 SET enable_query_result_cache = 0;
 
+statement ok
+CREATE TABLE t_long_sql_result_cache (a INT);
+
+statement ok
+INSERT INTO t_long_sql_result_cache VALUES (1), (2), (3);
+
+statement ok
+SET enable_query_result_cache = 1;
+
+statement ok
+SET query_result_cache_min_execute_secs = 0;
+
+query IIIIIIIIIIIIII
+SELECT a, a + 1, a + 2, a + 3, a + 4, a + 5, a + 6, a + 7, a + 8, a + 9, a + 10, a + 11, a + 12, a + 13 FROM t_long_sql_result_cache ORDER BY a;
+----
+1 2 3 4 5 6 7 8 9 10 11 12 13 14
+2 3 4 5 6 7 8 9 10 11 12 13 14 15
+3 4 5 6 7 8 9 10 11 12 13 14 15 16
+
+query T
+EXPLAIN SELECT a, a + 1, a + 2, a + 3, a + 4, a + 5, a + 6, a + 7, a + 8, a + 9, a + 10, a + 11, a + 12, a + 13 FROM t_long_sql_result_cache ORDER BY a;
+----
+ReadQueryResultCache
+├── SQL: SELECT a, a + 1, a + 2, a + 3, a + 4, a + 5, a + 6, a + 7, a... a + 11, a + 12, a + 13 FROM t_long_sql_result_cache ORDER BY a
+├── Number of rows: 3
+└── Result size: 338
+
+statement ok
+DROP TABLE t_long_sql_result_cache;
+
+statement ok
+SET enable_query_result_cache = 0;
+
 # ISSUE 11870
 
 statement ok

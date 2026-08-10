@@ -14,6 +14,16 @@ select a, b from t where a = 1 and cast(b as int) >= 2;
 1 4
 1 4
 
+query I
+select count(*) from (select '01' as s1, '1' as s2, 1 as n) where s1 = n and s2 = n and s1 != s2;
+----
+1
+
+query I
+select count(*) from (select '01' as s1, '1' as s2, 1 as n) where s1 = n and s2 = s1;
+----
+0
+
 
 # AND filter short circuit
 statement ok

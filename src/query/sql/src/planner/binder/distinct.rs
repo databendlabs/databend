@@ -12,73 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
 use databend_common_exception::Result;
 
-use crate::BindContext;
-use crate::Symbol;
-use crate::WindowChecker;
 use crate::binder::Binder;
-use crate::binder::ColumnBinding;
+use crate::binder::project::SelectInfo;
 use crate::optimizer::ir::SExpr;
-use crate::planner::semantic::GroupingChecker;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
-use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
-use crate::plans::VisitorMut as _;
-
 impl Binder {
     pub fn bind_distinct(
         &self,
         span: Span,
-        bind_context: &mut BindContext,
-        projections: &[ColumnBinding],
-        scalar_items: &mut HashMap<Symbol, ScalarItem>,
+        select_info: &mut SelectInfo,
         child: SExpr,
     ) -> Result<SExpr> {
-        let scalar_items: Vec<ScalarItem> = scalar_items
-            .drain()
-            .map(|(_, item)| {
-                let mut scalar = item.scalar;
-                if bind_context.in_grouping {
-                    let mut group_checker = GroupingChecker::new(bind_context, None);
-                    group_checker.visit(&mut scalar)?;
-                } else if !bind_context.windows.window_functions.is_empty() {
-                    let mut window_checker = WindowChecker::new(bind_context);
-                    window_checker.visit(&mut scalar)?;
-                }
-                Ok(ScalarItem {
-                    scalar,
-                    index: item.index,
-                })
-            })
-            .collect::<Result<_>>()?;
+        let distinct_input = select_info.take_distinct_plan(span);
+        let pre_distinct_items = distinct_input.pre_distinct_items;
+        let group_items = distinct_input.group_items;
 
         let mut new_expr = child;
-        if !scalar_items.is_empty() {
+        if !pre_distinct_items.is_empty() {
             let eval_scalar = EvalScalar {
-                items: scalar_items,
+                items: pre_distinct_items,
             };
             new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
         }
-
-        // Like aggregate, we just use scalar directly.
-        let group_items: Vec<ScalarItem> = projections
-            .iter()
-            .map(|v| ScalarItem {
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span,
-                    column: v.clone(),
-                }),
-                index: v.index,
-            })
-            .collect();
 
         let distinct_plan = Aggregate {
             mode: AggregateMode::Initial,

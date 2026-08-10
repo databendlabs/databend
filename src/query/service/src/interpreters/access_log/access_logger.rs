@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourceInfo;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_sql::InsertInputSource;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::plans::CopyIntoLocationPlan;
@@ -34,6 +33,8 @@ use crate::interpreters::access_log::log_entry::DDLOperationType;
 use crate::interpreters::access_log::log_entry::ModifyByDDLObject;
 use crate::interpreters::access_log::log_entry::ObjectDomain;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::convert_query_log_timestamp;
 
 pub struct AccessLogger {
@@ -220,6 +221,19 @@ impl AccessLogger {
                     properties: HashMap::from([(
                         "set_options".to_string(),
                         serde_json::to_value(&plan.set_options).unwrap(),
+                    )]),
+                });
+            }
+            Plan::AlterTablePartitionBy(plan) => {
+                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
+                let operation_type = DDLOperationType::Alter;
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Table,
+                    object_name,
+                    operation_type,
+                    properties: HashMap::from([(
+                        "partition_by".to_string(),
+                        serde_json::to_value(&plan.partition_keys).unwrap(),
                     )]),
                 });
             }

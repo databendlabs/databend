@@ -186,7 +186,7 @@ impl<'a> FuseStatisticImpl<'a> {
             );
             if let Some(his_info) = histograms.and_then(|v| v.get(i)) {
                 let mut his_infos = vec![];
-                for (i, bucket) in his_info.buckets.iter().enumerate() {
+                for (i, bucket) in his_info.bucket_iter().enumerate() {
                     let min = bucket.lower_bound().to_string()?;
                     let max = bucket.upper_bound().to_string()?;
                     let ndv = bucket.num_distinct();

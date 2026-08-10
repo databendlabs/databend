@@ -25,6 +25,33 @@ use crate::plan::PushDownInfo;
 use crate::plan::datasource::datasource_info::DataSourceInfo;
 use crate::table_args::TableArgs;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct BlockMetaOptions {
+    // for merge_into target build.
+    pub reserve_block_index: bool,
+    // Whether to update stream columns.
+    pub update_stream_columns: bool,
+    // used to query internal columns.
+    pub query_internal_columns: bool,
+}
+
+impl BlockMetaOptions {
+    pub fn set_reserve_block_index(mut self, reserve_block_index: bool) -> Self {
+        self.reserve_block_index = reserve_block_index;
+        self
+    }
+
+    pub fn set_update_stream_columns(mut self, update_stream_columns: bool) -> Self {
+        self.update_stream_columns = update_stream_columns;
+        self
+    }
+
+    pub fn set_query_internal_columns(mut self, query_internal_columns: bool) -> Self {
+        self.query_internal_columns = query_internal_columns;
+        self
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DataSourcePlan {
     pub source_info: DataSourceInfo,
@@ -39,8 +66,7 @@ pub struct DataSourcePlan {
     pub push_downs: Option<PushDownInfo>,
     pub internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
     pub base_block_ids: Option<Scalar>,
-    // used for recluster to update stream columns
-    pub update_stream_columns: bool,
+    pub block_meta_options: BlockMetaOptions,
 
     pub table_index: usize,
     pub scan_id: usize,

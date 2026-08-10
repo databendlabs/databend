@@ -45,6 +45,7 @@ use databend_common_meta_app::schema::EmptyProto;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::SequenceMeta;
@@ -97,6 +98,9 @@ pub fn decode_pb_value(key: &str, bytes: &[u8]) -> String {
         "__fd_table_id_to_name/"    => DBIdTableName,
         "__fd_table_id_list/"       => TableIdList,
         "__fd_table_copied_files/"  => TableCopiedFileInfo,
+        "__fd_materialized_view_definition/" => MVDefinition,
+        "__fd_materialized_view_by_source/" => EmptyProto,
+        "__fd_materialized_view_source_binding_version/" => EmptyProto,
 
         // schema - catalog
         "__fd_catalog_by_id/"       => CatalogMeta,
@@ -323,7 +327,7 @@ mod tests {
     }
 
     fn encode_pb<T: FromToProto>(val: &T) -> Vec<u8> {
-        kv_pb_api::encode_pb(val).unwrap()
+        kv_pb_api::encode_pb(val)
     }
 
     // -- decode_pb_value tests --
@@ -360,7 +364,7 @@ mod tests {
         let got = normalize_timestamps(&decode_pb_value("__fd_table_by_id/1", &buf));
         assert_eq!(
             got,
-            r#"TableMeta { schema: TableSchema { fields: [], metadata: {}, next_column_id: 0 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, created_on: <TS>, updated_on: <TS>, comment: "", field_comments: [], virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {} }"#
+            r#"TableMeta { schema: TableSchema { fields: [], metadata: {}, next_column_id: 0 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, created_on: <TS>, updated_on: <TS>, comment: "", field_comments: [], field_stats_truncate_len: {}, virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {} }"#
         );
     }
 
@@ -488,7 +492,7 @@ mod tests {
             got1,
             concat!(
                 "    txn.if_then[1].put __fd_table_by_id/20:\n",
-                r#"      TableMeta { schema: TableSchema { fields: [], metadata: {}, next_column_id: 0 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, created_on: <TS>, updated_on: <TS>, comment: "", field_comments: [], virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {} }"#,
+                r#"      TableMeta { schema: TableSchema { fields: [], metadata: {}, next_column_id: 0 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, created_on: <TS>, updated_on: <TS>, comment: "", field_comments: [], field_stats_truncate_len: {}, virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {} }"#,
             )
         );
     }

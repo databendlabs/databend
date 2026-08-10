@@ -34,10 +34,13 @@ use futures::TryStreamExt;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextVariables;
 
 pub struct SetInterpreter {
     ctx: Arc<QueryContext>,
@@ -202,21 +205,35 @@ impl Interpreter for SetInterpreter {
                     false,
                 )?;
 
-                let stream = select_interpreter.execute(self.ctx.clone()).await?;
+                let stream = select_interpreter
+                    .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+                    .await?;
                 let datablocks: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
+                let num_columns = bind_context.columns.len();
+                if num_columns != self.set.idents.len() {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Expect {} column in set query result, but got {} columns",
+                        self.set.idents.len(),
+                        num_columns
+                    )));
+                }
+                let num_rows: usize = datablocks.iter().map(|b| b.num_rows()).sum();
+                if num_rows == 0 {
+                    if matches!(self.set.set_type, SetType::Variable) {
+                        self.execute_variables(vec![Scalar::Null; self.set.idents.len()])
+                            .await?;
+                        return Ok(PipelineBuildResult::create());
+                    }
+                    return Err(ErrorCode::BadArguments(
+                        "Subquery in SET statement returned 0 rows, expected exactly 1 row",
+                    ));
+                }
                 let datablock = DataBlock::concat(&datablocks)?;
 
                 if datablock.num_rows() != 1 {
                     return Err(ErrorCode::BadArguments(format!(
                         "Expect scalar result in set query result, but got {} rows",
                         datablock.num_rows()
-                    )));
-                }
-                if datablock.num_columns() != self.set.idents.len() {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Expect {} column in set query result, but got {} columns",
-                        self.set.idents.len(),
-                        datablock.num_columns()
                     )));
                 }
                 datablock

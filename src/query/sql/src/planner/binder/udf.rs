@@ -24,7 +24,8 @@ use databend_common_ast::ast::UDFArgs;
 use databend_common_ast::ast::UDFDefinition;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataField;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_functions::is_builtin_function;
@@ -51,6 +52,14 @@ use crate::plans::CreateUDFPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
 use crate::plans::UDFLanguage;
+
+fn table_type_to_data_type(ty: &TableDataType) -> DataType {
+    DataType::from(ty)
+}
+
+fn table_types_to_data_types(tys: &[TableDataType]) -> Vec<DataType> {
+    tys.iter().map(table_type_to_data_type).collect()
+}
 
 impl Binder {
     pub(in crate::planner::binder) async fn bind_udf_definition(
@@ -104,7 +113,7 @@ impl Binder {
                                     "StageLocation must have a corresponding variable name",
                                 ));
                             }
-                            arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                            arg_datatypes.push(resolve_type_name_udf(arg_type)?);
                         }
                     }
                     UDFArgs::NameWithTypes(name_with_types) => {
@@ -112,11 +121,11 @@ impl Binder {
                             arg_names.push(
                                 normalize_identifier(arg_name, &self.name_resolution_ctx).name,
                             );
-                            arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                            arg_datatypes.push(resolve_type_name_udf(arg_type)?);
                         }
                     }
                 }
-                let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
+                let return_type = resolve_type_name_udf(return_type)?;
 
                 let connect_timeout = self
                     .ctx
@@ -146,8 +155,10 @@ impl Binder {
                         .with_handler_name(handler)?
                         .with_query_id(&self.ctx.get_id())?
                         .with_headers(headers.iter())?;
+                let schema_arg_types = table_types_to_data_types(&arg_datatypes);
+                let schema_return_type = table_type_to_data_type(&return_type);
                 client
-                    .check_schema(handler, &arg_datatypes, &return_type)
+                    .check_schema(handler, &schema_arg_types, &schema_return_type)
                     .await?;
 
                 Ok(UserDefinedFunction {
@@ -240,7 +251,7 @@ impl Binder {
                     .iter()
                     .map(|(name, arg_type)| {
                         let column = normalize_identifier(name, &self.name_resolution_ctx).name;
-                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        let ty = resolve_type_name_udf(arg_type)?;
                         Ok((column, ty))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -249,7 +260,7 @@ impl Binder {
                     .iter()
                     .map(|(name, arg_type)| {
                         let column = normalize_identifier(name, &self.name_resolution_ctx).name;
-                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        let ty = resolve_type_name_udf(arg_type)?;
                         Ok((column, ty))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -282,14 +293,14 @@ impl Binder {
 
                 for (arg_name, arg_type) in arg_types {
                     arg_names.push(normalize_identifier(arg_name, &self.name_resolution_ctx).name);
-                    arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                    arg_datatypes.push(resolve_type_name_udf(arg_type)?);
                 }
 
                 let return_types = return_types
                     .iter()
                     .map(|(name, arg_type)| {
                         let column = normalize_identifier(name, &self.name_resolution_ctx).name;
-                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        let ty = resolve_type_name_udf(arg_type)?;
                         Ok((column, ty))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -320,11 +331,11 @@ impl Binder {
                     .iter()
                     .map(|(name, arg_type)| {
                         let column = normalize_identifier(name, &self.name_resolution_ctx).name;
-                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        let ty = resolve_type_name_udf(arg_type)?;
                         Ok((column, ty))
                     })
                     .collect::<Result<Vec<_>>>()?;
-                let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
+                let return_type = resolve_type_name_udf(return_type)?;
 
                 Ok(UserDefinedFunction {
                     name,
@@ -441,10 +452,10 @@ fn create_udf_definition_script(
 
     let arg_types = arg_types
         .types_iter()
-        .map(|arg_type| Ok(DataType::from(&resolve_type_name_udf(arg_type)?)))
+        .map(resolve_type_name_udf)
         .collect::<Result<Vec<_>>>()?;
 
-    let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
+    let return_type = resolve_type_name_udf(return_type)?;
 
     let mut runtime_version = runtime_version.to_string();
     if runtime_version.is_empty() && language == UDFLanguage::Python {
@@ -456,9 +467,9 @@ fn create_udf_definition_script(
             let state_fields = fields
                 .iter()
                 .map(|field| {
-                    Ok(DataField::new(
+                    Ok(TableField::new(
                         &field.name.name,
-                        DataType::from(&resolve_type_name_udf(&field.type_name)?),
+                        resolve_type_name_udf(&field.type_name)?,
                     ))
                 })
                 .collect::<Result<Vec<_>>>()?;

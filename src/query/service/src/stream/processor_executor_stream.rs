@@ -18,14 +18,21 @@ use std::task::Poll;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use futures::Future;
 use futures::Stream;
 
 use crate::pipelines::executor::PipelinePullingExecutor;
 
+type PullDataFuture =
+    Pin<Box<dyn Future<Output = (PipelinePullingExecutor, Result<Option<DataBlock>>)> + Send>>;
+
 pub struct PullingExecutorStream {
     end_of_stream: bool,
     executor: Option<PipelinePullingExecutor>,
+    pull_data_future: Option<PullDataFuture>,
 }
+
+impl Unpin for PullingExecutorStream {}
 
 impl PullingExecutorStream {
     pub fn create(mut executor: PipelinePullingExecutor) -> Result<Self> {
@@ -33,22 +40,36 @@ impl PullingExecutorStream {
         Ok(Self {
             end_of_stream: false,
             executor: Some(executor),
+            pull_data_future: None,
         })
     }
 
-    fn poll_next_impl(&mut self) -> Poll<Option<Result<DataBlock>>> {
-        if let Some(mut executor) = self.executor.take() {
-            return match executor.pull_data() {
-                Err(cause) => {
+    fn poll_next_impl(&mut self, cx: &mut Context<'_>) -> Poll<Option<Result<DataBlock>>> {
+        if self.pull_data_future.is_none()
+            && let Some(mut executor) = self.executor.take()
+        {
+            self.pull_data_future = Some(Box::pin(async move {
+                let res = executor.pull_data().await;
+                (executor, res)
+            }));
+        }
+
+        if let Some(future) = self.pull_data_future.as_mut() {
+            return match future.as_mut().poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready((executor, Err(cause))) => {
+                    self.pull_data_future = None;
                     self.end_of_stream = true;
                     drop(executor);
                     Poll::Ready(Some(Err(cause)))
                 }
-                Ok(Some(data)) => {
+                Poll::Ready((executor, Ok(Some(data)))) => {
+                    self.pull_data_future = None;
                     self.executor = Some(executor);
                     Poll::Ready(Some(Ok(data)))
                 }
-                Ok(None) => {
+                Poll::Ready((executor, Ok(None))) => {
+                    self.pull_data_future = None;
                     self.end_of_stream = true;
                     drop(executor);
                     Poll::Ready(None)
@@ -63,13 +84,12 @@ impl PullingExecutorStream {
 impl Stream for PullingExecutorStream {
     type Item = Result<DataBlock>;
 
-    // The ctx can't be wake up, so we can't return Poll::Pending here
-    fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let self_ = Pin::get_mut(self);
         if self_.end_of_stream {
             return Poll::Ready(None);
         }
 
-        self_.poll_next_impl()
+        self_.poll_next_impl(cx)
     }
 }

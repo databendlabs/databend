@@ -24,7 +24,6 @@ use std::sync::atomic::Ordering;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
@@ -63,6 +62,9 @@ use tokio::sync::Mutex;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::AsyncFunctionArgument;
 use crate::sql::plans::ReadFileFunctionArgument;
 
@@ -194,7 +196,7 @@ pub type SequenceCounters = Vec<Arc<SequenceCounter>>;
 enum VisibilityCheckerState {
     Disabled,
     Pending,
-    Ready(GrantObjectVisibilityChecker),
+    Ready(Arc<GrantObjectVisibilityChecker>),
 }
 
 impl VisibilityCheckerState {
@@ -878,7 +880,7 @@ impl SequenceNextValFetcher {
         &self,
         ctx: &QueryContext,
         catalog: &Arc<dyn Catalog>,
-    ) -> Result<(GetSequenceReply, Option<GrantObjectVisibilityChecker>)> {
+    ) -> Result<(GetSequenceReply, Option<Arc<GrantObjectVisibilityChecker>>)> {
         let visibility_checker = if ctx
             .get_settings()
             .get_enable_experimental_sequence_privilege_check()?

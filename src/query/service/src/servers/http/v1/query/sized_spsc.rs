@@ -21,6 +21,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use databend_common_base::base::WatchNotify;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -48,6 +49,13 @@ where
 }
 
 enum Page {
+    Memory(Vec<DataBlock>),
+    Spilled(Location),
+}
+
+// Spilled pages stay in the queue until restore succeeds so a cancelled
+// restore future can be retried by the same page request.
+enum PageRead {
     Memory(Vec<DataBlock>),
     Spilled(Location),
 }
@@ -84,6 +92,10 @@ impl SizedChannelBuffer {
                 Page::Spilled(_) => 0,
             })
             .sum()
+    }
+
+    fn has_page_ready(&self) -> bool {
+        !self.pages.is_empty()
     }
 
     fn is_pages_full(&self, reserve: usize) -> bool {
@@ -155,8 +167,44 @@ impl SizedChannelBuffer {
         self.is_recv_stopped = true
     }
 
-    fn take_page(&mut self) -> Option<Page> {
-        self.pages.pop_front()
+    fn prepare_page_read(&mut self) -> Option<PageRead> {
+        match self.pages.front() {
+            None => None,
+            Some(Page::Memory(_)) => match self.pages.pop_front() {
+                Some(Page::Memory(page)) => Some(PageRead::Memory(page)),
+                _ => unreachable!("front page changed while holding buffer lock"),
+            },
+            Some(Page::Spilled(location)) => Some(PageRead::Spilled(location.clone())),
+        }
+    }
+
+    fn commit_spilled_page(&mut self, location: &Location) -> Result<()> {
+        match self.pages.front() {
+            Some(Page::Spilled(front)) if front == location => {
+                self.pages.pop_front();
+                Ok(())
+            }
+            _ => Err(ErrorCode::Internal(
+                "Failed to commit restored spilled page: page queue changed unexpectedly",
+            )),
+        }
+    }
+
+    fn take_current_page(&mut self) -> Option<PageRead> {
+        if self
+            .current_page
+            .as_ref()
+            .is_none_or(|page| page.is_empty())
+        {
+            return None;
+        }
+
+        Some(PageRead::Memory(
+            self.current_page
+                .replace(PageBuilder::new(self.page_rows))
+                .expect("current_page has taken")
+                .into_page(),
+        ))
     }
 }
 
@@ -189,6 +237,10 @@ impl PageBuilder {
 
     fn num_rows(&self) -> usize {
         self.blocks.iter().map(DataBlock::num_rows).sum()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.blocks.iter().all(DataBlock::is_empty)
     }
 
     fn calculate_take_rows(&self, block: &DataBlock) -> (usize, usize) {
@@ -319,7 +371,7 @@ where S: DataBlockSpill
         loop {
             {
                 let buffer = self.buffer.lock().unwrap();
-                if !buffer.pages.is_empty() {
+                if buffer.has_page_ready() {
                     return true;
                 }
                 if buffer.is_send_stopped {
@@ -379,6 +431,9 @@ where S: DataBlockSpill
                     }
                     Err(_) => {
                         debug!("Long polling timeout reached");
+                        if let Some(page) = self.try_take_current_page().await? {
+                            return Ok((page, self.chan.is_close()));
+                        }
                         return Ok((BlocksSerializer::empty(), self.chan.is_close()));
                     }
                 }
@@ -394,17 +449,30 @@ where S: DataBlockSpill
 
     #[fastrace::trace(name = "SizedChannelReceiver::try_take_page")]
     async fn try_take_page(&mut self) -> Result<Option<BlocksSerializer>> {
-        let page = self.chan.buffer.lock().unwrap().take_page();
+        let page = self.chan.buffer.lock().unwrap().prepare_page_read();
+        self.deserialize_page(page).await
+    }
+
+    #[fastrace::trace(name = "SizedChannelReceiver::try_take_current_page")]
+    async fn try_take_current_page(&mut self) -> Result<Option<BlocksSerializer>> {
+        let page = self.chan.buffer.lock().unwrap().take_current_page();
+        self.deserialize_page(page).await
+    }
+
+    async fn deserialize_page(
+        &mut self,
+        page: Option<PageRead>,
+    ) -> Result<Option<BlocksSerializer>> {
         let collector = match page {
             None => return Ok(None),
-            Some(Page::Memory(page)) => {
+            Some(PageRead::Memory(page)) => {
                 let mut collector = BlocksCollector::new();
                 for block in page {
                     collector.append_block(block);
                 }
                 collector
             }
-            Some(Page::Spilled(location)) => {
+            Some(PageRead::Spilled(location)) => {
                 let start_time = std::time::Instant::now();
 
                 log::info!(
@@ -415,6 +483,11 @@ where S: DataBlockSpill
 
                 let spiller = self.chan.spiller.lock().unwrap().clone().unwrap();
                 let block = spiller.restore(&location).await?;
+                self.chan
+                    .buffer
+                    .lock()
+                    .unwrap()
+                    .commit_spilled_page(&location)?;
                 let rows_count = block.num_rows();
                 let memory_bytes = block.memory_size();
                 let duration_ms = start_time.elapsed().as_millis();
@@ -548,6 +621,8 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::sync::Mutex;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
 
     use databend_common_exception::ErrorCode;
@@ -582,6 +657,61 @@ mod tests {
         }
 
         async fn restore(&self, location: &Location) -> Result<DataBlock> {
+            match location {
+                Location::Remote(key) => {
+                    let storage = self.storage.lock().unwrap();
+                    storage
+                        .get(key)
+                        .cloned()
+                        .ok_or_else(|| ErrorCode::Internal("Block not found in mock spiller"))
+                }
+                _ => Err(ErrorCode::Internal("Unsupported location type")),
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct BlockingRestoreSpiller {
+        storage: Arc<Mutex<HashMap<String, DataBlock>>>,
+        restore_started: Arc<Notify>,
+        allow_first_restore: Arc<Notify>,
+        block_first_restore: Arc<AtomicBool>,
+    }
+
+    impl BlockingRestoreSpiller {
+        fn with_page(key: &str, block: DataBlock) -> (Self, Location) {
+            let storage = Arc::new(Mutex::new(HashMap::new()));
+            storage.lock().unwrap().insert(key.to_string(), block);
+            (
+                BlockingRestoreSpiller {
+                    storage,
+                    restore_started: Arc::new(Notify::new()),
+                    allow_first_restore: Arc::new(Notify::new()),
+                    block_first_restore: Arc::new(AtomicBool::new(true)),
+                },
+                Location::Remote(key.to_string()),
+            )
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl DataBlockSpill for BlockingRestoreSpiller {
+        async fn spill(&self, data_block: DataBlock) -> Result<Location> {
+            let key = format!("block_{}", rand::random::<u64>());
+            self.storage.lock().unwrap().insert(key.clone(), data_block);
+            Ok(Location::Remote(key))
+        }
+
+        async fn merge_and_spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
+            self.spill(DataBlock::concat(&data_block)?).await
+        }
+
+        async fn restore(&self, location: &Location) -> Result<DataBlock> {
+            if self.block_first_restore.swap(false, Ordering::SeqCst) {
+                self.restore_started.notify_one();
+                self.allow_first_restore.notified().await;
+            }
+
             match location {
                 Location::Remote(key) => {
                     let storage = self.storage.lock().unwrap();
@@ -676,6 +806,75 @@ mod tests {
         send_task.await.unwrap();
 
         assert_eq!(serializer.num_rows(), 3);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spsc_returns_partial_page_before_finish() {
+        let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(5, 4);
+
+        let allow_finish = Arc::new(Notify::new());
+        let sender_allow_finish = allow_finish.clone();
+        let send_task = databend_common_base::runtime::spawn(async move {
+            sender.plan_ready(OutputFormatSettings::default(), None);
+            sender
+                .send(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                    vec![1, 2, 3],
+                )]))
+                .await
+                .unwrap();
+
+            sender_allow_finish.notified().await;
+            sender.finish();
+        });
+
+        let (serializer, is_end) = receiver
+            .next_page(&Wait::Deadline(Instant::now() + Duration::from_millis(50)))
+            .await
+            .unwrap();
+
+        assert_eq!(serializer.num_rows(), 3);
+        assert!(!is_end);
+
+        allow_finish.notify_one();
+        let (serializer, is_end) = receiver
+            .next_page(&Wait::Deadline(Instant::now() + Duration::from_secs(1)))
+            .await
+            .unwrap();
+
+        assert_eq!(serializer.num_rows(), 0);
+        assert!(is_end);
+
+        assert!(receiver.close().is_none());
+        send_task.await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spilled_page_survives_cancelled_restore() {
+        let (_sender, mut receiver) = sized_spsc::<BlockingRestoreSpiller>(1, 1);
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![42])]);
+        let (spiller, location) = BlockingRestoreSpiller::with_page("spilled_page", block);
+        let restore_started = spiller.restore_started.clone();
+
+        {
+            let mut buffer = receiver.chan.buffer.lock().unwrap();
+            buffer.pages.push_back(Page::Spilled(location));
+            buffer.stop_send();
+        }
+        *receiver.chan.format_settings.lock().unwrap() = Some(OutputFormatSettings::default());
+        *receiver.chan.spiller.lock().unwrap() = Some(spiller);
+
+        let mut cancelled_restore = Box::pin(receiver.next_page(&Wait::Async));
+        tokio::select! {
+            result = &mut cancelled_restore => {
+                panic!("restore completed before it could be cancelled: {}", result.is_ok());
+            }
+            _ = restore_started.notified() => {}
+        }
+        drop(cancelled_restore);
+
+        let (serializer, is_end) = receiver.next_page(&Wait::Async).await.unwrap();
+        assert_eq!(serializer.num_rows(), 1);
+        assert!(is_end);
     }
 
     #[tokio::test(flavor = "multi_thread")]

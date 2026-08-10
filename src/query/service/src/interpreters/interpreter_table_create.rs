@@ -43,6 +43,8 @@ use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::plans::CreateTablePlan;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
@@ -53,10 +55,13 @@ use databend_common_users::UserApiProvider;
 use databend_enterprise_attach_table::get_attach_table_handler;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_session::TempTblMgrRef;
+use databend_storages_common_session::abort_staged_temp_table;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -67,16 +72,25 @@ use log::info;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_count_min_sketch_error_rate;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_frequency_columns;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_algorithm;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_kll_relative_error;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_size;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_type;
 use crate::interpreters::common::table_option_validation::is_valid_change_tracking;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
+use crate::interpreters::common::table_option_validation::is_valid_data_page_bytes;
+use crate::interpreters::common::table_option_validation::is_valid_data_page_rows;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
+use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
@@ -84,7 +98,10 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
@@ -100,6 +117,22 @@ impl CreateTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateTablePlan) -> Result<Self> {
         Ok(CreateTableInterpreter { ctx, plan })
     }
+}
+
+async fn cleanup_staged_temp_table(
+    mgr: TempTblMgrRef,
+    table_id: u64,
+    temp_prefix: &str,
+) -> Result<()> {
+    if let Err(e) = abort_staged_temp_table(mgr.clone(), table_id, temp_prefix).await {
+        log::warn!(
+            "Failed to clean up staged temporary table id {}: {:?}",
+            table_id,
+            e
+        );
+    }
+    ClientSessionManager::instance().remove_temp_tbl_mgr(temp_prefix.to_string(), &mgr);
+    Ok(())
 }
 
 #[async_trait::async_trait]
@@ -189,15 +222,26 @@ impl CreateTableInterpreter {
         req.as_dropped = true;
         req.table_meta.drop_on = Some(Utc::now());
         let table_meta = req.table_meta.clone();
-        let reply = catalog.create_table(req.clone()).await?;
+        // The prefix is moved into the pipeline's 'static finish hook, while the request itself can
+        // be consumed by the catalog.
+        let temp_prefix = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned();
+        let reply = catalog.create_table(req).await?;
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
-        if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
-            self.register_temp_table(prefix).await?;
+        let table_id = reply.table_id;
+        if let Some(prefix) = temp_prefix.as_deref()
+            && let Err(e) = self.register_temp_table(prefix).await
+        {
+            cleanup_staged_temp_table(
+                self.ctx.get_current_session().temp_tbl_mgr(),
+                table_id,
+                prefix,
+            )
+            .await?;
+            return Err(e);
         }
 
-        let table_id = reply.table_id;
         let prev_table_id = reply.prev_table_id;
         let orphan_table_name = reply.orphan_table_name.clone();
         let table_id_seq = reply
@@ -205,7 +249,7 @@ impl CreateTableInterpreter {
             .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
         let db_id = reply.db_id;
 
-        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+        if temp_prefix.is_none() {
             self.process_ownership(&tenant, reply).await?;
         }
 
@@ -237,9 +281,24 @@ impl CreateTableInterpreter {
             table_info: Some(table_info),
         };
 
-        let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
-            .execute2()
-            .await?;
+        let pipeline_result = match InsertInterpreter::try_create(self.ctx.clone(), insert_plan) {
+            Ok(interpreter) => interpreter.execute2().await,
+            Err(e) => Err(e),
+        };
+        let mut pipeline = match pipeline_result {
+            Ok(pipeline) => pipeline,
+            Err(e) => {
+                if let Some(prefix) = &temp_prefix {
+                    cleanup_staged_temp_table(
+                        self.ctx.get_current_session().temp_tbl_mgr(),
+                        table_id,
+                        prefix,
+                    )
+                    .await?;
+                }
+                return Err(e);
+            }
+        };
 
         let db_name = self.plan.database.clone();
         let table_name = self.plan.table.clone();
@@ -260,11 +319,9 @@ impl CreateTableInterpreter {
         //
         // If the un-drop fails, data inserted and the table will be invisible, and available for vacuum.
 
-        let ctx = self.ctx.clone();
         pipeline
             .main_pipeline
             .lift_on_finished(move |info: &ExecutionInfo| {
-                info!("{:?}", ctx.session_state()?.temp_tbl_mgr);
                 let qualified_table_name = format!("{}.{}", db_name, table_name);
 
                 if info.res.is_ok() {
@@ -291,11 +348,30 @@ impl CreateTableInterpreter {
                         info!("create {} as select failed. {:?}", qualified_table_name, e);
                         e
                     })?;
-                    info!("{:?}", ctx.session_state()?.temp_tbl_mgr);
                 }
 
                 Ok(())
             });
+
+        if let Some(temp_prefix) = temp_prefix {
+            let temp_tbl_mgr = self.ctx.get_current_session().temp_tbl_mgr();
+            pipeline
+                .main_pipeline
+                .set_on_finished(always_callback(move |info: &ExecutionInfo| {
+                    // Abort only the staged table created by this CTAS. A successfully committed
+                    // table has already been moved out of staged_tables, but avoid cleanup entirely
+                    // on success so this hook never handles unrelated temporary tables.
+                    if info.res.is_ok() {
+                        return Ok(());
+                    }
+
+                    GlobalIORuntime::instance().block_on(cleanup_staged_temp_table(
+                        temp_tbl_mgr,
+                        table_id,
+                        &temp_prefix,
+                    ))
+                }));
+        }
 
         Ok(pipeline)
     }
@@ -371,7 +447,7 @@ impl CreateTableInterpreter {
         }
 
         let reply = catalog.create_table(req.clone()).await?;
-        if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
+        if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX) {
             self.register_temp_table(prefix).await?;
         }
 
@@ -403,6 +479,13 @@ impl CreateTableInterpreter {
             self.plan.field_comments.clone()
         };
         let schema = TableSchemaRefExt::create(fields);
+        let field_stats_truncate_len = self
+            .plan
+            .field_stats_truncate_len
+            .iter()
+            .enumerate()
+            .filter_map(|(i, opt_len)| opt_len.map(|len| (schema.fields()[i].column_id(), len)))
+            .collect();
         let mut options = self.plan.options.clone();
 
         if self.plan.engine == Engine::Fuse {
@@ -422,6 +505,7 @@ impl CreateTableInterpreter {
                 );
             }
         }
+        // Validate storage_format; rejects the removed `native` format.
         if let Some(storage_format) = options.get(OPT_KEY_STORAGE_FORMAT) {
             FuseStorageFormat::from_str(storage_format)?;
         }
@@ -439,6 +523,7 @@ impl CreateTableInterpreter {
             options,
             engine_options: self.plan.engine_options.clone(),
             field_comments,
+            field_stats_truncate_len,
             drop_on: None,
             statistics: statistics.unwrap_or_default(),
             comment: comment.unwrap_or_default(),
@@ -449,10 +534,11 @@ impl CreateTableInterpreter {
 
         is_valid_block_per_segment(&table_meta.options)?;
         is_valid_row_per_block(&table_meta.options)?;
+        is_valid_recluster_depth(&table_meta.options)?;
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, schema.clone())?;
         is_valid_bloom_index_type(&table_meta.options)?;
-        is_valid_approx_distinct_columns(&table_meta.options, schema)?;
+        is_valid_approx_distinct_columns(&table_meta.options, schema.clone())?;
         is_valid_change_tracking(&table_meta.options)?;
         // check random seed
         is_valid_random_seed(&table_meta.options)?;
@@ -460,15 +546,30 @@ impl CreateTableInterpreter {
         is_valid_data_retention_period(&table_meta.options)?;
         // check enable_parquet_encoding
         is_valid_fuse_parquet_dictionary_opt(&table_meta.options)?;
+        // check enable_virtual_column
+        is_valid_fuse_virtual_column_opt(&table_meta.options)?;
+        is_valid_data_page_rows(&table_meta.options)?;
+        is_valid_data_page_bytes(&table_meta.options)?;
+        is_valid_analyze_histogram_algorithm(&table_meta.options)?;
+        is_valid_analyze_histogram_kll_relative_error(&table_meta.options)?;
+        is_valid_analyze_frequency_columns(&table_meta.options, schema)?;
+        is_valid_analyze_top_n_size(&table_meta.options)?;
+        is_valid_analyze_count_min_sketch_error_rate(&table_meta.options)?;
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
         // check enable auto analyze.
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE)?;
+        is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER)?;
+        is_valid_option_of_type::<u64>(
+            &table_meta.options,
+            FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
+        )?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
-            if !is_valid_create_opt(&key, &self.plan.engine) {
+            // PARTITION BY is normalized and inserted by the binder as internal metadata.
+            if key != OPT_KEY_PARTITION_BY && !is_valid_create_opt(&key, &self.plan.engine) {
                 let msg = format!(
                     "table option {key} is invalid for create table statement with engine {}",
                     self.plan.engine
@@ -497,6 +598,7 @@ impl CreateTableInterpreter {
             },
             table_meta,
             as_dropped: false,
+            materialized_view: None,
             table_properties: self.plan.table_properties.clone(),
             table_partition: self.plan.table_partition.as_ref().map(|table_partition| {
                 TablePartition::Identity {
@@ -518,11 +620,12 @@ impl CreateTableInterpreter {
             .await
     }
 
-    async fn register_temp_table(&self, prefix: String) -> Result<()> {
+    async fn register_temp_table(&self, prefix: &str) -> Result<()> {
         let session = self.ctx.get_current_session();
         if let Some(id) = session.get_client_session_id() {
             let client_session_manager = ClientSessionManager::instance();
-            client_session_manager.add_temp_tbl_mgr(prefix, session.temp_tbl_mgr().clone());
+            client_session_manager
+                .add_temp_tbl_mgr(prefix.to_string(), session.temp_tbl_mgr().clone());
             client_session_manager
                 .refresh_session_handle(
                     self.ctx.get_tenant(),

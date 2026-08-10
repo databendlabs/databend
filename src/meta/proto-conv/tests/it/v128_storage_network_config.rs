@@ -148,6 +148,7 @@ fn test_decode_v128_storage_network_config() -> anyhow::Result<()> {
         access_key_id: "access_key_id".to_string(),
         access_key_secret: "access_key_secret".to_string(),
         presign_endpoint_url: "".to_string(),
+        role_arn: "".to_string(),
         server_side_encryption_key_id: "".to_string(),
         network_config: Some(StorageNetworkParams {
             retry_timeout: 1,

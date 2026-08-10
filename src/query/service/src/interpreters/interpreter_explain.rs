@@ -22,7 +22,6 @@ use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -65,6 +64,12 @@ use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryProfile;
+use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::TableContextSettings;
 use crate::sql::optimizer::ir::SExpr;
 use crate::sql::plans::Plan;
 
@@ -139,7 +144,7 @@ impl Interpreter for ExplainInterpreter {
                         self.ctx.clone(),
                         *plan.clone(),
                     )?
-                    .build_physical_plan()
+                    .build_physical_plan(true)
                     .await?;
                     self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
                         .await?
@@ -214,7 +219,7 @@ impl Interpreter for ExplainInterpreter {
                 Plan::DataMutation { s_expr, .. } => {
                     let plan: Mutation = s_expr.plan().clone().try_into()?;
                     let mutation_build_info =
-                        build_mutation_info(self.ctx.clone(), &plan, true).await?;
+                        build_mutation_info(self.ctx.clone(), &plan, true, None).await?;
                     self.explain_analyze(
                         s_expr.child(0)?,
                         &plan.metadata,
@@ -273,6 +278,16 @@ impl Interpreter for ExplainInterpreter {
                 }
                 Plan::DataMutation { s_expr, schema, .. } => {
                     self.explain_merge_fragments(*s_expr.clone(), schema.clone())
+                        .await?
+                }
+                Plan::InsertMultiTable(plan) => {
+                    let physical_plan = InsertMultiTableInterpreter::try_create_static(
+                        self.ctx.clone(),
+                        *plan.clone(),
+                    )?
+                    .build_physical_plan(true)
+                    .await?;
+                    self.explain_physical_fragments(physical_plan, plan.meta_data.clone())
                         .await?
                 }
                 _ => {
@@ -342,10 +357,10 @@ impl ExplainInterpreter {
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
         if self.ctx.get_settings().get_enable_query_result_cache()?
-            && self.ctx.get_cacheable()
+            && self.ctx.result_cache_state().cacheable()
             && formatted_ast.is_some()
         {
-            let extras = self.ctx.get_cache_key_extras();
+            let extras = self.ctx.result_cache_state().cache_key_extras();
             let key_source = if extras.is_empty() {
                 formatted_ast.as_ref().unwrap().clone()
             } else {
@@ -356,6 +371,7 @@ impl ExplainInterpreter {
             let cache_reader = ResultCacheReader::create(
                 self.ctx.clone(),
                 &key,
+                formatted_ast.as_ref().unwrap(),
                 kv_store.clone(),
                 self.ctx
                     .get_settings()
@@ -423,6 +439,26 @@ impl ExplainInterpreter {
 
         let fragments = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
 
+        self.format_fragments(ctx, fragments, metadata)
+    }
+
+    async fn explain_physical_fragments(
+        &self,
+        plan: PhysicalPlan,
+        metadata: MetadataRef,
+    ) -> Result<Vec<DataBlock>> {
+        let ctx = self.ctx.clone();
+        let fragments = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
+
+        self.format_fragments(ctx, fragments, metadata)
+    }
+
+    fn format_fragments(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragments: Vec<crate::schedulers::PlanFragment>,
+        metadata: MetadataRef,
+    ) -> Result<Vec<DataBlock>> {
         let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
 
         for fragment in fragments {
@@ -457,7 +493,7 @@ impl ExplainInterpreter {
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res)?;
+        let query_profiles = self.execute_and_get_profiles(build_res).await?;
 
         Ok(GraphicalProfiles {
             query_id: query_ctx.get_id(),
@@ -482,7 +518,7 @@ impl ExplainInterpreter {
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res)?;
+        let query_profiles = self.execute_and_get_profiles(build_res).await?;
 
         let mut pruned_partitions_stats = self.ctx.get_pruned_partitions_stats();
         if !pruned_partitions_stats.is_empty() {
@@ -532,7 +568,7 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
-    fn execute_and_get_profiles(
+    async fn execute_and_get_profiles(
         &self,
         mut build_res: PipelineBuildResult,
     ) -> Result<HashMap<u32, PlanProfile>> {
@@ -549,12 +585,12 @@ impl ExplainInterpreter {
                 pipelines.push(build_res.main_pipeline);
 
                 let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-                executor.execute()?;
+                executor.execute().await?;
             }
             false => {
                 let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
                 executor.start();
-                while (executor.pull_data()?).is_some() {}
+                while (executor.pull_data().await?).is_some() {}
             }
         }
         Ok(self

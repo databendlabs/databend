@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_storages_fuse::TableContext;
 use databend_storages_common_session::TxnManagerRef;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSession;
 pub struct AbortInterpreter {
     txn_manager: TxnManagerRef,
 }

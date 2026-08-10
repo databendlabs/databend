@@ -26,16 +26,20 @@ pub fn build_ordered_compact_pipeline(
     pipeline: &mut Pipeline,
     thresholds: BlockThresholds,
     max_threads: usize,
+    extra_key_num: usize,
 ) -> Result<()> {
     pipeline.try_resize(1)?;
-    pipeline.add_accumulating_transformer(|| OrderedBlockCompactBuilder::new(thresholds));
+    pipeline.add_accumulating_transformer(move || {
+        OrderedBlockCompactBuilder::new(thresholds, extra_key_num)
+    });
     pipeline.try_resize(max_threads)?;
-    pipeline.add_block_meta_transformer(TransformCompactBlock::default);
+    pipeline.add_block_meta_transformer(|| TransformCompactBlock);
     Ok(())
 }
 
 pub struct OrderedBlockCompactBuilder {
     thresholds: BlockThresholds,
+    extra_key_num: usize,
     // Holds blocks that exceeded the threshold and are waiting to be compacted.
     staged_blocks: BlockGroup,
     // Holds blocks that are partially accumulated but haven't reached the threshold.
@@ -43,9 +47,10 @@ pub struct OrderedBlockCompactBuilder {
 }
 
 impl OrderedBlockCompactBuilder {
-    pub fn new(thresholds: BlockThresholds) -> Self {
+    pub fn new(thresholds: BlockThresholds, extra_key_num: usize) -> Self {
         Self {
             thresholds,
+            extra_key_num,
             staged_blocks: BlockGroup::default(),
             pending_blocks: BlockGroup::default(),
         }
@@ -60,20 +65,11 @@ impl OrderedBlockCompactBuilder {
             // this path intentionally does not enforce a hard post-sort per-block maximum.
             // A block may remain above max_rows_per_block / max_bytes_per_block when that
             // avoids creating very small tail blocks inside the compaction window.
-            let mut block_nums = 2;
-            if blocks.total_rows > 2 * thresholds.min_rows_per_block {
-                block_nums = block_nums.max(blocks.total_rows / thresholds.min_rows_per_block);
-            }
-            if blocks.total_bytes > thresholds.max_bytes_per_block {
-                block_nums = block_nums.max(blocks.total_bytes / thresholds.min_bytes_per_block);
-            }
-            // rows_per_block is a split target for the downstream no-tail splitter rather than
-            // a hard upper bound for the produced blocks.
-            let rows_per_block = blocks.total_rows.div_ceil(block_nums).max(1);
-
+            let block_num =
+                thresholds.calc_compact_block_num(blocks.total_rows, blocks.total_bytes);
             DataBlock::empty_with_meta(Box::new(BlockCompactMeta::Split {
                 blocks: blocks.take_blocks(),
-                rows_per_block,
+                block_num,
             }))
         } else if blocks.len() > 1 {
             DataBlock::empty_with_meta(Box::new(BlockCompactMeta::Concat(blocks.take_blocks())))
@@ -87,8 +83,9 @@ impl AccumulatingTransform for OrderedBlockCompactBuilder {
     const NAME: &'static str = "OrderedBlockCompactBuilder";
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
+        debug_assert!(self.extra_key_num <= data.num_columns());
         let num_rows = data.num_rows();
-        let num_bytes = data.estimate_block_size();
+        let num_bytes = data.estimate_block_size(data.num_columns() - self.extra_key_num);
 
         // pending_blocks accumulates the current ordered run; once it reaches N we either
         // stage it as the next output candidate or materialize it immediately if it grows past 2N.
@@ -170,6 +167,7 @@ mod tests {
     use databend_common_expression::BlockMetaInfoDowncast;
     use databend_common_expression::FromData;
     use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::StringType;
 
     use super::*;
     use crate::processors::BlockMetaTransform;
@@ -180,8 +178,41 @@ mod tests {
         )])
     }
 
+    fn block_with_extra_key(rows: usize, extra_value: &str) -> DataBlock {
+        DataBlock::new_from_columns(vec![
+            Int32Type::from_data((0..rows).map(|v| v as i32).collect::<Vec<_>>()),
+            StringType::from_data(vec![extra_value.to_string(); rows]),
+        ])
+    }
+
     fn row_focused_thresholds() -> BlockThresholds {
-        BlockThresholds::new(1000, 1 << 20, 1 << 20, 1000)
+        BlockThresholds::default()
+            .set_rows_per_block(1000)
+            .set_bytes_per_block(1 << 20)
+    }
+
+    #[test]
+    fn test_ordered_compact_ignores_tail_extra_key_size() -> Result<()> {
+        let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+        let mut builder = OrderedBlockCompactBuilder::new(thresholds, 1);
+        let block = block_with_extra_key(10, "extra-cluster-key-value");
+
+        assert!(thresholds.check_large_enough(
+            block.num_rows(),
+            block.estimate_block_size(block.num_columns())
+        ));
+        assert!(builder.transform(block)?.is_empty());
+
+        let block = block_with_extra_key(10, "extra-cluster-key-value");
+        assert!(builder.transform(block)?.is_empty());
+        let output = builder.on_finish(true)?;
+        let meta_block = output.into_iter().next().unwrap();
+        let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
+        let output = TransformCompactBlock.transform(meta)?;
+
+        assert_eq!(output.len(), 1);
+        assert_eq!(output[0].num_rows(), 20);
+        Ok(())
     }
 
     #[test]
@@ -190,12 +221,16 @@ mod tests {
         let mut group = BlockGroup::default();
         for rows in [300, 300, 1000] {
             let block = block_with_rows(rows);
-            group.push(block.clone(), block.num_rows(), block.estimate_block_size());
+            group.push(
+                block.clone(),
+                block.num_rows(),
+                block.estimate_block_size(block.num_columns()),
+            );
         }
 
         let meta_block = OrderedBlockCompactBuilder::create_output_data(&mut group, thresholds);
         let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
-        let output = TransformCompactBlock::default().transform(meta)?;
+        let output = TransformCompactBlock.transform(meta)?;
 
         assert_eq!(output.len(), 1);
         assert_eq!(output[0].num_rows(), 1600);
@@ -207,16 +242,71 @@ mod tests {
         let thresholds = row_focused_thresholds();
         let block = block_with_rows(2001);
         let mut group = BlockGroup::default();
-        group.push(block.clone(), block.num_rows(), block.estimate_block_size());
+        group.push(
+            block.clone(),
+            block.num_rows(),
+            block.estimate_block_size(block.num_columns()),
+        );
 
         let meta_block = OrderedBlockCompactBuilder::create_output_data(&mut group, thresholds);
         let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
-        let output = TransformCompactBlock::default().transform(meta)?;
+        let output = TransformCompactBlock.transform(meta)?;
 
         assert_eq!(output.len(), 2);
         assert_eq!(output[0].num_rows(), 1001);
         assert_eq!(output[1].num_rows(), 1000);
         assert!(output[0].num_rows() > thresholds.max_rows_per_block);
+        Ok(())
+    }
+
+    #[test]
+    fn test_ordered_compact_splits_by_target_block_count() -> Result<()> {
+        let thresholds = BlockThresholds::default()
+            .set_rows_per_block(5)
+            .set_bytes_per_block(1 << 20);
+        let mut group = BlockGroup::default();
+        for rows in [2, 6, 6, 2, 2] {
+            let block = block_with_rows(rows);
+            group.push(
+                block.clone(),
+                block.num_rows(),
+                block.estimate_block_size(block.num_columns()),
+            );
+        }
+
+        let meta_block = OrderedBlockCompactBuilder::create_output_data(&mut group, thresholds);
+        let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
+        let output = TransformCompactBlock.transform(meta)?;
+
+        assert_eq!(
+            output.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
+            vec![6, 6, 6]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_ordered_compact_split_does_not_exceed_target_block_count() -> Result<()> {
+        let block = block_with_rows(1000);
+        let mut group = BlockGroup::default();
+        group.push(
+            block.clone(),
+            block.num_rows(),
+            block.estimate_block_size(block.num_columns()),
+        );
+
+        let target_block_count = 500;
+        let thresholds = BlockThresholds::default()
+            .set_rows_per_block(1000)
+            .set_bytes_per_block(group.total_bytes / target_block_count);
+        let block_num = thresholds.calc_compact_block_num(group.total_rows, group.total_bytes);
+
+        let meta_block = OrderedBlockCompactBuilder::create_output_data(&mut group, thresholds);
+        let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
+        let output = TransformCompactBlock.transform(meta)?;
+
+        assert!(output.len() <= block_num);
+        assert!(output.iter().all(|block| block.num_rows() > 1));
         Ok(())
     }
 }

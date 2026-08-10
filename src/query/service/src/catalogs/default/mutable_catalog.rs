@@ -21,7 +21,6 @@ use std::time::Instant;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -31,13 +30,15 @@ use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
-use databend_common_meta_api::LockApi;
+use databend_common_meta_api::LockApi2;
+use databend_common_meta_api::MaterializedViewApi;
 use databend_common_meta_api::RefApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_api::TableApi;
 use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::principal::UDTFServer;
@@ -52,7 +53,6 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
@@ -106,6 +106,7 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -127,8 +128,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -136,6 +135,8 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
@@ -145,6 +146,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
 use databend_meta_runtime::DatabendRuntime;
@@ -158,6 +160,7 @@ use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
 use crate::meta_service_error;
 use crate::meta_txn_error;
+use crate::sessions::TableContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
@@ -212,7 +215,7 @@ impl MutableCatalog {
 
         // Create default database.
         let req = CreateDatabaseReq {
-            create_option: CreateOption::CreateIfNotExists,
+            override_existing: false,
             catalog_name: None,
             name_ident: DatabaseNameIdent::new(&tenant, "default"),
             meta: DatabaseMeta {
@@ -358,6 +361,10 @@ impl Catalog for MutableCatalog {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
+        if !res.created {
+            return Ok(res);
+        }
+
         info!(
             "[CATALOG] Creating database: name={}, engine={}",
             req.name_ident.database_name(),
@@ -373,7 +380,7 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(req.name_ident.tenant_name()).await?;
-        Ok(CreateDatabaseReply { db_id: res.db_id })
+        Ok(res)
     }
 
     #[async_backtrace::framed]
@@ -550,6 +557,18 @@ impl Catalog for MutableCatalog {
             .await
             .map_err(meta_service_error)?;
         Ok(res)
+    }
+
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.ctx
+            .meta
+            .get_mv_definition(tenant, mv_table_id)
+            .await
+            .map_err(meta_service_error)
     }
 
     async fn mget_table_names_by_ids(
@@ -931,27 +950,27 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
-        Ok(self.ctx.meta.list_lock_revisions(req).await?)
+        Ok(self.ctx.meta.list_lock_revisions_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply> {
-        Ok(self.ctx.meta.create_lock_revision(req).await?)
+        Ok(self.ctx.meta.create_lock_revision_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()> {
-        Ok(self.ctx.meta.extend_lock_revision(req).await?)
+        Ok(self.ctx.meta.extend_lock_revision_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()> {
-        Ok(self.ctx.meta.delete_lock_revision(req).await?)
+        Ok(self.ctx.meta.delete_lock_revision_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>> {
-        Ok(self.ctx.meta.list_locks(req).await?)
+        Ok(self.ctx.meta.list_locks_v2(req).await?)
     }
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {
@@ -965,7 +984,7 @@ impl Catalog for MutableCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         if let Some(vi) = visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {
@@ -1008,7 +1027,7 @@ impl Catalog for MutableCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         if let Some(vi) = visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {
@@ -1032,8 +1051,30 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
-        Ok(self.ctx.meta.update_dictionary(req).await?)
+    async fn get_dictionary_id(
+        &self,
+        dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryId>>> {
+        Ok(self
+            .ctx
+            .meta
+            .get_dictionary_id(&dict_ident)
+            .await
+            .map_err(meta_service_error)?)
+    }
+
+    #[async_backtrace::framed]
+    async fn update_dictionary_by_id(
+        &self,
+        id_ident: DictionaryIdIdent,
+        dictionary_meta: DictionaryMeta,
+    ) -> Result<Change<DictionaryMeta>> {
+        Ok(self
+            .ctx
+            .meta
+            .update_dictionary_by_id(id_ident, dictionary_meta)
+            .await
+            .map_err(meta_service_error)?)
     }
 
     #[async_backtrace::framed]
@@ -1066,7 +1107,12 @@ impl Catalog for MutableCatalog {
         &self,
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
-        Ok(self.ctx.meta.list_dictionaries(req).await?)
+        Ok(self
+            .ctx
+            .meta
+            .list_dictionaries(req)
+            .await
+            .map_err(meta_service_error)?)
     }
 
     async fn set_table_lvt(

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -42,7 +41,6 @@ use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
-use databend_storages_common_table_meta::table::ClusterType;
 use parking_lot::RwLock;
 
 use crate::interpreters::HookOperator;
@@ -67,6 +65,10 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct ReplaceInterpreter {
     ctx: Arc<QueryContext>,
@@ -301,10 +303,7 @@ impl ReplaceInterpreter {
             .ctx
             .get_settings()
             .get_replace_into_bloom_pruning_max_column_number()?;
-        let bloom_filter_column_indexes = if table
-            .cluster_type()
-            .is_some_and(|v| v == ClusterType::Linear)
-        {
+        let bloom_filter_column_indexes = if table.cluster_key_meta().is_some() {
             fuse_table
                 .choose_bloom_filter_columns(
                     self.ctx.clone(),

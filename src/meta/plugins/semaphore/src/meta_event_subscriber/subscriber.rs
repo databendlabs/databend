@@ -28,7 +28,7 @@ use futures::TryStreamExt;
 use log::error;
 use log::info;
 use log::warn;
-use tonic::Status;
+use tonic_013::Status;
 
 use crate::errors::ConnectionClosed;
 use crate::errors::ProcessorError;
@@ -88,7 +88,7 @@ impl MetaEventSubscriber {
     pub(crate) async fn new_watch_stream(
         &self,
         ctx: impl fmt::Display,
-    ) -> Result<tonic::Streaming<WatchResponse>, ConnectionClosed> {
+    ) -> Result<tonic_013::Streaming<WatchResponse>, ConnectionClosed> {
         let watch =
             WatchRequest::new(self.left.clone(), Some(self.right.clone())).with_initial_flush(true);
 
@@ -145,6 +145,14 @@ impl MetaEventSubscriber {
 
                 _ = timeout_fu.fuse() => {
                     warn!("{}: process_meta_event_loop timeout waiting for an event", self.watcher_name);
+
+                    let conn_error = ConnectionClosed::new_str("timeout").context(&self.watcher_name);
+                    self.processor
+                        .tx_to_acquirer
+                        .send(Err(conn_error))
+                        .await
+                        .ok();
+
                     return Err(ProcessorError::ConnectionClosed(
                         ConnectionClosed::new_str("timeout").context(&self.watcher_name)
                     ));
@@ -190,6 +198,14 @@ impl MetaEventSubscriber {
 
             let Some(watch_response) = watch_response else {
                 warn!("watch-stream closed: {}", self.watcher_name);
+
+                let conn_error =
+                    ConnectionClosed::new_str("watch-stream closed").context(&self.watcher_name);
+                self.processor
+                    .tx_to_acquirer
+                    .send(Err(conn_error))
+                    .await
+                    .ok();
 
                 return Err(ProcessorError::ConnectionClosed(
                     ConnectionClosed::new_str("watch-stream closed").context(&self.watcher_name),

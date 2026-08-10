@@ -11,5 +11,8 @@ databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 serde = { workspace = true }
 
+[dev-dependencies]
+serde_json = { workspace = true }
+
 [lints]
 workspace = true

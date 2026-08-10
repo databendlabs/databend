@@ -16,17 +16,11 @@ use std::time::Duration;
 
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
-use databend_meta_client::types::InvalidArgument;
 use databend_meta_client::types::TxnOp;
 
 use crate::kv_pb_api::encode_pb;
 
-pub fn txn_put_u64(key: &impl kvapi::Key, value: u64) -> Result<TxnOp, InvalidArgument> {
-    let v = serde_json::to_vec(&value).map_err(|e| InvalidArgument::new(e, ""))?;
-    Ok(TxnOp::put(key.to_string_key(), v))
-}
-
-pub fn txn_put_pb<K>(key: &K, value: &K::ValueType) -> Result<TxnOp, InvalidArgument>
+pub fn txn_put_pb<K>(key: &K, value: &K::ValueType) -> TxnOp
 where
     K: kvapi::Key,
     K::ValueType: FromToProto + 'static,
@@ -35,17 +29,13 @@ where
 }
 
 /// Deprecate this. Replace it with `txn_put_pb().with_ttl()`
-pub fn txn_put_pb_with_ttl<K>(
-    key: &K,
-    value: &K::ValueType,
-    ttl: Option<Duration>,
-) -> Result<TxnOp, InvalidArgument>
+pub fn txn_put_pb_with_ttl<K>(key: &K, value: &K::ValueType, ttl: Option<Duration>) -> TxnOp
 where
     K: kvapi::Key,
     K::ValueType: FromToProto + 'static,
 {
-    let buf = encode_pb(value).map_err(|e| InvalidArgument::new(e, ""))?;
-    Ok(TxnOp::put_with_ttl(key.to_string_key(), buf, ttl))
+    let buf = encode_pb(value);
+    TxnOp::put_with_ttl(key.to_string_key(), buf, ttl)
 }
 
 /// Build a txn operation that gets value by key.

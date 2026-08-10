@@ -178,8 +178,8 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
                 .consume(data_block)
                 .await?;
         } else if !self.called_on_finish {
-            self.called_on_finish = true;
-            self.inner
+            let result = self
+                .inner
                 .as_mut()
                 .ok_or_else(|| {
                     databend_common_exception::ErrorCode::Internal(
@@ -187,7 +187,9 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
                     )
                 })?
                 .on_finish()
-                .await?;
+                .await;
+            self.called_on_finish = true;
+            result?;
         }
 
         Ok(())
@@ -195,5 +197,120 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
 
     fn details_status(&self) -> Option<String> {
         self.inner.as_ref().and_then(|x| x.details_status())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use async_trait::async_trait;
+    use databend_common_exception::ErrorCode;
+    use databend_common_exception::Result;
+    use databend_common_expression::DataBlock;
+    use tokio::sync::oneshot;
+
+    use super::AsyncSink;
+    use super::AsyncSinker;
+    use crate::core::InputPort;
+    use crate::core::Processor;
+
+    struct BlockingFinishSink {
+        finish_entered_tx: Option<oneshot::Sender<()>>,
+        finish_release_rx: Option<oneshot::Receiver<()>>,
+    }
+
+    #[async_trait]
+    impl AsyncSink for BlockingFinishSink {
+        const NAME: &'static str = "BlockingFinishSink";
+
+        async fn on_finish(&mut self) -> Result<()> {
+            if let Some(tx) = self.finish_entered_tx.take() {
+                let _ = tx.send(());
+            }
+
+            if let Some(rx) = self.finish_release_rx.take() {
+                let _ = rx.await;
+            }
+
+            Ok(())
+        }
+
+        async fn consume(&mut self, _data_block: DataBlock) -> Result<bool> {
+            Ok(false)
+        }
+    }
+
+    struct ErrorFinishSink;
+
+    #[async_trait]
+    impl AsyncSink for ErrorFinishSink {
+        const NAME: &'static str = "ErrorFinishSink";
+
+        async fn on_finish(&mut self) -> Result<()> {
+            Err(ErrorCode::Internal("finish failed"))
+        }
+
+        async fn consume(&mut self, _data_block: DataBlock) -> Result<bool> {
+            Ok(false)
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_cancel_pending_on_finish_does_not_mark_finish_called() -> Result<()> {
+        let (finish_entered_tx, finish_entered_rx) = oneshot::channel();
+        let (_finish_release_tx, finish_release_rx) = oneshot::channel();
+
+        let sink = Box::leak(Box::new(AsyncSinker {
+            inner: Some(BlockingFinishSink {
+                finish_entered_tx: Some(finish_entered_tx),
+                finish_release_rx: Some(finish_release_rx),
+            }),
+            finished: false,
+            input: InputPort::create(),
+            input_data: None,
+            called_on_start: true,
+            called_on_finish: false,
+        }));
+
+        let mut finish_future = Box::pin(sink.async_process());
+
+        tokio::select! {
+            entered = finish_entered_rx => {
+                entered.expect("on_finish should be entered");
+            }
+            result = &mut finish_future => {
+                panic!("on_finish should remain pending, got {result:?}");
+            }
+        }
+
+        drop(finish_future);
+
+        assert!(
+            !sink.called_on_finish,
+            "pending on_finish must not be recorded as completed"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_on_finish_error_marks_finish_called() -> Result<()> {
+        let sink = Box::leak(Box::new(AsyncSinker {
+            inner: Some(ErrorFinishSink),
+            finished: false,
+            input: InputPort::create(),
+            input_data: None,
+            called_on_start: true,
+            called_on_finish: false,
+        }));
+
+        let result = sink.async_process().await;
+
+        assert!(result.is_err(), "on_finish should propagate its error");
+        assert!(
+            sink.called_on_finish,
+            "completed on_finish errors must be recorded as attempted"
+        );
+
+        Ok(())
     }
 }

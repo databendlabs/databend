@@ -26,12 +26,14 @@ use databend_common_meta_control::admin::MetaAdminClient;
 use databend_common_meta_control::args::BenchArgs;
 use databend_common_meta_control::args::DumpRaftLogWalArgs;
 use databend_common_meta_control::args::ExportArgs;
+use databend_common_meta_control::args::FilterTenantArgs;
 use databend_common_meta_control::args::GetArgs;
 use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::args::KeysLayoutArgs;
 use databend_common_meta_control::args::ListFeatures;
 use databend_common_meta_control::args::LuaArgs;
+use databend_common_meta_control::args::LuaScript;
 use databend_common_meta_control::args::MemberListArgs;
 use databend_common_meta_control::args::MetricsArgs;
 use databend_common_meta_control::args::SetFeature;
@@ -42,6 +44,7 @@ use databend_common_meta_control::args::UpsertArgs;
 use databend_common_meta_control::args::WatchArgs;
 use databend_common_meta_control::export_from_disk;
 use databend_common_meta_control::export_from_grpc;
+use databend_common_meta_control::filter_tenant;
 use databend_common_meta_control::import;
 use databend_common_meta_control::keys_layout_from_grpc;
 use databend_common_meta_control::lua_support;
@@ -213,6 +216,11 @@ impl App {
         Ok(())
     }
 
+    fn filter_tenant(&self, args: &FilterTenantArgs) -> anyhow::Result<()> {
+        filter_tenant::filter_tenant(args)?;
+        Ok(())
+    }
+
     async fn keys_layout(&self, args: &KeysLayoutArgs) -> anyhow::Result<()> {
         keys_layout_from_grpc::keys_layout_from_running_node(args).await?;
         Ok(())
@@ -262,22 +270,23 @@ impl App {
         // Setup Lua environment with gRPC client support
         lua_support::setup_lua_environment(&lua)?;
 
-        let script = match &args.file {
-            Some(path) => std::fs::read_to_string(path)?,
-            None => {
-                let mut buffer = String::new();
-                io::stdin().read_to_string(&mut buffer)?;
-                buffer
-            }
-        };
-
         #[allow(clippy::disallowed_types)]
         let local = tokio::task::LocalSet::new();
-        let res = local.run_until(lua.load(&script).exec_async()).await;
 
-        if let Err(e) = res {
-            return Err(anyhow::anyhow!("Lua execution error: {}", e));
+        if args.scripts.is_empty() {
+            let mut script = String::new();
+            io::stdin().read_to_string(&mut script)?;
+            return execute_lua_script(&lua, &local, &script).await;
         }
+
+        for source in &args.scripts {
+            let script = match source {
+                LuaScript::File(path) => std::fs::read_to_string(path)?,
+                LuaScript::Inline(script) => script.clone(),
+            };
+            execute_lua_script(&lua, &local, &script).await?;
+        }
+
         Ok(())
     }
 
@@ -318,6 +327,18 @@ return metrics, nil
     ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
         lua_support::new_grpc_client(addresses)
     }
+}
+
+#[allow(clippy::disallowed_types)]
+async fn execute_lua_script(
+    lua: &Lua,
+    local: &tokio::task::LocalSet,
+    script: &str,
+) -> anyhow::Result<()> {
+    local
+        .run_until(lua.load(script).exec_async())
+        .await
+        .map_err(|e| anyhow::anyhow!("Lua execution error: {}", e))
 }
 
 #[derive(Debug, Clone, Deserialize, Subcommand)]
@@ -376,6 +397,21 @@ enum CtlCommand {
     ///     --initial-cluster 1=localhost:28103 \
     ///     --initial-cluster 2=localhost:28203
     Import(ImportArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Filter an exported metadata dump and keep only one tenant.
+    ///
+    /// The command keeps the export header, skips all raft-log records, and filters
+    /// state-machine GenericKV/Expire records by traversing tenant roots and their
+    /// referenced database/table ids. Every state-machine record must receive an
+    /// explicit keep/drop mark; otherwise the command fails.
+    ///
+    /// Example:
+    ///   metactl filter-tenant --tenant tenant1 --input meta.db --output tenant1.db
+    ///
+    /// Example (stdin/stdout):
+    ///   cat meta.db | metactl filter-tenant --tenant tenant1 > tenant1.db
+    FilterTenant(FilterTenantArgs),
 
     #[command(verbatim_doc_comment)]
     /// Dump state machine keys grouped by prefix.
@@ -524,12 +560,18 @@ enum CtlCommand {
     /// Example (from file):
     ///   metactl lua --file script.lua
     ///
+    /// Example (inline):
+    ///   metactl lua --script 'print("hello")'
+    ///
+    /// Sources run in command-line order:
+    ///   metactl lua --file define.lua --script 'callit()' --file cleanup.lua
+    ///
     /// Example (from stdin):
     ///   echo 'print("hello")' | metactl lua
     ///
     /// Sample Lua script:
     ///   local client = metactl.new_grpc_client("127.0.0.1:9191")
-    ///   local result, err = client:get_kv("mykey")
+    ///   local result, err = client:get("mykey")
     ///   if err then print("error:", err) else print(result) end
     Lua(LuaArgs),
 
@@ -638,6 +680,9 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Import(args) => {
                 app.import(args).await?;
+            }
+            CtlCommand::FilterTenant(args) => {
+                app.filter_tenant(args)?;
             }
             CtlCommand::KeysLayout(args) => {
                 app.keys_layout(args).await?;

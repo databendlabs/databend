@@ -47,6 +47,7 @@ fn test_cast() {
         test_cast_between_string_and_date(file, is_try);
         test_cast_to_nested_type(file, is_try);
         test_cast_between_binary_and_string(file, is_try);
+        test_cast_to_vector(file, is_try);
     }
 }
 
@@ -754,6 +755,37 @@ fn test_cast_between_binary_and_string(file: &mut impl Write, is_try: bool) {
             "a",
             StringType::from_data_with_validity(vec!["Abc", "Dobrý den", "ß😀山"], vec![
                 true, true, false,
+            ]),
+        )],
+    );
+}
+
+fn test_cast_to_vector(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    run_ast(file, format!("{prefix}CAST('[1,2,3,4]' AS VECTOR(4))"), &[]);
+    run_ast(
+        file,
+        format!("{prefix}CAST(parse_json('[1,2,3,4]') AS VECTOR(4))"),
+        &[],
+    );
+    run_ast(file, format!("{prefix}CAST(a AS VECTOR(4))"), &[(
+        "a",
+        StringType::from_data(vec![
+            " [1,2,3,4] ",
+            "[4.5, 5.5, 6.5, 7.5]",
+            "[8.1,8.2,8.3,8.4]",
+        ]),
+    )]);
+    run_ast(
+        file,
+        format!("{prefix}CAST(parse_json(a) AS VECTOR(4))"),
+        &[(
+            "a",
+            StringType::from_data(vec![
+                " [1,2,3,4] ",
+                "[4.5, 5.5, 6.5, 7.5]",
+                "[8.1,8.2,8.3,8.4]",
             ]),
         )],
     );

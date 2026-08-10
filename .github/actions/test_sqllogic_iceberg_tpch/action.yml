@@ -41,6 +41,16 @@ runs:
 
         script_dir="tests/sqllogictests/scripts"
         (cd "$script_dir" && uv sync)
+        java_home_17="${JAVA_HOME_17_ARM64:-${JAVA_HOME_17_X64:-}}"
+        if [ -z "$java_home_17" ]; then
+          echo "Java 17 is required for Spark 4 based Iceberg variant test data" >&2
+          exit 1
+        fi
+        export JAVA_HOME="$java_home_17"
+        export PATH="$JAVA_HOME/bin:$PATH"
+        export SPARK_LOCAL_HOSTNAME=localhost
+        export SPARK_LOCAL_IP=127.0.0.1
+        java -version
         echo "Running prepare_iceberg_tpch_data.py..."
         uv run tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
         echo "Running prepare_iceberg_test_data.py..."

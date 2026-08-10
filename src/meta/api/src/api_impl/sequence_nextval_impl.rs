@@ -19,7 +19,7 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnOp;
@@ -77,7 +77,7 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
 
         let condition = vec![txn_cond_eq_seq(&self.ident, self.sequence_meta.seq)];
         let if_then = vec![
-            txn_put_pb_with_ttl(&self.ident, &self.sequence_meta.data, None)?, // name -> meta
+            txn_put_pb_with_ttl(&self.ident, &self.sequence_meta.data, None), // name -> meta
         ];
 
         let txn_req = TxnRequest::new(condition, if_then);

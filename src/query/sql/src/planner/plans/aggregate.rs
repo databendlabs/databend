@@ -23,7 +23,6 @@ use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::Symbol;
 use crate::optimizer::ir::Distribution;
-use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -129,22 +128,22 @@ impl Aggregate {
 
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for group_item in self.group_items.iter() {
+        for group_item in &self.group_items {
             used_columns.insert(group_item.index);
-            used_columns.extend(group_item.scalar.used_columns())
+            group_item.scalar.collect_used_columns(&mut used_columns);
         }
-        for agg in self.aggregate_functions.iter() {
+        for agg in &self.aggregate_functions {
             used_columns.insert(agg.index);
-            used_columns.extend(agg.scalar.used_columns())
+            agg.scalar.collect_used_columns(&mut used_columns);
         }
         Ok(used_columns)
     }
 
     pub fn group_columns(&self) -> Result<ColumnSet> {
         let mut col_set = ColumnSet::new();
-        for group_item in self.group_items.iter() {
+        for group_item in &self.group_items {
             col_set.insert(group_item.index);
-            col_set.extend(group_item.scalar.used_columns())
+            group_item.scalar.collect_used_columns(&mut col_set);
         }
         Ok(col_set)
     }
@@ -157,27 +156,27 @@ impl Aggregate {
                 statistics: Statistics {
                     precise_cardinality: Some(1),
                     column_stats: column_stats.clone(),
+                    top_n: Default::default(),
+                    count_min_sketch: Default::default(),
                 },
             }));
         }
 
-        if self.group_items.iter().any(|item| {
-            column_stats
-                .get(&item.index)
-                .map(|stat| {
-                    if let Ndv::Max(ndv) = stat.ndv {
-                        ndv >= stat_info.cardinality
-                    } else {
-                        false
-                    }
-                })
-                .unwrap_or(true)
-        }) {
+        if self
+            .group_items
+            .iter()
+            .any(|item| match column_stats.get(&item.index) {
+                Some(stat) => stat.ndv.is_upper_only(),
+                None => true,
+            })
+        {
             return Ok(Arc::new(StatInfo {
                 cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0),
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
+                    top_n: Default::default(),
+                    count_min_sketch: Default::default(),
                 },
             }));
         }
@@ -185,7 +184,12 @@ impl Aggregate {
         let groups_ndv = self
             .group_items
             .iter()
-            .map(|group| column_stats[&group.index].ndv.value())
+            .map(|group| {
+                column_stats[&group.index]
+                    .ndv
+                    .expected
+                    .expect("upper-only group NDV should have used aggregate fallback")
+            })
             .collect::<Vec<_>>();
 
         let cardinality = groups_ndv
@@ -213,10 +217,12 @@ impl Aggregate {
             };
             // When there is a high probability that eager aggregation
             // is better, we will update the histogram.
-            if histogram.num_values() >= histogram.num_distinct_values() * 10.0 {
-                for bucket in histogram.buckets.iter_mut() {
-                    bucket.aggregate_values();
-                }
+            if histogram
+                .ndv()
+                .expected
+                .is_some_and(|ndv| histogram.num_values() >= ndv * 10.0)
+            {
+                histogram.collapse_counts_to_distinct();
             }
         }
 
@@ -225,6 +231,8 @@ impl Aggregate {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }

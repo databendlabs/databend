@@ -191,11 +191,11 @@ ADDRESS = 'https://databend.com';"
 pub fn config_with_spill() -> InnerConfig {
     let mut conf = ConfigBuilder::create().config();
 
-    // Use a stable directory under the workspace for spill during tests.
-    // TempDirManager::init will create and clean up directories under this
-    // path, so it's safe to reuse across tests.
+    // Use an isolated directory under the workspace for spill during tests.
+    // TempDirManager::init removes its tenant subdirectory, so sharing the
+    // root across parallel test processes can delete another test's spill file.
     conf.spill = SpillConfig::new_for_test(
-        ".databend/_query_spill".to_string(),
+        format!(".databend/_query_spill/{}", GlobalUniq::unique()),
         0.0,
         1024 * 1024 * 1024,
     );

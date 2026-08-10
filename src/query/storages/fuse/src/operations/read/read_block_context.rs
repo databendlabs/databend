@@ -20,11 +20,8 @@ use databend_common_exception::Result;
 use databend_storages_common_io::ReadSettings;
 use log::debug;
 
-use super::block_format::FuseBlockFormat;
-use super::native_data_source::NativeDataSource;
+use super::block_format::FuseParquetBlockFormat;
 use super::parquet_data_source::ParquetDataSource;
-use super::raw_data_source::RawDataSource;
-use super::read_data_source::ReadDataSource;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::AggIndexReader;
@@ -37,7 +34,7 @@ pub struct ReadBlockContext {
     read_settings: ReadSettings,
     storage_format: FuseStorageFormat,
     block_read_ctx: BlockReadContext,
-    block_format: Arc<dyn FuseBlockFormat>,
+    block_format: FuseParquetBlockFormat,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 }
@@ -47,7 +44,7 @@ impl ReadBlockContext {
         ctx: Arc<dyn TableContext>,
         storage_format: FuseStorageFormat,
         block_read_ctx: BlockReadContext,
-        block_format: Arc<dyn FuseBlockFormat>,
+        block_format: FuseParquetBlockFormat,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<Arc<Self>> {
@@ -67,7 +64,7 @@ impl ReadBlockContext {
     }
 
     #[async_backtrace::framed]
-    pub async fn read_data(&self, part: PartInfoPtr) -> Result<ReadDataSource> {
+    pub async fn read_data(&self, part: PartInfoPtr) -> Result<ParquetDataSource> {
         let fuse_part = FuseBlockPartInfo::from_part(&part)?;
 
         if let Some(data_source) = self.read_agg_index_data(fuse_part).await? {
@@ -79,7 +76,7 @@ impl ReadBlockContext {
             .as_ref()
             .and_then(|source| source.ignore_column_ids.clone());
 
-        let raw_data = self
+        let data = self
             .block_format
             .read_data_by_merge_io(
                 &self.block_read_ctx,
@@ -90,20 +87,13 @@ impl ReadBlockContext {
             )
             .await?;
 
-        Ok(match raw_data {
-            RawDataSource::Native(data) => {
-                ReadDataSource::Native(Box::new(NativeDataSource::Normal(data)))
-            }
-            RawDataSource::Parquet(data) => {
-                ReadDataSource::Parquet(Box::new(ParquetDataSource::Normal((data, virtual_source))))
-            }
-        })
+        Ok(ParquetDataSource::Normal((data, virtual_source)))
     }
 
     async fn read_agg_index_data(
         &self,
         fuse_part: &FuseBlockPartInfo,
-    ) -> Result<Option<ReadDataSource>> {
+    ) -> Result<Option<ParquetDataSource>> {
         let Some(index_reader) = self.index_reader.as_ref() else {
             return Ok(None);
         };
@@ -122,7 +112,7 @@ impl ReadBlockContext {
             return Ok(None);
         };
 
-        let raw_data = match self
+        let data = match self
             .block_format
             .read_data_by_merge_io(
                 &index_block_read_ctx,
@@ -133,36 +123,26 @@ impl ReadBlockContext {
             )
             .await
         {
-            Ok(raw_data) => raw_data,
+            Ok(data) => data,
             Err(err) => {
                 debug!("Read aggregating index `{location}` failed: {err}");
                 return Ok(None);
             }
         };
 
-        Ok(Some(match raw_data {
-            RawDataSource::Native(data) => {
-                ReadDataSource::Native(Box::new(NativeDataSource::AggIndex(data)))
-            }
-            RawDataSource::Parquet(data) => {
-                let part = FuseBlockPartInfo::create(
-                    location,
-                    None,
-                    0,
-                    None,
-                    0,
-                    block_meta.num_rows,
-                    block_meta.columns_meta,
-                    None,
-                    None,
-                    index_reader.compression().into(),
-                    None,
-                    None,
-                    None,
-                );
-                ReadDataSource::Parquet(Box::new(ParquetDataSource::AggIndex((part, data))))
-            }
-        }))
+        let part = FuseBlockPartInfo::create(
+            location,
+            None,
+            0,
+            block_meta.num_rows,
+            block_meta.columns_meta,
+            None,
+            index_reader.compression().into(),
+            None,
+            None,
+            None,
+        );
+        Ok(Some(ParquetDataSource::AggIndex((part, data))))
     }
 
     async fn read_virtual_data(

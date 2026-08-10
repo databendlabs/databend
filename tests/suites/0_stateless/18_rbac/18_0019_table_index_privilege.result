@@ -1,0 +1,17 @@
+=== denied table index ===
+1
+=== table function name collision ===
+1
+=== alter ngram index ===
+alter ok
+=== table owner inverted index ===
+0
+table owner ok
+=== db owner vector index ===
+db owner ok
+=== super table index ===
+super ok
+=== global drop table index ===
+global drop ok
+=== system_history hard deny for super ===
+1

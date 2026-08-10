@@ -25,7 +25,9 @@ use crate::sessions::SessionManager;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct InstanceStatus {
-    // the active sessions count with running queries
+    // running queries plus HTTP queries waiting for result fetching
+    pub inflight_queries_count: u64,
+    // the number of running queries
     pub running_queries_count: u64,
     // the length of query queue
     pub queuing_queries_count: u64,
@@ -67,7 +69,8 @@ pub async fn instance_status_handler() -> poem::Result<impl IntoResponse> {
     };
 
     let status = InstanceStatus {
-        running_queries_count: status.running_queries_count.max(http_query_count),
+        running_queries_count: status.running_queries_count,
+        inflight_queries_count: status.running_queries_count.max(http_query_count),
         active_sessions_count: status.active_sessions_count,
         queuing_queries_count: queue_manager.length() as u64,
         last_query_started_at: status.last_query_started_at.map(unix_timestamp_secs),

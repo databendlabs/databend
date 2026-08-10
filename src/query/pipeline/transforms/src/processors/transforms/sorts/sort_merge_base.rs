@@ -83,6 +83,4 @@ pub trait MergeSort<R: Rows> {
     ///
     /// If `all_in_one_block`, the return value is a single block.
     fn on_finish(&mut self, all_in_one_block: bool) -> Result<Vec<DataBlock>>;
-
-    fn interrupt(&self) {}
 }

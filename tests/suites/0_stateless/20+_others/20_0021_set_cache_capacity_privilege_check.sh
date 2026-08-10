@@ -3,9 +3,9 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "create user if not exists test identified by 'test'"|$BENDSQL_CLIENT_CONNECT
+echo "create user if not exists test identified by 'test'"|bendsql_connect_root
 
-export TEST_NON_PRIVILEGED_USER_CONNECT="bendsql -A --user=test --password=test --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_NON_PRIVILEGED_USER_CONNECT="bendsql_connect_user test test -A"
 
 echo "call system\$set_cache_capacity('memory_cache_block_meta', 100)" | $TEST_NON_PRIVILEGED_USER_CONNECT
 

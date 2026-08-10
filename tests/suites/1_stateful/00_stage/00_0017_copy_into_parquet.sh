@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 run_copy_count() {
-  echo "$1" | $BENDSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
+  echo "$1" | bendsql_connect_root | wc -l | sed 's/ //g'
 }
 
 SINGLE_ROW_COUNT=${COPY_PARQUET_SINGLE_ROW_COUNT:-600000}
@@ -37,7 +37,7 @@ run_copy_count "copy /*+ set_var(max_threads=4) set_var(max_memory_usage=${MEMOR
 stmt "remove @s1;"
 
 for i in `seq 1 ${COPY_ITERATIONS}`;do
-	echo "copy into @s1/ from (select number a, number + 1 b from numbers(20))" | $BENDSQL_CLIENT_CONNECT > /dev/null 2>&1
+	echo "copy into @s1/ from (select number a, number + 1 b from numbers(20))" | bendsql_connect_root > /dev/null 2>&1
 done
 
 stmt "select count() from @s1 where a >= 0 and b <= 1000;"

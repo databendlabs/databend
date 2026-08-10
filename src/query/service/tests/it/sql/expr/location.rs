@@ -14,14 +14,15 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-
 use std::collections::BTreeMap;
 
-use anyhow::Result;
 use databend_common_ast::ast::UriLocation;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::StorageFsConfig;
 // use databend_common_storage::StorageFtpConfig;
 use databend_common_meta_app::storage::StorageGcsConfig;
@@ -31,20 +32,18 @@ use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
-use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
-use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
-use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use databend_common_sql::planner::binder::parse_uri_location;
+use databend_common_version::BUILD_INFO;
 
 #[tokio::test]
-async fn test_parse_uri_location() -> anyhow::Result<()> {
+async fn test_parse_uri_location_without_connection() -> anyhow::Result<()> {
     let thread_name = std::thread::current()
         .name()
         .map(ToString::to_string)
         .expect("thread should has a name");
 
     GlobalInstance::init_testing(&thread_name);
-    GlobalConfig::init(&InnerConfig::default())?;
+    GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO)?;
 
     let cases = vec![
         (
@@ -62,6 +61,7 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: "https://ipfs.filebase.io".to_string(),
                     root: "/ipfs/".to_string(),
+                    network_config: None,
                 }),
                 "too-naive".to_string(),
             ),
@@ -77,9 +77,9 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     ("access_key_id", "dzin"),
                     ("access_key_secret", "p=ear1"),
                 ]
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<String, String>>(),
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<BTreeMap<String, String>>(),
             ),
             (
                 StorageParams::Oss(StorageOssConfig {
@@ -90,7 +90,9 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     bucket: "zhen".to_string(),
                     access_key_id: "dzin".to_string(),
                     access_key_secret: "p=ear1".to_string(),
+                    role_arn: "".to_string(),
                     server_side_encryption_key_id: "".to_string(),
+                    network_config: None,
                 }),
                 "/".to_string(),
             ),
@@ -128,6 +130,7 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
                     root: "/ipfs/".to_string(),
+                    network_config: None,
                 }),
                 "too-simple".to_string(),
             ),
@@ -147,6 +150,7 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: "https://ipfs.filebase.io".to_string(),
                     root: "/ipfs/".to_string(),
+                    network_config: None,
                 }),
                 "too-naive".to_string(),
             ),
@@ -163,9 +167,9 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     ("session_token", "session_token"),
                     ("region", "us-east-2"),
                 ]
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<String, String>>(),
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<BTreeMap<String, String>>(),
             ),
             (
                 StorageParams::S3(StorageS3Config {
@@ -182,6 +186,8 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     enable_virtual_host_style: false,
                     role_arn: "".to_string(),
                     external_id: "".to_string(),
+                    network_config: None,
+                    storage_class: Default::default(),
                 }),
                 "/".to_string(),
             ),
@@ -198,9 +204,9 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     ("session_token", "security_token"),
                     ("region", "us-east-2"),
                 ]
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<String, String>>(),
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<BTreeMap<String, String>>(),
             ),
             (
                 StorageParams::S3(StorageS3Config {
@@ -217,6 +223,8 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     enable_virtual_host_style: false,
                     role_arn: "".to_string(),
                     external_id: "".to_string(),
+                    network_config: None,
+                    storage_class: Default::default(),
                 }),
                 "/".to_string(),
             ),
@@ -233,9 +241,9 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     ("aws_token", "security_token"),
                     ("region", "us-east-2"),
                 ]
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<String, String>>(),
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<BTreeMap<String, String>>(),
             ),
             (
                 StorageParams::S3(StorageS3Config {
@@ -248,9 +256,12 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     master_key: "".to_string(),
                     root: "/tmp/".to_string(),
                     disable_credential_loader: false,
+                    allow_credential_chain: None,
                     enable_virtual_host_style: false,
                     role_arn: "".to_string(),
                     external_id: "".to_string(),
+                    network_config: None,
+                    storage_class: Default::default(),
                 }),
                 "/".to_string(),
             ),
@@ -281,6 +292,8 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     enable_virtual_host_style: false,
                     role_arn: "aws::iam::xxxx".to_string(),
                     external_id: "".to_string(),
+                    network_config: None,
+                    storage_class: Default::default(),
                 }),
                 "/".to_string(),
             ),
@@ -317,6 +330,7 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     bucket: "example".to_string(),
                     root: "/tmp/".to_string(),
                     credential: "gcs.credential".to_string(),
+                    network_config: None,
                 }),
                 "/".to_string(),
             ),
@@ -333,6 +347,7 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                 StorageParams::Http(StorageHttpConfig {
                     endpoint_url: "https://example.com".to_string(),
                     paths: ["/tmp.csv"].iter().map(|v| v.to_string()).collect(),
+                    network_config: None,
                 }),
                 "/".to_string(),
             ),
@@ -352,6 +367,7 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                         .iter()
                         .map(|v| v.to_string())
                         .collect(),
+                    network_config: None,
                 }),
                 "/".to_string(),
             ),
@@ -374,9 +390,10 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                         "/tmp-14.csv",
                         "/tmp-15.csv",
                     ]
-                        .iter()
-                        .map(|v| v.to_string())
-                        .collect(),
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect(),
+                    network_config: None,
                 }),
                 "/".to_string(),
             ),
@@ -393,9 +410,9 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     ("disable_list_batch", "true"),
                     ("user_name", "test"),
                 ]
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<_, _>>(),
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<BTreeMap<_, _>>(),
             ),
             (
                 StorageParams::Webhdfs(StorageWebhdfsConfig {
@@ -404,6 +421,7 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
                     delegation: "databendthebest".to_string(),
                     disable_list_batch: true,
                     user_name: "test".to_string(),
+                    network_config: None,
                 }),
                 "/".to_string(),
             ),
@@ -411,7 +429,7 @@ async fn test_parse_uri_location() -> anyhow::Result<()> {
     ];
 
     for (name, mut input, expected) in cases {
-        let actual = parse_uri_location(&mut input, None).await?;
+        let actual = parse_uri_location(&mut input).await?;
         assert_eq!(expected, actual, "{}", name);
     }
 

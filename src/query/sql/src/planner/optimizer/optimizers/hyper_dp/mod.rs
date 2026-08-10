@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod algorithm;
 mod dphyp;
-mod join_node;
 mod join_relation;
-mod query_graph;
-mod util;
 
 pub use dphyp::DPhpyOptimizer;
-pub use join_node::JoinNode;
-pub use join_relation::JoinRelation;
-pub use join_relation::RelationSetTree;
-pub use query_graph::QueryGraph;
+use join_relation::JoinRelation;
+use join_relation::RelationId;
+use join_relation::RelationSet;
+use join_relation::RelationSetTree;

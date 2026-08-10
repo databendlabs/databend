@@ -20,8 +20,8 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_storages_fuse::TableContext;
 use databend_meta_runtime::DatabendRuntime;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
 
 #[tokio::test(flavor = "multi_thread")]

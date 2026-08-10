@@ -1,0 +1,27 @@
+statement ok
+DROP USER IF EXISTS 'kp_show_user'
+
+statement ok
+CREATE USER 'kp_show_user' IDENTIFIED WITH key_pair BY 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w=='
+
+query TTTTTTBTTBTI
+DESC USER 'kp_show_user'
+----
+kp_show_user % key_pair (empty) (empty) (empty) 0 NULL NULL NULL NULL 1
+
+statement ok
+ALTER USER 'kp_show_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ==' LABEL = 'ci-key'
+
+query TTTTTTBTTBTI
+DESC USER 'kp_show_user'
+----
+kp_show_user % key_pair (empty) (empty) (empty) 0 NULL NULL NULL NULL 2
+
+query TTT
+SHOW PUBLIC KEYS FOR USER 'kp_show_user'
+----
+SHA256:ygGD6DgPtF3I3Jvytfc3RExRaX1cTQjlBxpFmgXmE+E (empty) <slt:ignore>
+SHA256:sBDVc5gUgq6zgTWMt9K3XDEs6paj3ZDjblsFCb96048 ci-key <slt:ignore>
+
+statement ok
+DROP USER IF EXISTS 'kp_show_user'

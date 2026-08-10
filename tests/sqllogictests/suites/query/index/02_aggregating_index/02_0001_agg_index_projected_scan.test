@@ -140,7 +140,7 @@ SELECT SUM(a) from t_mismatch_parquet WHERE c > 1 GROUP BY b ORDER BY 1
 50
 
 statement ok
-CREATE TABLE t_mismatch_native (a int, b int, c int) storage_format = 'native'
+CREATE TABLE t_mismatch_native (a int, b int, c int) storage_format = 'parquet'
 
 statement ok
 INSERT INTO t_mismatch_native VALUES (10,1,4), (20,2,4), (30,2,5)

@@ -20,6 +20,7 @@ use crate::physical_plans::MaterializeCTERef;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::display_materialized_cte_name;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 
@@ -43,7 +44,7 @@ impl<'a> PhysicalFormat for MaterializeCTERefFormatter<'a> {
         let mut children = Vec::new();
         children.push(FormatTreeNode::new(format!(
             "cte_name: {}",
-            self.inner.cte_name.clone()
+            display_materialized_cte_name(&self.inner.cte_name)
         )));
         children.push(FormatTreeNode::new(format!(
             "cte_schema: [{}]",
@@ -64,7 +65,10 @@ impl<'a> PhysicalFormat for MaterializeCTERefFormatter<'a> {
     #[recursive::recursive]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let children = vec![
-            FormatTreeNode::new(format!("cte_name: {}", self.inner.cte_name)),
+            FormatTreeNode::new(format!(
+                "cte_name: {}",
+                display_materialized_cte_name(&self.inner.cte_name)
+            )),
             FormatTreeNode::new(format!(
                 "cte_schema: [{}]",
                 format_output_columns(self.inner.cte_schema.clone(), ctx.metadata, false)

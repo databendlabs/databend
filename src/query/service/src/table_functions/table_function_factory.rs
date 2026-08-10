@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_storages_fuse::table_functions::ClusteringStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseBlockFunc;
+use databend_common_storages_fuse::table_functions::FuseBlockStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
 use databend_common_storages_fuse::table_functions::FuseDumpSnapshotsFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
@@ -35,6 +36,7 @@ use databend_common_storages_fuse::table_functions::FuseVirtualColumnFunc;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_iceberg::IcebergInspectTable;
+use databend_common_storages_stream::stream_backlog_table_func::StreamBacklogTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use databend_meta_client::types::MetaId;
 #[cfg(feature = "task-support")]
@@ -48,6 +50,7 @@ use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
+use super::BillingUsageDailyTable;
 use super::LicenseInfoTable;
 use super::TenantQuotaTable;
 use super::others::UdfEchoTable;
@@ -55,6 +58,10 @@ use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::storages::fuse::table_functions::FuseTagFunc;
+#[cfg(feature = "task-support")]
+use crate::table_functions::PrivateTaskCancelTable;
+#[cfg(feature = "task-support")]
+use crate::table_functions::PrivateTaskHistoryTable;
 use crate::table_functions::TableFunction;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::copy_history::CopyHistoryTable;
@@ -108,9 +115,6 @@ pub struct TableFunctionFactory {
 
 impl TableFunctionFactory {
     pub fn create(config: &InnerConfig) -> Self {
-        #[cfg(not(feature = "task-support"))]
-        let _ = config;
-
         let mut id = SYS_TBL_FUNC_ID_BEGIN;
         let mut next_id = || -> MetaId {
             if id >= SYS_TBL_FUC_ID_END {
@@ -202,6 +206,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseBlockFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_block_statistics".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseBlockStatisticsFunc>::create),
             ),
         );
 
@@ -320,7 +332,16 @@ impl TableFunctionFactory {
         );
 
         #[cfg(feature = "task-support")]
-        if !config.task.on {
+        if config.task.on {
+            creators.insert(
+                "task_history".to_string(),
+                (next_id(), Arc::new(PrivateTaskHistoryTable::create)),
+            );
+            creators.insert(
+                "user_task_cancel_ongoing_executions".to_string(),
+                (next_id(), Arc::new(PrivateTaskCancelTable::create)),
+            );
+        } else {
             creators.insert(
                 "task_dependents".to_string(),
                 (next_id(), Arc::new(TaskDependentsTable::create)),
@@ -334,6 +355,18 @@ impl TableFunctionFactory {
             creators.insert(
                 "task_history".to_string(),
                 (next_id(), Arc::new(TaskHistoryTable::create)),
+            );
+        }
+
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_some()
+        {
+            creators.insert(
+                "billing_usage_daily".to_string(),
+                (next_id(), Arc::new(BillingUsageDailyTable::create)),
             );
         }
 
@@ -415,6 +448,10 @@ impl TableFunctionFactory {
         creators.insert(
             "copy_history".to_string(),
             (next_id(), Arc::new(CopyHistoryTable::create)),
+        );
+        creators.insert(
+            "stream_backlog".to_string(),
+            (next_id(), Arc::new(StreamBacklogTable::create)),
         );
 
         TableFunctionFactory {

@@ -23,7 +23,7 @@ use super::Interpreter;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct DropTableClusterKeyInterpreter {
     ctx: Arc<QueryContext>,
@@ -70,9 +70,12 @@ impl Interpreter for DropTableClusterKeyInterpreter {
             |snapshot_opt, meta| {
                 if let Some(snapshot) = snapshot_opt {
                     snapshot.cluster_key_meta = None;
+                    snapshot.cluster_type = None;
+                    snapshot.summary.cluster_stats = None;
                 }
                 if plan.branch.is_none() {
                     meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+                    meta.cluster_key = None;
                     meta.cluster_key_v2 = None;
                 }
             },

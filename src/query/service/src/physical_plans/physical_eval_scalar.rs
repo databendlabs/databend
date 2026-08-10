@@ -65,6 +65,23 @@ pub struct EvalScalar {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+impl EvalScalar {
+    pub fn create(
+        input: PhysicalPlan,
+        exprs: Vec<(RemoteExpr, Symbol)>,
+        projections: BTreeSet<usize>,
+        stat_info: Option<PlanStatsInfo>,
+    ) -> Self {
+        EvalScalar {
+            meta: PhysicalPlanMeta::new("EvalScalar"),
+            projections,
+            input,
+            exprs,
+            stat_info,
+        }
+    }
+}
+
 #[typetag::serde]
 impl IPhysicalPlan for EvalScalar {
     fn as_any(&self) -> &dyn Any {
@@ -199,11 +216,14 @@ impl PhysicalPlanBuilder {
         let column_projections = required.clone();
         let mut used = vec![];
         // Only keep columns needed by parent plan.
-        for s in eval_scalar.items.iter() {
+        for s in &eval_scalar.items {
             if !required.contains(&s.index) {
                 continue;
             }
             used.push(s.clone());
+            // The item defines this output index. Only request the child column
+            // when the defining expression itself references that index.
+            required.remove(&s.index);
             s.scalar.used_columns().iter().for_each(|c| {
                 required.insert(*c);
             })

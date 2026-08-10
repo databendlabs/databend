@@ -17,7 +17,7 @@ use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::tenant::ToTenant;
 use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::TxnOp;
 use databend_meta_client::types::TxnRequest;

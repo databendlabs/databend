@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -66,6 +67,13 @@ pub struct SExpr {
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
     pub(crate) applied_rules: AppliedRules,
+}
+
+#[derive(Clone, Default)]
+pub struct ScanRequiredColumns {
+    pub columns: BTreeSet<Symbol>,
+    pub inverted_index: Option<InvertedIndexInfo>,
+    pub vector_index: Option<VectorIndexInfo>,
 }
 
 impl SExpr {
@@ -301,31 +309,36 @@ impl SExpr {
     }
 
     // Add column index to Scan nodes that match the given table index
-    pub fn add_column_index_to_scans(
+    pub fn add_column_index_to_scans(&self, table_index: IndexType, column_index: Symbol) -> SExpr {
+        let mut required_columns = BTreeMap::new();
+        required_columns.insert(table_index, ScanRequiredColumns {
+            columns: BTreeSet::from([column_index]),
+            inverted_index: None,
+            vector_index: None,
+        });
+        self.add_column_indexes_to_scans(&required_columns)
+    }
+
+    // Add column indexes to Scan nodes that match the given table indexes.
+    pub fn add_column_indexes_to_scans(
         &self,
-        table_index: IndexType,
-        column_index: Symbol,
-        inverted_index: &Option<InvertedIndexInfo>,
-        vector_index: &Option<VectorIndexInfo>,
+        required_columns: &BTreeMap<IndexType, ScanRequiredColumns>,
     ) -> SExpr {
         struct Visitor<'a> {
-            table_index: IndexType,
-            column_index: Symbol,
-            inverted_index: &'a Option<InvertedIndexInfo>,
-            vector_index: &'a Option<VectorIndexInfo>,
+            required_columns: &'a BTreeMap<IndexType, ScanRequiredColumns>,
         }
 
         impl<'a> SExprVisitor for Visitor<'a> {
             fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
                 if let Some(p) = expr.plan.as_ref().as_scan() {
-                    if p.table_index == self.table_index {
+                    if let Some(required_columns) = self.required_columns.get(&p.table_index) {
                         let mut p = p.clone();
-                        p.columns.insert(self.column_index);
-                        if self.inverted_index.is_some() {
-                            p.inverted_index = self.inverted_index.clone();
+                        p.columns.extend(required_columns.columns.iter().copied());
+                        if required_columns.inverted_index.is_some() {
+                            p.inverted_index = required_columns.inverted_index.clone();
                         }
-                        if self.vector_index.is_some() {
-                            p.vector_index = self.vector_index.clone();
+                        if required_columns.vector_index.is_some() {
+                            p.vector_index = required_columns.vector_index.clone();
                         }
                         let expr = expr.replace_plan(p);
                         return Ok(VisitAction::Replace(expr));
@@ -337,12 +350,7 @@ impl SExpr {
             }
         }
 
-        let mut visitor = Visitor {
-            table_index,
-            column_index,
-            inverted_index,
-            vector_index,
-        };
+        let mut visitor = Visitor { required_columns };
         let expr = self.accept(&mut visitor);
         if let Ok(Some(expr)) = expr {
             return expr;

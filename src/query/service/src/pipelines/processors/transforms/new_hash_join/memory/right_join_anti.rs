@@ -18,13 +18,13 @@ use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_base::hints::assume;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::with_join_hash_method;
+use databend_common_pipeline::core::check_interrupt;
 
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
@@ -39,6 +39,7 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeDat
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub struct AntiRightHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,
@@ -50,7 +51,6 @@ pub struct AntiRightHashJoin {
     pub(crate) inlist_threshold: usize,
     pub(crate) bloom_threshold: usize,
     pub(crate) min_max_threshold: usize,
-    pub(crate) spatial_threshold: usize,
 
     pub(crate) finished: bool,
 }
@@ -68,7 +68,6 @@ impl AntiRightHashJoin {
         let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
         let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
         let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
-        let spatial_threshold = settings.get_spatial_runtime_filter_threshold()? as usize;
 
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
@@ -90,7 +89,6 @@ impl AntiRightHashJoin {
             inlist_threshold,
             bloom_threshold,
             min_max_threshold,
-            spatial_threshold,
             finished: false,
         })
     }
@@ -118,7 +116,6 @@ impl Join for AntiRightHashJoin {
             self.inlist_threshold,
             self.bloom_threshold,
             self.min_max_threshold,
-            self.spatial_threshold,
         )
     }
 
@@ -201,6 +198,8 @@ struct AntiRightHashJoinFinalStream<'a> {
 impl<'a> JoinStream for AntiRightHashJoinFinalStream<'a> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         while let Some((chunk_idx, row_idx)) = self.scan_progress.take() {
+            check_interrupt()?;
+
             let scan_map = &self.join_state.scan_map[chunk_idx];
             let remain_rows = self.max_rows - self.scan_idx.len();
             let remain_rows = std::cmp::min(remain_rows, scan_map.len() - row_idx);

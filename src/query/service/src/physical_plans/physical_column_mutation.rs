@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -162,17 +163,15 @@ impl IPhysicalPlan for ColumnMutation {
                 });
             }
 
-            // Keep the original order of the columns.
-            let num_output_columns =
-                self.input_num_columns - self.has_filter_column as usize - self.udf_col_num;
-            let mut projection = Vec::with_capacity(num_output_columns);
-            for idx in 0..num_output_columns {
-                if let Some(index) = schema_offset_to_new_offset.get(&idx) {
-                    projection.push(*index);
-                } else {
-                    projection.push(idx);
-                }
-            }
+            // Keep only table fields in their schema order. Mutation input may
+            // carry derived UDF argument/result columns that must not be
+            // serialized back into the table.
+            let mut projection = field_id_to_schema_index.iter().collect::<Vec<_>>();
+            projection.sort_by_key(|(field_id, _)| *field_id);
+            let projection = projection
+                .into_iter()
+                .map(|(_, schema_index)| *schema_index)
+                .collect::<Vec<_>>();
             block_operators.push(BlockOperator::Project { projection });
 
             builder.main_pipeline.add_transformer(|| {
@@ -191,9 +190,10 @@ impl IPhysicalPlan for ColumnMutation {
 
         let block_thresholds = table.get_block_thresholds();
         let cluster_stats_gen = if matches!(self.mutation_kind, MutationKind::Delete) {
-            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, None)?
+            let input_schema = DataSchema::from(table.schema_with_stream()).into();
+            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?
         } else {
-            table.cluster_gen_for_append(
+            table.cluster_gen_for_update(
                 builder.ctx.clone(),
                 &mut builder.main_pipeline,
                 block_thresholds,

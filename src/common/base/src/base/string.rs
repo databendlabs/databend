@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::string::FromUtf8Error;
+use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -99,13 +100,14 @@ pub fn unescape_for_key(key: &str) -> std::result::Result<String, FromUtf8Error>
 
 /// Mask a string by "******", but keep `unmask_len` of suffix.
 #[inline]
-pub fn mask_string(s: &str, unmask_len: usize) -> String {
-    if s.len() <= unmask_len {
-        s.to_string()
+pub fn mask_string(s: &str, _unmask_len: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= 4 {
+        "***".to_string()
     } else {
-        let mut ret = "******".to_string();
-        ret.push_str(&s[(s.len() - unmask_len)..]);
-        ret
+        let head: String = chars[..2].iter().collect();
+        let tail: String = chars[chars.len() - 2..].iter().collect();
+        format!("{}***{}", head, tail)
     }
 }
 
@@ -175,19 +177,52 @@ pub fn convert_number_size(num: f64) -> String {
     format!("{}{}{}", negative, pretty_bytes, unit)
 }
 
+/// Mask a secret value, showing first 2 and last 2 characters.
+/// For values with 4 or fewer characters, fully mask.
+pub fn mask_partial(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= 4 {
+        "***".to_string()
+    } else {
+        let head: String = chars[..2].iter().collect();
+        let tail: String = chars[chars.len() - 2..].iter().collect();
+        format!("{}***{}", head, tail)
+    }
+}
+
 /// Mask the connection info in the sql.
 pub fn mask_connection_info(sql: &str) -> String {
-    let mut masked_sql = sql.to_string();
+    // Quoted string pattern: handles both '' (SQL doubled) and \' (backslash escaped) quotes
+    // Also handles other backslash escapes like \\
+    // Supports both single-quoted and double-quoted literals (MySQL/Hive dialects)
+    const SINGLE_QUOTED_STR: &str = r"'([^'\\]|''|\\.)*'";
+    const DOUBLE_QUOTED_STR: &str = r#""([^"\\]|""|\\.)*""#;
 
-    // Regular expression to find the CONNECTION block
-    let re_connection = Regex::new(r"CONNECTION\s*=\s*\([^)]+\)").unwrap();
+    // Match individual secret key-value pairs
+    // Supports both single-quoted and double-quoted values
+    static RE_SECRET_KV: LazyLock<Regex> = LazyLock::new(|| {
+        let pattern = format!(
+            r"(?i)(ACCESS_KEY_ID|ACCESS_KEY_SECRET|SECRET_ACCESS_KEY|AWS_KEY_ID|AWS_KEY_SECRET|AWS_SECRET_KEY|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_TOKEN|AWS_SESSION_TOKEN|MASTER_KEY|ACCOUNT_KEY|ACCOUNT_NAME|PASSWORD|SECURITY_TOKEN|SESSION_TOKEN|SECRET_ID|SECRET_KEY|CREDENTIAL|EXTERNAL_ID|AWS_EXTERNAL_ID|DELEGATION)\s*=\s*({}|{})",
+            SINGLE_QUOTED_STR, DOUBLE_QUOTED_STR
+        );
+        Regex::new(&pattern).unwrap()
+    });
 
-    // Replace the entire CONNECTION block with 'CONNECTION = (***masked***)'
-    masked_sql = re_connection
-        .replace_all(&masked_sql, "CONNECTION = (***masked***)")
-        .to_string();
-
-    masked_sql
+    RE_SECRET_KV
+        .replace_all(sql, |caps: &regex::Captures| {
+            let key = &caps[1];
+            let quoted_val = &caps[2];
+            let quote_char = &quoted_val[..1];
+            let inner = &quoted_val[1..quoted_val.len() - 1];
+            format!(
+                "{} = {}{}{}",
+                key,
+                quote_char,
+                mask_partial(inner),
+                quote_char
+            )
+        })
+        .to_string()
 }
 
 /// Maximum length of the SQL query to be displayed or log.
@@ -216,5 +251,253 @@ pub fn short_sql(sql: String, max_length: u64) -> String {
         truncated + &format!("...[{} more characters]", remaining_length)
     } else {
         query.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mask_connection_eq() {
+        let sql = "CREATE STAGE s URL='s3://b' CONNECTION = (ACCESS_KEY_ID = 'akid123' SECRET_ACCESS_KEY = 'secret456')";
+        let masked = mask_connection_info(sql);
+        assert_eq!(
+            masked,
+            "CREATE STAGE s URL='s3://b' CONNECTION = (ACCESS_KEY_ID = 'ak***23' SECRET_ACCESS_KEY = 'se***56')"
+        );
+        assert!(!masked.contains("akid123"));
+        assert!(!masked.contains("secret456"));
+    }
+
+    #[test]
+    fn test_mask_connection_arrow() {
+        let sql = "SELECT * FROM 's3://b/data.csv' (CONNECTION => (ACCESS_KEY_ID = 'akid123', SECRET_ACCESS_KEY = 'secret456'))";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("ACCESS_KEY_ID = 'ak***23'"));
+        assert!(masked.contains("SECRET_ACCESS_KEY = 'se***56'"));
+        assert!(!masked.contains("akid123"));
+        assert!(!masked.contains("secret456"));
+    }
+
+    #[test]
+    fn test_mask_connection_with_parens_in_value() {
+        // Value contains ')' inside quotes — should not break the regex
+        let sql = "CONNECTION = (PASSWORD = 'p@ss(w)rd' ACCESS_KEY_ID = 'mykey123')";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("PASSWORD = 'p@***rd'"));
+        assert!(masked.contains("ACCESS_KEY_ID = 'my***23'"));
+        assert!(!masked.contains("p@ss(w)rd"));
+        assert!(!masked.contains("mykey123"));
+    }
+
+    #[test]
+    fn test_mask_connection_with_escaped_quotes() {
+        // SQL-style escaped quotes ('') inside values
+        let sql = "CONNECTION = (PASSWORD = 'it''s_secret' ACCESS_KEY_ID = 'ak')";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("PASSWORD = 'it***et'"));
+        assert!(masked.contains("ACCESS_KEY_ID = '***'"));
+        assert!(!masked.contains("it''s_secret"));
+    }
+
+    #[test]
+    fn test_mask_connection_with_backslash_escaped_quotes() {
+        // Backslash-escaped quotes (\') inside values
+        let sql = r"CONNECTION = (PASSWORD = 'abc\'tail' ACCESS_KEY_ID = 'mykey')";
+        let masked = mask_connection_info(sql);
+        assert!(!masked.contains("tail"));
+        assert!(!masked.contains("mykey"));
+    }
+
+    #[test]
+    fn test_mask_bare_key_with_backslash_escaped_quote() {
+        // Backslash-escaped quote in a bare key value
+        let sql = r"PASSWORD = 'p@ss\'word'";
+        let masked = mask_connection_info(sql);
+        assert!(!masked.contains("p@ss"));
+    }
+
+    #[test]
+    fn test_mask_connection_with_backslash_in_value() {
+        // Backslash-escaped backslash (\\) inside values
+        let sql = r"CONNECTION = (PASSWORD = 'path\\to\\secret' ACCESS_KEY_ID = 'key123')";
+        let masked = mask_connection_info(sql);
+        assert!(!masked.contains("path"));
+        assert!(!masked.contains("key123"));
+    }
+
+    #[test]
+    fn test_mask_secret_kv_standalone() {
+        let sql = "CREATE CONNECTION myconn STORAGE_TYPE = 's3' ACCESS_KEY_ID = 'AKID123' SECRET_ACCESS_KEY = 'secret456'";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("ACCESS_KEY_ID = 'AK***23'"));
+        assert!(masked.contains("SECRET_ACCESS_KEY = 'se***56'"));
+        assert!(masked.contains("STORAGE_TYPE = 's3'"));
+        assert!(!masked.contains("AKID123"));
+        assert!(!masked.contains("secret456"));
+    }
+
+    #[test]
+    fn test_mask_password() {
+        let sql = "PASSWORD = 'my_password'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "PASSWORD = 'my***rd'");
+    }
+
+    #[test]
+    fn test_mask_session_token() {
+        let sql = "SESSION_TOKEN = 'tok123'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "SESSION_TOKEN = 'to***23'");
+    }
+
+    #[test]
+    fn test_mask_security_token() {
+        let sql = "SECURITY_TOKEN = 'sectok'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "SECURITY_TOKEN = 'se***ok'");
+    }
+
+    #[test]
+    fn test_mask_secret_id_and_key() {
+        let sql = "SECRET_ID = 'sid' SECRET_KEY = 'skey'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "SECRET_ID = '***' SECRET_KEY = '***'");
+    }
+
+    #[test]
+    fn test_mask_account_key() {
+        let sql = "ACCOUNT_KEY = 'azure_key_123'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "ACCOUNT_KEY = 'az***23'");
+        assert!(!masked.contains("azure_key_123"));
+    }
+
+    #[test]
+    fn test_no_false_positive_on_token() {
+        // Plain 'token' column should NOT be masked (we only match specific prefixed tokens)
+        let sql = "WHERE token = 'abc'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, sql);
+    }
+
+    #[test]
+    fn test_no_false_positive_on_normal_settings() {
+        let sql = "SET max_threads = '8'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, sql);
+    }
+
+    #[test]
+    fn test_no_false_positive_on_select() {
+        let sql = "SELECT name FROM users WHERE id = '123'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, sql);
+    }
+
+    #[test]
+    fn test_mask_case_insensitive() {
+        let sql = "connection = (access_key_id = 'akid123' secret_access_key = 'secret456')";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("access_key_id = 'ak***23'"));
+        assert!(masked.contains("secret_access_key = 'se***56'"));
+    }
+
+    #[test]
+    fn test_mask_mixed_connection_and_bare_keys() {
+        // Both CONNECTION block keys and bare keys get masked
+        let sql =
+            "COPY INTO t FROM 's3://b' CONNECTION = (ACCESS_KEY_ID = 'akid123') PASSWORD = 'pw123'";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("ACCESS_KEY_ID = 'ak***23'"));
+        assert!(masked.contains("PASSWORD = 'pw***23'"));
+        assert!(!masked.contains("akid123"));
+        assert!(!masked.contains("pw123"));
+    }
+
+    #[test]
+    fn test_mask_empty_value() {
+        let sql = "PASSWORD = ''";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "PASSWORD = '***'");
+    }
+
+    #[test]
+    fn test_mask_no_space_around_eq() {
+        let sql = "CONNECTION=(ACCESS_KEY_ID='akid123')";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("ACCESS_KEY_ID = 'ak***23'"));
+    }
+
+    #[test]
+    fn test_mask_aws_secret_key() {
+        let sql = "CREATE CONNECTION c STORAGE_TYPE='s3' AWS_SECRET_KEY='my_secret'";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("AWS_SECRET_KEY = 'my***et'"));
+        assert!(masked.contains("STORAGE_TYPE='s3'"));
+        assert!(!masked.contains("my_secret"));
+    }
+
+    #[test]
+    fn test_mask_aws_token() {
+        let sql = "CREATE CONNECTION c STORAGE_TYPE='s3' AWS_TOKEN='tok_val99'";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("AWS_TOKEN = 'to***99'"));
+        assert!(!masked.contains("tok_val99"));
+    }
+
+    #[test]
+    fn test_mask_aws_access_key_id() {
+        let sql = "AWS_ACCESS_KEY_ID='AKIA1234' AWS_SECRET_ACCESS_KEY='secret_val'";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("AWS_ACCESS_KEY_ID = 'AK***34'"));
+        assert!(masked.contains("AWS_SECRET_ACCESS_KEY = 'se***al'"));
+        assert!(!masked.contains("AKIA1234"));
+        assert!(!masked.contains("secret_val"));
+    }
+
+    #[test]
+    fn test_mask_aws_session_token() {
+        let sql = "AWS_SESSION_TOKEN='session_tok_123'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "AWS_SESSION_TOKEN = 'se***23'");
+        assert!(!masked.contains("session_tok_123"));
+    }
+
+    #[test]
+    fn test_mask_gcs_credential() {
+        let sql =
+            "CREATE CONNECTION c STORAGE_TYPE='gcs' CREDENTIAL='service-account-json-content'";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("CREDENTIAL = 'se***nt'"));
+        assert!(masked.contains("STORAGE_TYPE='gcs'"));
+        assert!(!masked.contains("service-account-json-content"));
+    }
+
+    #[test]
+    fn test_mask_double_quoted_password() {
+        // MySQL/Hive dialect uses double-quoted string literals
+        let sql = r#"CREATE CONNECTION c STORAGE_TYPE="s3" PASSWORD="secret_val""#;
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains(r#"PASSWORD = "se***al""#));
+        assert!(!masked.contains("secret_val"));
+    }
+
+    #[test]
+    fn test_mask_double_quoted_connection_block() {
+        let sql = r#"CONNECTION = (ACCESS_KEY_ID = "akid123" SECRET_ACCESS_KEY = "secret456")"#;
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains(r#"ACCESS_KEY_ID = "ak***23""#));
+        assert!(masked.contains(r#"SECRET_ACCESS_KEY = "se***56""#));
+        assert!(!masked.contains("akid123"));
+        assert!(!masked.contains("secret456"));
+    }
+
+    #[test]
+    fn test_mask_double_quoted_with_backslash_escape() {
+        let sql = r#"PASSWORD = "pass\"word""#;
+        let masked = mask_connection_info(sql);
+        assert!(!masked.contains("pass"));
     }
 }

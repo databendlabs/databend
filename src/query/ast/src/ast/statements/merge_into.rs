@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -29,7 +31,7 @@ use crate::ast::WithOptions;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct MutationUpdateExpr {
     pub table: Option<Identifier>,
     pub name: Identifier,
@@ -166,7 +168,7 @@ impl Display for MergeIntoStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum MutationSource {
     Select {
         query: Box<Query>,

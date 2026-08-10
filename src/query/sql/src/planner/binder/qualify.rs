@@ -23,7 +23,7 @@ use crate::Binder;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
 use crate::binder::aggregate::AggregateRewriter;
-use crate::binder::split_conjunctions;
+use crate::binder::into_conjunctions;
 use crate::binder::window::WindowRewriter;
 use crate::binder::window::find_replaced_window_function;
 use crate::optimizer::ir::SExpr;
@@ -43,8 +43,9 @@ impl Binder {
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
         qualify: &Expr,
+        needs_window_rewrite: bool,
     ) -> Result<ScalarExpr> {
-        bind_context.set_expr_context(ExprContext::QualifyClause);
+        bind_context.expr_context = ExprContext::QualifyClause;
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -58,8 +59,10 @@ impl Binder {
             &mut scalar,
             "Qualify clause must not contain aggregate functions",
         )?;
-        let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
-        rewriter.visit(&mut scalar)?;
+        if needs_window_rewrite {
+            let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
+            rewriter.visit(&mut scalar)?;
+        }
         Ok(scalar)
     }
 
@@ -69,7 +72,7 @@ impl Binder {
         qualify: ScalarExpr,
         child: SExpr,
     ) -> Result<SExpr> {
-        bind_context.set_expr_context(ExprContext::QualifyClause);
+        bind_context.expr_context = ExprContext::QualifyClause;
 
         let scalar = {
             let mut qualify = qualify;
@@ -87,7 +90,7 @@ impl Binder {
             qualify
         };
 
-        let predicates = split_conjunctions(&scalar);
+        let predicates = into_conjunctions(scalar).collect();
 
         let filter = Filter { predicates };
 

@@ -13,25 +13,25 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::SystemTime;
 
 use async_channel::Receiver;
-use async_channel::Sender;
-use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
+use databend_common_base::runtime::IoStats;
+use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
@@ -42,44 +42,41 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::query_kind::QueryKind;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::StageAttachment;
+use databend_common_component::BroadcastRegistry;
+use databend_common_component::CopyState;
+use databend_common_component::MutationState;
+use databend_common_component::ResultCacheState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
-use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline::core::InputError;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
-use databend_common_sql::IndexType;
-use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
-use databend_common_storage::MultiTableInsertStatus;
-use databend_common_storage::MutationStatus;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_common_users::UserApiProvider;
-use databend_storages_common_table_meta::meta::Location;
+use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::PlanNodeMemoryUsage;
+use crate::pipelines::processors::transforms::MaterializedCtePayload;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
 use crate::sessions::query_affect::QueryAffect;
+use crate::sessions::runtime_filter_state::RuntimeFilterState;
 use crate::spillers;
 use crate::storages::Table;
 
@@ -134,19 +131,9 @@ pub struct QueryContextShared {
     pub(super) created_time: SystemTime,
     // now it is only set in query_log::log_query_finished
     pub(super) finish_time: RwLock<Option<SystemTime>>,
-    // DashMap<file_path, HashMap<ErrorCode::code, (ErrorCode, Number of occurrences)>>
-    // We use this field to count maximum of one error found per data file.
-    #[allow(clippy::type_complexity)]
-    on_error_map: Arc<RwLock<Option<Arc<DashMap<String, HashMap<u16, InputError>>>>>>,
-    on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
-    pub(super) copy_status: Arc<CopyStatus>,
-    pub(super) mutation_status: Arc<RwLock<MutationStatus>>,
-    pub(super) multi_table_insert_status: Arc<Mutex<MultiTableInsertStatus>>,
-    /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
-    pub(super) partitions_shas: Arc<RwLock<Vec<String>>>,
-    /// Additional factors that should participate in the result cache key.
-    pub(super) cache_key_extras: Arc<RwLock<Vec<String>>>,
-    pub(super) cacheable: Arc<AtomicBool>,
+    pub(super) copy_state: CopyState,
+    pub(super) mutation_state: MutationState,
+    pub(super) result_cache_state: ResultCacheState,
     pub(super) can_scan_from_agg_index: Arc<AtomicBool>,
     pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
     pub(super) enable_sort_spill: Arc<AtomicBool>,
@@ -159,9 +146,7 @@ pub struct QueryContextShared {
 
     pub(super) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 
-    pub(super) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
-
-    pub(super) runtime_filter_ready: Arc<RwLock<HashMap<IndexType, Vec<Arc<RuntimeFilterReady>>>>>,
+    pub(super) runtime_filter_state: RuntimeFilterState,
 
     pub(super) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
 
@@ -175,38 +160,36 @@ pub struct QueryContextShared {
     pub(super) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
     pub(super) spilled_files: Arc<RwLock<HashMap<spillers::Location, spillers::Layout>>>,
     pub(super) unload_callbacked: AtomicBool,
-    pub(super) runtime_filter_logged: AtomicBool,
     pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
     pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
 
-    // Used by hilbert clustering when do recluster.
-    pub(super) selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
-
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
 
-    pub(super) next_broadcast_id: AtomicU32,
-    pub(super) broadcast_channels: Arc<Mutex<HashMap<u32, BroadcastChannel>>>,
+    pub(super) io_stats: Arc<IoStats>,
+
+    pub(super) broadcast_registry: BroadcastRegistry,
 
     // QueryPerf configuration (profiler + hw counters)
     pub(super) perf_config: Mutex<PerfConfig>,
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
-    pub(super) materialized_cte_receivers: Arc<Mutex<HashMap<String, Vec<Receiver<DataBlock>>>>>,
+    pub(super) materialized_cte_receivers:
+        Arc<Mutex<HashMap<String, Vec<Receiver<MaterializedCtePayload>>>>>,
     // Temp tables created for recursive CTE cleanup.
     // This must be shared across QueryContext instances created from the same query,
     // otherwise cleanup hooks running on the parent context cannot see registrations
     // performed inside child contexts.
     pub(super) recursive_cte_temp_tables: Arc<RwLock<Vec<(String, String, String)>>>,
     pub(super) logical_recursive_cte_runtime_ids: Arc<RwLock<HashMap<u32, String>>>,
-}
 
-#[derive(Default)]
-pub struct BroadcastChannel {
-    pub source_sender: Option<Sender<DataBlock>>,
-    pub source_receiver: Option<Receiver<DataBlock>>,
-    pub sink_sender: Option<Sender<DataBlock>>,
-    pub sink_receiver: Option<Receiver<DataBlock>>,
+    /// Cached full visibility checker (ignore_ownership=false, Object::All).
+    /// Shared across all QueryContext instances within this query.
+    pub(super) visibility_checker_cache: tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
+
+    /// Limits concurrent RowFetch reads and decodes across all pipelines and
+    /// QueryContext instances belonging to this query on the local node.
+    row_fetch_io_semaphore: OnceLock<Arc<Semaphore>>,
 }
 
 impl QueryContextShared {
@@ -243,13 +226,9 @@ impl QueryContextShared {
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
             finish_time: Default::default(),
-            on_error_map: Arc::new(RwLock::new(None)),
-            on_error_mode: Arc::new(RwLock::new(None)),
-            copy_status: Default::default(),
-            mutation_status: Default::default(),
-            partitions_shas: Arc::new(RwLock::new(vec![])),
-            cache_key_extras: Arc::new(RwLock::new(vec![])),
-            cacheable: Arc::new(AtomicBool::new(true)),
+            copy_state: Default::default(),
+            mutation_state: Default::default(),
+            result_cache_state: Default::default(),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             num_fragmented_block_hint: Default::default(),
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
@@ -262,80 +241,34 @@ impl QueryContextShared {
             window_partition_spill_progress: Arc::new(Progress::create()),
             query_cache_metrics: DataCacheMetrics::new(),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
-            runtime_filters: Default::default(),
-            runtime_filter_ready: Default::default(),
+            runtime_filter_state: Default::default(),
             merge_into_join: Default::default(),
-            multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
             table_meta_timestamps: Arc::new(Mutex::new(HashMap::new())),
             cluster_spill_progress: Default::default(),
             spilled_files: Default::default(),
             unload_callbacked: AtomicBool::new(false),
-            runtime_filter_logged: AtomicBool::new(false),
             warehouse_cache: Arc::new(RwLock::new(None)),
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
-            selected_segment_locs: Default::default(),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
-            next_broadcast_id: AtomicU32::new(0),
-            broadcast_channels: Arc::new(Mutex::new(HashMap::new())),
+            io_stats: Default::default(),
+            broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
+            visibility_checker_cache: Default::default(),
+            row_fetch_io_semaphore: Default::default(),
         }))
     }
 
-    pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
-        let mut broadcast_channels = self.broadcast_channels.lock();
-        let entry = broadcast_channels.entry(broadcast_id).or_default();
-        match entry.source_receiver.take() {
-            Some(receiver) => receiver,
-            None => {
-                let (sender, receiver) = async_channel::unbounded();
-                entry.source_sender = Some(sender);
-                receiver
-            }
-        }
-    }
-    pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
-        let mut broadcast_channels = self.broadcast_channels.lock();
-        let entry = broadcast_channels.entry(broadcast_id).or_default();
-        match entry.source_sender.take() {
-            Some(sender) => sender,
-            None => {
-                let (sender, receiver) = async_channel::unbounded();
-                entry.source_receiver = Some(receiver);
-                sender
-            }
-        }
-    }
-
-    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
-        let mut broadcast_channels = self.broadcast_channels.lock();
-        let entry = broadcast_channels.entry(broadcast_id).or_default();
-        match entry.sink_receiver.take() {
-            Some(receiver) => receiver,
-            None => {
-                let (sender, receiver) = async_channel::unbounded();
-                entry.sink_sender = Some(sender);
-                receiver
-            }
-        }
-    }
-    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
-        let mut broadcast_channels = self.broadcast_channels.lock();
-        let entry = broadcast_channels.entry(broadcast_id).or_default();
-        match entry.sink_sender.take() {
-            Some(sender) => sender,
-            None => {
-                let (sender, receiver) = async_channel::unbounded();
-                entry.sink_receiver = Some(receiver);
-                sender
-            }
-        }
+    pub(super) fn get_row_fetch_io_semaphore(&self, max_threads: usize) -> Arc<Semaphore> {
+        self.row_fetch_io_semaphore
+            .get_or_init(|| Arc::new(Semaphore::new(max_threads.max(1))))
+            .clone()
     }
 
     pub fn get_version(&self) -> &BuildInfoRef {
@@ -364,24 +297,6 @@ impl QueryContextShared {
         let warnings = (*guard).clone();
         (*guard).clear();
         warnings
-    }
-
-    pub fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
-        let mut guard = self.on_error_map.write();
-        *guard = Some(map);
-    }
-
-    pub fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        self.on_error_map.read().as_ref().cloned()
-    }
-
-    pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        self.on_error_mode.read().clone()
-    }
-
-    pub fn set_on_error_mode(&self, mode: OnErrorMode) {
-        let mut guard = self.on_error_mode.write();
-        *guard = Some(mode);
     }
 
     pub fn kill<C>(&self, cause: ErrorCode<C>) {
@@ -476,6 +391,14 @@ impl QueryContextShared {
         let metrics: Vec<Arc<StorageMetrics>> =
             tables.iter().filter_map(|v| v.get_data_metrics()).collect();
         StorageMetrics::merge(&metrics)
+    }
+
+    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
+        self.io_stats.merge_snapshot(stats);
+    }
+
+    pub fn get_io_stats(&self) -> IoStatsSnapshot {
+        self.io_stats.snapshot()
     }
 
     pub fn get_tenant(&self) -> Tenant {
@@ -593,6 +516,8 @@ impl QueryContextShared {
                                     &source_database_name,
                                     &source_table_name,
                                     max_batch_size,
+                                    self.get_settings()
+                                        .get_enable_stream_batch_snapshot_forward_scan()?,
                                     self.get_settings().get_s3_storage_class()?,
                                 )
                                 .await?;
@@ -670,7 +595,7 @@ impl QueryContextShared {
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(
-                query,
+                mask_connection_info(&query),
                 self.get_settings()
                     .get_short_sql_max_length()
                     .unwrap_or(1000),
@@ -775,12 +700,6 @@ impl QueryContextShared {
         status.clone()
     }
 
-    pub async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
-        let user_mgr = UserApiProvider::instance();
-        let tenant = self.get_tenant();
-        user_mgr.get_connection(&tenant, name).await
-    }
-
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {
         &self.query_cache_metrics
     }
@@ -795,6 +714,13 @@ impl QueryContextShared {
         match self.executor.read().upgrade() {
             None => String::new(),
             Some(executor) => executor.format_graph_nodes(),
+        }
+    }
+
+    pub fn get_top_memory_plan_nodes(&self, limit: usize) -> Vec<PlanNodeMemoryUsage> {
+        match self.executor.read().upgrade() {
+            None => Vec::new(),
+            Some(executor) => executor.top_memory_plan_nodes(limit),
         }
     }
 
@@ -903,6 +829,10 @@ impl QueryContextShared {
             .entry(plan_id)
             .and_modify(|s| s.merge(&stats))
             .or_insert(stats);
+    }
+
+    pub fn clear_pruned_partitions_stats(&self) {
+        self.pruned_partitions_stats.write().clear();
     }
 
     pub fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {

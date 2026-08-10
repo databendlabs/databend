@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
@@ -26,13 +27,13 @@ use databend_common_expression as ce;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::PaimonCatalogOption;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
@@ -149,6 +150,7 @@ fn new_table_meta() -> mt::TableMeta {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s("table_comment"),
         field_comments: vec!["c".to_string(); 21],
+        field_stats_truncate_len: btreemap! {},
         virtual_schema: Some(ce::VirtualDataSchema {
             fields: vec![ce::VirtualDataField {
                 name: "field_0".to_string(),
@@ -284,6 +286,27 @@ fn new_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
     }
 }
 
+fn new_paimon_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
+    databend_common_meta_app::schema::CatalogMeta {
+        catalog_option: CatalogOption::Paimon(PaimonCatalogOption {
+            options: HashMap::from([
+                ("metastore".to_string(), "rest".to_string()),
+                ("uri".to_string(), "http://127.0.0.1:8080".to_string()),
+                ("warehouse".to_string(), "demo".to_string()),
+            ]),
+        }),
+        created_on: Utc::now(),
+    }
+}
+
+#[test]
+fn test_paimon_catalog_meta_round_trip() -> anyhow::Result<()> {
+    let want = new_paimon_catalog_meta();
+    let got = databend_common_meta_app::schema::CatalogMeta::from_pb(want.to_pb())?;
+    assert_eq!(want, got);
+    Ok(())
+}
+
 fn new_virtual_data_schema() -> ce::VirtualDataSchema {
     ce::VirtualDataSchema {
         fields: vec![ce::VirtualDataField {
@@ -312,8 +335,8 @@ fn new_udf_server() -> databend_common_meta_app::principal::UDFServer {
         ]),
         language: "python".to_string(),
         arg_names: vec![],
-        arg_types: vec![DataType::String],
-        return_type: DataType::Boolean,
+        arg_types: vec![TableDataType::String],
+        return_type: TableDataType::Boolean,
         immutable: None,
     }
 }
@@ -332,27 +355,27 @@ fn new_table_index() -> databend_common_meta_app::schema::TableIndex {
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
-    let p = db.to_pb()?;
+    let p = db.to_pb();
     let got = mt::DatabaseMeta::from_pb(p)?;
     assert_eq!(db, got);
 
     let tbl = new_table_meta();
-    let p = tbl.to_pb()?;
+    let p = tbl.to_pb();
     let got = mt::TableMeta::from_pb(p)?;
     assert_eq!(tbl, got);
 
     let index = new_index_meta();
-    let p = index.to_pb()?;
+    let p = index.to_pb();
     let got = mt::IndexMeta::from_pb(p)?;
     assert_eq!(index, got);
 
     let data_mask_meta = new_data_mask_meta();
-    let p = data_mask_meta.to_pb()?;
+    let p = data_mask_meta.to_pb();
     let got = databend_common_meta_app::data_mask::DatamaskMeta::from_pb(p)?;
     assert_eq!(data_mask_meta, got);
 
     let lvt = new_lvt();
-    let p = lvt.to_pb()?;
+    let p = lvt.to_pb();
     let got = mt::LeastVisibleTime::from_pb(p)?;
     assert_eq!(lvt, got);
 
@@ -362,7 +385,7 @@ fn test_pb_from_to() -> anyhow::Result<()> {
 #[test]
 fn test_incompatible() -> anyhow::Result<()> {
     let db_meta = new_db_meta();
-    let mut p = db_meta.to_pb()?;
+    let mut p = db_meta.to_pb();
     p.ver = VER + 1;
     p.min_reader_ver = VER + 1;
 
@@ -377,7 +400,7 @@ fn test_incompatible() -> anyhow::Result<()> {
     );
 
     let db_meta = new_db_meta();
-    let mut p = db_meta.to_pb()?;
+    let mut p = db_meta.to_pb();
     p.ver = 0;
     p.min_reader_ver = 0;
 
@@ -399,20 +422,18 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // share DatabaseMeta
     {
         let db_meta = new_db_meta_share();
-        let p = db_meta.to_pb()?;
+        let p = db_meta.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("db from share:{:?}", buf);
     }
 
     // DatabaseMeta
     {
         let db_meta = new_db_meta();
-        let p = db_meta.to_pb()?;
+        let p = db_meta.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("db:{:?}", buf);
     }
 
@@ -420,139 +441,123 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     {
         let tbl = new_table_meta();
 
-        let p = tbl.to_pb()?;
+        let p = tbl.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("table:{:?}", buf);
     }
 
     // IndexMeta
     {
         let index = new_index_meta();
-        let p = index.to_pb()?;
+        let p = index.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("index meta:{buf:?}");
     }
 
     // TableCopiedFileInfo
     {
         let copied_file = new_table_copied_file_info_v6();
-        let p = copied_file.to_pb()?;
+        let p = copied_file.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("copied_file:{:?}", buf);
     }
 
     // EmptyProto
     {
         let empty_proto = new_empty_proto();
-        let p = empty_proto.to_pb()?;
+        let p = empty_proto.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("empty_proto:{:?}", buf);
     }
 
     // LockMeta
     {
         let table_lock_meta = new_lock_meta();
-        let p = table_lock_meta.to_pb()?;
-
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        table_lock_meta.to_pb();
     }
 
     // schema
     {
         let schema = new_latest_schema();
-        let p = schema.to_pb()?;
+        let p = schema.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("schema:{:?}", buf);
     }
 
     // data mask
     {
         let data_mask_meta = new_data_mask_meta();
-        let p = data_mask_meta.to_pb()?;
+        let p = data_mask_meta.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("data mask:{:?}", buf);
     }
 
     // table statistics
     {
         let table_statistics = new_table_statistics();
-        let p = table_statistics.to_pb()?;
+        let p = table_statistics.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("table statistics:{:?}", buf);
     }
 
     // catalog meta
     {
         let catalog_meta = new_catalog_meta();
-        let p = catalog_meta.to_pb()?;
+        let p = catalog_meta.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("catalog catalog_meta:{:?}", buf);
     }
 
     // lvt
     {
         let lvt = new_lvt();
-        let p = lvt.to_pb()?;
+        let p = lvt.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("lvt:{:?}", buf);
     }
 
     // sequence
     {
         let sequence_meta = new_sequence_meta();
-        let p = sequence_meta.to_pb()?;
+        let p = sequence_meta.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("sequence:{:?}", buf);
     }
 
     // virtual data schema
     {
         let virtual_data_schema = new_virtual_data_schema();
-        let p = virtual_data_schema.to_pb()?;
+        let p = virtual_data_schema.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("virtual data schema:{:?}", buf);
     }
 
     // udf server
     {
         let udf_server = new_udf_server();
-        let p = udf_server.to_pb()?;
+        let p = udf_server.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("udf server:{:?}", buf);
     }
 
     // table index
     {
         let table_index = new_table_index();
-        let p = table_index.to_pb()?;
+        let p = table_index.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("table index:{:?}", buf);
     }
 

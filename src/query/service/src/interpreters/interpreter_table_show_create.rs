@@ -34,7 +34,7 @@ use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -46,7 +46,8 @@ use itertools::Itertools;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 pub struct ShowCreateTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -217,6 +218,13 @@ impl ShowCreateTableInterpreter {
                     "".to_string()
                 };
 
+                let stats_truncate_len = table_info
+                    .meta
+                    .field_stats_truncate_len
+                    .get(&field.column_id())
+                    .map(|n| format!(" STATS_TRUNCATE_LEN {n}"))
+                    .unwrap_or_default();
+
                 let ident = display_ident(
                     field.name(),
                     force_quoted_ident,
@@ -225,7 +233,7 @@ impl ShowCreateTableInterpreter {
                 );
                 let data_type = field.data_type().sql_name_explicit_null();
                 let column_str = format!(
-                    "  {ident} {data_type}{default_expr}{computed_expr}{auto_increment}{comment}"
+                    "  {ident} {data_type}{default_expr}{computed_expr}{auto_increment}{comment}{stats_truncate_len}"
                 );
 
                 create_defs.push(column_str);
@@ -279,12 +287,22 @@ impl ShowCreateTableInterpreter {
         let table_engine = format!(") ENGINE={}", engine);
         table_create_sql.push_str(table_engine.as_str());
 
+        if let Some(partition_keys_str) = table_info.options().get(OPT_KEY_PARTITION_BY) {
+            let mut exprs = parse_cluster_key_exprs(partition_keys_str)?;
+            let mut normalizer = ClusterKeyNormalizer {
+                force_quoted_ident,
+                unquoted_ident_case_sensitive,
+                quoted_ident_case_sensitive,
+                sql_dialect,
+            };
+            for expr in exprs.iter_mut() {
+                expr.drive_mut(&mut normalizer);
+            }
+            let partition_keys_str = exprs.into_iter().map(|e| format!("{e:#}")).join(", ");
+            table_create_sql.push_str(format!(" PARTITION BY ({partition_keys_str})").as_str());
+        }
+
         if let Some(cluster_keys_str) = table_info.meta.cluster_key_str() {
-            let cluster_type = table_info
-                .options()
-                .get(OPT_KEY_CLUSTER_TYPE)
-                .cloned()
-                .unwrap_or("".to_string());
             let mut exprs = parse_cluster_key_exprs(cluster_keys_str)?;
             let mut normalizer = ClusterKeyNormalizer {
                 force_quoted_ident,
@@ -299,8 +317,7 @@ impl ShowCreateTableInterpreter {
                 "({})",
                 exprs.into_iter().map(|e| format!("{:#}", e)).join(", ")
             );
-            table_create_sql
-                .push_str(format!(" CLUSTER BY {}{}", cluster_type, cluster_keys_str).as_str());
+            table_create_sql.push_str(format!(" CLUSTER BY {}", cluster_keys_str).as_str());
         }
 
         if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {

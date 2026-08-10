@@ -22,19 +22,24 @@ use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::BlockMetaWithHLL;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VirtualDataSchema;
+use databend_common_expression::types::DataType;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -45,7 +50,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
-use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use itertools::Itertools;
 use log::debug;
 use log::info;
@@ -67,22 +72,19 @@ use crate::operations::common::SnapshotMerged;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::statistics::VirtualColumnAccumulator;
+use crate::statistics::get_min_max_stats;
+use crate::statistics::prepare_cluster_key_exprs;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
+use crate::statistics::same_partition;
 use crate::statistics::sort_by_cluster_stats;
 
 pub struct TableMutationAggregator {
     ctx: Arc<dyn TableContext>,
-    schema: TableSchemaRef,
     table_id: u64,
-    dal: Operator,
-    location_gen: TableMetaLocationGenerator,
-    thresholds: BlockThresholds,
 
-    default_cluster_key_id: Option<u32>,
     base_segments: Vec<Location>,
     merged_blocks: Vec<Arc<ExtendedBlockMeta>>,
-    set_hilbert_level: bool,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     extended_mutations: HashMap<SegmentIndex, ExtendedBlockMutations>,
@@ -93,11 +95,12 @@ pub struct TableMutationAggregator {
     removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
     hll: BlockHLL,
+    top_n: BlockTopN,
+    logical_updated_rows: u64,
+    logical_deleted_rows: u64,
+    write_segment_ctx: WriteSegmentCtx,
 
-    kind: MutationKind,
-    start_time: Instant,
-    finished_tasks: usize,
-    table_meta_timestamps: TableMetaTimestamps,
+    processed_log_entries: usize,
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -108,27 +111,33 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let mutation_logs = MutationLogs::try_from(data)?;
-        let task_num = mutation_logs.entries.len();
-        mutation_logs.entries.into_iter().for_each(|entry| {
-            self.accumulate_log_entry(entry);
-        });
-        self.refresh_status(task_num);
+        self.logical_updated_rows += mutation_logs.logical_updated_rows;
+        self.logical_deleted_rows += mutation_logs.logical_deleted_rows;
+        self.processed_log_entries += mutation_logs.entries.len();
+        for entry in mutation_logs.entries {
+            self.accumulate_log_entry(entry)?;
+        }
         Ok(None)
     }
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
+        info!(
+            "{}: finished aggregating mutation logs, entries: {}",
+            self.write_segment_ctx.kind, self.processed_log_entries
+        );
         self.generate_append_segments().await?;
+
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
 
-        let conflict_resolve_context = match self.kind {
+        let conflict_resolve_context = match self.write_segment_ctx.kind {
             MutationKind::Insert => ConflictResolveContext::AppendOnly((
                 SnapshotMerged {
                     merged_segments: std::mem::take(&mut self.appended_segments),
                     merged_statistics: std::mem::take(&mut self.appended_statistics),
                 },
-                self.schema.clone(),
+                self.write_segment_ctx.schema.clone(),
             )),
             MutationKind::Recluster => {
                 let mut new_segments = std::mem::take(&mut self.appended_segments);
@@ -140,9 +149,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
                 if new_segments_len > removed_segments_len {
                     // The remain new segments will be appended.
                     let appended = new_segments.split_off(removed_segments_len);
-                    for location in appended.into_iter().rev() {
-                        appended_segments.push(location);
-                    }
+                    appended_segments.extend(appended.into_iter().rev());
                 }
 
                 for (i, location) in new_segments.into_iter().enumerate() {
@@ -161,14 +168,16 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             }
             _ => self.apply_mutation(&mut new_segment_locs).await?,
         };
-
         let meta = CommitMeta::new(
             conflict_resolve_context,
             new_segment_locs,
             self.table_id,
+            self.logical_updated_rows,
+            self.logical_deleted_rows,
             std::mem::take(&mut self.virtual_schema),
             self.virtual_schema_mode,
             std::mem::take(&mut self.hll),
+            std::mem::take(&mut self.top_n),
         );
         debug!("mutations {:?}", meta);
         let block_meta: BlockMetaInfoPtr = Box::new(meta);
@@ -188,26 +197,35 @@ impl TableMutationAggregator {
         kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
-        let set_hilbert_level = table
-            .cluster_type()
-            .is_some_and(|v| matches!(v, ClusterType::Hilbert))
-            && matches!(
-                kind,
-                MutationKind::Delete
-                    | MutationKind::MergeInto
-                    | MutationKind::Replace
-                    | MutationKind::Recluster
-            );
+        let fill_missing_cluster_stats = table.resolve_cluster_keys().is_some();
 
         let virtual_schema = table.table_info.meta.virtual_schema.clone();
-        TableMutationAggregator {
-            ctx,
-            schema: table.schema(),
+        let cluster_key_exprs = if fill_missing_cluster_stats {
+            table
+                .resolve_cluster_keys()
+                .map(|cluster_keys| {
+                    parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)
+                })
+                .transpose()
+                .expect("table cluster keys should be valid")
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
+        let write_segment_ctx = WriteSegmentCtx {
             dal: table.get_operator(),
             location_gen: table.meta_location_generator().clone(),
             thresholds: table.get_block_thresholds(),
-            default_cluster_key_id: table.cluster_key_id(),
-            set_hilbert_level,
+            default_cluster_key: table.cluster_key_id(),
+            partition_key_count: table.partition_key_count(),
+            cluster_key_exprs: Arc::from(cluster_key_exprs.clone()),
+            schema: table.schema(),
+            kind,
+            table_meta_timestamps,
+            fill_missing_cluster_stats,
+        };
+        TableMutationAggregator {
+            ctx,
             mutations: HashMap::new(),
             extended_mutations: HashMap::new(),
             appended_segments: vec![],
@@ -219,33 +237,33 @@ impl TableMutationAggregator {
             removed_segment_indexes,
             removed_statistics,
             hll: HashMap::new(),
-            kind,
-            finished_tasks: 0,
-            start_time: Instant::now(),
+            top_n: HashMap::new(),
+            logical_updated_rows: 0,
+            logical_deleted_rows: 0,
+            write_segment_ctx,
+            processed_log_entries: 0,
             table_id: table.get_id(),
-            table_meta_timestamps,
         }
     }
 
-    pub fn refresh_status(&mut self, task_num: usize) {
-        self.finished_tasks += task_num;
-
-        // Refresh status
+    fn accumulate_top_n(&mut self, top_n: Option<BlockTopN>) -> Result<()> {
+        if let Some(top_n) = top_n
+            && !top_n.is_empty()
         {
-            let status = format!(
-                "{}: run tasks:{}, cost:{:?}",
-                self.kind,
-                self.finished_tasks,
-                self.start_time.elapsed()
-            );
-            self.ctx.set_status_info(&status);
+            merge_column_top_n_mut(&mut self.top_n, top_n)?;
         }
+        Ok(())
     }
 
-    pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) {
+    pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) -> Result<()> {
         match log_entry {
             MutationLogEntry::ReplacedBlock { index, block_meta } => {
-                BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+                // UPDATE replacement blocks contain its after-images. MERGE/REPLACE
+                // replacement blocks only preserve unmatched rows; their added
+                // images arrive as AppendBlock entries.
+                if matches!(self.write_segment_ctx.kind, MutationKind::Update) {
+                    BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+                }
                 match self.extended_mutations.entry(index.segment_idx) {
                     Entry::Occupied(mut v) => {
                         v.get_mut().push_replaced(index.block_idx, block_meta);
@@ -258,8 +276,20 @@ impl TableMutationAggregator {
                     }
                 }
             }
-            MutationLogEntry::AppendBlock { block_meta } => {
-                BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+            MutationLogEntry::AppendBlock {
+                block_meta,
+                merge_hll,
+            } => {
+                // MERGE and REPLACE append logical INSERT/UPDATE after-images.
+                if merge_hll
+                    || matches!(
+                        self.write_segment_ctx.kind,
+                        MutationKind::MergeInto | MutationKind::Replace
+                    )
+                {
+                    BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+                }
+                self.accumulate_top_n(block_meta.column_top_n.clone())?;
                 self.merged_blocks.push(block_meta);
             }
             MutationLogEntry::DeletedBlock { index } => {
@@ -273,7 +303,7 @@ impl TableMutationAggregator {
                 merge_statistics_mut(
                     &mut self.removed_statistics,
                     &deleted_segment.summary,
-                    self.default_cluster_key_id,
+                    self.write_segment_ctx.default_cluster_key,
                 );
             }
             MutationLogEntry::AppendSegment {
@@ -281,13 +311,17 @@ impl TableMutationAggregator {
                 format_version,
                 summary,
                 hll,
+                top_n,
             } => {
                 merge_statistics_mut(
                     &mut self.appended_statistics,
                     &summary,
-                    self.default_cluster_key_id,
+                    self.write_segment_ctx.default_cluster_key,
                 );
-                merge_column_hll_mut(&mut self.hll, &hll);
+                if matches!(self.write_segment_ctx.kind, MutationKind::Insert) && !hll.is_empty() {
+                    merge_column_hll_mut(&mut self.hll, &hll);
+                }
+                self.accumulate_top_n(Some(top_n))?;
 
                 self.appended_segments
                     .push((segment_location, format_version));
@@ -296,7 +330,7 @@ impl TableMutationAggregator {
                 virtual_schema,
                 mode,
             } => {
-                self.virtual_schema = virtual_schema.clone();
+                self.virtual_schema = virtual_schema;
                 self.virtual_schema_mode = mode;
             }
             MutationLogEntry::CompactExtras { extras } => {
@@ -323,11 +357,12 @@ impl TableMutationAggregator {
                 merge_statistics_mut(
                     &mut self.removed_statistics,
                     &extras.removed_segment_summary,
-                    self.default_cluster_key_id,
+                    self.write_segment_ctx.default_cluster_key,
                 );
             }
             MutationLogEntry::DoNothing => (),
         }
+        Ok(())
     }
 
     async fn generate_append_segments(&mut self) -> Result<()> {
@@ -337,58 +372,65 @@ impl TableMutationAggregator {
 
         let mut merged_blocks = self.accumulate_merged_blocks()?;
 
-        if let Some(id) = self.default_cluster_key_id {
+        if let Some(id) = self.write_segment_ctx.default_cluster_key {
             // sort ascending.
-            merged_blocks
-                .sort_by(|a, b| sort_by_cluster_stats(&a.0.cluster_stats, &b.0.cluster_stats, id));
-        }
-
-        let mut tasks = Vec::new();
-        let segments_num = (merged_blocks.len() / self.thresholds.block_per_segment).max(1);
-        let chunk_size = merged_blocks.len().div_ceil(segments_num);
-        let default_cluster_key = self.default_cluster_key_id;
-        let thresholds = self.thresholds;
-        let set_hilbert_level = self.set_hilbert_level;
-        let kind = self.kind;
-        for chunk in &merged_blocks.into_iter().chunks(chunk_size) {
-            let (new_blocks, new_hlls): (Vec<Arc<BlockMeta>>, Vec<Option<RawBlockHLL>>) =
-                chunk.unzip();
-            let new_hlls = if new_hlls.iter().all(|v| v.is_none()) {
-                None
-            } else {
-                let hlls = new_hlls
-                    .into_iter()
-                    .map(|x| x.unwrap_or_default())
-                    .collect::<Vec<_>>();
-                Some(SegmentStatistics::new(hlls).to_bytes()?)
-            };
-            let all_perfect = new_blocks.len() > 1;
-
-            let location_gen = self.location_gen.clone();
-            let op = self.dal.clone();
-            let table_meta_timestamps = self.table_meta_timestamps;
-            tasks.push(async move {
-                write_segment(
-                    op,
-                    location_gen,
-                    new_blocks,
-                    new_hlls,
-                    thresholds,
-                    default_cluster_key,
-                    all_perfect,
-                    kind,
-                    set_hilbert_level,
-                    table_meta_timestamps,
-                )
-                .await
+            merged_blocks.sort_by(|a, b| {
+                sort_by_cluster_stats(a.0.cluster_stats.as_ref(), b.0.cluster_stats.as_ref(), id)
             });
         }
 
-        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let mut partition_groups: Vec<Vec<BlockMetaWithHLL>> = Vec::new();
+        for block in merged_blocks {
+            if partition_groups
+                .last()
+                .and_then(|group| group.last())
+                .is_none_or(|previous| {
+                    !same_partition(
+                        previous.0.partition_stats.as_ref(),
+                        block.0.partition_stats.as_ref(),
+                        self.write_segment_ctx.partition_key_count,
+                    )
+                })
+            {
+                partition_groups.push(Vec::new());
+            }
+            partition_groups.last_mut().unwrap().push(block);
+        }
+
+        let mut tasks = Vec::new();
+        for partition_blocks in partition_groups {
+            let segments_num = (partition_blocks.len()
+                / self.write_segment_ctx.thresholds.block_per_segment)
+                .max(1);
+            let chunk_size = partition_blocks.len().div_ceil(segments_num);
+            for chunk in &partition_blocks.into_iter().chunks(chunk_size) {
+                let (new_blocks, new_hlls): (Vec<Arc<BlockMeta>>, Vec<Option<RawBlockHLL>>) =
+                    chunk.unzip();
+                // Only compaction/reclustering output may be force-marked perfect to keep
+                // those operations at a fixed point. REPLACE/MERGE append after-images
+                // must retain the physical perfect-block count from reduce_block_metas.
+                let force_all_blocks_perfect = matches!(
+                    self.write_segment_ctx.kind,
+                    MutationKind::Compact | MutationKind::Recluster
+                ) && new_blocks.len() > 1;
+
+                let ctx = self.write_segment_ctx.clone();
+                tasks.push(async move {
+                    // SegmentStatistics encoding and Zstd compression are CPU-heavy. Perform them
+                    // in the bounded worker pool rather than serially before the first write.
+                    let new_hlls = generate_segment_stats(new_hlls)?;
+                    ctx.write_segment(new_blocks, new_hlls, force_all_blocks_perfect)
+                        .await
+                });
+            }
+        }
+
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let worker_count = max_threads.min(tasks.len());
         let new_segments = execute_futures_in_parallel(
             tasks,
-            threads_nums,
-            threads_nums * 2,
+            worker_count,
+            worker_count,
             "fuse-write-segments-worker".to_owned(),
         )
         .await?
@@ -399,7 +441,7 @@ impl TableMutationAggregator {
             merge_statistics_mut(
                 &mut self.appended_statistics,
                 &stats,
-                self.default_cluster_key_id,
+                self.write_segment_ctx.default_cluster_key,
             );
             self.appended_segments
                 .push((location, SegmentInfo::VERSION));
@@ -434,7 +476,7 @@ impl TableMutationAggregator {
                     merge_statistics_mut(
                         &mut merged_statistics,
                         &summary,
-                        self.default_cluster_key_id,
+                        self.write_segment_ctx.default_cluster_key,
                     );
                     replaced_segments.insert(result.index, new_segment_loc);
                 } else {
@@ -445,7 +487,7 @@ impl TableMutationAggregator {
                     merge_statistics_mut(
                         &mut self.removed_statistics,
                         &origin_summary,
-                        self.default_cluster_key_id,
+                        self.write_segment_ctx.default_cluster_key,
                     );
                 }
             }
@@ -455,7 +497,7 @@ impl TableMutationAggregator {
                 count += chunk.len();
                 let status = format!(
                     "{}: generate new segment files:{}/{}, cost:{:?}",
-                    self.kind,
+                    self.write_segment_ctx.kind,
                     count,
                     segment_indices.len(),
                     start.elapsed()
@@ -473,7 +515,7 @@ impl TableMutationAggregator {
         merge_statistics_mut(
             &mut merged_statistics,
             &appended_statistics,
-            self.default_cluster_key_id,
+            self.write_segment_ctx.default_cluster_key,
         );
 
         Ok(ConflictResolveContext::ModifiedSegmentExistsInLatest(
@@ -491,30 +533,29 @@ impl TableMutationAggregator {
         &mut self,
         segment_indices: Vec<usize>,
     ) -> Result<Vec<SegmentLite>> {
-        let thresholds = self.thresholds;
-        let default_cluster_key_id = self.default_cluster_key_id;
-        let kind = self.kind;
-        let set_hilbert_level = self.set_hilbert_level;
         let mut tasks = Vec::with_capacity(segment_indices.len());
         for index in segment_indices {
             let segment_mutation = self.mutations.remove(&index).unwrap();
             let location = self.base_segments.get(index).cloned();
-            let schema = self.schema.clone();
-            let op = self.dal.clone();
-            let location_gen = self.location_gen.clone();
-            let table_meta_timestamps = self.table_meta_timestamps;
+            let write_segment_ctx = self.write_segment_ctx.clone();
 
             tasks.push(async move {
-                let mut all_perfect = false;
-                let mut set_level = false;
+                let mut force_all_blocks_perfect = false;
                 let (new_blocks, new_hlls, origin_summary) = if let Some(loc) = location {
                     // read the old segment
-                    let compact_segment_info =
-                        SegmentsIO::read_compact_segment(op.clone(), loc, schema, false).await?;
+                    let compact_segment_info = SegmentsIO::read_compact_segment(
+                        write_segment_ctx.dal.clone(),
+                        loc,
+                        write_segment_ctx.schema.clone(),
+                        false,
+                    )
+                    .await?;
                     let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
                     let stats = match segment_info.summary.additional_stats_loc() {
-                        Some(loc) => Some(read_segment_stats(op.clone(), loc).await?),
+                        Some(loc) => {
+                            Some(read_segment_stats(write_segment_ctx.dal.clone(), loc).await?)
+                        }
                         _ => None,
                     };
 
@@ -548,20 +589,23 @@ impl TableMutationAggregator {
 
                     // assign back the mutated blocks to segment
                     let (new_blocks, new_hlls) = block_editor.into_values().unzip();
-                    set_level = set_hilbert_level
-                        && segment_info
-                            .summary
-                            .cluster_stats
-                            .as_ref()
-                            .is_some_and(|v| v.cluster_key_id == default_cluster_key_id.unwrap());
                     let stats = generate_segment_stats(new_hlls)?;
                     (new_blocks, stats, Some(segment_info.summary))
                 } else {
-                    // use by compact.
+                    // Only compact builds replacement segments without corresponding
+                    // entries in base_segments. Treating a missing base segment from
+                    // any other mutation as compact output could silently corrupt its
+                    // segment statistics.
+                    if !matches!(write_segment_ctx.kind, MutationKind::Compact) {
+                        return Err(ErrorCode::Internal(format!(
+                            "{} mutation references missing base segment index {}",
+                            write_segment_ctx.kind, index
+                        )));
+                    }
                     assert!(segment_mutation.deleted_blocks.is_empty());
                     // There are more than 1 blocks, means that the blocks can no longer be compacted.
                     // They can be marked as perfect blocks.
-                    all_perfect = segment_mutation.replaced_blocks.len() > 1;
+                    force_all_blocks_perfect = segment_mutation.replaced_blocks.len() > 1;
                     let (new_blocks, new_hlls) = segment_mutation
                         .replaced_blocks
                         .into_iter()
@@ -572,19 +616,9 @@ impl TableMutationAggregator {
                     (new_blocks, stats, None)
                 };
 
-                let new_segment_info = write_segment(
-                    op,
-                    location_gen,
-                    new_blocks,
-                    new_hlls,
-                    thresholds,
-                    default_cluster_key_id,
-                    all_perfect,
-                    kind,
-                    set_level,
-                    table_meta_timestamps,
-                )
-                .await?;
+                let new_segment_info = write_segment_ctx
+                    .write_segment(new_blocks, new_hlls, force_all_blocks_perfect)
+                    .await?;
 
                 Ok(SegmentLite {
                     index,
@@ -614,8 +648,7 @@ impl TableMutationAggregator {
         }
 
         let mut virtual_column_accumulator = VirtualColumnAccumulator::try_create(
-            self.ctx.clone(),
-            &self.schema,
+            &self.write_segment_ctx.schema,
             &self.virtual_schema,
         );
 
@@ -684,37 +717,36 @@ impl TableMutationAggregator {
     // Assign columnId to the virtual column in the merged blocks and generate a new virtual schema.
     fn accumulate_merged_blocks(&mut self) -> Result<Vec<BlockMetaWithHLL>> {
         let mut virtual_column_accumulator = VirtualColumnAccumulator::try_create(
-            self.ctx.clone(),
-            &self.schema,
+            &self.write_segment_ctx.schema,
             &self.virtual_schema,
         );
         let extended_merged_blocks = std::mem::take(&mut self.merged_blocks);
         let mut new_merged_blocks = Vec::with_capacity(extended_merged_blocks.len());
-        for extended_block_meta in extended_merged_blocks.into_iter() {
-            let new_block_meta = if let Some(draft_virtual_block_meta) =
-                &extended_block_meta.draft_virtual_block_meta
+        for extended_block_meta in extended_merged_blocks {
+            let ExtendedBlockMeta {
+                mut block_meta,
+                draft_virtual_block_meta,
+                column_hlls,
+                ..
+            } = Arc::unwrap_or_clone(extended_block_meta);
+
+            if let Some(draft_virtual_block_meta) = draft_virtual_block_meta
+                && let Some(ref mut virtual_column_accumulator) = virtual_column_accumulator
             {
-                let mut new_block_meta = extended_block_meta.block_meta.clone();
+                // Generate ColumnId for virtual columns. Consume the side-car metadata so the
+                // common recluster path can move serialized HLL bytes without cloning them.
+                let virtual_column_metas = virtual_column_accumulator
+                    .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
 
-                if let Some(ref mut virtual_column_accumulator) = virtual_column_accumulator {
-                    // generate ColumnId for virtual columns.
-                    let virtual_column_metas = virtual_column_accumulator
-                        .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
+                block_meta.virtual_block_meta = Some(VirtualBlockMeta {
+                    virtual_column_metas,
+                    virtual_column_size: draft_virtual_block_meta.virtual_column_size,
+                    virtual_location: draft_virtual_block_meta.virtual_location,
+                });
+            }
 
-                    let virtual_block_meta = VirtualBlockMeta {
-                        virtual_column_metas,
-                        virtual_column_size: draft_virtual_block_meta.virtual_column_size,
-                        virtual_location: draft_virtual_block_meta.virtual_location.clone(),
-                    };
-                    new_block_meta.virtual_block_meta = Some(virtual_block_meta);
-                }
-                Arc::new(new_block_meta)
-            } else {
-                Arc::new(extended_block_meta.block_meta.clone())
-            };
-            let column_hlls =
-                BlockHLLState::encode_column_hll(extended_block_meta.column_hlls.clone())?;
-            new_merged_blocks.push((new_block_meta, column_hlls));
+            let column_hlls = BlockHLLState::encode_column_hll(column_hlls)?;
+            new_merged_blocks.push((Arc::new(block_meta), column_hlls));
         }
 
         self.virtual_schema = if let Some(virtual_column_accumulator) = virtual_column_accumulator {
@@ -822,71 +854,109 @@ struct SegmentLite {
     origin_summary: Option<Statistics>,
 }
 
-async fn write_segment(
+#[derive(Clone)]
+struct WriteSegmentCtx {
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
-    blocks: Vec<Arc<BlockMeta>>,
-    stats: Option<Vec<u8>>,
     thresholds: BlockThresholds,
     default_cluster_key: Option<u32>,
-    all_perfect: bool,
+    partition_key_count: usize,
+    cluster_key_exprs: Arc<[Expr<usize>]>,
+    schema: TableSchemaRef,
     kind: MutationKind,
-    set_hilbert_level: bool,
     table_meta_timestamps: TableMetaTimestamps,
-) -> Result<(String, Statistics)> {
-    let location = location_gen.gen_segment_info_location(table_meta_timestamps, false);
-    let mut new_summary = reduce_block_metas(&blocks, thresholds, default_cluster_key);
-    if all_perfect {
-        // To fix issue #13217.
-        if new_summary.block_count > new_summary.perfect_block_count {
-            warn!(
-                "{}: generate new segment: {}, perfect_block_count: {}, block_count: {}",
-                kind, location, new_summary.perfect_block_count, new_summary.block_count,
-            );
-            new_summary.perfect_block_count = new_summary.block_count;
+    fill_missing_cluster_stats: bool,
+}
+
+impl WriteSegmentCtx {
+    async fn write_segment(
+        &self,
+        blocks: Vec<Arc<BlockMeta>>,
+        stats: Option<Vec<u8>>,
+        force_all_blocks_perfect: bool,
+    ) -> Result<(String, Statistics)> {
+        let location = self
+            .location_gen
+            .gen_segment_info_location(self.table_meta_timestamps, false);
+        let mut new_summary =
+            reduce_block_metas(&blocks, self.thresholds, self.default_cluster_key)?;
+        if force_all_blocks_perfect {
+            // To fix issue #13217.
+            if new_summary.block_count > new_summary.perfect_block_count {
+                warn!(
+                    "{}: generate new segment: {}, perfect_block_count: {}, block_count: {}",
+                    self.kind, location, new_summary.perfect_block_count, new_summary.block_count,
+                );
+                new_summary.perfect_block_count = new_summary.block_count;
+            }
         }
-    }
-    if set_hilbert_level {
-        debug_assert!(new_summary.cluster_stats.is_none());
-        let level = if thresholds.check_perfect_segment(
-            new_summary.block_count as usize,
-            new_summary.row_count as usize,
-            new_summary.uncompressed_byte_size as usize,
-            new_summary.compressed_byte_size as usize,
-        ) {
-            -1
-        } else {
-            0
-        };
-        new_summary.cluster_stats = Some(ClusterStatistics {
-            cluster_key_id: default_cluster_key.unwrap(),
-            min: vec![],
-            max: vec![],
-            level,
-            pages: None,
-        });
-    }
-
-    if let Some(stats) = stats {
-        let segment_stats_location =
-            TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
-                location.as_str(),
+        if self.fill_missing_cluster_stats {
+            // Mutation paths may produce a new segment whose blocks do not all carry
+            // block-level cluster_stats for the current cluster key yet. In that case
+            // reduce_block_metas() leaves summary.cluster_stats empty. Reconstruct a
+            // segment-level min/max here from the merged summary col_stats so the new
+            // segment can participate in later recluster selection and clustering
+            // introspection without waiting for another rewrite.
+            fill_missing_segment_cluster_stats(
+                &mut new_summary,
+                self.default_cluster_key,
+                &self.cluster_key_exprs,
+                self.schema.as_ref(),
             );
-        let additional_stats_meta = AdditionalStatsMeta {
-            size: stats.len() as u64,
-            location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
-            ..Default::default()
-        };
-        dal.write(&segment_stats_location, stats).await?;
-        new_summary.additional_stats_meta = Some(additional_stats_meta);
+        }
+
+        if let Some(stats) = stats {
+            let segment_stats_location =
+                TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
+                    location.as_str(),
+                );
+            let additional_stats_meta = AdditionalStatsMeta {
+                size: stats.len() as u64,
+                location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+                ..Default::default()
+            };
+            self.dal.write(&segment_stats_location, stats).await?;
+            new_summary.additional_stats_meta = Some(additional_stats_meta);
+        }
+
+        // create new segment info
+        let new_segment = SegmentInfo::new(blocks, new_summary.clone());
+        new_segment
+            .write_meta_through_cache(&self.dal, &location)
+            .await?;
+        Ok((location, new_summary))
+    }
+}
+
+fn fill_missing_segment_cluster_stats(
+    summary: &mut Statistics,
+    default_cluster_key: Option<u32>,
+    cluster_key_exprs: &[Expr<usize>],
+    schema: &databend_common_expression::TableSchema,
+) {
+    if summary.cluster_stats.is_some() {
+        return;
+    }
+    let Some(cluster_key_id) = default_cluster_key else {
+        return;
+    };
+    if cluster_key_exprs.is_empty() {
+        return;
     }
 
-    // create new segment info
-    let new_segment = SegmentInfo::new(blocks, new_summary.clone());
-    new_segment
-        .write_meta_through_cache(&dal, &location)
-        .await?;
-    Ok((location, new_summary))
+    let scalar_cluster_key_exprs = cluster_key_exprs
+        .iter()
+        .filter(|expr| !matches!(expr.data_type().remove_nullable(), DataType::Vector(_)))
+        .cloned()
+        .collect::<Vec<_>>();
+    let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&scalar_cluster_key_exprs, schema);
+    let (min, max) = get_min_max_stats(
+        &prepared_cluster_key_exprs,
+        &summary.col_stats,
+        None,
+        Some(cluster_key_id),
+    );
+    summary.cluster_stats = Some(ClusterStatistics::new(cluster_key_id, min, max, 0));
 }
 
 fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u8>>> {
@@ -894,7 +964,7 @@ fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u
         Ok(None)
     } else {
         let blocks = hlls.into_iter().map(|x| x.unwrap_or_default()).collect();
-        let data = SegmentStatistics::new(blocks).to_bytes()?;
+        let data = SegmentStatistics::new(blocks, Vec::new()).to_bytes()?;
         Ok(Some(data))
     }
 }

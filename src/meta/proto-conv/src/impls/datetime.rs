@@ -35,8 +35,7 @@ impl FromToProto for DateTime<Utc> {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<String, Incompatible> {
-        let p = self.to_string();
-        Ok(p)
+    fn to_pb(&self) -> String {
+        self.to_string()
     }
 }

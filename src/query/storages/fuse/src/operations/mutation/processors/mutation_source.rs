@@ -85,9 +85,12 @@ pub struct MutationSource {
     operators: Vec<BlockOperator>,
     storage_format: FuseStorageFormat,
     action: MutationAction,
+    update_stream_columns: bool,
 
     index: BlockMetaIndex,
     stats_type: ClusterStatsGenType,
+    update_rows: u64,
+    deleted_rows: u64,
 }
 
 impl MutationSource {
@@ -101,6 +104,7 @@ impl MutationSource {
         remain_reader: Arc<Option<BlockReader>>,
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
+        update_stream_columns: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData(None),
@@ -112,8 +116,11 @@ impl MutationSource {
             operators,
             storage_format,
             action,
+            update_stream_columns,
             index: BlockMetaIndex::default(),
             stats_type: ClusterStatsGenType::Generally,
+            update_rows: 0,
+            deleted_rows: 0,
         })))
     }
 }
@@ -217,6 +224,8 @@ impl Processor for MutationSource {
                                         SerializeBlock::create(
                                             self.index.clone(),
                                             self.stats_type.clone(),
+                                            0,
+                                            affect_rows as u64,
                                         ),
                                     ));
                                     self.state = State::Output(
@@ -224,7 +233,7 @@ impl Processor for MutationSource {
                                         DataBlock::empty_with_meta(meta),
                                     );
                                 } else {
-                                    if self.block_reader.update_stream_columns {
+                                    if self.update_stream_columns {
                                         let row_num = build_origin_block_row_num(rows);
                                         data_block.add_entry(row_num);
                                     }
@@ -308,15 +317,21 @@ impl Processor for MutationSource {
                 self.state = State::PerformOperator(data_block, path);
             }
             State::PerformOperator(data_block, path) => {
+                let update_rows = std::mem::take(&mut self.update_rows);
+                let deleted_rows = std::mem::take(&mut self.deleted_rows);
                 let func_ctx = self.ctx.get_function_context()?;
                 let block = self
                     .operators
                     .iter()
                     .try_fold(data_block, |input, op| op.execute(&func_ctx, input))?;
-                let inner_meta = Box::new(SerializeDataMeta::SerializeBlock(
-                    SerializeBlock::create(self.index.clone(), self.stats_type.clone()),
-                ));
-                let meta: BlockMetaInfoPtr = if self.block_reader.update_stream_columns() {
+                let inner_meta =
+                    Box::new(SerializeDataMeta::SerializeBlock(SerializeBlock::create(
+                        self.index.clone(),
+                        self.stats_type.clone(),
+                        update_rows,
+                        deleted_rows,
+                    )));
+                let meta: BlockMetaInfoPtr = if self.update_stream_columns {
                     Box::new(gen_mutation_stream_meta(Some(inner_meta), &path)?)
                 } else {
                     inner_meta
@@ -362,7 +377,12 @@ impl Processor for MutationSource {
                             // whole block deletion.
                             self.update_mutation_status(fuse_part.nums_rows);
                             let meta = Box::new(SerializeDataMeta::SerializeBlock(
-                                SerializeBlock::create(self.index.clone(), self.stats_type.clone()),
+                                SerializeBlock::create(
+                                    self.index.clone(),
+                                    self.stats_type.clone(),
+                                    0,
+                                    fuse_part.nums_rows as u64,
+                                ),
                             ));
                             self.state = State::Output(
                                 self.ctx.get_partition(),
@@ -417,16 +437,20 @@ impl Processor for MutationSource {
 }
 
 impl MutationSource {
-    fn update_mutation_status(&self, num_rows: usize) {
+    fn update_mutation_status(&mut self, num_rows: usize) {
         let (update_rows, deleted_rows) = if self.action == MutationAction::Update {
+            self.update_rows = num_rows as u64;
             (num_rows as u64, 0)
         } else {
+            self.deleted_rows = num_rows as u64;
             (0, num_rows as u64)
         };
-        self.ctx.add_mutation_status(MutationStatus {
-            insert_rows: 0,
-            update_rows,
-            deleted_rows,
-        });
+        self.ctx
+            .mutation_state()
+            .add_mutation_status(MutationStatus {
+                insert_rows: 0,
+                update_rows,
+                deleted_rows,
+            });
     }
 }

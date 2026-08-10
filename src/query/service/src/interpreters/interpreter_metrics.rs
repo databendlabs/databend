@@ -18,7 +18,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_metrics::interpreter::*;
 
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextTableAccess;
 
 pub struct InterpreterMetrics;
 

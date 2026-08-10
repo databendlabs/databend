@@ -14,16 +14,13 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::hint::unlikely;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::local_block_meta_serde;
+use databend_common_pipeline::core::check_interrupt;
 
 use crate::processors::BlockMetaTransform;
 use crate::processors::UnknownMode;
@@ -32,7 +29,7 @@ pub enum BlockCompactMeta {
     Concat(Vec<DataBlock>),
     Split {
         blocks: Vec<DataBlock>,
-        rows_per_block: usize,
+        block_num: usize,
     },
     NoChange(Vec<DataBlock>),
 }
@@ -49,9 +46,7 @@ local_block_meta_serde!(BlockCompactMeta);
 impl BlockMetaInfo for BlockCompactMeta {}
 
 #[derive(Default)]
-pub struct TransformCompactBlock {
-    aborting: Arc<AtomicBool>,
-}
+pub struct TransformCompactBlock;
 
 #[async_trait::async_trait]
 impl BlockMetaTransform<BlockCompactMeta> for TransformCompactBlock {
@@ -59,45 +54,30 @@ impl BlockMetaTransform<BlockCompactMeta> for TransformCompactBlock {
     const NAME: &'static str = "TransformCompactBlock";
 
     fn transform(&mut self, meta: BlockCompactMeta) -> Result<Vec<DataBlock>> {
-        if unlikely(self.aborting.load(Ordering::Relaxed)) {
-            return Err(ErrorCode::aborting());
-        }
-
+        check_interrupt()?;
         match meta {
             BlockCompactMeta::Concat(blocks) => Ok(vec![DataBlock::concat(&blocks)?]),
-            BlockCompactMeta::Split {
-                blocks,
-                rows_per_block,
-            } => Self::split_blocks(blocks, rows_per_block),
+            BlockCompactMeta::Split { blocks, block_num } => Self::split_blocks(blocks, block_num),
             BlockCompactMeta::NoChange(blocks) => Ok(blocks),
         }
-    }
-
-    fn interrupt(&self) {
-        self.aborting.store(true, Ordering::Release);
     }
 }
 
 impl TransformCompactBlock {
-    fn split_blocks(blocks: Vec<DataBlock>, rows_per_block: usize) -> Result<Vec<DataBlock>> {
-        debug_assert!(!blocks.is_empty());
-        if blocks.len() == 1 {
-            return Ok(blocks[0].split_by_rows_if_needed_no_tail(rows_per_block));
-        }
+    fn split_blocks(blocks: Vec<DataBlock>, block_num: usize) -> Result<Vec<DataBlock>> {
+        let total_rows: usize = blocks.iter().map(DataBlock::num_rows).sum();
+        let block_num = block_num.min(total_rows);
+        debug_assert!(block_num > 0);
 
-        let max_rows_per_block = (rows_per_block * 9).div_ceil(5);
-        let mut total_rows: usize = blocks.iter().map(DataBlock::num_rows).sum();
+        let base_rows = total_rows / block_num;
+        let extra_rows = total_rows % block_num;
         let mut blocks = blocks.into_iter();
         let mut current = blocks.next();
         let mut offset = 0;
-        let mut output = Vec::new();
+        let mut output = Vec::with_capacity(block_num);
 
-        // Mirror split_by_rows_if_needed_no_tail, but consume a sequence of blocks
-        // while preserving their original order. Like the original helper, this
-        // treats rows_per_block as a target and allows a slightly larger block to
-        // avoid emitting a tiny tail block.
-        while total_rows >= max_rows_per_block {
-            let mut remain_rows = rows_per_block;
+        for index in 0..block_num {
+            let mut remain_rows = base_rows + usize::from(index < extra_rows);
             let mut pieces = vec![];
 
             while remain_rows > 0 {
@@ -124,16 +104,10 @@ impl TransformCompactBlock {
                 }
             }
 
-            output.push(DataBlock::concat(&pieces)?);
-            total_rows -= rows_per_block;
-        }
-
-        if let Some(block) = current {
-            // Emit the final tail block, which may be smaller than rows_per_block by design.
-            let mut tail = Vec::new();
-            tail.push(block.slice(offset..block.num_rows()));
-            tail.extend(blocks);
-            output.push(DataBlock::concat(&tail)?);
+            output.push(match pieces.len() {
+                1 => pieces.pop().unwrap(),
+                _ => DataBlock::concat(&pieces)?,
+            });
         }
 
         Ok(output)
@@ -163,49 +137,69 @@ mod tests {
             .collect()
     }
 
-    fn assert_split_matches_reference(blocks: Vec<DataBlock>, rows_per_block: usize) -> Result<()> {
-        let actual = TransformCompactBlock::split_blocks(blocks.clone(), rows_per_block)?;
-        let expected = DataBlock::concat(&blocks)?.split_by_rows_if_needed_no_tail(rows_per_block);
+    fn assert_split_result(
+        blocks: Vec<DataBlock>,
+        block_num: usize,
+        expected_sizes: &[usize],
+        expected_values: &[Vec<i32>],
+    ) -> Result<()> {
+        let actual = TransformCompactBlock::split_blocks(blocks.clone(), block_num)?;
 
         assert_eq!(
             actual.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
-            expected.iter().map(DataBlock::num_rows).collect::<Vec<_>>()
+            expected_sizes
         );
         assert_eq!(
             actual.iter().map(block_values).collect::<Vec<_>>(),
-            expected.iter().map(block_values).collect::<Vec<_>>()
+            expected_values
         );
         Ok(())
     }
 
     #[test]
-    fn test_split_blocks_matches_reference_across_block_boundaries() -> Result<()> {
-        assert_split_matches_reference(
+    fn test_split_blocks() -> Result<()> {
+        assert_split_result(vec![block_with_range(0, 10)], 3, &[4, 3, 3], &[
+            vec![0, 1, 2, 3],
+            vec![4, 5, 6],
+            vec![7, 8, 9],
+        ])?;
+        assert_split_result(
             vec![
                 block_with_range(0, 2),
                 block_with_range(2, 6),
                 block_with_range(6, 10),
             ],
             3,
+            &[4, 3, 3],
+            &[vec![0, 1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]],
         )?;
-        assert_split_matches_reference(
+        assert_split_result(
             vec![
                 block_with_range(0, 1),
                 block_with_range(1, 2),
                 block_with_range(2, 3),
                 block_with_range(3, 10),
             ],
-            4,
+            2,
+            &[5, 5],
+            &[vec![0, 1, 2, 3, 4], vec![5, 6, 7, 8, 9]],
         )?;
-        assert_split_matches_reference(
+        assert_split_result(
             vec![
                 block_with_range(0, 2),
                 block_with_range(2, 4),
                 block_with_range(4, 6),
                 block_with_range(6, 8),
             ],
-            5,
+            1,
+            &[8],
+            &[vec![0, 1, 2, 3, 4, 5, 6, 7]],
         )?;
+        assert_split_result(vec![block_with_range(0, 11)], 3, &[4, 4, 3], &[
+            vec![0, 1, 2, 3],
+            vec![4, 5, 6, 7],
+            vec![8, 9, 10],
+        ])?;
         Ok(())
     }
 }

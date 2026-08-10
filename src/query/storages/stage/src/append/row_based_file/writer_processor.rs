@@ -30,6 +30,7 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_storage::ensure_no_stage_path_traversal;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use encoding_rs::EncoderResult;
 use encoding_rs::Encoding;
@@ -248,6 +249,9 @@ impl Processor for RowBasedFileWriter {
             self.compression,
             partition.as_deref(),
         );
+        if !self.info.allow_path_traversal {
+            ensure_no_stage_path_traversal(&path)?;
+        }
         self.unload_output.add_file(&path, summary);
         self.data_accessor.write(&path, data).await?;
         self.batch_id += 1;

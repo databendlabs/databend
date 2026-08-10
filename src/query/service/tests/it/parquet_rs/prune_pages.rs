@@ -22,6 +22,7 @@ use parquet::arrow::arrow_reader::ArrowReaderMetadata;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
+use parquet::file::metadata::PageIndexPolicy;
 
 use crate::parquet_rs::data::Scenario;
 use crate::parquet_rs::data::make_test_file_page;
@@ -41,7 +42,7 @@ async fn test_batch(batches: &[(Scenario, &str, RowSelection)]) {
         let metadata = ArrowReaderMetadata::load(
             file.as_file(),
             ArrowReaderOptions::new()
-                .with_page_index(true)
+                .with_page_index_policy(PageIndexPolicy::from(true))
                 .with_skip_arrow_metadata(true),
         )
         .unwrap();

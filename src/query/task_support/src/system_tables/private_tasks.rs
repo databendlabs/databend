@@ -102,7 +102,7 @@ pub fn private_task_to_cloud_task(task: Task) -> Result<CloudTask> {
     Ok(CloudTask {
         task_id: task.task_id,
         task_name: task.task_name,
-        query_text: task.query_text,
+        query_text: task.task_sql.query_text(),
         condition_text: task.when_condition.unwrap_or_default(),
         after: task.after,
         comment: task.comment,

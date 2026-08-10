@@ -67,6 +67,23 @@ impl BuiltinUsers {
                     }
                 }
             }
+            AuthType::KeyPair => match &auth_config.auth_string {
+                None => Err(ErrorCode::InvalidConfig(
+                    "must set auth_string (PEM public key) for key_pair auth",
+                )),
+                Some(key_input) => {
+                    databend_common_users::validate_public_key_pem(key_input)?;
+                    Ok(AuthInfo::KeyPair {
+                        public_keys: vec![databend_common_meta_app::principal::PublicKeyEntry {
+                            key: databend_common_meta_app::principal::normalize_public_key(
+                                key_input,
+                            )?,
+                            label: String::new(),
+                            created_at: chrono::Utc::now().timestamp(),
+                        }],
+                    })
+                }
+            },
         }
     }
 

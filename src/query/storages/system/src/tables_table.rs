@@ -127,6 +127,7 @@ macro_rules! impl_history_aware {
                             ));
                         }
                         CatalogType::Iceberg => "Iceberg".to_string(),
+                        CatalogType::Paimon => "Paimon".to_string(),
                         CatalogType::Hive => "Hive".to_string(),
                     };
 
@@ -672,18 +673,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let ctl_name = catalog_impl.name();
         let is_external_catalog = catalog_impl.is_external();
 
-        let ctls = if !catalog_name.is_empty() {
-            let mut res = vec![];
-            for name in &catalog_name {
-                if *name == ctl_name {
-                    let ctl = ctx.get_catalog(name).await?;
-                    res.push((name.to_string(), ctl));
-                }
-            }
-            // If empty return empty result
-            res
-        } else {
+        let ctls = if catalog_name.is_empty() || catalog_name.iter().any(|name| name == &ctl_name) {
             vec![(ctl_name, catalog_impl)]
+        } else {
+            vec![]
         };
 
         let no_filters = push_downs
@@ -753,10 +746,24 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
         if !used_optimized_path {
             // Slow path: need full visibility checker
-            let visibility_checker = if is_external_catalog {
-                None
+            // Load ownership once and reuse for both visibility check and owner column.
+            let (visibility_checker, ownership) = if is_external_catalog {
+                (None, HashMap::new())
             } else {
-                Some(ctx.get_visibility_checker(false, Object::All).await?)
+                let checker = ctx.get_visibility_checker(false, Object::All).await?;
+                let own = if get_owner_field {
+                    let t = std::time::Instant::now();
+                    let result = user_api.list_ownerships(&tenant).await.unwrap_or_default();
+                    trace!(
+                        "slow_path: list_ownerships({}) took {:?}",
+                        result.len(),
+                        t.elapsed()
+                    );
+                    result
+                } else {
+                    HashMap::new()
+                };
+                (Some(checker), own)
             };
 
             let catalog_dbs = visibility_checker
@@ -876,18 +883,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 // Now we get the final dbs, need to clear dbs vec.
                 dbs.clear();
 
-                let ownership = if get_owner_field && visibility_checker.is_some() {
-                    let t = std::time::Instant::now();
-                    let result = user_api.list_ownerships(&tenant).await.unwrap_or_default();
-                    trace!(
-                        "slow_path: list_ownerships({}) took {:?}",
-                        result.len(),
-                        t.elapsed()
-                    );
-                    result
-                } else {
-                    HashMap::new()
-                };
                 let mock_table = ctl.is_external() && only_get_name;
                 for db in final_dbs {
                     let db_id = db.get_db_info().database_id.db_id;
@@ -1079,6 +1074,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .map(|v| {
                 if v.engine().to_uppercase() == "VIEW" {
                     "VIEW".to_string()
+                } else if v.engine().to_uppercase() == "MATERIALIZED_VIEW" {
+                    "MATERIALIZED VIEW".to_string()
                 } else {
                     "BASE TABLE".to_string()
                 }
@@ -1349,7 +1346,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         && filtered_db_names.len() == 1
                         && catalog.name() == filtered_catalog_names[0].clone()
                     {
-                        if let CatalogType::Iceberg = catalog.info().catalog_type() {
+                        if matches!(
+                            catalog.info().catalog_type(),
+                            CatalogType::Iceberg | CatalogType::Paimon
+                        ) {
                             return Some((
                                 filtered_catalog_names[0].clone(),
                                 filtered_db_names[0].clone(),

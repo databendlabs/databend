@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::executor::physical_plans::FragmentKind;
@@ -28,6 +27,7 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::BroadcastSinkProcessor;
 use crate::pipelines::processors::transforms::BroadcastSourceProcessor;
+use crate::sessions::TableContext;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastSource {
@@ -151,8 +151,8 @@ pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
 
 pub fn build_broadcast_plans(ctx: &dyn TableContext) -> Result<Vec<PhysicalPlan>> {
     let mut plans = vec![];
-    let next_broadcast_id = ctx.get_next_broadcast_id();
-    ctx.reset_broadcast_id();
+    let next_broadcast_id = ctx.broadcast_registry().next_broadcast_id();
+    ctx.broadcast_registry().reset_broadcast_id();
     for broadcast_id in 0..next_broadcast_id {
         plans.push(build_broadcast_plan(broadcast_id)?);
     }

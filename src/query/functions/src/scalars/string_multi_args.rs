@@ -798,8 +798,14 @@ fn regexp_instr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyT
         let occur = occur.unwrap_or(1);
         let ro = ro.unwrap_or(0);
 
-        if let Some((idx, _)) = source.char_indices().nth((pos - 1) as usize) {
-            source = &source[idx..];
+        match source.char_indices().nth((pos - 1) as usize) {
+            Some((idx, _)) => {
+                source = &source[idx..];
+            }
+            None => {
+                builder.push(0);
+                continue;
+            }
         }
         let instr = regexp::regexp_instr(source, re, pos, occur, ro);
         builder.push(instr);

@@ -20,9 +20,9 @@ This crate implements a distributed semaphore using a meta-service as the underl
 
 ```text
 <prefix>/meta          -> {capacity: 10}  // Planned for future versions
-<prefix>/queue/<seq_1> -> {id: "<id_1>", value: 1}
-<prefix>/queue/<seq_2> -> {id: "<id_2>", value: 2}
-<prefix>/queue/<seq_3> -> {id: "<id_3>", value: 1}
+<prefix>/queue/<seq_1> -> {id: "<id_1>", permits: 1}
+<prefix>/queue/<seq_2> -> {id: "<id_2>", permits: 2}
+<prefix>/queue/<seq_3> -> {id: "<id_3>", permits: 1}
 <prefix>/seq_generator -> {}
 ```
 
@@ -31,21 +31,21 @@ This crate implements a distributed semaphore using a meta-service as the underl
 - `seq_generator`: Generates globally unique sequence numbers
 - Each entry contains:
   - `id`: User-defined identifier
-  - `value`: Resource amount consumed
+  - `permits`: Resource amount consumed
 
 ### Main Types
 
 - `Semaphore`: The main entry point for semaphore operations
-- `Acquirer`: Handles the semaphore acquisition process
-- `AcquiredGuard`: Manages the lifecycle of an acquired semaphore
-- `SemaphoreEntry`: Represents a semaphore entry in the queue
-- `SemaphoreKey`: Defines the key structure for semaphore entries
+- `Permit`: Manages the lifecycle of an acquired semaphore
+- `PermitEntry`: Represents a semaphore entry in the queue
+- `PermitKey`: Defines the key structure for semaphore entries
+- `Acquirer`: Internal helper that handles the semaphore acquisition process
 
 ## Usage
 
 ```rust
 let client = MetaGrpcClient::try_create(/*..*/);
-let acquired_guard = Semaphore::new_acquired(
+let permit = Semaphore::new_acquired(
         client,
         "your/semaphore/name/in/meta/service",
         2,                          // capacity: 2 acquired at most
@@ -53,8 +53,8 @@ let acquired_guard = Semaphore::new_acquired(
         Duration::from_secs(3)      // lease time
 ).await?;
 
-acquired_guard.await;
-// Released
+permit.await?;
+// Removed from meta-service
 ```
 
 ## Implementation Details
@@ -62,7 +62,7 @@ acquired_guard.await;
 ### Acquisition Process
 
 1. Client obtains a new sequence number from `seq_generator`
-2. Creates a `SemaphoreEntry` and inserts it at `queue/<seq>`
+2. Creates a `PermitEntry` and inserts it at `queue/<seq>`
 3. Submits a watch request to monitor changes
 4. Maintains local collections of `acquired` and `waiting` entries
 5. Manages entries based on capacity and sequence order

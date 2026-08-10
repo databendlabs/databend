@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
@@ -55,6 +56,7 @@ pub fn gen_columns_statistics(
     data_block: &DataBlock,
     column_distinct_count: Option<HashMap<ColumnId, usize>>,
     schema: &TableSchemaRef,
+    col_stats_truncate_lens: &BTreeMap<ColumnId, usize>,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
     let rows = data_block.num_rows();
@@ -66,11 +68,19 @@ pub fn gen_columns_statistics(
                 let (distinct_of_values, unset_bits) =
                     if s == Scalar::Null { (0, rows) } else { (1, 0) };
 
+                let Some((min, max)) = trim_column_min_max(
+                    s.clone(),
+                    s.clone(),
+                    col_stats_truncate_lens.get(&column_id).copied(),
+                ) else {
+                    continue;
+                };
+
                 // when we read it back from parquet, it is a Column instead of Scalar
                 let in_memory_size = s.as_ref().estimated_scalar_repeat_size(rows, &data_type);
                 let col_stats = ColumnStatistics::new(
-                    s.clone(),
-                    s.clone(),
+                    min,
+                    max,
                     unset_bits as u64,
                     in_memory_size as u64,
                     Some(distinct_of_values),
@@ -80,37 +90,27 @@ pub fn gen_columns_statistics(
             }
             Value::Column(col) => {
                 // later, during the evaluation of expressions, name of field does not matter
-                let mut min = Scalar::Null;
-                let mut max = Scalar::Null;
-
-                if col.len() > 0 {
+                let (min, max) = if col.len() > 0 {
                     let (mins, _) = eval_aggr("min", vec![], &[col.clone().into()], rows, vec![])?;
                     let (maxs, _) = eval_aggr("max", vec![], &[col.clone().into()], rows, vec![])?;
 
-                    if mins.len() > 0 {
-                        min = if let Some(v) = mins.index(0) {
-                            if let Some(v) = v.to_owned().trim_min() {
-                                v
-                            } else {
-                                continue;
-                            }
-                        } else {
-                            continue;
-                        }
-                    }
-
-                    if maxs.len() > 0 {
-                        max = if let Some(v) = maxs.index(0) {
-                            if let Some(v) = v.to_owned().trim_max() {
-                                v
-                            } else {
-                                continue;
-                            }
-                        } else {
-                            continue;
-                        }
-                    }
-                }
+                    let Some(raw_min) = mins.index(0).map(|v| v.to_owned()) else {
+                        continue;
+                    };
+                    let Some(raw_max) = maxs.index(0).map(|v| v.to_owned()) else {
+                        continue;
+                    };
+                    let Some(min_max) = trim_column_min_max(
+                        raw_min,
+                        raw_max,
+                        col_stats_truncate_lens.get(&column_id).copied(),
+                    ) else {
+                        continue;
+                    };
+                    min_max
+                } else {
+                    (Scalar::Null, Scalar::Null)
+                };
 
                 let (is_all_null, bitmap) = col.validity();
                 let unset_bits = match (is_all_null, bitmap) {
@@ -165,11 +165,47 @@ pub fn scalar_min_max(data_type: &DataType, scalar: Scalar) -> Option<(Scalar, S
 pub trait Trim: Sized {
     fn trim_min(self) -> Option<Self>;
     fn trim_max(self) -> Option<Self>;
-    fn may_be_trimmed(&self) -> bool;
 }
 
 pub const END_OF_UNICODE_RANGE: char = '\u{10FFFF}';
 pub const STATS_STRING_PREFIX_LEN: usize = 16;
+const MAX_AUTO_STATS_STRING_PREFIX_LEN: usize = 32;
+const MAX_AUTO_STATS_STRING_COMMON_PREFIX_LEN: usize = MAX_AUTO_STATS_STRING_PREFIX_LEN - 1;
+
+fn auto_stats_string_prefix_len(min: &str, max: &str) -> usize {
+    let common_prefix_len = min
+        .chars()
+        .zip(max.chars())
+        .take(MAX_AUTO_STATS_STRING_COMMON_PREFIX_LEN)
+        .take_while(|(min_char, max_char)| min_char == max_char)
+        .count();
+
+    if common_prefix_len < STATS_STRING_PREFIX_LEN {
+        STATS_STRING_PREFIX_LEN
+    } else {
+        common_prefix_len
+            .saturating_add(1)
+            .min(MAX_AUTO_STATS_STRING_PREFIX_LEN)
+    }
+}
+
+pub(crate) fn trim_column_min_max(
+    min: Scalar,
+    max: Scalar,
+    string_truncate_len: Option<usize>,
+) -> Option<(Scalar, Scalar)> {
+    match (min, max) {
+        (Scalar::String(min), Scalar::String(max)) => {
+            let truncate_len =
+                string_truncate_len.unwrap_or_else(|| auto_stats_string_prefix_len(&min, &max));
+            Some((
+                Scalar::String(trim_string_min_with_len(min, truncate_len)?),
+                Scalar::String(trim_string_max_with_len(max, truncate_len)?),
+            ))
+        }
+        (min, max) => Some((min.trim_min()?, max.trim_max()?)),
+    }
+}
 
 impl Trim for Scalar {
     fn trim_min(self) -> Option<Self> {
@@ -245,22 +281,99 @@ impl Trim for Scalar {
             v => Some(v),
         }
     }
+}
 
-    fn may_be_trimmed(&self) -> bool {
-        match self {
-            Scalar::String(s) => s.len() >= STATS_STRING_PREFIX_LEN,
-            _ => false,
+pub fn trim_string_min_with_len(s: String, len: usize) -> Option<String> {
+    if s.len() <= len {
+        return Some(s);
+    }
+    let vs = s.as_str();
+    let slice = match vs.char_indices().nth(len) {
+        None => vs,
+        Some((idx, _)) => &vs[..idx],
+    };
+    let mut result = String::with_capacity(len);
+    result.push_str(slice);
+    Some(result)
+}
+
+pub fn trim_string_max_with_len(s: String, len: usize) -> Option<String> {
+    if s.len() <= len {
+        return Some(s);
+    }
+    let number_of_chars = s.as_str().chars().count();
+    if number_of_chars <= len {
+        return Some(s);
+    }
+    let vs = s.as_str();
+    let sliced = match vs.char_indices().nth(len) {
+        None => vs,
+        Some((idx, _)) => &vs[..idx],
+    };
+    let mut idx = None;
+    for (i, c) in sliced.char_indices().rev() {
+        if c < END_OF_UNICODE_RANGE {
+            idx = Some(i);
+            break;
         }
     }
+    let replacement_point = idx?;
+    let mut r = String::with_capacity(len);
+    for (i, c) in sliced.char_indices() {
+        if i < replacement_point {
+            r.push(c)
+        } else {
+            r.push(END_OF_UNICODE_RANGE);
+        }
+    }
+    Some(r)
 }
 
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Scalar;
 
+    use super::MAX_AUTO_STATS_STRING_COMMON_PREFIX_LEN;
+    use super::MAX_AUTO_STATS_STRING_PREFIX_LEN;
+    use super::auto_stats_string_prefix_len;
     use crate::statistics::END_OF_UNICODE_RANGE;
     use crate::statistics::STATS_STRING_PREFIX_LEN;
     use crate::statistics::Trim;
+
+    #[test]
+    fn test_auto_stats_string_prefix_len() {
+        assert_eq!(
+            auto_stats_string_prefix_len("abcdefghijklmnoa", "abcdefghijklmnoz"),
+            STATS_STRING_PREFIX_LEN
+        );
+
+        let prefix = "abcdefghijklmnop";
+        assert_eq!(
+            auto_stats_string_prefix_len(
+                &format!("{prefix}a-min-suffix"),
+                &format!("{prefix}z-max-suffix"),
+            ),
+            STATS_STRING_PREFIX_LEN + 1
+        );
+
+        let long_prefix = "a".repeat(MAX_AUTO_STATS_STRING_COMMON_PREFIX_LEN);
+        assert_eq!(
+            auto_stats_string_prefix_len(
+                &format!("{long_prefix}x-min"),
+                &format!("{long_prefix}y-max"),
+            ),
+            MAX_AUTO_STATS_STRING_PREFIX_LEN
+        );
+
+        let capped_prefix = "好".repeat(MAX_AUTO_STATS_STRING_PREFIX_LEN);
+        assert_eq!(
+            auto_stats_string_prefix_len(
+                &format!("{capped_prefix}甲"),
+                &format!("{capped_prefix}乙"),
+            ),
+            MAX_AUTO_STATS_STRING_PREFIX_LEN
+        );
+    }
 
     #[test]
     fn test_trim_max() {

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::ExplainOption;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -50,10 +53,67 @@ fn test_like_escape_display_escapes_escape_literal() {
     for sql in [
         r#"SELECT 'a' LIKE 'a' ESCAPE '''';"#,
         r#"SELECT 'a' LIKE ANY ('a', 'b') ESCAPE '''';"#,
+        r#"SELECT 'a' ILIKE 'a' ESCAPE '''';"#,
+        r#"SELECT 'a' NOT ILIKE 'a' ESCAPE '''';"#,
+        r#"SELECT 'a' ILIKE ANY ('a', 'b') ESCAPE '''';"#,
         r#"SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE '''';"#,
     ] {
         test_stmt_display(sql);
     }
+}
+
+#[test]
+fn test_rewrite_statement_display_escapes_string_literals() {
+    for sql in [
+        r#"SHOW SETTINGS LIKE 'a''b%';"#,
+        r#"SHOW TABLES LIKE 'a''b%';"#,
+        r#"LIST @test_stage PATTERN = 'a''b.*';"#,
+        r#"REMOVE @test_stage PATTERN = 'a''b.*';"#,
+        r#"CALL admin$tenant_quota('a''b');"#,
+    ] {
+        test_stmt_display(sql);
+    }
+}
+
+#[test]
+fn test_analyze_table_histogram_options() {
+    let sql = "ANALYZE TABLE t WITH HISTOGRAM";
+    let tokens = tokenize_sql(sql).unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+
+    match &stmt {
+        Statement::AnalyzeTable(stmt) => {
+            assert!(!stmt.no_scan);
+            let options = stmt
+                .histogram_options
+                .as_ref()
+                .expect("histogram options should be parsed");
+            assert_eq!(options.algorithm.as_deref(), None);
+            assert_eq!(options.error_rate, None);
+        }
+        _ => panic!("expected ANALYZE TABLE statement"),
+    }
+
+    test_stmt_display(sql);
+
+    let sql = "ANALYZE TABLE t NOSCAN WITH HISTOGRAM ALGORITHM = 'kll_full', ERROR_RATE = 0.01";
+    let tokens = tokenize_sql(sql).unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+
+    match &stmt {
+        Statement::AnalyzeTable(stmt) => {
+            assert!(stmt.no_scan);
+            let options = stmt
+                .histogram_options
+                .as_ref()
+                .expect("histogram options should be parsed");
+            assert_eq!(options.algorithm.as_deref(), Some("kll_full"));
+            assert_eq!(options.error_rate, Some(0.01));
+        }
+        _ => panic!("expected ANALYZE TABLE statement"),
+    }
+
+    test_stmt_display(sql);
 }
 
 #[test]
@@ -81,4 +141,36 @@ fn test_parse_sql_nested_join_conditions_without_panic() {
         let tokens = tokenize_sql(sql).unwrap();
         parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
     }
+}
+
+#[test]
+fn test_keyword_function_fallback() {
+    for sql in [
+        "SELECT try_cast FROM try_cast",
+        "SELECT try_cast(try_cast AS BIGINT) FROM try_cast",
+        "SELECT trim(foo)",
+    ] {
+        test_stmt_display(sql);
+    }
+}
+
+#[test]
+fn test_explain_verbose_alias_display() {
+    let tokens = tokenize_sql("EXPLAIN VERBOSE SELECT * FROM t").unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+
+    match &stmt {
+        Statement::Explain {
+            kind,
+            options: (_, options),
+            ..
+        } => {
+            assert_eq!(kind, &ExplainKind::Plan);
+            assert_eq!(options, &vec![ExplainOption::Verbose]);
+        }
+        _ => panic!("expected EXPLAIN statement"),
+    }
+
+    assert_eq!(stmt.to_string(), "EXPLAIN(VERBOSE) SELECT * FROM t");
+    test_stmt_display("EXPLAIN VERBOSE SELECT * FROM t");
 }

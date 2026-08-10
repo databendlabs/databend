@@ -20,6 +20,7 @@ use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::QueryFragments;
+use crate::sessions::TableContextCluster;
 
 pub static INIT_QUERY_FRAGMENTS: &str = "/actions/init_query_fragments";
 
@@ -29,6 +30,7 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     tracking_payload.query_id = Some(fragments.query_id.clone());
+    tracking_payload.warehouse_id = ctx.get_cluster().get_warehouse_id().ok();
 
     debug!("init query fragments with {:?}", fragments);
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::CallStmt;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -40,15 +41,15 @@ impl Binder {
                 )));
             }
             format!(
-                "SELECT * FROM system.tables WHERE name like '%{}%' ORDER BY database, name",
-                stmt.args[0]
+                "SELECT * FROM system.tables WHERE name like {} ORDER BY database, name",
+                QuotedString(format!("%{}%", stmt.args[0]), '\'')
             )
         } else {
             format!(
                 "SELECT * from {table_function_name}({})",
                 stmt.args
                     .iter()
-                    .map(|x| format!("'{}'", x))
+                    .map(|x| QuotedString(x, '\'').to_string())
                     .collect::<Vec<_>>()
                     .join(", "),
             )

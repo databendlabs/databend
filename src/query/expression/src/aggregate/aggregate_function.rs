@@ -22,12 +22,12 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggrStateRegistry;
 use super::StateAddr;
+use super::StateSerdeItem;
+use super::StateSerdeType;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
 use crate::Scalar;
-use crate::StateSerdeItem;
-use crate::StateSerdeType;
 use crate::types::DataType;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;

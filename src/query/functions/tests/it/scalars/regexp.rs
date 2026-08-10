@@ -36,6 +36,7 @@ fn test_string() {
 
 fn test_regexp_instr(file: &mut impl Write) {
     run_ast(file, "regexp_instr('dog cat dog', 'dog', 1)", &[]);
+    run_ast(file, "regexp_instr('abc', 'a', 5)", &[]);
     run_ast(
         file,
         "regexp_instr('aa aaa aaaa aa aaa aaaa', 'a{2}', 1)",

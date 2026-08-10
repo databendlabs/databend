@@ -24,8 +24,8 @@ use anyhow::anyhow;
 use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::UriLocation;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
+use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
@@ -43,6 +43,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use databend_common_storage::STDIN_FD;
+use databend_common_storage::check_storage_params_endpoints;
 use log::LevelFilter;
 use log::info;
 use opendal::Scheme;
@@ -67,8 +68,9 @@ fn parse_azure_params(l: &mut UriLocation, root: String) -> Result<StorageParams
             anyhow!("endpoint_url is required for storage azblob"),
         )
     })?;
+    let endpoint = secure_omission(endpoint);
     let sp = StorageParams::Azblob(StorageAzblobConfig {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         container: l.name.to_string(),
         account_name: l
             .connection
@@ -93,6 +95,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         .get("endpoint_url")
         .cloned()
         .unwrap_or_else(|| STORAGE_S3_DEFAULT_ENDPOINT.to_string());
+    let endpoint = secure_omission(endpoint);
 
     // we split those field out to make borrow checker happy.
     let region = l.connection.get("region").cloned().unwrap_or_default();
@@ -181,7 +184,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         });
 
     let sp = StorageParams::S3(StorageS3Config {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         region,
         bucket: l.name.to_string(),
         access_key_id,
@@ -212,8 +215,9 @@ fn parse_gcs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         .get("endpoint_url")
         .cloned()
         .unwrap_or_else(|| STORAGE_GCS_DEFAULT_ENDPOINT.to_string());
+    let endpoint = secure_omission(endpoint);
     let sp = StorageParams::Gcs(StorageGcsConfig {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         bucket: l.name.clone(),
         root: root.clone(),
         credential: l.connection.get("credential").cloned().unwrap_or_default(),
@@ -233,8 +237,9 @@ fn parse_ipfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams>
         .get("endpoint_url")
         .cloned()
         .unwrap_or_else(|| STORAGE_IPFS_DEFAULT_ENDPOINT.to_string());
+    let endpoint = secure_omission(endpoint);
     let sp = StorageParams::Ipfs(StorageIpfsConfig {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         root: "/ipfs".to_string() + root.as_str(),
         network_config: None,
     });
@@ -273,6 +278,7 @@ fn parse_oss_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
             .cloned()
             .unwrap_or_default(),
         root,
+        role_arn: l.connection.get("role_arn").cloned().unwrap_or_default(),
         // TODO(xuanwo): Support SSE in stage later.
         server_side_encryption: "".to_string(),
         server_side_encryption_key_id: "".to_string(),
@@ -490,7 +496,6 @@ fn parse_huggingface_params(l: &mut UriLocation, root: String) -> Result<Storage
 
 pub async fn parse_storage_params_from_uri(
     l: &mut UriLocation,
-    ctx: Option<&dyn TableContext>,
     usage: &str,
 ) -> Result<StorageParams> {
     if !l.path.ends_with('/') {
@@ -499,14 +504,16 @@ pub async fn parse_storage_params_from_uri(
             anyhow!("path in URL must end with '/' {usage}. Got '{}'.", l.path),
         ));
     }
-    Ok(parse_uri_location(l, ctx).await?.0)
+    Ok(parse_uri_location(l).await?.0)
 }
 
-/// parse_uri_location will parse given UriLocation into StorageParams and Path.
-pub async fn parse_uri_location(
-    l: &mut UriLocation,
-    ctx: Option<&dyn TableContext>,
-) -> Result<(StorageParams, String)> {
+struct ParsedUriLocation {
+    root: String,
+    path: String,
+    protocol: Scheme,
+}
+
+fn parse_uri_location_parts(l: &UriLocation) -> Result<ParsedUriLocation> {
     // Path ends with `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
@@ -526,44 +533,66 @@ pub async fn parse_uri_location(
         ));
     }
 
-    match (ctx, l.connection.get("connection_name")) {
-        (None, Some(_)) => {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                anyhow!("can not use connection_name when create connection"),
-            ));
-        }
-        (_, None) => {}
-        (Some(ctx), Some(name)) => {
-            let conn = ctx.get_connection(name).await.map_err(|err| {
-                Error::new(
-                    ErrorKind::InvalidInput,
-                    anyhow!("fail to get connection_name {name}: {err:?}"),
-                )
-            })?;
-            let proto = conn.storage_type.parse::<Scheme>().map_err(|err| {
-                Error::new(
-                    ErrorKind::InvalidInput,
-                    anyhow!("input connection is not a valid protocol: {err:?}"),
-                )
-            })?;
-            if proto != protocol {
-                return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    anyhow!(
-                        "protocol from connection_name={name} ({proto}) not match with uri protocol ({protocol})."
-                    ),
-                ));
-            }
-            l.connection.check().map_err(|_| {
-                Error::new(
-                    ErrorKind::InvalidInput,
-                    anyhow!("connection_name can not be used with other connection options"),
-                )
-            })?;
-            l.connection = Connection::new(conn.storage_params);
-        }
+    Ok(ParsedUriLocation {
+        root,
+        path,
+        protocol,
+    })
+}
+
+pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)> {
+    let parts = parse_uri_location_parts(l)?;
+
+    if l.connection.get("connection_name").is_some() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("can not use connection_name when create connection"),
+        ));
     }
+
+    parse_uri_location_resolved(l, parts).await
+}
+
+pub fn apply_uri_connection(
+    l: &mut UriLocation,
+    name: &str,
+    conn: UserDefinedConnection,
+) -> Result<()> {
+    let protocol = l.protocol.parse::<Scheme>()?;
+    let proto = conn.storage_type.parse::<Scheme>().map_err(|err| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("input connection is not a valid protocol: {err:?}"),
+        )
+    })?;
+    if proto != protocol {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!(
+                "protocol from connection_name={name} ({proto}) not match with uri protocol ({protocol})."
+            ),
+        ));
+    }
+    l.connection.check().map_err(|_| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("connection_name can not be used with other connection options"),
+        )
+    })?;
+    l.connection = Connection::new(conn.storage_params);
+
+    Ok(())
+}
+
+async fn parse_uri_location_resolved(
+    l: &mut UriLocation,
+    parts: ParsedUriLocation,
+) -> Result<(StorageParams, String)> {
+    let ParsedUriLocation {
+        root,
+        path,
+        protocol,
+    } = parts;
 
     let sp = match protocol {
         Scheme::Azblob => parse_azure_params(l, root)?,
@@ -592,6 +621,9 @@ pub async fn parse_uri_location(
             };
 
             // HTTP is special that we don't support dir, always return / instead.
+            check_storage_params_endpoints(&StorageParams::Http(cfg.clone()))
+                .await
+                .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
             return Ok((StorageParams::Http(cfg), "/".to_string()));
         }
         Scheme::Fs => {
@@ -612,6 +644,20 @@ pub async fn parse_uri_location(
         }
     };
 
+    // Validate every endpoint URL exposed by the resolved StorageParams
+    // (including secondary URLs such as OSS presign_endpoint_url) against the
+    // egress policy. Centralising the check here keeps each per-scheme parser
+    // free of policy knowledge and ensures new fields cannot silently bypass
+    // it.
+    //
+    // Run before sp.auto_detect(): the S3 auto-detect branch contacts the
+    // configured endpoint to discover the bucket region, so the policy must
+    // gate that call as well. auto_detect only mutates `region`, not the
+    // endpoint URL, so a single pre-check is sufficient.
+    check_storage_params_endpoints(&sp)
+        .await
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
+
     let sp = sp.auto_detect().await.map_err(|err| {
         Error::new(
             ErrorKind::InvalidInput,
@@ -623,16 +669,20 @@ pub async fn parse_uri_location(
 }
 
 pub async fn get_storage_params_from_options(
-    ctx: &dyn TableContext,
     options: &BTreeMap<String, String>,
+    resolved_connection: Option<UserDefinedConnection>,
 ) -> databend_common_exception::Result<StorageParams> {
     let location = options
         .get("location")
         .ok_or_else(|| ErrorCode::BadArguments("missing option 'location'".to_string()))?;
     let connection = options.get("connection_name");
 
-    let mut location = if let Some(connection) = connection {
-        let connection = ctx.get_connection(connection).await?;
+    let mut location = if let Some(connection_name) = connection {
+        let connection = resolved_connection.ok_or_else(|| {
+            ErrorCode::BadArguments(format!(
+                "missing resolved connection for connection_name {connection_name}"
+            ))
+        })?;
         let location = UriLocation::from_uri(location.to_string(), connection.storage_params)?;
         if location.protocol.to_lowercase() != connection.storage_type {
             return Err(ErrorCode::BadArguments(format!(
@@ -644,11 +694,8 @@ pub async fn get_storage_params_from_options(
     } else {
         UriLocation::from_uri(location.to_string(), BTreeMap::new())?
     };
-    let sp = parse_storage_params_from_uri(
-        &mut location,
-        None,
-        "when loading/creating ICEBERG/DELTA table",
-    )
-    .await?;
+    let sp =
+        parse_storage_params_from_uri(&mut location, "when loading/creating ICEBERG/DELTA table")
+            .await?;
     Ok(sp)
 }

@@ -39,7 +39,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use databend_common_storage::OperatorRegistry;
-use databend_storages_common_stage::add_internal_columns;
+use databend_storages_common_stage::add_internal_columns_with_meta;
 use databend_storages_common_stage::read_record_batch_to_variant_column;
 use databend_storages_common_stage::record_batch_to_variant_block;
 use jiff::tz::TimeZone;
@@ -50,6 +50,7 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::parquet_to_arrow_schema;
 
+use crate::ParquetFileMeta;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
 use crate::meta::read_metadata_async_cached;
@@ -64,8 +65,10 @@ enum State {
     ReadRowGroup {
         readers: VecDeque<(ParquetRecordBatchReader, u64, TableDataType, DataSchema)>,
         location: String,
+        meta: ParquetFileMeta,
     },
-    ReadFiles(Vec<(Bytes, String)>),
+    // (bytes, path, file-meta)
+    ReadFiles(Vec<(Bytes, String, ParquetFileMeta)>),
 }
 
 pub struct ParquetVariantSource {
@@ -102,7 +105,7 @@ impl ParquetVariantSource {
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let is_copy = matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
-        let copy_status = ctx.get_copy_status();
+        let copy_status = ctx.copy_state().copy_status();
 
         let settings = ctx.get_settings();
         let tz_string = settings.get_timezone()?;
@@ -179,16 +182,19 @@ impl Processor for ParquetVariantSource {
             State::ReadRowGroup {
                 readers: mut vs,
                 location,
+                meta,
             } => {
                 if let Some((reader, start_row, typ, data_schema)) = vs.front_mut() {
                     if let Some(batch) = reader.next() {
                         let mut block =
                             record_batch_to_variant_block(batch?, &self.tz, typ, data_schema)?;
-                        add_internal_columns(
+                        add_internal_columns_with_meta(
                             &self.internal_columns,
                             location.clone(),
                             &mut block,
                             start_row,
+                            meta.content_key.as_deref(),
+                            meta.last_modified,
                         );
 
                         if self.is_copy {
@@ -204,13 +210,14 @@ impl Processor for ParquetVariantSource {
                     self.state = State::ReadRowGroup {
                         readers: vs,
                         location,
+                        meta,
                     };
                 }
                 // Else: The reader is finished. We should try to build another reader.
             }
             State::ReadFiles(buffers) => {
                 let mut blocks = Vec::with_capacity(buffers.len());
-                for (buffer, path) in buffers {
+                for (buffer, path, meta) in buffers {
                     let mut block =
                         read_small_file(buffer, self.batch_size, &self.tz, self.use_logic_type)?;
 
@@ -221,11 +228,13 @@ impl Processor for ParquetVariantSource {
                         });
                     }
                     let mut rows_start = 0;
-                    add_internal_columns(
+                    add_internal_columns_with_meta(
                         &self.internal_columns,
                         path.to_string(),
                         &mut block,
                         &mut rows_start,
+                        meta.content_key.as_deref(),
+                        meta.last_modified,
                     );
                     blocks.push(block);
                 }
@@ -252,6 +261,7 @@ impl Processor for ParquetVariantSource {
                             for part in parts {
                                 let (op, path) =
                                     self.op_registry.get_operator_path(part.file.as_str())?;
+                                let meta = part.meta.clone();
                                 handlers.push(async move {
                                     let bs = cached_range_full_read(
                                         &op,
@@ -260,7 +270,7 @@ impl Processor for ParquetVariantSource {
                                         false,
                                     )
                                     .await?;
-                                    Ok::<_, ErrorCode>((bs, path.to_owned()))
+                                    Ok::<_, ErrorCode>((bs, path.to_owned(), meta))
                                 });
                             }
                             let results = futures::future::try_join_all(handlers).await?;
@@ -272,6 +282,7 @@ impl Processor for ParquetVariantSource {
                                 self.state = State::ReadRowGroup {
                                     readers,
                                     location: part.file.clone(),
+                                    meta: part.meta.clone(),
                                 };
                             }
                         }
@@ -320,9 +331,10 @@ impl ParquetVariantSource {
         let mut start_row = 0;
         let mut readers = VecDeque::with_capacity(meta.num_row_groups());
         for (rowgroup_idx, rg) in meta.row_groups().iter().enumerate() {
-            start_row += rg.num_rows() as u64;
+            let row_group_start = start_row;
             // filter by bucket option
             if !should_read(rowgroup_idx, part.bucket_option) {
+                start_row += rg.num_rows() as u64;
                 continue;
             }
             let mut row_group =
@@ -334,7 +346,8 @@ impl ParquetVariantSource {
                 self.batch_size,
                 None,
             )?;
-            readers.push_back((reader, start_row, typ.clone(), data_schema.clone()));
+            readers.push_back((reader, row_group_start, typ.clone(), data_schema.clone()));
+            start_row += rg.num_rows() as u64;
         }
         Ok(readers)
     }

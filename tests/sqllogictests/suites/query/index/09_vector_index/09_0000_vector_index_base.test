@@ -7,6 +7,21 @@ create database test_vector_index
 statement ok
 use test_vector_index
 
+statement error Vector cluster key `embedding` requires a vector index with distance option
+CREATE TABLE t_vector_cluster_no_index(id Int, embedding Vector(8)) Engine = Fuse CLUSTER BY(embedding)
+
+statement error Vector cluster key `embedding` has multiple vector index distance types
+CREATE TABLE t_vector_cluster_multi_distance(id Int, embedding Vector(8), VECTOR INDEX idx (embedding) distance='cosine,l2') Engine = Fuse CLUSTER BY(embedding)
+
+statement ok
+CREATE TABLE t_vector_cluster_single_distance(id Int, embedding Vector(8), VECTOR INDEX idx (embedding) distance='cosine') Engine = Fuse CLUSTER BY(embedding)
+
+statement error
+DROP VECTOR INDEX idx ON t_vector_cluster_single_distance
+
+statement ok
+DROP TABLE t_vector_cluster_single_distance
+
 statement ok
 CREATE TABLE IF NOT EXISTS t(id Int, embedding Vector(8), VECTOR INDEX idx (embedding) m=10 ef_construct=40 distance='cosine') Engine = Fuse
 
@@ -285,7 +300,7 @@ SELECT id, cosine_distance(embedding2, [0.50515236, 0.8561939, 0.87169914, 0.558
 5 0.03522873
 
 statement ok
-CREATE TABLE IF NOT EXISTS t_native(id Int, embedding Vector(8), VECTOR INDEX idx (embedding) m=10 ef_construct=40 distance='cosine') storage_format = 'native' row_per_page = 2
+CREATE TABLE IF NOT EXISTS t_native(id Int, embedding Vector(8), VECTOR INDEX idx (embedding) m=10 ef_construct=40 distance='cosine') storage_format = 'parquet' row_per_page = 2
 
 statement ok
 INSERT INTO t_native VALUES

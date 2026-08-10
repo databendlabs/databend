@@ -53,5 +53,11 @@ select number % 3, weighted_avg(number+1, 1), weighted_avg(number+2, 1) from num
 1 5.0 6.0
 2 6.0 7.0
 
+# FILTER is parsed for UDAFs (PostgreSQL compatibility) but execution is not wired up yet.
+# The UDAF should be recognized as an aggregate and rejected with a dedicated message,
+# not the "only supported for aggregate functions" error used for scalar functions.
+statement error FILTER clause is not supported for aggregate UDFs yet
+select weighted_avg(number+1, number*2) filter (where number % 2 = 0) from numbers(10);
+
 statement ok
 drop function weighted_avg

@@ -31,6 +31,7 @@ pub enum CatalogType {
     Default = 1,
     Hive = 2,
     Iceberg = 3,
+    Paimon = 4,
 }
 
 impl From<databend_common_ast::ast::CatalogType> for CatalogType {
@@ -39,6 +40,7 @@ impl From<databend_common_ast::ast::CatalogType> for CatalogType {
             databend_common_ast::ast::CatalogType::Default => CatalogType::Default,
             databend_common_ast::ast::CatalogType::Hive => CatalogType::Hive,
             databend_common_ast::ast::CatalogType::Iceberg => CatalogType::Iceberg,
+            databend_common_ast::ast::CatalogType::Paimon => CatalogType::Paimon,
         }
     }
 }
@@ -54,6 +56,8 @@ pub enum CatalogOption {
     Hive(HiveCatalogOption),
     // Catalog option for Iceberg.
     Iceberg(IcebergCatalogOption),
+    // Catalog option for Paimon.
+    Paimon(PaimonCatalogOption),
 }
 
 impl CatalogOption {
@@ -62,8 +66,15 @@ impl CatalogOption {
             CatalogOption::Default => CatalogType::Default,
             CatalogOption::Hive(_) => CatalogType::Hive,
             CatalogOption::Iceberg(_) => CatalogType::Iceberg,
+            CatalogOption::Paimon(_) => CatalogType::Paimon,
         }
     }
+}
+
+/// Option for creating a Paimon catalog.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PaimonCatalogOption {
+    pub options: HashMap<String, String>,
 }
 
 /// Option for creating a iceberg catalog

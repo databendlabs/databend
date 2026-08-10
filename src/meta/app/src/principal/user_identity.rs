@@ -15,10 +15,6 @@
 use std::fmt;
 
 use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::KeyBuilder;
-use databend_meta_client::kvapi::KeyCodec;
-use databend_meta_client::kvapi::KeyError;
-use databend_meta_client::kvapi::KeyParser;
 
 /// Uniquely identifies a user with a username and a hostname.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash, Default)]
@@ -74,15 +70,19 @@ impl UserIdentity {
     }
 }
 
-impl KeyCodec for UserIdentity {
-    fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+impl kvapi::KeyCodec for UserIdentity {
+    fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
         b.push_str(&self.encode())
     }
 
-    fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
+    fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
     where Self: Sized {
         let s = parser.next_str()?;
         Self::parse(&s)
+    }
+
+    fn segment_count(&self) -> usize {
+        1
     }
 }
 

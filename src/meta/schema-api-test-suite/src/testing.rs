@@ -14,9 +14,10 @@
 
 //! Supporting utilities for tests.
 
+use std::ops::Deref;
+
 use databend_common_meta_api::deserialize_struct;
 use databend_common_meta_api::kv_app_error::KVAppError;
-use databend_common_meta_api::serialization_util::deserialize_u64;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KvApiExt;
@@ -50,13 +51,17 @@ where
 }
 
 /// Get existing u64 value by key. Panic if key is absent.
-pub(crate) async fn get_kv_u64_data(
+pub(crate) async fn get_kv_u64_data<K>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &impl kvapi::Key,
-) -> Result<u64, KVAppError> {
+    key: &K,
+) -> Result<u64, KVAppError>
+where
+    K: kvapi::Key,
+    K::ValueType: FromToProto + Deref<Target = u64>,
+{
     let res = kv_api.get_kv(&key.to_string_key()).await?;
     if let Some(res) = res {
-        let s = deserialize_u64(&res.data)?;
+        let s = deserialize_struct::<K::ValueType>(&res.data)?;
         return Ok(*s);
     };
 

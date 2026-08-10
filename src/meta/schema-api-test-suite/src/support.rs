@@ -19,7 +19,7 @@ use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::UpsertKV;
 

@@ -19,6 +19,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::ops::Bound;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -164,20 +165,27 @@ impl ScalarExpr {
     }
 
     pub fn used_columns(&self) -> ColumnSet {
-        struct UsedColumnsVisitor {
-            columns: ColumnSet,
+        let mut columns = ColumnSet::new();
+        self.collect_used_columns(&mut columns);
+        columns
+    }
+
+    pub fn collect_used_columns<C>(&self, columns: &mut C)
+    where C: Extend<Symbol> {
+        struct UsedColumnsVisitor<'a, C> {
+            columns: &'a mut C,
         }
 
-        impl<'a> Visitor<'a> for UsedColumnsVisitor {
+        impl<'a, C> Visitor<'a> for UsedColumnsVisitor<'_, C>
+        where C: Extend<Symbol>
+        {
             fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
-                self.columns.insert(col.column.index);
+                self.columns.extend(std::iter::once(col.column.index));
                 Ok(())
             }
 
             fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
-                for idx in subquery.outer_columns.iter() {
-                    self.columns.insert(*idx);
-                }
+                self.columns.extend(subquery.outer_columns.iter().copied());
                 if let Some(child_expr) = subquery.child_expr.as_ref() {
                     self.visit(child_expr)?;
                 }
@@ -185,11 +193,26 @@ impl ScalarExpr {
             }
         }
 
-        let mut visitor = UsedColumnsVisitor {
-            columns: ColumnSet::new(),
-        };
+        let mut visitor = UsedColumnsVisitor { columns };
         visitor.visit(self).unwrap();
-        visitor.columns
+    }
+
+    pub fn is_deterministic(&self) -> bool {
+        match self {
+            ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::ConstantExpr(_)
+            | ScalarExpr::TypedConstantExpr(_, _) => true,
+            ScalarExpr::FunctionCall(func) => {
+                if let Some(property) = BUILTIN_FUNCTIONS.get_property(&func.func_name) {
+                    if property.kind == FunctionKind::SRF || property.non_deterministic {
+                        return false;
+                    }
+                }
+                func.arguments.iter().all(ScalarExpr::is_deterministic)
+            }
+            ScalarExpr::CastExpr(cast) => cast.argument.is_deterministic(),
+            _ => false,
+        }
     }
 
     // Get used tables in ScalarExpr
@@ -922,6 +945,18 @@ impl ComparisonOp {
             ComparisonOp::LTE => ComparisonOp::GTE,
         }
     }
+
+    pub fn range_bounds<T>(&self, value: T) -> Option<(Bound<T>, Bound<T>)>
+    where T: Clone {
+        match self {
+            ComparisonOp::Equal => Some((Bound::Included(value.clone()), Bound::Included(value))),
+            ComparisonOp::NotEqual => None,
+            ComparisonOp::GT => Some((Bound::Excluded(value), Bound::Unbounded)),
+            ComparisonOp::LT => Some((Bound::Unbounded, Bound::Excluded(value))),
+            ComparisonOp::GTE => Some((Bound::Included(value), Bound::Unbounded)),
+            ComparisonOp::LTE => Some((Bound::Unbounded, Bound::Included(value))),
+        }
+    }
 }
 
 impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
@@ -1155,7 +1190,7 @@ pub struct CastExpr {
     pub target_type: Box<DataType>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum SubqueryType {
     Any,
     All,
@@ -1405,7 +1440,7 @@ impl AsyncFunctionCall {
         &self,
         tenant: Tenant,
         catalog: Arc<dyn Catalog>,
-        visibility_checker: Option<GrantObjectVisibilityChecker>,
+        visibility_checker: Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<Scalar> {
         match &self.func_arg {
             AsyncFunctionArgument::SequenceFunction(sequence_name) => {

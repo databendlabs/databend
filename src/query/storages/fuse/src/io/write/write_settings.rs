@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
+use databend_common_expression::ColumnId;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_table_meta::table::TableCompression;
 
-use crate::DEFAULT_ROW_PER_PAGE;
 use crate::FuseStorageFormat;
 
 pub const MAX_BLOCK_UNCOMPRESSED_SIZE: usize = 1024 * 1024 * 400;
@@ -26,11 +28,12 @@ pub struct WriteSettings {
     pub storage_format: FuseStorageFormat,
     pub table_compression: TableCompression,
     pub bloom_index_type: BloomIndexType,
-    // rows per page, current only work in native format
-    pub max_page_size: usize,
 
     pub block_per_seg: usize,
     pub enable_parquet_dictionary: bool,
+    pub data_page_rows: Option<usize>,
+    pub data_page_bytes: Option<usize>,
+    pub col_stats_truncate_lens: BTreeMap<ColumnId, usize>,
 }
 
 impl Default for WriteSettings {
@@ -39,9 +42,11 @@ impl Default for WriteSettings {
             storage_format: FuseStorageFormat::Parquet,
             table_compression: TableCompression::default(),
             bloom_index_type: BloomIndexType::default(),
-            max_page_size: DEFAULT_ROW_PER_PAGE,
             block_per_seg: DEFAULT_BLOCK_PER_SEGMENT,
             enable_parquet_dictionary: false,
+            data_page_rows: None,
+            data_page_bytes: None,
+            col_stats_truncate_lens: BTreeMap::new(),
         }
     }
 }

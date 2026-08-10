@@ -27,19 +27,19 @@ use crate::plans::IndexPredicateChecker;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
-use crate::plans::Sort;
+use crate::plans::SortItem;
+use crate::plans::TopN;
 use crate::plans::Visitor;
 
-/// Matches: Sort -> [EvalScalar ->] Filter -> Scan
+/// Matches: (Sort | TopN) -> [EvalScalar ->] Filter -> Scan
 ///
 /// Push down order_by and limit from Sort to Scan when filter predicates
 /// use inverted_index or vector_index.
 ///
-/// Note: This rule does NOT match plans with SecureFilter (from row access policy).
-/// When SecureFilter exists, pushing limit to Scan enables TopN pruning based only
-/// on user filter's index match counts, but SecureFilter predicates are not included
-/// in push_down_predicates, so blocks needed after security filtering may be pruned,
-/// causing fewer rows than requested.
+/// Note: When `secure_predicates` has not been applied by prewhere, this rule
+/// bails out because storage TopK pruning would return N rows before RAP row
+/// selection, then secure predicates filter them further, yielding fewer rows
+/// than requested.
 pub struct RulePushDownSortFilterScan {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -54,6 +54,10 @@ impl RulePushDownSortFilterScan {
                 match_op!(Sort -> Filter -> Scan),
                 // Sort -> EvalScalar -> Filter -> Scan
                 match_op!(Sort -> EvalScalar -> Filter -> Scan),
+                // TopN -> Filter -> Scan
+                match_op!(TopN -> Filter -> Scan),
+                // TopN -> EvalScalar -> Filter -> Scan
+                match_op!(TopN -> EvalScalar -> Filter -> Scan),
             ],
         }
     }
@@ -65,7 +69,14 @@ impl Rule for RulePushDownSortFilterScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let (sort_items, sort_limit): (Vec<SortItem>, Option<usize>) = match s_expr.plan() {
+            RelOperator::Sort(sort) => (sort.items.clone(), sort.limit),
+            RelOperator::TopN(top_n) => {
+                let top_n: TopN = top_n.clone();
+                (top_n.items.clone(), Some(top_n.candidate_count()))
+            }
+            _ => unreachable!(),
+        };
 
         let child = s_expr.child(0)?;
         let (eval_scalar, filter, mut scan) = match child.plan() {
@@ -92,19 +103,21 @@ impl Rule for RulePushDownSortFilterScan {
         //    in Filter to ensure that all filter conditions are pushed down.
         //    (Filter `predicates` has been pushed down in `RulePushDownFilterScan` rule.)
         // 3. Sort must have limit in order to prune unused blocks.
+        // 4. RAP must already participate in row selection if present.
         let push_down_predicates = scan.push_down_predicates.clone().unwrap_or_default();
         let has_inverted_index = scan.inverted_index.is_some();
         let has_vector_index = scan.vector_index.is_some();
         if (!has_inverted_index && !has_vector_index)
             || push_down_predicates.len() != filter.predicates.len()
-            || sort.limit.is_none()
+            || sort_limit.is_none()
             || !filter_contains_only_index_predicates(&filter, has_inverted_index, has_vector_index)
+            || scan.has_secure_predicates_not_applied_by_prewhere()
         {
             return Ok(());
         }
 
-        scan.order_by = Some(sort.items);
-        scan.limit = sort.limit;
+        scan.order_by = Some(sort_items);
+        scan.limit = sort_limit;
 
         let new_scan = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
         let mut result = if eval_scalar.is_some() {

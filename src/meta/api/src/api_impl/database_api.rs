@@ -29,7 +29,6 @@ use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
@@ -76,7 +75,6 @@ use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_del;
 use crate::txn_put_pb;
-use crate::txn_put_u64;
 
 impl<KV> DatabaseApi for KV
 where
@@ -127,32 +125,22 @@ where
             let mut txn = TxnRequest::default();
 
             if let Some(ref curr_seq_db_id) = curr_seq_db_id {
-                match req.create_option {
-                    CreateOption::Create => {
-                        return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
-                            DatabaseAlreadyExists::new(
-                                name_key.database_name(),
-                                format!("create db: tenant: {}", name_key.tenant_name()),
-                            ),
-                        )));
-                    }
-                    CreateOption::CreateIfNotExists => {
-                        return Ok(CreateDatabaseReply {
-                            db_id: curr_seq_db_id.data.into_inner(),
-                        });
-                    }
-                    CreateOption::CreateOrReplace => {
-                        let _ = drop_database_meta(
-                            self,
-                            name_key,
-                            req.catalog_name.clone(),
-                            false,
-                            false,
-                            &mut txn,
-                        )
-                        .await?;
-                    }
+                if !req.override_existing {
+                    return Ok(CreateDatabaseReply {
+                        db_id: curr_seq_db_id.data,
+                        created: false,
+                    });
                 }
+
+                let _ = drop_database_meta(
+                    self,
+                    name_key,
+                    req.catalog_name.clone(),
+                    false,
+                    false,
+                    &mut txn,
+                )
+                .await?;
             };
 
             // get db id list from _fd_db_id_list/db_id
@@ -188,10 +176,10 @@ where
                     txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
                 ]);
                 txn.if_then.extend(vec![
-                    txn_put_u64(name_key, db_id)?, // (tenant, db_name) -> db_id
-                    txn_put_pb(&id_key, &req.meta)?, // (db_id) -> db_meta
-                    txn_put_pb(&dbid_idlist, &db_id_list)?, /* _fd_db_id_list/<tenant>/<db_name> -> db_id_list */
-                    txn_put_pb(&id_to_name_key, &DatabaseNameIdentRaw::from(name_key))?, /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
+                    txn_put_pb(name_key, &id_key), // (tenant, db_name) -> db_id
+                    txn_put_pb(&id_key, &req.meta), // (db_id) -> db_meta
+                    txn_put_pb(&dbid_idlist, &db_id_list), /* _fd_db_id_list/<tenant>/<db_name> -> db_id_list */
+                    txn_put_pb(&id_to_name_key, &DatabaseNameIdentRaw::from(name_key)), /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
                 ]);
 
                 let (succ, _responses) = send_txn(self, txn).await?;
@@ -204,7 +192,10 @@ where
                 );
 
                 if succ {
-                    return Ok(CreateDatabaseReply { db_id: id_key });
+                    return Ok(CreateDatabaseReply {
+                        db_id: id_key,
+                        created: true,
+                    });
                 }
             }
         }
@@ -334,8 +325,8 @@ where
                         txn_cond_seq(&dbid, Eq, db_meta_seq),
                     ],
                     vec![
-                        txn_put_u64(name_key, db_id)?, // (tenant, db_name) -> db_id
-                        txn_put_pb(&dbid, &db_meta)?,  // (db_id) -> db_meta
+                        txn_put_pb(name_key, &dbid), // (tenant, db_name) -> db_id
+                        txn_put_pb(&dbid, &db_meta), // (db_id) -> db_meta
                     ],
                 );
 
@@ -385,7 +376,7 @@ where
                 }
             };
 
-            let old_db_id = old_seq_db_id.data.into_inner();
+            let old_db_id = old_seq_db_id.data;
 
             let old_seq_db_meta = self.get_pb(&old_db_id).await?;
 
@@ -472,10 +463,10 @@ where
             let if_then = vec![
                 txn_del(tenant_dbname), // del old_db_name
                 // Renaming db should not affect the seq of db_meta. Just modify db name.
-                txn_put_u64(&tenant_newdbname, *old_db_id)?, /* (tenant, new_db_name) -> old_db_id */
-                txn_put_pb(&new_dbid_idlist, &new_db_id_list)?, /* _fd_db_id_list/tenant/new_db_name -> new_db_id_list */
-                txn_put_pb(&dbid_idlist, &db_id_list)?, /* _fd_db_id_list/tenant/db_name -> db_id_list */
-                txn_put_pb(&db_id_key, &DatabaseNameIdentRaw::from(&tenant_newdbname))?, /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
+                txn_put_pb(&tenant_newdbname, &old_db_id), // (tenant, new_db_name) -> old_db_id
+                txn_put_pb(&new_dbid_idlist, &new_db_id_list), /* _fd_db_id_list/tenant/new_db_name -> new_db_id_list */
+                txn_put_pb(&dbid_idlist, &db_id_list), /* _fd_db_id_list/tenant/db_name -> db_id_list */
+                txn_put_pb(&db_id_key, &DatabaseNameIdentRaw::from(&tenant_newdbname)), /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
             ];
 
             let txn_req = TxnRequest::new(condition, if_then);
@@ -648,10 +639,7 @@ where
 
         let id_idents = name_seq_ids
             .iter()
-            .map(|(_k, id)| {
-                let db_id = id.data;
-                DatabaseId { db_id: *db_id }
-            })
+            .map(|(_k, id)| id.data)
             .collect::<Vec<_>>();
 
         let id_metas = self.get_pb_values_vec(id_idents).await?;
@@ -665,7 +653,7 @@ where
             })
             .map(|(name, db_id, seq_meta)| {
                 let db_info = DatabaseInfo {
-                    database_id: db_id.into_inner(),
+                    database_id: db_id,
                     name_ident: name,
                     meta: seq_meta,
                 };
@@ -737,7 +725,7 @@ where
         msg: impl Display + std::fmt::Debug + Send,
     ) -> Result<Result<SeqV<DatabaseId>, UnknownDatabase>, MetaError> {
         let seq_db_id = self.get_pb(name_key).await?;
-        let result = seq_db_id.map(|s| s.map(|x| x.into_inner())).ok_or_else(|| {
+        let result = seq_db_id.ok_or_else(|| {
             UnknownDatabase::new(
                 name_key.database_name(),
                 format!("{}: {}", msg, name_key.display()),

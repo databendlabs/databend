@@ -24,13 +24,13 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
-use databend_common_storages_fuse::TableContext;
 
 use super::runtime_filter::RuntimeFilterLocalBuilder;
 use super::runtime_filter::build_and_push_down_runtime_filter;
 use super::runtime_filter::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
+use crate::sessions::TableContextSettings;
 
 /// There are three types of hash table:
 /// 1. FirstRound: it is the first time the hash table is constructed.
@@ -137,7 +137,6 @@ impl TransformHashJoinBuild {
                 settings.get_inlist_runtime_filter_threshold()? as usize,
                 settings.get_bloom_runtime_filter_threshold()? as usize,
                 settings.get_min_max_runtime_filter_threshold()? as usize,
-                settings.get_spatial_runtime_filter_threshold()? as usize,
             )?
         };
 
@@ -250,10 +249,6 @@ impl Processor for TransformHashJoinBuild {
         }
     }
 
-    fn interrupt(&self) {
-        self.build_state.hash_join_state.interrupt()
-    }
-
     fn process(&mut self) -> Result<()> {
         match self.step {
             Step::Sync(SyncStep::Collect) => {
@@ -334,7 +329,6 @@ impl Processor for TransformHashJoinBuild {
                         settings.get_inlist_runtime_filter_threshold()? as usize,
                         settings.get_bloom_runtime_filter_threshold()? as usize,
                         settings.get_min_max_runtime_filter_threshold()? as usize,
-                        settings.get_spatial_runtime_filter_threshold()? as usize,
                     )?;
                     build_and_push_down_runtime_filter(packet, &self.build_state).await?;
                 }

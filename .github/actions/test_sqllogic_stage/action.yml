@@ -17,6 +17,10 @@ inputs:
     description: "path type for dedup when copy, choices: full_path,sub_path"
     required: true
     default: ""
+  size:
+    description: "stage parquet read size mode, choices: small,large"
+    required: true
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -34,4 +38,5 @@ runs:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_STAGE_STORAGE: ${{ inputs.storage }}
         TEST_STAGE_DEDUP: ${{ inputs.dedup}}
+        TEST_STAGE_SIZE: ${{ inputs.size }}
       run: bash ./scripts/ci/ci-run-sqllogic-tests-without-sandbox.sh ${{ inputs.dirs }}

@@ -44,11 +44,14 @@ use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::interpreter_table_modify_column::build_select_insert_plan;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct AddTableColumnInterpreter {
     ctx: Arc<QueryContext>,
@@ -242,7 +245,9 @@ impl Interpreter for AddTableColumnInterpreter {
                     schema,
                     mutation.metadata.clone(),
                 )?;
-                let _ = interpreter.execute(self.ctx.clone()).await?;
+                let _ = interpreter
+                    .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+                    .await?;
                 return Ok(PipelineBuildResult::create());
             }
         }
@@ -265,6 +270,7 @@ where
             // Build new snapshot from previous
             Some(TableSnapshot::try_from_previous(
                 prev.clone(),
+                fuse_tbl.cluster_key_meta(),
                 Some(fuse_tbl.get_table_info().ident.seq),
                 ctx.get_table_meta_timestamps(fuse_tbl, Some(prev.clone()))?,
             )?)

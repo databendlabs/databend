@@ -45,6 +45,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
+use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 
 /// Rule to push aggregation past a join to reduces the number of input rows to the join.
@@ -145,6 +146,8 @@ impl RuleEagerAggregation {
                 match_op!(EvalScalar -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
                 match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> Join[*, *]),
                 match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
+                match_op!(EvalScalar -> TopN -> Aggregate -> Aggregate -> Join[*, *]),
+                match_op!(EvalScalar -> TopN -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
             ],
             metadata,
         }
@@ -191,7 +194,7 @@ impl Rule for RuleEagerAggregation {
 #[derive(Clone)]
 struct EagerInput<'a> {
     eval_scalar: &'a EvalScalar,
-    sort_expr: Option<&'a SExpr>,
+    ordering_expr: Option<&'a SExpr>,
     join_expr: &'a SExpr,
     extra_eval_scalar: EvalScalar,
     final_agg: Aggregate,
@@ -202,11 +205,14 @@ impl<'a> EagerInput<'a> {
         let eval_scalar = s_expr.plan().as_eval_scalar()?;
 
         let mut current = s_expr.unary_child();
-        let sort_expr = current.plan().as_sort().map(|_| {
-            let sort_expr = current;
-            current = sort_expr.unary_child();
-            sort_expr
-        });
+        let ordering_expr = match current.plan() {
+            RelOperator::Sort(_) | RelOperator::TopN(_) => {
+                let ordering_expr = current;
+                current = ordering_expr.unary_child();
+                Some(ordering_expr)
+            }
+            _ => None,
+        };
 
         let final_agg = current.plan().as_aggregate()?.clone();
         current = current.unary_child();
@@ -228,7 +234,7 @@ impl<'a> EagerInput<'a> {
 
         Some(Self {
             eval_scalar,
-            sort_expr,
+            ordering_expr,
             join_expr: current,
             extra_eval_scalar,
             final_agg,
@@ -257,6 +263,10 @@ impl<'a> EagerInput<'a> {
             .iter()
             .flat_map(|item| item.scalar.used_columns())
             .collect::<ColumnSet>();
+
+        if self.has_mixed_sum_and_count_aggregates(&eval_scalar_used_columns) {
+            return Ok(vec![]);
+        }
 
         let function_factory = AggregateFunctionFactory::instance();
         let eager_candidates = EagerCandidates::collect(
@@ -353,6 +363,36 @@ impl<'a> EagerInput<'a> {
                 )
             })
             .collect())
+    }
+
+    fn has_mixed_sum_and_count_aggregates(&self, eval_scalar_used_columns: &ColumnSet) -> bool {
+        let mut has_sum = false;
+        let mut has_count = false;
+
+        for aggregate in &self.final_agg.aggregate_functions {
+            if !eval_scalar_used_columns.contains(&aggregate.index) {
+                continue;
+            }
+
+            let ScalarExpr::AggregateFunction(aggregate_function) = &aggregate.scalar else {
+                continue;
+            };
+
+            match aggregate_function.func_name.as_str() {
+                "sum" => has_sum = true,
+                "count" => has_count = true,
+                _ => {}
+            }
+
+            if has_sum && has_count {
+                // Mixed sum/count outputs are used by rewrites such as AVG = SUM / COUNT.
+                // The current eager-count rewrite does not preserve this shape, so keep the
+                // original aggregate plan instead of applying eager aggregation.
+                return true;
+            }
+        }
+
+        false
     }
 
     fn expand_analyses(
@@ -1027,8 +1067,8 @@ impl EagerAnalysis {
                 ..final_aggr.clone()
             })
             .build_unary(final_aggr);
-        let plan = match input.sort_expr {
-            Some(sort_expr) => plan.build_unary(sort_expr.plan.clone()),
+        let plan = match input.ordering_expr {
+            Some(ordering_expr) => plan.build_unary(ordering_expr.plan.clone()),
             None => plan,
         };
         plan.build_unary(eval_scalar)
@@ -1171,11 +1211,6 @@ impl EagerAnalysis {
         aggregate_function: &mut AggregateFunction,
         eager_count_index: Symbol,
     ) -> Result<ScalarItem, ErrorCode> {
-        let new_index = metadata.write().add_derived_column(
-            format!("{} * _eager_count", aggregate_function.display_name),
-            aggregate_function.args[0].data_type()?,
-        );
-
         let new_scalar = if let ScalarExpr::BoundColumnRef(column) = &aggregate_function.args[0] {
             let mut scalar_idx = input.extra_eval_scalar.items.len();
             for (idx, eval_scalar) in input.extra_eval_scalar.items.iter().enumerate() {
@@ -1192,35 +1227,60 @@ impl EagerAnalysis {
             unreachable!()
         };
 
+        let multiplied_scalar = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "multiply".to_string(),
+            params: vec![],
+            arguments: vec![
+                new_scalar,
+                wrap_cast(
+                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: ColumnBindingBuilder::new(
+                            "_eager_count".to_string(),
+                            eager_count_index,
+                            Box::new(DataType::Nullable(Box::new(DataType::Number(
+                                NumberDataType::UInt64,
+                            )))),
+                            Visibility::Visible,
+                        )
+                        .build(),
+                    }),
+                    &DataType::Number(NumberDataType::UInt64),
+                ),
+            ],
+        });
+        let multiplied_scalar = if matches!(
+            aggregate_function.return_type.remove_nullable(),
+            DataType::Decimal(_)
+        ) {
+            wrap_cast(&multiplied_scalar, &aggregate_function.return_type)
+        } else {
+            multiplied_scalar
+        };
+        let multiplied_type = multiplied_scalar.data_type()?;
+        let new_index = metadata.write().add_derived_column(
+            format!("{} * _eager_count", aggregate_function.display_name),
+            multiplied_type.clone(),
+        );
+
         let new_scalar_item = ScalarItem {
-            scalar: ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "multiply".to_string(),
-                params: vec![],
-                arguments: vec![
-                    new_scalar,
-                    wrap_cast(
-                        &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: ColumnBindingBuilder::new(
-                                "_eager_count".to_string(),
-                                eager_count_index,
-                                Box::new(DataType::Nullable(Box::new(DataType::Number(
-                                    NumberDataType::UInt64,
-                                )))),
-                                Visibility::Visible,
-                            )
-                            .build(),
-                        }),
-                        &DataType::Number(NumberDataType::UInt64),
-                    ),
-                ],
-            }),
+            scalar: multiplied_scalar,
             index: new_index,
         };
+        aggregate_function.return_type = Box::new(
+            AggregateFunctionFactory::instance()
+                .get(
+                    &aggregate_function.func_name,
+                    aggregate_function.params.clone(),
+                    vec![multiplied_type.clone()],
+                    vec![],
+                )?
+                .return_type()?,
+        );
         if let ScalarExpr::BoundColumnRef(column) = &mut aggregate_function.args[0] {
             column.column.index = new_index;
-            column.column.data_type = Box::new(new_scalar_item.scalar.data_type()?);
+            column.column.data_type = Box::new(multiplied_type);
         }
         Ok(new_scalar_item)
     }

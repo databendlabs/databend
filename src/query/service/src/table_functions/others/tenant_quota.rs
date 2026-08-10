@@ -22,7 +22,6 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -50,6 +49,8 @@ use databend_common_storages_factory::Table;
 use databend_common_users::UserApiProvider;
 use databend_meta_client::types::MatchSeq;
 use fastrace::func_name;
+
+use crate::sessions::TableContext;
 
 pub struct TenantQuotaTable {
     table_info: TableInfo,

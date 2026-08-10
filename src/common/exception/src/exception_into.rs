@@ -452,3 +452,9 @@ impl From<tokio::task::JoinError> for ErrorCode {
         }
     }
 }
+
+impl From<!> for ErrorCode {
+    fn from(_: !) -> Self {
+        unreachable!()
+    }
+}

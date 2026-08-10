@@ -48,11 +48,12 @@ use crate::plans::Mutation;
 use crate::plans::OptimizeCompactBlock as CompactBlock;
 use crate::plans::ProjectSet;
 use crate::plans::Scan;
-use crate::plans::SecureFilter;
 use crate::plans::Sort;
+use crate::plans::TopN;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
+use crate::plans::WindowGroup;
 use crate::plans::r_cte_scan::RecursiveCteScan;
 use crate::plans::sequence::Sequence;
 
@@ -113,14 +114,15 @@ pub enum RelOp {
     Join,
     EvalScalar,
     Filter,
-    SecureFilter,
     Aggregate,
     Sort,
     Limit,
+    TopN,
     Exchange,
     UnionAll,
     DummyTableScan,
     Window,
+    WindowGroup,
     ProjectSet,
     ConstantTableScan,
     ExpressionScan,
@@ -151,14 +153,15 @@ pub enum RelOperator {
     Join(Join),
     EvalScalar(EvalScalar),
     Filter(Filter),
-    SecureFilter(SecureFilter),
     Aggregate(Aggregate),
     Sort(Sort),
     Limit(Limit),
+    TopN(TopN),
     Exchange(Exchange),
     UnionAll(UnionAll),
     DummyTableScan(DummyTableScan),
     Window(Window),
+    WindowGroup(WindowGroup),
     ProjectSet(ProjectSet),
     ConstantTableScan(ConstantTableScan),
     ExpressionScan(ExpressionScan),
@@ -256,14 +259,15 @@ impl_try_from_rel_operator! {
     Join,
     EvalScalar,
     Filter,
-    SecureFilter,
     Aggregate,
     Sort,
     Limit,
+    TopN,
     Exchange,
     UnionAll,
     DummyTableScan,
     Window,
+    WindowGroup,
     ProjectSet,
     ConstantTableScan,
     ExpressionScan,

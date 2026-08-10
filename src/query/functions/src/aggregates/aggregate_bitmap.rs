@@ -41,7 +41,7 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_io::HybridBitmap;
-use databend_common_io::bitmap::intersection_with_serialized;
+use databend_common_io::bitmap::BitmapRhs;
 use databend_common_io::prelude::BinaryWrite;
 use num_traits::AsPrimitive;
 
@@ -172,7 +172,7 @@ impl BitmapOperate for BitmapAndOp {
     }
 
     fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
-        intersection_with_serialized(lhs, buf)
+        lhs.bitand_assign_rhs(BitmapRhs::Serialized(buf))
     }
 }
 
@@ -182,8 +182,7 @@ impl BitmapOperate for BitmapOrOp {
     }
 
     fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
-        lhs.bitor_assign(deserialize_bitmap(buf)?);
-        Ok(())
+        lhs.bitor_assign_rhs(BitmapRhs::Serialized(buf))
     }
 }
 
@@ -193,8 +192,7 @@ impl BitmapOperate for BitmapXorOp {
     }
 
     fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
-        lhs.bitxor_assign(deserialize_bitmap(buf)?);
-        Ok(())
+        lhs.bitxor_assign_rhs(BitmapRhs::Serialized(buf))
     }
 }
 
@@ -204,8 +202,7 @@ impl BitmapOperate for BitmapNotOp {
     }
 
     fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
-        lhs.sub_assign(deserialize_bitmap(buf)?);
-        Ok(())
+        lhs.sub_assign_rhs(BitmapRhs::Serialized(buf))
     }
 }
 
@@ -229,6 +226,27 @@ impl BitmapAggState {
                 self.rb = Some(rb);
             }
         }
+    }
+
+    fn insert_many<I>(&mut self, values: I)
+    where I: IntoIterator<Item = u64> {
+        let mut values: Vec<u64> = values.into_iter().collect();
+        if values.is_empty() {
+            return;
+        }
+
+        let len = values.len();
+        values.sort_unstable();
+        values.dedup();
+        // Only use the batch path when dedup removes enough repeated values to pay for sorting.
+        if values.len() * 4 > len * 3 {
+            for value in values {
+                self.insert(value);
+            }
+            return;
+        }
+
+        self.add_bitmap::<BitmapOrOp>(HybridBitmap::from_iter(values));
     }
 
     fn add<OP: BitmapOperate>(&mut self, other: &[u8]) -> Result<()> {
@@ -488,9 +506,7 @@ where
                 }
             }
         } else {
-            for value in view.iter() {
-                state.insert(value.as_());
-            }
+            state.insert_many(view.iter().map(|value| value.as_()));
         }
         Ok(())
     }

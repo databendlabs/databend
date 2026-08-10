@@ -57,15 +57,15 @@ impl FromToProto for mt::principal::RoleInfo {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::RoleInfo, Incompatible> {
-        Ok(pb::RoleInfo {
+    fn to_pb(&self) -> pb::RoleInfo {
+        pb::RoleInfo {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
-            grants: Some(mt::principal::UserGrantSet::to_pb(&self.grants)?),
-            created_on: Some(self.created_on.to_pb()?),
-            update_on: Some(self.update_on.to_pb()?),
+            grants: Some(mt::principal::UserGrantSet::to_pb(&self.grants)),
+            created_on: Some(self.created_on.to_pb()),
+            update_on: Some(self.update_on.to_pb()),
             comment: self.comment.clone(),
-        })
+        }
     }
 }

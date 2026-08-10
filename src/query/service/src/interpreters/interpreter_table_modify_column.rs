@@ -61,8 +61,10 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -76,7 +78,10 @@ use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct ModifyTableColumnInterpreter {
     ctx: Arc<QueryContext>,
@@ -267,6 +272,15 @@ impl ModifyTableColumnInterpreter {
                     }
                 }
             }
+            if let Some(partition_key) = table.options().get(OPT_KEY_PARTITION_BY) {
+                let referenced = cluster_key_referenced_columns(partition_key)?;
+                if referenced.iter().any(|v| modified_cols.contains(v)) {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Cannot modify column data type because it is referenced by partition key '{}'",
+                        partition_key
+                    )));
+                }
+            }
         }
 
         let catalog_name = table_info.catalog();
@@ -305,6 +319,12 @@ impl ModifyTableColumnInterpreter {
                 approx_distinct_cols = cols;
             }
         }
+        let mut analyze_frequency_cols = vec![];
+        if let Some(v) = table_info.options().get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
+            if let ApproxDistinctColumns::Specify(cols) = v.parse::<ApproxDistinctColumns>()? {
+                analyze_frequency_cols = cols;
+            }
+        }
 
         let mut table_info = table.get_table_info().clone();
         table_info.meta.fill_field_comments();
@@ -339,6 +359,16 @@ impl ModifyTableColumnInterpreter {
                     {
                         return Err(ErrorCode::TableOptionInvalid(format!(
                             "Unsupported data type '{}' for approx distinct columns",
+                            field.data_type
+                        )));
+                    }
+                    if analyze_frequency_cols
+                        .iter()
+                        .any(|v| v.as_str() == field.name)
+                        && !RangeIndex::supported_table_type(&field.data_type)
+                    {
+                        return Err(ErrorCode::TableOptionInvalid(format!(
+                            "Unsupported data type '{}' for analyze frequency columns",
                             field.data_type
                         )));
                     }
@@ -903,6 +933,7 @@ pub(crate) async fn build_select_insert_plan(
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),
         cast_needed: true,
+        input_prepared: false,
         table_meta_timestamps,
         meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
     });

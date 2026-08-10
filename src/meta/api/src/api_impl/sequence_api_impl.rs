@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
-
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::SequenceError;
 use databend_common_meta_app::app_error::UnsupportedSequenceStorageVersion;
 use databend_common_meta_app::app_error::WrongSequenceCount;
-use databend_common_meta_app::primitive::Id;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::DropSequenceReply;
@@ -31,6 +28,7 @@ use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageValue;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::value_id::ValueId;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::ListOptions;
@@ -65,34 +63,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let meta: SequenceMeta = req.clone().into();
 
         let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
-        let storage_value = Id::new_typed(SequenceStorageValue(req.start));
+        let storage_value = ValueId::<SequenceStorageValue>::new(req.start);
 
-        let conditions = if req.create_option == CreateOption::CreateOrReplace {
+        let conditions = if req.override_existing {
             vec![]
         } else {
             vec![txn_cond_eq_seq(&req.ident, 0)]
         };
 
         let txn = TxnRequest::new(conditions, vec![
-            txn_put_pb(&req.ident, &meta)?,
-            txn_put_pb(&storage_ident, &storage_value)?,
+            txn_put_pb(&req.ident, &meta),
+            txn_put_pb(&storage_ident, &storage_value),
         ]);
 
         let (succ, _response) = send_txn(self, txn).await?;
 
-        if succ {
-            return Ok(CreateSequenceReply {});
-        }
-
-        match req.create_option {
-            CreateOption::Create => Err(KVAppError::AppError(AppError::SequenceError(
-                SequenceError::SequenceAlreadyExists(req.ident.exist_error(func_name!())),
-            ))),
-            CreateOption::CreateIfNotExists => Ok(CreateSequenceReply {}),
-            CreateOption::CreateOrReplace => {
-                unreachable!("CreateOrReplace should always success")
-            }
-        }
+        Ok(CreateSequenceReply { success: succ })
     }
 
     async fn get_sequence(
@@ -120,7 +106,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             return Ok(None);
         };
 
-        let next_available = *storage_value.data.deref();
+        let next_available = *storage_value.data;
 
         seq_meta.data.current = next_available;
         Ok(Some(seq_meta))
@@ -154,7 +140,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
                 // For version==1  sequence, load the current value from the external storage.
                 if meta.storage_version == 1 {
                     if let Some(seq_storage_value) = sto {
-                        meta.current = seq_storage_value.data.into_inner().0;
+                        meta.current = *seq_storage_value.data;
                     }
                 }
 

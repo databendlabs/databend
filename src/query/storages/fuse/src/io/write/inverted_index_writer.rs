@@ -33,7 +33,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
@@ -44,6 +43,7 @@ use jsonb::RawJsonb;
 use jsonb::from_raw_jsonb;
 use log::debug;
 use log::info;
+use opendal::Buffer;
 use tantivy::Directory;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
@@ -129,13 +129,13 @@ pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedInd
 
 #[derive(Debug)]
 pub struct InvertedIndexState {
-    pub(crate) data: Vec<u8>,
+    pub(crate) data: Buffer,
     pub(crate) size: u64,
     pub(crate) location: Location,
 }
 
 impl InvertedIndexState {
-    pub fn try_create(data: Vec<u8>, location: String) -> Result<Self> {
+    pub fn try_create(data: Buffer, location: String) -> Result<Self> {
         let size = data.len() as u64;
         Ok(Self {
             data,
@@ -270,7 +270,7 @@ impl InvertedIndexWriter {
     }
 
     #[async_backtrace::framed]
-    pub fn finalize(mut self) -> Result<Vec<u8>> {
+    pub fn finalize(mut self) -> Result<Buffer> {
         let _ = self.index_writer.run(self.operations);
         let _ = self.index_writer.commit()?;
         let index = self.index_writer.index();
@@ -329,11 +329,9 @@ impl InvertedIndexWriter {
         let index_schema = TableSchemaRefExt::create(index_fields);
         let index_block = DataBlock::new(index_columns, 1);
 
-        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let _ = blocks_to_parquet(
+        let serialized = blocks_to_parquet(
             index_schema.as_ref(),
             vec![index_block],
-            &mut data,
             // Zstd has the best compression ratio
             TableCompression::Zstd,
             // No dictionary page for inverted index
@@ -341,7 +339,7 @@ impl InvertedIndexWriter {
             None,
         )?;
 
-        Ok(data)
+        Ok(Buffer::from(serialized.payload))
     }
 }
 

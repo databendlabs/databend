@@ -28,7 +28,9 @@ use log::debug;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct CreateDatabaseInterpreter {
@@ -72,6 +74,16 @@ impl Interpreter for CreateDatabaseInterpreter {
 
         let create_db_req: CreateDatabaseReq = self.plan.clone().into();
         let reply = catalog.create_database(create_db_req).await?;
+        if !reply.created {
+            if self.plan.create_option.if_return_error() {
+                return Err(ErrorCode::DatabaseAlreadyExists(format!(
+                    "{} database exists",
+                    self.plan.database
+                )));
+            }
+
+            return Ok(PipelineBuildResult::create());
+        }
 
         // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in
         // the future.

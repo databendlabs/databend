@@ -40,10 +40,25 @@ pub enum NameResolutionSuggest {
 }
 
 impl NameResolutionContext {
-    // rely on normalize_identifier() do not change quote
+    // Rely on identifier normalization preserving quote information.
     pub fn is_case_sensitive(&self, ident: &Identifier) -> bool {
         (ident.is_quoted() && self.quoted_ident_case_sensitive)
             || (!ident.is_quoted() && self.unquoted_ident_case_sensitive)
+    }
+
+    pub fn normalize_identifier(&self, ident: &Identifier) -> Identifier {
+        if (ident.is_quoted() && self.quoted_ident_case_sensitive)
+            || (!ident.is_quoted() && self.unquoted_ident_case_sensitive)
+        {
+            ident.clone()
+        } else {
+            Identifier {
+                span: ident.span,
+                name: ident.name.to_lowercase(),
+                quote: ident.quote,
+                ident_type: ident.ident_type,
+            }
+        }
     }
 
     pub fn not_found_suggest(&self, ident: &Identifier) -> Option<NameResolutionSuggest> {
@@ -91,19 +106,7 @@ impl TryFrom<&Settings> for NameResolutionContext {
 
 /// Normalize identifier with given `NameResolutionContext`
 pub fn normalize_identifier(ident: &Identifier, context: &NameResolutionContext) -> Identifier {
-    if (ident.is_quoted() && context.quoted_ident_case_sensitive)
-        || (!ident.is_quoted() && context.unquoted_ident_case_sensitive)
-    {
-        ident.clone()
-    } else {
-        // Preserve the quote information when creating a new identifier
-        Identifier {
-            span: ident.span,
-            name: ident.name.to_lowercase(),
-            quote: ident.quote,
-            ident_type: ident.ident_type,
-        }
-    }
+    context.normalize_identifier(ident)
 }
 
 pub fn compare_table_name(
@@ -138,7 +141,7 @@ impl<'a> IdentifierNormalizer<'a> {
         // because MapAccessor is used to extract internal fields of nested types,
         // altering the case may prevent the desired data from being retrieved.
         if !self.in_map_accessor {
-            let normalized_ident = normalize_identifier(ident, self.ctx);
+            let normalized_ident = self.ctx.normalize_identifier(ident);
             *ident = normalized_ident;
         }
     }
@@ -180,7 +183,7 @@ impl<'a> VariableNormalizer<'a> {
 
     fn enter_identifier(&mut self, ident: &mut Identifier) {
         if ident.is_variable() {
-            let mut normalized_ident = normalize_identifier(ident, self.ctx);
+            let mut normalized_ident = self.ctx.normalize_identifier(ident);
 
             let scalar = self.table_ctx.get_variable(&normalized_ident.name);
             if let Some(Scalar::String(s)) = scalar {

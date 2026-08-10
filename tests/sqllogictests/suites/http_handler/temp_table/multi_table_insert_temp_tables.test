@@ -1,0 +1,41 @@
+statement ok
+create temp table multi_insert_temp_fuse(a UInt64) engine=fuse;
+
+statement ok
+drop table if exists multi_insert_perm_fuse;
+
+statement ok
+create table multi_insert_perm_fuse(a UInt64) engine=fuse;
+
+statement ok
+insert all into multi_insert_temp_fuse into multi_insert_perm_fuse select * from numbers(3);
+
+query I
+select count(*) from multi_insert_temp_fuse;
+----
+3
+
+query I
+select a from multi_insert_temp_fuse order by a;
+----
+0
+1
+2
+
+query I
+select num_rows from system.temporary_tables where is_current_session = true and name = 'multi_insert_temp_fuse';
+----
+3
+
+query I
+select a from multi_insert_perm_fuse order by a;
+----
+0
+1
+2
+
+statement ok
+drop table multi_insert_temp_fuse;
+
+statement ok
+drop table multi_insert_perm_fuse;

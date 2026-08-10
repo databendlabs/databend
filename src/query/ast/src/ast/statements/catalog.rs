@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -24,7 +26,7 @@ use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 use crate::ast::write_comma_separated_string_map;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowCatalogsStmt {
     pub limit: Option<ShowLimit>,
 }
@@ -40,7 +42,7 @@ impl Display for ShowCatalogsStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowCreateCatalogStmt {
     pub catalog: Identifier,
 }
@@ -73,7 +75,7 @@ impl Display for CreateCatalogStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DropCatalogStmt {
     pub if_exists: bool,
     pub catalog: Identifier,

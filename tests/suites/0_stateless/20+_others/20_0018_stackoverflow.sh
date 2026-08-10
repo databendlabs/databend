@@ -3,8 +3,8 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "DROP TABLE IF EXISTS t1"|$BENDSQL_CLIENT_CONNECT
-echo "CREATE TABLE t1(id VARCHAR NULL, timestamp TIMESTAMP NULL, type VARCHAR NULL)" |$BENDSQL_CLIENT_CONNECT
+echo "DROP TABLE IF EXISTS t1"|bendsql_connect_root
+echo "CREATE TABLE t1(id VARCHAR NULL, timestamp TIMESTAMP NULL, type VARCHAR NULL)" |bendsql_connect_root
 
 SQL="SELECT * FROM t1 WHERE 1 = 1 AND((timestamp = '2024-05-05 18:05:20' AND type = '1' AND id = 'xx')"
 
@@ -14,7 +14,7 @@ done
 
 SQL="$SQL)"
 
-echo "$SQL"|$BENDSQL_CLIENT_CONNECT
+echo "$SQL"|bendsql_connect_root
 
 
 SQL="a > 0 "
@@ -25,6 +25,6 @@ done
 
 SQL="$SQL OR (a / 0 > 0)"
 
-echo "SELECT $SQL from numbers(1) t(a)" | $BENDSQL_CLIENT_CONNECT
+echo "SELECT $SQL from numbers(1) t(a)" | bendsql_connect_root
 
-echo "DROP TABLE IF EXISTS t1"|$BENDSQL_CLIENT_CONNECT
+echo "DROP TABLE IF EXISTS t1"|bendsql_connect_root

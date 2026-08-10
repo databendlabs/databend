@@ -82,6 +82,17 @@ impl SyncSystemTable for ConfigsTable {
             log_config_value,
         );
 
+        let task_config = config.task;
+        let task_config_value = serde_json::to_value(task_config)?;
+        ConfigsTable::extract_config(
+            &mut names,
+            &mut values,
+            &mut groups,
+            &mut descs,
+            "task".to_string(),
+            task_config_value,
+        );
+
         let meta_config = config.meta;
         let meta_config_value = serde_json::to_value(meta_config)?;
         ConfigsTable::extract_config(

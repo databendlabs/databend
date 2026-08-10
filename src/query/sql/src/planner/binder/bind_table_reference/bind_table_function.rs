@@ -34,6 +34,7 @@ use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_expression::display::scalar_ref_to_string;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::UDFDefinition;
@@ -62,6 +63,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 
 impl Binder {
+    /// Bind a base table.
     /// Bind a table function.
     pub(crate) fn bind_table_function(
         &mut self,
@@ -100,6 +102,7 @@ impl Binder {
                             params: vec![],
                             args,
                             order_by: vec![],
+                            filter: None,
                             window: None,
                             lambda: None,
                         },
@@ -137,6 +140,7 @@ impl Binder {
             &[],
         );
         let table_args = bind_table_args(
+            &func_name.name,
             &mut scalar_binder,
             params,
             named_params,
@@ -211,6 +215,7 @@ impl Binder {
                         .into_iter()
                         .zip(bind_context.columns.iter())
                     {
+                        let return_type = DataType::from(&return_type);
                         let input_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
                             span: None,
                             column: output_binding.clone(),
@@ -511,6 +516,7 @@ impl Binder {
                             args,
                             params: vec![],
                             order_by: vec![],
+                            filter: None,
                             window: None,
                             lambda: None,
                         },

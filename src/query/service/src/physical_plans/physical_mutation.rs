@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
@@ -87,6 +86,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContext;
 
 // The predicate column symbol should not conflict with update expr column bindings.
 pub const PREDICATE_COLUMN_INDEX: Symbol = Symbol::DUMMY_COLUMN;
@@ -165,8 +165,9 @@ impl IPhysicalPlan for Mutation {
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
 
+        let input_schema = DataSchema::from(table.schema_with_stream()).into();
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, None)?;
+            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?;
 
         let max_threads = builder.settings.get_max_threads()? as usize;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads));

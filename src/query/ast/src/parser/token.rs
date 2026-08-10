@@ -98,6 +98,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                         TokenKind::INSERT
                             | TokenKind::SELECT
                             | TokenKind::REPLACE
+                            | TokenKind::MERGE
                             | TokenKind::UPDATE
                             | TokenKind::DELETE
                             | TokenKind::COPY
@@ -319,7 +320,7 @@ pub enum TokenKind {
     #[token("~*")]
     TildeAsterisk,
     /// A case sensitive not match regular expression operator in PostgreSQL
-    #[token("!*")]
+    #[token("!~")]
     ExclamationMarkTilde,
     /// A case insensitive not match regular expression operator in PostgreSQL
     #[token("!~*")]
@@ -429,6 +430,10 @@ pub enum TokenKind {
     AND,
     #[token("ARRAY", ignore(ascii_case))]
     ARRAY,
+    #[token("ARROW_STREAM", ignore(ascii_case))]
+    ARROW_STREAM,
+    #[token("ARROW", ignore(ascii_case))]
+    ARROW,
     #[token("AS", ignore(ascii_case))]
     AS,
     #[token("ASOF", ignore(ascii_case))]
@@ -708,6 +713,8 @@ pub enum TokenKind {
     ELSEIF,
     #[token("FALSE", ignore(ascii_case))]
     FALSE,
+    #[token("NO_CHECK", ignore(ascii_case))]
+    NO_CHECK,
     #[token("FETCH", ignore(ascii_case))]
     FETCH,
     #[token("FIELDS", ignore(ascii_case))]
@@ -726,8 +733,12 @@ pub enum TokenKind {
     FILE,
     #[token("FILES", ignore(ascii_case))]
     FILES,
+    #[token("FILTER", ignore(ascii_case))]
+    FILTER,
     #[token("FINAL", ignore(ascii_case))]
     FINAL,
+    #[token("FINGERPRINT", ignore(ascii_case))]
+    FINGERPRINT,
     #[token("FLASHBACK", ignore(ascii_case))]
     FLASHBACK,
     #[token("FLOAT", ignore(ascii_case))]
@@ -800,6 +811,8 @@ pub enum TokenKind {
     HOURS,
     #[token("ICEBERG", ignore(ascii_case))]
     ICEBERG,
+    #[token("PAIMON", ignore(ascii_case))]
+    PAIMON,
     #[token("INTERSECT", ignore(ascii_case))]
     INTERSECT,
     #[token("IDENTIFIED", ignore(ascii_case))]
@@ -812,6 +825,8 @@ pub enum TokenKind {
     IF,
     #[token("IMMUTABLE", ignore(ascii_case))]
     IMMUTABLE,
+    #[token("ILIKE", ignore(ascii_case))]
+    ILIKE,
     #[token("IN", ignore(ascii_case))]
     IN,
     #[token("INCLUDE_QUERY_ID", ignore(ascii_case))]
@@ -876,8 +891,14 @@ pub enum TokenKind {
     JWT,
     #[token("KEY", ignore(ascii_case))]
     KEY,
+    #[token("KEYS", ignore(ascii_case))]
+    KEYS,
+    #[token("KEY_PAIR", ignore(ascii_case))]
+    KEY_PAIR,
     #[token("KILL", ignore(ascii_case))]
     KILL,
+    #[token("LABEL", ignore(ascii_case))]
+    LABEL,
     #[token("LAST_DAY", ignore(ascii_case))]
     LAST_DAY,
     #[token("LATERAL", ignore(ascii_case))]
@@ -1073,6 +1094,10 @@ pub enum TokenKind {
     PURGE,
     #[token("PUT", ignore(ascii_case))]
     PUT,
+    #[token("PUBLIC_KEY", ignore(ascii_case))]
+    PUBLIC_KEY,
+    #[token("PUBLIC", ignore(ascii_case))]
+    PUBLIC,
     #[token("PARTIAL", ignore(ascii_case))]
     PARTIAL,
     #[token("QUARTER", ignore(ascii_case))]
@@ -1081,6 +1106,8 @@ pub enum TokenKind {
     QUERY,
     #[token("QUOTE", ignore(ascii_case))]
     QUOTE,
+    #[token("QUOTE_STYLE", ignore(ascii_case))]
+    QUOTE_STYLE,
     #[token("QUOTED_EMPTY_FIELD_AS", ignore(ascii_case))]
     QUOTED_EMPTY_FIELD_AS,
     #[token("QUOTED_IDENTIFIERS", ignore(ascii_case))]
@@ -1179,6 +1206,8 @@ pub enum TokenKind {
     SATURDAY,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
+    #[token("SCHEMA_EVOLUTION", ignore(ascii_case))]
+    SCHEMA_EVOLUTION,
     #[token("SCHEMAS", ignore(ascii_case))]
     SCHEMAS,
     #[token("SECOND", ignore(ascii_case))]
@@ -1287,6 +1316,8 @@ pub enum TokenKind {
     SOUNDS,
     #[token("STATISTICS", ignore(ascii_case))]
     STATISTICS,
+    #[token("STATS_TRUNCATE_LEN", ignore(ascii_case))]
+    STATS_TRUNCATE_LEN,
     #[token("SYNC", ignore(ascii_case))]
     SYNC,
     #[token("SYSTEM", ignore(ascii_case))]
@@ -1449,6 +1480,8 @@ pub enum TokenKind {
     COALESCE,
     #[token("RANDOM", ignore(ascii_case))]
     RANDOM,
+    #[token("PROXY", ignore(ascii_case))]
+    PROXY,
     #[token("IFNULL", ignore(ascii_case))]
     IFNULL,
     #[token("NULLS", ignore(ascii_case))]
@@ -1957,10 +1990,8 @@ impl TokenKind {
             | TokenKind::ORDER
             | TokenKind::OVER
             | TokenKind::PARTITION
-            | TokenKind::PROPERTIES
             | TokenKind::QUALIFY
             | TokenKind::ROWS
-            | TokenKind::RANGE
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
@@ -1993,10 +2024,24 @@ impl TokenKind {
     }
 }
 
-pub fn all_reserved_keywords() -> Vec<String> {
-    let mut result = Vec::new();
-    for token in TokenKind::iter() {
-        result.push(format!("{:?}", token));
+pub fn all_reserved_keywords() -> impl Iterator<Item = String> {
+    TokenKind::iter()
+        .filter(TokenKind::is_keyword)
+        .filter(|token| token.is_reserved_ident(false) || token.is_reserved_function_name())
+        .map(|token| format!("{:?}", token))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::all_reserved_keywords;
+
+    #[test]
+    fn test_all_reserved_keywords_only_returns_reserved_keywords() {
+        let keywords = all_reserved_keywords().collect::<Vec<_>>();
+
+        assert!(keywords.contains(&"SELECT".to_string()));
+        assert!(keywords.contains(&"TABLE".to_string()));
+        assert!(!keywords.contains(&"DATABASE".to_string()));
+        assert!(!keywords.contains(&"Whitespace".to_string()));
     }
-    result
 }

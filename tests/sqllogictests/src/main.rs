@@ -85,14 +85,6 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
             }),
             5,
         ),
-        (
-            Box::new(ClientType::Ttc {
-                image: "ghcr.io/databendlabs/ttc-go:latest".to_string(),
-                port: TTC_PORT_START + 2,
-                query_result_format: QueryResultFormat::Json,
-            }),
-            5,
-        ),
     ]
 });
 

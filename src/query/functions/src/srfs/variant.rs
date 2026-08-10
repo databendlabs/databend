@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_expression::Function;
@@ -44,15 +41,16 @@ use databend_common_expression::types::string::StringColumnBuilder;
 use jaq_core;
 use jaq_core::Compiler;
 use jaq_core::Ctx;
-use jaq_core::RcIter;
+use jaq_core::Vars;
+use jaq_core::data::JustLut;
 use jaq_core::load::Arena;
 use jaq_core::load::File;
 use jaq_core::load::Loader;
+use jaq_core::unwrap_valr;
 use jaq_json::Val;
 use jaq_std;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
-use jsonb::from_raw_jsonb;
 use jsonb::jsonpath::parse_json_path;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -468,8 +466,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                             return vec![];
                         }
                     };
+
                     let arena = Arena::default();
-                    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
+                    let loader = Loader::new(
+                        jaq_core::defs()
+                            .chain(jaq_std::defs())
+                            .chain(jaq_json::defs()),
+                    );
                     let Ok(modules) = loader.load(&arena, File {
                         path: (),
                         code: jq_filter,
@@ -479,18 +482,20 @@ pub fn register(registry: &mut FunctionRegistry) {
                     };
 
                     let Ok(filter) = Compiler::default()
-                        .with_funs(jaq_std::funs().chain(jaq_json::funs()))
+                        .with_funs(
+                            jaq_core::funs::<JustLut<jaq_json::Val>>()
+                                .chain(jaq_std::funs::<JustLut<jaq_json::Val>>())
+                                .chain(jaq_json::funs::<JustLut<jaq_json::Val>>()),
+                        )
                         .compile(modules)
                     else {
                         ctx.set_error(0, "Invalid jq filter compile error");
                         return vec![];
                     };
 
-                    let jaq_args = vec![];
                     // You can pass additional scalar inputs as args to the jq filter.
                     // This could be a useful enhancement, but leaving it out for now.
-                    let inputs = RcIter::new(core::iter::empty());
-                    let jaq_ctx = Ctx::new(jaq_args, &inputs);
+                    let jaq_ctx = Ctx::<JustLut<jaq_json::Val>>::new(&filter.lut, Vars::new([]));
 
                     let json_arg = args[1].clone().to_owned();
                     (0..ctx.num_rows)
@@ -508,25 +513,24 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
                                 Some(ScalarRef::Variant(v)) => {
                                     let raw_jsonb = RawJsonb::new(v);
-                                    let s = from_raw_jsonb::<serde_json::Value>(&raw_jsonb);
-                                    match s {
+                                    match Val::try_from(raw_jsonb) {
                                         Err(e) => {
                                             ctx.set_error(row, e.to_string());
                                             return null_result;
                                         }
-                                        Ok(s) => {
-                                            let jaq_val = Val::from(s);
-                                            let jaq_out = filter.run((jaq_ctx.clone(), jaq_val));
+                                        Ok(jaq_val) => {
+                                            let jaq_out = filter.id.run((jaq_ctx.clone(), jaq_val));
 
                                             for res in jaq_out {
-                                                match res {
+                                                match unwrap_valr(res) {
                                                     Err(err) => {
                                                         ctx.set_error(row, err.to_string());
                                                         return null_result;
                                                     }
-                                                    Ok(res) => match jaq_val_to_jsonb(&res) {
+                                                    Ok(res) => match OwnedJsonb::try_from(&res) {
                                                         Ok(res_jsonb) => {
-                                                            res_builder.put_slice(&res_jsonb);
+                                                            let data = res_jsonb.to_vec();
+                                                            res_builder.put_slice(&data);
                                                             res_builder.commit_row();
                                                         }
                                                         Err(err) => {
@@ -556,55 +560,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         }))
     }));
     registry.register_function_factory("jq", jq);
-}
-
-// Convert a Jaq val to a jsonb value.
-fn jaq_val_to_jsonb(val: &Val) -> Result<Vec<u8>> {
-    let mut buf = Vec::new();
-    let jsonb_value = match val {
-        Val::Null => jsonb::Value::Null,
-        Val::Bool(b) => jsonb::Value::Bool(*b),
-        Val::Num(n) => {
-            if let Ok(f) = n.parse::<f64>() {
-                f.into()
-            } else {
-                return Err(ErrorCode::BadBytes(format!(
-                    "parse string `{}` to f64 failed",
-                    n
-                )));
-            }
-        }
-        Val::Float(f) => (*f).into(),
-        Val::Int(i) => (*i).into(),
-        Val::Str(s) => jsonb::Value::String((**s).clone().into()),
-        Val::Arr(arr) => {
-            let items = arr
-                .iter()
-                .map(jaq_val_to_jsonb)
-                .collect::<Result<Vec<_>>>()?;
-            let owned_jsonb = OwnedJsonb::build_array(items.iter().map(|v| RawJsonb::new(v)))
-                .map_err(|e| {
-                    ErrorCode::Internal(format!("failed to build array error: {:?}", e))
-                })?;
-            return Ok(owned_jsonb.to_vec());
-        }
-        Val::Obj(obj) => {
-            let mut kvs = BTreeMap::new();
-            for (k, v) in obj.iter() {
-                let key = (**k).clone();
-                let val = jaq_val_to_jsonb(v)?;
-                kvs.insert(key, val);
-            }
-            let owned_jsonb =
-                OwnedJsonb::build_object(kvs.iter().map(|(k, v)| (k, RawJsonb::new(&v[..]))))
-                    .map_err(|e| {
-                        ErrorCode::Internal(format!("failed to build object error: {:?}", e))
-                    })?;
-            return Ok(owned_jsonb.to_vec());
-        }
-    };
-    jsonb_value.write_to_vec(&mut buf);
-    Ok(buf)
 }
 
 pub(crate) fn unnest_variant_array(

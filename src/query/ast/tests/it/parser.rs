@@ -51,12 +51,10 @@ fn run_parser_with_dialect<P, O>(
     let src = unindent::unindent(src);
     let src = src.trim();
     let tokens = tokenize_sql(src).unwrap();
-    let backtrace = Backtrace::new();
     let input = Input {
         tokens: &tokens,
         dialect,
         mode,
-        backtrace: &backtrace,
     };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
@@ -127,6 +125,7 @@ fn test_statement() {
         r#"explain perf select a from b;"#,
         r#"explain perf (events='cycles,instructions') select a from b;"#,
         r#"explain perf (events='cycles+instructions,branch-misses') select a from b;"#,
+        r#"explain analyze select * from t;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
@@ -138,8 +137,12 @@ fn test_statement() {
         r#"create table a (c1 decimal(38), c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"='33554432');"#,
         r#"create or replace table a (c decimal(38))"#,
         r#"create or replace table a (c int(10) unsigned)"#,
+        // https://github.com/databendlabs/databend/issues/11031
+        r#"create table issue_11031 (range int, samples int)"#,
+        r#"create table cluster_tbl (a int, b int) cluster by (a, b)"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
+        r#"create table if not exists t_constraints (a int check (a > 0), b int, constraint b_nonzero check (b <> 0));"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
         r#"create table a (b tuple("c-1" int, "c-2" uint64));"#,
         r#"create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );"#,
@@ -161,12 +164,33 @@ fn test_statement() {
         r#"ALTER WORKER read_env RESUME"#,
         r#"DROP WORKER read_env"#,
         r#"DROP WORKER IF EXISTS read_env"#,
+        r#"SHOW WAREHOUSES"#,
+        r#"USE WAREHOUSE wh1"#,
+        r#"CREATE WAREHOUSE wh1 (ASSIGN 2 NODES FROM 'group1', ASSIGN 1 NODES) WITH size='small', auto_suspend='300'"#,
+        r#"DROP WAREHOUSE wh1"#,
+        r#"RENAME WAREHOUSE wh1 TO wh2"#,
+        r#"SUSPEND WAREHOUSE wh2"#,
+        r#"RESUME WAREHOUSE wh2"#,
+        r#"INSPECT WAREHOUSE wh2"#,
+        r#"ALTER WAREHOUSE wh2 ADD CLUSTER c1 (ASSIGN 2 NODES FROM 'group1') WITH size='medium', max_cluster_count='3'"#,
+        r#"ALTER WAREHOUSE wh2 DROP CLUSTER c1"#,
+        r#"ALTER WAREHOUSE wh2 RENAME CLUSTER c1 TO c2"#,
+        r#"ALTER WAREHOUSE wh2 ASSIGN NODES (ASSIGN 2 NODES FROM 'group1' FOR c1, ASSIGN 1 NODES FOR c2)"#,
+        r#"ALTER WAREHOUSE wh2 UNASSIGN NODES (UNASSIGN 1 NODES FROM 'group1' FOR c1, UNASSIGN 1 NODES FOR c2)"#,
+        r#"SHOW WORKLOAD GROUPS"#,
+        r#"CREATE WORKLOAD GROUP IF NOT EXISTS wg1 WITH cpu_quota='50%', memory_quota='1GB', query_timeout='30s'"#,
+        r#"DROP WORKLOAD GROUP IF EXISTS wg1"#,
+        r#"RENAME WORKLOAD GROUP wg1 TO wg2"#,
+        r#"ALTER WORKLOAD GROUP wg2 SET cpu_quota='60%', max_concurrency='8'"#,
+        r#"ALTER WORKLOAD GROUP wg2 UNSET (cpu_quota, max_concurrency)"#,
         r#"truncate table a;"#,
         r#"truncate table "a".b;"#,
         r#"drop table a;"#,
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
         r#"create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary' warehouse='default');"#,
+        r#"show catalogs like 'ct%';"#,
+        r#"show create catalog ctl;"#,
         r#"select current_catalog();"#,
         r#"use catalog ctl;"#,
         r#"catalog ctl;"#,
@@ -180,10 +204,14 @@ fn test_statement() {
         r#"create or replace database a;"#,
         r#"drop database ctl.t;"#,
         r#"drop database if exists t;"#,
+        r#"show create database ctl.t;"#,
+        r#"undrop database ctl.t;"#,
+        r#"show table status from test_db like 'test%';"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,
         r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"alter view v as select number % 3 as a from numbers(1000);"#,
         r#"drop view v;"#,
+        r#"describe view v;"#,
         r#"create view v1(c1) as select number % 3 as a from numbers(1000);"#,
         r#"create or replace view v1(c1) as select number % 3 as a from numbers(1000);"#,
         r#"alter view v1(c2) as select number % 3 as a from numbers(1000);"#,
@@ -206,6 +234,11 @@ fn test_statement() {
         r#"truncate table test_db.test;"#,
         r#"DROP table table1;"#,
         r#"DROP table IF EXISTS table1;"#,
+        r#"undrop table test_db.test;"#,
+        r#"analyze table test_db.test noscan;"#,
+        r#"analyze table test_db.test with histogram;"#,
+        r#"analyze table test_db.test with histogram algorithm = 'kll_full', error_rate = 0.01;"#,
+        r#"exists table test_db.test;"#,
         r#"create role role1 comment='test';"#,
         r#"alter role role1 set comment='test';"#,
         r#"alter role role1 unset comment;"#,
@@ -225,10 +258,20 @@ fn test_statement() {
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH SET WORKLOAD GROUP='W1'"#,
         r#"ALTER USER u1 WITH SET WORKLOAD GROUP = 'W1';"#,
         r#"ALTER USER u1 WITH UNSET WORKLOAD GROUP;"#,
+        r#"CREATE USER u1 IDENTIFIED WITH key_pair BY '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----'"#,
+        r#"ALTER USER u1 WITH ADD PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----';"#,
+        r#"ALTER USER u1 WITH ADD PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A' LABEL = 'ci-pipeline';"#,
+        r#"ALTER USER u1 WITH REMOVE PUBLIC_KEY LABEL = 'ci-pipeline';"#,
+        r#"ALTER USER u1 WITH REMOVE PUBLIC_KEY FINGERPRINT = 'SHA256:abc123';"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='policy1'"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH disabled=true"#,
         r#"DROP database if exists db1;"#,
+        r#"with c as (select 1 as a) delete /*+ set_var(max_threads=1) */ from test_db.test tt where tt.a = 1;"#,
+        // https://github.com/databendlabs/databend/issues/11031
+        r#"insert into issue_11031 (radio, range, samples) values ('lte', 10, 1)"#,
+        // https://github.com/databendlabs/databend/issues/11031
+        r#"select range from issue_11031;"#,
         r#"select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;"#,
         r#"select * from t4;"#,
         r#"select top 2 * from t4;"#,
@@ -283,6 +326,7 @@ fn test_statement() {
         r#"insert into table t select * from t2;"#,
         r#"insert overwrite into table t select * from t2;"#,
         r#"insert overwrite table t select * from t2;"#,
+        r#"with src as (select 1 as c1) insert /*+ set_var(max_threads=1) */ into t (c1) select c1 from src;"#,
         r#"INSERT ALL
     WHEN c3 = 1 THEN
       INTO t1
@@ -323,6 +367,7 @@ SELECT * from s;"#,
         r#"OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;"#,
         r#"OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
+        r#"ALTER TABLE t PARTITION BY (date_trunc(day, c1), c2);"#,
         r#"ALTER TABLE t1 swap with t2;"#,
         r#"ALTER TABLE t refresh cache;"#,
         r#"ALTER TABLE t COMMENT='t1-commnet';"#, // typos:disable-line
@@ -352,9 +397,15 @@ SELECT * from s;"#,
         r#"ALTER TABLE t MODIFY a int;"#,
         r#"ALTER TABLE t MODIFY COLUMN a DROP STORED;"#,
         r#"ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);"#,
+        r#"ALTER TABLE t UNSET OPTIONS (SNAPSHOT_LOCATION, block_per_segment);"#,
         r#"ALTER TABLE t ADD CONSTRAINT a_not_1 CHECK (a != 1);"#,
         r#"ALTER TABLE t ADD CHECK (a != 1);"#,
         r#"ALTER TABLE t DROP CONSTRAINT a_not_1;"#,
+        r#"ALTER TABLE t FLASHBACK TO (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5');"#,
+        r#"ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS;"#,
+        r#"ALTER TABLE t CREATE TAG tag1 AT (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) RETAIN 30 SECONDS;"#,
+        r#"ALTER TABLE t DROP BRANCH b1;"#,
+        r#"ALTER TABLE t DROP TAG tag1;"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE c set tag tag1='a';"#,
@@ -380,6 +431,15 @@ SELECT * from s;"#,
         r#"VACUUM DROP TABLE DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
+        r#"VACUUM TEMPORARY FILES RETAIN 7 DAYS LIMIT 10;"#,
+        r#"ATTACH TABLE db.attached (c1, c2) 's3://testbucket/data/' CONNECTION=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
+        r#"CREATE DICTIONARY IF NOT EXISTS db.dict1 (id int, name string) PRIMARY KEY id SOURCE(mysql(host='127.0.0.1' port='3306')) COMMENT 'test dictionary';"#,
+        r#"SHOW CREATE DICTIONARY db.dict1;"#,
+        r#"DROP DICTIONARY IF EXISTS db.dict1;"#,
+        r#"RENAME DICTIONARY IF EXISTS db.dict1 TO db.dict2;"#,
+        r#"REFRESH AGGREGATING INDEX idx1 LIMIT 10;"#,
+        r#"REFRESH INVERTED INDEX idx2 ON db.t LIMIT 5;"#,
+        r#"REFRESH VIRTUAL COLUMN FOR db.t WHERE c1 > 0 LIMIT 5 OVERWRITE;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';"#,
         r#"COMMENT IF EXISTS ON TABLE t IS 'test'"#,
         r#"COMMENT ON COLUMN t.C1 IS 'test'"#,
@@ -421,9 +481,11 @@ SELECT * from s;"#,
         r#"GRANT OWNERSHIP ON MASKING POLICY mask_phone TO ROLE role_mask_apply;"#,
         r#"SHOW GRANTS ON MASKING POLICY ssn_mask;"#,
         r#"SHOW GRANTS;"#,
+        r#"SHOW GRANTS LIKE 'test%';"#,
         r#"SHOW GRANTS FOR 'test-grant';"#,
         r#"SHOW GRANTS FOR USER 'test-grant';"#,
         r#"SHOW GRANTS FOR ROLE role1;"#,
+        r#"SHOW GRANTS FOR ROLE role1 LIMIT 1;"#,
         r#"SHOW GRANTS FOR ROLE 'role1';"#,
         r#"SHOW GRANTS OF ROLE 'role1' like 'r';"#,
         r#"SHOW GRANTS ON TABLE t;"#,
@@ -441,6 +503,23 @@ SELECT * from s;"#,
             COPY INTO mytable
                 FROM '@~/mybucket/my data.csv'
                 size_limit=10;
+        "#,
+        r#"
+            WITH staged AS (SELECT 1 AS dummy)
+            COPY /*+ SET_VAR(max_threads=1) */ INTO mytable (c1, c2, c3)
+                FROM (
+                    SELECT src_col AS renamed_col, src.* EXCLUDE (skip_col), COLUMNS(a -> length(a) = 3)
+                    FROM @my_stage/data.csv src
+                )
+                FILE_FORMAT = (TYPE = CSV);
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM (
+                    SELECT *
+                    FROM @my_stage/data.csv
+                )
+                FILE_FORMAT = (TYPE = CSV);
         "#,
         r#"
             COPY INTO mytable
@@ -512,12 +591,29 @@ SELECT * from s;"#,
                 FILE_FORMAT = (type = PARQUET);
         "#,
         r#"
+            WITH src AS (SELECT id FROM mytable)
+            COPY /*+ SET_VAR(max_threads=1) */ INTO @my_stage/with_hint
+                FROM (SELECT id FROM src)
+                PARTITION BY (id)
+                FILE_FORMAT = (TYPE = PARQUET);
+        "#,
+        r#"
             COPY INTO mytable
                 FROM 'https://127.0.0.1:9900';
         "#,
         r#"
             COPY INTO mytable
                 FROM 'https://127.0.0.1:';
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (type = NDJSON)
+                SCHEMA_EVOLUTION = (
+                    sample_files = 64,
+                    sample_records_per_file = AUTO,
+                    sample_total_records = 10000
+                );
         "#,
         r#"
             COPY INTO mytable
@@ -560,6 +656,22 @@ SELECT * from s;"#,
                 FROM (SELECT * FROM numbers(10))
                 FILE_FORMAT = (
                     type = LANCE
+                )
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @external_stage/path/to/file.arrow
+                FILE_FORMAT = (
+                    type = ARROW
+                    missing_field_as = FIELD_DEFAULT
+                )
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @external_stage/path/to/file.arrow_stream
+                FILE_FORMAT = (
+                    type = ARROW_STREAM
+                    missing_field_as = FIELD_DEFAULT
                 )
         "#,
         r#"
@@ -650,6 +762,7 @@ SELECT * from s;"#,
         r#"show settings where name='max_memory_usage' limit 1"#,
         r#"show functions like 'today%' limit 1"#,
         r#"show functions where name='to_day_of_year' limit 1"#,
+        r#"show user functions like 'isnot%'"#,
         r#"show engines like 'FU%' limit 1"#,
         r#"show engines where engine='MEMORY' limit 1"#,
         r#"show metrics like '%parse%' limit 1"#,
@@ -669,6 +782,7 @@ SELECT * from s;"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
+        r#"drop catalog if exists ctl;"#,
         r#"GRANT all ON stage s1 TO a;"#,
         r#"GRANT read ON stage s1 TO a;"#,
         r#"GRANT write ON stage s1 TO a;"#,
@@ -742,6 +856,7 @@ SELECT * from s;"#,
         r#"CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
+        r#"SHOW PASSWORD POLICIES LIKE 'p%'"#,
         // dynamic tables
         r#"
             CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
@@ -796,6 +911,7 @@ SELECT * from s;"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)"#,
+        r#"COPY INTO @my_internal_stage/minimal.csv FROM canadian_city_population FILE_FORMAT = (TYPE = CSV QUOTE_STYLE = quote_minimal OUTPUT_HEADER = true)"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t"#,
         r#"
@@ -830,6 +946,13 @@ SELECT * from s;"#,
                 INSERT values('a;', 1, "str");
             END
         "#,
+        r#"
+            MERGE /*+ SET_VAR(max_threads=1) */ INTO tgt t USING src s ON t.id = s.id
+                WHEN MATCHED AND s.v > 10 THEN
+                    UPDATE SET v = s.v, updated_at = s.v
+                WHEN NOT MATCHED AND s.v > 0 THEN
+                    INSERT (id, v) VALUES (s.id, s.v);
+        "#,
         r#"ALTER TASK MyTask1 RESUME"#,
         r#"ALTER TASK MyTask1 SUSPEND"#,
         r#"ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'"#,
@@ -863,6 +986,11 @@ SELECT * from s;"#,
         r#"DESC CONNECTION my_conn;"#,
         r#"SHOW CONNECTIONS;"#,
         r#"SHOW LOCKS IN ACCOUNT"#,
+        r#"SHOW STATISTICS FROM TABLE test_db.test"#,
+        r#"SHOW DICTIONARIES FROM db LIKE 'dict%'"#,
+        r#"DROP AGGREGATING INDEX IF EXISTS idx1"#,
+        r#"DROP INVERTED INDEX IF EXISTS idx2 ON test_db.test"#,
+        r#"SHOW VIRTUAL COLUMNS FROM test FROM test_db LIKE 'v%'"#,
         // pipes
         r#"CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')"#,
         r#"CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv"#,
@@ -1058,6 +1186,8 @@ SELECT * from s;"#,
         r#"SHOW GRANTS ON ROW ACCESS POLICY ssn_mask"#,
         // tag
         r#"create tag if not exists tag_a ALLOWED_VALUES = ('dev', 'prod') COMMENT = 'environment tag'"#,
+        r#"drop tag if exists tag_a"#,
+        r#"show tags like 'tag%' limit 5"#,
     ];
 
     for case in cases {
@@ -1076,6 +1206,17 @@ SELECT * from s;"#,
             writeln!(file, "---------- FORMAT ------------").unwrap();
             writeln!(file, "{:#?}", fmt).unwrap();
         }
+    }
+}
+
+#[test]
+fn test_hilbert_cluster_type_is_rejected() {
+    for sql in [
+        "create table t(a int, b int) cluster by hilbert(a, b)",
+        "alter table t cluster by hilbert(a, b)",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
     }
 }
 
@@ -1252,6 +1393,60 @@ fn test_file_format_trim_space_option() {
 }
 
 #[test]
+fn test_create_table_options_before_partition_by() {
+    let cases = [
+        "CREATE TABLE t(c INT) ENGINE=ICEBERG LOCATION='s3://bucket/path' CONNECTION_NAME='conn' PARTITION BY (c)",
+        "CREATE TABLE iceberg.db.t(c INT) LOCATION='s3://bucket/path' PARTITION BY (c)",
+        "CREATE TABLE t(a INT) ENGINE=FUSE ROW_PER_BLOCK=1 PARTITION BY (a)",
+        "CREATE TABLE t(a INT) ROW_PER_BLOCK=1 PARTITION BY (a)",
+    ];
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+
+        let displayed = stmt.to_string();
+        let displayed_uppercase = displayed.to_uppercase();
+        let partition_pos = displayed_uppercase.find("PARTITION BY").unwrap();
+        for option in ["LOCATION", "CONNECTION_NAME", "ROW_PER_BLOCK"] {
+            if let Some(option_pos) = displayed_uppercase.find(option) {
+                assert!(partition_pos < option_pos);
+            }
+        }
+
+        let tokens = tokenize_sql(&displayed).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
+}
+
+#[test]
+fn test_stage_local_filesystem_uri_errors() {
+    let cases = [
+        (
+            "create stage mystage url='/test/load/'",
+            "local filesystem paths must use fs:///path/ instead of /path/",
+        ),
+        (
+            "create stage mystage url='file:///tmp/00_0002/'",
+            "local filesystem paths must use fs:///path/ instead of file:///path/",
+        ),
+        (
+            "create stage mystage url='s3://bucket:abc/path/'",
+            "invalid uri invalid port number",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
+        assert!(
+            err.1.contains(expected),
+            "expected error to contain `{expected}`, got:\n{}",
+            err.1
+        );
+    }
+}
+
+#[test]
 fn test_raw_insert_stmt() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("raw-insert.txt").unwrap();
@@ -1280,6 +1475,10 @@ fn test_query() {
         r#"select * from customer with consume as s"#,
         r#"select * from t12_0004 at (TIMESTAMP => 'xxxx') as t"#,
         r#"select count(t.c) from t12_0004 at (snapshot => 'xxxx') as t"#,
+        r#"select * from t at (snapshot => (select snapshot_id from fuse_snapshot('db', 't') limit 1))"#,
+        r#"select * from t at (snapshot => 'abc123', NO_CHECK => true)"#,
+        r#"select * from t at (timestamp => '2024-01-01'::TIMESTAMP, NO_CHECK => true)"#,
+        r#"select * from t at (snapshot => 'abc123', NO_CHECK => false)"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on (a = b)"#,
@@ -1358,6 +1557,14 @@ fn test_query() {
         r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
         r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
         r#"VALUES(1,'a'),(2,'b'),(null,'c') order by col0 limit 2"#,
+        // Issue #20093: PostgreSQL aggregate syntax should parse in full queries.
+        r#"SELECT array_agg(a ORDER BY b) FROM (VALUES (1,4),(2,3),(3,1),(4,2)) v(a,b)"#,
+        r#"SELECT array_agg(DISTINCT a ORDER BY a DESC NULLS LAST) FROM (VALUES (1),(2),(1),(3),(NULL),(2)) v(a)"#,
+        r#"SELECT string_agg(DISTINCT f1::text, ',' ORDER BY f1) FROM varchar_tbl"#,
+        r#"SELECT min(unique1) FILTER (WHERE unique1 > 100) FROM tenk1"#,
+        r#"SELECT sum(DISTINCT four) FILTER (WHERE four::text ~ '123') FROM onek a GROUP BY ten"#,
+        r#"SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY income) FROM households"#,
+        r#"SELECT rank(42) WITHIN GROUP (ORDER BY score) FROM scores"#,
         r#"select * from t left join lateral(select 1) on true, lateral(select 2)"#,
         r#"select * from t, lateral flatten(input => u.col) f"#,
         r#"select * from flatten(input => parse_json('{"a":1, "b":[77,88]}'), outer => true)"#,
@@ -1487,8 +1694,12 @@ fn test_expr() {
         r#"(arr[0]:a).b"#,
         r#"arr[4]["k"]"#,
         r#"a rlike '^11'"#,
+        r#"a ~ '^11'"#,
+        r#"a !~ '^11'"#,
         r#"a like '%1$%1%' escape '$'"#,
         r#"a not like '%1$%1%' escape '$'"#,
+        r#"a ilike '%1$%1%' escape '$'"#,
+        r#"a not ilike '%1$%1%' escape '$'"#,
         r#"'中文'::text not in ('a', 'b')"#,
         r#"G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)"#,
         r#"sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END"#,
@@ -1501,6 +1712,8 @@ fn test_expr() {
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
         r#"'中文'::text LIKE ANY ('a', 'b')"#,
         r#"'中文'::text LIKE ANY ('a', 'b') ESCAPE '$'"#,
+        r#"'中文'::text ILIKE ANY ('a', 'b')"#,
+        r#"'中文'::text ILIKE ANY ('a', 'b') ESCAPE '$'"#,
         r#"'中文'::text LIKE ANY (SELECT 'a', 'b')"#,
         r#"'中文'::text LIKE ALL (SELECT 'a', 'b')"#,
         r#"'中文'::text LIKE SOME (SELECT 'a', 'b')"#,
@@ -1515,8 +1728,16 @@ fn test_expr() {
         r#"a is distinct from b"#,
         r#"1 is not distinct from null"#,
         r#"{'k1':1,'k2':2}"#,
+        // PostgreSQL aggregate syntax
+        r#"ARRAY_AGG(a ORDER BY b)"#,
+        r#"ARRAY_AGG(DISTINCT a ORDER BY a DESC NULLS LAST)"#,
+        r#"STRING_AGG(name, ',' ORDER BY name)"#,
+        r#"SUM(amount) FILTER (WHERE status = 'paid')"#,
+        r#"COUNT(*) FILTER (WHERE amount > 0)"#,
         // within group
         r#"LISTAGG(salary, '|') WITHIN GROUP (ORDER BY salary DESC NULLS LAST)"#,
+        r#"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY income)"#,
+        r#"RANK(42) WITHIN GROUP (ORDER BY score)"#,
         // window expr
         r#"ROW_NUMBER() OVER (ORDER BY salary DESC)"#,
         r#"SUM(salary) OVER ()"#,
@@ -1524,6 +1745,8 @@ fn test_expr() {
         r#"SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"#,
         r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)"#,
+        // https://github.com/databendlabs/databend/issues/11031
+        r#"COUNT() OVER (RANGE UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,
@@ -1572,6 +1795,9 @@ fn test_expr_error() {
         r#"CAST(col1 AS foo)"#,
         r#"1 a"#,
         r#"CAST(col1)"#,
+        r#"SUBSTRING(col, 1"#,
+        r#"EXTRACT(YEAR)"#,
+        r#"TRIM(foo,"#,
         r#"a.add(b)"#,
         r#"$ abc + 3"#,
         r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,

@@ -287,6 +287,7 @@ pub(crate) fn test_oss_stage_info() -> mt::principal::StageInfo {
                 access_key_id: "access_key_id".to_string(),
                 access_key_secret: "access_key_secret".to_string(),
                 presign_endpoint_url: "".to_string(),
+                role_arn: "".to_string(),
                 server_side_encryption_key_id: "".to_string(),
                 network_config: None,
             }),
@@ -445,7 +446,7 @@ pub(crate) fn test_stage_file() -> mt::principal::StageFile {
 #[test]
 fn test_user_pb_from_to() -> anyhow::Result<()> {
     let test_user_info = test_user_info();
-    let test_user_info_pb = test_user_info.to_pb()?;
+    let test_user_info_pb = test_user_info.to_pb();
     let got = mt::principal::UserInfo::from_pb(test_user_info_pb)?;
     assert_eq!(got, test_user_info);
 
@@ -455,7 +456,7 @@ fn test_user_pb_from_to() -> anyhow::Result<()> {
 #[test]
 fn test_stage_file_pb_from_to() -> anyhow::Result<()> {
     let test_stage_file = test_stage_file();
-    let test_stage_file_pb = test_stage_file.to_pb()?;
+    let test_stage_file_pb = test_stage_file.to_pb();
     let got = mt::principal::StageFile::from_pb(test_stage_file_pb)?;
     assert_eq!(got, test_stage_file);
 
@@ -466,7 +467,7 @@ fn test_stage_file_pb_from_to() -> anyhow::Result<()> {
 fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let user_info = test_user_info();
-        let mut p = user_info.to_pb()?;
+        let mut p = user_info.to_pb();
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
@@ -483,7 +484,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
     {
         let stage_file = test_stage_file();
-        let mut p = stage_file.to_pb()?;
+        let mut p = stage_file.to_pb();
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
@@ -500,7 +501,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
     {
         let fs_stage_info = test_fs_stage_info();
-        let mut p = fs_stage_info.to_pb()?;
+        let mut p = fs_stage_info.to_pb();
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
@@ -517,7 +518,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
     {
         let s3_stage_info = test_s3_stage_info();
-        let mut p = s3_stage_info.to_pb()?;
+        let mut p = s3_stage_info.to_pb();
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
@@ -534,7 +535,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
     {
         let s3_stage_info = test_s3_stage_info_v14();
-        let mut p = s3_stage_info.to_pb()?;
+        let mut p = s3_stage_info.to_pb();
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
@@ -551,7 +552,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
     {
         let gcs_stage_info = test_gcs_stage_info();
-        let mut p = gcs_stage_info.to_pb()?;
+        let mut p = gcs_stage_info.to_pb();
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
@@ -568,7 +569,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
     {
         let oss_stage_info = test_oss_stage_info();
-        let mut p = oss_stage_info.to_pb()?;
+        let mut p = oss_stage_info.to_pb();
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
@@ -585,7 +586,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
     {
         let webhdfs_stage_info = test_webhdfs_stage_info();
-        let mut p = webhdfs_stage_info.to_pb()?;
+        let mut p = webhdfs_stage_info.to_pb();
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
@@ -610,19 +611,17 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
     // UserInfo
     {
         let user_info = test_user_info();
-        let p = user_info.to_pb()?;
+        let p = user_info.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("user_info: {:?}", buf);
     }
 
     // StageFile
     {
         let stage_file = test_stage_file();
-        let p = stage_file.to_pb()?;
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let p = stage_file.to_pb();
+        let buf = prost::Message::encode_to_vec(&p);
         println!("stage_file: {:?}", buf);
     }
 
@@ -630,10 +629,9 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
     {
         let fs_stage_info = test_fs_stage_info();
 
-        let p = fs_stage_info.to_pb()?;
+        let p = fs_stage_info.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("fs_stage_info: {:?}", buf);
     }
 
@@ -641,10 +639,9 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
     {
         let s3_stage_info = test_s3_stage_info();
 
-        let p = s3_stage_info.to_pb()?;
+        let p = s3_stage_info.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("s3_stage_info: {:?}", buf);
     }
 
@@ -652,10 +649,9 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
     {
         let s3_stage_info = test_s3_stage_info_v16();
 
-        let p = s3_stage_info.to_pb()?;
+        let p = s3_stage_info.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("s3_stage_info_v16: {:?}", buf);
     }
 
@@ -663,28 +659,25 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
     {
         let s3_stage_info = test_s3_stage_info_v14();
 
-        let p = s3_stage_info.to_pb()?;
+        let p = s3_stage_info.to_pb();
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("s3_stage_info_v14: {:?}", buf);
     }
 
     // Stage on GCS, supported in version >=4.
     {
         let gcs_stage_info = test_gcs_stage_info();
-        let p = gcs_stage_info.to_pb()?;
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let p = gcs_stage_info.to_pb();
+        let buf = prost::Message::encode_to_vec(&p);
         println!("gcs_stage_info: {:?}", buf);
     }
 
     // Stage on OSS, supported in version >= 13.
     {
         let oss_stage_info = test_oss_stage_info();
-        let p = oss_stage_info.to_pb()?;
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let p = oss_stage_info.to_pb();
+        let buf = prost::Message::encode_to_vec(&p);
         println!("oss_stage_info: {:?}", buf);
     }
 

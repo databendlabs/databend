@@ -33,8 +33,10 @@ use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_storages_common_index::VirtualColumnFileMeta;
+use databend_storages_common_index::VirtualColumnIdWithMeta;
 use databend_storages_common_index::VirtualColumnNameIndex;
 use databend_storages_common_index::VirtualColumnNode;
+use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractBlockMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
@@ -64,16 +66,20 @@ impl TableMetaFunc for FuseVirtualColumn {
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("shared_paths", TableDataType::String.wrap_nullable()),
             TableField::new("column_name", TableDataType::String),
             TableField::new("column_type", TableDataType::String),
-            TableField::new("column_id", TableDataType::Number(NumberDataType::UInt32)),
+            TableField::new(
+                "column_id",
+                TableDataType::Number(NumberDataType::UInt32).wrap_nullable(),
+            ),
             TableField::new(
                 "block_offset",
-                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
             ),
             TableField::new(
                 "bytes_compressed",
-                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
             ),
         ])
     }
@@ -110,6 +116,7 @@ impl FuseVirtualColumn {
         let mut virtual_block_location = StringColumnBuilder::with_capacity(len);
         let mut virtual_block_size = vec![];
         let mut row_count = vec![];
+        let mut shared_paths = vec![];
 
         let mut column_name = StringColumnBuilder::with_capacity(len);
         let mut column_type = StringColumnBuilder::with_capacity(len);
@@ -150,6 +157,7 @@ impl FuseVirtualColumn {
                         virtual_block_location.put_and_commit(location.clone());
                         virtual_block_size.push(block_meta.virtual_column_size);
                         row_count.push(entry.num_values);
+                        shared_paths.push(entry.shared_paths.clone());
 
                         column_name.put_and_commit(&entry.column_name);
                         column_type.put_and_commit(&entry.column_type);
@@ -175,11 +183,12 @@ impl FuseVirtualColumn {
                 Column::String(virtual_block_location.build()).into(),
                 UInt64Type::from_data(virtual_block_size).into(),
                 UInt64Type::from_data(row_count).into(),
+                StringType::from_opt_data(shared_paths).into(),
                 Column::String(column_name.build()).into(),
                 Column::String(column_type.build()).into(),
-                UInt32Type::from_data(column_id).into(),
-                UInt64Type::from_data(block_offset).into(),
-                UInt64Type::from_data(bytes_compressed).into(),
+                UInt32Type::from_opt_data(column_id).into(),
+                UInt64Type::from_opt_data(block_offset).into(),
+                UInt64Type::from_opt_data(bytes_compressed).into(),
             ],
             num_rows,
         ))
@@ -187,12 +196,18 @@ impl FuseVirtualColumn {
 }
 
 struct VirtualColumnEntry {
+    shared_paths: Option<String>,
     column_name: String,
     column_type: String,
-    column_id: u32,
-    offset: u64,
-    len: u64,
+    column_id: Option<u32>,
+    offset: Option<u64>,
+    len: Option<u64>,
     num_values: u64,
+}
+
+struct SharedPathBucket {
+    source_column_name: String,
+    paths: Vec<String>,
 }
 
 fn collect_virtual_column_entries(
@@ -200,6 +215,7 @@ fn collect_virtual_column_entries(
     source_column_names: &HashMap<u32, String>,
 ) -> Vec<VirtualColumnEntry> {
     let mut entries = Vec::new();
+    let mut shared_buckets = HashMap::new();
 
     for (source_column_id, node) in &virtual_meta.virtual_column_nodes {
         let source_column_name = source_column_names
@@ -209,65 +225,147 @@ fn collect_virtual_column_entries(
         let mut segments = Vec::new();
         collect_virtual_column_leaves(
             virtual_meta,
+            *source_column_id,
             &source_column_name,
             node,
             &mut segments,
             &mut entries,
+            &mut shared_buckets,
         );
     }
 
-    for (source_column_id, (key_meta, value_meta)) in &virtual_meta.shared_column_metas {
-        let source_column_name = source_column_names
-            .get(source_column_id)
-            .cloned()
-            .unwrap_or_else(|| source_column_id.to_string());
-        entries.push(VirtualColumnEntry {
-            column_name: format!(
-                "{}.__shared_virtual_column_data__.entries.key",
-                source_column_name
-            ),
-            column_type: key_meta.data_type.to_string(),
-            column_id: key_meta.column_id,
-            offset: key_meta.meta.offset,
-            len: key_meta.meta.len,
-            num_values: key_meta.meta.num_values,
-        });
-        entries.push(VirtualColumnEntry {
-            column_name: format!(
-                "{}.__shared_virtual_column_data__.entries.value",
-                source_column_name
-            ),
-            column_type: value_meta.data_type.to_string(),
-            column_id: value_meta.column_id,
-            offset: value_meta.meta.offset,
-            len: value_meta.meta.len,
-            num_values: value_meta.meta.num_values,
-        });
+    for ((source_column_id, data_type), mut bucket) in shared_buckets {
+        bucket.paths.sort();
+        let metas = virtual_meta
+            .typed_shared_column_metas
+            .get(&source_column_id)
+            .and_then(|typed_metas| typed_metas.get(&data_type));
+        if let Some((key_meta, value_meta)) = metas {
+            push_shared_entries(
+                &bucket.source_column_name,
+                data_type,
+                &bucket.paths,
+                key_meta,
+                value_meta,
+                &mut entries,
+            );
+        }
     }
 
-    entries.sort_by_key(|entry| entry.column_id);
+    entries.sort_by(|a, b| {
+        a.column_id
+            .unwrap_or(u32::MAX)
+            .cmp(&b.column_id.unwrap_or(u32::MAX))
+            .then_with(|| a.column_name.cmp(&b.column_name))
+    });
     entries
+}
+
+fn shared_column_name(source_name: &str, data_type: VirtualColumnSharedDataType) -> String {
+    let suffix = match data_type {
+        VirtualColumnSharedDataType::Boolean => "__shared_bool_virtual_column_data__",
+        VirtualColumnSharedDataType::UInt64 => "__shared_uint64_virtual_column_data__",
+        VirtualColumnSharedDataType::Int64 => "__shared_int64_virtual_column_data__",
+        VirtualColumnSharedDataType::Float64 => "__shared_float64_virtual_column_data__",
+        VirtualColumnSharedDataType::String => "__shared_string_virtual_column_data__",
+        VirtualColumnSharedDataType::Jsonb => "__shared_virtual_column_data__",
+    };
+    format!("{source_name}.{suffix}")
+}
+
+fn push_shared_entries(
+    source_column_name: &str,
+    data_type: VirtualColumnSharedDataType,
+    paths: &[String],
+    key_meta: &VirtualColumnIdWithMeta,
+    value_meta: &VirtualColumnIdWithMeta,
+    entries: &mut Vec<VirtualColumnEntry>,
+) {
+    let column_name = shared_column_name(source_column_name, data_type);
+    entries.push(VirtualColumnEntry {
+        shared_paths: Some(format_shared_paths(paths)),
+        column_name: format!("{column_name}.entries.key"),
+        column_type: key_meta.data_type.to_string(),
+        column_id: Some(key_meta.column_id),
+        offset: Some(key_meta.meta.offset),
+        len: Some(key_meta.meta.len),
+        num_values: key_meta.meta.num_values,
+    });
+    entries.push(VirtualColumnEntry {
+        shared_paths: None,
+        column_name: format!("{column_name}.entries.value"),
+        column_type: value_meta.data_type.to_string(),
+        column_id: Some(value_meta.column_id),
+        offset: Some(value_meta.meta.offset),
+        len: Some(value_meta.meta.len),
+        num_values: value_meta.meta.num_values,
+    });
+}
+
+fn push_shared_path(
+    shared_buckets: &mut HashMap<(u32, VirtualColumnSharedDataType), SharedPathBucket>,
+    source_column_id: u32,
+    source_column_name: &str,
+    data_type: VirtualColumnSharedDataType,
+    virtual_path: String,
+) {
+    shared_buckets
+        .entry((source_column_id, data_type))
+        .or_insert_with(|| SharedPathBucket {
+            source_column_name: source_column_name.to_string(),
+            paths: Vec::new(),
+        })
+        .paths
+        .push(virtual_path);
+}
+
+fn format_shared_paths(paths: &[String]) -> String {
+    paths.join(", ")
 }
 
 fn collect_virtual_column_leaves(
     virtual_meta: &VirtualColumnFileMeta,
+    source_column_id: u32,
     source_column_name: &str,
     node: &VirtualColumnNode,
     segments: &mut Vec<String>,
     entries: &mut Vec<VirtualColumnEntry>,
+    shared_buckets: &mut HashMap<(u32, VirtualColumnSharedDataType), SharedPathBucket>,
 ) {
-    if let Some(VirtualColumnNameIndex::Column(leaf_index)) = node.leaf.as_ref() {
-        if let Some(meta) = virtual_meta.column_metas.get(*leaf_index as usize) {
-            let key_name = build_virtual_column_key_name(segments);
-            let name = format!("{}{}", source_column_name, key_name);
-            entries.push(VirtualColumnEntry {
-                column_name: name,
-                column_type: meta.data_type.to_string(),
-                column_id: meta.column_id,
-                offset: meta.meta.offset,
-                len: meta.meta.len,
-                num_values: meta.meta.num_values,
-            });
+    if let Some(leaf) = node.leaf.as_ref() {
+        let virtual_path = build_virtual_column_key_name(segments);
+        match leaf {
+            VirtualColumnNameIndex::Column(leaf_index) => {
+                if let Some(meta) = virtual_meta.column_metas.get(*leaf_index as usize) {
+                    entries.push(VirtualColumnEntry {
+                        shared_paths: None,
+                        column_name: format!("{}{}", source_column_name, virtual_path),
+                        column_type: meta.data_type.to_string(),
+                        column_id: Some(meta.column_id),
+                        offset: Some(meta.meta.offset),
+                        len: Some(meta.meta.len),
+                        num_values: meta.meta.num_values,
+                    });
+                }
+            }
+            VirtualColumnNameIndex::Shared(_) => {
+                push_shared_path(
+                    shared_buckets,
+                    source_column_id,
+                    source_column_name,
+                    VirtualColumnSharedDataType::Jsonb,
+                    virtual_path,
+                );
+            }
+            VirtualColumnNameIndex::TypedShared { data_type, .. } => {
+                push_shared_path(
+                    shared_buckets,
+                    source_column_id,
+                    source_column_name,
+                    *data_type,
+                    virtual_path,
+                );
+            }
         }
     }
 
@@ -284,10 +382,12 @@ fn collect_virtual_column_leaves(
         segments.push(segment.clone());
         collect_virtual_column_leaves(
             virtual_meta,
+            source_column_id,
             source_column_name,
             child_node,
             segments,
             entries,
+            shared_buckets,
         );
         segments.pop();
     }

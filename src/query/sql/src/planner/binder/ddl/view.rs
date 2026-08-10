@@ -18,11 +18,13 @@ use databend_common_ast::ast::DescribeViewStmt;
 use databend_common_ast::ast::DropViewStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowViewsStmt;
+use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::QuotedString;
+use databend_common_ast::visit::WalkMut;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
-use derive_visitor::DriveMut;
 use log::debug;
 
 use crate::BindContext;
@@ -30,7 +32,6 @@ use crate::SelectBuilder;
 use crate::ViewRewriter;
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
-use crate::plans::AlterViewPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::DescribeViewPlan;
 use crate::plans::DropViewPlan;
@@ -62,7 +63,7 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        query.drive_mut(&mut visitor);
+        query.walk_mut(&mut visitor)?;
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
@@ -82,37 +83,14 @@ impl Binder {
         &mut self,
         stmt: &AlterViewStmt,
     ) -> Result<Plan> {
-        let AlterViewStmt {
-            catalog,
-            database,
-            view,
-            columns,
-            query,
-        } = stmt;
-
-        let mut query = *query.clone();
-        let tenant = self.ctx.get_tenant();
-        let (catalog, database, view_name) =
-            self.normalize_object_identifier_triple(catalog, database, view);
-        let column_names = columns
-            .iter()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .collect::<Vec<_>>();
-        let mut visitor = ViewRewriter {
-            current_database: database.clone(),
-        };
-        query.drive_mut(&mut visitor);
-        let subquery = format!("{}", query);
-
-        let plan = AlterViewPlan {
-            tenant,
-            catalog,
-            database,
-            view_name,
-            column_names,
-            subquery,
-        };
-        Ok(Plan::AlterView(plan.into()))
+        let _ = stmt;
+        // View dependencies are tracked from the stored query. Changing the
+        // definition or output columns in place would require rewriting lineage
+        // metadata and makes rename/restore semantics harder to reason about.
+        // TODO: support ALTER VIEW <name> RENAME TO <new_name>.
+        Err(databend_common_exception::ErrorCode::Unimplemented(
+            "ALTER VIEW does not support changing the view query",
+        ))
     }
 
     #[async_backtrace::framed]
@@ -172,7 +150,10 @@ impl Binder {
                 .with_column("created_on AS create_time")
                 .with_column("view_query");
         } else {
-            select_builder.with_column(format!("name AS `Views_in_{database}`"));
+            select_builder.with_column(format!(
+                "name AS {}",
+                QuotedIdent(format!("Views_in_{database}"), '`')
+            ));
         }
 
         if *with_history {
@@ -184,7 +165,7 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
 
         let catalog_name = match catalog {
             None => self.ctx.get_current_catalog(),
@@ -195,11 +176,11 @@ impl Binder {
             }
         };
 
-        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&catalog_name, '\'')));
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {

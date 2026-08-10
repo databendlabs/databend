@@ -18,6 +18,7 @@ use std::env;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::str::FromStr;
 
 use clap::ArgAction;
 use clap::Args;
@@ -35,7 +36,6 @@ use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig
 use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
 use databend_common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
-use databend_common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
 use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
@@ -44,6 +44,9 @@ use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_storage::EndpointUrlPolicy;
+use databend_common_storage::EndpointUrlPolicyConfig;
+use databend_common_storage::StagePathTraversalPolicy;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use databend_common_tracing::Config as InnerLogConfig;
@@ -88,6 +91,10 @@ pub struct TelemetryConfig {
 
 fn default_telemetry_enabled() -> bool {
     true
+}
+
+fn default_stage_path_traversal_policy() -> String {
+    "disable".to_string()
 }
 
 impl Default for TelemetryConfig {
@@ -362,6 +369,39 @@ pub struct StorageConfig {
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
 
+    /// Policy for validating external storage endpoint_url targets.
+    ///
+    /// `permissive` preserves backward compatibility. `strict` rejects
+    /// high-risk targets such as loopback, private, link-local and metadata
+    /// addresses unless explicitly allowed.
+    #[clap(
+        long = "storage-endpoint-url-policy",
+        value_name = "VALUE",
+        default_value_t,
+        value_enum
+    )]
+    pub endpoint_url_policy: EndpointUrlPolicyConfigValue,
+
+    /// Hostnames allowed by the storage endpoint_url policy.
+    ///
+    /// Supports exact hosts and subdomain-only wildcard patterns such as `*.example.com`.
+    #[clap(long = "storage-endpoint-url-allowed-hosts", value_name = "VALUE")]
+    pub endpoint_url_allowed_hosts: Vec<String>,
+
+    /// IP addresses or CIDR blocks allowed by the storage endpoint_url policy.
+    #[clap(long = "storage-endpoint-url-allowed-cidrs", value_name = "VALUE")]
+    pub endpoint_url_allowed_cidrs: Vec<String>,
+
+    /// Hostnames rejected by the storage endpoint_url policy.
+    ///
+    /// Supports exact hosts and subdomain-only wildcard patterns such as `*.example.com`.
+    #[clap(long = "storage-endpoint-url-blocked-hosts", value_name = "VALUE")]
+    pub endpoint_url_blocked_hosts: Vec<String>,
+
+    /// IP addresses or CIDR blocks rejected by the storage endpoint_url policy.
+    #[clap(long = "storage-endpoint-url-blocked-cidrs", value_name = "VALUE")]
+    pub endpoint_url_blocked_cidrs: Vec<String>,
+
     /// Disable loading credentials from env/shared config/web identity files globally.
     #[clap(long = "storage-disable-config-load")]
     pub disable_config_load: bool,
@@ -369,6 +409,20 @@ pub struct StorageConfig {
     /// Disable all instance-profile based credential providers globally.
     #[clap(long = "storage-disable-instance-profile")]
     pub disable_instance_profile: bool,
+
+    /// Controls whether stage paths containing parent directory components
+    /// (`../`) are allowed.
+    ///
+    /// `disable` rejects traversal paths for both read and write.
+    /// `enable` allows traversal paths for both read and write.
+    /// `readonly` allows reading existing traversal paths but rejects writes.
+    #[clap(
+        long = "storage-stage-path-traversal-policy",
+        value_name = "VALUE",
+        default_value = "disable"
+    )]
+    #[serde(default = "default_stage_path_traversal_policy")]
+    pub stage_path_traversal_policy: String,
 
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub storage_retry_timeout: u64,
@@ -431,14 +485,49 @@ impl Default for StorageConfig {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum EndpointUrlPolicyConfigValue {
+    #[default]
+    Permissive,
+    Strict,
+    Allowlist,
+}
+
+impl From<EndpointUrlPolicyConfigValue> for EndpointUrlPolicy {
+    fn from(value: EndpointUrlPolicyConfigValue) -> Self {
+        match value {
+            EndpointUrlPolicyConfigValue::Permissive => EndpointUrlPolicy::Permissive,
+            EndpointUrlPolicyConfigValue::Strict => EndpointUrlPolicy::Strict,
+            EndpointUrlPolicyConfigValue::Allowlist => EndpointUrlPolicy::Allowlist,
+        }
+    }
+}
+
+impl From<&EndpointUrlPolicy> for EndpointUrlPolicyConfigValue {
+    fn from(value: &EndpointUrlPolicy) -> Self {
+        match value {
+            EndpointUrlPolicy::Permissive => EndpointUrlPolicyConfigValue::Permissive,
+            EndpointUrlPolicy::Strict => EndpointUrlPolicyConfigValue::Strict,
+            EndpointUrlPolicy::Allowlist => EndpointUrlPolicyConfigValue::Allowlist,
+        }
+    }
+}
+
 impl From<InnerStorageConfig> for StorageConfig {
     fn from(inner: InnerStorageConfig) -> Self {
         let mut cfg = Self {
             storage_num_cpus: inner.num_cpus,
             typ: "".to_string(),
             allow_insecure: inner.allow_insecure,
+            endpoint_url_policy: (&inner.endpoint_url_policy.policy).into(),
+            endpoint_url_allowed_hosts: inner.endpoint_url_policy.allowed_hosts,
+            endpoint_url_allowed_cidrs: inner.endpoint_url_policy.allowed_cidrs,
+            endpoint_url_blocked_hosts: inner.endpoint_url_policy.blocked_hosts,
+            endpoint_url_blocked_cidrs: inner.endpoint_url_policy.blocked_cidrs,
             disable_config_load: inner.disable_config_load,
             disable_instance_profile: inner.disable_instance_profile,
+            stage_path_traversal_policy: inner.stage_path_traversal_policy.to_string(),
             // use default for each config instead of using `..Default::default`
             // using `..Default::default` is calling `Self::default`
             // and `Self::default` relies on `InnerStorage::into()`
@@ -576,6 +665,17 @@ impl StorageConfig {
             max_concurrent_io_requests: self.storage_max_concurrent_io_requests,
         }
     }
+
+    fn create_endpoint_url_policy_config(&self) -> EndpointUrlPolicyConfig {
+        EndpointUrlPolicyConfig {
+            policy: self.endpoint_url_policy.clone().into(),
+            allowed_hosts: self.endpoint_url_allowed_hosts.clone(),
+            allowed_cidrs: self.endpoint_url_allowed_cidrs.clone(),
+            blocked_hosts: self.endpoint_url_blocked_hosts.clone(),
+            blocked_cidrs: self.endpoint_url_blocked_cidrs.clone(),
+            protected_sockets: vec![],
+        }
+    }
 }
 
 impl TryInto<InnerStorageConfig> for StorageConfig {
@@ -594,11 +694,15 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         }
 
         let storage_network_params = self.create_storage_network_params();
+        let stage_path_traversal_policy =
+            StagePathTraversalPolicy::from_str(&self.stage_path_traversal_policy)?;
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
+            endpoint_url_policy: self.create_endpoint_url_policy_config(),
             disable_config_load: self.disable_config_load,
             disable_instance_profile: self.disable_instance_profile,
+            stage_path_traversal_policy,
             params: {
                 match self.typ.as_str() {
                     "azblob" => {
@@ -1231,6 +1335,11 @@ pub struct OssStorageConfig {
     )]
     #[serde(rename = "server_side_encryption_key_id")]
     pub oss_server_side_encryption_key_id: String,
+
+    /// Role ARN for OSS storage (used for AssumeRole)
+    #[clap(long = "storage-oss-role-arn", value_name = "VALUE", default_value_t)]
+    #[serde(rename = "role_arn")]
+    pub oss_role_arn: String,
 }
 
 impl Default for OssStorageConfig {
@@ -1265,6 +1374,7 @@ impl From<InnerStorageOssConfig> for OssStorageConfig {
             oss_root: inner.root,
             oss_server_side_encryption: inner.server_side_encryption,
             oss_server_side_encryption_key_id: inner.server_side_encryption_key_id,
+            oss_role_arn: inner.role_arn,
         }
     }
 }
@@ -1280,45 +1390,10 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
             access_key_id: self.oss_access_key_id,
             access_key_secret: self.oss_access_key_secret,
             root: self.oss_root,
+            role_arn: self.oss_role_arn,
             server_side_encryption: self.oss_server_side_encryption,
             server_side_encryption_key_id: self.oss_server_side_encryption_key_id,
             network_config: None,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
-pub struct MokaStorageConfig {
-    pub max_capacity: u64,
-    pub time_to_live: i64,
-    pub time_to_idle: i64,
-}
-
-impl Default for MokaStorageConfig {
-    fn default() -> Self {
-        InnerStorageMokaConfig::default().into()
-    }
-}
-
-impl From<InnerStorageMokaConfig> for MokaStorageConfig {
-    fn from(v: InnerStorageMokaConfig) -> Self {
-        Self {
-            max_capacity: v.max_capacity,
-            time_to_live: v.time_to_live,
-            time_to_idle: v.time_to_idle,
-        }
-    }
-}
-
-impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerStorageMokaConfig> {
-        Ok(InnerStorageMokaConfig {
-            max_capacity: self.max_capacity,
-            time_to_live: self.time_to_live,
-            time_to_idle: self.time_to_idle,
         })
     }
 }
@@ -1556,6 +1631,10 @@ pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     #[clap(long, value_name = "VALUE", default_value = "admin")]
     pub tenant_id: String,
+
+    /// Product name used in user-visible server version strings.
+    #[clap(long, value_name = "VALUE", default_value = "Databend Query")]
+    pub product_name: String,
 
     /// ID for construct the cluster.
     #[clap(long, value_name = "VALUE", default_value_t)]
@@ -1872,6 +1951,14 @@ pub struct QueryConfig {
 
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_queries_executor: bool,
+
+    /// Controls how table hooks after write are executed. Supported values: sync, async.
+    #[clap(long, value_name = "VALUE", default_value = "sync")]
+    pub table_hook_mode: String,
+
+    /// Max number of async table hook jobs running concurrently.
+    #[clap(long, value_name = "VALUE", default_value = "2")]
+    pub table_hook_async_max_concurrency: usize,
 }
 
 impl Default for QueryConfig {
@@ -1893,6 +1980,18 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
     fn try_into(mut self) -> Result<InnerQueryConfig> {
         let upgrade_to_pb = self.enable_meta_data_upgrade_json_to_pb_from_v307;
 
+        self.table_hook_mode = self.table_hook_mode.to_lowercase();
+        if !matches!(self.table_hook_mode.as_str(), "sync" | "async") {
+            return Err(ErrorCode::InvalidConfig(format!(
+                "table_hook_mode must be sync or async, got {}",
+                self.table_hook_mode
+            )));
+        }
+        if self.table_hook_async_max_concurrency == 0 {
+            return Err(ErrorCode::InvalidConfig(
+                "table_hook_async_max_concurrency must be greater than 0",
+            ));
+        }
         if self.warehouse_id.is_empty() {
             self.warehouse_id = self.cluster_id.clone();
         }
@@ -3471,6 +3570,11 @@ pub struct SpillConfig {
     #[clap(long, value_name = "PERCENT", default_value = "60")]
     pub sort_spilling_disk_quota_ratio: u64,
 
+    /// Maximum percentage of the global local spill quota that materialized
+    /// CTE execution may use for one query.
+    #[clap(long, value_name = "PERCENT", default_value = "60")]
+    pub materialized_cte_spilling_disk_quota_ratio: u64,
+
     /// Maximum percentage of the global local spill quota that window
     /// partitioners may use for one query.
     #[clap(long, value_name = "PERCENT", default_value = "60")]
@@ -3481,6 +3585,10 @@ pub struct SpillConfig {
     /// TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
     #[clap(long, value_name = "PERCENT", default_value = "0")]
     pub result_set_spilling_disk_quota_ratio: u64,
+
+    /// Number of worker tasks in the spill buffer pool.
+    #[clap(long, value_name = "VALUE", default_value = "2")]
+    pub spill_buffer_pool_workers: usize,
 }
 
 impl Default for SpillConfig {
@@ -3591,9 +3699,12 @@ mod config_converters {
             global_bytes_limit: spill.spill_local_disk_max_bytes,
             storage_params,
             sort_spilling_disk_quota_ratio: spill.sort_spilling_disk_quota_ratio,
+            materialized_cte_spilling_disk_quota_ratio: spill
+                .materialized_cte_spilling_disk_quota_ratio,
             window_partition_spilling_disk_quota_ratio: spill
                 .window_partition_spilling_disk_quota_ratio,
             result_set_spilling_disk_quota_ratio: spill.result_set_spilling_disk_quota_ratio,
+            buffer_pool_workers: spill.spill_buffer_pool_workers,
         })
     }
 
@@ -3613,9 +3724,12 @@ mod config_converters {
                 spill_local_disk_max_bytes: value.global_bytes_limit,
                 storage,
                 sort_spilling_disk_quota_ratio: value.sort_spilling_disk_quota_ratio,
+                materialized_cte_spilling_disk_quota_ratio: value
+                    .materialized_cte_spilling_disk_quota_ratio,
                 window_partition_spilling_disk_quota_ratio: value
                     .window_partition_spilling_disk_quota_ratio,
                 result_set_spilling_disk_quota_ratio: value.result_set_spilling_disk_quota_ratio,
+                spill_buffer_pool_workers: value.buffer_pool_workers,
             }
         }
     }
@@ -3683,5 +3797,35 @@ mod test {
                 assert!(!cfg.cache.enable_table_index_bloom);
             },
         );
+    }
+
+    #[test]
+    fn test_endpoint_url_policy_round_trips_through_inner() {
+        let args = vec![
+            "databend-query",
+            "--storage-endpoint-url-policy=strict",
+            "--storage-endpoint-url-allowed-hosts=s3.us-east-1.amazonaws.com",
+            "--storage-endpoint-url-allowed-hosts=*.storage.googleapis.com",
+            "--storage-endpoint-url-allowed-cidrs=10.0.0.0/8",
+            "--storage-endpoint-url-blocked-hosts=evil.example.com",
+            "--storage-endpoint-url-blocked-cidrs=192.168.99.0/24",
+        ];
+        let cmd = Cmd::parse_from(args);
+        let inner: InnerConfig = cmd.config.try_into().expect("must parse");
+
+        let policy = &inner.storage.endpoint_url_policy;
+        assert_eq!(
+            policy.policy,
+            databend_common_storage::EndpointUrlPolicy::Strict
+        );
+        assert_eq!(policy.allowed_hosts, vec![
+            "s3.us-east-1.amazonaws.com",
+            "*.storage.googleapis.com"
+        ]);
+        assert_eq!(policy.allowed_cidrs, vec!["10.0.0.0/8"]);
+        assert_eq!(policy.blocked_hosts, vec!["evil.example.com"]);
+        assert_eq!(policy.blocked_cidrs, vec!["192.168.99.0/24"]);
+        // protected_sockets is runtime-only and must not be set from CLI
+        assert!(policy.protected_sockets.is_empty());
     }
 }

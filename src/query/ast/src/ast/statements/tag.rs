@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -61,7 +63,7 @@ impl Display for CreateTagStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct TagSetItem {
     pub tag_name: Identifier,
     pub tag_value: String,
@@ -114,7 +116,7 @@ impl Display for ShowTagsStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct AlterObjectTagStmt {
     pub object: AlterObjectTagTarget,
     pub action: AlterObjectTagAction,
@@ -127,7 +129,7 @@ impl Display for AlterObjectTagStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AlterObjectTagTarget {
     Database {
         if_exists: bool,
@@ -303,7 +305,7 @@ impl Display for AlterObjectTagTarget {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AlterObjectTagAction {
     Set { tags: Vec<TagSetItem> },
     Unset { tags: Vec<Identifier> },

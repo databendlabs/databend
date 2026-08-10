@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::session_type::SessionType;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::StatisticsTable;
@@ -26,6 +26,7 @@ use poem::web::Json;
 use poem::web::Path;
 
 use crate::sessions::SessionManager;
+use crate::sessions::TableContext;
 
 #[poem::handler]
 #[async_backtrace::framed]
@@ -33,6 +34,19 @@ pub async fn get_table_stats_handler(
     Path((tenant, database, table)): Path<(String, String, String)>,
 ) -> poem::Result<impl IntoResponse> {
     match dump_columns(&tenant, &database, &table).await {
+        Ok(columns) => Ok(Json(columns)),
+        Err(error) => Err(poem::error::InternalServerError(error)),
+    }
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn get_table_stats_local_handler(
+    Path((database, table)): Path<(String, String)>,
+) -> poem::Result<impl IntoResponse> {
+    let config = GlobalConfig::instance();
+    let tenant = config.query.tenant_id.tenant_name();
+    match dump_columns(tenant, &database, &table).await {
         Ok(columns) => Ok(Json(columns)),
         Err(error) => Err(poem::error::InternalServerError(error)),
     }

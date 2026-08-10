@@ -15,7 +15,6 @@
 use std::fmt;
 
 use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::KeyCodec;
 
 /// [`OwnershipObject`] is used to maintain the grant object that support rename by id. Using ID over name
 /// have many benefits, it can avoid lost privileges after the object get renamed.
@@ -120,7 +119,7 @@ impl fmt::Display for OwnershipObject {
     }
 }
 
-impl KeyCodec for OwnershipObject {
+impl kvapi::KeyCodec for OwnershipObject {
     fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
         match self {
             OwnershipObject::Database {
@@ -243,6 +242,33 @@ impl KeyCodec for OwnershipObject {
                     .to_string(),
                 got: q.to_string(),
             }),
+        }
+    }
+
+    fn segment_count(&self) -> usize {
+        match self {
+            OwnershipObject::Database { catalog_name, .. } => {
+                if catalog_name == Self::DEFAULT_CATALOG {
+                    2
+                } else {
+                    3
+                }
+            }
+            OwnershipObject::Table { catalog_name, .. } => {
+                if catalog_name == Self::DEFAULT_CATALOG {
+                    2
+                } else {
+                    3
+                }
+            }
+            OwnershipObject::Stage { .. }
+            | OwnershipObject::UDF { .. }
+            | OwnershipObject::Warehouse { .. }
+            | OwnershipObject::Connection { .. }
+            | OwnershipObject::Sequence { .. }
+            | OwnershipObject::Procedure { .. }
+            | OwnershipObject::MaskingPolicy { .. }
+            | OwnershipObject::RowAccessPolicy { .. } => 2,
         }
     }
 }

@@ -35,6 +35,7 @@ use databend_query::test_kits::*;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
+use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -46,7 +47,6 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
-use parquet::format::FileMetaData;
 use sysinfo::System;
 use sysinfo::get_current_pid;
 use uuid::Uuid;
@@ -331,6 +331,7 @@ fn build_test_segment_info(
         col_stats: col_stats.clone(),
         col_metas,
         cluster_stats: None,
+        partition_stats: None,
         location: block_location,
         bloom_filter_index_location: Some(location_gen.block_bloom_index_location(&block_uuid)),
         bloom_filter_index_size: 0,
@@ -341,6 +342,7 @@ fn build_test_segment_info(
         spatial_index_size: None,
         spatial_index_location: None,
         spatial_stats: None,
+        vector_stats: None,
         virtual_block_meta: None,
         compression: Compression::Lz4,
         create_on: Some(Utc::now()),
@@ -367,6 +369,7 @@ fn build_test_segment_info(
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
     };
@@ -384,7 +387,7 @@ where T: Clone + Into<CacheValue<T>> {
 }
 
 #[allow(dead_code)]
-async fn setup() -> databend_common_exception::Result<FileMetaData> {
+async fn setup() -> databend_common_exception::Result<ParquetMetaData> {
     let fields = (0..23)
         .map(|_| TableField::new("id", TableDataType::Number(NumberDataType::Int32)))
         .collect::<Vec<_>>();
@@ -401,7 +404,8 @@ async fn setup() -> databend_common_exception::Result<FileMetaData> {
     let block = DataBlock::new_from_columns(columns);
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
-    let col_stats = gen_columns_statistics(&block, None, &schema)?;
+    let col_stats =
+        gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
     let block_writer = BlockWriter::new(
         &operator,
         &loc_generator,

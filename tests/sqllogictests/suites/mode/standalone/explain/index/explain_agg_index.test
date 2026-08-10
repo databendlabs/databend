@@ -678,7 +678,7 @@ EvalScalar
             ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: NONE]
             ├── aggregating index: [SELECT event_name, user_id, COUNT(), COUNT(id), MAX(user_id), SUM(id) FROM test_index_db.t GROUP BY event_name, user_id]
             ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_4 (#4), index_col_5 (#5), index_col_3 (#3)]]
@@ -701,16 +701,16 @@ explain select event_name, user_id, max(user_id), avg(id) from t where user_id >
 EvalScalar
 ├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
 ├── expressions: [sum(id) (#4) / CAST(if(CAST(count(id) (#5) = 0 AS Boolean NULL), 1, count(id) (#5)) AS UInt64 NULL)]
-├── estimated rows: 6.00
+├── estimated rows: 5.98
 └── AggregateFinal
     ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), t.event_name (#2), t.user_id (#1)]
     ├── group by: [event_name, user_id]
     ├── aggregate functions: [max(user_id), sum(id), count(id)]
-    ├── estimated rows: 6.00
+    ├── estimated rows: 5.98
     └── AggregatePartial
         ├── group by: [event_name, user_id]
         ├── aggregate functions: [max(user_id), sum(id), count(id)]
-        ├── estimated rows: 6.00
+        ├── estimated rows: 5.98
         └── TableScan
             ├── table: default.test_index_db.t
             ├── scan id: 0
@@ -719,7 +719,7 @@ EvalScalar
             ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [is_true(t.user_id (#1) > 1)], limit: NONE]
             ├── aggregating index: [SELECT event_name, user_id, COUNT(), COUNT(id), MAX(user_id), SUM(id) FROM test_index_db.t GROUP BY event_name, user_id]
             ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_4 (#4), index_col_5 (#5), index_col_3 (#3)], filter: is_true(index_col_0 (#0) > CAST(1 AS Int32 NULL))]
@@ -740,20 +740,20 @@ explain select event_name, user_id, max(user_id), avg(id) from t where user_id >
 Sort(Single)
 ├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
 ├── sort keys: [event_name ASC NULLS LAST, user_id DESC NULLS LAST]
-├── estimated rows: 6.00
+├── estimated rows: 5.98
 └── EvalScalar
     ├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
     ├── expressions: [sum(id) (#4) / CAST(if(CAST(count(id) (#5) = 0 AS Boolean NULL), 1, count(id) (#5)) AS UInt64 NULL)]
-    ├── estimated rows: 6.00
+    ├── estimated rows: 5.98
     └── AggregateFinal
         ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), t.event_name (#2), t.user_id (#1)]
         ├── group by: [event_name, user_id]
         ├── aggregate functions: [max(user_id), sum(id), count(id)]
-        ├── estimated rows: 6.00
+        ├── estimated rows: 5.98
         └── AggregatePartial
             ├── group by: [event_name, user_id]
             ├── aggregate functions: [max(user_id), sum(id), count(id)]
-            ├── estimated rows: 6.00
+            ├── estimated rows: 5.98
             └── TableScan
                 ├── table: default.test_index_db.t
                 ├── scan id: 0
@@ -762,7 +762,7 @@ Sort(Single)
                 ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [is_true(t.user_id (#1) > 1)], limit: NONE]
                 ├── aggregating index: [SELECT event_name, user_id, COUNT(), COUNT(id), MAX(user_id), SUM(id) FROM test_index_db.t GROUP BY event_name, user_id]
                 ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_4 (#4), index_col_5 (#5), index_col_3 (#3)], filter: is_true(index_col_0 (#0) > CAST(1 AS Int32 NULL))]

@@ -1,0 +1,6 @@
+=== set_returning_function_rejects_where_clause ===
+description: SRFs should keep the old WHERE-clause rejection.
+sql: unnest([1, 2, 3])
+status: error
+code: 1065
+message: set-returning functions are not allowed in WHERE clause

@@ -22,6 +22,7 @@ use databend_common_ast::ast::RenameDictionaryStmt;
 use databend_common_ast::ast::ShowCreateDictionaryStmt;
 use databend_common_ast::ast::ShowDictionariesStmt;
 use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -274,7 +275,7 @@ impl Binder {
         let options = validate_dictionary_options(&source, source_options)?;
 
         // Check for data source fields.
-        let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
+        let (schema, _, _) = self.analyze_create_table_schema_by_columns(columns).await?;
         match source.as_str() {
             "redis" => validate_redis_fields(&schema)?,
             "mysql" => validate_mysql_fields(&schema)?,
@@ -417,12 +418,12 @@ impl Binder {
             .with_order_by("name");
 
         let database = self.check_database_exist(&None, database).await?;
-        select_builder.with_filter(format!("database = '{}'", database.clone()));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
 
         match limit {
             None => (),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
             }
             Some(ShowLimit::Where { selection }) => {
                 select_builder.with_filter(format!("({selection})"));

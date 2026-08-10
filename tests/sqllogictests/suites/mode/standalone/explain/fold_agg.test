@@ -85,7 +85,7 @@ AggregateFinal
         ├── read size: 5.90 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(t.number (#0) > 10)], limit: NONE]
         └── estimated rows: 2983.50
 
@@ -109,7 +109,7 @@ AggregateFinal
         ├── read size: 5.90 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 3000.00
 
@@ -117,18 +117,14 @@ query T
 explain select count(), max(number) + 3, min(day) from t;
 ----
 EvalScalar
-├── output columns: [count() (#5), min(day) (#7), max(number) + 3 (#8)]
+├── output columns: [min(day) (#7), count() (#5), max(number) + 3 (#8)]
 ├── expressions: [max(number) (#6) + 3]
 ├── estimated rows: 1.00
 └── EvalScalar
-    ├── output columns: [count() (#5), max(number) (#6), min(day) (#7)]
-    ├── expressions: [1999, '2024-01-01']
+    ├── output columns: [max(number) (#6), min(day) (#7), count() (#5)]
+    ├── expressions: [1999, '2024-01-01', 3000]
     ├── estimated rows: 1.00
-    └── EvalScalar
-        ├── output columns: [count() (#5)]
-        ├── expressions: [3000]
-        ├── estimated rows: 1.00
-        └── DummyTableScan
+    └── DummyTableScan
 
 query T
 explain select  count(), max(number) + 4, sum_if(number + 4 , number > 3 ), min(day), max(ts), min(money), 8, min(ts), sum(money) from t;
@@ -159,10 +155,10 @@ EvalScalar
                     ├── scan id: 0
                     ├── output columns: [number (#0), money (#2)]
                     ├── read rows: 3000
-                    ├── read size: 10.51 KiB
+                    ├── read size: <slt:ignore>
                     ├── partitions total: 2
                     ├── partitions scanned: 2
-                    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 3000.00
 
@@ -170,18 +166,10 @@ query T
 explain select 5, count(), min(number), max(ts), min(money), 4 from t;
 ----
 EvalScalar
-├── output columns: [count() (#5), min(number) (#6), max(ts) (#7), min(money) (#8), 5 (#9), 4 (#10)]
-├── expressions: [5, 4]
+├── output columns: [5 (#9), 4 (#10), min(number) (#6), max(ts) (#7), min(money) (#8), count() (#5)]
+├── expressions: [5, 4, 0, '2024-01-01 00:33:19.000000', 0.00, 3000]
 ├── estimated rows: 1.00
-└── EvalScalar
-    ├── output columns: [count() (#5), min(number) (#6), max(ts) (#7), min(money) (#8)]
-    ├── expressions: [0, '2024-01-01 00:33:19.000000', 0.00]
-    ├── estimated rows: 1.00
-    └── EvalScalar
-        ├── output columns: [count() (#5)]
-        ├── expressions: [3000]
-        ├── estimated rows: 1.00
-        └── DummyTableScan
+└── DummyTableScan
 
 query T
 ----
@@ -205,10 +193,10 @@ EvalScalar
             ├── scan id: 0
             ├── output columns: [number (#0), money (#2)]
             ├── read rows: 3000
-            ├── read size: 10.51 KiB
+            ├── read size: <slt:ignore>
             ├── partitions total: 2
             ├── partitions scanned: 2
-            ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 3000.00
 

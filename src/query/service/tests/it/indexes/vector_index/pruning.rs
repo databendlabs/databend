@@ -56,6 +56,8 @@ use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::test_kits::*;
@@ -83,6 +85,7 @@ async fn apply_block_pruning(
         dal,
         schema,
         push_down,
+        None,
         bloom_index_cols,
         vec![],
         HashSet::new(),
@@ -148,6 +151,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         ]
         .into(),
         field_comments: vec![],
+        field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
         table_indexes: Some(table_indexes),

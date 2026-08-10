@@ -201,7 +201,16 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (169, "2026-03-23: Update: user.proto/TextFileFormatParams add null_display, allow_column_count_mismatch, empty_field_as and output_header"),
     (170, "2026-03-25: Add: TableTag"),
     (171, "2026-04-02: Update: user.proto/CsvFileFormatParams and TextFileFormatParams add encoding and encoding_error_mode"),
-    (172, "2026-04-09: Update: user.proto/CsvFileFormatParams and TextFileFormatParams add trim_space")
+    (172, "2026-04-09: Update: user.proto/CsvFileFormatParams and TextFileFormatParams add trim_space"),
+    (173, "2026-04-16: Update: file_format.proto/CsvFileFormatParams add quote_style"),
+    (174, "2026-04-28: Add: AuthInfo::KeyPair for key-pair authentication"),
+    (175, "2026-05-08: Add: field_stats_truncate_len per-column string stats truncation in TableMeta"),
+    (176, "2026-05-25: Add: task.proto/Task.script_sql"),
+    (177, "2026-06-02: Add: file_format.proto Arrow and ArrowStream file formats"),
+    (178, "2026-06-22: Add: config.proto StorageConfig variants for StorageParams::{Azblob,Ftp,Http,Ipfs,Memory}"),
+    (179, "2026-07-06: Add: task.proto/TaskMessage.DeleteTask.task_id"),
+    (180, "2026-07-10: Add: catalog.proto/PaimonCatalogOption"),
+    (181, "2026-07-21: Add: materialized_view.proto/{MVDefinition,MVSourceBinding,MVSourceBindingVersion}"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

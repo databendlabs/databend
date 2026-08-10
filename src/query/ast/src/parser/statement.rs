@@ -47,6 +47,11 @@ pub enum ShowGrantOption {
     OfRole(String),
 }
 
+enum AnalyzeHistogramOption {
+    Algorithm(String),
+    ErrorRate(f64),
+}
+
 // (tenant, share name, endpoint name)
 pub type ShareDatabaseParams = (ShareNameIdent, Identifier);
 
@@ -78,10 +83,34 @@ fn query_statement(i: Input) -> IResult<Statement> {
     map(query, |query| Statement::Query(Box::new(query))).parse(i)
 }
 
+fn match_ident_text(text: &'static str) -> impl FnMut(Input) -> IResult<()> {
+    move |i| {
+        let (next, ident) = ident(i)?;
+        if ident.name.eq_ignore_ascii_case(text) {
+            Ok((next, ()))
+        } else {
+            Err(nom::Err::Error(Error::from_error_kind(
+                i,
+                ErrorKind::ExpectText(text),
+            )))
+        }
+    }
+}
+
 pub fn statement_body(i: Input) -> IResult<Statement> {
+    let explain_options = map(
+        rule! {
+            "(" ~ #comma_separated_list1(explain_option) ~ ")"
+        },
+        |(a, opts, b)| (merge_span(Some(a.span), Some(b.span)), opts),
+    );
+    let explain_verbose_alias = map(rule! { VERBOSE }, |verbose| {
+        (Some(verbose.span), vec![ExplainOption::Verbose])
+    });
+
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF)? ~ #statement
+            EXPLAIN ~ ( #explain_options | #explain_verbose_alias )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF)? ~ #statement
         },
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -105,9 +134,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
-                options: options
-                    .map(|(a, opts, b)| (merge_span(Some(a.span), Some(b.span)), opts))
-                    .unwrap_or_default(),
+                options: options.unwrap_or_default(),
                 query: Box::new(statement.stmt),
             })
         },
@@ -490,7 +517,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         },
                     })
                 } else {
-                    Err(nom::Err::Failure(ErrorKind::Other(
+                    Err(nom::Err::Failure(ErrorKind::other(
                         "inconsistent number of variables and values",
                     )))
                 }
@@ -1104,6 +1131,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let create_table_partition_by = map(
+        rule! {
+            #table_option ~ PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+        },
+        |(table_options, _, _, _, exprs, _)| (table_options, exprs),
+    );
     let create_table = map_res(
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ (TEMP| TEMPORARY|TRANSIENT)? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -1111,9 +1144,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #create_table_source?
             ~ ( #engine )?
             ~ ( #uri_location )?
-            ~ ( CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ #create_table_partition_by?
+            ~ ( CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
-            ~ ( PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
             ~ ( PROPERTIES ~  #connection_options )?
             ~ ( AS ~ ^#query )?
         },
@@ -1127,9 +1160,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             source,
             engine,
             uri_location,
+            opt_partition_by,
             opt_cluster_by,
             opt_table_options,
-            opt_iceberg_table_partition_by,
             opt_table_properties,
             opt_as_query,
         )| {
@@ -1141,6 +1174,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 Some(TEMP) | Some(TEMPORARY) => TableType::Temporary,
                 _ => unreachable!(),
             };
+            let (mut table_options, partition_by) = opt_partition_by
+                .map(|(options, exprs)| (options, Some(exprs)))
+                .unwrap_or_default();
+            table_options.extend(opt_table_options.unwrap_or_default());
             Ok(Statement::CreateTable(CreateTableStmt {
                 create_option,
                 catalog,
@@ -1149,13 +1186,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 source,
                 engine,
                 uri_location,
-                cluster_by: opt_cluster_by.map(|(_, _, typ, _, exprs, _)| ClusterOption {
-                    cluster_type: typ.unwrap_or(ClusterType::Linear),
+                cluster_by: opt_cluster_by.map(|(_, _, _, _, exprs, _)| ClusterOption {
                     cluster_exprs: exprs,
                 }),
-                table_options: opt_table_options.unwrap_or_default(),
-                iceberg_table_partition: opt_iceberg_table_partition_by
-                    .map(|(_, _, _, cols, _)| cols),
+                table_options,
+                partition_by,
                 table_properties: opt_table_properties.map(|(_, properties)| properties),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 table_type,
@@ -1301,16 +1336,63 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let analyze_histogram_keyword = match_ident_text("HISTOGRAM");
+    let analyze_algorithm_keyword = match_ident_text("ALGORITHM");
+    let analyze_error_rate_keyword = match_ident_text("ERROR_RATE");
+    let analyze_histogram_algorithm = map(
+        rule! {
+            #analyze_algorithm_keyword ~ "=" ~ #literal_string
+        },
+        |(_, _, algorithm)| AnalyzeHistogramOption::Algorithm(algorithm),
+    );
+    let analyze_histogram_error_rate = map_res(
+        rule! {
+            #analyze_error_rate_keyword ~ "=" ~ #literal
+        },
+        |(_, _, value)| {
+            value
+                .as_double()
+                .map(AnalyzeHistogramOption::ErrorRate)
+                .map_err(|_| nom::Err::Failure(ErrorKind::ExpectText("number")))
+        },
+    );
+    let analyze_histogram_option = rule! {
+        #analyze_histogram_algorithm
+        | #analyze_histogram_error_rate
+    };
+    let analyze_histogram_options = map(
+        rule! {
+            WITH ~ #analyze_histogram_keyword ~ #comma_separated_list1(analyze_histogram_option)?
+        },
+        |(_, _, options)| {
+            let mut histogram_options = AnalyzeHistogramOptions {
+                algorithm: None,
+                error_rate: None,
+            };
+            for option in options.unwrap_or_default() {
+                match option {
+                    AnalyzeHistogramOption::Algorithm(algorithm) => {
+                        histogram_options.algorithm = Some(algorithm);
+                    }
+                    AnalyzeHistogramOption::ErrorRate(error_rate) => {
+                        histogram_options.error_rate = Some(error_rate);
+                    }
+                }
+            }
+            histogram_options
+        },
+    );
     let analyze_table = map(
         rule! {
-            ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ NOSCAN?
+            ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ NOSCAN? ~ #analyze_histogram_options?
         },
-        |(_, _, (catalog, database, table), no_scan)| {
+        |(_, _, (catalog, database, table), no_scan, histogram_options)| {
             Statement::AnalyzeTable(AnalyzeTableStmt {
                 catalog,
                 database,
                 table,
                 no_scan: no_scan.is_some(),
+                histogram_options,
             })
         },
     );
@@ -1531,6 +1613,83 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let create_materialized_view = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ MATERIALIZED ~ ^VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #dot_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ AS ~ #query
+        },
+        |(
+            _,
+            opt_or_replace,
+            _,
+            _,
+            opt_if_not_exists,
+            (catalog, database, view),
+            opt_columns,
+            _,
+            query,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateMaterializedView(
+                CreateMaterializedViewStmt {
+                    create_option,
+                    catalog,
+                    database,
+                    view,
+                    columns: opt_columns
+                        .map(|(_, columns, _)| columns)
+                        .unwrap_or_default(),
+                    query: Box::new(query),
+                },
+            ))
+        },
+    );
+    let drop_materialized_view = map(
+        rule! {
+            DROP ~ MATERIALIZED ~ ^VIEW ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, opt_if_exists, (catalog, database, view))| {
+            Statement::DropMaterializedView(DropMaterializedViewStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
+    let refresh_materialized_view = map(
+        rule! {
+            REFRESH ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, (catalog, database, view))| {
+            Statement::RefreshMaterializedView(RefreshMaterializedViewStmt {
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
+    let show_materialized_views = map(
+        rule! {
+            SHOW ~ MATERIALIZED ~ ^VIEWS ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
+        },
+        |(_, _, _, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowMaterializedViews(ShowMaterializedViewsStmt {
+                catalog,
+                database,
+                limit,
+            })
+        },
+    );
+
     let create_index = map_res(
         rule! {
             CREATE
@@ -1702,6 +1861,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ( DESC | DESCRIBE ) ~ USER ~ #user_identity
         },
         |(_, _, user)| Statement::DescribeUser { user },
+    );
+    let show_public_keys = map(
+        rule! {
+            SHOW ~ PUBLIC ~ KEYS ~ FOR ~ USER ~ #user_identity
+        },
+        |(_, _, _, _, _, user)| Statement::ShowPublicKeys { user },
     );
     let create_user = map_res(
         rule! {
@@ -2783,7 +2948,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         HintPrefix | LParen | FROM => query_statement(i),
         EXPLAIN => rule!(
             #explain_perf : "`EXPLAIN PERF [(events='<event>,...')] <statement>`"
-            | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+            | #explain : "`EXPLAIN [VERBOSE | (<option>, ...)] [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
         ).parse(i),
         REPORT => rule!(#report: "`REPORT ISSUE <statement>`").parse(i),
@@ -2825,12 +2990,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
                 | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
                 | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
+                | #show_materialized_views : "`SHOW MATERIALIZED VIEWS [FROM [<catalog>.]<database>] [<show_limit>]`"
                 | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             )
             | (
                 #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
                 | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
                 | #show_users : "`SHOW USERS`"
+                | #show_public_keys : "`SHOW PUBLIC KEYS FOR USER <user_name>`"
                 | #show_roles : "`SHOW ROLES`"
                 | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
                 | #show_connections: "`SHOW CONNECTIONS`"
@@ -2898,7 +3065,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ATTACH => rule!(#attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
             ).parse(i),
         REFRESH => rule!(
-            #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
+            #refresh_materialized_view: "`REFRESH MATERIALIZED VIEW [<database>.]<view>`"
+            | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ).parse(i),
@@ -2960,6 +3128,7 @@ AS
                 | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
                 | #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
                 | #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+                | #create_materialized_view : "`CREATE [OR REPLACE] MATERIALIZED VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
                 | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
                 | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             )
@@ -3008,6 +3177,7 @@ AS
                 | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
                 | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
                 | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
+                | #drop_materialized_view : "`DROP MATERIALIZED VIEW [IF EXISTS] [<database>.]<view>`"
                 | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
                 | #drop_table_index: "`DROP <index_type> INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
             )
@@ -3065,11 +3235,7 @@ AS
         SUSPEND => rule!(#suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`").parse(i),
         INSPECT => rule!(#inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
             ).parse(i),
-    );
-    Err(nom::Err::Error(Error::from_error_kind(
-        i,
-        ErrorKind::Other("expecting SQL statement"),
-    )))
+    )
 }
 
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
@@ -3093,7 +3259,7 @@ pub fn parse_create_option(
         (false, false) => Ok(CreateOption::Create),
         (true, false) => Ok(CreateOption::CreateOrReplace),
         (false, true) => Ok(CreateOption::CreateIfNotExists),
-        (true, true) => Err(nom::Err::Failure(ErrorKind::Other(
+        (true, true) => Err(nom::Err::Failure(ErrorKind::other(
             "option IF NOT EXISTS and OR REPLACE are incompatible.",
         ))),
     }
@@ -3120,7 +3286,7 @@ pub fn insert_stmt(
             },
             |(with, _, opt_hints, overwrite, into, _, table, opt_columns, source)| {
                 if overwrite.is_none() && into.is_none() {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "INSERT statement must be followed by 'overwrite' or 'into'",
                     )));
                 }
@@ -3585,21 +3751,30 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         |(_, comment)| comment,
     );
 
+    let stats_truncate_len = map(
+        rule! {
+            STATS_TRUNCATE_LEN ~ #literal_u64
+        },
+        |(_, n)| n,
+    );
+
     let (i, (mut def, constraints)) = map(
         rule! {
             #ident
             ~ #type_name
             ~ ( #nullable | #expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`"
+            ~ ( #stats_truncate_len )?
+            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`"
         },
-        |(name, data_type, constraints, comment)| {
+        |(name, data_type, constraints, comment, stats_truncate_len)| {
             let def = ColumnDefinition {
                 name,
                 data_type,
                 expr: None,
                 check: None,
                 comment,
+                stats_truncate_len,
             };
             (def, constraints)
         },
@@ -3613,7 +3788,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other("ambiguous NOT NULL constraint"),
+                        ErrorKind::other("ambiguous NOT NULL constraint"),
                     )));
                 }
                 if nullable {
@@ -3626,7 +3801,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 if matches!(def.expr, Some(ColumnExpr::AutoIncrement { .. })) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other(
+                        ErrorKind::other(
                             "DEFAULT and AUTO INCREMENT cannot exist at the same time",
                         ),
                     )));
@@ -3648,7 +3823,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 if matches!(def.expr, Some(ColumnExpr::Default(_))) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
+                        ErrorKind::other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
                     )));
                 }
                 def.expr = Some(ColumnExpr::AutoIncrement {
@@ -3720,14 +3895,14 @@ pub fn role_name(i: Input) -> IResult<String> {
                 match c {
                     '\\' => match chars.next() {
                         Some('f') | Some('b') => {
-                            return Err(nom::Err::Failure(ErrorKind::Other(
+                            return Err(nom::Err::Failure(ErrorKind::other(
                                 "' or \" or \\f or \\b are not allowed in role name",
                             )));
                         }
                         _ => {}
                     },
                     '\'' | '"' => {
-                        return Err(nom::Err::Failure(ErrorKind::Other(
+                        return Err(nom::Err::Failure(ErrorKind::other(
                             "' or \" or \\f or \\b are not allowed in role name",
                         )));
                     }
@@ -4151,26 +4326,27 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
 }
 
 pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
-    // *.*
-    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
-    // db.*
-    // "*": as current db or "table" with current db
-    let db = map(
-        rule! {
-            ( #ident ~ "." )? ~ "*"
-        },
-        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
-    );
+    let global_or_current_database = map(rule! { "*" ~ ( "." ~ ^"*" )? }, |(_, global)| {
+        if global.is_some() {
+            AccountMgrLevel::Global
+        } else {
+            AccountMgrLevel::Database(None)
+        }
+    });
 
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let table = map(
-        rule! {
-            ( #ident ~ "." )? ~ #parameter_to_string
-        },
-        |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+    let database_qualifier = followed_by_text(ident, ".");
+    let database = value(None, rule! { "*" });
+    let table = map(parameter_to_string, Some);
+    let qualified = map(
+        rule! { #database_qualifier ~ "." ~ ^(#database | #table) },
+        |(database, _, table)| match table {
+            None => AccountMgrLevel::Database(Some(database.name)),
+            Some(table) => AccountMgrLevel::Table(Some(database.name), table),
         },
     );
+    let table = map(parameter_to_string, |table| {
+        AccountMgrLevel::Table(None, table)
+    });
 
     let masking_policy = map(rule! { MASKING ~ POLICY ~ #ident }, |(_, _, name)| {
         AccountMgrLevel::MaskingPolicy(name.to_string())
@@ -4182,8 +4358,8 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
     );
 
     rule!(
-        #global : "*.*"
-        | #db : "<database>.*"
+        #global_or_current_database : "* | *.*"
+        | #qualified : "<database>.* | <database>.<table>"
         | #table : "<database>.<table>"
         | #masking_policy : "MASKING POLICY <policy_name>"
         | #row_access_policy : "ROW ACCESS POLICY <policy_name>"
@@ -4192,26 +4368,27 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
 }
 
 pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
-    // *.*
-    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
-    // db.*
-    // "*": as current db or "table" with current db
-    let db = map(
-        rule! {
-            ( #ident ~ "." )? ~ "*"
-        },
-        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
-    );
+    let global_or_current_database = map(rule! { "*" ~ ( "." ~ ^"*" )? }, |(_, global)| {
+        if global.is_some() {
+            AccountMgrLevel::Global
+        } else {
+            AccountMgrLevel::Database(None)
+        }
+    });
 
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let table = map(
-        rule! {
-            ( #ident ~ "." )? ~ #parameter_to_string
-        },
-        |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+    let database_qualifier = followed_by_text(ident, ".");
+    let database = value(None, rule! { "*" });
+    let table = map(parameter_to_string, Some);
+    let qualified = map(
+        rule! { #database_qualifier ~ "." ~ ^(#database | #table) },
+        |(database, _, table)| match table {
+            None => AccountMgrLevel::Database(Some(database.name)),
+            Some(table) => AccountMgrLevel::Table(Some(database.name), table),
         },
     );
+    let table = map(parameter_to_string, |table| {
+        AccountMgrLevel::Table(None, table)
+    });
 
     let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
         AccountMgrLevel::Stage(stage_name.to_string())
@@ -4221,8 +4398,8 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
         AccountMgrLevel::Warehouse(w.to_string())
     });
     rule!(
-        #global : "*.*"
-        | #db : "<database>.*"
+        #global_or_current_database : "* | *.*"
+        | #qualified : "<database>.* | <database>.<table>"
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
         | #warehouse : "WAREHOUSE <warehouse_name>"
@@ -4231,24 +4408,21 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
 }
 
 pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
-    // db.*
-    // "*": as current db or "table" with current db
-    let db = map(
-        rule! {
-            ( #grant_ident ~ "." )? ~ "*"
-        },
-        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
-    );
+    let current_database = value(AccountMgrLevel::Database(None), rule! { "*" });
 
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let table = map(
-        rule! {
-            ( #grant_ident ~ "." )? ~ #parameter_to_grant_string
-        },
-        |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+    let database_qualifier = followed_by_text(grant_ident, ".");
+    let database = value(None, rule! { "*" });
+    let table = map(parameter_to_grant_string, Some);
+    let qualified = map(
+        rule! { #database_qualifier ~ "." ~ ^(#database | #table) },
+        |(database, _, table)| match table {
+            None => AccountMgrLevel::Database(Some(database.name)),
+            Some(table) => AccountMgrLevel::Table(Some(database.name), table),
         },
     );
+    let table = map(parameter_to_grant_string, |table| {
+        AccountMgrLevel::Table(None, table)
+    });
 
     #[derive(Clone)]
     enum Object {
@@ -4297,7 +4471,8 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         },
     );
     rule!(
-        #db : "<database>.*"
+        #current_database : "*"
+        | #qualified : "<database>.* | <database>.<table>"
         | #table : "<database>.<table>"
         | #object : "STAGE | UDF | WAREHOUSE | CONNECTION | SEQUENCE <object_name>"
         | #procedure : "PROCEDURE <procedure_identity>"
@@ -4308,21 +4483,21 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
 pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
     let grant_role = map(
         rule! {
-            FOR ~ #grant_option
+            FOR ~ ^#grant_option
         },
         |(_, opt_principal)| ShowGrantOption::PrincipalIdentity(opt_principal),
     );
 
     let share_object_name = map(
         rule! {
-            ON ~ #on_object_name
+            ON ~ ^#on_object_name
         },
         |(_, object_name)| ShowGrantOption::GrantObjectName(object_name),
     );
 
     let role_granted = map(
         rule! {
-            OF ~ ROLE ~ #role_name
+            OF ~ ^ROLE ~ ^#role_name
         },
         |(_, _, role_name)| ShowGrantOption::OfRole(role_name),
     );
@@ -4659,6 +4834,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                 expr: None,
                 check: None,
                 comment,
+                stats_truncate_len: None,
             };
             for constraint in constraints {
                 match constraint {
@@ -4666,7 +4842,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                         if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
                             || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
                         {
-                            return Err(nom::Err::Failure(ErrorKind::Other(
+                            return Err(nom::Err::Failure(ErrorKind::other(
                                 "ambiguous NOT NULL constraint",
                             )));
                         }
@@ -4860,14 +5036,18 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let alter_table_cluster_key = map(
         rule! {
-            CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+            CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
         },
-        |(_, _, typ, _, cluster_exprs, _)| AlterTableAction::AlterTableClusterKey {
-            cluster_by: ClusterOption {
-                cluster_type: typ.unwrap_or(ClusterType::Linear),
-                cluster_exprs,
-            },
+        |(_, _, _, _, cluster_exprs, _)| AlterTableAction::AlterTableClusterKey {
+            cluster_by: ClusterOption { cluster_exprs },
         },
+    );
+
+    let alter_table_partition_by = map(
+        rule! {
+            PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+        },
+        |(_, _, _, partition_by, _)| AlterTableAction::AlterTablePartitionBy { partition_by },
     );
 
     let drop_table_cluster_key = map(
@@ -4971,6 +5151,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #create_table_tag
             | #drop_table_branch
             | #drop_table_tag
+            | #alter_table_partition_by
             | #alter_table_cluster_key
             | #drop_table_cluster_key
             | #drop_constraint
@@ -5401,7 +5582,7 @@ pub fn workload_quotas(i: Input) -> IResult<BTreeMap<String, QuotaValueStmt>> {
                     quotas.insert(name, value);
                 }
                 Err(error_desc) => {
-                    return Err(nom::Err::Failure(ErrorKind::Other(error_desc)));
+                    return Err(nom::Err::Failure(ErrorKind::other(error_desc)));
                 }
             }
         }
@@ -5485,14 +5666,6 @@ pub fn switch(i: Input) -> IResult<bool> {
     alt((
         value(true, rule! { ENABLE }),
         value(false, rule! { DISABLE }),
-    ))
-    .parse(i)
-}
-
-pub fn cluster_type(i: Input) -> IResult<ClusterType> {
-    alt((
-        value(ClusterType::Linear, rule! { LINEAR }),
-        value(ClusterType::Hilbert, rule! { HILBERT }),
     ))
     .parse(i)
 }
@@ -5616,6 +5789,8 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Random, rule! { RANDOM }),
         value(Engine::Iceberg, rule! { ICEBERG }),
         value(Engine::Delta, rule! { DELTA }),
+        value(Engine::Paimon, rule! { PAIMON }),
+        value(Engine::Proxy, rule! { PROXY }),
     ));
 
     map(
@@ -5672,6 +5847,7 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
         value(CatalogType::Default, rule! { DEFAULT }),
         value(CatalogType::Hive, rule! { HIVE }),
         value(CatalogType::Iceberg, rule! { ICEBERG }),
+        value(CatalogType::Paimon, rule! { PAIMON }),
     ))
     .parse(i)
 }
@@ -5742,6 +5918,27 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetWorkloadGroup,
     );
+    let add_public_key = map(
+        rule! {
+            ADD ~ PUBLIC_KEY ~ ^"=" ~ ^#literal_string ~ ( LABEL ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, _, _, pem, label_opt)| {
+            let label = label_opt.map(|(_, _, l)| l);
+            UserOptionItem::AddPublicKey(pem, label)
+        },
+    );
+    let remove_public_key_by_label = map(
+        rule! {
+            REMOVE ~ PUBLIC_KEY ~ LABEL ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, label)| UserOptionItem::RemovePublicKeyByLabel(label),
+    );
+    let remove_public_key_by_fingerprint = map(
+        rule! {
+            REMOVE ~ PUBLIC_KEY ~ FINGERPRINT ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, fingerprint)| UserOptionItem::RemovePublicKeyByFingerprint(fingerprint),
+    );
 
     rule!(
         #tenant_setting
@@ -5756,6 +5953,9 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #must_change_password
         | #set_workload_group
         | #unset_workload_group
+        | #add_public_key
+        | #remove_public_key_by_label
+        | #remove_public_key_by_fingerprint
     )
     .parse(i)
 }
@@ -5763,7 +5963,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #parameter_to_string ~ ( "@" ~ "'%'" )?
+            #parameter_to_string ~ ( "@" ~ ^"'%'" )?
         },
         |(username, _)| {
             let hostname = "%".to_string();
@@ -5779,6 +5979,7 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),
+        value(AuthType::KeyPair, rule! { KEY_PAIR }),
     ))
     .parse(i)
 }
@@ -5824,7 +6025,7 @@ pub fn udaf_state_field(i: Input) -> IResult<UDAFStateField> {
     map(
         rule! {
             #ident
-            ~ #type_name
+            ~ ^#type_name
             : "`<state name> <type>`"
         },
         |(name, type_name)| UDAFStateField { name, type_name },
@@ -5870,6 +6071,20 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         Table(Vec<(Identifier, TypeName)>),
     }
 
+    fn table_return_types(i: Input) -> IResult<Vec<(Identifier, TypeName)>> {
+        if i.tokens.first().is_some_and(|token| token.kind == RParen) {
+            return Ok((i, vec![]));
+        }
+
+        match comma_separated_list1(udtf_arg).parse(i) {
+            Err(nom::Err::Error(mut error)) if error.span.start == i.tokens[0].span.start => {
+                error.errors.push(ErrorKind::ExpectText(")"));
+                Err(nom::Err::Error(error))
+            }
+            result => result,
+        }
+    }
+
     fn return_body(i: Input) -> IResult<ReturnBody> {
         let scalar = map(
             rule! {
@@ -5879,7 +6094,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         );
         let table = map(
             rule! {
-                TABLE ~ "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+                TABLE ~ "(" ~ #table_return_types ~ ")"
             },
             |(_, _, arg_types, _)| ReturnBody::Table(arg_types),
         );
@@ -6021,7 +6236,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     return_type,
                 },
                 (ReturnBody::Scalar(_), FuncBody::Server { .. }) => {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "ScalarUDF unsupported external Server",
                     )));
                 }
@@ -6162,7 +6377,7 @@ fn udf_args(i: Input) -> IResult<UDFArgs> {
 }
 
 fn udtf_arg(i: Input) -> IResult<(Identifier, TypeName)> {
-    map(rule! { #ident ~ ^#type_name }, |(name, ty)| (name, ty)).parse(i)
+    map(rule! { #ident ~ #type_name }, |(name, ty)| (name, ty)).parse(i)
 }
 
 fn udf_immutable(i: Input) -> IResult<bool> {
@@ -6352,7 +6567,7 @@ pub fn explain_perf(i: Input) -> IResult<Statement> {
         |(_, _, opt_options, statement)| {
             let event_groups = if let Some((_, key, _, value, _)) = opt_options {
                 if key.name.to_lowercase() != "events" {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "expected 'events' as the option key for EXPLAIN PERF",
                     )));
                 }

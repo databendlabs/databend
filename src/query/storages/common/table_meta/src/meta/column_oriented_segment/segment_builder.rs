@@ -46,10 +46,12 @@ use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
 use crate::meta::Location;
 use crate::meta::MetaEncoding;
+use crate::meta::PartitionStatistics;
 use crate::meta::Statistics;
 use crate::meta::VirtualBlockMeta;
 use crate::meta::format::encode;
 use crate::meta::supported_stat_type;
+use crate::meta::validate_segment_partition_statistics;
 
 pub trait SegmentBuilder: Send + Sync + 'static {
     type Segment: AbstractSegment;
@@ -69,6 +71,7 @@ pub struct ColumnOrientedSegmentBuilder {
     block_size: Vec<u64>,
     file_size: Vec<u64>,
     cluster_stats: Vec<Option<ClusterStatistics>>,
+    partition_stats: Vec<Option<PartitionStatistics>>,
     location: (Vec<String>, Vec<u64>),
     bloom_filter_index_location: LocationsWithOption,
     bloom_filter_index_size: Vec<u64>,
@@ -128,6 +131,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         self.block_size.push(block_meta.block_size);
         self.file_size.push(block_meta.file_size);
         self.cluster_stats.push(block_meta.cluster_stats);
+        self.partition_stats.push(block_meta.partition_stats);
         self.location.0.push(block_meta.location.0);
         self.location.1.push(block_meta.location.1);
         self.bloom_filter_index_location
@@ -250,6 +254,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             block_size: Vec::with_capacity(block_per_segment),
             file_size: Vec::with_capacity(block_per_segment),
             cluster_stats: Vec::with_capacity(block_per_segment),
+            partition_stats: Vec::with_capacity(block_per_segment),
             location: (
                 Vec::with_capacity(block_per_segment),
                 Vec::with_capacity(block_per_segment),
@@ -351,6 +356,8 @@ impl ColumnOrientedSegmentBuilder {
         self.column_stats = self_column_stats;
 
         let cluster_stats = reduce_cluster_statistics(&self.cluster_stats, default_cluster_key_id);
+        let partition_stats =
+            validate_segment_partition_statistics(self.partition_stats.iter().map(Option::as_ref))?;
 
         Ok(Statistics {
             row_count,
@@ -369,6 +376,7 @@ impl ColumnOrientedSegmentBuilder {
             virtual_col_stats: None,
             spatial_stats: None,
             cluster_stats,
+            partition_stats,
             virtual_block_count: Some(virtual_block_count),
             additional_stats_meta,
         })
@@ -418,7 +426,6 @@ fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
         min.clone(),
         max.clone(),
         level,
-        None,
     ))
 }
 

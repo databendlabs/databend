@@ -16,8 +16,8 @@ use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
@@ -29,17 +29,6 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DateType;
-use databend_common_expression::types::Number;
-use databend_common_expression::types::NumberColumn;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::ReturnType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::VariantType;
-use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -193,274 +182,14 @@ impl BlockingTransform for TransformSRF {
         }
 
         for (srf_expr, srf_results) in self.srf_exprs.iter().zip(self.srf_results.iter_mut()) {
-            match srf_expr.function.signature.name.as_str() {
-                "json_path_query" | "json_array_elements" | "jq" => {
-                    // The function return type:
-                    // DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])
-                    let mut builder: NullableColumnBuilder<VariantType> =
-                        NullableColumnBuilder::with_capacity(result_rows, &[]);
-
-                    for (i, (row_result, repeat_times)) in srf_results.drain(0..used).enumerate() {
-                        if let Value::Column(Column::Tuple(fields)) = row_result {
-                            for (field_index, field) in fields.into_iter().enumerate() {
-                                if field_index == 0 {
-                                    push_variant_column(
-                                        field,
-                                        &mut builder,
-                                        self.num_rows[i],
-                                        repeat_times,
-                                    );
-                                } else {
-                                    unreachable!();
-                                }
-                            }
-                        }
-                    }
-
-                    let column =
-                        Column::Tuple(vec![Column::Nullable(Box::new(builder.build().upcast()))]);
-                    result.add_column(column);
-                }
-                "json_each" => {
-                    // The function return type:
-                    // DataType::Tuple(vec![
-                    //   DataType::Nullable(Box::new(DataType::String)),
-                    //   DataType::Nullable(Box::new(DataType::Variant)),
-                    // ]).
-                    let mut key_builder =
-                        NullableColumnBuilder::<StringType>::with_capacity(result_rows, &[]);
-                    let mut value_builder =
-                        NullableColumnBuilder::<VariantType>::with_capacity(result_rows, &[]);
-
-                    for (i, (row_result, repeat_times)) in srf_results.drain(0..used).enumerate() {
-                        if let Value::Column(Column::Tuple(fields)) = row_result {
-                            for (field_index, field) in fields.into_iter().enumerate() {
-                                if field_index == 0 {
-                                    push_string_column(
-                                        field,
-                                        &mut key_builder,
-                                        self.num_rows[i],
-                                        repeat_times,
-                                    );
-                                } else {
-                                    push_variant_column(
-                                        field,
-                                        &mut value_builder,
-                                        self.num_rows[i],
-                                        repeat_times,
-                                    );
-                                }
-                            }
-                        }
-                    }
-
-                    let column = Column::Tuple(vec![
-                        Column::Nullable(Box::new(key_builder.build().upcast())),
-                        Column::Nullable(Box::new(value_builder.build().upcast())),
-                    ]);
-                    result.add_column(column);
-                }
-                "flatten" => {
-                    // The function return type:
-                    // DataType::Tuple(vec![
-                    //   DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                    //   DataType::Nullable(Box::new(DataType::String)),
-                    //   DataType::Nullable(Box::new(DataType::String)),
-                    //   DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                    //   DataType::Nullable(Box::new(DataType::Variant)),
-                    //   DataType::Nullable(Box::new(DataType::Variant)),
-                    // ]).
-                    let mut seq_builder =
-                        NullableColumnBuilder::<NumberType<u64>>::with_capacity(result_rows, &[]);
-                    let mut key_builder =
-                        NullableColumnBuilder::<StringType>::with_capacity(result_rows, &[]);
-                    let mut path_builder =
-                        NullableColumnBuilder::<StringType>::with_capacity(result_rows, &[]);
-                    let mut index_builder =
-                        NullableColumnBuilder::<NumberType<u64>>::with_capacity(result_rows, &[]);
-                    let mut value_builder =
-                        NullableColumnBuilder::<VariantType>::with_capacity(result_rows, &[]);
-                    let mut this_builder =
-                        NullableColumnBuilder::<VariantType>::with_capacity(result_rows, &[]);
-
-                    for (i, (row_result, repeat_times)) in srf_results.drain(0..used).enumerate() {
-                        if let Value::Column(Column::Tuple(fields)) = row_result {
-                            debug_assert!(fields.len() == 6);
-                            for (field_index, field) in fields.into_iter().enumerate() {
-                                match field_index {
-                                    0 => push_number_column(
-                                        field,
-                                        &mut seq_builder,
-                                        self.num_rows[i],
-                                        repeat_times,
-                                    ),
-                                    1 => push_string_column(
-                                        field,
-                                        &mut key_builder,
-                                        self.num_rows[i],
-                                        repeat_times,
-                                    ),
-                                    2 => push_string_column(
-                                        field,
-                                        &mut path_builder,
-                                        self.num_rows[i],
-                                        repeat_times,
-                                    ),
-                                    3 => push_number_column(
-                                        field,
-                                        &mut index_builder,
-                                        self.num_rows[i],
-                                        repeat_times,
-                                    ),
-                                    4 => push_variant_column(
-                                        field,
-                                        &mut value_builder,
-                                        self.num_rows[i],
-                                        repeat_times,
-                                    ),
-                                    5 => push_variant_column(
-                                        field,
-                                        &mut this_builder,
-                                        self.num_rows[i],
-                                        repeat_times,
-                                    ),
-                                    _ => unreachable!(),
-                                }
-                            }
-                        }
-                    }
-
-                    let column = Column::Tuple(vec![
-                        Column::Nullable(Box::new(seq_builder.build().upcast())),
-                        Column::Nullable(Box::new(key_builder.build().upcast())),
-                        Column::Nullable(Box::new(path_builder.build().upcast())),
-                        Column::Nullable(Box::new(index_builder.build().upcast())),
-                        Column::Nullable(Box::new(value_builder.build().upcast())),
-                        Column::Nullable(Box::new(this_builder.build().upcast())),
-                    ]);
-                    result.add_column(column);
-                }
-                "unnest" | "regexp_split_to_table" => {
-                    let mut result_data_blocks = Vec::with_capacity(used);
-                    for (i, (mut row_result, repeat_times)) in
-                        srf_results.drain(0..used).enumerate()
-                    {
-                        if let Value::Column(Column::Tuple(fields)) = &mut row_result {
-                            // If the current result set has less rows than the max number of rows,
-                            // we need to pad the result set with null values.
-                            // TODO(leiysky): this can be optimized by using a `zip` array function
-                            if repeat_times < self.num_rows[i] {
-                                for field in fields {
-                                    match field {
-                                        Column::Null { .. } => {
-                                            *field = ColumnBuilder::repeat(
-                                                &ScalarRef::Null,
-                                                self.num_rows[i],
-                                                &DataType::Null,
-                                            )
-                                            .build();
-                                        }
-                                        Column::Nullable(box nullable_column) => {
-                                            let mut column_builder =
-                                                NullableColumnBuilder::from_column(
-                                                    (*nullable_column).clone(),
-                                                );
-                                            (0..(self.num_rows[i] - repeat_times)).for_each(|_| {
-                                                column_builder.push_null();
-                                            });
-                                            *field =
-                                                Column::Nullable(Box::new(column_builder.build()));
-                                        }
-                                        _ => unreachable!(),
-                                    }
-                                }
-                            }
-                        } else {
-                            let data_type = &srf_expr.return_type;
-                            let inner_tys = data_type.as_tuple().unwrap();
-                            let inner_vals = vec![ScalarRef::Null; inner_tys.len()];
-                            row_result = Value::Column(
-                                ColumnBuilder::repeat(
-                                    &ScalarRef::Tuple(inner_vals),
-                                    self.num_rows[i],
-                                    data_type,
-                                )
-                                .build(),
-                            );
-                        }
-
-                        let block_entry = row_result.into_column().unwrap().into();
-                        result_data_blocks.push(DataBlock::new(vec![block_entry], self.num_rows[i]))
-                    }
-                    let data_block = DataBlock::concat(&result_data_blocks)?;
-                    debug_assert!(data_block.num_rows() == result_rows);
-                    let block_entry = BlockEntry::new(data_block.get_by_offset(0).value(), || {
-                        (data_block.data_type(0), result_rows)
-                    });
-                    result.add_entry(block_entry);
-                }
-                "generate_series" => match srf_expr.return_type.remove_nullable() {
-                    DataType::Tuple(fields) => {
-                        if fields.len() != 1 {
-                            return Err(databend_common_exception::ErrorCode::Internal(
-                                "generate_series expects a single tuple field".to_string(),
-                            ));
-                        }
-                        match fields[0].remove_nullable() {
-                            DataType::Number(num_ty) => {
-                                with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                                    NumberDataType::NUM_TYPE => {
-                                        let column = build_srf_column::<NumberType<NUM_TYPE>, _>(
-                                            result_rows,
-                                            used,
-                                            srf_results,
-                                            &self.num_rows,
-                                            push_number_column_generic::<NUM_TYPE>,
-                                        );
-                                        result.add_column(Column::Tuple(vec![column]));
-                                    }
-                                })
-                            }
-                            DataType::Timestamp => {
-                                let column = build_srf_column::<TimestampType, _>(
-                                    result_rows,
-                                    used,
-                                    srf_results,
-                                    &self.num_rows,
-                                    push_timestamp_column,
-                                );
-                                result.add_column(Column::Tuple(vec![column]));
-                            }
-                            DataType::Date => {
-                                let column = build_srf_column::<DateType, _>(
-                                    result_rows,
-                                    used,
-                                    srf_results,
-                                    &self.num_rows,
-                                    push_date_column,
-                                );
-                                result.add_column(Column::Tuple(vec![column]));
-                            }
-                            other => {
-                                return Err(databend_common_exception::ErrorCode::BadArguments(
-                                    format!(
-                                        "generate_series only supports number/timestamp/date arguments, got {other}"
-                                    ),
-                                ));
-                            }
-                        }
-                    }
-                    other => {
-                        return Err(databend_common_exception::ErrorCode::BadArguments(format!(
-                            "generate_series expects a tuple return type, got {other}"
-                        )));
-                    }
-                },
-                _ => todo!(
-                    "unsupported set-returning function: {}",
-                    srf_expr.function.signature.name
-                ),
-            }
+            let column = materialize_srf_tuple_column(
+                &srf_expr.return_type,
+                result_rows,
+                used,
+                srf_results,
+                &self.num_rows,
+            )?;
+            result.add_column(column);
         }
 
         // Release consumed rows.
@@ -479,240 +208,172 @@ impl BlockingTransform for TransformSRF {
     }
 }
 
-fn build_srf_column<T, F>(
+fn materialize_srf_tuple_column(
+    return_type: &DataType,
     result_rows: usize,
     used: usize,
     srf_results: &mut VecDeque<(Value<AnyType>, usize)>,
     num_rows: &VecDeque<usize>,
-    mut push_fn: F,
-) -> Column
-where
-    T: ReturnType,
-    F: FnMut(Column, &mut NullableColumnBuilder<T>, usize, usize),
-    T: databend_common_expression::types::ArgType,
-{
-    let mut builder = NullableColumnBuilder::<T>::with_capacity(result_rows, &[]);
+) -> Result<Column> {
+    let fields = return_type.as_tuple().ok_or_else(|| {
+        ErrorCode::Internal(format!(
+            "SRF expects a tuple return type, got {return_type}"
+        ))
+    })?;
+    let null_tuple = ScalarRef::Tuple(vec![ScalarRef::Null; fields.len()]);
+    let mut builder = ColumnBuilder::with_capacity(return_type, result_rows);
+
     for (i, (row_result, repeat_times)) in srf_results.drain(0..used).enumerate() {
-        if let Value::Column(column) = row_result {
-            let column = match column {
-                Column::Tuple(mut fields) => {
-                    if fields.len() != 1 {
-                        builder.push_repeat_null(num_rows[i]);
-                        continue;
-                    }
-                    fields.pop().unwrap()
+        let output_rows = num_rows[i];
+        if repeat_times > output_rows {
+            return Err(ErrorCode::Internal(format!(
+                "SRF result rows {repeat_times} exceed output rows {output_rows}"
+            )));
+        }
+
+        if repeat_times > 0 {
+            match row_result {
+                Value::Column(column) => {
+                    let column = normalize_srf_tuple_column(column, return_type, repeat_times)?;
+                    builder.append_column(&column);
                 }
-                column => column,
-            };
-            push_fn(column, &mut builder, num_rows[i], repeat_times);
-        } else {
-            builder.push_repeat_null(num_rows[i]);
+                Value::Scalar(scalar) => match scalar.as_ref() {
+                    ScalarRef::Tuple(_) => {
+                        builder.push_repeat(&scalar.as_ref(), repeat_times);
+                    }
+                    ScalarRef::Null => {
+                        push_repeat_null_tuple(
+                            &mut builder,
+                            &null_tuple,
+                            return_type,
+                            repeat_times,
+                        )?;
+                    }
+                    scalar => {
+                        return Err(ErrorCode::Internal(format!(
+                            "SRF expects a tuple scalar result, got {scalar:?}"
+                        )));
+                    }
+                },
+            }
+        }
+
+        if output_rows > repeat_times {
+            push_repeat_null_tuple(
+                &mut builder,
+                &null_tuple,
+                return_type,
+                output_rows - repeat_times,
+            )?;
         }
     }
-    Column::Nullable(Box::new(builder.build().upcast()))
+
+    Ok(builder.build())
 }
 
-pub fn push_string_column(
-    column: Column,
-    builder: &mut NullableColumnBuilder<StringType>,
-    num_rows: usize,
-    repeat_times: usize,
-) {
-    if let Column::Nullable(box nullable_column) = column {
-        if let Column::String(string_column) = nullable_column.column {
-            let validity = nullable_column.validity;
-            if validity.null_count() == 0 {
-                for idx in 0..repeat_times {
-                    builder.push(unsafe { string_column.index_unchecked(idx) });
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            } else if validity.null_count() == validity.len() {
-                builder.push_repeat_null(num_rows);
-            } else {
-                for idx in 0..repeat_times {
-                    if validity.get_bit(idx) {
-                        builder.push(unsafe { string_column.index_unchecked(idx) });
-                    } else {
-                        builder.push_null();
-                    }
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            }
-        } else {
-            unreachable!();
-        }
-    } else {
-        unreachable!();
+fn push_repeat_null_tuple(
+    builder: &mut ColumnBuilder,
+    null_tuple: &ScalarRef,
+    return_type: &DataType,
+    repeat: usize,
+) -> Result<()> {
+    let fields = return_type.as_tuple().ok_or_else(|| {
+        ErrorCode::Internal(format!(
+            "SRF expects a tuple return type, got {return_type}"
+        ))
+    })?;
+
+    if fields
+        .iter()
+        .any(|field| !matches!(field, DataType::Null | DataType::Nullable(_)))
+    {
+        return Err(ErrorCode::Internal(format!(
+            "SRF cannot pad NULLs for non-nullable tuple return type {return_type}"
+        )));
     }
+
+    builder.push_repeat(null_tuple, repeat);
+    Ok(())
 }
 
-fn push_variant_column(
+fn normalize_srf_tuple_column(
     column: Column,
-    builder: &mut NullableColumnBuilder<VariantType>,
-    num_rows: usize,
+    return_type: &DataType,
     repeat_times: usize,
-) {
-    if let Column::Nullable(box nullable_column) = column {
-        if let Column::Variant(variant_column) = nullable_column.column {
-            let validity = nullable_column.validity;
-            if validity.null_count() == 0 {
-                for idx in 0..repeat_times {
-                    builder.push(unsafe { variant_column.index_unchecked(idx) });
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            } else if validity.null_count() == validity.len() {
-                builder.push_repeat_null(num_rows);
-            } else {
-                for idx in 0..repeat_times {
-                    if validity.get_bit(idx) {
-                        builder.push(unsafe { variant_column.index_unchecked(idx) });
-                    } else {
-                        builder.push_null();
-                    }
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            }
-        } else {
-            unreachable!();
+) -> Result<Column> {
+    let return_fields = return_type.as_tuple().ok_or_else(|| {
+        ErrorCode::Internal(format!(
+            "SRF expects a tuple return type, got {return_type}"
+        ))
+    })?;
+
+    let fields = match column {
+        Column::Tuple(fields) => fields,
+        column if return_fields.len() == 1 => vec![column],
+        other => {
+            return Err(ErrorCode::Internal(format!(
+                "SRF expects a tuple column result, got {}",
+                other.data_type()
+            )));
         }
-    } else {
-        unreachable!();
+    };
+
+    if fields.len() != return_fields.len() {
+        return Err(ErrorCode::Internal(format!(
+            "SRF tuple field count mismatch, expected {}, got {}",
+            return_fields.len(),
+            fields.len()
+        )));
     }
+
+    let fields = fields
+        .into_iter()
+        .zip(return_fields)
+        .map(|(field, return_type)| normalize_srf_field_column(field, return_type, repeat_times))
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(Column::Tuple(fields))
 }
 
-fn push_number_column(
+fn normalize_srf_field_column(
     column: Column,
-    builder: &mut NullableColumnBuilder<NumberType<u64>>,
-    num_rows: usize,
+    return_type: &DataType,
     repeat_times: usize,
-) {
-    if let Column::Nullable(box nullable_column) = column {
-        if let Column::Number(NumberColumn::UInt64(number_column)) = nullable_column.column {
-            let validity = nullable_column.validity;
-            if validity.null_count() == 0 {
-                for idx in 0..repeat_times {
-                    builder.push(unsafe { *number_column.get_unchecked(idx) });
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            } else if validity.null_count() == validity.len() {
-                builder.push_repeat_null(num_rows);
-            } else {
-                for idx in 0..repeat_times {
-                    if validity.get_bit(idx) {
-                        builder.push(unsafe { *number_column.get_unchecked(idx) });
-                    } else {
-                        builder.push_null();
-                    }
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            }
-        } else {
-            unreachable!();
-        }
-    } else {
-        unreachable!();
+) -> Result<Column> {
+    if column.len() != repeat_times {
+        return Err(ErrorCode::Internal(format!(
+            "SRF field row count mismatch, expected {repeat_times}, got {}",
+            column.len()
+        )));
     }
-}
 
-fn push_number_column_generic<T: Number>(
-    column: Column,
-    builder: &mut NullableColumnBuilder<NumberType<T>>,
-    num_rows: usize,
-    repeat_times: usize,
-) {
-    if let Column::Nullable(box nullable_column) = column {
-        if let Column::Number(number_column) = nullable_column.column {
-            let number_column = T::try_downcast_column(&number_column).unwrap();
-            let validity = nullable_column.validity;
-            if validity.null_count() == 0 {
-                for idx in 0..repeat_times {
-                    builder.push(unsafe { *number_column.get_unchecked(idx) });
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            } else if validity.null_count() == validity.len() {
-                builder.push_repeat_null(num_rows);
-            } else {
-                for idx in 0..repeat_times {
-                    if validity.get_bit(idx) {
-                        builder.push(unsafe { *number_column.get_unchecked(idx) });
-                    } else {
-                        builder.push_null();
-                    }
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            }
-        } else {
-            unreachable!();
-        }
-    } else {
-        unreachable!();
-    }
-}
-
-fn push_timestamp_column(
-    column: Column,
-    builder: &mut NullableColumnBuilder<TimestampType>,
-    num_rows: usize,
-    repeat_times: usize,
-) {
-    if let Column::Nullable(box nullable_column) = column {
-        if let Column::Timestamp(timestamp_column) = nullable_column.column {
-            let validity = nullable_column.validity;
-            if validity.null_count() == 0 {
-                for idx in 0..repeat_times {
-                    builder.push(unsafe { *timestamp_column.get_unchecked(idx) });
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            } else if validity.null_count() == validity.len() {
-                builder.push_repeat_null(num_rows);
-            } else {
-                for idx in 0..repeat_times {
-                    if validity.get_bit(idx) {
-                        builder.push(unsafe { *timestamp_column.get_unchecked(idx) });
-                    } else {
-                        builder.push_null();
-                    }
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            }
-        } else {
-            unreachable!();
-        }
-    } else {
-        unreachable!();
-    }
-}
-
-fn push_date_column(
-    column: Column,
-    builder: &mut NullableColumnBuilder<DateType>,
-    num_rows: usize,
-    repeat_times: usize,
-) {
-    if let Column::Nullable(box nullable_column) = column {
-        if let Column::Date(date_column) = nullable_column.column {
-            let validity = nullable_column.validity;
-            if validity.null_count() == 0 {
-                for idx in 0..repeat_times {
-                    builder.push(unsafe { *date_column.get_unchecked(idx) });
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            } else if validity.null_count() == validity.len() {
-                builder.push_repeat_null(num_rows);
-            } else {
-                for idx in 0..repeat_times {
-                    if validity.get_bit(idx) {
-                        builder.push(unsafe { *date_column.get_unchecked(idx) });
-                    } else {
-                        builder.push_null();
-                    }
-                }
-                builder.push_repeat_null(num_rows - repeat_times);
-            }
-        } else {
-            unreachable!();
-        }
-    } else {
-        unreachable!();
+    match return_type {
+        DataType::Nullable(inner_type) => match column {
+            Column::Null { len } => Ok(ColumnBuilder::repeat(
+                &ScalarRef::Null,
+                len,
+                &DataType::Nullable(inner_type.clone()),
+            )
+            .build()),
+            column if column.data_type() == **inner_type => Ok(column.wrap_nullable(None)),
+            column if column.data_type() == *return_type => Ok(column),
+            other => Err(ErrorCode::Internal(format!(
+                "SRF field type mismatch, expected {return_type}, got {}",
+                other.data_type()
+            ))),
+        },
+        DataType::Null => match column {
+            Column::Null { .. } => Ok(column),
+            other => Err(ErrorCode::Internal(format!(
+                "SRF field type mismatch, expected {return_type}, got {}",
+                other.data_type()
+            ))),
+        },
+        _ if column.data_type() == *return_type => Ok(column),
+        _ if repeat_times == 0 => Ok(ColumnBuilder::with_capacity(return_type, 0).build()),
+        other_type => Err(ErrorCode::Internal(format!(
+            "SRF field type mismatch, expected {other_type}, got {}",
+            column.data_type()
+        ))),
     }
 }

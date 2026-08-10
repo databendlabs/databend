@@ -22,14 +22,12 @@ use chrono::Utc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::local_block_meta_serde;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
@@ -46,24 +44,25 @@ use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_mil
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
-use databend_common_native::write::NativeWriter;
+use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::encode_column_hll;
-use databend_storages_common_table_meta::table::TableCompression;
+use opendal::Buffer;
 use opendal::Operator;
 
 use crate::FuseStorageFormat;
+use crate::io::BlockStatsBuilder;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::build_column_hlls;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::SpatialIndexBuilder;
@@ -81,9 +80,8 @@ pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
     block: DataBlock,
-    buf: &mut Vec<u8>,
-) -> Result<HashMap<ColumnId, ColumnMeta>> {
-    serialize_block_with_column_stats(write_settings, schema, None, block, buf)
+) -> Result<(HashMap<ColumnId, ColumnMeta>, Buffer)> {
+    serialize_block_with_column_stats(write_settings, schema, None, block)
 }
 
 pub fn serialize_block_with_column_stats(
@@ -91,68 +89,35 @@ pub fn serialize_block_with_column_stats(
     schema: &TableSchemaRef,
     column_stats: Option<&StatisticsOfColumns>,
     block: DataBlock,
-    buf: &mut Vec<u8>,
-) -> Result<HashMap<ColumnId, ColumnMeta>> {
+) -> Result<(HashMap<ColumnId, ColumnMeta>, Buffer)> {
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result = blocks_to_parquet_with_stats(
+            let SerializedParquet { payload, metadata } = blocks_to_parquet_with_stats(
                 &schema,
                 vec![block],
-                buf,
                 write_settings.table_compression,
                 write_settings.enable_parquet_dictionary,
                 None,
                 column_stats,
+                write_settings.data_page_rows,
+                write_settings.data_page_bytes,
             )?;
-            let meta = column_parquet_metas(&result, &schema)?;
-            Ok(meta)
+            let meta = column_parquet_metas(&metadata, &schema)?;
+            Ok((meta, Buffer::from(payload)))
         }
-        FuseStorageFormat::Native => {
-            let leaf_column_ids = schema.to_leaf_column_ids();
-
-            let mut default_compress_ratio = Some(2.10f64);
-            if matches!(write_settings.table_compression, TableCompression::Zstd) {
-                default_compress_ratio = Some(3.72f64);
-            }
-
-            let mut writer = NativeWriter::new(
-                buf,
-                schema.as_ref().clone(),
-                databend_common_native::write::WriteOptions {
-                    default_compression: write_settings.table_compression.into(),
-                    max_page_size: Some(write_settings.max_page_size),
-                    default_compress_ratio,
-                    forbidden_compressions: vec![],
-                },
-            )?;
-
-            let block = block.consume_convert_to_full();
-            let batch: Vec<Column> = block
-                .take_columns()
-                .into_iter()
-                .map(|x| x.into_column().unwrap())
-                .collect();
-
-            writer.start()?;
-            writer.write(&batch)?;
-            writer.finish()?;
-
-            let mut metas = HashMap::with_capacity(writer.metas.len());
-            for (idx, meta) in writer.metas.iter().enumerate() {
-                // use column id as key instead of index
-                let column_id = leaf_column_ids.get(idx).unwrap();
-                metas.insert(*column_id, ColumnMeta::Native(meta.clone()));
-            }
-
-            Ok(metas)
-        }
+        FuseStorageFormat::Unsupported => Err(crate::unsupported_storage_format_error()),
     }
 }
 
-/// Take ownership here to avoid extra copy.
+/// Take ownership here to avoid extra copy. Accepts anything convertible to an opendal
+/// `Buffer`, including a multi-chunk `Buffer` that is written out without consolidation.
 #[async_backtrace::framed]
-pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str) -> Result<()> {
+pub async fn write_data(
+    data: impl Into<Buffer>,
+    data_accessor: &Operator,
+    location: &str,
+) -> Result<()> {
     data_accessor.write(location, data).await?;
 
     Ok(())
@@ -160,7 +125,7 @@ pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str)
 
 #[derive(Debug)]
 pub struct BlockSerialization {
-    pub block_raw_data: Vec<u8>,
+    pub block_raw_data: Buffer,
     pub block_meta: BlockMeta,
     pub bloom_index_state: Option<BloomIndexState>,
     pub inverted_index_states: Vec<InvertedIndexState>,
@@ -168,6 +133,7 @@ pub struct BlockSerialization {
     pub vector_index_state: Option<VectorIndexState>,
     pub spatial_index_state: Option<SpatialIndexState>,
     pub column_hlls: Option<BlockHLLState>,
+    pub column_top_n: Option<BlockTopN>,
 }
 
 local_block_meta_serde!(BlockSerialization);
@@ -184,6 +150,7 @@ pub struct BlockBuilder {
     pub cluster_stats_gen: ClusterStatsGenerator,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     pub ndv_columns_map: BTreeMap<FieldIndex, TableField>,
+    pub top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
     pub ngram_args: Vec<NgramArgs>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
@@ -200,6 +167,9 @@ impl BlockBuilder {
     pub fn build<F>(&self, data_block: DataBlock, f: F) -> Result<BlockSerialization>
     where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>
     {
+        let partition_stats = self
+            .cluster_stats_gen
+            .extract_partition_stats(&data_block)?;
         let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
         let (block_location, block_id) = self
             .meta_locations
@@ -219,7 +189,21 @@ impl BlockBuilder {
             .map(|i| i.column_distinct_count.clone())
             .unwrap_or_default();
 
-        let column_hlls = build_column_hlls(&data_block, &self.ndv_columns_map)?;
+        let top_n = self
+            .top_n
+            .as_ref()
+            .map(|(top_n_columns_map, top_n_size)| (top_n_columns_map, *top_n_size));
+        let mut block_stats_builder = BlockStatsBuilder::new(&self.ndv_columns_map, top_n, None)?;
+        block_stats_builder.add_block(&data_block)?;
+        let block_stats = block_stats_builder.finalize_with_top_n()?;
+        let (column_hlls, column_top_n) = if let Some(stats) = block_stats {
+            (
+                (!stats.hll.is_empty()).then_some(stats.hll),
+                (!stats.top_n.is_empty()).then_some(stats.top_n),
+            )
+        } else {
+            (None, None)
+        };
         if let Some(hlls) = &column_hlls {
             for (key, val) in hlls {
                 if let Entry::Vacant(entry) = column_distinct_count.entry(*key) {
@@ -238,14 +222,19 @@ impl BlockBuilder {
             )?;
             inverted_index_states.push(inverted_index_state);
         }
-        let vector_index_state = if let Some(ref vector_index_builder) = self.vector_index_builder {
+        let (vector_index_state, vector_stats) = if let Some(ref vector_index_builder) =
+            self.vector_index_builder
+        {
             let vector_index_location = self.meta_locations.block_vector_index_location();
             let mut vector_index_builder = vector_index_builder.clone();
             vector_index_builder.add_block(&data_block)?;
-            let vector_index_state = vector_index_builder.finalize(&vector_index_location)?;
-            Some(vector_index_state)
+            let vector_index_state = vector_index_builder.finalize_block(&vector_index_location)?;
+            (
+                vector_index_state.index_state,
+                vector_index_state.vector_stats,
+            )
         } else {
-            None
+            (None, None)
         };
 
         let (spatial_index_state, spatial_stats) =
@@ -275,16 +264,15 @@ impl BlockBuilder {
             &data_block,
             Some(column_distinct_count),
             &self.source_schema,
+            &self.write_settings.col_stats_truncate_lens,
         )?;
 
-        let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let block_size = data_block.estimate_block_size() as u64;
-        let col_metas = serialize_block_with_column_stats(
+        let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
+        let (col_metas, buffer) = serialize_block_with_column_stats(
             &self.write_settings,
             &self.source_schema,
             Some(&col_stats),
             data_block,
-            &mut buffer,
         )?;
         let file_size = buffer.len() as u64;
         let inverted_index_size = if !inverted_index_states.is_empty() {
@@ -300,6 +288,7 @@ impl BlockBuilder {
             col_stats,
             col_metas,
             cluster_stats,
+            partition_stats,
             location: block_location,
             bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
             bloom_filter_index_size: bloom_index_state
@@ -315,6 +304,7 @@ impl BlockBuilder {
             spatial_index_size: spatial_index_state.as_ref().map(|v| v.size),
             spatial_index_location: spatial_index_state.as_ref().map(|v| v.location.clone()),
             spatial_stats,
+            vector_stats,
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,
@@ -339,6 +329,7 @@ impl BlockBuilder {
             vector_index_state,
             spatial_index_state,
             column_hlls,
+            column_top_n,
         };
         Ok(serialized)
     }
@@ -353,6 +344,7 @@ impl BlockWriter {
     ) -> Result<ExtendedBlockMeta> {
         let block_meta = serialized.block_meta;
         let column_hlls = serialized.column_hlls;
+        let column_top_n = serialized.column_top_n;
         let block_location = block_meta.location.0.clone();
 
         let extended_block_meta =
@@ -363,12 +355,14 @@ impl BlockWriter {
                         virtual_column_state.draft_virtual_block_meta.clone(),
                     ),
                     column_hlls,
+                    column_top_n,
                 }
             } else {
                 ExtendedBlockMeta {
                     block_meta,
                     draft_virtual_block_meta: None,
                     column_hlls,
+                    column_top_n,
                 }
             };
 
@@ -384,7 +378,7 @@ impl BlockWriter {
 
     pub async fn write_down_data_block(
         dal: &Operator,
-        raw_block_data: Vec<u8>,
+        raw_block_data: Buffer,
         block_location: &str,
     ) -> Result<()> {
         let start = Instant::now();

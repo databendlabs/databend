@@ -348,7 +348,7 @@ pub async fn make_test_file_rg(scenario: Scenario) -> (NamedTempFile, SchemaRef)
         .expect("tempfile creation");
 
     let props = WriterProperties::builder()
-        .set_max_row_group_size(5)
+        .set_max_row_group_row_count(Some(5))
         .build();
 
     let batches = create_data_batch(scenario);

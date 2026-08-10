@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -34,6 +33,7 @@ use databend_common_pipeline::sources::BlocksSource;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextProgress;
 use databend_query::test_kits::TestFixture;
 use rand::Rng;
 use rand::rngs::ThreadRng;

@@ -21,14 +21,13 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_sql::plans::ShowCreateCatalogPlan;
 use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct ShowCreateCatalogInterpreter {
     ctx: Arc<QueryContext>,
@@ -66,8 +65,9 @@ impl Interpreter for ShowCreateCatalogInterpreter {
                     "METASTORE ADDRESS\n{}\nSTORAGE PARAMS\n{}",
                     op.address,
                     op.storage_params
-                        .clone()
-                        .unwrap_or(Box::new(StorageParams::None))
+                        .as_ref()
+                        .map(|sp| sp.to_string())
+                        .unwrap_or_else(|| "none".to_string())
                 ),
             ),
             CatalogOption::Iceberg(op) => (String::from("iceberg"), match op {
@@ -87,6 +87,22 @@ impl Interpreter for ShowCreateCatalogInterpreter {
                     )
                 }
             }),
+            CatalogOption::Paimon(op) => {
+                let metastore = op
+                    .options
+                    .get("metastore")
+                    .cloned()
+                    .unwrap_or_else(|| "filesystem".to_string());
+                let warehouse = op.options.get("warehouse").cloned().unwrap_or_default();
+                let mut lines = vec![
+                    format!("METASTORE\n{metastore}"),
+                    format!("WAREHOUSE\n{warehouse}"),
+                ];
+                if let Some(uri) = op.options.get("uri") {
+                    lines.insert(1, format!("URI\n{uri}"));
+                }
+                (String::from("paimon"), lines.join("\n"))
+            }
         };
 
         let block = DataBlock::new(

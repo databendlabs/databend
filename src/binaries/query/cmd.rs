@@ -16,6 +16,7 @@ use clap::Parser;
 use clap::Subcommand;
 use databend_common_config::Config;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 
@@ -55,7 +56,12 @@ impl Cmd {
             ..
         } = self;
 
-        let config = config.merge(&config_file).unwrap();
+        let config = config.merge(&config_file).map_err(|e| {
+            ErrorCode::Internal(format!(
+                "failed to load config file {:?}: {}",
+                config_file, e
+            ))
+        })?;
         InnerConfig::init(config, check_meta).await
     }
 }

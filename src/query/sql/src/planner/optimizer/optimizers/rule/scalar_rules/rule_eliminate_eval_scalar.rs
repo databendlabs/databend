@@ -79,6 +79,11 @@ impl Rule for RuleEliminateEvalScalar {
             // check if there's f(#x) as #x, if so we can't eliminate the eval scalar
             for item in eval_scalar.items {
                 match item.scalar {
+                    ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => {
+                        // A constant with an existing output index shadows the child column.
+                        // It cannot be eliminated as an identity projection.
+                        return Ok(());
+                    }
                     ScalarExpr::FunctionCall(func) => {
                         if func.arguments.len() == 1 {
                             if let ScalarExpr::BoundColumnRef(bound_column_ref) = &func.arguments[0]

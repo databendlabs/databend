@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -24,6 +23,8 @@ use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextQueryProfile;
 
 fn run_hooks(query_ctx: Arc<QueryContext>) -> Result<()> {
     hook_clear_m_cte_temp_table(&query_ctx)?;

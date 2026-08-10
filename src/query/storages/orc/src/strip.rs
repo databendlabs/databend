@@ -26,6 +26,8 @@ pub struct StripeInMemory {
     pub stripe: Stripe,
     pub schema: Option<HashableSchema>,
     pub start_row: u64,
+    pub content_key: Option<String>,
+    pub last_modified: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 local_block_meta_serde!(StripeInMemory);

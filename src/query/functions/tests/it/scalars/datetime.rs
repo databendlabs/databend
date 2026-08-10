@@ -15,15 +15,24 @@
 use std::io::Write;
 use std::str::FromStr;
 
+use databend_common_expression::Domain;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::types::NumberDomain;
+use databend_common_expression::types::date::DATE_MAX;
+use databend_common_expression::types::date::DATE_MIN;
+use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp_tz;
 use databend_common_expression::utils::auto_detect_datetime::parse_epoch_str;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 use jiff::Timestamp;
+use jiff::Unit;
+use jiff::civil::date;
 use jiff::tz::TimeZone;
 
 use super::TestContext;
@@ -43,10 +52,13 @@ fn test_datetime() {
     test_timestamp_date_add_sub(file);
     test_date_arith(file);
     test_timestamp_arith(file);
+    test_date_domain_overflow(file);
     test_to_number(file);
     test_rounder_functions(file);
     test_date_date_diff(file);
     test_current_time(file);
+    test_date_from_parts(file);
+    test_timestamp_from_parts(file);
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
@@ -99,7 +111,7 @@ fn test_to_date(file: &mut impl Write) {
     run_ast(file, "to_date(2932897)", &[]);
     run_ast(file, "to_date(a)", &[(
         "a",
-        Int32Type::from_data(vec![-354285, -100, 0, 100, 2932896]),
+        Int32Type::from_data(vec![-354285, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_date(b)", &[(
         "b",
@@ -468,6 +480,161 @@ fn test_timestamp_arith(file: &mut impl Write) {
     ]);
 }
 
+// Regression test for issue #20134: date/timestamp domain calculation with overflow
+fn test_date_domain_overflow(file: &mut impl Write) {
+    // Date plus: domain crosses upper valid date range
+    run_ast_with_context(file, "a + b", TestContext {
+        entries: &[
+            ("a", DateType::from_data(vec![1, 1, 1]).into()),
+            ("b", Int64Type::from_data(vec![-1, 0, 2147483647]).into()),
+        ],
+        input_domains: Some(&[
+            ("a", Domain::Date(SimpleDomain { min: 1, max: 1 })),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: -1,
+                    max: 2147483647,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Date plus: domain entirely above valid range
+    run_ast_with_context(file, "a + b", TestContext {
+        entries: &[
+            ("a", DateType::from_data(vec![100]).into()),
+            ("b", Int64Type::from_data(vec![2932897]).into()),
+        ],
+        input_domains: Some(&[
+            ("a", Domain::Date(SimpleDomain { min: 100, max: 100 })),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: 2932897,
+                    max: 2932897,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Date minus: domain crosses lower valid date range
+    run_ast_with_context(file, "a - b", TestContext {
+        entries: &[
+            ("a", DateType::from_data(vec![0, 0, 0]).into()),
+            ("b", Int64Type::from_data(vec![-1, 0, 2147483647]).into()),
+        ],
+        input_domains: Some(&[
+            ("a", Domain::Date(SimpleDomain { min: 0, max: 0 })),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: -1,
+                    max: 2147483647,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Timestamp plus: domain crosses upper valid range
+    run_ast_with_context(file, "a + b", TestContext {
+        entries: &[
+            ("a", TimestampType::from_data(vec![0, 0, 0]).into()),
+            ("b", Int64Type::from_data(vec![-1, 0, i64::MAX]).into()),
+        ],
+        input_domains: Some(&[
+            ("a", Domain::Timestamp(SimpleDomain { min: 0, max: 0 })),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: -1,
+                    max: i64::MAX,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Timestamp minus: domain crosses lower valid range
+    run_ast_with_context(file, "a - b", TestContext {
+        entries: &[
+            ("a", TimestampType::from_data(vec![0, 0, 0]).into()),
+            ("b", Int64Type::from_data(vec![-1, 0, i64::MAX]).into()),
+        ],
+        input_domains: Some(&[
+            ("a", Domain::Timestamp(SimpleDomain { min: 0, max: 0 })),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: -1,
+                    max: i64::MAX,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Date plus: i64 saturating_add actually triggers (DATE_MIN + i64::MIN wraps without saturating)
+    run_ast_with_context(file, "a + b", TestContext {
+        entries: &[
+            ("a", DateType::from_data(vec![DATE_MIN]).into()),
+            ("b", Int64Type::from_data(vec![-DATE_MIN as _]).into()),
+        ],
+        input_domains: Some(&[
+            (
+                "a",
+                Domain::Date(SimpleDomain {
+                    min: DATE_MIN,
+                    max: DATE_MIN,
+                }),
+            ),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: i64::MIN,
+                    max: 719162,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Date minus: i64 saturating_sub triggers (DATE_MIN - i64::MAX wraps without saturating)
+    run_ast_with_context(file, "a - b", TestContext {
+        entries: &[
+            ("a", DateType::from_data(vec![DATE_MIN]).into()),
+            ("b", Int64Type::from_data(vec![0]).into()),
+        ],
+        input_domains: Some(&[
+            (
+                "a",
+                Domain::Date(SimpleDomain {
+                    min: DATE_MIN,
+                    max: DATE_MIN,
+                }),
+            ),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: 0,
+                    max: i64::MAX,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+}
+
 fn test_to_number(file: &mut impl Write) {
     // date
     run_ast(file, "to_yyyymm(to_date(18875))", &[]);
@@ -482,11 +649,11 @@ fn test_to_number(file: &mut impl Write) {
     run_ast(file, "to_week_of_year(to_date(18875))", &[]);
     run_ast(file, "to_yyyymm(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_yyyymmdd(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_yyyymmddhhmmss(a)", &[(
         "a",
@@ -494,31 +661,65 @@ fn test_to_number(file: &mut impl Write) {
     )]);
     run_ast(file, "to_year(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_iso_year(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_quarter(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_month(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_day_of_year(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_day_of_month(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_day_of_week(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "dayofweek(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "yearweek(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "millennium(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    let millennium_days = [999, 1000, 1001, 1999, 2000, 2001].map(|year| {
+        date(year, 1, 1)
+            .since((Unit::Day, date(1970, 1, 1)))
+            .unwrap()
+            .get_days()
+    });
+    run_ast(file, "millennium(a)", &[(
+        "a",
+        DateType::from_data(millennium_days.to_vec()),
+    )]);
+    run_ast(file, "millennium(a)", &[(
+        "a",
+        TimestampType::from_data(
+            millennium_days
+                .map(|days| days as i64 * 86_400_000_000)
+                .to_vec(),
+        ),
     )]);
     run_ast(file, "to_week_of_year(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
 
     // timestamp
@@ -587,9 +788,62 @@ fn test_to_number(file: &mut impl Write) {
         "a",
         TimestampType::from_data(vec![-100, 0, 100]),
     )]);
+    run_ast(file, "to_unix_timestamp(a)", &[(
+        "a",
+        TimestampType::from_data(vec![-1_000_001, -1, 0, 1, 1_000_001]),
+    )]);
 }
 
 fn test_rounder_functions(file: &mut impl Write) {
+    run_ast(file, "to_monday(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_start_of_week(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN + 7, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_start_of_month(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_start_of_quarter(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_start_of_year(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_start_of_iso_year(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_last_of_week(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX - 7]),
+    )]);
+    run_ast(file, "to_last_of_month(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_last_of_quarter(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_last_of_year(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_previous_monday(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_next_monday(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+
     run_ast(file, "to_start_of_second(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_start_of_minute(to_timestamp(1630812366))", &[]);
     run_ast(
@@ -609,6 +863,10 @@ fn test_rounder_functions(file: &mut impl Write) {
     );
     run_ast(file, "to_start_of_hour(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_start_of_day(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_start_of_day(order_time)", &[(
+        "order_time",
+        TimestampType::from_data(vec![0, 86_400_000_001]),
+    )]);
     run_ast(file, "time_slot(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_monday(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_start_of_week(to_timestamp(1630812366))", &[]);
@@ -775,6 +1033,42 @@ fn test_current_time(file: &mut impl Write) {
     run_ast_with_context(file, "current_time(10)", ctx);
 }
 
+fn test_date_from_parts(file: &mut impl Write) {
+    // Basic date construction
+    run_ast(file, "date_from_parts(1977, 8, 7)", &[]);
+    // Alias
+    run_ast(file, "datefromparts(2023, 1, 15)", &[]);
+    // Day overflow: 100th day from Jan 1, 2010
+    run_ast(file, "date_from_parts(2010, 1, 100)", &[]);
+    // Month overflow: +24 months from Jan 2010
+    run_ast(file, "date_from_parts(2010, 25, 1)", &[]);
+    // Zero month: Dec of previous year
+    run_ast(file, "date_from_parts(2004, 0, 1)", &[]);
+    // Negative month: Nov of previous year
+    run_ast(file, "date_from_parts(2004, -1, 1)", &[]);
+    // Zero day: one day before 1st
+    run_ast(file, "date_from_parts(2004, 2, 0)", &[]);
+    // Negative day
+    run_ast(file, "date_from_parts(2004, 2, -1)", &[]);
+    // Both negative
+    run_ast(file, "date_from_parts(2004, -1, -1)", &[]);
+}
+
+fn test_timestamp_from_parts(file: &mut impl Write) {
+    // Basic 6-arg timestamp
+    run_ast(file, "timestamp_from_parts(2013, 4, 5, 12, 0, 0)", &[]);
+    // 7-arg with nanoseconds
+    run_ast(
+        file,
+        "timestamp_from_parts(2013, 4, 5, 12, 0, 0, 987654321)",
+        &[],
+    );
+    // Alias
+    run_ast(file, "timestampfromparts(2013, 4, 5, 12, 0, 0)", &[]);
+    // Negative seconds (overflow handling)
+    run_ast(file, "timestamp_from_parts(2013, 4, 5, 12, 0, -3600)", &[]);
+}
+
 // ===================================================================
 // Unit tests for AUTO datetime format detection
 // ===================================================================
@@ -884,6 +1178,163 @@ fn test_auto_detect_timestamp_tz_unit() {
     // No offset — should use session tz (UTC → 0)
     let ts_tz = auto_detect_timestamp_tz("17-DEC-1980 10:30:00", &tz).unwrap();
     assert_eq!(ts_tz.seconds_offset(), 0);
+}
+
+#[test]
+fn test_calendar_monotonicity_check() {
+    // America/St_Johns fell back at 2009-11-01 00:01 NDT to 10-31 23:01 NST
+    // (02:31 UTC): a range straddling that transition sees the wall clock
+    // rewind across a day (and month) boundary.
+    let st_johns = FunctionContext {
+        tz: TimeZone::get("America/St_Johns").unwrap(),
+        ..FunctionContext::default()
+    };
+    let utc = FunctionContext::default();
+
+    // [2009-11-01T02:00Z, 2009-11-01T03:00Z] straddles the fallback.
+    let crossing = Domain::Timestamp(SimpleDomain {
+        min: 1_257_040_800_000_000,
+        max: 1_257_044_400_000_000,
+    });
+    // [2009-11-01T03:00Z, 2009-11-01T04:00Z] lies inside one offset segment.
+    let clear = Domain::Timestamp(SimpleDomain {
+        min: 1_257_044_400_000_000,
+        max: 1_257_048_000_000_000,
+    });
+    // Date inputs ignore the session time zone entirely.
+    let dates = Domain::Date(SimpleDomain { min: 0, max: 20000 });
+    // Nullable domains are judged by their non-null range.
+    let nullable_crossing = Domain::Nullable(NullableDomain {
+        has_null: true,
+        value: Some(Box::new(crossing.clone())),
+    });
+    let nullable_clear = Domain::Nullable(NullableDomain {
+        has_null: true,
+        value: Some(Box::new(clear.clone())),
+    });
+    let all_null = Domain::Nullable(NullableDomain {
+        has_null: true,
+        value: None,
+    });
+
+    for name in [
+        "to_start_of_day",
+        "to_monday",
+        "to_start_of_week",
+        "to_start_of_month",
+        "to_start_of_quarter",
+        "to_start_of_year",
+        "to_start_of_iso_year",
+        "to_yyyymm",
+        "to_yyyymmdd",
+    ] {
+        let property = BUILTIN_FUNCTIONS.get_property(name).unwrap();
+        assert!(
+            !property.monotonicity,
+            "{name}: time-zone-sensitive monotonicity must not be a global flag"
+        );
+        let check = property
+            .monotonicity_check
+            .unwrap_or_else(|| panic!("{name}: expected a monotonicity check"));
+        assert_eq!(check(&utc, std::slice::from_ref(&crossing)), Some(0));
+        assert_eq!(
+            check(&st_johns, std::slice::from_ref(&crossing)),
+            None,
+            "{name}: must fail open when the range crosses a DST fallback"
+        );
+        assert_eq!(check(&st_johns, std::slice::from_ref(&clear)), Some(0));
+        assert_eq!(check(&st_johns, std::slice::from_ref(&dates)), Some(0));
+        assert_eq!(
+            check(&st_johns, std::slice::from_ref(&nullable_crossing)),
+            None,
+            "{name}: nullable wrapper must not bypass the transition check"
+        );
+        assert_eq!(
+            check(&st_johns, std::slice::from_ref(&nullable_clear)),
+            Some(0)
+        );
+        assert_eq!(
+            check(&st_johns, std::slice::from_ref(&all_null)),
+            Some(0),
+            "{}: an all-NULL domain projects to one value",
+            name
+        );
+    }
+
+    // Sub-day rounders rebuild a local wall-clock time inside the day; every
+    // DST fallback breaks them, so they expose no monotonicity at all.
+    for name in [
+        "to_start_of_second",
+        "to_start_of_minute",
+        "to_start_of_five_minutes",
+        "to_start_of_ten_minutes",
+        "to_start_of_fifteen_minutes",
+        "to_start_of_hour",
+    ] {
+        let property = BUILTIN_FUNCTIONS.get_property(name).unwrap();
+        assert!(
+            !property.monotonicity && property.monotonicity_check.is_none(),
+            "{name}: sub-day rounder must not be exposed as monotonic"
+        );
+    }
+}
+
+#[test]
+fn test_calendar_domain_fails_open_across_tz_fallback() {
+    use std::collections::HashMap;
+
+    use databend_common_expression::ConstantFolder;
+    use databend_common_expression::expr::ColumnRef;
+    use databend_common_expression::expr::Expr;
+    use databend_common_expression::type_check::check_function;
+
+    let st_johns = FunctionContext {
+        tz: TimeZone::get("America/St_Johns").unwrap(),
+        ..FunctionContext::default()
+    };
+    let utc = FunctionContext::default();
+    let crossing = Domain::Timestamp(SimpleDomain {
+        min: 1_257_040_800_000_000, // 2009-11-01T02:00Z = 10-31 23:30 NDT
+        max: 1_257_044_400_000_000, // 2009-11-01T03:00Z = 10-31 23:30 NST
+    });
+
+    for (name, return_type) in [
+        // Exact `calc_domain`, guarded by the session time zone.
+        ("to_yyyymmdd", DataType::Number(NumberDataType::UInt32)),
+        // `Full` calc_domain: exercises the fold's monotonic end-point path,
+        // which consumes `monotonicity_check`.
+        ("to_start_of_day", DataType::Timestamp),
+    ] {
+        let expr = check_function(
+            None,
+            name,
+            &[],
+            &[Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 0,
+                data_type: DataType::Timestamp,
+                display_name: "ts".to_string(),
+            })],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let input = HashMap::from([(0, crossing.clone())]);
+
+        // Both end points map to October 31, but the range internally touches
+        // November 1: any domain narrower than `Full` would exclude reachable
+        // outputs and let pruning drop live rows.
+        let (_, domain) =
+            ConstantFolder::fold_with_domain(&expr, &input, &st_johns, &BUILTIN_FUNCTIONS);
+        assert_eq!(domain, Some(Domain::full(&return_type)), "{name}");
+
+        // Under a fixed offset the same range is a single segment: the
+        // projection collapses to one day and folds to a constant.
+        let (folded, _) = ConstantFolder::fold_with_domain(&expr, &input, &utc, &BUILTIN_FUNCTIONS);
+        assert!(
+            matches!(folded, Expr::Constant(_)),
+            "{name}: expected constant fold under UTC, got {folded:?}"
+        );
+    }
 }
 
 #[test]

@@ -110,7 +110,7 @@ impl PipelineBuilder {
             Ok(ProcessorPtr::create(BlockMetaTransformer::create(
                 transform_input_port,
                 transform_output_port,
-                TransformCompactBlock::default(),
+                TransformCompactBlock,
             )))
         })
     }
@@ -143,11 +143,9 @@ impl PipelineBuilder {
         block_thresholds: BlockThresholds,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
-        let ctx = self.ctx.clone();
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
             new_serialize_segment_processor(
-                ctx.clone(),
                 input,
                 output,
                 fuse_table,

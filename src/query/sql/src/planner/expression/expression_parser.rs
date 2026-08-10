@@ -73,41 +73,43 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
         None,
     );
 
-    let columns = metadata.read().columns_by_table_index(table_index);
-    let table = metadata.read().table(table_index).clone();
-    for column in columns.iter() {
-        let column_binding = match column {
-            ColumnEntry::BaseTableColumn(BaseTableColumn {
-                column_index,
-                column_name,
-                data_type,
-                path_indices,
-                virtual_expr,
-                ..
-            }) => {
-                let visibility = if path_indices.is_some() {
-                    Visibility::InVisible
-                } else {
-                    Visibility::Visible
-                };
-                ColumnBindingBuilder::new(
-                    column_name.clone(),
-                    *column_index,
-                    Box::new(data_type.into()),
-                    visibility,
-                )
-                .database_name(Some("default".to_string()))
-                .table_name(Some(table.name().to_string()))
-                .table_index(Some(table.index()))
-                .virtual_expr(virtual_expr.clone())
-                .build()
-            }
-            _ => {
-                return Err(ErrorCode::Internal("Invalid column entry"));
-            }
-        };
+    {
+        let metadata = metadata.read();
+        let table = metadata.table(table_index);
+        for column in metadata.columns_by_table_index(table_index) {
+            let column_binding = match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn {
+                    column_index,
+                    column_name,
+                    data_type,
+                    path_indices,
+                    virtual_expr,
+                    ..
+                }) => {
+                    let visibility = if path_indices.is_some() {
+                        Visibility::InVisible
+                    } else {
+                        Visibility::Visible
+                    };
+                    ColumnBindingBuilder::new(
+                        column_name.clone(),
+                        *column_index,
+                        Box::new(data_type.into()),
+                        visibility,
+                    )
+                    .database_name(Some("default".to_string()))
+                    .table_name(Some(table.name().to_string()))
+                    .table_index(Some(table.index()))
+                    .virtual_expr(virtual_expr.clone())
+                    .build()
+                }
+                _ => {
+                    return Err(ErrorCode::Internal("Invalid column entry"));
+                }
+            };
 
-        bind_context.add_column_binding(column_binding);
+            bind_context.add_column_binding(column_binding);
+        }
     }
     Ok((bind_context, metadata))
 }
@@ -349,7 +351,7 @@ pub fn parse_lambda_expr(
     // Use parent metadata if provided (for masking policies on outer columns)
     // Otherwise create empty metadata (for better performance in community edition)
     let metadata = parent_metadata.unwrap_or_else(|| Arc::new(RwLock::new(Metadata::default())));
-    lambda_context.set_expr_context(ExprContext::InLambdaFunction);
+    lambda_context.expr_context = ExprContext::InLambdaFunction;
 
     for (lambda_column, lambda_column_type) in lambda_columns.iter() {
         let column_index = lambda_context.next_column_index();
@@ -476,6 +478,7 @@ pub fn analyze_cluster_keys(
     };
     let mut exprs = Vec::with_capacity(ast_exprs.len());
     let mut cluster_keys = Vec::with_capacity(exprs.len());
+    let mut vector_cluster_key_num = 0;
     for ast in ast_exprs {
         let (scalar, _) = *type_checker.resolve(&ast)?;
         if scalar.used_columns().len() != 1 || !scalar.evaluable() {
@@ -494,11 +497,20 @@ pub fn analyze_cluster_keys(
         }
 
         let data_type = expr.data_type();
-        if !Binder::valid_cluster_key_type(data_type) {
+        let (is_valid_type, is_vector_type) = Binder::valid_cluster_key_type(data_type);
+        if !is_valid_type {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Unsupported data type '{}' for cluster by expression `{:#}`",
                 data_type, ast
             )));
+        }
+        if is_vector_type {
+            vector_cluster_key_num += 1;
+            if vector_cluster_key_num > 1 {
+                return Err(ErrorCode::InvalidClusterKeys(
+                    "Only one vector column is supported in cluster by",
+                ));
+            }
         }
 
         exprs.push(expr);

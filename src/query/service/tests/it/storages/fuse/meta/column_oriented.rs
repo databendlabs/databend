@@ -78,7 +78,6 @@ async fn generate_column_oriented_segment()
         vec![Scalar::from(1i64)],
         vec![Scalar::from(3i64)],
         1,
-        None,
     ));
 
     let mut block_metas = Vec::new();
@@ -88,7 +87,13 @@ async fn generate_column_oriented_segment()
         .finish();
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     for block in data_blocks {
-        let col_stats = gen_columns_statistics(&block, None, &table_schema).unwrap();
+        let col_stats = gen_columns_statistics(
+            &block,
+            None,
+            &table_schema,
+            &std::collections::BTreeMap::new(),
+        )
+        .unwrap();
         let block_writer = BlockWriter::new(
             &operator,
             &loc_generator,
@@ -306,7 +311,7 @@ fn check_block_level_meta(
 }
 
 fn check_summary(block_metas: &[BlockMeta], column_oriented_segment: &ColumnOrientedSegment) {
-    let summary = reduce_block_metas(block_metas, Default::default(), Some(0));
+    let summary = reduce_block_metas(block_metas, Default::default(), Some(0)).unwrap();
     assert_eq!(summary.row_count, column_oriented_segment.summary.row_count);
     assert_eq!(
         summary.block_count,

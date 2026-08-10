@@ -37,7 +37,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::MarkedDeletedTableIndexIdIdent;
     use crate::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
@@ -50,13 +51,6 @@ mod tests {
             tenant,
             MarkedDeletedTableIndexId::new(3, "test".to_owned(), "1".to_owned()),
         );
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_marked_deleted_table_index/3/test/1");
-
-        assert_eq!(
-            ident,
-            MarkedDeletedTableIndexIdIdent::from_str_key(&key).unwrap()
-        );
+        assert_round_trip(ident, "__fd_marked_deleted_table_index/3/test/1");
     }
 }

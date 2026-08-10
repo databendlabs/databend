@@ -23,7 +23,9 @@ use log::debug;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct DropNetworkPolicyInterpreter {

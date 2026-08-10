@@ -81,6 +81,7 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -101,8 +102,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -114,10 +113,13 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
@@ -263,6 +265,18 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     /// Get the table meta by table id.
     async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
+
+    /// Get a materialized-view definition by its table ID.
+    async fn get_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_mv_definition' not implemented for catalog {}",
+            self.name()
+        )))
+    }
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(
@@ -671,7 +685,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply>;
 
     async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply>;
@@ -679,7 +693,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply>;
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;
@@ -696,7 +710,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Dictionary
     async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply>;
 
-    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply>;
+    async fn get_dictionary_id(
+        &self,
+        _dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryId>>> {
+        unimplemented!()
+    }
+
+    async fn update_dictionary_by_id(
+        &self,
+        _id_ident: DictionaryIdIdent,
+        _dictionary_meta: DictionaryMeta,
+    ) -> Result<Change<DictionaryMeta>> {
+        unimplemented!()
+    }
 
     async fn drop_dictionary(
         &self,

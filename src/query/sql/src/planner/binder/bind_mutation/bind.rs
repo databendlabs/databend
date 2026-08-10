@@ -31,7 +31,8 @@ use databend_common_expression::types::DataType;
 use databend_common_pipeline::core::SharedLockGuard;
 
 use crate::BindContext;
-use crate::ColumnEntry;
+use crate::IndexType;
+use crate::Metadata;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Symbol;
@@ -194,28 +195,31 @@ impl Binder {
             table_name.clone()
         };
 
-        let target_column_entries = self
-            .metadata
-            .read()
-            .columns_by_table_index(target_table_index);
-
         let mut matched_evaluators = Vec::with_capacity(matched_clauses.len());
         let mut unmatched_evaluators = Vec::with_capacity(unmatched_clauses.len());
         let mut field_index_map = HashMap::<usize, String>::new();
-        if self.has_update(&matched_clauses) {
-            // If exists update clause, we need to read all columns of target table.
-            for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
-                let column_index = Self::find_column_index(&target_column_entries, field.name())?;
-                field_index_map.insert(idx, column_index.to_string());
-            }
-        }
-
-        if table.change_tracking_enabled() && mutation_strategy != MutationStrategy::NotMatchedOnly
         {
-            for stream_column in table.stream_columns() {
-                let column_index =
-                    Self::find_column_index(&target_column_entries, stream_column.column_name())?;
-                required_columns.insert(column_index);
+            let metadata = self.metadata.read();
+            if self.has_update(&matched_clauses) {
+                // If exists update clause, we need to read all columns of target table.
+                for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
+                    let column_index =
+                        Self::find_column_index(&metadata, target_table_index, field.name())?;
+                    field_index_map.insert(idx, column_index.to_string());
+                }
+            }
+
+            if table.change_tracking_enabled()
+                && mutation_strategy != MutationStrategy::NotMatchedOnly
+            {
+                for stream_column in table.stream_columns() {
+                    let column_index = Self::find_column_index(
+                        &metadata,
+                        target_table_index,
+                        stream_column.column_name(),
+                    )?;
+                    required_columns.insert(column_index);
+                }
             }
         }
 
@@ -335,9 +339,9 @@ impl Binder {
     ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr)?;
-            if !self.check_allowed_scalar_expr(&scalar_expr)? {
+            if !self.check_allowed_scalar_expr_with_udf(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "matched clause's condition can't contain subquery|window|aggregate|udf functions|async functions"
+                    "matched clause's condition can't contain subquery|window|aggregate|async functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -421,9 +425,9 @@ impl Binder {
     ) -> Result<UnmatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr)?;
-            if !self.check_allowed_scalar_expr(&scalar_expr)? {
+            if !self.check_allowed_scalar_expr_with_udf(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "unmatched clause's condition can't contain subquery|window|aggregate|udf functions"
+                    "unmatched clause's condition can't contain subquery|window|aggregate|async functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -471,9 +475,9 @@ impl Binder {
             }
             for (idx, expr) in clause.insert_operation.values.iter().enumerate() {
                 let (mut scalar_expr, _) = scalar_binder.bind(expr)?;
-                if !self.check_allowed_scalar_expr(&scalar_expr)? {
+                if !self.check_allowed_scalar_expr_with_udf(&scalar_expr)? {
                     return Err(ErrorCode::SemanticError(
-                        "insert clause's can't contain subquery|window|aggregate|udf functions"
+                        "insert clause's can't contain subquery|window|aggregate|async functions"
                             .to_string(),
                     )
                     .set_span(scalar_expr.span()));
@@ -495,8 +499,12 @@ impl Binder {
         }
     }
 
-    pub fn find_column_index(column_entries: &Vec<ColumnEntry>, col_name: &str) -> Result<Symbol> {
-        for column_entry in column_entries {
+    pub fn find_column_index(
+        metadata: &Metadata,
+        table_index: IndexType,
+        col_name: &str,
+    ) -> Result<Symbol> {
+        for column_entry in metadata.columns_by_table_index(table_index) {
             if col_name == column_entry.name() {
                 return Ok(column_entry.index());
             }
@@ -521,7 +529,6 @@ fn insert_only(mutation: &crate::plans::Mutation) -> bool {
     let metadata = mutation.metadata.read();
     let target_table_columns: HashSet<Symbol> = metadata
         .columns_by_table_index(mutation.target_table_index)
-        .iter()
         .map(|column| column.index())
         .collect();
 

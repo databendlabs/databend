@@ -74,6 +74,15 @@ fn test_geometry() {
     test_st_area(file);
     test_st_convexhull(file);
     test_st_hilbert(file);
+    test_st_simplify(file);
+    test_st_isvalid(file);
+    test_st_covers(file);
+    test_st_coveredby(file);
+    test_st_perimeter(file);
+    test_st_azimuth(file);
+    test_st_hausdorffdistance(file);
+    test_st_makepolygonoriented(file);
+    test_st_buffer(file);
 }
 
 fn test_haversine(file: &mut impl Write) {
@@ -1009,6 +1018,114 @@ fn test_st_hilbert(file: &mut impl Write) {
     run_ast(
         file,
         "ST_HILBERT(TO_GEOMETRY('POINT(0.75 0.75)'), [0, 0, 1, 1])",
+        &[],
+    );
+}
+
+fn test_st_simplify(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_ASWKT(ST_SIMPLIFY(TO_GEOMETRY('LINESTRING(0 0, 1 0, 1 1, 2 1)'), 0.5))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_ASWKT(ST_SIMPLIFY(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0.5 0.5, 0 1, 0 0))'), 0.6))",
+        &[],
+    );
+}
+
+fn test_st_isvalid(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_ISVALID(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_ISVALID(TO_GEOMETRY('POLYGON((0 0, 2 2, 2 0, 0 2, 0 0))'))",
+        &[],
+    );
+}
+
+fn test_st_covers(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_COVERS(TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'), TO_GEOMETRY('POINT(1 1)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_COVERS(TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'), TO_GEOMETRY('POINT(5 5)'))",
+        &[],
+    );
+}
+
+fn test_st_coveredby(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_COVEREDBY(TO_GEOMETRY('POINT(1 1)'), TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_COVEREDBY(TO_GEOMETRY('POINT(5 5)'), TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'))",
+        &[],
+    );
+}
+
+fn test_st_perimeter(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_PERIMETER(TO_GEOMETRY('POLYGON((0 0, 0 3, 4 3, 4 0, 0 0))'))",
+        &[],
+    );
+    run_ast(file, "ST_PERIMETER(TO_GEOMETRY('POINT(1 1)'))", &[]);
+}
+
+fn test_st_azimuth(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_AZIMUTH(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 0)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_AZIMUTH(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))",
+        &[],
+    );
+}
+
+fn test_st_hausdorffdistance(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_HAUSDORFFDISTANCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(0 1)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_HAUSDORFFDISTANCE(TO_GEOMETRY('LINESTRING(0 0, 1 0)'), TO_GEOMETRY('LINESTRING(0 1, 1 1)'))",
+        &[],
+    );
+}
+
+fn test_st_makepolygonoriented(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_ASWKT(ST_MAKEPOLYGONORIENTED(TO_GEOMETRY('LINESTRING(0 0, 1 0, 1 2, 0 2, 0 0)')))",
+        &[],
+    );
+}
+
+fn test_st_buffer(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_BUFFER(TO_GEOMETRY('POINT(0 0)'), 1) IS NOT NULL",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_ASWKT(ST_BUFFER(TO_GEOMETRY('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), 0))",
         &[],
     );
 }

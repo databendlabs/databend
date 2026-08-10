@@ -31,7 +31,7 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 pub fn parser_fn<'a, O, P>(mut parser: P) -> impl FnMut(Input<'a>) -> IResult<'a, O>
-where P: nom::Parser<Input<'a>, Output = O, Error = Error<'a>> {
+where P: nom::Parser<Input<'a>, Output = O, Error = Error> {
     move |input| parser.parse(input)
 }
 
@@ -51,7 +51,7 @@ use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::token::*;
 
-pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
+pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error>;
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
     move |i| match i.tokens.first().filter(|token| token.text() == text) {
@@ -78,9 +78,62 @@ pub fn any_token(i: Input<'_>) -> IResult<'_, &Token<'_>> {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
-            ErrorKind::Other("expected any token but reached the end"),
+            ErrorKind::other("expected any token but reached the end"),
         ))),
     }
+}
+
+/// Parse a value only when it is followed by `text`.
+///
+/// A missing lookahead is reported at the original input, so callers can use this parser to guard
+/// a speculative branch without creating a consuming recoverable error.
+pub fn followed_by_text<'a, O, F>(
+    mut parser: F,
+    text: &'static str,
+) -> impl FnMut(Input<'a>) -> IResult<'a, O>
+where
+    F: nom::Parser<Input<'a>, Output = O, Error = Error>,
+{
+    move |input| {
+        let (rest, output) = parser.parse(input)?;
+        if rest
+            .tokens
+            .first()
+            .is_some_and(|token| token.text() == text)
+        {
+            Ok((rest, output))
+        } else {
+            Err(nom::Err::Error(nom::error::ParseError::from_error_kind(
+                input,
+                nom::error::ErrorKind::Verify,
+            )))
+        }
+    }
+}
+
+/// Parse the optional one- or two-part qualifier before a wildcard.
+///
+/// An identifier which is not followed by `.` does not enter this branch. This keeps ordinary
+/// expressions such as `SELECT foo` and calls such as `COUNT(foo)` recoverable at their starting
+/// position instead of after `foo` has been consumed.
+pub fn wildcard_qualification(input: Input) -> IResult<Option<(Identifier, Option<Identifier>)>> {
+    let (rest, first) = match followed_by_text(ident, ".").parse(input) {
+        Ok(result) => result,
+        Err(nom::Err::Error(_)) => return Ok((input, None)),
+        Err(error) => return Err(error),
+    };
+    let (rest, _) = match_text(".").parse(rest)?;
+
+    let (rest, second) = match followed_by_text(ident, ".").parse(rest) {
+        Ok((rest, second)) => {
+            let (rest, _) = match_text(".").parse(rest)?;
+            (rest, Some(second))
+        }
+        Err(nom::Err::Error(_)) => (rest, None),
+        Err(error) => return Err(error),
+    };
+
+    Ok((rest, Some((first, second))))
 }
 
 pub fn lambda_params(i: Input) -> IResult<Vec<Identifier>> {
@@ -160,7 +213,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
             let QuotedIdent(ident, quote) = token.text().parse().map_err(|_| {
                 nom::Err::Error(Error::from_error_kind(
                     i,
-                    ErrorKind::Other("invalid identifier"),
+                    ErrorKind::other("invalid identifier"),
                 ))
             })?;
             Ok((i2, Identifier {
@@ -354,7 +407,7 @@ pub fn column_position(i: Input) -> IResult<ColumnID> {
             .parse::<usize>()
             .map_err(|e| nom::Err::Failure(e.into()))?;
         if pos == 0 {
-            return Err(nom::Err::Failure(ErrorKind::Other(
+            return Err(nom::Err::Failure(ErrorKind::other(
                 "column position must be greater than 0",
             )));
         }
@@ -494,38 +547,38 @@ pub fn dot_separated_idents_2_to_4(
 }
 
 pub fn comma_separated_list0<'a, T>(
-    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
     separated_list0(match_text(","), item)
 }
 
 pub fn comma_separated_list0_ignore_trailing<'a, T>(
-    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
-) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error> {
     nom::multi::separated_list0(match_text(","), item)
 }
 
 pub fn comma_separated_list1_ignore_trailing<'a, T>(
-    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
-) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error> {
     nom::multi::separated_list1(match_text(","), item)
 }
 
 pub fn semicolon_terminated_list1<'a, T>(
-    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
-) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error> {
     many1(terminated(item, match_text(";")))
 }
 
 pub fn comma_separated_list1<'a, T>(
-    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
-) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error> {
     separated_list1(match_text(","), item)
 }
 
 /// A fork of `separated_list0` from nom, but never forgive parser error
-/// after a separator is encountered, and always forgive the first element
-/// failure.
+/// after a separator is encountered, and forgive a recoverable error from the
+/// first element.
 pub fn separated_list0<I, O, O2, E, F, G>(
     mut sep: G,
     mut f: F,
@@ -540,7 +593,8 @@ where
         let mut res = Vec::new();
 
         match f.parse(i.clone()) {
-            Err(_) => return Ok((i, res)),
+            Err(nom::Err::Error(_)) => return Ok((i, res)),
+            Err(e) => return Err(e),
             Ok((i1, o)) => {
                 res.push(o);
                 i = i1;
@@ -631,23 +685,16 @@ pub fn map_res<'a, O1, O2, F, G>(
     mut f: G,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, O2>
 where
-    F: nom::Parser<Input<'a>, Output = O1, Error = Error<'a>>,
+    F: nom::Parser<Input<'a>, Output = O1, Error = Error>,
     G: FnMut(O1) -> Result<O2, nom::Err<ErrorKind>>,
 {
     move |input: Input| {
         let i = input;
-        let bt = i.backtrace.clone();
         let (rest, o1) = parser.parse(input)?;
         match f(o1) {
             Ok(o2) => Ok((rest, o2)),
-            Err(nom::Err::Error(e)) => {
-                i.backtrace.restore(bt);
-                Err(nom::Err::Error(Error::from_error_kind(i, e)))
-            }
-            Err(nom::Err::Failure(e)) => {
-                i.backtrace.restore(bt);
-                Err(nom::Err::Failure(Error::from_error_kind(i, e)))
-            }
+            Err(nom::Err::Error(e)) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
+            Err(nom::Err::Failure(e)) => Err(nom::Err::Failure(Error::from_error_kind(i, e))),
             Err(nom::Err::Incomplete(_)) => unreachable!(),
         }
     }
@@ -659,12 +706,12 @@ pub fn error_hint<'a, O, F>(
     message: &'static str,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, ()>
 where
-    F: nom::Parser<Input<'a>, Output = O, Error = Error<'a>>,
+    F: nom::Parser<Input<'a>, Output = O, Error = Error>,
 {
     move |input: Input| match match_error.parse(input) {
         Ok(_) => Err(nom::Err::Error(Error::from_error_kind(
             input,
-            ErrorKind::Other(message),
+            ErrorKind::other(message),
         ))),
         Err(_) => Ok((input, ())),
     }
@@ -735,28 +782,25 @@ where
     let expr = parser
         .parse_input(&mut iter, Precedence(0))
         .map_err(|err| {
-            // Rollback parsing footprint on unused expr elements.
-            input.backtrace.clear();
-
             let err_kind = match err {
-                PrattError::EmptyInput => ErrorKind::Other("expecting an operand"),
+                PrattError::EmptyInput => ErrorKind::other("expecting an operand"),
                 PrattError::UnexpectedNilfix(i) => {
                     *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("unable to parse the element")
+                    ErrorKind::other("unable to parse the element")
                 }
                 PrattError::UnexpectedPrefix(i) => {
                     *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("unable to parse the prefix operator")
+                    ErrorKind::other("unable to parse the prefix operator")
                 }
                 PrattError::UnexpectedInfix(i) => {
                     *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("missing lhs or rhs for the binary operator")
+                    ErrorKind::other("missing lhs or rhs for the binary operator")
                 }
                 PrattError::UnexpectedPostfix(i) => {
                     *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("unable to parse the postfix operator")
+                    ErrorKind::other("unable to parse the postfix operator")
                 }
-                PrattError::UserError(err) => ErrorKind::Other(err),
+                PrattError::UserError(err) => ErrorKind::other(err),
             };
 
             let span = span
@@ -767,8 +811,6 @@ where
             nom::Err::Error(Error::from_error_kind(span, err_kind))
         })?;
     if let Some(elem) = iter.peek() {
-        // Rollback parsing footprint on unused expr elements.
-        input.backtrace.clear();
         Ok((input.slice(input.offset(&elem.span)..), expr))
     } else {
         Ok((rest, expr))
@@ -776,16 +818,15 @@ where
 }
 
 pub fn check_template_mode<'a, O, F>(mut parser: F) -> impl FnMut(Input<'a>) -> IResult<'a, O>
-where F: nom::Parser<Input<'a>, Output = O, Error = Error<'a>> {
+where F: nom::Parser<Input<'a>, Output = O, Error = Error> {
     move |input: Input| {
         parser.parse(input).and_then(|(i, res)| {
             if input.mode.is_template() {
                 Ok((i, res))
             } else {
-                i.backtrace.clear();
                 let error = Error::from_error_kind(
                     input,
-                    ErrorKind::Other("variable is only available in SQL template"),
+                    ErrorKind::other("variable is only available in SQL template"),
                 );
                 Err(nom::Err::Failure(error))
             }
@@ -809,17 +850,16 @@ macro_rules! declare_experimental_feature {
             mut parser: F,
         ) -> impl FnMut(Input<'a>) -> IResult<'a, O>
         where
-            F: nom::Parser<Input<'a>, Output = O, Error = Error<'a>>,
+            F: nom::Parser<Input<'a>, Output = O, Error = Error>,
         {
             move |input: Input| {
                 parser.parse(input).and_then(|(i, res)| {
                     if input.dialect.is_experimental() {
                         Ok((i, res))
                     } else {
-                        i.backtrace.clear();
                         let error = Error::from_error_kind(
                             input,
-                            ErrorKind::Other(
+                            ErrorKind::other(
                                 concat!(
                                     $feature_name,
                                     " only works in experimental dialect, try `set sql_dialect = 'experimental'`"

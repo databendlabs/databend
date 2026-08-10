@@ -358,6 +358,7 @@ impl RuleEliminateSelfJoin {
             || scan.inverted_index.is_some()
             || scan.vector_index.is_some()
             || scan.is_lazy_table
+            || scan.secure_predicates.is_some()
         {
             return None;
         }
