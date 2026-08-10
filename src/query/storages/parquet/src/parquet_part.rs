@@ -181,7 +181,7 @@ fn collect_small_file_parts(
     partitions: &mut Partitions,
     stats: &mut PartStatistics,
 ) {
-    if max_compression_ratio <= 0.0 || max_compression_ratio >= 1.0 {
+    if max_compression_ratio < 1.0 {
         // just incase
         max_compression_ratio = 1.0;
     }
