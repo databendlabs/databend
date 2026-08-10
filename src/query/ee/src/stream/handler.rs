@@ -159,20 +159,14 @@ impl StreamHandler for RealStreamHandler {
                 comment: plan.comment.clone().unwrap_or("".to_string()),
                 ..Default::default()
             },
+            source_table_option,
             as_dropped: false,
             materialized_view: None,
             table_properties: None,
             table_partition: None,
         };
 
-        match source_table_option {
-            Some(source_table_option) => {
-                catalog
-                    .create_table_with_source_table_option(req, source_table_option)
-                    .await
-            }
-            None => catalog.create_table(req).await,
-        }
+        catalog.create_table(req).await
     }
 
     #[async_backtrace::framed]

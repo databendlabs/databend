@@ -1676,19 +1676,24 @@ impl SchemaApiTestSuite {
         let (source_id, _) = source.create_table().await?;
         let tenant = source.tenant();
 
-        let create_req = |name: &str, create_option: CreateOption, engine: &str| CreateTableReq {
-            create_option,
-            catalog_name: None,
-            name_ident: TableNameIdent::new(&tenant, db_name, name),
-            table_meta: TableMeta {
-                engine: engine.to_string(),
-                ..Default::default()
-            },
-            as_dropped: false,
-            materialized_view: None,
-            table_properties: None,
-            table_partition: None,
-        };
+        let create_req =
+            |name: &str,
+             create_option: CreateOption,
+             engine: &str,
+             source_table_option: Option<UpsertTableOptionReq>| CreateTableReq {
+                create_option,
+                catalog_name: None,
+                name_ident: TableNameIdent::new(&tenant, db_name, name),
+                table_meta: TableMeta {
+                    engine: engine.to_string(),
+                    ..Default::default()
+                },
+                source_table_option,
+                as_dropped: false,
+                materialized_view: None,
+                table_properties: None,
+                table_partition: None,
+            };
         let source_update = |table_id, seq| UpsertTableOptionReq {
             table_id,
             seq: MatchSeq::Exact(seq),
@@ -1701,10 +1706,12 @@ impl SchemaApiTestSuite {
         // Publishing the target and updating the source happen together.
         let source_before = source.get_table().await?;
         let reply = mt
-            .create_table_with_source_table_option(
-                create_req("stream", CreateOption::Create, "STREAM"),
+            .create_table(create_req(
+                "stream",
+                CreateOption::Create,
+                "STREAM",
                 Some(source_update(source_id, source_before.ident.seq)),
-            )
+            ))
             .await?;
         assert!(reply.new_table);
         let source_after = source.get_table().await?;
@@ -1731,10 +1738,12 @@ impl SchemaApiTestSuite {
         let (second_source_id, _) = second_source.create_table().await?;
         let second_before = second_source.get_table().await?;
         let reply = mt
-            .create_table_with_source_table_option(
-                create_req("stream", CreateOption::CreateIfNotExists, "STREAM"),
+            .create_table(create_req(
+                "stream",
+                CreateOption::CreateIfNotExists,
+                "STREAM",
                 Some(source_update(second_source_id, second_before.ident.seq)),
-            )
+            ))
             .await?;
         assert!(!reply.new_table);
         assert_eq!(second_source.get_table().await?, second_before);
@@ -1745,10 +1754,12 @@ impl SchemaApiTestSuite {
         let (third_source_id, _) = third_source.create_table().await?;
         let third_before = third_source.get_table().await?;
         let err = mt
-            .create_table_with_source_table_option(
-                create_req("stream", CreateOption::CreateOrReplace, "FUSE"),
+            .create_table(create_req(
+                "stream",
+                CreateOption::CreateOrReplace,
+                "FUSE",
                 Some(source_update(third_source_id, third_before.ident.seq)),
-            )
+            ))
             .await
             .unwrap_err();
         assert!(matches!(
@@ -1763,10 +1774,12 @@ impl SchemaApiTestSuite {
         let (fourth_source_id, _) = fourth_source.create_table().await?;
         let fourth_before = fourth_source.get_table().await?;
         let err = mt
-            .create_table_with_source_table_option(
-                create_req("stale_stream", CreateOption::Create, "STREAM"),
+            .create_table(create_req(
+                "stale_stream",
+                CreateOption::Create,
+                "STREAM",
                 Some(source_update(fourth_source_id, fourth_before.ident.seq + 1)),
-            )
+            ))
             .await
             .unwrap_err();
         assert!(matches!(
@@ -1851,6 +1864,7 @@ impl SchemaApiTestSuite {
                 catalog_name: None,
                 name_ident: TableNameIdent::new(&tenant, &db_name, name),
                 table_meta,
+                source_table_option: None,
                 as_dropped: false,
                 materialized_view: Some(CreateMaterializedViewMeta {
                     definition: definition.clone(),
@@ -2360,6 +2374,7 @@ impl SchemaApiTestSuite {
                 },
 
                 table_meta: table_meta(created_on),
+                source_table_option: None,
                 as_dropped: false,
                 materialized_view: None,
                 table_properties: None,
@@ -2478,6 +2493,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                source_table_option: None,
                 as_dropped: false,
                 materialized_view: None,
                 table_properties: None,
@@ -2751,6 +2767,7 @@ impl SchemaApiTestSuite {
                     engine: "STREAM".to_string(),
                     ..Default::default()
                 },
+                source_table_option: None,
                 as_dropped: false,
                 materialized_view: None,
                 table_properties: None,
@@ -2796,6 +2813,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: tbl_meta,
+                source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
                 table_properties: None,
@@ -5096,6 +5114,7 @@ impl SchemaApiTestSuite {
             catalog_name: None,
             name_ident,
             table_meta: create_table_meta.clone(),
+            source_table_option: None,
             as_dropped: false,
             materialized_view: None,
             table_properties: None,
@@ -5924,6 +5943,7 @@ impl SchemaApiTestSuite {
                     },
 
                     table_meta: table_meta(created_on),
+                    source_table_option: None,
                     as_dropped: false,
                     materialized_view: None,
                     table_properties: None,
@@ -6413,6 +6433,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
             },
             table_meta: drop_table_meta(created_on),
+            source_table_option: None,
             as_dropped: true,
             materialized_view: None,
             table_properties: None,
@@ -6534,6 +6555,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
                 table_properties: None,
@@ -6555,6 +6577,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: drop_table_meta(created_on),
+                source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
                 table_properties: None,
@@ -6592,6 +6615,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: drop_table_meta(created_on),
+                source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
                 table_properties: None,
@@ -6664,6 +6688,7 @@ impl SchemaApiTestSuite {
                 table_name: table_name.to_string(),
             },
             table_meta: replacement_meta,
+            source_table_option: None,
             as_dropped: true,
             materialized_view: None,
             table_properties: None,
@@ -6708,6 +6733,7 @@ impl SchemaApiTestSuite {
                 table_name: table_name.to_string(),
             },
             table_meta: replacement_meta,
+            source_table_option: None,
             as_dropped: true,
             materialized_view: None,
             table_properties: None,
@@ -6816,6 +6842,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
             },
             table_meta: drop_table_meta(created_on),
+            source_table_option: None,
             as_dropped: true,
             materialized_view: None,
             table_properties: None,

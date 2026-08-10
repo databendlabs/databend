@@ -232,21 +232,9 @@ where
     Self: Send + Sync,
     Self: kvapi::KVApi<Error = MetaError>,
 {
-    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError> {
-        self.create_table_with_source_table_option(req, None).await
-    }
-
-    /// Create a table and optionally update its source table options in the same transaction.
-    ///
-    /// The source update is used when creating a stream that needs to enable change tracking.
-    /// It is applied only if the target table is actually created or replaced.
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn create_table_with_source_table_option(
-        &self,
-        req: CreateTableReq,
-        source_table_option: Option<UpsertTableOptionReq>,
-    ) -> Result<CreateTableReply, KVAppError> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError> {
         // Make an error if table exists.
         fn make_exists_err(req: &CreateTableReq) -> AppError {
             let name = &req.name_ident.table_name;
@@ -495,7 +483,7 @@ where
                     txn_put_pb(&key_table_id_to_name, &key_dbid_tbname), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                 ]);
 
-                if let Some(source_update) = &source_table_option {
+                if let Some(source_update) = &req.source_table_option {
                     let source_id = TableId::new(source_update.table_id);
                     let source_meta = self.get_pb(&source_id).await?.ok_or_else(|| {
                         KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(

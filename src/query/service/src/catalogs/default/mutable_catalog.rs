@@ -789,19 +789,6 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table_with_source_table_option(
-        &self,
-        req: CreateTableReq,
-        source_table_option: UpsertTableOptionReq,
-    ) -> Result<CreateTableReply> {
-        self.ctx
-            .meta
-            .create_table_with_source_table_option(req, Some(source_table_option))
-            .await
-            .map_err(Into::into)
-    }
-
-    #[async_backtrace::framed]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         let res = self.ctx.meta.drop_table_by_id(req).await?;
         Ok(res)
