@@ -23,6 +23,7 @@ use databend_common_base::base::mask_connection_info;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_base::runtime::spawn;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -524,7 +525,9 @@ impl InteractiveWorkerBase {
     )> {
         let instant = Instant::now();
 
-        let query_result = context.try_spawn({
+        // The connection already runs on the shared MySQL query executor. Keep the task boundary
+        // without creating and destroying a dedicated Tokio runtime for every statement.
+        let query_result = spawn({
             let ctx = context.clone();
             async move {
                 let mut data_stream = interpreter.execute(ctx.clone()).await?;
@@ -541,11 +544,11 @@ impl InteractiveWorkerBase {
                 Ok::<_, ErrorCode>(intercepted_stream.boxed())
             }
             .in_span(Span::enter_with_local_parent(func_path!()))
-        })?;
+        });
 
         let query_result = query_result.await.map_err_to_code(
             ErrorCode::TokioError,
-            || "Cannot join handle from context's runtime",
+            || "Cannot join handle from MySQL query executor runtime",
         )?;
         let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
             as Box<dyn ProgressReporter + Send>;
