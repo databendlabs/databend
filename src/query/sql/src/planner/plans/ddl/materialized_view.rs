@@ -16,6 +16,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
 
 use crate::plans::TableOptions;
@@ -30,6 +31,8 @@ pub struct CreateMaterializedViewPlan {
     pub schema: TableSchemaRef,
     pub options: TableOptions,
     pub mv_definition: MVDefinition,
+    /// Source option update to commit atomically with MV publication, if needed.
+    pub source_table_option: Option<UpsertTableOptionReq>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

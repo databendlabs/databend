@@ -1834,6 +1834,14 @@ impl SchemaApiTestSuite {
         };
         let definition = new_definition(&source_table_name);
         let replacement_definition = new_definition(replacement_source_name);
+        let enable_change_tracking = |table_id, seq| UpsertTableOptionReq {
+            table_id,
+            seq: MatchSeq::Exact(seq),
+            options: HashMap::from([
+                ("change_tracking".to_string(), Some("true".to_string())),
+                ("begin_version".to_string(), Some(seq.to_string())),
+            ]),
+        };
         let initial_source_binding_generation = mt
             .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
             .await?
@@ -1950,17 +1958,72 @@ impl SchemaApiTestSuite {
             );
         }
 
-        // Creating an MV publishes an empty table, its definition, and its source index atomically.
-        let created = {
-            let created = mt
-                .create_table(new_mv_req(
-                    mv_name,
-                    CreateOption::Create,
+        let source_before_create = util.get_table().await?;
+
+        // A stale source sequence rejects the MV and leaves change tracking disabled.
+        {
+            let mut stale_req = new_mv_req(
+                "mv_stale_source_option",
+                CreateOption::Create,
+                source_table_id,
+                initial_source_binding_generation,
+                &definition,
+            );
+            stale_req.source_table_option = Some(enable_change_tracking(
+                source_table_id,
+                source_before_create.ident.seq + 1,
+            ));
+            let err = mt.create_table(stale_req).await.unwrap_err();
+            assert!(matches!(
+                err,
+                KVAppError::AppError(AppError::TableVersionMismatched(_))
+            ));
+            assert_eq!(util.get_table().await?, source_before_create);
+            assert!(
+                mt.get_table(GetTableReq::new(
+                    &tenant,
+                    &db_name,
+                    "mv_stale_source_option"
+                ))
+                .await
+                .is_err()
+            );
+            assert!(
+                mt.list_valid_mvs_by_source_table_id(
+                    &tenant,
                     source_table_id,
                     initial_source_binding_generation,
-                    &definition,
-                ))
-                .await?;
+                )
+                .await?
+                .is_empty()
+            );
+        }
+
+        // Creating an MV publishes its table, definition, source index, and source change-tracking
+        // update atomically.
+        let created = {
+            let mut req = new_mv_req(
+                mv_name,
+                CreateOption::Create,
+                source_table_id,
+                initial_source_binding_generation,
+                &definition,
+            );
+            req.source_table_option = Some(enable_change_tracking(
+                source_table_id,
+                source_before_create.ident.seq,
+            ));
+            let created = mt.create_table(req).await?;
+            let source_after_create = util.get_table().await?;
+            assert!(source_after_create.ident.seq > source_before_create.ident.seq);
+            assert_eq!(
+                source_after_create.meta.options.get("change_tracking"),
+                Some(&"true".to_string())
+            );
+            assert_eq!(
+                source_after_create.meta.options.get("begin_version"),
+                Some(&source_before_create.ident.seq.to_string())
+            );
             assert_eq!(
                 mt.get_mv_definition(&tenant, created.table_id)
                     .await?
@@ -2146,15 +2209,25 @@ impl SchemaApiTestSuite {
                 .await?
                 .map(|seqv| seqv.data.current_source_generation)
                 .unwrap_or(0);
-            let new_source_replacement = mt
-                .create_table(new_mv_req(
-                    mv_name,
-                    CreateOption::CreateOrReplace,
-                    replacement_source_table_id,
-                    source_binding_generation,
-                    &replacement_definition,
-                ))
-                .await?;
+            let replacement_source_before = util.get_table_by_name(replacement_source_name).await?;
+            let mut req = new_mv_req(
+                mv_name,
+                CreateOption::CreateOrReplace,
+                replacement_source_table_id,
+                source_binding_generation,
+                &replacement_definition,
+            );
+            req.source_table_option = Some(enable_change_tracking(
+                replacement_source_table_id,
+                replacement_source_before.ident.seq,
+            ));
+            let new_source_replacement = mt.create_table(req).await?;
+            let replacement_source_after = util.get_table_by_name(replacement_source_name).await?;
+            assert!(replacement_source_after.ident.seq > replacement_source_before.ident.seq);
+            assert_eq!(
+                replacement_source_after.meta.options.get("change_tracking"),
+                Some(&"true".to_string())
+            );
 
             assert!(
                 mt.get_mv_definition(&tenant, replacement.table_id)

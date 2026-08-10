@@ -1,4 +1,5 @@
 # Materialized view DDL and explicit refresh over Fuse CHANGE_TRACKING.
+# CREATE enables source CHANGE_TRACKING atomically when needed.
 
 statement ok
 drop database if exists test_materialized_view
@@ -15,12 +16,74 @@ create table source (
     amount int,
     category string,
     active boolean
-) change_tracking = true
+)
 
-# Explicit MV column names are exposed to users.
+query B
+select table_option like '%CHANGE_TRACKING=''true''%'
+from system.tables
+where database = 'test_materialized_view' and name = 'source'
+----
+0
+
+# Explicit MV column names are exposed to users. CREATE atomically enables source change tracking.
 statement ok
 create materialized view mv_detail (item_id, doubled_amount) as
 select id, amount * 2 from source where active
+
+query B
+select table_option like '%CHANGE_TRACKING=''true''%'
+from system.tables
+where database = 'test_materialized_view' and name = 'source'
+----
+1
+
+# A rejected cross-engine replacement must not enable change tracking on its source.
+statement ok
+create table atomic_source (id int)
+
+statement ok
+create table atomic_target (id int)
+
+statement error 1302
+create or replace materialized view atomic_target as select id from atomic_source where id > 0
+
+query B
+select table_option like '%CHANGE_TRACKING=''true''%'
+from system.tables
+where database = 'test_materialized_view' and name = 'atomic_source'
+----
+0
+
+# CREATE IF NOT EXISTS is a complete no-op when the target MV already exists.
+statement ok
+create materialized view if not exists mv_detail as select id from atomic_source where id > 0
+
+query B
+select table_option like '%CHANGE_TRACKING=''true''%'
+from system.tables
+where database = 'test_materialized_view' and name = 'atomic_source'
+----
+0
+
+# A successful CREATE publishes the MV and enables source tracking atomically.
+statement ok
+drop table atomic_target
+
+statement ok
+create materialized view atomic_target as select id from atomic_source where id > 0
+
+query B
+select table_option like '%CHANGE_TRACKING=''true''%'
+from system.tables
+where database = 'test_materialized_view' and name = 'atomic_source'
+----
+1
+
+statement ok
+drop materialized view atomic_target
+
+statement ok
+drop table atomic_source
 
 # Aggregating MVs persist states internally and expose finalized values.
 statement ok
