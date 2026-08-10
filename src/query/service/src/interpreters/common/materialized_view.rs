@@ -17,15 +17,12 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::is_materialized_view_engine;
-use databend_common_sql::plans::TableMaintenanceTarget;
+use databend_common_sql::plans::MaintenanceTarget;
 
-pub fn check_table_maintenance_target(
-    table: &dyn Table,
-    target: &TableMaintenanceTarget,
-) -> Result<()> {
+pub fn check_maintenance_target(table: &dyn Table, target: &MaintenanceTarget) -> Result<()> {
     match target {
-        TableMaintenanceTarget::Table => table.check_mutable(),
-        TableMaintenanceTarget::MaterializedView { table_id } => {
+        MaintenanceTarget::Table => table.check_mutable(),
+        MaintenanceTarget::MaterializedView { table_id } => {
             if table.get_id() != *table_id || !is_materialized_view_engine(table.engine()) {
                 return Err(ErrorCode::InvalidOperation(format!(
                     "Materialized view maintenance target changed: expected table id {}, found '{}'(id {}, engine {})",

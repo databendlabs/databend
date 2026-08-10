@@ -52,7 +52,7 @@ use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
-use crate::interpreters::common::check_table_maintenance_target;
+use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
@@ -271,7 +271,7 @@ impl ReclusterTableInterpreter {
             .await?;
 
         let tbl = self.ctx.get_table(catalog, database, table).await?;
-        check_table_maintenance_target(tbl.as_ref(), &self.plan.target)?;
+        check_maintenance_target(tbl.as_ref(), &self.plan.target)?;
         if tbl.cluster_key_meta().is_none() {
             return Err(ErrorCode::UnclusteredTable(format!(
                 "Unclustered table '{}.{}'",

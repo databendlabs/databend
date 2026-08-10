@@ -18,8 +18,8 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
 
 use crate::plans::CreateTablePlan;
+use crate::plans::MaintenanceTarget;
 use crate::plans::Plan;
-use crate::plans::TableMaintenanceTarget;
 
 #[derive(Clone, Debug)]
 pub struct CreateMaterializedViewPlan {
@@ -61,6 +61,6 @@ pub struct RefreshMaterializedViewPlan {
     pub catalog: String,
     pub database: String,
     pub view_name: String,
-    pub target: TableMaintenanceTarget,
+    pub target: MaintenanceTarget,
     pub source_table_id: u64,
 }

@@ -46,12 +46,12 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
-use databend_common_sql::plans::TableMaintenanceTarget;
 use databend_common_sql::plans::TagSetObject;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::RoleCacheManager;
@@ -1890,8 +1890,8 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::AlterTableClusterKey(plan) => {
                 match &plan.target {
-                    TableMaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,
-                    TableMaintenanceTarget::MaterializedView { .. } => {
+                    MaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,
+                    MaintenanceTarget::MaterializedView { .. } => {
                         let table = self.ctx.get_table(&plan.catalog, &plan.database, &plan.table).await?;
                         self.validate_mv_source_access(table.as_ref()).await?
                     }
@@ -1902,8 +1902,8 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::DropTableClusterKey(plan) => {
                 match &plan.target {
-                    TableMaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,
-                    TableMaintenanceTarget::MaterializedView { .. } => {
+                    MaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,
+                    MaintenanceTarget::MaterializedView { .. } => {
                         let table = self.ctx.get_table(&plan.catalog, &plan.database, &plan.table).await?;
                         self.validate_mv_source_access(table.as_ref()).await?
                     }
@@ -1927,8 +1927,8 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::ReclusterTable(plan) => {
                 match &plan.target {
-                    TableMaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,
-                    TableMaintenanceTarget::MaterializedView { .. } => {
+                    MaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,
+                    MaintenanceTarget::MaterializedView { .. } => {
                         let table = self.ctx.get_table(&plan.catalog, &plan.database, &plan.table).await?;
                         self.validate_mv_source_access(table.as_ref()).await?
                     }
@@ -1941,23 +1941,11 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
             Plan::OptimizeCompactSegment(plan) => {
-                match &plan.target {
-                    TableMaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?,
-                    TableMaintenanceTarget::MaterializedView { .. } => {
-                        let table = self.ctx.get_table(&plan.catalog, &plan.database, &plan.table).await?;
-                        self.validate_mv_source_access(table.as_ref()).await?
-                    }
-                }
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
             Plan::OptimizeCompactBlock { s_expr, .. } => {
                 let plan: OptimizeCompactBlock = s_expr.plan().clone().try_into()?;
-                match &plan.target {
-                    TableMaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?,
-                    TableMaintenanceTarget::MaterializedView { .. } => {
-                        let table = self.ctx.get_table(&plan.catalog, &plan.database, &plan.table).await?;
-                        self.validate_mv_source_access(table.as_ref()).await?
-                    }
-                }
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
             Plan::VacuumTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?

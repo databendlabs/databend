@@ -22,8 +22,6 @@ use databend_common_ast::ast::CreateMaterializedViewStmt;
 use databend_common_ast::ast::DropMaterializedViewStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::OptimizeTableAction;
-use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::RefreshMaterializedViewStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::ShowCreateMaterializedViewStmt;
@@ -75,6 +73,7 @@ use crate::plans::CreateMaterializedViewPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::DropMaterializedViewPlan;
 use crate::plans::DropTableClusterKeyPlan;
+use crate::plans::MaintenanceTarget;
 use crate::plans::Plan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshMaterializedViewPlan;
@@ -82,7 +81,6 @@ use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ScalarExpr;
 use crate::plans::ShowCreateMaterializedViewPlan;
-use crate::plans::TableMaintenanceTarget;
 
 fn is_supported_materialized_view_source(table: &dyn Table) -> bool {
     !table.is_temp()
@@ -310,12 +308,6 @@ impl Binder {
         let (catalog_name, database_name, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
         let target_catalog = self.ctx.get_catalog(&catalog_name).await?;
-        if target_catalog.support_partition() {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "Catalog '{}' does not support MATERIALIZED VIEW",
-                target_catalog.name()
-            )));
-        }
         let target_database = target_catalog.get_database(&tenant, &database_name).await?;
         let target_database_id = target_database.get_db_info().database_id.db_id;
 
@@ -367,14 +359,6 @@ impl Binder {
         };
         let (source_table, source_catalog_name, source_database, source_table_name) =
             Self::materialized_view_source_table(original_metadata)?;
-        if !source_catalog_name.eq_ignore_ascii_case(CATALOG_DEFAULT)
-            || !is_supported_materialized_view_source(source_table.as_ref())
-        {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "Materialized view source '{}.{}.{}' must be a persistent base table in the default catalog using FUSE engine",
-                source_catalog_name, source_database, source_table_name
-            )));
-        }
         let source_table_id = source_table.get_id();
         let source_table_seq = source_table.get_table_info().ident.seq;
         let source_table_option =
@@ -568,7 +552,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
-                        target: TableMaintenanceTarget::MaterializedView { table_id },
+                        target: MaintenanceTarget::MaterializedView { table_id },
                         branch: None,
                         cluster_keys,
                     },
@@ -580,7 +564,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
-                    target: TableMaintenanceTarget::MaterializedView { table_id },
+                    target: MaintenanceTarget::MaterializedView { table_id },
                     branch: None,
                 },
             ))),
@@ -598,7 +582,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
-                    target: TableMaintenanceTarget::MaterializedView { table_id },
+                    target: MaintenanceTarget::MaterializedView { table_id },
                     limit: limit.map(|value| value as usize),
                     selection: None,
                     is_final: *is_final,
@@ -608,39 +592,6 @@ impl Binder {
                 "unsupported ALTER MATERIALIZED VIEW action: {action}"
             ))),
         }
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_optimize_materialized_view(
-        &mut self,
-        stmt: &OptimizeTableStmt,
-    ) -> Result<Plan> {
-        let OptimizeTableStmt {
-            catalog,
-            database,
-            table,
-            action,
-            limit,
-        } = stmt;
-        let (catalog, database, table, mv_table) = self
-            .resolve_materialized_view_target(catalog, database, table)
-            .await?;
-        let OptimizeTableAction::Compact { target } = action else {
-            return Err(ErrorCode::SemanticError(format!(
-                "unsupported OPTIMIZE MATERIALIZED VIEW action: {action}"
-            )));
-        };
-
-        Ok(Self::build_optimize_compact_plan(
-            catalog,
-            database,
-            table,
-            TableMaintenanceTarget::MaterializedView {
-                table_id: mv_table.get_id(),
-            },
-            target,
-            limit.map(|value| value as usize),
-        ))
     }
 
     #[async_backtrace::framed]
@@ -695,7 +646,7 @@ impl Binder {
                 catalog,
                 database,
                 view_name,
-                target: TableMaintenanceTarget::MaterializedView {
+                target: MaintenanceTarget::MaterializedView {
                     table_id: mv_table_id,
                 },
                 source_table_id,

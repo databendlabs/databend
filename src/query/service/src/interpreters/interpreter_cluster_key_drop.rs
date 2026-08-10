@@ -19,7 +19,7 @@ use databend_common_sql::plans::DropTableClusterKeyPlan;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
 use super::Interpreter;
-use crate::interpreters::common::check_table_maintenance_target;
+use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -55,7 +55,7 @@ impl Interpreter for DropTableClusterKeyInterpreter {
         let table = catalog
             .get_table_with_branch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
             .await?;
-        check_table_maintenance_target(table.as_ref(), &plan.target)?;
+        check_maintenance_target(table.as_ref(), &plan.target)?;
 
         if table.cluster_key_meta().is_none() {
             return Ok(PipelineBuildResult::create());

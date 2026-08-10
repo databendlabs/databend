@@ -222,7 +222,6 @@ pub enum Statement {
     // Materialized Views
     CreateMaterializedView(CreateMaterializedViewStmt),
     AlterMaterializedView(AlterMaterializedViewStmt),
-    OptimizeMaterializedView(OptimizeTableStmt),
     DropMaterializedView(DropMaterializedViewStmt),
     RefreshMaterializedView(RefreshMaterializedViewStmt),
     ShowCreateMaterializedView(ShowCreateMaterializedViewStmt),
@@ -552,7 +551,6 @@ impl Statement {
             | Statement::ShowTablesStatus(..)
             | Statement::ShowDropTables(..)
             | Statement::OptimizeTable(..)
-            | Statement::OptimizeMaterializedView(..)
             | Statement::VacuumTable(..)
             | Statement::VacuumDropTable(..)
             | Statement::VacuumTemporaryFiles(..)
@@ -950,9 +948,6 @@ impl Display for Statement {
             Statement::DescribeView(stmt) => write!(f, "{stmt}")?,
             Statement::CreateMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterMaterializedView(stmt) => write!(f, "{stmt}")?,
-            Statement::OptimizeMaterializedView(stmt) => {
-                stmt.fmt_with_target(f, "MATERIALIZED VIEW")?
-            }
             Statement::DropMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateMaterializedView(stmt) => write!(f, "{stmt}")?,

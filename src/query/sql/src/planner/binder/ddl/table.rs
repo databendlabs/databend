@@ -157,6 +157,7 @@ use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTableTagPlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::MaintenanceTarget;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
@@ -175,7 +176,6 @@ use crate::plans::RewriteKind;
 use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::SwapTablePlan;
-use crate::plans::TableMaintenanceTarget;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
@@ -1491,7 +1491,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
-                        target: TableMaintenanceTarget::Table,
+                        target: MaintenanceTarget::Table,
                         branch,
                         cluster_keys,
                     },
@@ -1562,7 +1562,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
-                    target: TableMaintenanceTarget::Table,
+                    target: MaintenanceTarget::Table,
                     branch,
                 },
             ))),
@@ -1574,7 +1574,7 @@ impl Binder {
                 catalog,
                 database,
                 table,
-                target: TableMaintenanceTarget::Table,
+                target: MaintenanceTarget::Table,
                 limit: limit.map(|v| v as usize),
                 selection: selection.clone(),
                 is_final: *is_final,
@@ -1778,44 +1778,6 @@ impl Binder {
         })))
     }
 
-    pub(super) fn build_optimize_compact_plan(
-        catalog: String,
-        database: String,
-        table: String,
-        maintenance_target: TableMaintenanceTarget,
-        compact_target: &CompactTarget,
-        limit: Option<usize>,
-    ) -> Plan {
-        match compact_target {
-            CompactTarget::Block => {
-                let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
-                    catalog,
-                    database,
-                    table,
-                    target: maintenance_target,
-                    limit: CompactionLimits {
-                        segment_limit: limit,
-                        block_limit: None,
-                    },
-                });
-                let s_expr = SExpr::create_leaf(Arc::new(compact_block));
-                Plan::OptimizeCompactBlock {
-                    s_expr: Box::new(s_expr),
-                    need_purge: false,
-                }
-            }
-            CompactTarget::Segment => {
-                Plan::OptimizeCompactSegment(Box::new(OptimizeCompactSegmentPlan {
-                    catalog,
-                    database,
-                    table,
-                    target: maintenance_target,
-                    num_segment_limit: limit,
-                }))
-            }
-        }
-    }
-
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_optimize_table(
         &mut self,
@@ -1839,7 +1801,6 @@ impl Binder {
                     catalog,
                     database,
                     table,
-                    target: TableMaintenanceTarget::Table,
                     limit: CompactionLimits {
                         segment_limit: limit,
                         block_limit: None,
@@ -1866,14 +1827,32 @@ impl Binder {
                     num_snapshot_limit: limit,
                 }))
             }
-            AstOptimizeTableAction::Compact { target } => Self::build_optimize_compact_plan(
-                catalog,
-                database,
-                table,
-                TableMaintenanceTarget::Table,
-                target,
-                limit,
-            ),
+            AstOptimizeTableAction::Compact { target } => match target {
+                CompactTarget::Block => {
+                    let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+                        catalog,
+                        database,
+                        table,
+                        limit: CompactionLimits {
+                            segment_limit: limit,
+                            block_limit: None,
+                        },
+                    });
+                    let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+                    Plan::OptimizeCompactBlock {
+                        s_expr: Box::new(s_expr),
+                        need_purge: false,
+                    }
+                }
+                CompactTarget::Segment => {
+                    Plan::OptimizeCompactSegment(Box::new(OptimizeCompactSegmentPlan {
+                        catalog,
+                        database,
+                        table,
+                        num_segment_limit: limit,
+                    }))
+                }
+            },
         };
 
         Ok(plan)

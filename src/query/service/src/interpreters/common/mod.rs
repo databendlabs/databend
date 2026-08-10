@@ -34,7 +34,7 @@ pub use grant::validate_grant_object_exists;
 pub use lineage_log::log_lineage_object_deletion;
 pub use lineage_log::log_query_lineage;
 pub use log::*;
-pub use materialized_view::check_table_maintenance_target;
+pub use materialized_view::check_maintenance_target;
 pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;
 pub use stream::dml_build_update_stream_req;

@@ -14,12 +14,8 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SampleConfig;
-use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
-use databend_common_ast::ast::TableReference;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
@@ -28,7 +24,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::MVDefinition;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -69,17 +64,14 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         mv_definition: &MVDefinition,
-        source_database: &str,
-        source_table_name: &str,
         database: &str,
         table_name: &str,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        let mut query = parse_materialized_view_query(
+        let query = parse_materialized_view_query(
             &mv_definition.original_query,
             "invalid materialized view logical query",
         )?;
-        Self::rewrite_materialized_view_source(&mut query, source_database, source_table_name)?;
 
         // Bind with the current binder so the source table enters this query's metadata.
         let mut definition_context = BindContext::with_parent(bind_context.clone())?;
@@ -116,26 +108,6 @@ impl Binder {
             }
         }
         Ok((s_expr, logical_context))
-    }
-
-    fn rewrite_materialized_view_source(
-        query: &mut Query,
-        source_database: &str,
-        source_table_name: &str,
-    ) -> Result<()> {
-        let SetExpr::Select(select) = &mut query.body else {
-            return Err(ErrorCode::Internal(
-                "materialized view query must be a SELECT",
-            ));
-        };
-        let [TableReference::Table { table, .. }] = select.from.as_mut_slice() else {
-            return Err(ErrorCode::Internal(
-                "materialized view query must have exactly one table source",
-            ));
-        };
-        table.database = Some(Identifier::from_name(None, source_database));
-        table.table = Identifier::from_name(None, source_table_name);
-        Ok(())
     }
 
     fn build_materialized_view_final_projection(
@@ -233,95 +205,66 @@ impl Binder {
         cte_suffix_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let tenant = self.ctx.get_tenant();
-        let (
-            mv_definition,
-            source_table_id,
-            source_snapshot_location,
-            source_database,
-            source_table_name,
-        ) = databend_common_base::runtime::block_on(async {
-            let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let mv_definition = catalog
-                .get_mv_definition(&tenant, table_meta.get_id())
-                .await?
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "materialized view {} has no definition",
+        let (mv_definition, source_table_id, source_snapshot_location) =
+            databend_common_base::runtime::block_on(async {
+                let catalog = self.ctx.get_catalog(catalog_name).await?;
+                let mv_definition = catalog
+                    .get_mv_definition(&tenant, table_meta.get_id())
+                    .await?
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "materialized view {} has no definition",
+                            table_meta.name()
+                        ))
+                    })?;
+                let source_table_id = table_meta
+                    .get_table_info()
+                    .meta
+                    .materialized_view_source_table_id()
+                    .map_err(ErrorCode::from)?;
+                let source_meta = catalog
+                    .get_table_meta_by_id(source_table_id)
+                    .await?
+                    .ok_or_else(|| {
+                        ErrorCode::UnknownTable(format!(
+                            "materialized view {} source table id {} not found",
+                            table_meta.name(),
+                            source_table_id
+                        ))
+                    })?;
+                let source_snapshot_location = source_meta
+                    .data
+                    .options
+                    .get(OPT_KEY_SNAPSHOT_LOCATION)
+                    .cloned();
+                // The binding generation is immutable while the source generation only increases.
+                // Read the source generation at admission before checking the exact binding.
+                let current_source_generation = catalog
+                    .get_mv_source_generation(&tenant, source_table_id)
+                    .await?;
+                let bound_source_generation = catalog
+                    .get_mv_bound_source_generation(&tenant, source_table_id, table_meta.get_id())
+                    .await?;
+                if current_source_generation.is_none()
+                    || bound_source_generation != current_source_generation
+                {
+                    return Err(ErrorCode::InvalidMaterializedView(format!(
+                        "materialized view {} has an invalid source binding; recreate the materialized view",
                         table_meta.name()
-                    ))
-                })?;
-            let source_table_id = table_meta
-                .get_table_info()
-                .meta
-                .materialized_view_source_table_id()
-                .map_err(ErrorCode::from)?;
-            let source_meta = catalog
-                .get_table_meta_by_id(source_table_id)
-                .await?
-                .ok_or_else(|| {
-                    ErrorCode::UnknownTable(format!(
-                        "materialized view {} source table id {} not found",
-                        table_meta.name(),
-                        source_table_id
-                    ))
-                })?;
-            let source_snapshot_location = source_meta
-                .data
-                .options
-                .get(OPT_KEY_SNAPSHOT_LOCATION)
-                .cloned();
-            let source_database_id = source_meta
-                .data
-                .options
-                .get(OPT_KEY_DATABASE_ID)
-                .ok_or_else(|| ErrorCode::Internal("source table database id is missing"))?
-                .parse::<u64>()?;
-            let source_database = catalog.get_db_name_by_id(source_database_id).await?;
-            let source_table_name = catalog
-                .get_table_name_by_id(source_table_id)
-                .await?
-                .ok_or_else(|| {
-                    ErrorCode::UnknownTable(format!(
-                        "materialized view {} source table id {} not found",
-                        table_meta.name(),
-                        source_table_id
-                    ))
-                })?;
-            // The binding generation is immutable while the source generation only increases.
-            // Read the source generation at admission before checking the exact binding.
-            let current_source_generation = catalog
-                .get_mv_source_generation(&tenant, source_table_id)
-                .await?;
-            let bound_source_generation = catalog
-                .get_mv_bound_source_generation(&tenant, source_table_id, table_meta.get_id())
-                .await?;
-            if current_source_generation.is_none()
-                || bound_source_generation != current_source_generation
-            {
-                return Err(ErrorCode::InvalidMaterializedView(format!(
-                    "materialized view {} has an invalid source binding; recreate the materialized view",
-                    table_meta.name()
-                )));
-            }
-            Ok::<_, ErrorCode>((
-                mv_definition,
-                source_table_id,
-                source_snapshot_location,
-                source_database,
-                source_table_name,
-            ))
-        })?;
+                    )));
+                }
+                Ok::<_, ErrorCode>((mv_definition, source_table_id, source_snapshot_location))
+            })?;
 
         // Aggregate MV storage contains serialized states. Reading and merging those states across
         // cluster nodes needs an explicit distributed plan boundary, which is deferred to a follow-up
         // change. Until then, aggregate MVs always execute their persisted logical definition against
         // the source table, even when their storage checkpoint is fresh.
-        let mut query = parse_materialized_view_query(
+        let query = parse_materialized_view_query(
             &mv_definition.data.query,
             "invalid materialized view physical query",
         )?;
         let definition_metadata = Metadata::default_ref();
-        Self::rewrite_materialized_view_source(&mut query, &source_database, &source_table_name)?;
         let mut definition_binder = Binder::new(
             self.ctx.clone(),
             self.catalogs.clone(),
@@ -342,8 +285,6 @@ impl Binder {
             return self.bind_materialized_view_fallback(
                 bind_context,
                 &mv_definition.data,
-                &source_database,
-                &source_table_name,
                 database,
                 table_name,
                 alias,
@@ -363,8 +304,6 @@ impl Binder {
             return self.bind_materialized_view_fallback(
                 bind_context,
                 &mv_definition.data,
-                &source_database,
-                &source_table_name,
                 database,
                 table_name,
                 alias,

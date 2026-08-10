@@ -355,9 +355,6 @@ impl Binder {
             Statement::AlterMaterializedView(stmt) => {
                 self.bind_alter_materialized_view(stmt).await?
             }
-            Statement::OptimizeMaterializedView(stmt) => {
-                self.bind_optimize_materialized_view(stmt).await?
-            }
             Statement::DropMaterializedView(stmt) => self.bind_drop_materialized_view(stmt).await?,
             Statement::RefreshMaterializedView(stmt) => {
                 self.bind_refresh_materialized_view(stmt).await?

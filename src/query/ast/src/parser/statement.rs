@@ -1665,20 +1665,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
-    let optimize_materialized_view = map(
-        rule! {
-            OPTIMIZE ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
-        },
-        |(_, _, _, (catalog, database, table), action, opt_limit)| {
-            Statement::OptimizeMaterializedView(OptimizeTableStmt {
-                catalog,
-                database,
-                table,
-                action,
-                limit: opt_limit.map(|(_, limit)| limit),
-            })
-        },
-    );
     let drop_materialized_view = map(
         rule! {
             DROP ~ MATERIALIZED ~ ^VIEW ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
@@ -3090,10 +3076,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ABORT | ROLLBACK => rule!(#abort).parse(i),
         TRUNCATE => rule!(#truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             ).parse(i),
-        OPTIMIZE => rule!(
-            #optimize_materialized_view : "`OPTIMIZE MATERIALIZED VIEW [<database>.]<view> COMPACT [SEGMENT] [LIMIT <limit>]`"
-            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
-        ).parse(i),
+        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+            ).parse(i),
         VACUUM => rule!(
             #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"

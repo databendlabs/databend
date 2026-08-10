@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_sql::plans::OptimizeCompactSegmentPlan;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::common::check_table_maintenance_target;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -66,7 +66,7 @@ impl Interpreter for OptimizeCompactSegmentInterpreter {
                 &self.plan.table,
             )
             .await?;
-        check_table_maintenance_target(table.as_ref(), &self.plan.target)?;
+        table.check_mutable()?;
 
         let mut build_res = PipelineBuildResult::create();
         table

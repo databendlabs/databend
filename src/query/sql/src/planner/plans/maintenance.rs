@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum TableMaintenanceTarget {
+pub enum MaintenanceTarget {
     Table,
     MaterializedView { table_id: u64 },
 }
