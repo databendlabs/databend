@@ -109,6 +109,15 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
+    /// Returns the source table whose data columns a stream exposes.
+    ///
+    /// Lineage intentionally passes through a stream to its source table.
+    /// Views are lineage boundaries and must not use this relation-level hook;
+    /// their output columns are annotated separately by the planner.
+    fn stream_source_table_info(&self) -> Option<&TableInfo> {
+        None
+    }
+
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::TableSource(self.get_table_info().clone())
     }
