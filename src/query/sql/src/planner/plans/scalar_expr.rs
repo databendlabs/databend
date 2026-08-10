@@ -160,7 +160,23 @@ impl ScalarExpr {
     }
 
     pub fn data_type(&self) -> Result<DataType> {
-        Ok(self.as_expr()?.data_type().clone())
+        match self {
+            ScalarExpr::BoundColumnRef(column) => Ok((*column.column.data_type).clone()),
+            ScalarExpr::ConstantExpr(constant) => Ok(constant.value.as_ref().infer_data_type()),
+            ScalarExpr::TypedConstantExpr(_, data_type) => Ok(data_type.clone()),
+            ScalarExpr::WindowFunction(window) => Ok(window.func.return_type()),
+            ScalarExpr::AggregateFunction(aggregate) => Ok((*aggregate.return_type).clone()),
+            ScalarExpr::LambdaFunction(function) => Ok((*function.return_type).clone()),
+            // TODO: Cache the return type once expression rewrites reliably invalidate it when
+            // function arguments change.
+            ScalarExpr::FunctionCall(_) => Ok(self.as_expr()?.data_type().clone()),
+            ScalarExpr::CastExpr(cast) => Ok((*cast.target_type).clone()),
+            ScalarExpr::SubqueryExpr(subquery) => Ok(subquery.output_data_type()),
+            ScalarExpr::UDFCall(udf) => Ok((*udf.return_type).clone()),
+            ScalarExpr::UDAFCall(udaf) => Ok((*udaf.return_type).clone()),
+            ScalarExpr::UDFLambdaCall(udf) => udf.scalar.data_type(),
+            ScalarExpr::AsyncFunctionCall(function) => Ok((*function.return_type).clone()),
+        }
     }
 
     pub fn used_columns(&self) -> ColumnSet {

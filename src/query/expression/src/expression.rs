@@ -414,25 +414,18 @@ pub trait ExprVisitor<I: ColumnIndex>: Sized {
             args,
             return_type,
         } = call;
-        let new_args = args
-            .iter()
-            .map(|arg| Ok((visit_expr(arg, visitor)?, arg)))
-            .collect::<Result<Vec<_>, _>>()?;
-        if new_args.iter().all(|(v, _)| v.is_none()) {
-            Ok(None)
-        } else {
-            Ok(Some(Expr::FunctionCall(FunctionCall {
-                span: *span,
-                id: id.clone(),
-                function: function.clone(),
-                generics: generics.clone(),
-                args: new_args
-                    .into_iter()
-                    .map(|(new, old)| new.unwrap_or_else(|| old.clone()))
-                    .collect(),
-                return_type: return_type.clone(),
-            })))
-        }
+        let Some(args) = visit_expr_args(args, visitor)? else {
+            return Ok(None);
+        };
+
+        Ok(Some(Expr::FunctionCall(FunctionCall {
+            span: *span,
+            id: id.clone(),
+            function: function.clone(),
+            generics: generics.clone(),
+            args,
+            return_type: return_type.clone(),
+        })))
     }
 
     fn enter_lambda_function_call(
@@ -457,26 +450,46 @@ pub trait ExprVisitor<I: ColumnIndex>: Sized {
             lambda_display,
             return_type,
         } = call;
-        let new_args = args
-            .iter()
-            .map(|arg| Ok((visit_expr(arg, visitor)?, arg)))
-            .collect::<Result<Vec<_>, _>>()?;
-        if new_args.iter().all(|(v, _)| v.is_none()) {
-            Ok(None)
-        } else {
-            Ok(Some(Expr::LambdaFunctionCall(LambdaFunctionCall {
-                span: *span,
-                name: name.clone(),
-                args: new_args
-                    .into_iter()
-                    .map(|(new, old)| new.unwrap_or_else(|| old.clone()))
-                    .collect(),
-                lambda_expr: lambda_expr.clone(),
-                lambda_display: lambda_display.clone(),
-                return_type: return_type.clone(),
-            })))
+        let Some(args) = visit_expr_args(args, visitor)? else {
+            return Ok(None);
+        };
+
+        Ok(Some(Expr::LambdaFunctionCall(LambdaFunctionCall {
+            span: *span,
+            name: name.clone(),
+            args,
+            lambda_expr: lambda_expr.clone(),
+            lambda_display: lambda_display.clone(),
+            return_type: return_type.clone(),
+        })))
+    }
+}
+
+fn visit_expr_args<Index: ColumnIndex, V: ExprVisitor<Index>>(
+    args: &[Expr<Index>],
+    visitor: &mut V,
+) -> Result<Option<Vec<Expr<Index>>>, V::Error> {
+    let mut new_args = None;
+
+    for (index, arg) in args.iter().enumerate() {
+        match visit_expr(arg, visitor)? {
+            Some(new_arg) => {
+                let new_args = new_args.get_or_insert_with(|| {
+                    let mut new_args = Vec::with_capacity(args.len());
+                    new_args.extend(args[..index].iter().cloned());
+                    new_args
+                });
+                new_args.push(new_arg);
+            }
+            None => {
+                if let Some(new_args) = &mut new_args {
+                    new_args.push(arg.clone());
+                }
+            }
         }
     }
+
+    Ok(new_args)
 }
 
 #[recursive::recursive]
