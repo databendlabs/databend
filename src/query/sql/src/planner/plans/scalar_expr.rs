@@ -31,7 +31,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::FunctionKind;
-use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
@@ -279,21 +278,6 @@ impl ScalarExpr {
         let mut visitor = ContainsNextvalVisitor { has_nextval: false };
         visitor.visit(self).unwrap();
         visitor.has_nextval
-    }
-
-    pub fn is_deterministic(&self, registry: &FunctionRegistry) -> bool {
-        let mut visitor = DeterministicVisitor {
-            non_deterministic: false,
-        };
-        visitor.visit(self).unwrap();
-
-        if visitor.non_deterministic {
-            return false;
-        }
-
-        self.as_expr()
-            .map(|expr| expr.is_deterministic(registry))
-            .unwrap_or(false)
     }
 
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
@@ -639,24 +623,6 @@ impl<'a> Visitor<'a> for ContainsNextvalVisitor {
                 self.visit(expr)?;
             }
         }
-        Ok(())
-    }
-}
-
-struct DeterministicVisitor {
-    non_deterministic: bool,
-}
-
-impl<'a> Visitor<'a> for DeterministicVisitor {
-    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
-        if self.non_deterministic {
-            return Ok(());
-        }
-        walk_expr(self, expr)
-    }
-
-    fn visit_async_function_call(&mut self, _: &'a AsyncFunctionCall) -> Result<()> {
-        self.non_deterministic = true;
         Ok(())
     }
 }
@@ -1788,7 +1754,7 @@ mod tests {
         assert!(expr.is_compile_time_evaluable());
         assert!(expr.contains_nextval());
         assert!(
-            !expr.is_deterministic(&BUILTIN_FUNCTIONS),
+            !expr.is_deterministic(),
             "AsyncFunctionCall wrapped in CastExpr should stay non-deterministic at the ScalarExpr layer"
         );
     }
