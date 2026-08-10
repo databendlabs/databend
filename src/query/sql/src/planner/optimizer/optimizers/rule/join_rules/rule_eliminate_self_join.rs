@@ -328,8 +328,13 @@ impl RuleEliminateSelfJoin {
             node = node.unary_child();
         }
 
-        while matches!(node.plan(), RelOperator::Filter(_)) {
-            strict = true;
+        while let RelOperator::Filter(filter) = node.plan() {
+            // Optimizer-derived predicates (e.g. `is_not_null` from the null
+            // addition rule) are semantically redundant with the join itself,
+            // so they must not turn a loose candidate into a strict one.
+            if !filter.predicates.iter().all(|p| p.is_derived()) {
+                strict = true;
+            }
             node = node.unary_child();
         }
 
@@ -389,17 +394,19 @@ impl RuleEliminateSelfJoin {
         })
     }
 
-    /// Sorted, deduplicated canonical signatures of the scan's predicates
-    /// (`push_down_predicates` + prewhere). Only deterministic predicates may
-    /// participate: two branches with identical `rand() < 0.5` filters still
-    /// sample *different* row sets, so a volatile predicate must reject the
-    /// candidate. Returns `None` if any predicate cannot be normalized
-    /// (subquery, UDF, non-base column, ...), rejecting the candidate
-    /// conservatively.
+    /// Sorted, deduplicated canonical signatures of the scan's user-visible
+    /// predicates (`push_down_predicates` + prewhere). Optimizer-derived
+    /// predicates are semantically redundant with the query itself and are
+    /// excluded, so they never affect candidate grouping. Only deterministic
+    /// predicates may participate: two branches with identical `rand() < 0.5`
+    /// filters still sample *different* row sets, so a volatile predicate must
+    /// reject the candidate. Returns `None` if any predicate cannot be
+    /// normalized (subquery, UDF, non-base column, ...), rejecting the
+    /// candidate conservatively.
     fn scan_predicate_signatures(scan: &Scan, metadata: &Metadata) -> Option<Vec<String>> {
         let mut sigs = Vec::new();
         if let Some(predicates) = &scan.push_down_predicates {
-            for p in predicates.iter() {
+            for p in predicates.iter().filter(|p| !p.is_derived()) {
                 if !p.is_deterministic() {
                     return None;
                 }
@@ -407,7 +414,7 @@ impl RuleEliminateSelfJoin {
             }
         }
         if let Some(prewhere) = &scan.prewhere {
-            for p in prewhere.predicates.iter() {
+            for p in prewhere.predicates.iter().filter(|p| !p.is_derived()) {
                 if !p.is_deterministic() {
                     return None;
                 }

@@ -109,7 +109,7 @@ AggregateFinal
         │                       ├── read size: 0
         │                       ├── partitions total: 0
         │                       ├── partitions scanned: 0
-        │                       ├── push downs: [filters: [is_true(t2.sid (#1) = 1)], limit: NONE]
+        │                       ├── push downs: [filters: [is_not_null(t2.sid (#1)) and t2.sid (#1) = 1], limit: NONE]
         │                       ├── apply join filters: [#0]
         │                       └── estimated rows: 0.00
         └── AggregateFinal

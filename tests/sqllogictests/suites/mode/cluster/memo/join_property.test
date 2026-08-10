@@ -127,13 +127,14 @@ Memo
 ├── Group #1
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: []
-│   │   └── { dist: Hash(t_10.a (#1)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   ├── { dist: Broadcast }: expr: #1, cost: 1010.000, children: [{ dist: Any }]
+│   │   └── { dist: Hash(t_10.a (#1)::Int32 NULL) }: expr: #2, cost: 520.000, children: [{ dist: Any }]
 │   ├── #0 Scan []
-│   └── #1 Exchange: (Hash(t_10.a (#1)::Int32 NULL)) [#1]
+│   ├── #1 Exchange: (Broadcast) [#1]
+│   └── #2 Exchange: (Hash(t_10.a (#1)::Int32 NULL)) [#1]
 ├── Group #2
 │   ├── Best properties
-│   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_1000.a (#0)::Int32 NULL) }, { dist: Hash(t_10.a (#1)::Int32 NULL) }]
-│   │   └── { dist: Hash(t_1000.a (#0)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: Hash(t_1000.a (#0)::Int32 NULL) }: expr: #0, cost: 53620.000, children: [{ dist: Hash(t_1000.a (#0)::Int32 NULL) }, { dist: Hash(t_10.a (#1)::Int32 NULL) }]
 │   ├── #0 Join [#0, #1]
 │   └── #1 Exchange: (Hash(t_1000.a (#0)::Int32 NULL)) [#2]
 ├── Group #3

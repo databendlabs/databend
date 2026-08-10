@@ -24,9 +24,11 @@ Sequence
     └── UdfScript
         └── EvalScalar
             └── Join: INNER
-                ├── MaterializedCTERef: __materialized_cte_0_high_value output_columns=2
+                ├── Filter
+                │   └── MaterializedCTERef: __materialized_cte_0_high_value output_columns=2
                 └── Join: INNER
-                    ├── MaterializedCTERef: __materialized_cte_0_high_value output_columns=2
+                    ├── Filter
+                    │   └── MaterializedCTERef: __materialized_cte_0_high_value output_columns=2
                     └── Scan: default.statistics_trace_customers (#2) rows=3 row_access_policy=true
 
 

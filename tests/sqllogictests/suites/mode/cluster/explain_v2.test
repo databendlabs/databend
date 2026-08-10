@@ -369,16 +369,20 @@ AggregateFinal
                     ├── output columns: [a (#2)]
                     ├── expressions: [CAST(numbers.number (#0) AS UInt64 NULL)]
                     ├── estimated rows: 10.00
-                    └── TableScan
-                        ├── table: default.system.numbers
-                        ├── scan id: 0
-                        ├── output columns: [number (#0)]
-                        ├── read rows: 10
-                        ├── read size: < 1 KiB
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 10.00
+                    └── Filter
+                        ├── output columns: [numbers.number (#0)]
+                        ├── filters: [true]
+                        ├── estimated rows: 10.00
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── scan id: 0
+                            ├── output columns: [number (#0)]
+                            ├── read rows: 10
+                            ├── read size: < 1 KiB
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            ├── push downs: [filters: [true], limit: NONE]
+                            └── estimated rows: 10.00
 
 statement ok
 drop table t1;
@@ -438,7 +442,7 @@ Exchange
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [], limit: NONE]
+        ├── push downs: [filters: [is_not_null(t1.a (#0))], limit: NONE]
         ├── apply join filters: [#0]
         └── estimated rows: 3.00
 
@@ -548,6 +552,6 @@ Exchange
                             ├── read size: 0
                             ├── partitions total: 0
                             ├── partitions scanned: 0
-                            ├── push downs: [filters: [is_true(a00c.a0w (#19) = '汇缴')], limit: NONE]
+                            ├── push downs: [filters: [a00c.a0w (#19) = '汇缴' and is_not_null(a00c.a0f (#2))], limit: NONE]
                             ├── apply join filters: [#0]
                             └── estimated rows: 0.00

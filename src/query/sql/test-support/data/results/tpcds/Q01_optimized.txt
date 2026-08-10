@@ -51,17 +51,17 @@ TopN
                 │       │       │                                       ├── Exchange(Broadcast)
                 │       │       │                                       │   └── Scan
                 │       │       │                                       │       ├── table: default.date_dim (#5)
-                │       │       │                                       │       ├── filters: [eq(date_dim.d_year (#122), 2001)]
+                │       │       │                                       │       ├── filters: [eq(date_dim.d_year (#122), 2001), is_not_null(date_dim.d_date_sk (#116))]
                 │       │       │                                       │       ├── order by: []
                 │       │       │                                       │       └── limit: NONE
                 │       │       │                                       └── Scan
                 │       │       │                                           ├── table: default.store_returns (#4)
-                │       │       │                                           ├── filters: []
+                │       │       │                                           ├── filters: [is_not_null(store_returns.sr_returned_date_sk (#96)), is_not_null(store_returns.sr_store_sk (#103))]
                 │       │       │                                           ├── order by: []
                 │       │       │                                           └── limit: NONE
                 │       │       └── Scan
                 │       │           ├── table: default.store (#2)
-                │       │           ├── filters: [eq(store.s_state (#73), 'TN')]
+                │       │           ├── filters: [eq(store.s_state (#73), 'TN'), is_not_null(store.s_store_sk (#49))]
                 │       │           ├── order by: []
                 │       │           └── limit: NONE
                 │       └── Aggregate(Final)
@@ -81,17 +81,17 @@ TopN
                 │                           ├── Exchange(Broadcast)
                 │                           │   └── Scan
                 │                           │       ├── table: default.date_dim (#1)
-                │                           │       ├── filters: [eq(date_dim.d_year (#26), 2001)]
+                │                           │       ├── filters: [eq(date_dim.d_year (#26), 2001), is_not_null(date_dim.d_date_sk (#20))]
                 │                           │       ├── order by: []
                 │                           │       └── limit: NONE
                 │                           └── Scan
                 │                               ├── table: default.store_returns (#0)
-                │                               ├── filters: []
+                │                               ├── filters: [is_not_null(store_returns.sr_returned_date_sk (#0)), is_not_null(store_returns.sr_store_sk (#7)), is_not_null(store_returns.sr_customer_sk (#3))]
                 │                               ├── order by: []
                 │                               └── limit: NONE
                 └── Scan
                     ├── table: default.customer (#3)
-                    ├── filters: []
+                    ├── filters: [is_not_null(customer.c_customer_sk (#78))]
                     ├── order by: []
                     └── limit: NONE
 

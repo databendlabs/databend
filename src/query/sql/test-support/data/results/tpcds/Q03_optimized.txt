@@ -24,7 +24,7 @@ TopN
                             ├── Exchange(Broadcast)
                             │   └── Scan
                             │       ├── table: default.item (#2)
-                            │       ├── filters: [eq(item.i_manufact_id (#64), 128)]
+                            │       ├── filters: [eq(item.i_manufact_id (#64), 128), is_not_null(item.i_item_sk (#51))]
                             │       ├── order by: []
                             │       └── limit: NONE
                             └── Join(Inner)
@@ -34,12 +34,12 @@ TopN
                                 ├── Exchange(Broadcast)
                                 │   └── Scan
                                 │       ├── table: default.date_dim (#0)
-                                │       ├── filters: [eq(date_dim.d_moy (#8), 11)]
+                                │       ├── filters: [eq(date_dim.d_moy (#8), 11), is_not_null(date_dim.d_date_sk (#0))]
                                 │       ├── order by: []
                                 │       └── limit: NONE
                                 └── Scan
                                     ├── table: default.store_sales (#1)
-                                    ├── filters: []
+                                    ├── filters: [is_not_null(store_sales.ss_sold_date_sk (#28)), is_not_null(store_sales.ss_item_sk (#30))]
                                     ├── order by: []
                                     └── limit: NONE
 
