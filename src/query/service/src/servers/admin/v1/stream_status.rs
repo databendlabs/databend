@@ -18,7 +18,9 @@ use databend_common_exception::Result;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_storages_stream::stream_table::StreamStatus;
 use databend_common_storages_stream::stream_table::StreamTable;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use fastrace::func_name;
 use log::debug;
 use poem::IntoResponse;
@@ -61,8 +63,14 @@ async fn check_stream_status(
             AppError::from(err)
         })?;
 
+    let source_snapshot_loc = seqv.data.options.get(OPT_KEY_SNAPSHOT_LOCATION);
+    let has_data = matches!(
+        stream.check_stream_status(seqv.seq, source_snapshot_loc.map(String::as_str))?,
+        StreamStatus::MayHaveData
+    );
+
     Ok(StreamStatusResponse {
-        has_data: seqv.seq != stream.offset()?,
+        has_data,
         params: params.0,
     })
 }
