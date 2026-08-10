@@ -31,6 +31,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
+use databend_common_pipeline_transforms::BlockCompactBuilder;
+use databend_common_pipeline_transforms::TransformCompactBlock;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_compact_block_pipeline;
@@ -79,7 +81,13 @@ impl FuseTable {
             });
         } else {
             let block_thresholds = self.get_block_thresholds();
-            build_compact_block_pipeline(pipeline, block_thresholds)?;
+            if self.use_hash_write_distribution() {
+                pipeline
+                    .add_accumulating_transformer(|| BlockCompactBuilder::new(block_thresholds));
+                pipeline.add_block_meta_transformer(|| TransformCompactBlock);
+            } else {
+                build_compact_block_pipeline(pipeline, block_thresholds)?;
+            }
 
             let schema = DataSchema::from(self.schema()).into();
             let cluster_stats_gen =
