@@ -38,6 +38,7 @@ use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
+use databend_enterprise_materialized_view::get_materialized_view_handler;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
@@ -403,8 +404,8 @@ impl ShowCreateTableInterpreter {
         database: &str,
     ) -> Result<String> {
         let name = table.name();
-        let definition = catalog
-            .get_mv_definition(tenant, table.get_id())
+        let definition = get_materialized_view_handler()
+            .get_mv_definition(catalog, tenant, table.get_id())
             .await?
             .ok_or_else(|| {
                 ErrorCode::Internal(

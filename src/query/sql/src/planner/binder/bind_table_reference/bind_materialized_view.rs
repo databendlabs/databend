@@ -34,9 +34,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
+use databend_enterprise_materialized_view::get_materialized_view_handler;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
@@ -570,6 +573,9 @@ impl Binder {
         sample: &Option<SampleConfig>,
         cte_suffix_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
+
         let tenant = self.ctx.get_tenant();
         let source_table_id = table_meta
             .get_table_info()
@@ -578,8 +584,13 @@ impl Binder {
             .map_err(ErrorCode::from)?;
         let mv_definition = databend_common_base::runtime::block_on(async {
             let catalog = self.ctx.get_catalog(catalog_name).await?;
-            catalog
-                .get_active_mv_definition(&tenant, source_table_id, table_meta.get_id())
+            get_materialized_view_handler()
+                .get_active_mv_definition(
+                    catalog.as_ref(),
+                    &tenant,
+                    source_table_id,
+                    table_meta.get_id(),
+                )
                 .await?
                 .ok_or_else(|| {
                     ErrorCode::InvalidMaterializedView(format!(

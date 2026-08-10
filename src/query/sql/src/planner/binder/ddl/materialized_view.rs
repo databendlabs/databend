@@ -43,11 +43,14 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_enterprise_materialized_view::get_materialized_view_handler;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -121,6 +124,11 @@ fn normalize_null_fields(schema: TableSchemaRef) -> TableSchemaRef {
 }
 
 impl Binder {
+    fn check_materialized_view_license(&self) -> Result<()> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)
+    }
+
     async fn resolve_materialized_view_target(
         &self,
         catalog: &Option<Identifier>,
@@ -262,6 +270,8 @@ impl Binder {
         &mut self,
         stmt: &CreateMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let CreateMaterializedViewStmt {
             create_option,
             catalog,
@@ -369,8 +379,8 @@ impl Binder {
                 ]),
             });
         let source_catalog = self.ctx.get_catalog(&source_catalog_name).await?;
-        let expected_source_generation = source_catalog
-            .get_mv_current_source_generation(&tenant, source_table_id)
+        let expected_source_generation = get_materialized_view_handler()
+            .get_mv_current_source_generation(source_catalog.as_ref(), &tenant, source_table_id)
             .await?
             .unwrap_or(0);
 
@@ -541,6 +551,8 @@ impl Binder {
         &mut self,
         stmt: &AlterMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let AlterMaterializedViewStmt {
             catalog,
             database,
@@ -618,6 +630,8 @@ impl Binder {
         &mut self,
         stmt: &DropMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let DropMaterializedViewStmt {
             if_exists,
             catalog,
@@ -643,6 +657,8 @@ impl Binder {
         &mut self,
         stmt: &RefreshMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let RefreshMaterializedViewStmt {
             catalog,
             database,
@@ -667,6 +683,8 @@ impl Binder {
         _bind_context: &mut BindContext,
         stmt: &ShowCreateMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let ShowCreateMaterializedViewStmt {
             catalog,
             database,
@@ -694,6 +712,8 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &ShowMaterializedViewsStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let ShowMaterializedViewsStmt {
             catalog,
             database,

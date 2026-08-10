@@ -4825,6 +4825,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-materialized-view",
  "databend-enterprise-row-access-policy-feature",
  "databend-meta-client 260205.13.2",
  "databend-meta-runtime",
@@ -5575,6 +5576,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-enterprise-materialized-view"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-meta-app",
+ "databend-meta-client 260205.13.2",
+]
+
+[[package]]
 name = "databend-enterprise-meta"
 version = "0.1.0"
 
@@ -5588,6 +5602,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "dashmap 6.1.0",
+ "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-config",
@@ -5607,6 +5622,7 @@ dependencies = [
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
+ "databend-enterprise-materialized-view",
  "databend-enterprise-resources-management",
  "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-storage-encryption",
@@ -6590,6 +6606,7 @@ dependencies = [
  "databend-common-version",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-materialized-view",
  "databend-enterprise-query",
  "databend-enterprise-resources-management",
  "databend-enterprise-row-access-policy-feature",
