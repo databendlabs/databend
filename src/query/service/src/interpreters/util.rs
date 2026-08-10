@@ -40,6 +40,7 @@ use crate::interpreters::InterpreterFactory;
 use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 
 pub fn check_system_history(
@@ -146,11 +147,11 @@ impl Client for ScriptClient {
     async fn query(&self, query: &str) -> databend_common_exception::Result<Self::Set> {
         // Note: we can't use `QueryContext::create_from`, which does not create a new query.
         // It clones the outer QueryContext and, crucially, shares the same QueryContextShared that the HTTP query engine is already using for the top‑level EXECUTE IMMEDIATE. That shared state contains the running executor and the HTTP PageManager (see HttpQuery::try_create and ExecuteState::pull_and_send). When the RETURN TABLE sub‑query is executed with that shared context, its batches are published straight into the HTTP response queue as if they were the final query result. The HTTP handler drains those pages immediately, so by the time the script engine tries to build the ReturnValue::Set, blocks is empty and the returned table has zero rows. Running the same SELECT outside of the script still works because that query isn’t executed inside an already running HTTP context.
+        // Each script statement is a new query, but must plan against the parent's cluster.
         let ctx = self
             .ctx
             .get_current_session()
-            .create_query_context(&BUILD_INFO)
-            .await?;
+            .create_query_context_with_cluster(self.ctx.get_cluster(), &BUILD_INFO)?;
         Self::inherit_query_ctx(&self.ctx, &ctx);
 
         let mut planner = Planner::new(ctx.clone());

@@ -183,8 +183,6 @@ use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 
-const FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
-
 #[derive(Visitor)]
 #[visitor(FunctionCall(enter))]
 struct PartitionBucketValidator {
@@ -1029,7 +1027,7 @@ impl Binder {
                 .await?;
             if !keys.is_empty() {
                 options
-                    .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
+                    .entry("aggressive_recluster".to_owned())
                     .or_insert_with(|| "1".to_owned());
                 cluster_key = Some(format!("({})", keys.join(", ")));
             }

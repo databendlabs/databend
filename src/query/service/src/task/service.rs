@@ -612,6 +612,9 @@ impl TaskService {
     async fn spawn_task(task: Task, user: UserInfo) -> Result<()> {
         let task_service = TaskService::instance();
         let context = task_service.create_task_context(user, &task).await?;
+        // Task ownership remains on this node, while the SQL planner must see the complete
+        // warehouse before constructing a distributed physical plan.
+        context.set_cluster(context.get_warehouse_cluster().await?);
 
         match &task.task_sql {
             TaskSql::Sql(sql) => {

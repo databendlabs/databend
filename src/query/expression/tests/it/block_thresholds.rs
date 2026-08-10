@@ -92,21 +92,27 @@ fn test_calc_rows_for_recluster() {
         (1000, 1_000_000)
     );
 
-    // row-based block count exceeds compressed-based block count, use max rows per block.
+    // Row-based block count is the largest, so derive both targets from that block count.
     assert_eq!(
         t.calc_rows_for_recluster(10_000, 2_000_000, 100_000),
-        (t.max_rows_per_block, 1_000_000)
+        (834, 166_667)
     );
 
-    // Case 1: If the block size is too bigger.
-    let result = t.calc_rows_for_recluster(4_000, 30_000_000, 600_000);
-    assert_eq!(result, (267, 2_000_000));
+    // The max-byte constraint requires more blocks than rows and compressed size.
+    assert_eq!(
+        t.calc_rows_for_recluster(10_000, 30_000_000, 1_000_000),
+        (667, 2_000_000)
+    );
 
-    // Case 2: If the block size is too smaller.
-    let result = t.calc_rows_for_recluster(4_000, 1_600_000, 600_000);
-    assert_eq!(result, (2000, 800_000));
+    // The compressed-size target would create blocks below min_bytes_per_block.
+    assert_eq!(
+        t.calc_rows_for_recluster(1_000, 1_600_000, 600_000),
+        (500, 800_000)
+    );
 
-    // Case 3: use the compressed-based block count.
-    let result = t.calc_rows_for_recluster(4_000, 10_000_000, 600_000);
-    assert_eq!(result, (667, 1_666_667));
+    // The compressed-size target is within the byte-size range.
+    assert_eq!(
+        t.calc_rows_for_recluster(4_000, 10_000_000, 600_000),
+        (667, 1_666_667)
+    );
 }

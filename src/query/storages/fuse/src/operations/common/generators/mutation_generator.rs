@@ -69,6 +69,10 @@ impl SnapshotGenerator for MutationGenerator {
         self.logical_change_delta
     }
 
+    fn skip_auto_vacuum(&self) -> bool {
+        matches!(self.mutation_kind, MutationKind::Recluster)
+    }
+
     fn do_generate_new_snapshot(
         &self,
         table_info: &TableInfo,
