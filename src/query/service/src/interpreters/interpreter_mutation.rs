@@ -112,6 +112,7 @@ impl Interpreter for MutationInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if check_deduplicate_label(self.ctx.clone()).await? {
+            self.ctx.attach_query_lineage(None);
             return Ok(PipelineBuildResult::create());
         }
 
