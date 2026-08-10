@@ -50,9 +50,9 @@ SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 't') LIMIT 1
 ----
 6 6
 
-# A partition expression may also be a cluster-key expression. Sorting by
-# (c, p % 2) produces partition runs 1, 0, 1 for this input, whereas an implicit
-# partition prefix would produce only the runs 0, 1.
+# A partition expression may also be a cluster-key expression. Partition
+# splitting preserves the input runs 0, 1, 0, 1 before each run is sorted by
+# (c, p % 2); it does not make the partition key an implicit cluster prefix.
 statement ok
 SET max_threads=1
 
@@ -65,13 +65,13 @@ INSERT INTO overlapping_keys VALUES (0, 30), (1, 10), (2, 20), (3, 40)
 query II
 SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'overlapping_keys') LIMIT 1
 ----
-3 3
+4 4
 
-# The three cluster-ordered runs still carry exact partition metadata.
+# The four partition-local runs still carry exact partition metadata.
 query T
 EXPLAIN SELECT p, c FROM overlapping_keys WHERE p % 2 = 0
 ----
-<slt:ignore>partitions total: 3<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 3 to 1<slt:ignore>
+<slt:ignore>partitions total: 4<slt:ignore>partitions scanned: 2<slt:ignore>range pruning: 4 to 2<slt:ignore>
 
 statement ok
 UNSET max_threads
