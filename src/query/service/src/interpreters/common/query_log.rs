@@ -34,6 +34,7 @@ use log::info;
 use serde_json;
 use serde_json::Value;
 
+use super::query_log_enabled;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextCluster;
@@ -123,25 +124,31 @@ fn resource_usage_query_log(stats: IoStatsSnapshot, profiles: &[PlanProfile]) ->
 }
 
 impl InterpreterQueryLog {
+    pub fn enabled() -> bool {
+        query_log_enabled()
+    }
+
     fn write_log(mut event: QueryLogElement) -> Result<()> {
-        // log the query event in the system_history.query_history table
+        // Normal callers are gated by `enabled()`. The log facade's target check is
+        // not specific enough to tell whether this query sink is configured.
         let event_str = serde_json::to_string(&event)?;
         info!(target: "databend::log::query", "{}", event_str);
 
-        // log the query event in `query-details` log file
-        // remove some fields to keep tidy in the log file
+        // Remove verbose fields from the query-details file.
         event.session_settings.clear();
         event.sql_user_quota.clear();
         event.sql_user_privileges.clear();
         let event_str = serde_json::to_string(&event)?;
         info!(target: "databend::log::query::file", "{}", event_str);
 
-        // log the query event in the system log
         info!("query: {} becomes {:?}", event.query_id, event.log_type);
         Ok(())
     }
 
     pub fn fail_to_start(ctx: Arc<QueryContext>, err: ErrorCode) {
+        if !Self::enabled() {
+            return;
+        }
         InterpreterQueryLog::log_start(&ctx, SystemTime::now(), Some(err))
             .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
     }

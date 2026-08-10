@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_catalog::session_type::SessionType;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 
@@ -36,6 +37,29 @@ async fn test_session_setting() -> anyhow::Result<()> {
 
         assert_eq!(actual, expect);
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_context_snapshots_session_settings() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let session = fixture.default_session();
+    session
+        .get_settings()
+        .set_setting("max_threads".to_string(), "2".to_string())?;
+
+    let first_ctx = fixture.new_query_ctx().await?;
+    assert_eq!(first_ctx.get_settings().get_max_threads()?, 2);
+
+    session
+        .get_settings()
+        .set_setting("max_threads".to_string(), "3".to_string())?;
+
+    assert_eq!(first_ctx.get_settings().get_max_threads()?, 2);
+
+    let next_ctx = fixture.new_query_ctx().await?;
+    assert_eq!(next_ctx.get_settings().get_max_threads()?, 3);
 
     Ok(())
 }

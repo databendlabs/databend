@@ -64,7 +64,7 @@ impl BlockReadContext {
         let mut ranges = vec![];
         // for async read, try using table data cache (if enabled in settings)
         let column_data_cache = CacheManager::instance().get_column_data_cache();
-        let column_array_cache = CacheManager::instance().get_table_data_array_cache();
+        let table_data_cache = CacheManager::instance().get_table_data_cache();
         let mut cached_column_data = vec![];
         let mut cached_column_array = vec![];
 
@@ -84,14 +84,16 @@ impl BlockReadContext {
 
                 // first, check in memory table data cache
                 // column_array_cache
-                if let Some(cache_array) = column_array_cache.get_sized(&column_cache_key, len) {
-                    // Record bytes scanned from memory cache (table data only)
-                    Profile::record_usize_profile(
-                        ProfileStatisticsName::ScanBytesFromMemory,
-                        len as usize,
-                    );
-                    cached_column_array.push((*column_id, cache_array));
-                    continue;
+                if let Some(cache_entry) = table_data_cache.get_sized(&column_cache_key, len) {
+                    if cache_entry.as_column_array().is_some() {
+                        // Record bytes scanned from memory cache (table data only)
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::ScanBytesFromMemory,
+                            len as usize,
+                        );
+                        cached_column_array.push((*column_id, cache_entry));
+                        continue;
+                    }
                 }
 
                 // and then, check on disk table data cache
