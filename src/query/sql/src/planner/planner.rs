@@ -259,7 +259,7 @@ impl Planner {
                     "Logical plan retrieved from cache, elapsed: {:?}",
                     start.elapsed()
                 );
-                if cache_ctx.contains_nondeterministic_function {
+                if cache_ctx.contains_execution_dependent_function {
                     self.ctx.result_cache_state().set_cacheable(false);
                 }
                 // update for clickhouse handler

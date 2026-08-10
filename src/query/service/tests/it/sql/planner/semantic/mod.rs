@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod name_resolution;
+mod planner_cache;
 mod type_check;

@@ -583,14 +583,25 @@ fn query_metadata(plan: &Plan) -> &MetadataRef {
     metadata
 }
 
+fn query_s_expr(plan: &Plan) -> &SExpr {
+    let Plan::Query { s_expr, .. } = plan else {
+        panic!("expected query plan")
+    };
+    s_expr
+}
+
+fn contains_join(s_expr: &SExpr) -> bool {
+    matches!(s_expr.plan(), RelOperator::Join(_)) || s_expr.children().any(contains_join)
+}
+
 fn register_planner_cache_table(fixture: &Arc<LiteTableContext>, table_name: &str) -> Result<()> {
     fixture.register_table_with_stats(
         "default",
         table_name,
-        vec![TableField::new(
-            "a",
-            TableDataType::Number(NumberDataType::Int64),
-        )],
+        vec![
+            TableField::new("a", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("b", TableDataType::Number(NumberDataType::Int64)),
+        ],
         None,
         HashMap::new(),
         HashMap::new(),
@@ -630,7 +641,7 @@ async fn planner_cache_accepts_rewrite_and_cacheable_special_functions() -> Resu
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn planner_cache_hit_preserves_nondeterministic_result_cache_state() -> Result<()> {
+async fn planner_cache_hit_preserves_execution_dependent_result_cache_state() -> Result<()> {
     let fixture = LiteTableContext::create().await?;
     fixture
         .get_settings()
@@ -638,9 +649,9 @@ async fn planner_cache_hit_preserves_nondeterministic_result_cache_state() -> Re
     fixture
         .get_settings()
         .set_setting("enable_query_result_cache".to_string(), "1".to_string())?;
-    register_planner_cache_table(&fixture, "cache_nondeterministic_function")?;
+    register_planner_cache_table(&fixture, "cache_execution_dependent_function")?;
 
-    let sql = "SELECT now() FROM cache_nondeterministic_function";
+    let sql = "SELECT now() FROM cache_execution_dependent_function";
     let first = plan_sql(&fixture, sql).await?;
     assert!(!fixture.result_cache_state().cacheable());
 
@@ -649,12 +660,98 @@ async fn planner_cache_hit_preserves_nondeterministic_result_cache_state() -> Re
     let second = plan_sql(&fixture, sql).await?;
     assert!(
         Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
-        "non-deterministic builtins should reuse the cached plan"
+        "execution-dependent builtins should reuse the cached plan"
     );
     assert!(
         !fixture.result_cache_state().cacheable(),
-        "a plan-cache hit must not make a non-deterministic query result-cacheable"
+        "a plan-cache hit must not make an execution-dependent query result-cacheable"
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn planner_cache_preserves_execution_dependent_evaluation_scope() -> Result<()> {
+    let fixture = LiteTableContext::create().await?;
+    fixture
+        .get_settings()
+        .set_setting("enable_planner_cache".to_string(), "1".to_string())?;
+
+    register_planner_cache_table(&fixture, "cache_statement_stable_subquery")?;
+    let stable_sql = "SELECT * FROM cache_statement_stable_subquery \
+                      WHERE to_timestamp(a) < (SELECT now())";
+    let first = plan_sql(&fixture, stable_sql).await?;
+    let second = plan_sql(&fixture, stable_sql).await?;
+    assert!(
+        Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+        "a statement-stable scalar subquery should reuse the cached logical plan"
+    );
+    assert!(
+        !contains_join(query_s_expr(&first)),
+        "a statement-stable scalar subquery should be eliminated"
+    );
+    let formatted_plan = first.format_indent(Default::default())?;
+    assert!(
+        formatted_plan.to_ascii_lowercase().contains("now"),
+        "the cached logical plan must retain the statement-stable expression:\n{formatted_plan}"
+    );
+
+    register_planner_cache_table(&fixture, "cache_volatile_subquery")?;
+    let volatile_sql = "SELECT * FROM cache_volatile_subquery WHERE a < (SELECT rand())";
+    let first = plan_sql(&fixture, volatile_sql).await?;
+    let second = plan_sql(&fixture, volatile_sql).await?;
+    assert!(
+        Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+        "a volatile scalar subquery should reuse its structural logical plan"
+    );
+    assert!(
+        contains_join(query_s_expr(&first)),
+        "a volatile scalar subquery must retain its execute-once join"
+    );
+
+    register_planner_cache_table(&fixture, "cache_statement_stable_lambda")?;
+    let lambda_sql = "SELECT array_transform([a], x -> now()) \
+                      FROM cache_statement_stable_lambda";
+    let first = plan_sql(&fixture, lambda_sql).await?;
+    let second = plan_sql(&fixture, lambda_sql).await?;
+    assert!(
+        Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+        "a statement-stable lambda should reuse the cached logical plan"
+    );
+    let formatted_plan = first.format_indent(Default::default())?;
+    assert!(
+        formatted_plan.to_ascii_lowercase().contains("now"),
+        "the cached lambda expression must retain the statement-stable function:\n{formatted_plan}"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn planner_cache_rejects_execution_dependent_plan_shaping_expressions() -> Result<()> {
+    let fixture = LiteTableContext::create().await?;
+    fixture
+        .get_settings()
+        .set_setting("enable_planner_cache".to_string(), "1".to_string())?;
+    register_planner_cache_table(&fixture, "cache_execution_dependent_plan_shape")?;
+
+    for sql in [
+        "SELECT quantile_cont(to_second(now()) / 60.0)(a) \
+         FROM cache_execution_dependent_plan_shape",
+        "SELECT round(a::decimal(10, 2), to_second(now()) % 2) \
+         FROM cache_execution_dependent_plan_shape",
+        "SELECT to_decimal(a, 10 + to_second(now()) % 10, 2) \
+         FROM cache_execution_dependent_plan_shape",
+        "SELECT sum(a) OVER (ORDER BY a RANGE BETWEEN to_uint64(to_second(now())) PRECEDING \
+         AND CURRENT ROW) FROM cache_execution_dependent_plan_shape",
+        "SELECT COLUMNS(x -> x = 'a' OR rand() > 0.5) \
+         FROM cache_execution_dependent_plan_shape",
+    ] {
+        let first = plan_sql(&fixture, sql).await?;
+        let second = plan_sql(&fixture, sql).await?;
+        assert!(
+            !Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+            "plan-shaping execution-dependent expressions must be rebound: {sql}"
+        );
+    }
     Ok(())
 }
 

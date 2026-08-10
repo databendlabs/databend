@@ -54,6 +54,7 @@ use crate::function::Function;
 use crate::function::FunctionSignature;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
+use crate::property::FunctionVolatility;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -1174,8 +1175,10 @@ impl Display for FunctionSignature {
 impl Display for FunctionProperty {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut properties = Vec::new();
-        if self.non_deterministic {
-            properties.push("non_deterministic");
+        match self.volatility {
+            FunctionVolatility::Immutable => {}
+            FunctionVolatility::StableWithinStatement => properties.push("stable_within_statement"),
+            FunctionVolatility::Volatile => properties.push("volatile"),
         }
         if !properties.is_empty() {
             write!(f, "{{{}}}", properties.join(", "))?;

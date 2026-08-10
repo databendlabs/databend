@@ -437,7 +437,7 @@ impl SubqueryDecorrelatorOptimizer {
                 let mut subquery = subquery.clone();
                 subquery.subquery = Box::new(self.optimize_sync(&subquery.subquery)?);
 
-                if let Some(constant_subquery) = self.try_fold_constant_subquery(&subquery)? {
+                if let Some(constant_subquery) = self.try_eliminate_constant_subquery(&subquery)? {
                     return Ok((constant_subquery, outer));
                 }
 

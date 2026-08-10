@@ -30,6 +30,7 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::FunctionKind;
+use databend_common_expression::FunctionVolatility;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use derive_visitor::DriveMut;
@@ -250,8 +251,10 @@ impl AggregatingIndexChecker {
                 self.not_support = true;
             }
         } else if let Some(func_property) = BUILTIN_FUNCTIONS.get_property(func_name) {
-            // set returning functions and non deterministic functions such as `now()` are not supported.
-            if func_property.kind == FunctionKind::SRF || func_property.non_deterministic {
+            // Set-returning and execution-dependent functions such as `now()` are not supported.
+            if func_property.kind == FunctionKind::SRF
+                || func_property.volatility != FunctionVolatility::Immutable
+            {
                 self.not_support = true;
             }
         } else {

@@ -54,9 +54,19 @@ use crate::with_number_type;
 /// monotonicity cannot be proven for that range.
 pub type MonotonicityCheck = fn(&FunctionContext, &[Domain]) -> Option<usize>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FunctionVolatility {
+    /// The function always returns the same result for the same arguments.
+    Immutable,
+    /// The function may change between statements but is stable within one statement.
+    StableWithinStatement,
+    /// Repeated calls within one statement may differ or have observable side effects.
+    Volatile,
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionProperty {
-    pub non_deterministic: bool,
+    pub volatility: FunctionVolatility,
     pub kind: FunctionKind,
     // strictly increasing or strictly decreasing, like y = x + 1
     // y = x ^ 2 is not monotonicity, but it's only monotonicity in [-x, 0] and [0, +x]
@@ -70,8 +80,13 @@ pub struct FunctionProperty {
 }
 
 impl FunctionProperty {
-    pub fn non_deterministic(mut self) -> Self {
-        self.non_deterministic = true;
+    pub fn volatile(mut self) -> Self {
+        self.volatility = FunctionVolatility::Volatile;
+        self
+    }
+
+    pub fn stable_within_statement(mut self) -> Self {
+        self.volatility = FunctionVolatility::StableWithinStatement;
         self
     }
 
@@ -99,7 +114,7 @@ impl FunctionProperty {
 impl Default for FunctionProperty {
     fn default() -> Self {
         FunctionProperty {
-            non_deterministic: false,
+            volatility: FunctionVolatility::Immutable,
             monotonicity: false,
             monotonicity_by_type: vec![],
             monotonicity_check: None,

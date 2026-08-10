@@ -17,15 +17,22 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use databend_common_ast::ast::ColumnFilter;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::Window;
+use databend_common_ast::ast::WindowDefinition;
+use databend_common_ast::ast::WindowFrame;
+use databend_common_ast::ast::WindowFrameBound;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::FunctionVolatility;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -83,12 +90,12 @@ impl Planner {
             return Ok(None);
         }
 
-        let mut visitor = TableRefVisitor {
+        let mut visitor = PlanCacheabilityVisitor {
             ctx: self.ctx.clone(),
             table_snapshots: vec![],
             name_resolution_ctx,
             is_plan_cacheable: true,
-            contains_nondeterministic_function: false,
+            contains_execution_dependent_function: false,
             has_security_policy: false,
         };
         stmt.drive(&mut visitor);
@@ -101,7 +108,7 @@ impl Planner {
         Ok(Some(PlanCacheContext {
             cache_key,
             table_snapshots: visitor.table_snapshots,
-            contains_nondeterministic_function: visitor.contains_nondeterministic_function,
+            contains_execution_dependent_function: visitor.contains_execution_dependent_function,
         }))
     }
 
@@ -201,20 +208,25 @@ impl Planner {
 }
 
 #[derive(Visitor)]
-#[visitor(TableReference(enter), FunctionCall(enter))]
-struct TableRefVisitor {
+#[visitor(
+    TableReference(enter),
+    FunctionCall(enter),
+    WindowDefinition(enter),
+    ColumnFilter(enter)
+)]
+struct PlanCacheabilityVisitor {
     ctx: Arc<dyn TableContext>,
     table_snapshots: Vec<TableSnapshot>,
     name_resolution_ctx: NameResolutionContext,
     is_plan_cacheable: bool,
-    contains_nondeterministic_function: bool,
+    contains_execution_dependent_function: bool,
     has_security_policy: bool,
 }
 
 pub(crate) struct PlanCacheContext {
     cache_key: String,
     table_snapshots: Vec<TableSnapshot>,
-    pub(super) contains_nondeterministic_function: bool,
+    pub(super) contains_execution_dependent_function: bool,
 }
 
 impl PlanCacheContext {
@@ -289,22 +301,85 @@ impl From<&TableMeta> for SecurityPolicySnapshot {
     }
 }
 
-impl TableRefVisitor {
+#[derive(Default, Visitor)]
+#[visitor(FunctionCall(enter))]
+struct ExecutionDependentFunctionVisitor {
+    found: bool,
+}
+
+impl ExecutionDependentFunctionVisitor {
+    fn enter_function_call(&mut self, func: &FunctionCall) {
+        if self.found {
+            return;
+        }
+        self.found = BUILTIN_FUNCTIONS
+            .get_property(&func.name.name)
+            .is_some_and(|property| property.volatility != FunctionVolatility::Immutable);
+    }
+}
+
+fn contains_execution_dependent_function(expr: &Expr) -> bool {
+    let mut visitor = ExecutionDependentFunctionVisitor::default();
+    expr.drive(&mut visitor);
+    visitor.found
+}
+
+fn window_frame_contains_execution_dependent_function(frame: Option<&WindowFrame>) -> bool {
+    let Some(frame) = frame else {
+        return false;
+    };
+    [&frame.start_bound, &frame.end_bound]
+        .into_iter()
+        .filter_map(|bound| match bound {
+            WindowFrameBound::Preceding(Some(expr)) | WindowFrameBound::Following(Some(expr)) => {
+                Some(expr.as_ref())
+            }
+            _ => None,
+        })
+        .any(contains_execution_dependent_function)
+}
+
+impl PlanCacheabilityVisitor {
     fn enter_function_call(&mut self, func: &FunctionCall) {
         if !self.is_plan_cacheable {
             return;
         }
 
         let func_name = func.name.name.to_lowercase();
-        let is_nondeterministic_builtin = BUILTIN_FUNCTIONS
-            .get_property(&func_name)
-            .is_some_and(|property| property.non_deterministic);
 
-        // Non-deterministic builtins are not folded into constants, so their runtime values do not
-        // become part of the cached logical plan and do not block planner caching. Track them
-        // separately so a plan-cache hit still disables result caching.
-        if is_nondeterministic_builtin {
-            self.contains_nondeterministic_function = true;
+        // Function parameters, selected function arguments, and window-frame bounds are resolved
+        // into plan-shaping constants.
+        // Rebind them for every statement instead of caching an execution-dependent value.
+        let has_execution_dependent_parameter = func
+            .params
+            .iter()
+            .any(contains_execution_dependent_function);
+        let has_execution_dependent_plan_shaping_argument =
+            TypeChecker::<()>::plan_shaping_arguments(&func_name, &func.args)
+                .iter()
+                .any(contains_execution_dependent_function);
+        let has_execution_dependent_window_frame = func.window.as_ref().is_some_and(|window| {
+            let Window::WindowSpec(spec) = &window.window else {
+                return false;
+            };
+            window_frame_contains_execution_dependent_function(spec.window_frame.as_ref())
+        });
+        if has_execution_dependent_parameter
+            || has_execution_dependent_plan_shaping_argument
+            || has_execution_dependent_window_frame
+        {
+            self.is_plan_cacheable = false;
+            return;
+        }
+
+        let is_execution_dependent_builtin = BUILTIN_FUNCTIONS
+            .get_property(&func_name)
+            .is_some_and(|property| property.volatility != FunctionVolatility::Immutable);
+
+        // Reusable logical plans keep execution-dependent builtins symbolic. Track them separately
+        // so a plan-cache hit still disables result caching.
+        if is_execution_dependent_builtin {
+            self.contains_execution_dependent_function = true;
         }
 
         let is_plan_cacheable = is_plan_cacheable_function(&func_name)
@@ -319,6 +394,22 @@ impl TableRefVisitor {
         if !self.is_plan_cacheable {
             return;
         }
+        if let TableReference::TableFunction {
+            params,
+            named_params,
+            ..
+        } = table_ref
+        {
+            if params
+                .iter()
+                .chain(named_params.iter().map(|(_, expr)| expr))
+                .any(contains_execution_dependent_function)
+            {
+                self.is_plan_cacheable = false;
+            }
+            return;
+        }
+
         if let TableReference::Table {
             table,
             temporal,
@@ -372,6 +463,20 @@ impl TableRefVisitor {
                 }
                 self.is_plan_cacheable = false;
             });
+        }
+    }
+
+    fn enter_window_definition(&mut self, window: &WindowDefinition) {
+        if window_frame_contains_execution_dependent_function(window.spec.window_frame.as_ref()) {
+            self.is_plan_cacheable = false;
+        }
+    }
+
+    fn enter_column_filter(&mut self, filter: &ColumnFilter) {
+        if let ColumnFilter::Lambda(lambda) = filter
+            && contains_execution_dependent_function(&lambda.expr)
+        {
+            self.is_plan_cacheable = false;
         }
     }
 }

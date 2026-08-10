@@ -81,15 +81,17 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_grouping(registry);
     register_num_to_char(registry);
 
-    registry.properties.insert(
-        "rand".to_string(),
-        FunctionProperty::default().non_deterministic(),
-    );
+    registry
+        .properties
+        .insert("rand".to_string(), FunctionProperty::default().volatile());
 
     registry.properties.insert(
         "gen_random_uuid".to_string(),
-        FunctionProperty::default().non_deterministic(),
+        FunctionProperty::default().volatile(),
     );
+    registry
+        .properties
+        .insert("sleep".to_string(), FunctionProperty::default().volatile());
 
     registry
         .scalar_builder("humanize_size")

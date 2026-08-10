@@ -64,6 +64,35 @@ use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryType;
 
+const DECIMAL_SCALE_FUNCTIONS: &[&str] = &["round", "truncate"];
+const DECIMAL_CONVERSION_FUNCTIONS: &[&str] = &[
+    "to_number",
+    "to_numeric",
+    "to_decimal",
+    "try_to_number",
+    "try_to_numeric",
+    "try_to_decimal",
+];
+
+fn function_name_in(name: &str, functions: &[&str]) -> bool {
+    functions
+        .iter()
+        .any(|function| name.eq_ignore_ascii_case(function))
+}
+
+impl<'a, A> TypeChecker<'a, A> {
+    pub(crate) fn plan_shaping_arguments<'b>(func_name: &str, arguments: &'b [Expr]) -> &'b [Expr] {
+        if function_name_in(func_name, DECIMAL_SCALE_FUNCTIONS)
+            || func_name.eq_ignore_ascii_case("as_decimal")
+            || function_name_in(func_name, DECIMAL_CONVERSION_FUNCTIONS)
+        {
+            arguments.get(1..).unwrap_or_default()
+        } else {
+            &[]
+        }
+    }
+}
+
 impl<'a> CoreExprArena<'a> {
     pub(super) fn cast(
         &mut self,
@@ -517,7 +546,7 @@ where A: TypeCheckAdapter
         // Type check
         let mut arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
         // inject the params
-        if ["round", "truncate"].contains(&func_name)
+        if function_name_in(func_name, DECIMAL_SCALE_FUNCTIONS)
             && !args.is_empty()
             && params.is_empty()
             && args[0].data_type()?.remove_nullable().is_decimal()
@@ -592,14 +621,7 @@ where A: TypeCheckAdapter
                     }
                 }
             }
-        } else if (func_name.eq_ignore_ascii_case("to_number")
-            || func_name.eq_ignore_ascii_case("to_numeric")
-            || func_name.eq_ignore_ascii_case("to_decimal")
-            || func_name.eq_ignore_ascii_case("try_to_number")
-            || func_name.eq_ignore_ascii_case("try_to_numeric")
-            || func_name.eq_ignore_ascii_case("try_to_decimal"))
-            && params.is_empty()
-        {
+        } else if function_name_in(func_name, DECIMAL_CONVERSION_FUNCTIONS) && params.is_empty() {
             if args.is_empty() || args.len() > 4 {
                 return Err(ErrorCode::SemanticError(format!(
                     "Invalid arguments for `{func_name}`, get {} params and {} arguments",

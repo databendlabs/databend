@@ -40,10 +40,10 @@ pub fn is_builtin_function(name: &str) -> bool {
 
 /// Returns whether a registered function can safely reuse its logical plan.
 ///
-/// Non-deterministic builtins are included because their runtime values are not folded into the
-/// logical plan cached by the planner. Result-cache eligibility is tracked separately. Search
-/// functions, async functions, and UDFs are excluded because their logical plans may contain
-/// metadata-derived arguments that can change.
+/// Execution-dependent builtins are included; logical-planning rewrites must keep their evaluation
+/// symbolic instead of storing an evaluated value in the cached plan. Result-cache eligibility is
+/// tracked separately. Search functions, async functions, and UDFs are excluded because their
+/// logical plans may contain metadata-derived arguments that can change.
 pub fn is_plan_cacheable_function(name: &str) -> bool {
     let name = Ascii::new(name);
     BUILTIN_FUNCTIONS.contains(name.into_inner())

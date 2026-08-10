@@ -31,6 +31,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::FunctionKind;
+use databend_common_expression::FunctionVolatility;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
@@ -197,20 +198,32 @@ impl ScalarExpr {
     }
 
     pub fn is_deterministic(&self) -> bool {
+        self.volatility() == FunctionVolatility::Immutable
+    }
+
+    pub fn volatility(&self) -> FunctionVolatility {
         match self {
             ScalarExpr::BoundColumnRef(_)
             | ScalarExpr::ConstantExpr(_)
-            | ScalarExpr::TypedConstantExpr(_, _) => true,
+            | ScalarExpr::TypedConstantExpr(_, _) => FunctionVolatility::Immutable,
             ScalarExpr::FunctionCall(func) => {
-                if let Some(property) = BUILTIN_FUNCTIONS.get_property(&func.func_name) {
-                    if property.kind == FunctionKind::SRF || property.non_deterministic {
-                        return false;
-                    }
-                }
-                func.arguments.iter().all(ScalarExpr::is_deterministic)
+                let own_volatility = BUILTIN_FUNCTIONS
+                    .get_property(&func.func_name)
+                    .map(|property| {
+                        if property.kind == FunctionKind::SRF {
+                            FunctionVolatility::Volatile
+                        } else {
+                            property.volatility
+                        }
+                    })
+                    .unwrap_or(FunctionVolatility::Immutable);
+                func.arguments
+                    .iter()
+                    .map(ScalarExpr::volatility)
+                    .fold(own_volatility, std::cmp::max)
             }
-            ScalarExpr::CastExpr(cast) => cast.argument.is_deterministic(),
-            _ => false,
+            ScalarExpr::CastExpr(cast) => cast.argument.volatility(),
+            _ => FunctionVolatility::Volatile,
         }
     }
 

@@ -45,6 +45,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BASE_ROW_ID_COL_NAME;
 use databend_common_expression::FunctionKind;
+use databend_common_expression::FunctionVolatility;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
@@ -642,7 +643,9 @@ impl Visitor for MaterializedViewChecker {
                 self.not_supported = true;
             }
         } else if let Some(property) = BUILTIN_FUNCTIONS.get_property(&name) {
-            if property.kind == FunctionKind::SRF || property.non_deterministic {
+            if property.kind == FunctionKind::SRF
+                || property.volatility != FunctionVolatility::Immutable
+            {
                 self.not_supported = true;
             }
         } else {
@@ -757,11 +760,11 @@ mod tests {
     }
 
     #[test]
-    fn test_materialized_view_checker_rejects_non_deterministic_functions() -> Result<()> {
-        // Non-deterministic functions (and their aliases) must not appear in an MV definition,
-        // because refresh would recompute different values than the original query. Aliases such
-        // as current_timestamp/current_date resolve to canonical functions whose properties mark
-        // them non-deterministic, so they must be rejected just like the canonical names.
+    fn test_materialized_view_checker_rejects_execution_dependent_functions() -> Result<()> {
+        // Statement-stable and volatile functions (and their aliases) must not appear in an MV
+        // definition, because refresh could recompute different values than the original query.
+        // Aliases such as current_timestamp/current_date resolve to canonical functions and must
+        // be rejected just like their canonical names.
         for sql in [
             "SELECT amount, now() AS t FROM t WHERE amount > 0",
             "SELECT amount, current_timestamp AS t FROM t WHERE amount > 0",

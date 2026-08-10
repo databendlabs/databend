@@ -25,6 +25,7 @@ use databend_common_expression::Domain;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionFactory;
+use databend_common_expression::FunctionVolatility;
 use databend_common_expression::Value;
 use databend_common_expression::type_check;
 use databend_common_expression::types::NullableColumn;
@@ -62,6 +63,33 @@ mod variant;
 mod vector;
 
 pub use databend_common_expression_test_support as parser;
+
+#[test]
+fn test_execution_dependent_function_volatility() {
+    for name in [
+        "now",
+        "current_timestamp",
+        "current_time",
+        "today",
+        "current_date",
+        "yesterday",
+        "tomorrow",
+    ] {
+        assert_eq!(
+            BUILTIN_FUNCTIONS.get_property(name).unwrap().volatility,
+            FunctionVolatility::StableWithinStatement,
+            "unexpected volatility for {name}"
+        );
+    }
+
+    for name in ["rand", "gen_random_uuid", "uuid", "sleep"] {
+        assert_eq!(
+            BUILTIN_FUNCTIONS.get_property(name).unwrap().volatility,
+            FunctionVolatility::Volatile,
+            "unexpected volatility for {name}"
+        );
+    }
+}
 
 #[derive(Clone)]
 pub struct TestContext<'a> {

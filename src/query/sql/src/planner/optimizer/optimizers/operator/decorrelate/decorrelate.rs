@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr as EExpr;
+use databend_common_expression::FunctionVolatility;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::type_check::common_super_type;
@@ -33,6 +34,7 @@ use crate::ColumnSet;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
+use crate::binder::wrap_nullable;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -561,10 +563,11 @@ impl SubqueryDecorrelatorOptimizer {
         Ok((!can_reuse_inner_columns, derived_columns))
     }
 
-    // Try folding the subquery into a constant value expression,
-    // which turns the join plan into a filter plan, so that the bloom filter
-    // can be used to reduce the amount of data that needs to be read.
-    pub fn try_fold_constant_subquery(
+    // Try replacing the subquery with an immutable value or a statement-stable expression.
+    // This turns the join plan into a filter plan, so that the bloom filter can be used to reduce
+    // the amount of data that needs to be read. Statement-stable expressions are evaluated later
+    // while building the per-statement physical plan and must not become cached logical literals.
+    pub fn try_eliminate_constant_subquery(
         &self,
         subquery: &SubqueryExpr,
     ) -> Result<Option<ScalarExpr>> {
@@ -622,27 +625,37 @@ impl SubqueryDecorrelatorOptimizer {
                     return Ok(None);
                 }
                 let scalar_expr = &eval.items[0].scalar;
-                let mut constant_scalar = None;
+                let mut replacement_scalar = None;
                 if scalar_expr.used_columns().is_empty() && !scalar_expr.has_subquery() {
-                    let func_ctx = self.ctx.get_function_context()?;
-                    let (folded, _) = ConstantFolder::fold(
-                        &scalar_expr.as_expr()?,
-                        &func_ctx,
-                        &BUILTIN_FUNCTIONS,
-                    );
-                    if let EExpr::Constant(constant) = folded {
-                        constant_scalar = Some(ScalarExpr::TypedConstantExpr(
-                            ConstantExpr {
-                                span: scalar_expr.span(),
-                                value: constant.scalar,
-                            },
-                            constant.data_type.wrap_nullable(),
-                        ));
+                    match scalar_expr.volatility() {
+                        FunctionVolatility::Immutable => {
+                            let func_ctx = self.ctx.get_function_context()?;
+                            let (folded, _) = ConstantFolder::fold(
+                                &scalar_expr.as_expr()?,
+                                &func_ctx,
+                                &BUILTIN_FUNCTIONS,
+                            );
+                            if let EExpr::Constant(constant) = folded {
+                                replacement_scalar = Some(ScalarExpr::TypedConstantExpr(
+                                    ConstantExpr {
+                                        span: scalar_expr.span(),
+                                        value: constant.scalar,
+                                    },
+                                    constant.data_type.wrap_nullable(),
+                                ));
+                            }
+                        }
+                        FunctionVolatility::StableWithinStatement => {
+                            let data_type = scalar_expr.data_type()?;
+                            replacement_scalar =
+                                Some(wrap_nullable(scalar_expr.clone(), &data_type));
+                        }
+                        FunctionVolatility::Volatile => return Ok(None),
                     }
                 }
 
-                let scalar = if let Some(constant_scalar) = constant_scalar {
-                    constant_scalar
+                let scalar = if let Some(replacement_scalar) = replacement_scalar {
+                    replacement_scalar
                 } else {
                     let Ok(const_scalar) = ConstantExpr::try_from(scalar_expr.clone()) else {
                         return Ok(None);

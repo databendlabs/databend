@@ -2123,23 +2123,23 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
 
     registry.properties.insert(
         "now".to_string(),
-        FunctionProperty::default().non_deterministic(),
+        FunctionProperty::default().stable_within_statement(),
     );
     registry.properties.insert(
         "current_time".to_string(),
-        FunctionProperty::default().non_deterministic(),
+        FunctionProperty::default().stable_within_statement(),
     );
     registry.properties.insert(
         "today".to_string(),
-        FunctionProperty::default().non_deterministic(),
+        FunctionProperty::default().stable_within_statement(),
     );
     registry.properties.insert(
         "yesterday".to_string(),
-        FunctionProperty::default().non_deterministic(),
+        FunctionProperty::default().stable_within_statement(),
     );
     registry.properties.insert(
         "tomorrow".to_string(),
-        FunctionProperty::default().non_deterministic(),
+        FunctionProperty::default().stable_within_statement(),
     );
 
     // NOTE: `to_timestamp`/`to_timestamp_tz`/`to_date` keep their pre-existing global

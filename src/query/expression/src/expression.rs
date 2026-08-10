@@ -29,6 +29,7 @@ use crate::Symbol;
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
+use crate::property::FunctionVolatility;
 use crate::types::DataType;
 use crate::values::Scalar;
 
@@ -1010,7 +1011,8 @@ impl<Index: ColumnIndex> Expr<Index> {
                     .registry
                     .get_property(&function.signature.name)
                     .unwrap()
-                    .non_deterministic
+                    .volatility
+                    != FunctionVolatility::Immutable
                 {
                     self.non_deterministic = true;
                     Ok(None)
