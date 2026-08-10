@@ -695,8 +695,8 @@ mod tests {
     use std::ops::Bound;
 
     use super::*;
-    use crate::HistogramBounds;
-    use crate::HistogramRangeBounds;
+    use crate::StatBounds;
+    use crate::StatRangeBounds;
 
     #[test]
     fn test_restrict_to_bounds_uses_existing_buckets() -> ExceptionResult<()> {
@@ -730,7 +730,7 @@ mod tests {
 
     #[test]
     fn test_range_constraint_bounds_use_discrete_exclusive_edges() -> ExceptionResult<()> {
-        let bounds = HistogramBounds::from_range_constraint(
+        let bounds = StatBounds::from_range_constraint(
             &Datum::UInt(0),
             &Datum::UInt(19),
             &Bound::Unbounded,
@@ -739,7 +739,7 @@ mod tests {
 
         assert_eq!(
             bounds,
-            HistogramRangeBounds::Bounds(HistogramBounds::new(Datum::UInt(0), Datum::UInt(14)))
+            StatRangeBounds::Bounds(StatBounds::new(Datum::UInt(0), Datum::UInt(14)).unwrap())
         );
         Ok(())
     }

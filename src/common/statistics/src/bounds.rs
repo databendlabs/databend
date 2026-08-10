@@ -21,38 +21,34 @@ use crate::Datum;
 
 /// A finite, non-NULL closed interval in the statistics value space.
 #[derive(Debug, Clone, PartialEq)]
-pub struct HistogramBounds {
+pub struct StatBounds {
     lower_bound: Datum,
     upper_bound: Datum,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum HistogramRangeBounds {
-    Bounds(HistogramBounds),
+pub enum StatRangeBounds {
+    Bounds(StatBounds),
     Empty,
     Imprecise,
 }
 
-impl HistogramBounds {
-    pub fn new(lower_bound: Datum, upper_bound: Datum) -> Self {
-        Self {
-            lower_bound,
-            upper_bound,
-        }
-    }
-
-    pub fn try_new(lower_bound: Datum, upper_bound: Datum) -> Result<Self> {
+impl StatBounds {
+    pub fn new(lower_bound: Datum, upper_bound: Datum) -> Result<Self> {
         if !lower_bound.type_comparable(&upper_bound) {
             return Err(ErrorCode::InvalidArgument(format!(
-                "histogram bounds are not comparable: {lower_bound:?} and {upper_bound:?}"
+                "statistics bounds are not comparable: {lower_bound:?} and {upper_bound:?}"
             )));
         }
         if lower_bound.compare(&upper_bound)?.is_gt() {
             return Err(ErrorCode::InvalidArgument(format!(
-                "histogram lower bound {lower_bound:?} exceeds upper bound {upper_bound:?}"
+                "statistics lower bound {lower_bound:?} exceeds upper bound {upper_bound:?}"
             )));
         }
-        Ok(Self::new(lower_bound, upper_bound))
+        Ok(Self {
+            lower_bound,
+            upper_bound,
+        })
     }
 
     pub fn from_range_constraint(
@@ -60,13 +56,13 @@ impl HistogramBounds {
         max: &Datum,
         lower: &Bound<Datum>,
         upper: &Bound<Datum>,
-    ) -> Result<HistogramRangeBounds> {
+    ) -> Result<StatRangeBounds> {
         let new_min = match lower {
             Bound::Unbounded => Some(min.clone()),
             Bound::Included(datum) => Datum::max(Some(min.clone()), Some(datum.clone())),
             Bound::Excluded(datum) => {
                 if datum.compare(max)? != std::cmp::Ordering::Less {
-                    return Ok(HistogramRangeBounds::Empty);
+                    return Ok(StatRangeBounds::Empty);
                 }
                 if datum.compare(min)? == std::cmp::Ordering::Less {
                     Some(min.clone())
@@ -82,7 +78,7 @@ impl HistogramBounds {
                         Datum::Bool(true) => None,
                     };
                     if datum.is_none() {
-                        return Ok(HistogramRangeBounds::Imprecise);
+                        return Ok(StatRangeBounds::Imprecise);
                     };
                     datum
                 }
@@ -93,7 +89,7 @@ impl HistogramBounds {
             Bound::Included(datum) => Datum::min(Some(max.clone()), Some(datum.clone())),
             Bound::Excluded(datum) => {
                 if datum.compare(min)? != std::cmp::Ordering::Greater {
-                    return Ok(HistogramRangeBounds::Empty);
+                    return Ok(StatRangeBounds::Empty);
                 }
                 if datum.compare(max)? == std::cmp::Ordering::Greater {
                     Some(max.clone())
@@ -107,7 +103,7 @@ impl HistogramBounds {
                         Datum::Float(_) | Datum::Bytes(_) => Some(datum.clone()),
                     };
                     if datum.is_none() {
-                        return Ok(HistogramRangeBounds::Imprecise);
+                        return Ok(StatRangeBounds::Imprecise);
                     };
                     datum
                 }
@@ -115,13 +111,16 @@ impl HistogramBounds {
         };
 
         let (Some(new_min), Some(new_max)) = (new_min, new_max) else {
-            return Ok(HistogramRangeBounds::Empty);
+            return Ok(StatRangeBounds::Empty);
         };
         if new_min.compare(&new_max)? == std::cmp::Ordering::Greater {
-            return Ok(HistogramRangeBounds::Empty);
+            return Ok(StatRangeBounds::Empty);
         }
 
-        Ok(HistogramRangeBounds::Bounds(Self::new(new_min, new_max)))
+        Ok(StatRangeBounds::Bounds(Self {
+            lower_bound: new_min,
+            upper_bound: new_max,
+        }))
     }
 
     pub fn lower_bound(&self) -> &Datum {
@@ -137,11 +136,11 @@ impl HistogramBounds {
     }
 }
 
-impl TryFrom<(Datum, Datum)> for HistogramBounds {
+impl TryFrom<(Datum, Datum)> for StatBounds {
     type Error = ErrorCode;
 
     fn try_from((lower_bound, upper_bound): (Datum, Datum)) -> Result<Self> {
-        Self::try_new(lower_bound, upper_bound)
+        Self::new(lower_bound, upper_bound)
     }
 }
 
@@ -150,9 +149,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_try_new_histogram_bounds() {
-        assert!(HistogramBounds::try_new(Datum::Int(1), Datum::Int(2)).is_ok());
-        assert!(HistogramBounds::try_new(Datum::Int(2), Datum::Int(1)).is_err());
-        assert!(HistogramBounds::try_new(Datum::Bool(false), Datum::Int(1)).is_err());
+    fn test_try_new_stat_bounds() {
+        assert!(StatBounds::new(Datum::Int(1), Datum::Int(2)).is_ok());
+        assert!(StatBounds::new(Datum::Int(2), Datum::Int(1)).is_err());
+        assert!(StatBounds::new(Datum::Bool(false), Datum::Int(1)).is_err());
     }
 }

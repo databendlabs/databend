@@ -121,7 +121,7 @@ impl EvalScalar {
         // `ColumnStat` has no representation for an all-NULL column because its
         // min/max fields are non-optional. Do not retain the shadowed input stat
         // in that case; unknown is safer than a stale non-NULL distribution.
-        let (min, max) = stat.domain.histogram_bounds().ok()?.into_parts();
+        let (min, max) = stat.domain.stat_bounds().ok()?.into_parts();
         let histogram = match stat.distribution {
             OwnedDistribution::Histogram(histogram) => Some(histogram),
             OwnedDistribution::Unknown | OwnedDistribution::Boolean(_) => None,

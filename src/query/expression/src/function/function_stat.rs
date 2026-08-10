@@ -14,8 +14,9 @@
 
 use std::convert::TryFrom;
 
+use databend_common_exception::ErrorCode;
 use databend_common_statistics::Datum;
-use databend_common_statistics::HistogramBounds;
+use databend_common_statistics::StatBounds;
 
 pub use super::stat_distribution::ReturnStat;
 pub use super::stat_distribution::StatArgs;
@@ -137,7 +138,7 @@ impl ScalarRef<'_> {
 }
 
 impl Domain {
-    pub fn histogram_bounds(&self) -> Result<HistogramBounds, String> {
+    pub fn stat_bounds(&self) -> Result<StatBounds, ErrorCode> {
         let (min, max) = match self {
             Domain::Number(domain) => with_number_type!(|NUM| match domain {
                 NumberDomain::NUM(SimpleDomain { min, max }) => (
@@ -167,9 +168,9 @@ impl Domain {
                 has_false: false,
                 has_true: false,
             }) => {
-                return Err(
-                    "cannot construct histogram bounds from an empty Boolean domain".into(),
-                );
+                return Err(ErrorCode::InvalidArgument(
+                    "cannot construct statistics bounds from an empty Boolean domain",
+                ));
             }
             Domain::String(StringDomain {
                 min,
@@ -184,25 +185,27 @@ impl Domain {
             Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
             Domain::Nullable(domain) => {
                 let value = domain.value.as_deref().ok_or_else(|| {
-                    "cannot construct histogram bounds from an all-NULL domain".to_string()
+                    ErrorCode::InvalidArgument(
+                        "cannot construct statistics bounds from an all-NULL domain",
+                    )
                 })?;
-                return value.histogram_bounds();
+                return value.stat_bounds();
             }
             domain => {
-                return Err(format!(
-                    "cannot construct finite histogram bounds from domain {domain:?}"
-                ));
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "cannot construct finite statistics bounds from domain {domain:?}"
+                )));
             }
         };
 
-        histogram_bounds_from_scalars(min, max)
+        stat_bounds_from_scalars(min, max)
     }
 }
 
 impl DataType {
-    pub fn full_histogram_bounds(&self) -> Result<HistogramBounds, String> {
+    pub fn full_stat_bounds(&self) -> Result<StatBounds, ErrorCode> {
         let (min, max) = match self {
-            DataType::Nullable(inner) => return inner.full_histogram_bounds(),
+            DataType::Nullable(inner) => return inner.full_stat_bounds(),
             DataType::Boolean => (Scalar::Boolean(false), Scalar::Boolean(true)),
             DataType::Number(number_type) => with_number_type!(|NUM| match number_type {
                 NumberDataType::NUM => (
@@ -240,24 +243,24 @@ impl DataType {
                 (Scalar::Date(domain.min), Scalar::Date(domain.max))
             }
             data_type => {
-                return Err(format!(
-                    "cannot construct finite histogram bounds for data type {data_type}"
-                ));
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "cannot construct finite statistics bounds for data type {data_type}"
+                )));
             }
         };
 
-        histogram_bounds_from_scalars(min, max)
+        stat_bounds_from_scalars(min, max)
     }
 }
 
-fn histogram_bounds_from_scalars(min: Scalar, max: Scalar) -> Result<HistogramBounds, String> {
-    let min = min
-        .to_datum()
-        .ok_or_else(|| "histogram lower bound cannot be represented as Datum".to_string())?;
-    let max = max
-        .to_datum()
-        .ok_or_else(|| "histogram upper bound cannot be represented as Datum".to_string())?;
-    HistogramBounds::try_new(min, max).map_err(|error| error.to_string())
+fn stat_bounds_from_scalars(min: Scalar, max: Scalar) -> Result<StatBounds, ErrorCode> {
+    let min = min.to_datum().ok_or_else(|| {
+        ErrorCode::InvalidArgument("stat lower bound cannot be represented as Datum")
+    })?;
+    let max = max.to_datum().ok_or_else(|| {
+        ErrorCode::InvalidArgument("stat upper bound cannot be represented as Datum")
+    })?;
+    StatBounds::new(min, max)
 }
 
 impl Domain {
@@ -501,7 +504,7 @@ fn type_mismatch(expected: &str, actual: &Datum) -> String {
 #[cfg(test)]
 mod tests {
     use databend_common_column::types::timestamp_tz;
-    use databend_common_statistics::HistogramBounds;
+    use databend_common_statistics::StatBounds;
 
     use super::*;
 
@@ -520,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn histogram_bounds_from_domain_preserve_finite_non_null_range() {
+    fn stat_bounds_from_domain_preserve_finite_non_null_range() {
         let domain = Domain::Nullable(crate::types::nullable::NullableDomain {
             has_null: true,
             value: Some(Box::new(Domain::Number(NumberDomain::Int32(
@@ -528,25 +531,25 @@ mod tests {
             )))),
         });
 
-        let bounds = domain.histogram_bounds().unwrap();
+        let bounds = domain.stat_bounds().unwrap();
         assert_eq!(bounds.into_parts(), (Datum::Int(-2), Datum::Int(3)));
 
         let unbounded_string = Domain::String(StringDomain {
             min: "a".to_string(),
             max: None,
         });
-        assert!(unbounded_string.histogram_bounds().is_err());
+        assert!(unbounded_string.stat_bounds().is_err());
     }
 
     #[test]
-    fn histogram_bounds_from_data_type_use_full_representable_range() {
+    fn stat_bounds_from_data_type_use_full_representable_range() {
         let data_type = DataType::Number(NumberDataType::UInt16).wrap_nullable();
-        let bounds = data_type.full_histogram_bounds().unwrap();
+        let bounds = data_type.full_stat_bounds().unwrap();
 
         assert_eq!(
             bounds.into_parts(),
             (Datum::UInt(u16::MIN as u64), Datum::UInt(u16::MAX as u64))
         );
-        assert!(DataType::String.full_histogram_bounds().is_err());
+        assert!(DataType::String.full_stat_bounds().is_err());
     }
 }

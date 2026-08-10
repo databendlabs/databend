@@ -21,7 +21,6 @@ mod selectivity;
 pub(crate) use cardinality::cap_stat_info_by_rows;
 pub use column_stat::*;
 use databend_common_statistics::Datum;
-pub use databend_common_statistics::UniformSampleSet;
 pub(crate) use join::JoinConditionColumns;
 pub(crate) use join::JoinKeyStatUpdate;
 pub(crate) use join::JoinStatsEstimator;

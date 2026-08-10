@@ -17,7 +17,7 @@ use databend_common_exception::Result;
 use crate::Datum;
 use crate::F64;
 use crate::Histogram;
-use crate::HistogramBounds;
+use crate::StatBounds;
 use crate::TypedHistogramBounds;
 use crate::TypedHistogramBuilder;
 
@@ -63,10 +63,8 @@ impl HistogramBuilder {
     }
 }
 
-pub type UniformSampleSet = HistogramBounds;
-
-impl HistogramBounds {
-    pub fn has_same_supported_type(&self, other: &HistogramBounds) -> bool {
+impl StatBounds {
+    pub fn has_same_supported_type(&self, other: &StatBounds) -> bool {
         let Some(kind) = self.lower_bound().kind() else {
             return false;
         };
@@ -76,7 +74,7 @@ impl HistogramBounds {
             && other.upper_bound().kind() == Some(kind)
     }
 
-    pub fn has_intersection(&self, other: &HistogramBounds) -> Result<bool> {
+    pub fn has_intersection(&self, other: &StatBounds) -> Result<bool> {
         match (
             self.lower_bound(),
             self.upper_bound(),
@@ -118,7 +116,7 @@ impl HistogramBounds {
         }
     }
 
-    pub fn intersection(&self, other: &HistogramBounds) -> Result<(Option<Datum>, Option<Datum>)> {
+    pub fn intersection(&self, other: &StatBounds) -> Result<(Option<Datum>, Option<Datum>)> {
         match (
             self.lower_bound(),
             self.upper_bound(),
@@ -192,9 +190,9 @@ mod tests {
     }
 
     #[test]
-    fn test_uniform_sample_set_numeric_intersection() {
-        let left = UniformSampleSet::new(Datum::UInt(0), Datum::UInt(10));
-        let right = UniformSampleSet::new(Datum::UInt(5), Datum::UInt(15));
+    fn test_stat_bounds_numeric_intersection() {
+        let left = StatBounds::new(Datum::UInt(0), Datum::UInt(10)).unwrap();
+        let right = StatBounds::new(Datum::UInt(5), Datum::UInt(15)).unwrap();
 
         assert!(left.has_same_supported_type(&right));
         assert!(left.has_intersection(&right).unwrap());
@@ -205,9 +203,9 @@ mod tests {
     }
 
     #[test]
-    fn test_uniform_sample_set_rejects_mixed_numeric_intersection() {
-        let left = UniformSampleSet::new(Datum::UInt(0), Datum::UInt(10));
-        let right = UniformSampleSet::new(Datum::Int(5), Datum::Int(15));
+    fn test_stat_bounds_reject_mixed_numeric_intersection() {
+        let left = StatBounds::new(Datum::UInt(0), Datum::UInt(10)).unwrap();
+        let right = StatBounds::new(Datum::Int(5), Datum::Int(15)).unwrap();
 
         assert!(!left.has_same_supported_type(&right));
         assert!(!left.has_intersection(&right).unwrap());

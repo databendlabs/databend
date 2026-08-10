@@ -30,8 +30,8 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::plans::ComparisonOp;
-use databend_common_statistics::HistogramBounds;
-use databend_common_statistics::HistogramRangeBounds;
+use databend_common_statistics::StatBounds;
+use databend_common_statistics::StatRangeBounds;
 use databend_storages_common_table_meta::meta::PartitionStatistics;
 
 use crate::statistics::partition_values;
@@ -216,12 +216,12 @@ fn predicate_domain(constraints: &[RangeConstraint<String>]) -> Option<Domain> {
         return Some(constraint.constant.as_ref().domain(data_type));
     }
 
-    let mut bounds = data_type.full_histogram_bounds().ok()?;
+    let mut bounds = data_type.full_stat_bounds().ok()?;
     for constraint in constraints {
         let op = ComparisonOp::try_from_func_name(&constraint.operator)?;
         let value = constraint.constant.clone().to_datum()?;
         let (lower, upper) = op.range_bounds(value)?;
-        bounds = match HistogramBounds::from_range_constraint(
+        bounds = match StatBounds::from_range_constraint(
             bounds.lower_bound(),
             bounds.upper_bound(),
             &lower,
@@ -229,8 +229,8 @@ fn predicate_domain(constraints: &[RangeConstraint<String>]) -> Option<Domain> {
         )
         .ok()?
         {
-            HistogramRangeBounds::Bounds(bounds) => bounds,
-            HistogramRangeBounds::Empty | HistogramRangeBounds::Imprecise => return None,
+            StatRangeBounds::Bounds(bounds) => bounds,
+            StatRangeBounds::Empty | StatRangeBounds::Imprecise => return None,
         };
     }
     Domain::from_datum(
