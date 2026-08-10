@@ -335,6 +335,7 @@ impl Domain {
             | DataType::Geography
             | DataType::Vector(_)
             | DataType::Opaque(_) => Domain::Undefined,
+            DataType::AggregateState(state) => Domain::full(state.physical_type()),
             DataType::Generic(_) | DataType::StageLocation => unreachable!(),
         }
     }
