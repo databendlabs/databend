@@ -249,6 +249,12 @@ impl CreateTableInterpreter {
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan),
             table_info: Some(table_info),
+            lineage_target_table_id: None,
+            lineage_target_catalog_type: if self.plan.engine == Engine::Iceberg {
+                databend_common_meta_app::schema::CatalogType::Iceberg
+            } else {
+                databend_common_meta_app::schema::CatalogType::Default
+            },
         };
 
         let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
