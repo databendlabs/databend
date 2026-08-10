@@ -500,5 +500,266 @@ order by t3.c1
 81 1 1
 91 1 1
 
+# Scan-level filters: identical filters on both branches aggregate the same
+# row set, so the self join can still be eliminated.
+query T
+explain
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    where c2 > 15
+    group by c1
+    having sum(c2) > 0
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    where c2 > 15
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+----
+Filter
+├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+├── filters: [is_true(c1 (#0) = t3.c1 (#0))]
+├── estimated rows: 0.26
+└── Filter
+    ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+    ├── filters: [is_true(sum(c2) (#2) > 0)]
+    ├── estimated rows: 1.28
+    └── AggregateFinal
+        ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+        ├── group by: [c1]
+        ├── aggregate functions: [sum(c2)]
+        ├── estimated rows: 2.56
+        └── AggregatePartial
+            ├── group by: [c1]
+            ├── aggregate functions: [sum(c2)]
+            ├── estimated rows: 2.56
+            └── TableScan
+                ├── table: default.eliminate_self_join.t_nullable
+                ├── scan id: 0
+                ├── output columns: [c1 (#0), c2 (#1)]
+                ├── read rows: 5
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [t_nullable.c2 (#1) > 15], limit: NONE]
+                └── estimated rows: 4.27
+
+query II
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    where c2 > 15
+    group by c1
+    having sum(c2) > 0
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    where c2 > 15
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+order by t3.c1
+----
+2 20
+3 30
+
+# Different scan filters: the branches aggregate different row sets, so the
+# join must be preserved.
+query T
+explain
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    where c2 > 15
+    group by c1
+    having sum(c2) > 0
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    where c2 > 25
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+----
+HashJoin
+├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+├── join type: INNER
+├── build keys: [t3.c1 (#0)]
+├── probe keys: [t4.c1 (#3)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:t3.c1 (#0), probe targets:[t4.c1 (#3)@scan1], filter type:bloom,inlist,min_max
+├── estimated rows: 1.28
+├── Filter(Build)
+│   ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+│   ├── filters: [is_true(sum(c2) (#2) > 0)]
+│   ├── estimated rows: 1.28
+│   └── AggregateFinal
+│       ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+│       ├── group by: [c1]
+│       ├── aggregate functions: [sum(c2)]
+│       ├── estimated rows: 2.56
+│       └── AggregatePartial
+│           ├── group by: [c1]
+│           ├── aggregate functions: [sum(c2)]
+│           ├── estimated rows: 2.56
+│           └── TableScan
+│               ├── table: default.eliminate_self_join.t_nullable
+│               ├── scan id: 0
+│               ├── output columns: [c1 (#0), c2 (#1)]
+│               ├── read rows: 5
+│               ├── read size: < 1 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│               ├── push downs: [filters: [t_nullable.c2 (#1) > 15], limit: NONE]
+│               └── estimated rows: 4.27
+└── AggregateFinal(Probe)
+    ├── output columns: [t_nullable.c1 (#3)]
+    ├── group by: [c1]
+    ├── aggregate functions: []
+    ├── estimated rows: 1.83
+    └── AggregatePartial
+        ├── group by: [c1]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.83
+        └── TableScan
+            ├── table: default.eliminate_self_join.t_nullable
+            ├── scan id: 1
+            ├── output columns: [c1 (#3)]
+            ├── read rows: 5
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [t_nullable.c2 (#4) > 25], limit: NONE]
+            ├── apply join filters: [#0]
+            └── estimated rows: 3.05
+
+query II
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    where c2 > 15
+    group by c1
+    having sum(c2) > 0
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    where c2 > 25
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+order by t3.c1
+----
+3 30
+
+# Scan filter on only one side: the row sets differ, so the join must be
+# preserved even though the filtered side's keys happen to be a subset here.
+query T
+explain
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    where c2 > 15
+    group by c1
+    having sum(c2) > 0
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+----
+HashJoin
+├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+├── join type: INNER
+├── build keys: [t3.c1 (#0)]
+├── probe keys: [t4.c1 (#3)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:t3.c1 (#0), probe targets:[t4.c1 (#3)@scan1], filter type:bloom,inlist,min_max
+├── estimated rows: 1.28
+├── Filter(Build)
+│   ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+│   ├── filters: [is_true(sum(c2) (#2) > 0)]
+│   ├── estimated rows: 1.28
+│   └── AggregateFinal
+│       ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+│       ├── group by: [c1]
+│       ├── aggregate functions: [sum(c2)]
+│       ├── estimated rows: 2.56
+│       └── AggregatePartial
+│           ├── group by: [c1]
+│           ├── aggregate functions: [sum(c2)]
+│           ├── estimated rows: 2.56
+│           └── TableScan
+│               ├── table: default.eliminate_self_join.t_nullable
+│               ├── scan id: 0
+│               ├── output columns: [c1 (#0), c2 (#1)]
+│               ├── read rows: 5
+│               ├── read size: < 1 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│               ├── push downs: [filters: [t_nullable.c2 (#1) > 15], limit: NONE]
+│               └── estimated rows: 4.27
+└── AggregateFinal(Probe)
+    ├── output columns: [t_nullable.c1 (#3)]
+    ├── group by: [c1]
+    ├── aggregate functions: []
+    ├── estimated rows: 3.00
+    └── AggregatePartial
+        ├── group by: [c1]
+        ├── aggregate functions: []
+        ├── estimated rows: 3.00
+        └── TableScan
+            ├── table: default.eliminate_self_join.t_nullable
+            ├── scan id: 1
+            ├── output columns: [c1 (#3)]
+            ├── read rows: 5
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [], limit: NONE]
+            ├── apply join filters: [#0]
+            └── estimated rows: 5.00
+
+query II
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    where c2 > 15
+    group by c1
+    having sum(c2) > 0
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+order by t3.c1
+----
+2 20
+3 30
+
 statement ok
 drop database eliminate_self_join
