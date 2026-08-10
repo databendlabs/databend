@@ -60,6 +60,7 @@ rust_decimal = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+smallvec = { workspace = true }
 strength_reduce = { workspace = true }
 terminal_size = { workspace = true }
 tonic = { workspace = true }

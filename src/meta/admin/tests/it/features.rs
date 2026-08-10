@@ -17,7 +17,7 @@
 use std::time::Duration;
 
 use databend_meta::openraft::rt::watch::WatchReceiver;
-use databend_meta::raft_store::StateMachineFeature;
+use databend_meta::raft_config::StateMachineFeature;
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
 use databend_meta_admin::v1::features::FeatureResponse;

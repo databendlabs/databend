@@ -20,6 +20,7 @@ use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
+use smallvec::SmallVec;
 
 use crate::AutoCastRules;
 use crate::ColumnIndex;
@@ -345,13 +346,14 @@ pub fn check_function<Index: ColumnIndex>(
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
     let dynamic_cast_rules = fn_registry.get_dynamic_cast_rules(name);
 
-    let mut fail_reasons = Vec::with_capacity(candidates.len());
+    let mut fail_reasons = SmallVec::<[_; 1]>::with_capacity(candidates.len());
     let mut checked_candidates = vec![];
-    let args_not_const = args
-        .iter()
-        .map(Expr::contains_column_ref)
-        .collect::<Vec<_>>();
-    let need_sort = candidates.len() > 1 && args_not_const.iter().any(|contain| !*contain);
+    let need_sort = candidates.len() > 1 && args.iter().any(|arg| !arg.contains_column_ref());
+    let args_with_column = need_sort.then(|| {
+        args.iter()
+            .map(Expr::contains_column_ref)
+            .collect::<Vec<_>>()
+    });
     for (seq, (id, func)) in candidates.iter().enumerate() {
         match try_check_function(
             args,
@@ -363,10 +365,14 @@ pub fn check_function<Index: ColumnIndex>(
             Ok((args, return_type, generics)) => {
                 let score = if need_sort {
                     args.iter()
-                        .zip(args_not_const.iter().copied())
-                        .map(|(expr, not_const)| {
+                        .zip(args_with_column.as_deref().unwrap().iter().copied())
+                        .map(|(expr, contains_column)| {
                             // smaller score win
-                            if not_const && expr.is_cast() { 1 } else { 0 }
+                            if contains_column && expr.is_cast() {
+                                1
+                            } else {
+                                0
+                            }
                         })
                         .sum::<usize>()
                 } else {

@@ -19,7 +19,7 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 
 use anyhow::anyhow;
-use databend_meta::raft_store::key_spaces::RaftStoreEntry;
+use databend_meta::store_compat::sled_compat::key_spaces::RaftStoreEntry;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::MetaGrpcClient;
 use databend_meta_client::types::protobuf;
