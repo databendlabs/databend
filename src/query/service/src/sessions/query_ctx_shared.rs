@@ -55,6 +55,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
+use databend_common_sql::QueryLineage;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -115,6 +116,7 @@ pub struct QueryContextShared {
     running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     running_query_text_hash: Arc<RwLock<Option<String>>>,
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
+    query_lineage: Arc<RwLock<Option<QueryLineage>>>,
     aborting: Arc<AtomicBool>,
     pub(super) abort_notify: Arc<WatchNotify>,
     pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
@@ -210,6 +212,7 @@ impl QueryContextShared {
             running_query_kind: Arc::new(RwLock::new(None)),
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
+            query_lineage: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             abort_notify: Arc::new(WatchNotify::new()),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
@@ -630,6 +633,14 @@ impl QueryContextShared {
             .as_ref()
             .cloned()
             .unwrap_or(QueryKind::Unknown)
+    }
+
+    pub fn attach_query_lineage(&self, lineage: Option<QueryLineage>) {
+        *self.query_lineage.write() = lineage;
+    }
+
+    pub fn get_query_lineage(&self) -> Option<QueryLineage> {
+        self.query_lineage.read().clone()
     }
 
     pub fn get_connection_id(&self) -> String {

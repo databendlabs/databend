@@ -2,6 +2,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lineage_sqllogic.sh"
+
 # Source query IDs from setup script
 if [ -z "$QUERY_ID" ]; then
     echo "Error: Query IDs not set. Run setup_test_data.sh first."
@@ -70,6 +73,9 @@ check_query_log "basic-9" "$SELECT_QUERY_ID" "SELECT base_objects_accessed[0]['o
 check_query_log "basic-10" "$CREATE_VIEW_QUERY_ID" "select query_text from system_history.query_history where" "CREATE VIEW v AS SELECT a FROM t"
 
 check_query_log "basic-11" null "SELECT count(*) FROM system_history.login_history WHERE session_id = '$SELECT_SESSION_ID' " "1"
+
+# Lineage assertions mirror the grouped setup suite and clean up its dedicated database.
+run_lineage_suite check
 
 check_log_history_integrity
 
