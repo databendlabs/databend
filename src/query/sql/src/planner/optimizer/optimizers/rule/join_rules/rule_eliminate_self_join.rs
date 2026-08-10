@@ -88,6 +88,12 @@ struct Candidate {
     group_key: GroupKeyItemSignature,
     group_key_index: Symbol,
     agg_func_indexes: Vec<(AggFuncSignature, Symbol)>,
+    /// Canonical signatures of the scan's predicates (`push_down_predicates`
+    /// + prewhere), normalized to base-column identity and sorted. Two
+    /// candidates with equal signatures aggregate the same row set, so their
+    /// per-key aggregate values are identical and output-column substitution
+    /// is safe.
+    scan_predicates: Vec<String>,
     /// Scalar items introduced above the (Filter +) Aggregate chain.
     ///
     /// If the corresponding relation is eliminated, these derived columns must be
@@ -185,10 +191,15 @@ impl RuleEliminateSelfJoin {
             }
         }
 
-        let mut groups: HashMap<(u64, GroupKeyItemSignature), Vec<Candidate>> = HashMap::new();
+        let mut groups: HashMap<(u64, GroupKeyItemSignature, Vec<String>), Vec<Candidate>> =
+            HashMap::new();
         for candidate in candidates.into_iter() {
             groups
-                .entry((candidate.table_id, candidate.group_key.clone()))
+                .entry((
+                    candidate.table_id,
+                    candidate.group_key.clone(),
+                    candidate.scan_predicates.clone(),
+                ))
                 .or_default()
                 .push(candidate);
         }
@@ -345,13 +356,13 @@ impl RuleEliminateSelfJoin {
             .as_scan()
             .unwrap();
 
-        if scan
-            .push_down_predicates
-            .as_ref()
-            .is_some_and(|v| !v.is_empty())
-            || scan.limit.is_some()
+        // Row-set-changing scan properties cannot be compared across
+        // candidates, so they disqualify the candidate outright. Predicates
+        // (`push_down_predicates` / prewhere) are allowed: they become part of
+        // the candidate's row-set signature, and only candidates with equal
+        // signatures can be eliminated against each other.
+        if scan.limit.is_some()
             || scan.order_by.as_ref().is_some_and(|v| !v.is_empty())
-            || scan.prewhere.is_some()
             || scan.agg_index.is_some()
             || scan.change_type.is_some()
             || scan.update_stream_columns
@@ -363,6 +374,7 @@ impl RuleEliminateSelfJoin {
             return None;
         }
 
+        let scan_predicates = Self::scan_predicate_signatures(scan, metadata)?;
         let table_id = self.table_id_from_scan(scan, metadata)?;
 
         Some(Candidate {
@@ -370,10 +382,81 @@ impl RuleEliminateSelfJoin {
             group_key,
             group_key_index,
             agg_func_indexes,
+            scan_predicates,
             extra_scalar_items,
             strict,
             relation_idx,
         })
+    }
+
+    /// Sorted, deduplicated canonical signatures of the scan's predicates
+    /// (`push_down_predicates` + prewhere). Only deterministic predicates may
+    /// participate: two branches with identical `rand() < 0.5` filters still
+    /// sample *different* row sets, so a volatile predicate must reject the
+    /// candidate. Returns `None` if any predicate cannot be normalized
+    /// (subquery, UDF, non-base column, ...), rejecting the candidate
+    /// conservatively.
+    fn scan_predicate_signatures(scan: &Scan, metadata: &Metadata) -> Option<Vec<String>> {
+        let mut sigs = Vec::new();
+        if let Some(predicates) = &scan.push_down_predicates {
+            for p in predicates.iter() {
+                if !p.is_deterministic() {
+                    return None;
+                }
+                sigs.push(Self::scalar_signature(p, metadata)?);
+            }
+        }
+        if let Some(prewhere) = &scan.prewhere {
+            for p in prewhere.predicates.iter() {
+                if !p.is_deterministic() {
+                    return None;
+                }
+                sigs.push(Self::scalar_signature(p, metadata)?);
+            }
+        }
+        sigs.sort();
+        sigs.dedup();
+        Some(sigs)
+    }
+
+    /// Canonical signature of a scalar expression where base-table column
+    /// references are replaced by their stable column identity, so the same
+    /// predicate on two branches of a self join (different column indices,
+    /// same underlying column) compares equal. Argument order is preserved;
+    /// normalization failures only ever miss eliminations, never fabricate
+    /// them.
+    fn scalar_signature(expr: &ScalarExpr, metadata: &Metadata) -> Option<String> {
+        match expr {
+            ScalarExpr::BoundColumnRef(col) => {
+                let ColumnEntry::BaseTableColumn(base_col) = metadata.column(col.column.index)
+                else {
+                    return None;
+                };
+                Some(format!("col#{}", base_col.column_id))
+            }
+            ScalarExpr::ConstantExpr(c) => Some(format!("const:{:?}", c.value)),
+            ScalarExpr::TypedConstantExpr(c, ty) => Some(format!("const:{:?}:{:?}", c.value, ty)),
+            ScalarExpr::CastExpr(cast) => {
+                let arg = Self::scalar_signature(&cast.argument, metadata)?;
+                Some(format!(
+                    "cast({} as {}{:?})",
+                    arg,
+                    if cast.is_try { "try_" } else { "" },
+                    cast.target_type
+                ))
+            }
+            ScalarExpr::FunctionCall(func) => {
+                let mut sig = format!("{}({:?}", func.func_name, func.params);
+                for arg in func.arguments.iter() {
+                    let arg_sig = Self::scalar_signature(arg, metadata)?;
+                    sig.push(',');
+                    sig.push_str(&arg_sig);
+                }
+                sig.push(')');
+                Some(sig)
+            }
+            _ => None,
+        }
     }
 
     fn group_key_signature(
