@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
@@ -194,6 +195,40 @@ async fn test_binder_clauses_and_ordering() -> Result<()> {
     ];
 
     run_binder_cases("binder_clauses.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_mutation_internal_column_strategy() -> Result<()> {
+    let cases = [
+        (
+            "UPDATE t SET b = to_string(_row_id) WHERE a = 1",
+            MutationStrategy::MatchedOnly,
+        ),
+        (
+            "UPDATE t SET b = to_string(a) WHERE a = 1",
+            MutationStrategy::Direct,
+        ),
+    ];
+
+    for (sql, expected_strategy) in cases {
+        let case = SqlTestCase {
+            name: "update_internal_column_strategy",
+            description: "UPDATE strategy is selected after assignment expressions are bound.",
+            setup_sqls: &["CREATE TABLE t(a INT, b STRING)"],
+            sql,
+        };
+        let ctx = setup_context(&case).await?;
+        let plan = ctx.bind_sql(sql).await?;
+        let Plan::DataMutation { s_expr, .. } = plan else {
+            panic!("expected mutation plan for {sql}");
+        };
+        let RelOperator::Mutation(mutation) = s_expr.plan() else {
+            panic!("expected mutation operator for {sql}");
+        };
+        assert_eq!(mutation.strategy, expected_strategy, "sql: {sql}");
+    }
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

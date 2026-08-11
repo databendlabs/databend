@@ -168,8 +168,8 @@ impl Binder {
             .await?;
         let table_schema = table.schema();
 
-        let bind_result = expression
-            .bind(
+        let mut bind_result = expression
+            .bind_input(
                 self,
                 bind_context,
                 table.clone(),
@@ -177,17 +177,7 @@ impl Binder {
                 table_schema.clone(),
             )
             .await?;
-
-        let MutationExpressionBindResult {
-            mut input,
-            mut bind_context,
-            mutation_type,
-            mutation_strategy,
-            target_table_index,
-            target_table_row_id_index,
-            mut required_columns,
-            all_source_columns,
-        } = bind_result;
+        let target_table_index = bind_result.target_table_index;
 
         let target_table_name = if let Some(table_name_alias) = &table_name_alias {
             table_name_alias.clone()
@@ -210,7 +200,7 @@ impl Binder {
             }
 
             if table.change_tracking_enabled()
-                && mutation_strategy != MutationStrategy::NotMatchedOnly
+                && bind_result.mutation_strategy != MutationStrategy::NotMatchedOnly
             {
                 for stream_column in table.stream_columns() {
                     let column_index = Self::find_column_index(
@@ -218,14 +208,14 @@ impl Binder {
                         target_table_index,
                         stream_column.column_name(),
                     )?;
-                    required_columns.insert(column_index);
+                    bind_result.required_columns.insert(column_index);
                 }
             }
         }
 
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
-            &mut bind_context,
+            &mut bind_result.bind_context,
             self.ctx.clone(),
             &name_resolution_ctx,
             self.metadata.clone(),
@@ -239,7 +229,7 @@ impl Binder {
                     &mut scalar_binder,
                     clause,
                     table_schema.clone(),
-                    all_source_columns.clone(),
+                    bind_result.all_source_columns.clone(),
                     &target_table_name,
                     &database_name,
                 )
@@ -255,7 +245,7 @@ impl Binder {
                     &mut scalar_binder,
                     clause,
                     table_schema.clone(),
-                    all_source_columns.clone(),
+                    bind_result.all_source_columns.clone(),
                     dest_entity_name.clone(),
                 )
                 .await?,
@@ -263,8 +253,27 @@ impl Binder {
         }
         drop(scalar_binder);
 
-        // Matched expressions are bound after the input plan is built. Add every internal column
-        // discovered there to its scan and keep it through physical column pruning.
+        // Finalize the physical input only after clause binding. UPDATE assignments may bind
+        // internal columns, which must select the scan-based mutation path instead of Direct.
+        let bind_result = expression.finalize_input(
+            self,
+            table.clone(),
+            &target_table_identifier,
+            bind_result,
+        )?;
+        let MutationExpressionBindResult {
+            mut input,
+            mut bind_context,
+            mutation_type,
+            mutation_strategy,
+            target_table_index,
+            target_table_row_id_index,
+            mut required_columns,
+            ..
+        } = bind_result;
+
+        // Add every internal column discovered during binding to its scan and keep it through
+        // physical column pruning.
         input = self.add_bound_columns_into_expr(&mut bind_context, input)?;
         required_columns.extend(bind_context.bound_internal_columns.values().copied());
 

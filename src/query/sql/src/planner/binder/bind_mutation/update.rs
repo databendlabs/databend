@@ -15,34 +15,26 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::ColumnID;
-use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MutationUpdateExpr;
 use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UpdateStmt;
-use databend_common_ast::visit::VisitControl;
-use databend_common_ast::visit::Visitor;
-use databend_common_ast::visit::Walk;
 use databend_common_exception::Result;
 
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
-use crate::NameResolutionContext;
 use crate::ScalarExpr;
 use crate::Symbol;
 use crate::Visibility;
 use crate::binder::Binder;
-use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::bind_mutation::bind::Mutation;
 use crate::binder::bind_mutation::bind::MutationStrategy;
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
-use crate::normalize_identifier;
 use crate::optimizer::ir::Matcher;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -51,38 +43,6 @@ use crate::plans::Plan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
-
-fn references_internal_column(expr: &Expr, name_resolution_ctx: &NameResolutionContext) -> bool {
-    struct InternalColumnVisitor<'a> {
-        name_resolution_ctx: &'a NameResolutionContext,
-        found: bool,
-    }
-
-    impl Visitor for InternalColumnVisitor<'_> {
-        fn visit_expr(
-            &mut self,
-            expr: &Expr,
-        ) -> std::result::Result<VisitControl<Self::Break>, Self::Error> {
-            if let Expr::ColumnRef { column, .. } = expr
-                && let ColumnID::Name(name) = &column.column
-            {
-                let name = normalize_identifier(name, self.name_resolution_ctx).name;
-                if INTERNAL_COLUMN_FACTORY.get_internal_column(&name).is_some() {
-                    self.found = true;
-                    return Ok(VisitControl::Break(()));
-                }
-            }
-            Ok(VisitControl::Continue)
-        }
-    }
-
-    let mut visitor = InternalColumnVisitor {
-        name_resolution_ctx,
-        found: false,
-    };
-    let _ = expr.walk(&mut visitor);
-    visitor.found
-}
 
 impl Binder {
     #[async_backtrace::framed]
@@ -132,9 +92,6 @@ impl Binder {
                 expr: update_expr.expr.clone(),
             })
             .collect::<Vec<_>>();
-        let force_non_direct = update_exprs.iter().any(|update_expr| {
-            references_internal_column(&update_expr.expr, &self.name_resolution_ctx)
-        });
         let matched_clause = MatchedClause {
             selection: None,
             operation: MatchOperation::Update {
@@ -150,7 +107,6 @@ impl Binder {
                 target: target_table_reference,
                 filter: selection.clone(),
                 from,
-                force_non_direct,
             },
             strategy: MutationStrategy::MatchedOnly,
             matched_clauses: vec![matched_clause],
