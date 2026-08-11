@@ -55,6 +55,34 @@ FROM get_lineage('lineage_history_views.src_view', 'VIEW', 'DOWNSTREAM', 1)
 ----
 1 default.lineage_history_views.src_view default.lineage_history_views.view_dst
 
+# Column lineage always retains display names. View columns are explicitly NAME-addressed with no
+# schema id, while the CTAS target table column retains both its name and stable id.
+query BB
+SELECT
+  count_if(
+    lineage_kind = 'CREATE_VIEW'
+    AND target_name = 'src_view'
+    AND column_lineage['source_column_address_kind']::STRING = 'NAME'
+    AND column_lineage['target_column_address_kind']::STRING = 'NAME'
+    AND is_null_value(column_lineage['mappings'][0]['target']['id'])
+    AND is_null_value(column_lineage['mappings'][0]['sources'][0]['id'])
+  ) = 1,
+  count_if(
+    lineage_kind = 'CTAS'
+    AND target_name = 'view_dst'
+    AND column_lineage['source_column_address_kind']::STRING = 'NAME'
+    AND column_lineage['target_column_address_kind']::STRING = 'ID'
+    AND column_lineage['mappings'][0]['target']['name']::STRING IS NOT NULL
+    AND column_lineage['mappings'][0]['target']['id']::UInt64 IS NOT NULL
+    AND column_lineage['mappings'][0]['sources'][0]['name']::STRING IS NOT NULL
+    AND is_null_value(column_lineage['mappings'][0]['sources'][0]['id'])
+  ) = 1
+FROM system_history.lineage_history
+WHERE target_database = 'lineage_history_views'
+  AND target_name IN ('src_view', 'view_dst')
+----
+1 1
+
 # Downstream from a base column crosses the view and continues to the final table column, proving
 # the boundary is transparent in the forward direction too.
 query ITTTT rowsort

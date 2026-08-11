@@ -3,7 +3,7 @@
 # The dropped Fuse edge and the two DataMovement column-lifecycle edges remain in history.
 query TI rowsort
 SELECT target_name, count(*)
-FROM system_history.lineage_unresolved
+FROM system_history.lineage_history
 WHERE target_database = 'lineage_history_lifecycle'
 GROUP BY target_name
 ----

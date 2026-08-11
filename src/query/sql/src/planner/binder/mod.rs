@@ -113,5 +113,5 @@ pub(crate) fn lineage_enabled() -> bool {
         && history
             .tables
             .iter()
-            .any(|table| table.table_name == "lineage_unresolved")
+            .any(|table| table.table_name == "lineage_history")
 }
