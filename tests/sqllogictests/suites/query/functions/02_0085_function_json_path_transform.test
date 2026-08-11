@@ -148,6 +148,84 @@ SELECT json_path_transform(
 statement ok
 DROP TABLE events
 
+# Partial evaluation: rows masked out of an IF/CASE branch are never
+# evaluated, so their invalid paths, ambiguous matches or lambda errors
+# cannot fail the query.
+
+statement ok
+CREATE TABLE t_branch(id INT, doc VARIANT NULL, path STRING)
+
+statement ok
+INSERT INTO t_branch VALUES
+    (1, parse_json('{"a":1}'), '$.a'),
+    (2, parse_json('{"a":"x"}'), '$$bad'),
+    (3, parse_json('{"a":{"b":1}}'), '$.**')
+
+query IT
+SELECT id, IF(id = 1, json_path_transform(doc, path, v -> to_variant('y')), NULL) FROM t_branch ORDER BY id
+----
+1 {"a":"y"}
+2 NULL
+3 NULL
+
+query IT
+SELECT id, CASE WHEN id = 1 THEN json_path_transform(doc, path, v -> to_variant('y')) ELSE NULL END FROM t_branch ORDER BY id
+----
+1 {"a":"y"}
+2 NULL
+3 NULL
+
+# The lambda body is not evaluated over matches of masked-out rows
+# ('x'::Int64 on row 2 and object::Int64 on row 3 would fail).
+query IT
+SELECT id, IF(id = 1, json_path_transform(doc, '$.a', v -> to_variant(v::Int64 + 1)), NULL) FROM t_branch ORDER BY id
+----
+1 {"a":2}
+2 NULL
+3 NULL
+
+# A constant branch is a broadcast: it is skipped only when no row picks it.
+query IT
+SELECT id, IF(id = 0, json_path_transform(parse_json('{"a":1}'), '$$bad', v -> to_variant(0)), NULL) FROM t_branch ORDER BY id
+----
+1 NULL
+2 NULL
+3 NULL
+
+# A fully masked branch passes the json column through untouched.
+query IT
+SELECT id, IF(id = 0, json_path_transform(doc, path, v -> to_variant('y')), NULL) FROM t_branch ORDER BY id
+----
+1 NULL
+2 NULL
+3 NULL
+
+# Errors on rows that do pick the branch still fail the query.
+statement error 1006
+SELECT IF(id >= 2, json_path_transform(doc, path, v -> to_variant('y')), NULL) FROM t_branch
+
+statement error 1006
+SELECT IF(id >= 1, json_path_transform(parse_json('{"a":1}'), '$$bad', v -> to_variant(0)), NULL) FROM t_branch
+
+statement ok
+DROP TABLE t_branch
+
+# Fully masked branch whose non-nullable json column must widen to the
+# nullable return type driven by the nullable path argument.
+statement ok
+CREATE TABLE t_mask(id INT, doc VARIANT NOT NULL, path STRING NULL)
+
+statement ok
+INSERT INTO t_mask VALUES (1, parse_json('{"a":1}'), '$$bad')
+
+query IT
+SELECT id, IF(id = 0, json_path_transform(doc, path, v -> to_variant(0)), NULL) FROM t_mask
+----
+1 NULL
+
+statement ok
+DROP TABLE t_mask
+
 # Errors
 
 statement error 1006

@@ -590,9 +590,14 @@ impl<'a> Selector<'a> {
                         })
                         .all_equal()
                 );
-                let result =
-                    self.evaluator
-                        .run_lambda(name, args, data_types, lambda_expr, return_type)?;
+                let result = self.evaluator.run_lambda(
+                    name,
+                    args,
+                    data_types,
+                    lambda_expr,
+                    return_type,
+                    None,
+                )?;
                 (result, return_type.clone())
             }
             _ => {

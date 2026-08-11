@@ -253,7 +253,7 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
 
-                self.run_lambda(name, args, data_types, lambda_expr, return_type)?
+                self.run_lambda(name, args, data_types, lambda_expr, return_type, validity)?
             }
         };
 
@@ -1907,11 +1907,12 @@ impl<'a> Evaluator<'a> {
         data_types: Vec<DataType>,
         lambda_expr: &RemoteExpr,
         return_type: &DataType,
+        validity: Option<Bitmap>,
     ) -> Result<Value<AnyType>> {
         let expr = lambda_expr.as_expr(self.fn_registry);
 
         if func_name == "json_path_transform" {
-            return self.run_json_path_transform(args, data_types, &expr, return_type);
+            return self.run_json_path_transform(args, data_types, &expr, return_type, validity);
         }
 
         // array_reduce differs
@@ -2148,13 +2149,17 @@ impl<'a> Evaluator<'a> {
     /// Evaluates `json_path_transform(<json>, <path>, <lambda>)`.
     ///
     /// Arguments are laid out as `[json, path, captures...]` and the lambda
-    /// body was cast to `Nullable(Variant)` during type checking.
+    /// body was cast to `Nullable(Variant)` during type checking. Rows
+    /// outside `validity` (e.g. masked out of an IF/CASE branch) are passed
+    /// through unchanged: their paths are never parsed or selected and their
+    /// matches never reach the lambda, so they cannot fail the query.
     fn run_json_path_transform(
         &self,
         args: Vec<Value<AnyType>>,
         data_types: Vec<DataType>,
         expr: &Expr,
         return_type: &DataType,
+        validity: Option<Bitmap>,
     ) -> Result<Value<AnyType>> {
         debug_assert!(args.len() >= 2);
         let json_idx = 0;
@@ -2165,6 +2170,32 @@ impl<'a> Evaluator<'a> {
             _ => None,
         });
         let num_rows = len.unwrap_or(1);
+        debug_assert!(len.is_none() || validity.as_ref().is_none_or(|v| v.len() == num_rows));
+
+        // The branch is fully masked out: the caller discards every row, so
+        // pass the json argument through without locating any match.
+        if let Some(v) = &validity {
+            if v.null_count() == v.len() {
+                let json = args.into_iter().next().unwrap();
+                return Ok(match json {
+                    Value::Column(col) if col.data_type() != *return_type => {
+                        debug_assert!(return_type.is_nullable());
+                        Value::Column(NullableColumn::new_column(
+                            col,
+                            Bitmap::new_constant(true, num_rows),
+                        ))
+                    }
+                    json => json,
+                });
+            }
+        }
+
+        // `None` means every row is active. A partially masked scalar row is
+        // a broadcast picked by at least one row, so it stays active.
+        let validity = match len {
+            Some(_) => validity.filter(|v| v.null_count() > 0),
+            None => None,
+        };
 
         fn parse_path(path_str: &str) -> Result<JsonPath<'_>> {
             parse_json_path(path_str.as_bytes())
@@ -2208,6 +2239,12 @@ impl<'a> Evaluator<'a> {
                     ));
                 }
             };
+            if let Some(validity) = &validity {
+                if !unsafe { validity.get_bit_unchecked(idx) } {
+                    rows.push(JsonTransformRow::Unchanged);
+                    continue;
+                }
+            }
             if let Some(path_str) = const_path_str
                 && const_path.is_none()
             {
@@ -2505,7 +2542,7 @@ impl<'a> Evaluator<'a> {
                 );
 
                 Ok((
-                    self.run_lambda(name, args, data_types, lambda_expr, return_type)?,
+                    self.run_lambda(name, args, data_types, lambda_expr, return_type, None)?,
                     return_type.clone(),
                 ))
             }
