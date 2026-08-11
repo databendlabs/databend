@@ -21,6 +21,9 @@ MYSQL_PORT = 3307
 QUERY_START_TIMEOUT = 30
 QUERY_RESULT_TIMEOUT = 180
 KEEPALIVE_DETECTION_TIMEOUT = 10
+FLIGHT_RETRY_TIMES = 10
+FAILED_WORKER = "databend-query-1"
+NODE_FAILURE_TIMEOUT = 90
 TPCH_REPLACEMENT_TIMEOUT = 15
 MIN_TPCH_CONFIRMED_RECONNECTS = 3
 MAX_TPCH_CHAOS_OPERATIONS = 12
@@ -94,18 +97,18 @@ class QueryTask:
     def error(self, timeout: float = QUERY_RESULT_TIMEOUT) -> Exception:
         succeeded, result = self.outcome(timeout)
         if succeeded:
-            raise AssertionError(f"killed query completed unexpectedly: {result}")
+            raise AssertionError(f"query completed unexpectedly: {result}")
         return result
 
 
-class NetworkFault:
+class ClusterFault:
     def __init__(self, namespace: str, manifest: Path, coordinator_ip: str):
         self._namespace = namespace
         self._manifest = manifest
         self._coordinator_ip = coordinator_ip
         self._active = False
 
-    def _exec_worker(
+    def _exec_pod(
         self,
         pod: str,
         command: str,
@@ -155,7 +158,7 @@ class NetworkFault:
         # A partition blocks retries but does not reset established TCP streams. Put
         # the RST rule first so the active Flight transports fail immediately.
         for pod in WORKER_PODS:
-            self._exec_worker(
+            self._exec_pod(
                 pod,
                 "iptables -I OUTPUT 1 "
                 f"-p tcp -d {self._coordinator_ip} --dport 9090 "
@@ -169,7 +172,55 @@ class NetworkFault:
             "-j REJECT --reject-with tcp-reset"
         )
         for pod in WORKER_PODS:
-            self._exec_worker(pod, f"while {rule} 2>/dev/null; do :; done", check=False)
+            self._exec_pod(pod, f"while {rule} 2>/dev/null; do :; done", check=False)
+
+    def query_restart_count(self, pod: str) -> int:
+        output = subprocess.check_output(
+            [
+                "kubectl",
+                "-n",
+                self._namespace,
+                "get",
+                "pod",
+                pod,
+                "-o",
+                'jsonpath={.status.containerStatuses[?(@.name=="query")].restartCount}',
+            ],
+            text=True,
+        ).strip()
+        return int(output)
+
+    def crash_worker(self, pod: str) -> int:
+        if pod not in WORKER_PODS:
+            raise AssertionError(f"cannot crash unknown worker {pod}")
+        restart_count = self.query_restart_count(pod)
+        self._exec_pod(pod, "kill -KILL 1", container="query", check=False)
+        return restart_count
+
+    def wait_for_worker_restart(
+        self, pod: str, previous_restart_count: int, timeout: float = 120
+    ) -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                restarted = self.query_restart_count(pod) > previous_restart_count
+            except (subprocess.CalledProcessError, ValueError):
+                restarted = False
+            if restarted:
+                run(
+                    [
+                        "kubectl",
+                        "-n",
+                        self._namespace,
+                        "wait",
+                        f"pod/{pod}",
+                        "--for=condition=Ready",
+                        f"--timeout={int(timeout)}s",
+                    ]
+                )
+                return
+            time.sleep(POLL_INTERVAL)
+        raise AssertionError(f"query container in {pod} did not restart")
 
     def recover(self) -> None:
         self.clear_resets()
@@ -215,7 +266,7 @@ class NetworkFault:
             # Freeze userspace after the Flight transports exist. Kernel TCP timers
             # continue running, so a silent partition can only be detected by keepalive.
             for pod in WORKER_PODS:
-                self._exec_worker(pod, "kill -STOP 1", container="query")
+                self._exec_pod(pod, "kill -STOP 1", container="query")
                 paused.append(pod)
             self.apply_partition()
             yield
@@ -224,7 +275,7 @@ class NetworkFault:
                 self.recover()
             finally:
                 for pod in paused:
-                    self._exec_worker(pod, "kill -CONT 1", container="query")
+                    self._exec_pod(pod, "kill -CONT 1", container="query")
 
 
 def connect_mysql() -> Any:
@@ -251,7 +302,9 @@ def configure_session(
 ) -> None:
     cursor = connection.cursor()
     try:
-        cursor.execute("SET flight_connection_max_retry_times = 10")
+        cursor.execute(
+            f"SET flight_connection_max_retry_times = {FLIGHT_RETRY_TIMES}"
+        )
         cursor.execute(f"SET flight_connection_retry_interval = {retry_interval}")
         cursor.execute("SET group_by_shuffle_mode = 'before_partial'")
         keep_alive_value = 1 if keep_alive else 0
@@ -453,7 +506,7 @@ class TpchChaosInjector:
         self,
         namespace: str,
         coordinator_ip: str,
-        fault: NetworkFault,
+        fault: ClusterFault,
         stop: threading.Event,
         operations: ChaosOperationLog,
     ):
@@ -636,7 +689,7 @@ class ReconnectHarness:
         query_connection: Any,
         control_cursor: Any,
         kill_connection: Any,
-        fault: NetworkFault,
+        fault: ClusterFault,
         namespace: str,
         coordinator_ip: str,
     ):
@@ -699,6 +752,18 @@ class ReconnectHarness:
             self._namespace, self._coordinator_ip, previous, task
         )
         return task.rows(), identity
+
+    def fail_after_worker_crash(
+        self, sql: str, marker: str
+    ) -> tuple[Exception, QueryIdentity, float]:
+        task, identity = self._start_query(sql, marker, retry_interval=1)
+        failed_at = time.monotonic()
+        restart_count = self._fault.crash_worker(FAILED_WORKER)
+        error = task.error(timeout=NODE_FAILURE_TIMEOUT)
+        elapsed = time.monotonic() - failed_at
+        self._fault.wait_for_worker_restart(FAILED_WORKER, restart_count)
+        wait_for_cluster(self._control_cursor)
+        return error, identity, elapsed
 
     def kill_during_reconnect(
         self, sql: str, marker: str
@@ -808,13 +873,33 @@ def test_keepalive_reconnect(harness: ReconnectHarness) -> None:
     assert rows == [(100003, 1000000000)], rows
 
 
+def test_worker_oom_failure(harness: ReconnectHarness) -> None:
+    # 1. Start a long distributed query with the normal ten-attempt retry policy.
+    # 2. SIGKILL one participating query container, matching an abrupt OOM exit.
+    # 3. Verify the distributed query fails within its liveness bound instead of hanging.
+    # 4. Wait for Kubernetes to restart the worker and ensure the old query cannot revive.
+    print("=== worker OOM-style failure ===", flush=True)
+    marker = "flight_worker_oom_failure_ci"
+    error, identity, elapsed = harness.fail_after_worker_crash(
+        f"SELECT sum(number % 1000000) "
+        f"FROM numbers_mt(1000000000000) AS {marker}",
+        marker,
+    )
+    print(
+        f"query failed after {elapsed:.3f}s with {FAILED_WORKER} killed: {error}",
+        flush=True,
+    )
+    harness.assert_not_running(identity.query_id, retry_delay=3)
+    harness.assert_healthy()
+
+
 def test_tpch_queries(
     sqllogictests: Path,
     suite: Path,
     operation_log: Path,
     namespace: str,
     coordinator_ip: str,
-    fault: NetworkFault,
+    fault: ClusterFault,
 ) -> None:
     # 1. Run complete TPC-H result rounds serially.
     # 2. Wait for an active query and its worker Flight sockets before each fault.
@@ -947,7 +1032,7 @@ def main() -> None:
     control_connection = connect_mysql()
     kill_connection = connect_mysql()
     control_cursor = control_connection.cursor()
-    fault = NetworkFault(args.namespace, args.network_chaos, coordinator_ip)
+    fault = ClusterFault(args.namespace, args.network_chaos, coordinator_ip)
     harness = ReconnectHarness(
         query_connection,
         control_cursor,
@@ -962,6 +1047,7 @@ def main() -> None:
         test_exact_aggregate(harness)
         test_limit_early_stop(harness)
         test_keepalive_reconnect(harness)
+        test_worker_oom_failure(harness)
         test_kill_during_reconnect(harness)
         test_tpch_queries(
             args.sqllogictests,
