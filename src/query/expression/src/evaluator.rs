@@ -133,6 +133,9 @@ impl<'a> Evaluator<'a> {
         let column_refs = expr.column_refs();
         for (index, data_type) in column_refs.iter() {
             let column = self.data_block.get_by_offset(*index);
+            if data_type.matches_physical_type(&column.data_type()) {
+                continue;
+            }
             if (column.data_type() == DataType::Null && data_type.is_nullable())
                 || (column.data_type().is_nullable() && data_type == &DataType::Null)
             {
@@ -261,7 +264,12 @@ impl<'a> Evaluator<'a> {
                     expr.data_type()
                 )
             }
-            Value::Column(col) => assert_eq!(&col.data_type(), expr.data_type()),
+            Value::Column(col) => assert!(
+                expr.data_type().matches_physical_type(&col.data_type()),
+                "column result type mismatch: physical {}, logical {}",
+                col.data_type(),
+                expr.data_type()
+            ),
         }
 
         if !expr.is_column_ref() && !expr.is_constant() && options.strict_eval {
@@ -398,6 +406,9 @@ impl<'a> Evaluator<'a> {
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
+            return Ok(value);
+        }
+        if src_type.matches_physical_type(dest_type) {
             return Ok(value);
         }
 
@@ -619,6 +630,15 @@ impl<'a> Evaluator<'a> {
                     Ok(Value::Column(NullableColumn::new_column(column, validity)))
                 }
             },
+            (DataType::AggregateState(state), _) => self.run_cast(
+                span,
+                state.physical_type(),
+                dest_type,
+                value,
+                validity,
+                expr_display,
+                options,
+            ),
 
             (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::EmptyArray) => {

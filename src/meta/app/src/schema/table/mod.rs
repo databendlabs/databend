@@ -520,6 +520,16 @@ pub struct CreateTableReq {
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
 
+    /// An optional update to another table's options that must be committed atomically with this
+    /// table creation.
+    ///
+    /// This is used by `CREATE STREAM` and `CREATE MATERIALIZED VIEW`: publishing the new object
+    /// and enabling change tracking on its source table must be one metadata transaction. The
+    /// update is applied only when the target is actually created or replaced; `CREATE IF NOT
+    /// EXISTS` that finds an existing target leaves the source table unchanged. It is `None` for
+    /// ordinary table creation and when change tracking is already enabled.
+    pub source_table_option: Option<UpsertTableOptionReq>,
+
     /// Set it to true if a dropped table needs to be created,
     ///
     /// since [CreateOption] is used by various scenarios, we use

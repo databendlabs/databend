@@ -552,7 +552,10 @@ impl Catalog for SessionCatalog {
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         match req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
-            Some(prefix) => self.temp_tbl_mgr.lock().create_table(req, prefix.clone()),
+            Some(_) if req.source_table_option.is_some() => Err(ErrorCode::Unimplemented(
+                "Atomic source option update is not supported for temporary tables",
+            )),
+            Some(prefix) => self.temp_tbl_mgr.lock().create_table(req, prefix),
             None => self.inner.create_table(req).await,
         }
     }

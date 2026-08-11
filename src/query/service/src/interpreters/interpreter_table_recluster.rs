@@ -27,6 +27,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature::Vacuum;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
@@ -41,6 +43,8 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
+use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
+use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
@@ -64,6 +68,7 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextQueryState;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
@@ -113,13 +118,14 @@ impl Interpreter for ReclusterTableInterpreter {
         let start = SystemTime::now();
         let timeout = Duration::from_secs(recluster_timeout_secs);
         let is_final = self.plan.is_final;
-        loop {
+        let mut committed = false;
+        let result = loop {
             if let Err(err) = ctx.check_aborting() {
                 error!(
                     "recluster: statement aborted, server is shutting down or the query was killed, round={}",
                     times + 1
                 );
-                return Err(err.with_context("failed to execute"));
+                break Err(err.with_context("failed to execute"));
             }
 
             let res = self
@@ -127,15 +133,14 @@ impl Interpreter for ReclusterTableInterpreter {
                 .await;
 
             match res {
-                Ok(is_break) => {
-                    if is_break {
-                        debug!(
-                            "recluster: final loop stop reason=no_recluster_parts round={}",
-                            times + 1,
-                        );
-                        break;
-                    }
+                Ok(true) => {
+                    debug!(
+                        "recluster: final loop stop reason=no_recluster_parts round={}",
+                        times + 1,
+                    );
+                    break Ok(());
                 }
+                Ok(false) => committed = true,
                 Err(e) => {
                     if is_final
                         && matches!(
@@ -162,7 +167,7 @@ impl Interpreter for ReclusterTableInterpreter {
                             e.code(),
                             e,
                         );
-                        return Err(e);
+                        break Err(e);
                     }
                 }
             }
@@ -179,7 +184,7 @@ impl Interpreter for ReclusterTableInterpreter {
             }
 
             if !is_final {
-                break;
+                break Ok(());
             }
 
             if elapsed_time >= timeout {
@@ -187,15 +192,61 @@ impl Interpreter for ReclusterTableInterpreter {
                     "recluster: final loop stop reason=timeout round={} timeout={:?}",
                     times, timeout,
                 );
-                break;
+                break Ok(());
             }
+        };
+
+        if committed {
+            self.vacuum_table_history().await;
         }
 
+        result?;
         Ok(PipelineBuildResult::create())
     }
 }
 
 impl ReclusterTableInterpreter {
+    async fn vacuum_table_history(&self) {
+        if LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)
+            .is_err()
+        {
+            return;
+        }
+
+        let result = async {
+            // RECLUSTER resolves the table by name for every round. The deferred vacuum follows
+            // the same name-bound semantics and bypasses the query-level table cache instead of
+            // pinning the table ID for the statement.
+            let table = self
+                .ctx
+                .get_catalog(&self.plan.catalog)
+                .await?
+                .get_table(
+                    &self.ctx.get_tenant(),
+                    &self.plan.database,
+                    &self.plan.table,
+                )
+                .await?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            // Transient tables retain their existing per-commit PurgeAllHistory behavior.
+            if fuse_table.is_transient() {
+                return Ok::<_, ErrorCode>(());
+            }
+            if is_auto_vacuum_enabled(self.ctx.as_ref(), fuse_table)? {
+                fuse_table
+                    .vacuum_table(self.ctx.clone(), &get_vacuum_handler(), true)
+                    .await;
+            }
+            Ok::<_, ErrorCode>(())
+        }
+        .await;
+
+        if let Err(error) = result {
+            warn!("recluster: final table-history vacuum failed: {error}");
+        }
+    }
+
     async fn execute_recluster(
         &self,
         push_downs: &mut Option<PushDownInfo>,

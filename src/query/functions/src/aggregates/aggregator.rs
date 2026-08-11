@@ -196,5 +196,10 @@ impl Aggregators {
         factory.register_combinator("_if", AggregateIfCombinator::combinator_desc());
         factory.register_combinator("_distinct", aggregate_combinator_distinct_desc());
         factory.register_combinator("_state", AggregateStateCombinator::combinator_desc());
+        factory.register_combinator("_merge", AggregateMergeCombinator::combinator_desc());
+        factory.register_combinator(
+            "_merge_state",
+            AggregateMergeCombinator::state_combinator_desc(),
+        );
     }
 }

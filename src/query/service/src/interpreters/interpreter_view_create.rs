@@ -132,12 +132,23 @@ impl Interpreter for CreateViewInterpreter {
                 options,
                 ..Default::default()
             },
+            source_table_option: None,
             as_dropped: false,
             materialized_view: None,
             table_properties: None,
             table_partition: None,
         };
-        catalog.create_table(plan).await?;
+        let reply = catalog.create_table(plan).await?;
+        if !reply.new_table && !self.plan.create_option.is_overriding() {
+            self.ctx.attach_query_lineage(None);
+        } else {
+            self.ctx.update_query_lineage_target_id(
+                &self.plan.catalog,
+                &self.plan.database,
+                &self.plan.view_name,
+                reply.table_id,
+            );
+        }
 
         Ok(PipelineBuildResult::create())
     }
