@@ -50,9 +50,9 @@ SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 't') LIMIT 1
 ----
 6 6
 
-# A partition expression may also be a cluster-key expression. Sorting by
-# (c, p % 2) produces partition runs 1, 0, 1 for this input, whereas an implicit
-# partition prefix would produce only the runs 0, 1.
+# A partition expression may also be a cluster-key expression. Partition
+# splitting preserves the input runs 0, 1, 0, 1 before each run is sorted by
+# (c, p % 2); it does not make the partition key an implicit cluster prefix.
 statement ok
 SET max_threads=1
 
@@ -65,13 +65,13 @@ INSERT INTO overlapping_keys VALUES (0, 30), (1, 10), (2, 20), (3, 40)
 query II
 SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'overlapping_keys') LIMIT 1
 ----
-3 3
+4 4
 
-# The three cluster-ordered runs still carry exact partition metadata.
+# The four partition-local runs still carry exact partition metadata.
 query T
 EXPLAIN SELECT p, c FROM overlapping_keys WHERE p % 2 = 0
 ----
-<slt:ignore>partitions total: 3<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 3 to 1<slt:ignore>
+<slt:ignore>partitions total: 4<slt:ignore>partitions scanned: 2<slt:ignore>range pruning: 4 to 2<slt:ignore>
 
 statement ok
 UNSET max_threads
@@ -269,6 +269,23 @@ CREATE TABLE alter_invalid_partition(a INT, b INT)
 statement error PARTITION BY expression `a \+ b` is invalid
 ALTER TABLE alter_invalid_partition PARTITION BY (a + b)
 
+# Vector CLUSTER BY may buffer and concatenate blocks across physical partition
+# boundaries, so the combination is rejected until it has partition-aware batching.
+statement error Vector data type is not supported for CLUSTER BY with PARTITION BY
+CREATE TABLE vector_partition_create(id INT, embedding VECTOR(3), VECTOR INDEX idx (embedding) distance='cosine') PARTITION BY (id) CLUSTER BY (embedding)
+
+statement ok
+CREATE TABLE vector_partition_alter_cluster(id INT, embedding VECTOR(3), VECTOR INDEX idx (embedding) distance='cosine') PARTITION BY (id)
+
+statement error Vector data type is not supported for CLUSTER BY with PARTITION BY
+ALTER TABLE vector_partition_alter_cluster CLUSTER BY (embedding)
+
+statement ok
+CREATE TABLE vector_partition_alter_partition(id INT, embedding VECTOR(3), VECTOR INDEX idx (embedding) distance='cosine') CLUSTER BY (embedding)
+
+statement error Vector data type is not supported for CLUSTER BY with PARTITION BY
+ALTER TABLE vector_partition_alter_partition PARTITION BY (id)
+
 # IF EXISTS must skip partition-key binding when the table is absent.
 statement ok
 ALTER TABLE IF EXISTS alter_missing_partition PARTITION BY (missing_column)
@@ -455,6 +472,8 @@ SELECT if(block_count BETWEEN 6 AND 12, 1, 0) FROM fuse_snapshot('db_09_0054', '
 
 # The common write layout prepares the INT table row from a BIGINT input and
 # full-sorts by the physical partition transform before Fuse serialization.
+# CLUSTER BY verifies that partition boundaries are split before its partial
+# sort can interleave rows from a mixed-boundary block.
 statement ok
 SET max_threads=4
 
@@ -462,7 +481,7 @@ statement ok
 SET max_block_size=1000
 
 statement ok
-CREATE TABLE hash_partitioned(id INT) PARTITION BY (bucket(16, id)) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+CREATE TABLE hash_partitioned(id INT) PARTITION BY (bucket(16, id)) CLUSTER BY (id) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
 
 statement ok
 CREATE TABLE hash_partitioned_none(id INT) PARTITION BY (bucket(16, id)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000

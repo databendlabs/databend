@@ -1025,7 +1025,12 @@ impl Binder {
         let mut cluster_key = None;
         if let Some(cluster_opt) = cluster_by {
             let keys = self
-                .analyze_cluster_keys(cluster_opt, schema.clone(), table_indexes.as_ref())
+                .analyze_cluster_keys(
+                    cluster_opt,
+                    schema.clone(),
+                    table_indexes.as_ref(),
+                    partition_by.is_none(),
+                )
                 .await?;
             if !keys.is_empty() {
                 options
@@ -1468,6 +1473,10 @@ impl Binder {
                         cluster_by,
                         tbl.schema(),
                         Some(&tbl.get_table_info().meta.indexes),
+                        !tbl.get_table_info()
+                            .meta
+                            .options
+                            .contains_key(OPT_KEY_PARTITION_BY),
                     )
                     .await?;
 
@@ -1513,6 +1522,17 @@ impl Binder {
                     return Err(ErrorCode::UnsupportedEngineParams(format!(
                         "ALTER TABLE PARTITION BY is not supported for engine {engine}"
                     )));
+                }
+
+                if let Some(cluster_keys) = tbl.resolve_cluster_keys() {
+                    self.analyze_table_keys(
+                        &cluster_keys,
+                        tbl.schema(),
+                        Some(&tbl.get_table_info().meta.indexes),
+                        "CLUSTER BY with PARTITION BY",
+                        false,
+                    )
+                    .await?;
                 }
 
                 let partition_keys = self
@@ -2458,13 +2478,18 @@ impl Binder {
         cluster_opt: &ClusterOption,
         schema: TableSchemaRef,
         table_indexes: Option<&BTreeMap<String, TableIndex>>,
+        allow_vector: bool,
     ) -> Result<Vec<String>> {
         self.analyze_table_keys(
             &cluster_opt.cluster_exprs,
             schema,
             table_indexes,
-            "Cluster by",
-            true,
+            if allow_vector {
+                "CLUSTER BY"
+            } else {
+                "CLUSTER BY with PARTITION BY"
+            },
+            allow_vector,
         )
         .await
     }
@@ -2540,7 +2565,12 @@ impl Binder {
 
             let data_type = expr.data_type();
             let (is_valid_type, is_vector_type) = Self::valid_cluster_key_type(data_type);
-            if !is_valid_type || is_vector_type && !allow_vector {
+            if is_vector_type && !allow_vector {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "Vector data type is not supported for {key_name}"
+                )));
+            }
+            if !is_valid_type {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Unsupported data type '{data_type}' for {key_name} expression `{key_expr:#}`"
                 )));
