@@ -76,6 +76,7 @@ impl Interpreter for CreateMaterializedViewInterpreter {
                 options: self.plan.options.clone(),
                 ..Default::default()
             },
+            source_table_option: self.plan.source_table_option.clone(),
             as_dropped: false,
             materialized_view: Some(materialized_view),
             table_properties: None,

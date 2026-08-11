@@ -7469,6 +7469,817 @@ FunctionCall {
 
 
 ---------- Input ----------
+JSON_PATH_TRANSFORM(col, '$[*].name', v -> upper(v))
+---------- Output ---------
+JSON_PATH_TRANSFORM(col, '$[*].name', v -> upper(v))
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..52,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..19,
+            ),
+            name: "JSON_PATH_TRANSFORM",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    20..23,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                20..23,
+                            ),
+                            name: "col",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            Literal {
+                span: Some(
+                    25..36,
+                ),
+                value: String(
+                    "$[*].name",
+                ),
+            },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Lambda {
+                params: [
+                    Identifier {
+                        span: Some(
+                            38..39,
+                        ),
+                        name: "v",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+                expr: FunctionCall {
+                    span: Some(
+                        43..51,
+                    ),
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier {
+                            span: Some(
+                                43..48,
+                            ),
+                            name: "upper",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        args: [
+                            ColumnRef {
+                                span: Some(
+                                    49..50,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                49..50,
+                                            ),
+                                            name: "v",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                        params: [],
+                        order_by: [],
+                        filter: None,
+                        window: None,
+                        lambda: None,
+                    },
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+ARRAY_MAP(v -> v + 1)
+---------- Output ---------
+ARRAY_MAP(v -> v + 1)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..21,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..9,
+            ),
+            name: "ARRAY_MAP",
+            quote: None,
+            ident_type: None,
+        },
+        args: [],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Lambda {
+                params: [
+                    Identifier {
+                        span: Some(
+                            10..11,
+                        ),
+                        name: "v",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+                expr: BinaryOp {
+                    span: Some(
+                        17..18,
+                    ),
+                    op: Plus,
+                    left: ColumnRef {
+                        span: Some(
+                            15..16,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        15..16,
+                                    ),
+                                    name: "v",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            19..20,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+ARRAY_FILTER(a, v -> v + 1)
+---------- Output ---------
+ARRAY_FILTER(a, v -> v + 1)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..27,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..12,
+            ),
+            name: "ARRAY_FILTER",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    13..14,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                13..14,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Lambda {
+                params: [
+                    Identifier {
+                        span: Some(
+                            16..17,
+                        ),
+                        name: "v",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+                expr: BinaryOp {
+                    span: Some(
+                        23..24,
+                    ),
+                    op: Plus,
+                    left: ColumnRef {
+                        span: Some(
+                            21..22,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        21..22,
+                                    ),
+                                    name: "v",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            25..26,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+JSON_PATH_TRANSFORM(a, b, v -> v + 1)
+---------- Output ---------
+JSON_PATH_TRANSFORM(a, b, v -> v + 1)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..37,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..19,
+            ),
+            name: "JSON_PATH_TRANSFORM",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    20..21,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                20..21,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            ColumnRef {
+                span: Some(
+                    23..24,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                23..24,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Lambda {
+                params: [
+                    Identifier {
+                        span: Some(
+                            26..27,
+                        ),
+                        name: "v",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+                expr: BinaryOp {
+                    span: Some(
+                        33..34,
+                    ),
+                    op: Plus,
+                    left: ColumnRef {
+                        span: Some(
+                            31..32,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        31..32,
+                                    ),
+                                    name: "v",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            35..36,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+MAP_FILTER(a, b, c, (k, v) -> k + v)
+---------- Output ---------
+MAP_FILTER(a, b, c, (k, v) -> k + v)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..36,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..10,
+            ),
+            name: "MAP_FILTER",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    11..12,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                11..12,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            ColumnRef {
+                span: Some(
+                    14..15,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            ColumnRef {
+                span: Some(
+                    17..18,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                17..18,
+                            ),
+                            name: "c",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Lambda {
+                params: [
+                    Identifier {
+                        span: Some(
+                            21..22,
+                        ),
+                        name: "k",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    Identifier {
+                        span: Some(
+                            24..25,
+                        ),
+                        name: "v",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+                expr: BinaryOp {
+                    span: Some(
+                        32..33,
+                    ),
+                    op: Plus,
+                    left: ColumnRef {
+                        span: Some(
+                            30..31,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        30..31,
+                                    ),
+                                    name: "k",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: ColumnRef {
+                        span: Some(
+                            34..35,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        34..35,
+                                    ),
+                                    name: "v",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+JSON_ARRAY_MAP(doc -> 'items', v -> upper(v))
+---------- Output ---------
+JSON_ARRAY_MAP(doc -> 'items', v -> upper(v))
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..45,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..14,
+            ),
+            name: "JSON_ARRAY_MAP",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            JsonOp {
+                span: Some(
+                    19..21,
+                ),
+                op: Arrow,
+                left: ColumnRef {
+                    span: Some(
+                        15..18,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    15..18,
+                                ),
+                                name: "doc",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Literal {
+                    span: Some(
+                        22..29,
+                    ),
+                    value: String(
+                        "items",
+                    ),
+                },
+            },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Lambda {
+                params: [
+                    Identifier {
+                        span: Some(
+                            31..32,
+                        ),
+                        name: "v",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+                expr: FunctionCall {
+                    span: Some(
+                        36..44,
+                    ),
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier {
+                            span: Some(
+                                36..41,
+                            ),
+                            name: "upper",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        args: [
+                            ColumnRef {
+                                span: Some(
+                                    42..43,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                42..43,
+                                            ),
+                                            name: "v",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                        params: [],
+                        order_by: [],
+                        filter: None,
+                        window: None,
+                        lambda: None,
+                    },
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+TO_STRING(col -> 'name')
+---------- Output ---------
+TO_STRING(col -> 'name')
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..24,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..9,
+            ),
+            name: "TO_STRING",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            JsonOp {
+                span: Some(
+                    14..16,
+                ),
+                op: Arrow,
+                left: ColumnRef {
+                    span: Some(
+                        10..13,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    10..13,
+                                ),
+                                name: "col",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Literal {
+                    span: Some(
+                        17..23,
+                    ),
+                    value: String(
+                        "name",
+                    ),
+                },
+            },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+CONCAT(a -> 'k', b)
+---------- Output ---------
+CONCAT(a -> 'k', b)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..19,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..6,
+            ),
+            name: "CONCAT",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            JsonOp {
+                span: Some(
+                    9..11,
+                ),
+                op: Arrow,
+                left: ColumnRef {
+                    span: Some(
+                        7..8,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    7..8,
+                                ),
+                                name: "a",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Literal {
+                    span: Some(
+                        12..15,
+                    ),
+                    value: String(
+                        "k",
+                    ),
+                },
+            },
+            ColumnRef {
+                span: Some(
+                    17..18,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                17..18,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
 INTERVAL '1 YEAR'
 ---------- Output ---------
 CAST('1 YEAR' AS INTERVAL)

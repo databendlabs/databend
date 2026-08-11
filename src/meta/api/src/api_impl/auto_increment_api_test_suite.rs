@@ -128,6 +128,7 @@ impl AutoIncrementApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: drop_table_meta(created_on),
+                source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
                 table_properties: None,

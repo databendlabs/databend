@@ -49,6 +49,7 @@ fn create_table_req(
             table_name: table_name.to_string(),
         },
         table_meta,
+        source_table_option: None,
         as_dropped,
         materialized_view: None,
         table_properties: None,

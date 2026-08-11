@@ -2636,6 +2636,38 @@ fn aggregate_filter(i: Input) -> IResult<Expr> {
     .parse(i)
 }
 
+/// Functions that accept a trailing lambda in their call body:
+/// `f([arg, ...,] params -> expr)`. `->` is also the json arrow operator,
+/// so this grammar is only enabled for these names.
+///
+/// This list is the single source of truth: `GENERAL_LAMBDA_FUNCTIONS` in
+/// `databend-common-functions` is derived from it.
+pub const LAMBDA_FUNCTION_NAMES: &[&str] = &[
+    "array_transform",
+    "array_apply",
+    "array_map",
+    "array_filter",
+    "array_reduce",
+    "json_array_transform",
+    "json_array_apply",
+    "json_array_map",
+    "json_array_filter",
+    "json_array_reduce",
+    "map_filter",
+    "map_transform_keys",
+    "map_transform_values",
+    "json_map_filter",
+    "json_map_transform_keys",
+    "json_map_transform_values",
+    "json_path_transform",
+];
+
+fn is_lambda_function_name(name: &str) -> bool {
+    LAMBDA_FUNCTION_NAMES
+        .iter()
+        .any(|lambda_name| name.eq_ignore_ascii_case(lambda_name))
+}
+
 pub fn function_call(i: Input) -> IResult<ExprElement> {
     enum FunctionCallSuffix {
         Simple {
@@ -2676,7 +2708,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             window: Option<WindowDesc>,
         },
         Lambda {
-            arg: Expr,
+            args: Vec<Expr>,
             params: Vec<Identifier>,
             expr: Box<Expr>,
         },
@@ -2695,8 +2727,57 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
         }
     }
 
+    // Parses `function([arg, ...,] params -> expr)`. A `params -> expr` that
+    // does not close the call is re-parsed as an ordinary argument, e.g. the
+    // first argument of `f(a -> 'k', x -> y)`.
+    fn lambda_last_call_body<'a>(input: Input<'a>) -> IResult<'a, FunctionCallSuffix> {
+        let original = input;
+        let (mut rest, _) = match_text("(").parse(input)?;
+        let mut args = Vec::new();
+
+        loop {
+            match followed_by_text(lambda_params, "->").parse(rest) {
+                Ok((after_params, params)) => {
+                    let (after_arrow, _) = match_text("->").parse(after_params)?;
+                    if let Ok((after_expr, expr)) = subexpr(0).parse(after_arrow)
+                        && let Ok((rest, _)) = match_text(")").parse(after_expr)
+                    {
+                        return Ok((rest, FunctionCallSuffix::Lambda {
+                            args,
+                            params,
+                            expr: Box::new(expr),
+                        }));
+                    }
+                }
+                Err(nom::Err::Error(_)) => {}
+                Err(error) => return Err(error),
+            }
+
+            let (after_arg, arg) = match subexpr(0).parse(rest) {
+                Ok(result) => result,
+                Err(_) => {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        original,
+                        ErrorKind::other("expected lambda expression"),
+                    )));
+                }
+            };
+            let (after_comma, _) = match match_text(",").parse(after_arg) {
+                Ok(result) => result,
+                Err(_) => {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        original,
+                        ErrorKind::other("expected lambda expression"),
+                    )));
+                }
+            };
+            args.push(arg);
+            rest = after_comma;
+        }
+    }
+
     let lambda_params = followed_by_text(lambda_params, "->");
-    let function_call_body = map_res(
+    let general_function_call_body = map_res(
         rule! {
             "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ (#lambda_params ~ "->" ~ ^#subexpr(0))? ~ #comma_separated_list1(subexpr(0))? ~ #aggregate_order_by? ~ ")"
             ~ ("(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ #aggregate_order_by? ~ ")")?
@@ -2731,7 +2812,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             ) {
                 (
                     Some(first_param),
-                    Some((lambda_params, _, arg_1)),
+                    Some((lambda_params, _, lambda_body)),
                     None,
                     None,
                     None,
@@ -2740,9 +2821,9 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     None,
                     None,
                 ) => Ok(FunctionCallSuffix::Lambda {
-                    arg: first_param,
+                    args: vec![first_param],
                     params: lambda_params,
-                    expr: Box::new(arg_1),
+                    expr: Box::new(lambda_body),
                 }),
                 (
                     Some(first_param),
@@ -2878,115 +2959,130 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
         },
     );
 
-    map(
-        rule!(
-            #function_name
-            ~ #function_call_body : "`function(... [ ORDER BY <expr>, ... ] [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ FILTER ( WHERE <expr> ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`"
-        ),
-        |(name, suffix)| match suffix {
-            FunctionCallSuffix::Simple { distinct, args } => ExprElement::FunctionCall {
-                func: FunctionCall {
-                    distinct,
-                    name,
-                    args,
-                    params: vec![],
-                    order_by: vec![],
-                    filter: None,
-                    window: None,
-                    lambda: None,
-                },
-            },
-            FunctionCallSuffix::Filter {
+    let mut general_function_call_body = context(
+        "`function(... [ ORDER BY <expr>, ... ] [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ FILTER ( WHERE <expr> ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`",
+        general_function_call_body,
+    );
+
+    let (rest, name) = function_name.parse(i)?;
+
+    // Lambda functions must try the trailing-lambda body first: the general
+    // grammar would swallow `params -> expr` as a json arrow argument.
+    let (rest, suffix) = if is_lambda_function_name(&name.name) {
+        match lambda_last_call_body(rest) {
+            Ok(result) => result,
+            Err(nom::Err::Error(_)) => general_function_call_body.parse(rest)?,
+            Err(error) => return Err(error),
+        }
+    } else {
+        general_function_call_body.parse(rest)?
+    };
+
+    let elem = match suffix {
+        FunctionCallSuffix::Simple { distinct, args } => ExprElement::FunctionCall {
+            func: FunctionCall {
                 distinct,
+                name,
                 args,
-                filter,
-            } => ExprElement::FunctionCall {
-                func: FunctionCall {
-                    distinct,
-                    name,
-                    args,
-                    params: vec![],
-                    order_by: vec![],
-                    filter: Some(Box::new(filter)),
-                    window: None,
-                    lambda: None,
-                },
-            },
-            FunctionCallSuffix::Window {
-                distinct,
-                args,
-                filter,
-                window,
-            } => ExprElement::FunctionCall {
-                func: FunctionCall {
-                    distinct,
-                    name,
-                    args,
-                    params: vec![],
-                    order_by: vec![],
-                    filter: filter.map(Box::new),
-                    window: Some(window),
-                    lambda: None,
-                },
-            },
-            FunctionCallSuffix::ArgumentOrderBy {
-                distinct,
-                args,
-                order_by,
-                filter,
-                window,
-            }
-            | FunctionCallSuffix::WithInGroupWindow {
-                distinct,
-                args,
-                order_by,
-                filter,
-                window,
-            } => ExprElement::FunctionCall {
-                func: FunctionCall {
-                    distinct,
-                    name,
-                    args,
-                    params: vec![],
-                    order_by,
-                    filter: filter.map(Box::new),
-                    window,
-                    lambda: None,
-                },
-            },
-            FunctionCallSuffix::Lambda { arg, params, expr } => ExprElement::FunctionCall {
-                func: FunctionCall {
-                    distinct: false,
-                    name,
-                    args: vec![arg],
-                    params: vec![],
-                    order_by: vec![],
-                    filter: None,
-                    window: None,
-                    lambda: Some(Lambda { params, expr }),
-                },
-            },
-            FunctionCallSuffix::ParamsWindow {
-                distinct,
-                params,
-                args,
-                order_by,
-                filter,
-                window,
-            } => ExprElement::FunctionCall {
-                func: FunctionCall {
-                    distinct,
-                    name,
-                    args,
-                    params,
-                    order_by,
-                    filter: filter.map(Box::new),
-                    window,
-                    lambda: None,
-                },
+                params: vec![],
+                order_by: vec![],
+                filter: None,
+                window: None,
+                lambda: None,
             },
         },
-    ).parse(i)
+        FunctionCallSuffix::Filter {
+            distinct,
+            args,
+            filter,
+        } => ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct,
+                name,
+                args,
+                params: vec![],
+                order_by: vec![],
+                filter: Some(Box::new(filter)),
+                window: None,
+                lambda: None,
+            },
+        },
+        FunctionCallSuffix::Window {
+            distinct,
+            args,
+            filter,
+            window,
+        } => ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct,
+                name,
+                args,
+                params: vec![],
+                order_by: vec![],
+                filter: filter.map(Box::new),
+                window: Some(window),
+                lambda: None,
+            },
+        },
+        FunctionCallSuffix::ArgumentOrderBy {
+            distinct,
+            args,
+            order_by,
+            filter,
+            window,
+        }
+        | FunctionCallSuffix::WithInGroupWindow {
+            distinct,
+            args,
+            order_by,
+            filter,
+            window,
+        } => ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct,
+                name,
+                args,
+                params: vec![],
+                order_by,
+                filter: filter.map(Box::new),
+                window,
+                lambda: None,
+            },
+        },
+        FunctionCallSuffix::Lambda { args, params, expr } => ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct: false,
+                name,
+                args,
+                params: vec![],
+                order_by: vec![],
+                filter: None,
+                window: None,
+                lambda: Some(Lambda { params, expr }),
+            },
+        },
+        FunctionCallSuffix::ParamsWindow {
+            distinct,
+            params,
+            args,
+            order_by,
+            filter,
+            window,
+        } => ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct,
+                name,
+                args,
+                params,
+                order_by,
+                filter: filter.map(Box::new),
+                window,
+                lambda: None,
+            },
+        },
+    };
+
+    Ok((rest, elem))
 }
 
 pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
