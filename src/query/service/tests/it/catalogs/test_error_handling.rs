@@ -88,6 +88,7 @@ async fn test_get_table_error_handling() -> anyhow::Result<()> {
             engine: "MEMORY".to_string(),
             ..TableMeta::default()
         },
+        source_table_option: None,
         as_dropped: false,
         materialized_view: None,
         table_properties: None,
@@ -223,6 +224,7 @@ async fn test_get_table_by_info_error_handling() -> anyhow::Result<()> {
             engine: "MEMORY".to_string(),
             ..TableMeta::default()
         },
+        source_table_option: None,
         as_dropped: false,
         materialized_view: None,
         table_properties: None,

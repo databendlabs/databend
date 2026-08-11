@@ -483,6 +483,44 @@ where
                     txn_put_pb(&key_table_id_to_name, &key_dbid_tbname), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                 ]);
 
+                if let Some(source_update) = &req.source_table_option {
+                    let source_id = TableId::new(source_update.table_id);
+                    let source_meta = self.get_pb(&source_id).await?.ok_or_else(|| {
+                        KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                            source_update.table_id,
+                            "create_table source option update",
+                        )))
+                    })?;
+                    if source_update.seq.match_seq(&source_meta).is_err() {
+                        return Err(KVAppError::AppError(AppError::from(
+                            TableVersionMismatched::new(
+                                source_update.table_id,
+                                source_update.seq,
+                                source_meta.seq,
+                                "create_table source option update",
+                            ),
+                        )));
+                    }
+
+                    let source_seq = source_meta.seq;
+                    let mut updated_source_meta = source_meta.data;
+                    for (key, value) in &source_update.options {
+                        match value {
+                            Some(value) => {
+                                updated_source_meta
+                                    .options
+                                    .insert(key.clone(), value.clone());
+                            }
+                            None => {
+                                updated_source_meta.options.remove(key);
+                            }
+                        }
+                    }
+                    txn.condition.push(txn_cond_seq(&source_id, Eq, source_seq));
+                    txn.if_then
+                        .push(txn_put_pb(&source_id, &updated_source_meta));
+                }
+
                 if let Some(ref mv) = req.materialized_view {
                     let def_ident = MVDefinitionIdent::new(req.tenant(), table_id);
                     txn.if_then.push(txn_put_pb(&def_ident, &mv.definition));

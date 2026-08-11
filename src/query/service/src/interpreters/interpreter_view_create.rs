@@ -132,6 +132,7 @@ impl Interpreter for CreateViewInterpreter {
                 options,
                 ..Default::default()
             },
+            source_table_option: None,
             as_dropped: false,
             materialized_view: None,
             table_properties: None,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::CreateMaterializedViewStmt;
@@ -34,6 +35,10 @@ use databend_common_expression::infer_schema_type;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_meta_client::types::MatchSeq;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use log::debug;
 
@@ -254,14 +259,23 @@ impl Binder {
                 source_table.engine()
             )));
         }
-        if !source_table.change_tracking_enabled() {
-            return Err(ErrorCode::SemanticError(format!(
-                "Materialized view source table '{}.{}' must have CHANGE_TRACKING enabled",
-                source_database,
-                source_table.name()
-            )));
-        }
         let source_table_id = source_table.get_id();
+        let source_table_seq = source_table.get_table_info().ident.seq;
+        let source_table_option =
+            (!source_table.change_tracking_enabled()).then(|| UpsertTableOptionReq {
+                table_id: source_table_id,
+                seq: MatchSeq::Exact(source_table_seq),
+                options: HashMap::from([
+                    (
+                        OPT_KEY_CHANGE_TRACKING.to_string(),
+                        Some("true".to_string()),
+                    ),
+                    (
+                        OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(),
+                        Some(source_table_seq.to_string()),
+                    ),
+                ]),
+            });
 
         // Qualify the logical definition once so stale fallback is independent of the session's
         // current database. The physical definition starts from that same canonical source SQL.
@@ -351,6 +365,7 @@ impl Binder {
             schema: physical_schema,
             options,
             mv_definition,
+            source_table_option,
         };
 
         Ok(Plan::CreateMaterializedView(Box::new(plan)))

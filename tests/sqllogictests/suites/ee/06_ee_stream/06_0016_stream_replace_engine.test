@@ -64,5 +64,51 @@ CREATE STREAM stream_target ON TABLE source
 statement ok
 CREATE OR REPLACE STREAM stream_target ON TABLE source
 
+# A rejected stream replacement must not enable change tracking on its source.
+statement ok
+CREATE TABLE atomic_source(a INT)
+
+statement ok
+CREATE TABLE atomic_target(a INT)
+
+query B
+SELECT table_option LIKE '%CHANGE_TRACKING=''true''%' FROM system.tables WHERE database = 'test_stream_replace_engine' AND name = 'atomic_source'
+----
+0
+
+statement error 1302
+CREATE OR REPLACE STREAM atomic_target ON TABLE atomic_source
+
+query B
+SELECT table_option LIKE '%CHANGE_TRACKING=''true''%' FROM system.tables WHERE database = 'test_stream_replace_engine' AND name = 'atomic_source'
+----
+0
+
+# CREATE IF NOT EXISTS is a complete no-op when the target already exists.
+statement ok
+CREATE STREAM IF NOT EXISTS stream_target ON TABLE atomic_source
+
+query B
+SELECT table_option LIKE '%CHANGE_TRACKING=''true''%' FROM system.tables WHERE database = 'test_stream_replace_engine' AND name = 'atomic_source'
+----
+0
+
+# A successful CREATE publishes the stream and enables tracking atomically.
+statement ok
+DROP TABLE atomic_target
+
+statement ok
+CREATE STREAM atomic_target ON TABLE atomic_source
+
+query B
+SELECT table_option LIKE '%CHANGE_TRACKING=''true''%' FROM system.tables WHERE database = 'test_stream_replace_engine' AND name = 'atomic_source'
+----
+1
+
+query B
+SELECT * FROM stream_status('atomic_target')
+----
+0
+
 statement ok
 DROP DATABASE test_stream_replace_engine

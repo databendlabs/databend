@@ -121,6 +121,7 @@ impl AttachTableHandler for RealAttachTableHandler {
                 table_name: plan.table.to_string(),
             },
             table_meta,
+            source_table_option: None,
             as_dropped: false,
             materialized_view: None,
             table_properties: None,

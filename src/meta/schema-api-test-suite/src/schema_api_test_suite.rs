@@ -327,6 +327,8 @@ impl SchemaApiTestSuite {
         self.database_drop_out_of_retention_time_history(&b.build().await)
             .await?;
         self.table_create_get_drop(&b.build().await).await?;
+        self.table_create_with_source_option_atomicity(&b.build().await)
+            .await?;
         self.materialized_view_lifecycle(&b.build().await).await?;
         self.table_drop_without_db_id_to_name(&b.build().await)
             .await?;
@@ -1665,6 +1667,135 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    async fn table_create_with_source_option_atomicity<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
+        let tenant_name = "table_create_with_source_option_atomicity";
+        let db_name = "db";
+        let mut source = DbTableHarness::new(mt, tenant_name, db_name, "source", "FUSE");
+        source.create_db().await?;
+        let (source_id, _) = source.create_table().await?;
+        let tenant = source.tenant();
+
+        let create_req =
+            |name: &str,
+             create_option: CreateOption,
+             engine: &str,
+             source_table_option: Option<UpsertTableOptionReq>| CreateTableReq {
+                create_option,
+                catalog_name: None,
+                name_ident: TableNameIdent::new(&tenant, db_name, name),
+                table_meta: TableMeta {
+                    engine: engine.to_string(),
+                    ..Default::default()
+                },
+                source_table_option,
+                as_dropped: false,
+                materialized_view: None,
+                table_properties: None,
+                table_partition: None,
+            };
+        let source_update = |table_id, seq| UpsertTableOptionReq {
+            table_id,
+            seq: MatchSeq::Exact(seq),
+            options: HashMap::from([
+                ("change_tracking".to_string(), Some("true".to_string())),
+                ("begin_version".to_string(), Some(seq.to_string())),
+            ]),
+        };
+
+        // Publishing the target and updating the source happen together.
+        let source_before = source.get_table().await?;
+        let reply = mt
+            .create_table(create_req(
+                "stream",
+                CreateOption::Create,
+                "STREAM",
+                Some(source_update(source_id, source_before.ident.seq)),
+            ))
+            .await?;
+        assert!(reply.new_table);
+        let source_after = source.get_table().await?;
+        assert!(source_after.ident.seq > source_before.ident.seq);
+        assert_eq!(
+            source_after.meta.options.get("change_tracking"),
+            Some(&"true".to_string())
+        );
+        assert_eq!(
+            source_after.meta.options.get("begin_version"),
+            Some(&source_before.ident.seq.to_string())
+        );
+        assert_eq!(
+            mt.get_table(GetTableReq::new(&tenant, db_name, "stream"))
+                .await?
+                .meta
+                .engine,
+            "STREAM"
+        );
+
+        // CREATE IF NOT EXISTS is a no-op, including the attached source update.
+        let mut second_source =
+            DbTableHarness::new(mt, tenant_name, db_name, "second_source", "FUSE");
+        let (second_source_id, _) = second_source.create_table().await?;
+        let second_before = second_source.get_table().await?;
+        let reply = mt
+            .create_table(create_req(
+                "stream",
+                CreateOption::CreateIfNotExists,
+                "STREAM",
+                Some(source_update(second_source_id, second_before.ident.seq)),
+            ))
+            .await?;
+        assert!(!reply.new_table);
+        assert_eq!(second_source.get_table().await?, second_before);
+
+        // A rejected cross-engine replacement leaves the source unchanged.
+        let mut third_source =
+            DbTableHarness::new(mt, tenant_name, db_name, "third_source", "FUSE");
+        let (third_source_id, _) = third_source.create_table().await?;
+        let third_before = third_source.get_table().await?;
+        let err = mt
+            .create_table(create_req(
+                "stream",
+                CreateOption::CreateOrReplace,
+                "FUSE",
+                Some(source_update(third_source_id, third_before.ident.seq)),
+            ))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::TableEngineMismatch(_))
+        ));
+        assert_eq!(third_source.get_table().await?, third_before);
+
+        // A stale source condition rejects the entire transaction and does not publish the target.
+        let mut fourth_source =
+            DbTableHarness::new(mt, tenant_name, db_name, "fourth_source", "FUSE");
+        let (fourth_source_id, _) = fourth_source.create_table().await?;
+        let fourth_before = fourth_source.get_table().await?;
+        let err = mt
+            .create_table(create_req(
+                "stale_stream",
+                CreateOption::Create,
+                "STREAM",
+                Some(source_update(fourth_source_id, fourth_before.ident.seq + 1)),
+            ))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::TableVersionMismatched(_))
+        ));
+        assert_eq!(fourth_source.get_table().await?, fourth_before);
+        assert!(
+            mt.get_table(GetTableReq::new(&tenant, db_name, "stale_stream"))
+                .await
+                .is_err()
+        );
+
+        Ok(())
+    }
+
     async fn materialized_view_lifecycle<
         MT: kvapi::KVApi<Error = MetaError>
             + DatabaseApi
@@ -1703,6 +1834,14 @@ impl SchemaApiTestSuite {
         };
         let definition = new_definition(&source_table_name);
         let replacement_definition = new_definition(replacement_source_name);
+        let enable_change_tracking = |table_id, seq| UpsertTableOptionReq {
+            table_id,
+            seq: MatchSeq::Exact(seq),
+            options: HashMap::from([
+                ("change_tracking".to_string(), Some("true".to_string())),
+                ("begin_version".to_string(), Some(seq.to_string())),
+            ]),
+        };
         let initial_source_binding_generation = mt
             .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
             .await?
@@ -1733,6 +1872,7 @@ impl SchemaApiTestSuite {
                 catalog_name: None,
                 name_ident: TableNameIdent::new(&tenant, &db_name, name),
                 table_meta,
+                source_table_option: None,
                 as_dropped: false,
                 materialized_view: Some(CreateMaterializedViewMeta {
                     definition: definition.clone(),
@@ -1818,17 +1958,72 @@ impl SchemaApiTestSuite {
             );
         }
 
-        // Creating an MV publishes an empty table, its definition, and its source index atomically.
-        let created = {
-            let created = mt
-                .create_table(new_mv_req(
-                    mv_name,
-                    CreateOption::Create,
+        let source_before_create = util.get_table().await?;
+
+        // A stale source sequence rejects the MV and leaves change tracking disabled.
+        {
+            let mut stale_req = new_mv_req(
+                "mv_stale_source_option",
+                CreateOption::Create,
+                source_table_id,
+                initial_source_binding_generation,
+                &definition,
+            );
+            stale_req.source_table_option = Some(enable_change_tracking(
+                source_table_id,
+                source_before_create.ident.seq + 1,
+            ));
+            let err = mt.create_table(stale_req).await.unwrap_err();
+            assert!(matches!(
+                err,
+                KVAppError::AppError(AppError::TableVersionMismatched(_))
+            ));
+            assert_eq!(util.get_table().await?, source_before_create);
+            assert!(
+                mt.get_table(GetTableReq::new(
+                    &tenant,
+                    &db_name,
+                    "mv_stale_source_option"
+                ))
+                .await
+                .is_err()
+            );
+            assert!(
+                mt.list_valid_mvs_by_source_table_id(
+                    &tenant,
                     source_table_id,
                     initial_source_binding_generation,
-                    &definition,
-                ))
-                .await?;
+                )
+                .await?
+                .is_empty()
+            );
+        }
+
+        // Creating an MV publishes its table, definition, source index, and source change-tracking
+        // update atomically.
+        let created = {
+            let mut req = new_mv_req(
+                mv_name,
+                CreateOption::Create,
+                source_table_id,
+                initial_source_binding_generation,
+                &definition,
+            );
+            req.source_table_option = Some(enable_change_tracking(
+                source_table_id,
+                source_before_create.ident.seq,
+            ));
+            let created = mt.create_table(req).await?;
+            let source_after_create = util.get_table().await?;
+            assert!(source_after_create.ident.seq > source_before_create.ident.seq);
+            assert_eq!(
+                source_after_create.meta.options.get("change_tracking"),
+                Some(&"true".to_string())
+            );
+            assert_eq!(
+                source_after_create.meta.options.get("begin_version"),
+                Some(&source_before_create.ident.seq.to_string())
+            );
             assert_eq!(
                 mt.get_mv_definition(&tenant, created.table_id)
                     .await?
@@ -2014,15 +2209,25 @@ impl SchemaApiTestSuite {
                 .await?
                 .map(|seqv| seqv.data.current_source_generation)
                 .unwrap_or(0);
-            let new_source_replacement = mt
-                .create_table(new_mv_req(
-                    mv_name,
-                    CreateOption::CreateOrReplace,
-                    replacement_source_table_id,
-                    source_binding_generation,
-                    &replacement_definition,
-                ))
-                .await?;
+            let replacement_source_before = util.get_table_by_name(replacement_source_name).await?;
+            let mut req = new_mv_req(
+                mv_name,
+                CreateOption::CreateOrReplace,
+                replacement_source_table_id,
+                source_binding_generation,
+                &replacement_definition,
+            );
+            req.source_table_option = Some(enable_change_tracking(
+                replacement_source_table_id,
+                replacement_source_before.ident.seq,
+            ));
+            let new_source_replacement = mt.create_table(req).await?;
+            let replacement_source_after = util.get_table_by_name(replacement_source_name).await?;
+            assert!(replacement_source_after.ident.seq > replacement_source_before.ident.seq);
+            assert_eq!(
+                replacement_source_after.meta.options.get("change_tracking"),
+                Some(&"true".to_string())
+            );
 
             assert!(
                 mt.get_mv_definition(&tenant, replacement.table_id)
@@ -2242,6 +2447,7 @@ impl SchemaApiTestSuite {
                 },
 
                 table_meta: table_meta(created_on),
+                source_table_option: None,
                 as_dropped: false,
                 materialized_view: None,
                 table_properties: None,
@@ -2360,6 +2566,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                source_table_option: None,
                 as_dropped: false,
                 materialized_view: None,
                 table_properties: None,
@@ -2633,6 +2840,7 @@ impl SchemaApiTestSuite {
                     engine: "STREAM".to_string(),
                     ..Default::default()
                 },
+                source_table_option: None,
                 as_dropped: false,
                 materialized_view: None,
                 table_properties: None,
@@ -2678,6 +2886,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: tbl_meta,
+                source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
                 table_properties: None,
@@ -4978,6 +5187,7 @@ impl SchemaApiTestSuite {
             catalog_name: None,
             name_ident,
             table_meta: create_table_meta.clone(),
+            source_table_option: None,
             as_dropped: false,
             materialized_view: None,
             table_properties: None,
@@ -5806,6 +6016,7 @@ impl SchemaApiTestSuite {
                     },
 
                     table_meta: table_meta(created_on),
+                    source_table_option: None,
                     as_dropped: false,
                     materialized_view: None,
                     table_properties: None,
@@ -6295,6 +6506,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
             },
             table_meta: drop_table_meta(created_on),
+            source_table_option: None,
             as_dropped: true,
             materialized_view: None,
             table_properties: None,
@@ -6416,6 +6628,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
                 table_properties: None,
@@ -6437,6 +6650,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: drop_table_meta(created_on),
+                source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
                 table_properties: None,
@@ -6474,6 +6688,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: drop_table_meta(created_on),
+                source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
                 table_properties: None,
@@ -6546,6 +6761,7 @@ impl SchemaApiTestSuite {
                 table_name: table_name.to_string(),
             },
             table_meta: replacement_meta,
+            source_table_option: None,
             as_dropped: true,
             materialized_view: None,
             table_properties: None,
@@ -6590,6 +6806,7 @@ impl SchemaApiTestSuite {
                 table_name: table_name.to_string(),
             },
             table_meta: replacement_meta,
+            source_table_option: None,
             as_dropped: true,
             materialized_view: None,
             table_properties: None,
@@ -6698,6 +6915,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
             },
             table_meta: drop_table_meta(created_on),
+            source_table_option: None,
             as_dropped: true,
             materialized_view: None,
             table_properties: None,
