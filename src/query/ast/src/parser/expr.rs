@@ -2640,8 +2640,8 @@ fn aggregate_filter(i: Input) -> IResult<Expr> {
 /// `f([arg, ...,] params -> expr)`. `->` is also the json arrow operator,
 /// so this grammar is only enabled for these names.
 ///
-/// Keep in sync with `GENERAL_LAMBDA_FUNCTIONS` in
-/// `databend-common-functions` (a test there asserts both lists match).
+/// This list is the single source of truth: `GENERAL_LAMBDA_FUNCTIONS` in
+/// `databend-common-functions` is derived from it.
 pub const LAMBDA_FUNCTION_NAMES: &[&str] = &[
     "array_transform",
     "array_apply",

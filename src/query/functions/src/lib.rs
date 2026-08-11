@@ -20,6 +20,7 @@
 
 use aggregates::AggregateFunctionFactory;
 use ctor::ctor;
+use databend_common_ast::parser::expr::LAMBDA_FUNCTION_NAMES;
 use databend_common_expression::FunctionRegistry;
 use unicase::Ascii;
 
@@ -86,25 +87,18 @@ pub const GENERAL_WINDOW_FUNCTIONS: [Ascii<&str>; 13] = [
 pub const RANK_WINDOW_FUNCTIONS: [&str; 5] =
     ["first_value", "first", "last_value", "last", "nth_value"];
 
-pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 17] = [
-    Ascii::new("array_transform"),
-    Ascii::new("array_apply"),
-    Ascii::new("array_map"),
-    Ascii::new("array_filter"),
-    Ascii::new("array_reduce"),
-    Ascii::new("json_array_transform"),
-    Ascii::new("json_array_apply"),
-    Ascii::new("json_array_map"),
-    Ascii::new("json_array_filter"),
-    Ascii::new("json_array_reduce"),
-    Ascii::new("map_filter"),
-    Ascii::new("map_transform_keys"),
-    Ascii::new("map_transform_values"),
-    Ascii::new("json_map_filter"),
-    Ascii::new("json_map_transform_keys"),
-    Ascii::new("json_map_transform_values"),
-    Ascii::new("json_path_transform"),
-];
+/// The general lambda function names, derived from the parser's
+/// [`LAMBDA_FUNCTION_NAMES`] so the trailing-lambda call grammar and the
+/// semantic lambda registry always agree.
+pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; LAMBDA_FUNCTION_NAMES.len()] = {
+    let mut names = [Ascii::new(""); LAMBDA_FUNCTION_NAMES.len()];
+    let mut i = 0;
+    while i < names.len() {
+        names[i] = Ascii::new(LAMBDA_FUNCTION_NAMES[i]);
+        i += 1;
+    }
+    names
+};
 
 pub const GENERAL_SEARCH_FUNCTIONS: [Ascii<&str>; 3] = [
     Ascii::new("match"),
@@ -131,25 +125,4 @@ fn builtin_functions() -> FunctionRegistry {
 
     registry.check_ambiguity();
     registry
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The parser enables the trailing-lambda call grammar only for the
-    /// names in `LAMBDA_FUNCTION_NAMES`, so the two lists must stay in sync.
-    #[test]
-    fn general_lambda_functions_match_parser_lambda_names() {
-        let names = GENERAL_LAMBDA_FUNCTIONS
-            .iter()
-            .cloned()
-            .map(Ascii::into_inner)
-            .collect::<Vec<_>>();
-        assert_eq!(
-            names,
-            databend_common_ast::parser::expr::LAMBDA_FUNCTION_NAMES,
-            "GENERAL_LAMBDA_FUNCTIONS must stay in sync with the parser's LAMBDA_FUNCTION_NAMES"
-        );
-    }
 }
