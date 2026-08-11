@@ -98,9 +98,11 @@ use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::invalidates_mv_source_bindings;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::value_id::ValueId;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
@@ -129,7 +131,6 @@ use super::database_api::DatabaseApi;
 use super::database_util::get_db_or_err;
 use super::garbage_collection_api::ORPHAN_POSTFIX;
 use super::garbage_collection_api::get_history_tables_for_gc;
-use super::materialized_view_api::MaterializedViewApi;
 use super::schema_api::VersionedTable;
 use super::schema_api::build_upsert_table_deduplicated_label;
 use super::schema_api::construct_drop_table_txn_operations;
@@ -547,6 +548,11 @@ where
                             .into(),
                         ));
                     }
+                    // Keep the source existence/drop-state check in the CREATE transaction.
+                    // Ordinary source writes may make this condition fail, in which case the
+                    // create loop re-reads the source and retries.
+                    txn.condition
+                        .push(txn_cond_eq_seq(&source_table_ident, source_table_meta.seq));
                     let version_ident =
                         MVSourceBindingVersionIdent::new(req.tenant(), source_table_id);
                     let (version_seq, version) = self.get_pb_seq_and_value(&version_ident).await?;
@@ -1322,23 +1328,25 @@ where
         }
     }
 
+    /// `tenant` locates MV source binding generation records for invalidating schema updates.
     async fn update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let kv_txn_sender = IdempotentKVTxnSender::new();
-        self.update_multi_table_meta_with_sender(req, &kv_txn_sender)
+        self.update_multi_table_meta_with_sender(tenant, req, &kv_txn_sender)
             .await
     }
 
     async fn update_multi_table_meta_with_sender(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
         txn_sender: &IdempotentKVTxnSender,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
-            update_mv_source_bindings,
             copied_files,
             update_stream_metas,
             deduplicated_labels,
@@ -1382,12 +1390,25 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
-        for ((req, _), (tb_meta_seq, _)) in update_table_metas.iter_mut().zip(tb_meta_vec.iter()) {
+        // A malformed request may contain the same table more than once. Transaction puts and
+        // `new_table_meta_map` are last-write-wins, so keep only the final invalidation decision
+        // for each table as well.
+        let mut invalidates_mv_source_bindings_by_table_id = BTreeMap::new();
+        for ((req, _), (tb_meta_seq, old_table_meta)) in
+            update_table_metas.iter_mut().zip(tb_meta_vec.iter())
+        {
             let tbid = TableId {
                 table_id: req.table_id,
             };
 
             let new_table_meta = req.new_table_meta.clone();
+            let old_table_meta = old_table_meta
+                .as_ref()
+                .expect("table metadata existence was checked above");
+            invalidates_mv_source_bindings_by_table_id.insert(
+                req.table_id,
+                invalidates_mv_source_bindings(old_table_meta, &new_table_meta),
+            );
 
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
@@ -1425,47 +1446,45 @@ where
             new_table_meta_map.insert(req.table_id, new_table_meta);
         }
 
-        // The query layer marks only source schema changes that invalidate existing MV bindings.
-        // Each generation increment must be committed with an update of the same source TableMeta:
-        // its exact sequence condition serializes concurrent invalidating DDL, so the generation
-        // value does not need a second CAS condition.
-        for update in &update_mv_source_bindings {
-            if !update_table_metas
+        let invalidating_mv_source_table_ids = invalidates_mv_source_bindings_by_table_id
+            .into_iter()
+            .filter_map(|(table_id, invalidates)| invalidates.then_some(table_id))
+            .collect::<Vec<_>>();
+
+        if !invalidating_mv_source_table_ids.is_empty() {
+            let generation_idents = invalidating_mv_source_table_ids
                 .iter()
-                .any(|(req, _)| req.table_id == update.source_table_id)
+                .map(|table_id| MVSourceBindingVersionIdent::new(tenant, *table_id))
+                .collect::<Vec<_>>();
+
+            let generations = self.get_pb_values_vec(generation_idents.clone()).await?;
+
+            // The exact source TableMeta sequence condition serializes concurrent invalidating
+            // updates, so the generation value does not need a second CAS condition.
+            for ((table_id, generation_ident), generation) in invalidating_mv_source_table_ids
+                .into_iter()
+                .zip(generation_idents)
+                .zip(generations)
             {
-                // A standalone generation update would bypass the source TableMeta serialization
-                // invariant and could lose a concurrent increment.
-                return Err(KVAppError::AppError(
-                    InvalidMaterializedView::new(format!(
-                        "MV source binding update for source {} has no matching table metadata update",
-                        update.source_table_id
-                    ))
-                    .into(),
-                ));
+                let next_generation = generation
+                    .map(|generation| generation.data.current_source_generation)
+                    .unwrap_or(0)
+                    .checked_add(1)
+                    .ok_or_else(|| {
+                        KVAppError::AppError(
+                            InvalidMaterializedView::new(format!(
+                                "source table {} binding generation overflow",
+                                table_id
+                            ))
+                            .into(),
+                        )
+                    })?;
+
+                txn.if_then
+                    .push(txn_put_pb(&generation_ident, &MVSourceBindingVersion {
+                        current_source_generation: next_generation,
+                    }));
             }
-
-            let generation_ident =
-                MVSourceBindingVersionIdent::new(&update.tenant, update.source_table_id);
-            let next_generation = self
-                .get_mv_source_generation(&update.tenant, update.source_table_id)
-                .await?
-                .unwrap_or(0)
-                .checked_add(1)
-                .ok_or_else(|| {
-                    KVAppError::AppError(
-                        InvalidMaterializedView::new(format!(
-                            "source table {} binding generation overflow",
-                            update.source_table_id
-                        ))
-                        .into(),
-                    )
-                })?;
-
-            txn.if_then
-                .push(txn_put_pb(&generation_ident, &MVSourceBindingVersion {
-                    current_source_generation: next_generation,
-                }));
         }
 
         // `remove_table_copied_files` and `upsert_table_copied_file_info`

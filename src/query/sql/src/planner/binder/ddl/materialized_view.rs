@@ -252,7 +252,7 @@ impl Binder {
     /// Resolve the single base table referenced by the defining query.
     fn materialized_view_source_table(
         metadata: &MetadataRef,
-    ) -> Result<(Arc<dyn Table>, String, String, String)> {
+    ) -> Result<(Arc<dyn Table>, String, String)> {
         let metadata = metadata.read();
         if metadata.tables().len() != 1 {
             return Err(ErrorCode::SemanticError(
@@ -264,7 +264,6 @@ impl Binder {
             table.table(),
             table.catalog().to_string(),
             table.database().to_string(),
-            table.name().to_string(),
         ))
     }
 
@@ -357,7 +356,7 @@ impl Binder {
                 "materialized view AS clause must produce a Query plan",
             ));
         };
-        let (source_table, source_catalog_name, source_database, source_table_name) =
+        let (source_table, source_catalog_name, source_database) =
             Self::materialized_view_source_table(original_metadata)?;
         let source_table_id = source_table.get_id();
         let source_table_seq = source_table.get_table_info().ident.seq;
@@ -458,7 +457,7 @@ impl Binder {
         if let Some(cluster_opt) = cluster_by {
             let cluster_schema = Self::materialized_view_cluster_schema(&physical_schema);
             let keys = self
-                .analyze_cluster_keys(cluster_opt, cluster_schema, None)
+                .analyze_cluster_keys(cluster_opt, cluster_schema, None, true)
                 .await
                 .map_err(|error| {
                     ErrorCode::InvalidClusterKeys(format!(
@@ -538,7 +537,7 @@ impl Binder {
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 let cluster_schema = Self::materialized_view_cluster_schema(&mv_table.schema());
                 let cluster_keys = self
-                    .analyze_cluster_keys(cluster_by, cluster_schema, None)
+                    .analyze_cluster_keys(cluster_by, cluster_schema, None, true)
                     .await
                     .map_err(|error| {
                         ErrorCode::InvalidClusterKeys(format!(

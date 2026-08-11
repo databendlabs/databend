@@ -1010,6 +1010,17 @@ impl Catalog for FakedCatalog {
         self.cat.get_mv_definition(tenant, mv_id).await
     }
 
+    async fn get_valid_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.cat
+            .get_valid_mv_definition(tenant, source_table_id, mv_table_id)
+            .await
+    }
+
     async fn get_mv_source_generation(
         &self,
         tenant: &Tenant,
@@ -1256,12 +1267,15 @@ impl Catalog for FakedCatalog {
 
     async fn retryable_update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         if let Some(e) = &self.error_injection {
             Err(e.clone())
         } else {
-            self.cat.retryable_update_multi_table_meta(req).await
+            self.cat
+                .retryable_update_multi_table_meta(tenant, req)
+                .await
         }
     }
 

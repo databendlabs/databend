@@ -47,9 +47,9 @@
 //!
 //! - [`MaterializedViewApi::list_mvs_by_source_table_id`] returns every edge,
 //!   including invalid ones, for management and lifecycle operations.
-//! - [`MaterializedViewApi::get_mv_bound_source_generation`] reads one exact
-//!   dependency edge so query can compare its bound generation with the current
-//!   source generation before using the MV.
+//! - [`MaterializedViewApi::get_mv_definition_snapshot`] reads one definition,
+//!   its exact dependency edge, and the current source generation in one
+//!   read-only transaction so query can decide whether the definition is valid.
 //! - [`MaterializedViewApi::get_mv_source_binding_snapshot`] returns all active
 //!   MVs for source-driven query rewrite when the source generation stays stable
 //!   throughout metadata collection.
@@ -61,18 +61,21 @@
 //! The record remains until source GC to prevent generation ABA.
 //!
 //! Generation increments do not add a second condition on the version key.
-//! Query marks each invalidating source DDL with an `UpdateMVSourceBindingReq`,
-//! and Meta requires a matching source `TableMeta` update in the same transaction.
-//! The exact source `TableMeta` sequence condition therefore serializes concurrent
-//! generation increments. CREATE remains ordered with those DDL transactions by
-//! its version-key sequence condition: if CREATE commits first, the later DDL
-//! advances the generation and invalidates the new edge; if DDL commits first,
-//! CREATE's condition fails and its stale expected generation is rejected.
+//! Meta compares the persisted and replacement source schemas and advances the
+//! generation in the same transaction when an existing column is removed or
+//! changed. The exact source `TableMeta` sequence condition therefore serializes
+//! concurrent generation increments. CREATE remains ordered with those DDL
+//! transactions by its version-key sequence condition: if CREATE commits first,
+//! the later DDL advances the generation and invalidates the new edge; if DDL
+//! commits first, CREATE's condition fails and its stale expected generation is
+//! rejected.
 //!
 //! The metadata operations are:
 //!
 //! ```text
 //! CREATE MV txn:
+//!     read the source TableMeta and condition on its exact seq
+//!     reject a missing or dropped source
 //!     assert current_source_generation == expected_source_generation
 //!     initialize MVSourceBindingVersion { current_source_generation: 0 }
 //!         if the version record is missing
@@ -96,7 +99,6 @@
 //!     read MVSourceBindingVersion (missing means generation 0)
 //!     put current_source_generation + 1
 //!     update the source TableMeta using its exact seq as CAS
-//!     require both writes to target the same source_table_id
 //!     keep SourceTableMVIdent(tenant, source_id, *)
 //!     the source TableMeta CAS serializes generation increments
 //!
@@ -132,6 +134,7 @@
 
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::MVDefinitionSnapshot;
 use databend_common_meta_app::schema::MVInfo;
 use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
@@ -147,11 +150,16 @@ use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnGetResponse;
+use databend_meta_client::types::TxnOpResponse;
+use databend_meta_client::types::TxnRequest;
 use databend_meta_client::types::protobuf as pb;
 use log::warn;
 
 use crate::deserialize_struct_get_response;
+use crate::error_util::invalid_reply;
 use crate::kv_pb_api::KVPbApi;
+use crate::send_txn;
+use crate::txn_get;
 
 /// APIs for metadata that belongs exclusively to materialized views.
 #[async_trait::async_trait]
@@ -169,6 +177,75 @@ where
     ) -> Result<Option<SeqV<MVDefinition>>, MetaError> {
         let ident = MVDefinitionIdent::new(tenant, mv_table_id);
         self.get_pb(&ident).await
+    }
+
+    /// Get one MV definition and both source generations at one transaction point.
+    ///
+    /// This method returns raw metadata and does not decide whether the definition is valid.
+    /// Query-facing catalog implementations compare the immutable bound generation with the
+    /// current source generation. A missing current generation is always invalid.
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_mv_definition_snapshot(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<MVDefinitionSnapshot, MetaError> {
+        let definition_ident = MVDefinitionIdent::new(tenant, mv_table_id);
+        let binding_ident = SourceTableMVIdent::new_generic(
+            tenant,
+            SourceTableMV::new(source_table_id, mv_table_id),
+        );
+        let generation_ident = MVSourceBindingVersionIdent::new(tenant, source_table_id);
+
+        let txn = TxnRequest::new(vec![], vec![
+            txn_get(&definition_ident),
+            txn_get(&binding_ident),
+            txn_get(&generation_ident),
+        ]);
+        let (success, responses) = send_txn(self, txn).await?;
+        if !success {
+            return Err(invalid_reply(
+                "unconditional read-only transaction returned an unsuccessful result",
+            )
+            .into());
+        }
+
+        let [definition_response, binding_response, generation_response]: [TxnOpResponse; 3] =
+            responses.try_into().map_err(|_| {
+                invalid_reply("malformed materialized-view definition snapshot response")
+            })?;
+        let (Some(definition_response), Some(binding_response), Some(generation_response)) = (
+            definition_response.into_get(),
+            binding_response.into_get(),
+            generation_response.into_get(),
+        ) else {
+            return Err(
+                invalid_reply("malformed materialized-view definition snapshot response").into(),
+            );
+        };
+        if definition_response.key != definition_ident.to_string_key()
+            || binding_response.key != binding_ident.to_string_key()
+            || generation_response.key != generation_ident.to_string_key()
+        {
+            return Err(
+                invalid_reply("malformed materialized-view definition snapshot response").into(),
+            );
+        }
+
+        let (_, definition) =
+            deserialize_struct_get_response::<MVDefinitionIdent>(definition_response)?;
+        let (_, binding) = deserialize_struct_get_response::<SourceTableMVIdent>(binding_response)?;
+        let (_, generation) =
+            deserialize_struct_get_response::<MVSourceBindingVersionIdent>(generation_response)?;
+
+        Ok(MVDefinitionSnapshot {
+            definition,
+            bound_source_generation: binding.map(|binding| binding.bound_source_generation),
+            current_source_generation: generation
+                .map(|generation| generation.current_source_generation),
+        })
     }
 
     /// Get the current semantic MV-binding generation of one source table.

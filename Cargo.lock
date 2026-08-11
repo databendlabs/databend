@@ -4583,6 +4583,7 @@ name = "databend-common-meta-schema-api-test-suite"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "databend-common-base",
  "databend-common-exception",
@@ -4592,6 +4593,7 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-meta-client 260205.13.2",
  "fastrace",
+ "futures-util",
  "log",
  "maplit",
 ]

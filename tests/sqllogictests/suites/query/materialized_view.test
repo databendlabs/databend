@@ -743,6 +743,12 @@ REFRESH MATERIALIZED VIEW mv_guard
 statement error 2328
 SELECT * FROM mv_guard
 
+# Management paths retain the raw definition after the source binding becomes invalid.
+query TT
+SHOW CREATE MATERIALIZED VIEW mv_guard
+----
+mv_guard CREATE MATERIALIZED VIEW `default`.`mv_guard` (`a`, `b`) AS SELECT a, b FROM default.mv_guard_source
+
 # CREATE observes the nonzero generation produced by RENAME and can publish a new binding.
 statement ok
 CREATE MATERIALIZED VIEW mv_guard_recreated AS SELECT renamed_a, b, c FROM mv_guard_source

@@ -71,7 +71,6 @@ use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::UpdateMVSourceBindingReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::storage::S3StorageClass;
@@ -152,7 +151,6 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
-use crate::operations::CommitMetaUpdates;
 use crate::operations::SnapshotHint;
 use crate::operations::load_last_snapshot_hint;
 use crate::pruning::PartitionPruningInfo;
@@ -1144,21 +1142,16 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
-        update_mv_source_binding: Option<UpdateMVSourceBindingReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        let mut commit_meta_updates = CommitMetaUpdates::from(update_stream_meta);
-        if let Some(update) = update_mv_source_binding {
-            commit_meta_updates = commit_meta_updates.with_mv_source_binding_update(update);
-        }
         self.do_commit(
             ctx,
             pipeline,
             copied_files,
-            commit_meta_updates,
+            update_stream_meta,
             overwrite,
             prev_snapshot_id,
             deduplicated_label,

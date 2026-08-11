@@ -19,17 +19,19 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableLvtCheck;
-use databend_common_meta_app::schema::UpdateMVSourceBindingReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
@@ -65,9 +67,9 @@ pub enum TxnState {
 
 #[derive(Debug, Clone, Default)]
 pub struct TxnBuffer {
+    tenant: Option<Tenant>,
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
-    update_mv_source_bindings: HashMap<u64, UpdateMVSourceBindingReq>,
     base_snapshot_location: HashMap<u64, Option<String>>,
     lvt_check: HashMap<u64, Option<TableLvtCheck>>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
@@ -105,10 +107,25 @@ impl TxnBuffer {
         std::mem::take(self);
     }
 
-    fn update_multi_table_meta(&mut self, mut req: UpdateMultiTableMetaReq) {
-        for update in req.update_mv_source_bindings {
-            self.update_mv_source_bindings
-                .insert(update.source_table_id, update);
+    fn update_multi_table_meta(
+        &mut self,
+        tenant: &Tenant,
+        mut req: UpdateMultiTableMetaReq,
+    ) -> Result<()> {
+        if req.is_empty() {
+            return Ok(());
+        }
+
+        match &self.tenant {
+            Some(txn_tenant) if txn_tenant != tenant => {
+                return Err(ErrorCode::InvalidOperation(format!(
+                    "Cannot update metadata for tenant '{}' in a transaction bound to tenant '{}'",
+                    tenant.tenant_name(),
+                    txn_tenant.tenant_name()
+                )));
+            }
+            None => self.tenant = Some(tenant.clone()),
+            Some(_) => {}
         }
 
         for (req, table_info) in req.update_table_metas {
@@ -147,6 +164,8 @@ impl TxnBuffer {
                 copied_files: req.copied_files.clone(),
             });
         }
+
+        Ok(())
     }
 
     fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
@@ -220,8 +239,16 @@ impl TxnManager {
         self.state.clone()
     }
 
-    pub fn update_multi_table_meta(&mut self, req: UpdateMultiTableMetaReq) {
-        self.txn_buffer.update_multi_table_meta(req);
+    pub fn update_multi_table_meta(
+        &mut self,
+        tenant: &Tenant,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<()> {
+        self.txn_buffer.update_multi_table_meta(tenant, req)
+    }
+
+    pub fn tenant(&self) -> Option<Tenant> {
+        self.txn_buffer.tenant.clone()
     }
 
     pub fn update_table_options(
@@ -372,12 +399,6 @@ impl TxnManager {
                     )
                 })
                 .collect(),
-            update_mv_source_bindings: self
-                .txn_buffer
-                .update_mv_source_bindings
-                .values()
-                .cloned()
-                .collect(),
             copied_files,
             update_stream_metas: self
                 .txn_buffer
@@ -481,6 +502,10 @@ impl TxnManager {
 mod tests {
     use std::collections::HashMap;
 
+    use databend_common_exception::ErrorCode;
+    use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+    use databend_common_meta_app::tenant::Tenant;
+
     use super::TxnBuffer;
     use super::TxnManager;
 
@@ -510,5 +535,36 @@ mod tests {
         txn_mgr.lock().clear();
 
         assert!(txn_mgr.lock().multi_table_insert_rows().is_empty());
+    }
+
+    #[test]
+    fn test_multi_table_meta_tenant() {
+        let tenant = Tenant::new_literal("tenant");
+        let other_tenant = Tenant::new_literal("other-tenant");
+        let txn_mgr = TxnManager::init();
+
+        {
+            let mut txn_mgr = txn_mgr.lock();
+            txn_mgr.begin();
+            txn_mgr
+                .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
+                    deduplicated_labels: vec!["label".to_string()],
+                    ..Default::default()
+                })
+                .unwrap();
+
+            assert_eq!(txn_mgr.tenant(), Some(tenant.clone()));
+
+            let err = txn_mgr
+                .update_multi_table_meta(&other_tenant, UpdateMultiTableMetaReq {
+                    deduplicated_labels: vec!["other-label".to_string()],
+                    ..Default::default()
+                })
+                .unwrap_err();
+            assert_eq!(err.code(), ErrorCode::INVALID_OPERATION);
+        }
+
+        txn_mgr.lock().clear();
+        assert_eq!(txn_mgr.lock().tenant(), None);
     }
 }

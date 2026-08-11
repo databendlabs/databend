@@ -682,6 +682,15 @@ impl Catalog for DummyCatalog {
         unsupported("catalog::get_mv_definition")
     }
 
+    async fn get_valid_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+        _mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        unsupported("catalog::get_valid_mv_definition")
+    }
+
     async fn get_mv_source_generation(
         &self,
         _tenant: &Tenant,

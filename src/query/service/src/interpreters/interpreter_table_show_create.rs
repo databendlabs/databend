@@ -414,14 +414,8 @@ impl ShowCreateTableInterpreter {
             .data;
 
         let table_info = table.get_table_info();
-        let creation_mode = if definition.sync_creation {
-            "SYNC "
-        } else {
-            ""
-        };
         let mut create_sql = format!(
-            "CREATE {}MATERIALIZED VIEW {}.{}",
-            creation_mode,
+            "CREATE MATERIALIZED VIEW {}.{}",
             QuotedIdent(database, '`'),
             QuotedIdent(name, '`')
         );

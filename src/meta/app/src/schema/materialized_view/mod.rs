@@ -18,7 +18,6 @@ use databend_meta_client::types::SeqV;
 use super::TableMeta;
 use crate::app_error::AppError;
 use crate::app_error::InvalidMaterializedView;
-use crate::tenant::Tenant;
 
 mod mv_definition_ident;
 mod mv_source_binding_version_ident;
@@ -45,6 +44,24 @@ pub const MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN: &str = "_mv_source_row_id";
 
 pub fn is_materialized_view_engine(engine: &str) -> bool {
     engine == MATERIALIZED_VIEW_ENGINE
+}
+
+pub fn invalidates_mv_source_bindings(old_meta: &TableMeta, new_meta: &TableMeta) -> bool {
+    if old_meta.schema == new_meta.schema {
+        return false;
+    }
+
+    // Match each old column by ID, then compare the complete TableField. A missing or changed
+    // old field invalidates the binding; fields that exist only in the new schema (ADD COLUMN)
+    // are intentionally ignored.
+    old_meta.schema.fields().iter().any(|old_field| {
+        new_meta
+            .schema
+            .fields()
+            .iter()
+            .find(|new_field| new_field.column_id == old_field.column_id)
+            != Some(old_field)
+    })
 }
 
 impl TableMeta {
@@ -108,8 +125,10 @@ pub struct MVDefinition {
 /// transaction condition. It is not persisted in the MV `TableMeta`.
 /// A source `TableMeta` sequence is intentionally not carried here because
 /// ordinary source-table writes advance it without invalidating the bound
-/// schema. `create_table` reads the current source `TableMeta` itself to reject
-/// a missing or dropped source.
+/// schema. `create_table` reads the current source `TableMeta` itself and
+/// conditions on its sequence to reject a missing source or a source dropped
+/// concurrently with CREATE. Ordinary source writes may fail that internal
+/// condition and make CREATE retry without changing the semantic generation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateMaterializedViewMeta {
     pub definition: MVDefinition,
@@ -122,24 +141,12 @@ pub struct CreateMaterializedViewMeta {
     pub expected_source_generation: u64,
 }
 
-/// Query-layer marker for a source schema change that invalidates existing MV bindings.
-///
-/// Meta requires a matching `UpdateTableMetaReq` for `source_table_id` and
-/// advances the source generation in the same transaction. The source
-/// `TableMeta` sequence condition serializes concurrent generation increments.
+/// A point-in-time view of one materialized-view definition and its source generation.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct UpdateMVSourceBindingReq {
-    pub tenant: Tenant,
-    pub source_table_id: u64,
-}
-
-impl UpdateMVSourceBindingReq {
-    pub fn new(tenant: Tenant, source_table_id: u64) -> Self {
-        Self {
-            tenant,
-            source_table_id,
-        }
-    }
+pub struct MVDefinitionSnapshot {
+    pub definition: Option<SeqV<MVDefinition>>,
+    pub bound_source_generation: Option<u64>,
+    pub current_source_generation: Option<u64>,
 }
 
 /// Complete metadata needed to use one materialized view.
@@ -161,9 +168,62 @@ pub struct MVSourceBindingSnapshot {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
+
     use super::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
     use super::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
+    use super::invalidates_mv_source_bindings;
     use crate::schema::TableMeta;
+
+    fn source_table_meta() -> TableMeta {
+        TableMeta {
+            schema: Arc::new(TableSchema::new(vec![
+                TableField::new("id", TableDataType::Number(NumberDataType::Int32)),
+                TableField::new("name", TableDataType::String),
+            ])),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_invalidates_mv_source_bindings() {
+        let old_meta = source_table_meta();
+
+        let mut comment_changed = old_meta.clone();
+        comment_changed.comment = "new comment".to_string();
+        assert!(!invalidates_mv_source_bindings(&old_meta, &comment_changed));
+
+        let mut column_added = old_meta.clone();
+        column_added
+            .add_column(
+                &TableField::new("age", TableDataType::Number(NumberDataType::UInt8)),
+                "",
+                2,
+            )
+            .unwrap();
+        assert!(!invalidates_mv_source_bindings(&old_meta, &column_added));
+
+        let mut column_renamed = old_meta.clone();
+        Arc::make_mut(&mut column_renamed.schema).fields[0].name = "renamed_id".to_string();
+        assert!(invalidates_mv_source_bindings(&old_meta, &column_renamed));
+
+        let mut column_type_changed = old_meta.clone();
+        Arc::make_mut(&mut column_type_changed.schema).fields[0].data_type =
+            TableDataType::Number(NumberDataType::Int64);
+        assert!(invalidates_mv_source_bindings(
+            &old_meta,
+            &column_type_changed
+        ));
+
+        let mut column_dropped = old_meta.clone();
+        column_dropped.drop_column("name").unwrap();
+        assert!(invalidates_mv_source_bindings(&old_meta, &column_dropped));
+    }
 
     #[test]
     fn test_materialized_view_source_table_id() {

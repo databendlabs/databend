@@ -208,20 +208,20 @@ impl Binder {
         let (mv_definition, source_table_id, source_snapshot_location) =
             databend_common_base::runtime::block_on(async {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
-                let mv_definition = catalog
-                    .get_mv_definition(&tenant, table_meta.get_id())
-                    .await?
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "materialized view {} has no definition",
-                            table_meta.name()
-                        ))
-                    })?;
                 let source_table_id = table_meta
                     .get_table_info()
                     .meta
                     .materialized_view_source_table_id()
                     .map_err(ErrorCode::from)?;
+                let mv_definition = catalog
+                    .get_valid_mv_definition(&tenant, source_table_id, table_meta.get_id())
+                    .await?
+                    .ok_or_else(|| {
+                        ErrorCode::InvalidMaterializedView(format!(
+                            "materialized view {} has an invalid source binding; recreate the materialized view",
+                            table_meta.name()
+                        ))
+                    })?;
                 let source_meta = catalog
                     .get_table_meta_by_id(source_table_id)
                     .await?
@@ -237,22 +237,6 @@ impl Binder {
                     .options
                     .get(OPT_KEY_SNAPSHOT_LOCATION)
                     .cloned();
-                // The binding generation is immutable while the source generation only increases.
-                // Read the source generation at admission before checking the exact binding.
-                let current_source_generation = catalog
-                    .get_mv_source_generation(&tenant, source_table_id)
-                    .await?;
-                let bound_source_generation = catalog
-                    .get_mv_bound_source_generation(&tenant, source_table_id, table_meta.get_id())
-                    .await?;
-                if current_source_generation.is_none()
-                    || bound_source_generation != current_source_generation
-                {
-                    return Err(ErrorCode::InvalidMaterializedView(format!(
-                        "materialized view {} has an invalid source binding; recreate the materialized view",
-                        table_meta.name()
-                    )));
-                }
                 Ok::<_, ErrorCode>((mv_definition, source_table_id, source_snapshot_location))
             })?;
 

@@ -104,7 +104,6 @@ use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateMVSourceBindingReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -270,14 +269,17 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Get a materialized-view definition by its table ID.
     async fn get_mv_definition(
         &self,
-        _tenant: &Tenant,
-        _mv_table_id: u64,
-    ) -> Result<Option<SeqV<MVDefinition>>> {
-        Err(ErrorCode::Unimplemented(format!(
-            "'get_mv_definition' not implemented for catalog {}",
-            self.name()
-        )))
-    }
+        tenant: &Tenant,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>>;
+
+    /// Get an MV definition only when its source binding is currently valid.
+    async fn get_valid_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>>;
 
     /// Get the current semantic source generation, if its record exists.
     async fn get_mv_source_generation(
@@ -527,6 +529,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn retryable_update_multi_table_meta(
         &self,
+        _tenant: &Tenant,
         _req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         Err(ErrorCode::Unimplemented(
@@ -536,9 +539,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        let result = self.retryable_update_multi_table_meta(req).await?;
+        let result = self.retryable_update_multi_table_meta(tenant, req).await?;
         match result {
             Ok(reply) => Ok(reply),
             Err(failed_tables) => {
@@ -561,9 +565,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // update stream metas, currently used by "copy into location form stream"
     async fn update_stream_metas(
         &self,
+        tenant: &Tenant,
         update_stream_metas: Vec<UpdateStreamMetaReq>,
     ) -> Result<()> {
-        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+        self.update_multi_table_meta(tenant, UpdateMultiTableMetaReq {
             update_stream_metas,
             ..Default::default()
         })
@@ -575,46 +580,23 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         tenant: &Tenant,
         req: UpdateTableMetaReq,
-        current_table_info: &TableInfo,
+        table_info: &TableInfo,
     ) -> Result<UpdateTableMetaReply> {
         let mut update_table_metas = vec![];
-        let mut update_mv_source_bindings = vec![];
         let mut update_temp_tables = vec![];
-        if current_table_info
-            .meta
-            .options
-            .contains_key(OPT_KEY_TEMP_PREFIX)
-        {
+        if table_info.meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
             let req = UpdateTempTableReq {
                 table_id: req.table_id,
-                desc: current_table_info.desc.clone(),
+                desc: table_info.desc.clone(),
                 new_table_meta: req.new_table_meta,
                 copied_files: Default::default(),
             };
             update_temp_tables.push(req);
         } else {
-            if current_table_info
-                .meta
-                .schema
-                .fields()
-                .iter()
-                .any(|old_field| {
-                    req.new_table_meta
-                        .schema
-                        .fields()
-                        .iter()
-                        .find(|new_field| new_field.column_id == old_field.column_id)
-                        != Some(old_field)
-                })
-            {
-                update_mv_source_bindings
-                    .push(UpdateMVSourceBindingReq::new(tenant.clone(), req.table_id));
-            }
-            update_table_metas.push((req, current_table_info.clone()));
+            update_table_metas.push((req, table_info.clone()));
         }
-        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+        self.update_multi_table_meta(tenant, UpdateMultiTableMetaReq {
             update_table_metas,
-            update_mv_source_bindings,
             update_temp_tables,
             ..Default::default()
         })

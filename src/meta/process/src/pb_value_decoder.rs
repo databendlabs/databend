@@ -46,6 +46,8 @@ use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBinding;
+use databend_common_meta_app::schema::MVSourceBindingVersion;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::SequenceMeta;
@@ -99,8 +101,8 @@ pub fn decode_pb_value(key: &str, bytes: &[u8]) -> String {
         "__fd_table_id_list/"       => TableIdList,
         "__fd_table_copied_files/"  => TableCopiedFileInfo,
         "__fd_materialized_view_definition/" => MVDefinition,
-        "__fd_materialized_view_by_source/" => EmptyProto,
-        "__fd_materialized_view_source_binding_version/" => EmptyProto,
+        "__fd_materialized_view_by_source/" => MVSourceBinding,
+        "__fd_materialized_view_source_binding_version/" => MVSourceBindingVersion,
 
         // schema - catalog
         "__fd_catalog_by_id/"       => CatalogMeta,
@@ -374,6 +376,31 @@ mod tests {
         assert_eq!(
             decode_pb_value("__fd_db_id_list/1", &buf),
             "DbIdList { id_list: [] }"
+        );
+    }
+
+    #[test]
+    fn test_decode_pb_value_mv_source_binding() {
+        let buf = encode_pb(&MVSourceBinding {
+            bound_source_generation: 3,
+        });
+        assert_eq!(
+            decode_pb_value("__fd_materialized_view_by_source/tenant/1/2", &buf),
+            "MVSourceBinding { bound_source_generation: 3 }"
+        );
+    }
+
+    #[test]
+    fn test_decode_pb_value_mv_source_binding_version() {
+        let buf = encode_pb(&MVSourceBindingVersion {
+            current_source_generation: 5,
+        });
+        assert_eq!(
+            decode_pb_value(
+                "__fd_materialized_view_source_binding_version/tenant/1",
+                &buf,
+            ),
+            "MVSourceBindingVersion { current_source_generation: 5 }"
         );
     }
 

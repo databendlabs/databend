@@ -69,7 +69,6 @@ use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
 use crate::interpreters::common::QueryFinishHooks;
-use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::interpreter_txn_commit::execute_commit_statement;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
@@ -145,33 +144,21 @@ impl<'a> MaterializedViewRefresh<'a> {
         let mv_meta = &self.mv_table.get_table_info().meta;
         let source_table_id = self.plan.source_table_id;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        // Binding validity is an admission check, not a refresh fence. The binding generation is
-        // immutable while the source generation only increases, so read the source first and then
-        // the binding. Once admitted, a concurrent source-schema change may let this refresh finish;
-        // subsequent MV reads will reject the stale binding.
-        let current_source_generation = catalog
-            .get_mv_source_generation(&self.plan.tenant, source_table_id)
-            .await?;
-        let bound_source_generation = catalog
-            .get_mv_bound_source_generation(
+        // Binding validity is an admission check, not a refresh fence. Meta reads the definition
+        // and both generations at one transaction point. Once admitted, a concurrent source-schema
+        // change may let this refresh finish; subsequent MV reads reject the stale binding.
+        let definition = catalog
+            .get_valid_mv_definition(
                 &self.plan.tenant,
                 source_table_id,
                 self.mv_table.get_id(),
             )
-            .await?;
-        if current_source_generation.is_none()
-            || bound_source_generation != current_source_generation
-        {
-            return Err(ErrorCode::InvalidMaterializedView(format!(
-                "materialized view {}.{} has an invalid source binding; recreate the materialized view",
-                self.plan.database, self.plan.view_name
-            )));
-        }
-        let definition = catalog
-            .get_mv_definition(&self.plan.tenant, self.mv_table.get_id())
             .await?
             .ok_or_else(|| {
-                ErrorCode::InvalidMaterializedView("materialized view definition not found")
+                ErrorCode::InvalidMaterializedView(format!(
+                    "materialized view {}.{} has an invalid source binding; recreate the materialized view",
+                    self.plan.database, self.plan.view_name
+                ))
             })?;
         self.validate_source_table_id(&definition.data.query, source_table_id)
             .await?;

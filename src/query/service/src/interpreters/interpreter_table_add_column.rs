@@ -191,7 +191,6 @@ impl Interpreter for AddTableColumnInterpreter {
                 new_schema.into(),
                 prev_snapshot_id,
                 table_meta_timestamps,
-                None,
             )
             .await;
         }

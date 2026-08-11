@@ -24,7 +24,6 @@ mod transform_serialize_segment;
 mod transform_vector_cluster;
 
 pub use multi_table_insert_commit::CommitMultiTableInsert;
-pub use sink_commit::CommitMetaUpdates;
 pub use sink_commit::CommitSink;
 pub use sink_commit::is_auto_vacuum_enabled;
 pub use transform_block_writer::TransformBlockBuilder;

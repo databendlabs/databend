@@ -27,6 +27,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -63,7 +64,6 @@ use crate::io::MetaWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::SnapshotHintWriter;
 use crate::operations::common::AppendGenerator;
-use crate::operations::common::CommitMetaUpdates;
 use crate::operations::common::CommitSink;
 use crate::statistics::TableStatsGenerator;
 
@@ -74,7 +74,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
-        commit_meta_updates: CommitMetaUpdates,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
@@ -120,7 +120,7 @@ impl FuseTable {
                 self,
                 ctx.clone(),
                 copied_files.clone(),
-                commit_meta_updates.clone(),
+                update_stream_meta.clone(),
                 snapshot_gen.clone(),
                 input,
                 None,
@@ -175,7 +175,7 @@ impl FuseTable {
                 snapshot,
                 snapshot_location,
                 copied_files,
-                &CommitMetaUpdates::default(),
+                &[],
                 operator,
                 None,
             )
@@ -240,7 +240,7 @@ impl FuseTable {
         snapshot: TableSnapshot,
         snapshot_location: String,
         copied_files: &Option<UpsertTableCopiedFileReq>,
-        commit_meta_updates: &CommitMetaUpdates,
+        update_stream_meta: &[UpdateStreamMetaReq],
         operator: &Operator,
         deduplicated_label: Option<String>,
     ) -> Result<()> {
@@ -279,14 +279,9 @@ impl FuseTable {
 
         // 3. let's roll
         catalog
-            .update_multi_table_meta(UpdateMultiTableMetaReq {
+            .update_multi_table_meta(&ctx.get_tenant(), UpdateMultiTableMetaReq {
                 update_table_metas,
-                update_mv_source_bindings: commit_meta_updates
-                    .mv_source_binding_update()
-                    .into_iter()
-                    .cloned()
-                    .collect(),
-                update_stream_metas: commit_meta_updates.update_stream_meta().to_vec(),
+                update_stream_metas: update_stream_meta.to_vec(),
                 copied_files: copied_files_req,
                 deduplicated_labels: deduplicated_label.into_iter().collect(),
                 update_temp_tables,
