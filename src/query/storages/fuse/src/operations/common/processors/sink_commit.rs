@@ -208,7 +208,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
     ) -> Result<Option<PurgeMode>> {
         let mode = if Self::need_to_purge_all_history(table, snapshot_gen) {
             Some(PurgeMode::PurgeAllHistory)
-        } else if Self::is_auto_vacuum_enabled(ctx, table)? {
+        } else if snapshot_gen.skip_auto_vacuum() {
+            None
+        } else if is_auto_vacuum_enabled(ctx, table)? {
             Some(PurgeMode::PurgeAccordingToRetention)
         } else {
             None
@@ -246,23 +248,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         | MutationKind::Replace
                 )
             })
-    }
-
-    fn is_auto_vacuum_enabled(ctx: &dyn TableContext, table: &FuseTable) -> Result<bool> {
-        // Priority for auto vacuum:
-        // - If table-level option `FUSE_OPT_KEY_ENABLE_AUTO_VACUUM` is set, it takes precedence
-        // - If table-level option is not set, fall back to the setting
-        match table
-            .table_info
-            .options()
-            .get(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)
-        {
-            Some(v) => {
-                let enabled = v.parse::<u32>()? != 0;
-                Ok(enabled)
-            }
-            None => ctx.get_settings().get_enable_auto_vacuum(),
-        }
     }
 
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
@@ -861,5 +846,19 @@ where F: SnapshotGenerator + Send + Sync + 'static
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
+    }
+}
+
+pub fn is_auto_vacuum_enabled(ctx: &dyn TableContext, table: &FuseTable) -> Result<bool> {
+    // Priority for auto vacuum:
+    // - If table-level option `FUSE_OPT_KEY_ENABLE_AUTO_VACUUM` is set, it takes precedence.
+    // - If table-level option is not set, fall back to the setting.
+    match table
+        .table_info
+        .options()
+        .get(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)
+    {
+        Some(value) => Ok(value.parse::<u32>()? != 0),
+        None => ctx.get_settings().get_enable_auto_vacuum(),
     }
 }
