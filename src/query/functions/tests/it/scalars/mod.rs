@@ -364,6 +364,37 @@ fn check_ambiguity() {
 }
 
 #[test]
+fn context_independent_folding_respects_function_overloads() -> anyhow::Result<()> {
+    fn fold(text: &str) -> databend_common_expression::Expr<usize> {
+        let raw_expr = parser::parse_raw_expr(text, &[], &BUILTIN_FUNCTIONS);
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let expr = type_check::rewrite_function_to_cast(expr);
+        ConstantFolder::fold_context_independent(&expr, &BUILTIN_FUNCTIONS).0
+    }
+
+    assert!(fold("1 + 2").as_constant().is_some());
+    assert!(fold("to_string(42)").as_constant().is_some());
+    assert!(fold("to_int64(to_uint8(1))").as_constant().is_some());
+    assert!(fold("cast(2.00 as decimal(10, 2))").as_constant().is_some());
+    assert!(
+        fold("cast(null as decimal(10, 2) null)")
+            .as_constant()
+            .is_some()
+    );
+
+    assert!(fold("now()").as_constant().is_none());
+    assert!(fold("to_string(to_timestamp(0))").as_constant().is_none());
+    assert!(fold("to_int64(1.5)").as_constant().is_none());
+    assert!(
+        fold("cast(cast(2.25 as decimal(10, 2)) as decimal(10, 1))")
+            .as_constant()
+            .is_none()
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_if_function() -> anyhow::Result<()> {
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;

@@ -16,15 +16,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
@@ -240,18 +237,11 @@ pub fn can_filter_null(
     if replace.can_replace {
         let columns = null_scalar_expr.columns_and_data_types(metadata);
         let expr = convert_scalar_expr_to_expr(null_scalar_expr, columns)?;
-        let func_ctx = &FunctionContext::default();
-        let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
-        if expr.contains_column_ref() {
-            return Ok(false);
-        }
-        let data_block = DataBlock::empty();
-        let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
-        if let Value::Scalar(scalar) = evaluator.run(&expr)? {
-            // if null column can be filtered, return true.
-            if matches!(scalar, Scalar::Boolean(false) | Scalar::Null) {
-                return Ok(true);
-            }
+        let (expr, _) = ConstantFolder::fold_context_independent(&expr, &BUILTIN_FUNCTIONS);
+        if let Expr::Constant(Constant { scalar, .. }) = expr
+            && matches!(scalar, Scalar::Boolean(false) | Scalar::Null)
+        {
+            return Ok(true);
         }
     }
     Ok(false)
