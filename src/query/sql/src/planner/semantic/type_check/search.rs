@@ -136,12 +136,12 @@ where A: super::TypeCheckAdapter
         let internal_column_binding = InternalColumnBinding {
             database_name: None,
             table_name: None,
+            table_index: None,
             internal_column,
         };
         let column = self.bind_context.add_internal_column_binding(
             &internal_column_binding,
             self.metadata.clone(),
-            None,
             false,
         )?;
 
@@ -623,12 +623,12 @@ where A: super::TypeCheckAdapter
         let internal_column_binding = InternalColumnBinding {
             database_name: column_refs[0].0.column.database_name.clone(),
             table_name: column_refs[0].0.column.table_name.clone(),
+            table_index: None,
             internal_column,
         };
         let column = self.bind_context.add_internal_column_binding(
             &internal_column_binding,
             self.metadata.clone(),
-            None,
             false,
         )?;
 

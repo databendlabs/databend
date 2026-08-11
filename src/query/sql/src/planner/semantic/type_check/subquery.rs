@@ -38,6 +38,7 @@ use super::FullTypeCheckAdapter;
 use super::TypeCheckSubqueryPlan;
 use super::TypeChecker;
 use crate::BindContext;
+use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::binder::Binder;
@@ -428,6 +429,21 @@ where A: super::TypeCheckAdapter
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
         let rel_prop = rel_expr.derive_relational_prop()?;
+
+        // An internal column owned by an outer table is an ordinary correlated column in the
+        // subquery plan. Propagate its scan requirement to this context so it can continue through
+        // nested subqueries and eventually reach the context that owns the table scan.
+        {
+            let metadata = self.metadata.read();
+            for column_index in &rel_prop.outer_columns {
+                if let ColumnEntry::InternalColumn(column) = metadata.column(*column_index) {
+                    self.bind_context.bound_internal_columns.insert(
+                        (column.table_index, column.internal_column.column_id()),
+                        *column_index,
+                    );
+                }
+            }
+        }
 
         if typ == SubqueryType::Scalar
             && contain_agg == Some(true)

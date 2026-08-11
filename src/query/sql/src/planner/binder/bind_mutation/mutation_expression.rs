@@ -575,6 +575,7 @@ impl Binder {
         let row_id_column_binding = InternalColumnBinding {
             database_name: Some(target_table_identifier.database_name().clone()),
             table_name: Some(target_table_identifier.table_name().clone()),
+            table_index: Some(table_index),
             internal_column: InternalColumn {
                 column_name: ROW_ID_COL_NAME.to_string(),
                 column_type: InternalColumnType::RowId,
@@ -584,7 +585,6 @@ impl Binder {
         let column_binding = match bind_context.add_internal_column_binding(
             &row_id_column_binding,
             self.metadata.clone(),
-            Some(table_index),
             true,
         ) {
             Ok(column_binding) => column_binding,

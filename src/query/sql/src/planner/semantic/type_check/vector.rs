@@ -160,13 +160,13 @@ where A: TypeCheckAdapter
                                 let internal_column_binding = InternalColumnBinding {
                                     database_name: database_name.clone(),
                                     table_name: table_name.clone(),
+                                    table_index: Some(table_index),
                                     internal_column,
                                 };
                                 let Ok(column_binding) =
                                     self.bind_context.add_internal_column_binding(
                                         &internal_column_binding,
                                         self.metadata.clone(),
-                                        Some(table_index),
                                         false,
                                     )
                                 else {

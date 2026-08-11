@@ -295,6 +295,18 @@ impl Metadata {
         table_index: IndexType,
         internal_column: InternalColumn,
     ) -> Symbol {
+        if let Some(column_index) = self.columns.iter().find_map(|column| match column {
+            ColumnEntry::InternalColumn(column)
+                if column.table_index == table_index
+                    && column.internal_column.column_id() == internal_column.column_id() =>
+            {
+                Some(column.column_index)
+            }
+            _ => None,
+        }) {
+            return column_index;
+        }
+
         let column_index = self.next_column_index();
         self.columns
             .push(ColumnEntry::InternalColumn(TableInternalColumn {
