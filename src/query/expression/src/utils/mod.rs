@@ -22,6 +22,7 @@ mod column_from;
 pub mod date_helper;
 pub mod display;
 pub mod filter_helper;
+pub(crate) mod json_path_transform;
 pub mod serialize;
 pub mod udf_client;
 pub mod variant_transform;
