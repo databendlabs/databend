@@ -1027,6 +1027,11 @@ impl<Index: ColumnIndex> Expr<Index> {
             ) -> Result<Option<Expr<I>>, Self::Error> {
                 if self.non_deterministic {
                     Ok(None)
+                } else if call.lambda_expr.volatility(self.registry)
+                    != FunctionVolatility::Immutable
+                {
+                    self.non_deterministic = true;
+                    Ok(None)
                 } else {
                     Self::visit_lambda_function_call(call, self)
                 }
@@ -1082,6 +1087,34 @@ impl<Index: ColumnIndex> Expr<Index> {
 }
 
 impl<Index: ColumnIndex> RemoteExpr<Index> {
+    /// Return the maximum volatility of functions contained in this expression.
+    #[recursive::recursive]
+    pub fn volatility(&self, fn_registry: &FunctionRegistry) -> FunctionVolatility {
+        match self {
+            RemoteExpr::Constant { .. } | RemoteExpr::ColumnRef { .. } => {
+                FunctionVolatility::Immutable
+            }
+            RemoteExpr::Cast { expr, .. } => expr.volatility(fn_registry),
+            RemoteExpr::FunctionCall { id, args, .. } => {
+                let own_volatility = fn_registry
+                    .get(id)
+                    .and_then(|function| fn_registry.get_property(&function.signature.name))
+                    .map(|property| property.volatility)
+                    .unwrap_or(FunctionVolatility::Volatile);
+                args.iter()
+                    .map(|arg| arg.volatility(fn_registry))
+                    .fold(own_volatility, std::cmp::max)
+            }
+            RemoteExpr::LambdaFunctionCall {
+                args, lambda_expr, ..
+            } => args
+                .iter()
+                .map(|arg| arg.volatility(fn_registry))
+                .chain(std::iter::once(lambda_expr.volatility(fn_registry)))
+                .fold(FunctionVolatility::Immutable, std::cmp::max),
+        }
+    }
+
     pub fn as_expr(&self, fn_registry: &FunctionRegistry) -> Expr<Index> {
         match self {
             RemoteExpr::Constant {

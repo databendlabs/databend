@@ -22,7 +22,7 @@ use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::ast::WindowSpec;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ConstantFolder;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::expr;
@@ -557,8 +557,10 @@ where A: TypeCheckAdapter
             CoreWindowFrameBound::Following(Some(expr))
             | CoreWindowFrameBound::Preceding(Some(expr)) => {
                 let box (expr, _) = self.resolve_core(arena, *expr)?;
-                let (expr, _) =
-                    ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let expr = self.fold_for_plan_materialization(
+                    &expr,
+                    ConstantFoldPolicy::AllowStableWithinStatement,
+                )?;
                 match expr.into_constant() {
                     Ok(expr::Constant { scalar, .. }) => Ok(Some(scalar)),
                     Err(expr) => Err(ErrorCode::SemanticError(

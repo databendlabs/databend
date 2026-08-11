@@ -35,6 +35,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::Constant;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -685,14 +686,21 @@ impl Binder {
             )?;
             let (scalar, _) = *type_checker.resolve(&expr)?;
             let expr = scalar.as_expr()?;
-            let (new_expr, _) =
-                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            let (new_expr, _, folded_volatility) = ConstantFolder::fold_with_policy_and_provenance(
+                &expr,
+                &self.ctx.get_function_context()?,
+                &BUILTIN_FUNCTIONS,
+                ConstantFoldPolicy::AllowVolatile,
+            );
 
             match new_expr {
                 databend_common_expression::Expr::Constant(Constant {
                     scalar: Scalar::Array(Column::Boolean(bitmap)),
                     ..
                 }) => {
+                    self.metadata
+                        .write()
+                        .record_plan_constant(folded_volatility);
                     let mut new_column_idx = Vec::new();
                     for (index, val) in bitmap.iter().enumerate() {
                         if val {

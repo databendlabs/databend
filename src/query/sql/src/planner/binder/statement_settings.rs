@@ -22,6 +22,7 @@ use databend_common_ast::ast::Statement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_expression::cast_scalar;
@@ -73,10 +74,11 @@ impl Binder {
                             for expr in exprs.iter() {
                                 let (scalar, _) = *type_checker.resolve(expr.as_ref())?;
                                 let expr = scalar.as_expr()?;
-                                let (new_expr, _) = ConstantFolder::fold(
+                                let (new_expr, _) = ConstantFolder::fold_with_policy(
                                     &expr,
                                     &self.ctx.get_function_context()?,
                                     &BUILTIN_FUNCTIONS,
+                                    ConstantFoldPolicy::AllowVolatile,
                                 );
                                 match new_expr {
                                     Expr::Constant(Constant { scalar, .. }) => {

@@ -312,7 +312,10 @@ impl Planner {
 
         let optimized_plan = optimize(opt_ctx, plan).await?;
 
-        if let Some(cache_ctx) = plan_cache_context {
+        let can_cache_plan = metadata.read().is_plan_cacheable();
+        if let Some(cache_ctx) = plan_cache_context
+            && can_cache_plan
+        {
             self.set_cache(cache_ctx, optimized_plan.clone());
         }
 

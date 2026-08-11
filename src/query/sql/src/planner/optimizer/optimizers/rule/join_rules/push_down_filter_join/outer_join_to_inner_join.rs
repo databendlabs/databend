@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -56,44 +57,58 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
     let mut can_filter_right_null = false;
     let left_prop = join_rel_expr.derive_relational_prop_child(0)?;
     let right_prop = join_rel_expr.derive_relational_prop_child(1)?;
+    let check_left_null = matches!(
+        join.join_type,
+        JoinType::Right | JoinType::RightSingle | JoinType::Full | JoinType::FullAsof
+    );
+    let check_right_null = matches!(
+        join.join_type,
+        JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::FullAsof
+    );
     for predicate in &filter.predicates {
         let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
         match pred {
             JoinPredicate::Left(_)
-                if can_filter_null(
-                    predicate,
-                    &left_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                )? =>
+                if check_left_null
+                    && can_filter_null(
+                        predicate,
+                        &left_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                    )? =>
             {
                 can_filter_left_null = true;
             }
             JoinPredicate::Right(_)
-                if can_filter_null(
-                    predicate,
-                    &right_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                )? =>
+                if check_right_null
+                    && can_filter_null(
+                        predicate,
+                        &right_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                    )? =>
             {
                 can_filter_right_null = true;
             }
             JoinPredicate::Both { .. } | JoinPredicate::Other(_) => {
-                if can_filter_null(
-                    predicate,
-                    &left_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                )? {
+                if check_left_null
+                    && can_filter_null(
+                        predicate,
+                        &left_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                    )?
+                {
                     can_filter_left_null = true;
                 }
-                if can_filter_null(
-                    predicate,
-                    &right_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                )? {
+                if check_right_null
+                    && can_filter_null(
+                        predicate,
+                        &right_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                    )?
+                {
                     can_filter_right_null = true;
                 }
             }
@@ -238,11 +253,16 @@ pub fn can_filter_null(
     let mut null_scalar_expr = predicate.clone();
     replace.replace(&mut null_scalar_expr).unwrap();
     if replace.can_replace {
-        let columns = null_scalar_expr.columns_and_data_types(metadata);
+        let columns = null_scalar_expr.columns_and_data_types(metadata.clone());
         let expr = convert_scalar_expr_to_expr(null_scalar_expr, columns)?;
         let func_ctx = &FunctionContext::default();
-        let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
-        if expr.contains_column_ref() {
+        let (expr, _, folded_volatility) = ConstantFolder::fold_with_policy_and_provenance(
+            &expr,
+            func_ctx,
+            &BUILTIN_FUNCTIONS,
+            ConstantFoldPolicy::AllowStableWithinStatement,
+        );
+        if expr.contains_column_ref() || !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             return Ok(false);
         }
         let data_block = DataBlock::empty();
@@ -250,6 +270,7 @@ pub fn can_filter_null(
         if let Value::Scalar(scalar) = evaluator.run(&expr)? {
             // if null column can be filtered, return true.
             if matches!(scalar, Scalar::Boolean(false) | Scalar::Null) {
+                metadata.write().record_plan_constant(folded_volatility);
                 return Ok(true);
             }
         }

@@ -34,6 +34,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -966,7 +967,12 @@ where A: UdfAdapter
                     ));
                 }
                 let expr = argument.scalar.as_expr()?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) = ConstantFolder::fold_with_policy(
+                    &expr,
+                    &self.func_ctx,
+                    &BUILTIN_FUNCTIONS,
+                    ConstantFoldPolicy::ImmutableOnly,
+                );
                 let Ok(Some(location)) =
                     expr.into_constant().map(|c| c.scalar.as_string().cloned())
                 else {

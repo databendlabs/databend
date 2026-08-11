@@ -42,6 +42,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
@@ -718,11 +719,17 @@ impl Binder {
         )?;
         let box (scalar, _) = type_checker.resolve(expr)?;
         let scalar_expr = scalar.as_expr()?;
-        let (new_expr, _) = ConstantFolder::fold(
+        let (new_expr, _, folded_volatility) = ConstantFolder::fold_with_policy_and_provenance(
             &scalar_expr,
             &self.ctx.get_function_context()?,
             &BUILTIN_FUNCTIONS,
+            ConstantFoldPolicy::AllowVolatile,
         );
+        if matches!(new_expr, databend_common_expression::Expr::Constant(_)) {
+            self.metadata
+                .write()
+                .record_plan_constant(folded_volatility);
+        }
         Ok(new_expr)
     }
 

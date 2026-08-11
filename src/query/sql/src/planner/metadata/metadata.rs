@@ -27,6 +27,7 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
+use databend_common_expression::FunctionVolatility;
 pub use databend_common_expression::Symbol;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -46,6 +47,16 @@ pub type IndexType = usize;
 /// Use IndexType::MAX to represent dummy table.
 pub const DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
 
+/// The shortest lifetime of values embedded into the logical plan.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum PlanCacheLifetime {
+    /// Every embedded value is reusable across statements.
+    #[default]
+    Reusable,
+    /// At least one embedded value is valid only for the statement that planned it.
+    Statement,
+}
+
 /// ColumnSet represents a set of columns identified by `Symbol`.
 pub type ColumnSet = BTreeSet<Symbol>;
 
@@ -61,6 +72,7 @@ pub type MetadataRef = Arc<RwLock<Metadata>>;
 pub struct Metadata {
     tables: Vec<TableEntry>,
     columns: Vec<ColumnEntry>,
+    plan_cache_lifetime: PlanCacheLifetime,
     removed_mark_indexes: ColumnSet,
     /// Table column indexes that are lazy materialized.
     table_lazy_columns: HashMap<IndexType, ColumnSet>,
@@ -103,6 +115,20 @@ impl Metadata {
 
     pub fn tables(&self) -> &[TableEntry] {
         self.tables.as_slice()
+    }
+
+    /// Record the provenance before an expression is materialized into a plan constant.
+    ///
+    /// Once folded, the literal itself no longer carries the function's volatility. Recording it
+    /// here provides the late planner-cache insertion check with that lost information.
+    pub fn record_plan_constant(&mut self, volatility: FunctionVolatility) {
+        if volatility != FunctionVolatility::Immutable {
+            self.plan_cache_lifetime = PlanCacheLifetime::Statement;
+        }
+    }
+
+    pub fn is_plan_cacheable(&self) -> bool {
+        self.plan_cache_lifetime == PlanCacheLifetime::Reusable
     }
 
     pub fn table_index_by_column_indexes(&self, column_indexes: &ColumnSet) -> Option<IndexType> {

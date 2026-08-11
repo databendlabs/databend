@@ -21,9 +21,8 @@ use databend_common_ast::ast::TypeName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::Expr as EExpr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::expr;
@@ -552,15 +551,13 @@ where A: TypeCheckAdapter
             && args[0].data_type()?.remove_nullable().is_decimal()
         {
             let scale = if args.len() == 2 {
-                let scalar_expr = &arguments[1];
-                let expr = type_check::check(scalar_expr, &BUILTIN_FUNCTIONS)?;
-
-                let scale: i64 = check_number(
-                    expr.span(),
-                    &FunctionContext::default(),
-                    &expr,
-                    &BUILTIN_FUNCTIONS,
+                let expr = self.fold_for_plan_materialization(
+                    &args[1],
+                    ConstantFoldPolicy::AllowStableWithinStatement,
                 )?;
+
+                let scale: i64 =
+                    check_number(expr.span(), &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?;
                 scale.clamp(-76, 76)
             } else {
                 0
@@ -583,15 +580,14 @@ where A: TypeCheckAdapter
                         arguments.len()
                     )));
                 }
-                let param_args = arguments.split_off(1);
-                for arg in param_args.into_iter() {
-                    let expr = type_check::check(&arg, &BUILTIN_FUNCTIONS)?;
-                    let param: u8 = check_number(
-                        expr.span(),
-                        &FunctionContext::default(),
-                        &expr,
-                        &BUILTIN_FUNCTIONS,
+                arguments.truncate(1);
+                for arg in args.iter().skip(1) {
+                    let expr = self.fold_for_plan_materialization(
+                        arg,
+                        ConstantFoldPolicy::AllowStableWithinStatement,
                     )?;
+                    let param: u8 =
+                        check_number(expr.span(), &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?;
                     params.push(Scalar::Number(NumberScalar::UInt8(param)));
                 }
             }
@@ -629,14 +625,16 @@ where A: TypeCheckAdapter
                     arguments.len()
                 )));
             }
-            let func_ctx = self.adapter.function_context()?;
             let arg_fn = |args: &[ScalarExpr],
                           index: usize,
                           arg_name: &str,
                           default: i64|
              -> Result<i64> {
                 Ok(args.get(index).map(|arg| {
-                    match ConstantFolder::fold(&arg.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS).0 {
+                    match self.fold_for_plan_materialization(
+                        arg,
+                        ConstantFoldPolicy::AllowStableWithinStatement,
+                    )? {
                         EExpr::Constant(Constant {
                             scalar,
                             ..

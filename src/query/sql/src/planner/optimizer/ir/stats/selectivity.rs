@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
@@ -125,11 +126,12 @@ impl SelectivityEstimator {
         };
         let expr = scalar_expr.as_expr()?;
         let input_domains = self.build_input_domains(&expr)?;
-        let (expr, output_domain) = ConstantFolder::fold_with_domain(
+        let (expr, output_domain) = ConstantFolder::fold_with_domain_and_policy(
             &expr,
             &input_domains,
             &FunctionContext::default(),
             &BUILTIN_FUNCTIONS,
+            ConstantFoldPolicy::ImmutableOnly,
         );
 
         // ConstantFolder owns expression/domain reasoning: boolean shortcuts and

@@ -18,6 +18,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionVolatility;
 use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
@@ -72,5 +73,9 @@ impl<'a> ScalarBinder<'a> {
 
     pub fn get_func_ctx(&self) -> Result<FunctionContext> {
         self.ctx.get_function_context()
+    }
+
+    pub fn record_plan_constant(&self, volatility: FunctionVolatility) {
+        self.metadata.write().record_plan_constant(volatility);
     }
 }

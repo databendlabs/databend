@@ -22,6 +22,7 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -466,7 +467,13 @@ where A: super::TypeCheckAdapter
                     .type_check(&lambda_schema)?
                     .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
                 let expr = if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-                    ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0
+                    ConstantFolder::fold_with_policy(
+                        &expr,
+                        &self.func_ctx,
+                        &BUILTIN_FUNCTIONS,
+                        ConstantFoldPolicy::ImmutableOnly,
+                    )
+                    .0
                 } else {
                     expr
                 };

@@ -18,6 +18,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnIndex;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr as EExpr;
 use databend_common_expression::FunctionKind;
@@ -153,7 +154,12 @@ where A: TypeCheckAdapter
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if expr.is_deterministic(&BUILTIN_FUNCTIONS) && enable_shrink {
             if let (EExpr::Constant(expr::Constant { scalar, .. }), _) =
-                ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
+                ConstantFolder::fold_with_policy(
+                    expr,
+                    &self.func_ctx,
+                    &BUILTIN_FUNCTIONS,
+                    ConstantFoldPolicy::ImmutableOnly,
+                )
             {
                 let scalar = if enable_shrink {
                     shrink_scalar(scalar)
@@ -173,5 +179,34 @@ where A: TypeCheckAdapter
         }
 
         None
+    }
+
+    /// Fold an expression that is about to be embedded as a logical-plan constant.
+    ///
+    /// The caller chooses the maximum volatility allowed by the SQL evaluation scope. If an
+    /// execution-dependent expression becomes a literal, record its original volatility before
+    /// that provenance is lost so the completed plan cannot enter the cross-statement cache.
+    pub(super) fn fold_for_plan_materialization(
+        &self,
+        scalar: &ScalarExpr,
+        policy: ConstantFoldPolicy,
+    ) -> Result<EExpr<crate::ColumnBinding>> {
+        let volatility = scalar.volatility();
+        let expr = scalar.as_expr()?;
+        if !policy.allows(volatility) {
+            return Ok(expr);
+        }
+        let (folded, _, folded_volatility) = ConstantFolder::fold_with_policy_and_provenance(
+            &expr,
+            &self.func_ctx,
+            &BUILTIN_FUNCTIONS,
+            policy,
+        );
+        if matches!(folded, EExpr::Constant(_)) {
+            self.metadata
+                .write()
+                .record_plan_constant(folded_volatility);
+        }
+        Ok(folded)
     }
 }

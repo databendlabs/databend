@@ -19,6 +19,7 @@ use comfy_table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
@@ -89,6 +90,47 @@ fn test_execution_dependent_function_volatility() {
             "unexpected volatility for {name}"
         );
     }
+}
+
+#[test]
+fn test_constant_fold_policy_preserves_execution_dependent_functions() {
+    let raw_expr = parser::parse_raw_expr("to_second(now())", &[], &BUILTIN_FUNCTIONS);
+    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+    let func_ctx = FunctionContext::default();
+
+    let (immutable_only, _, immutable_provenance) = ConstantFolder::fold_with_policy_and_provenance(
+        &expr,
+        &func_ctx,
+        &BUILTIN_FUNCTIONS,
+        ConstantFoldPolicy::ImmutableOnly,
+    );
+    assert!(
+        !matches!(
+            immutable_only,
+            databend_common_expression::Expr::Constant(_)
+        ),
+        "an immutable-only fold must keep now() symbolic"
+    );
+    assert_eq!(immutable_provenance, FunctionVolatility::Immutable);
+
+    let (statement_local, _, statement_provenance) =
+        ConstantFolder::fold_with_policy_and_provenance(
+            &expr,
+            &func_ctx,
+            &BUILTIN_FUNCTIONS,
+            ConstantFoldPolicy::AllowStableWithinStatement,
+        );
+    assert!(
+        matches!(
+            statement_local,
+            databend_common_expression::Expr::Constant(_)
+        ),
+        "an explicitly statement-local fold should evaluate now()"
+    );
+    assert_eq!(
+        statement_provenance,
+        FunctionVolatility::StableWithinStatement
+    );
 }
 
 #[derive(Clone)]

@@ -22,6 +22,7 @@ use databend_common_ast::ast::Weekday as ASTWeekday;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
@@ -421,7 +422,12 @@ impl<'a, A> TypeChecker<'a, A> {
 
     fn interval_contains_only_date_parts(&self, interval_expr: &ScalarExpr) -> Result<bool> {
         let expr = interval_expr.as_expr()?;
-        let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (folded, _) = ConstantFolder::fold_with_policy(
+            &expr,
+            &self.func_ctx,
+            &BUILTIN_FUNCTIONS,
+            ConstantFoldPolicy::ImmutableOnly,
+        );
         if let EExpr::Constant(Constant {
             scalar: Scalar::Interval(value),
             ..

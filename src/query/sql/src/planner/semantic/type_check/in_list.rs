@@ -17,9 +17,10 @@ use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ConstantFolder;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FunctionVolatility;
 use databend_common_expression::Scalar;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
@@ -38,7 +39,6 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
-use crate::plans::ConstantExpr;
 use crate::plans::ConstantTableScan;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -79,8 +79,22 @@ where A: super::TypeCheckAdapter
         let inlist_to_join_threshold = self.adapter.settings().get_inlist_to_join_threshold()?;
         if list.len() >= inlist_to_join_threshold {
             let box (expr_scalar, expr_ty) = self.resolve_core(arena, expr)?;
-            let box (subquery, data_type) =
-                self.resolve_in_list_as_subquery(arena, span, expr_scalar, expr_ty, list)?;
+            let (list_scalars, list_types) = self.resolve_expr_args(arena, list)?;
+            if list_scalars
+                .iter()
+                .any(|scalar| scalar.volatility() == FunctionVolatility::Volatile)
+            {
+                // A ConstantTableScan evaluates its values once. That is not equivalent to the
+                // per-row evaluation scope of a volatile IN-list item, so retain the scalar form.
+                return self.resolve_in_list_as_predicate(span, expr_scalar, list_scalars, not);
+            }
+            let box (subquery, data_type) = self.resolve_in_list_as_subquery(
+                span,
+                expr_scalar,
+                expr_ty,
+                list_scalars,
+                list_types,
+            )?;
             return if not {
                 self.resolve_scalar_function_call(span, "not", vec![], vec![subquery])
             } else {
@@ -113,9 +127,20 @@ where A: super::TypeCheckAdapter
             };
         }
 
-        let mut predicate_levels = Vec::with_capacity(list.len().max(1).ilog2() as usize + 1);
-        for item in list {
-            let box (item, _) = self.resolve_core(arena, *item)?;
+        let (list_scalars, _) = self.resolve_expr_args(arena, list)?;
+        self.resolve_in_list_as_predicate(span, expr_scalar, list_scalars, not)
+    }
+
+    fn resolve_in_list_as_predicate(
+        &mut self,
+        span: Span,
+        expr_scalar: ScalarExpr,
+        list_scalars: Vec<ScalarExpr>,
+        not: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut predicate_levels =
+            Vec::with_capacity(list_scalars.len().max(1).ilog2() as usize + 1);
+        for item in list_scalars {
             let box (predicate, _) =
                 self.resolve_scalar_function_call(span, "eq", vec![], vec![
                     expr_scalar.clone(),
@@ -137,13 +162,12 @@ where A: super::TypeCheckAdapter
 
     fn resolve_in_list_as_subquery(
         &mut self,
-        arena: &CoreExprArena<'_>,
         span: Span,
         child_scalar: ScalarExpr,
         child_type: DataType,
-        list: &CoreExprArgs,
+        list_scalars: Vec<ScalarExpr>,
+        list_types: Vec<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let (list_scalars, list_types) = self.resolve_expr_args(arena, list)?;
         let common_type = list_types
             .iter()
             .cloned()
@@ -162,30 +186,21 @@ where A: super::TypeCheckAdapter
         let mut builder = ColumnBuilder::with_capacity(&common_type, num_rows);
         for (scalar, data_type) in list_scalars.into_iter().zip(list_types.iter()) {
             let scalar = if *data_type != common_type {
-                let cast = wrap_cast(&scalar, &common_type);
-                let expr = cast.as_expr()?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                match expr.into_constant() {
-                    Ok(constant) => ScalarExpr::ConstantExpr(ConstantExpr {
-                        span: scalar.span(),
-                        value: constant.scalar,
-                    }),
-                    Err(_) => {
-                        return Err(ErrorCode::SemanticError(
-                            "Values can't contain subquery, aggregate functions, window functions, or UDFs",
-                        ).set_span(span));
-                    }
-                }
+                wrap_cast(&scalar, &common_type)
             } else {
                 scalar
             };
-            let ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) = scalar else {
+            let expr = self.fold_for_plan_materialization(
+                &scalar,
+                ConstantFoldPolicy::AllowStableWithinStatement,
+            )?;
+            let Ok(constant) = expr.into_constant() else {
                 return Err(ErrorCode::SemanticError(
                     "Values can't contain subquery, aggregate functions, window functions, or UDFs",
                 )
                 .set_span(span));
             };
-            builder.push(value.as_ref());
+            builder.push(constant.scalar.as_ref());
         }
 
         let mut metadata = self.metadata.write();

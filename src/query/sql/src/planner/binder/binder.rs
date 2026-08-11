@@ -33,6 +33,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionKind;
@@ -951,10 +952,17 @@ impl Binder {
             let scalar = wrap_cast(&scalar, &DataType::String);
             let expr = scalar.as_expr()?;
 
-            let (new_expr, _) =
-                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            let (new_expr, _, folded_volatility) = ConstantFolder::fold_with_policy_and_provenance(
+                &expr,
+                &self.ctx.get_function_context()?,
+                &BUILTIN_FUNCTIONS,
+                ConstantFoldPolicy::AllowVolatile,
+            );
             match new_expr {
                 Expr::Constant(Constant { scalar, .. }) => {
+                    self.metadata
+                        .write()
+                        .record_plan_constant(folded_volatility);
                     let value = scalar.into_string().unwrap();
                     if variable.to_lowercase().as_str() == "timezone" {
                         let tz = value.trim_matches(|c| c == '\'' || c == '\"');

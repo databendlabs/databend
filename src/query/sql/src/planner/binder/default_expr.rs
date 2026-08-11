@@ -21,6 +21,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -155,8 +156,12 @@ impl DefaultExprBinder {
         let (expr, is_deterministic) = if is_nextval {
             (expr, false)
         } else if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            let (fold_to_constant, _) =
-                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let (fold_to_constant, _) = ConstantFolder::fold_with_policy(
+                &expr,
+                &self.func_ctx,
+                &BUILTIN_FUNCTIONS,
+                ConstantFoldPolicy::ImmutableOnly,
+            );
             (fold_to_constant, true)
         } else {
             (expr, false)

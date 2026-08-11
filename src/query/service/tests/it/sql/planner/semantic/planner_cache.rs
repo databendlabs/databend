@@ -18,9 +18,12 @@ use std::time::Duration;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Planner;
+use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOperator;
 use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextSettings;
@@ -64,10 +67,28 @@ async fn test_planner_cache_folds_statement_stable_subquery_per_physical_plan() 
     let plan_shaping_sql = "SELECT t.ts FROM default.cache_statement_stable_subquery AS t, \
                             numbers(to_uint64(to_second(now())))";
     let first = plan_query(ctx.clone(), plan_shaping_sql).await?;
-    let second = plan_query(ctx, plan_shaping_sql).await?;
+    let second = plan_query(ctx.clone(), plan_shaping_sql).await?;
     assert!(
         !Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
         "execution-dependent table-function arguments must be rebound"
+    );
+
+    ctx.get_settings()
+        .set_setting("inlist_to_join_threshold".to_string(), "4".to_string())?;
+    let in_list_sql = "SELECT * FROM default.cache_statement_stable_subquery \
+                       WHERE to_second(ts) IN (100.0, 101.0, 102.0, to_second(now()))";
+    let first = plan_query(ctx.clone(), in_list_sql).await?;
+    let first_second = constant_scan_last_second(&first);
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    let second = plan_query(ctx, in_list_sql).await?;
+    let second_second = constant_scan_last_second(&second);
+    assert!(
+        !Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+        "a statement-local constant table must not enter the planner cache"
+    );
+    assert_ne!(
+        first_second, second_second,
+        "the stable IN-list value must be materialized again for each statement"
     );
     Ok(())
 }
@@ -83,6 +104,27 @@ fn query_metadata(plan: &Plan) -> &MetadataRef {
         panic!("expected query plan")
     };
     metadata
+}
+
+fn constant_scan_last_second(plan: &Plan) -> i64 {
+    let Plan::Query { s_expr, .. } = plan else {
+        panic!("expected query plan")
+    };
+    let scan = find_constant_scan(s_expr).expect("expected a ConstantTableScan");
+    let value = scan.values[0]
+        .index(scan.num_rows - 1)
+        .expect("expected the last IN-list value");
+    match value {
+        ScalarRef::Decimal(value) => value.to_float64() as i64,
+        other => panic!("expected a decimal second, got {other:?}"),
+    }
+}
+
+fn find_constant_scan(s_expr: &SExpr) -> Option<&databend_common_sql::plans::ConstantTableScan> {
+    if let RelOperator::ConstantTableScan(scan) = s_expr.plan() {
+        return Some(scan);
+    }
+    s_expr.children().find_map(find_constant_scan)
 }
 
 async fn plan_and_extract_scan_timestamp(

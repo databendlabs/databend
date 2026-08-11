@@ -19,6 +19,7 @@ use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr as EExpr;
 use databend_common_expression::FunctionVolatility;
@@ -630,10 +631,11 @@ impl SubqueryDecorrelatorOptimizer {
                     match scalar_expr.volatility() {
                         FunctionVolatility::Immutable => {
                             let func_ctx = self.ctx.get_function_context()?;
-                            let (folded, _) = ConstantFolder::fold(
+                            let (folded, _) = ConstantFolder::fold_with_policy(
                                 &scalar_expr.as_expr()?,
                                 &func_ctx,
                                 &BUILTIN_FUNCTIONS,
+                                ConstantFoldPolicy::ImmutableOnly,
                             );
                             if let EExpr::Constant(constant) = folded {
                                 replacement_scalar = Some(ScalarExpr::TypedConstantExpr(

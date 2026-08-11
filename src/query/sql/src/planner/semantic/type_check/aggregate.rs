@@ -19,7 +19,7 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Window;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FunctionContext;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::Scalar;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
@@ -411,12 +411,12 @@ where A: TypeCheckAdapter
             && arguments.len() == expected_histogram_args
             && params.is_empty()
         {
-            let max_num_buckets: u64 = check_number(
-                None,
-                &FunctionContext::default(),
-                &arguments[1].as_expr()?,
-                &BUILTIN_FUNCTIONS,
+            let max_num_buckets = self.fold_for_plan_materialization(
+                &arguments[1],
+                ConstantFoldPolicy::AllowStableWithinStatement,
             )?;
+            let max_num_buckets: u64 =
+                check_number(None, &self.func_ctx, &max_num_buckets, &BUILTIN_FUNCTIONS)?;
 
             vec![Scalar::Number(NumberScalar::UInt64(max_num_buckets))]
         } else {

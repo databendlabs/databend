@@ -18,10 +18,9 @@ use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ConstantFolder;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use smallvec::smallvec;
 
@@ -714,8 +713,10 @@ where A: TypeCheckAdapter
         let mut new_params = Vec::with_capacity(params.len());
         for (display_name, param) in params {
             let box (scalar, _) = self.resolve_core(arena, *param)?;
-            let expr = scalar.as_expr()?;
-            let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let expr = self.fold_for_plan_materialization(
+                &scalar,
+                ConstantFoldPolicy::AllowStableWithinStatement,
+            )?;
             let constant = expr
                 .into_constant()
                 .map_err(|_| {

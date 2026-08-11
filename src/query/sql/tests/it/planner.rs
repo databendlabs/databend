@@ -601,6 +601,7 @@ fn register_planner_cache_table(fixture: &Arc<LiteTableContext>, table_name: &st
         vec![
             TableField::new("a", TableDataType::Number(NumberDataType::Int64)),
             TableField::new("b", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("ts", TableDataType::Timestamp),
         ],
         None,
         HashMap::new(),
@@ -612,6 +613,27 @@ fn register_planner_cache_table(fixture: &Arc<LiteTableContext>, table_name: &st
             format!("planner-cache-test/{table_name}"),
         )]),
     )
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn planner_cache_ignores_unused_outer_join_null_analysis() -> Result<()> {
+    let fixture = LiteTableContext::create().await?;
+    fixture
+        .get_settings()
+        .set_setting("enable_planner_cache".to_string(), "1".to_string())?;
+    register_planner_cache_table(&fixture, "cache_outer_join_left")?;
+    register_planner_cache_table(&fixture, "cache_outer_join_right")?;
+
+    let sql = "SELECT l.a FROM cache_outer_join_left AS l \
+               LEFT JOIN cache_outer_join_right AS r ON l.a = r.a \
+               WHERE l.ts >= subtract_hours(now(), 24)";
+    let first = plan_sql(&fixture, sql).await?;
+    let second = plan_sql(&fixture, sql).await?;
+    assert!(
+        Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+        "a stable predicate on the preserved side must not trigger unused null analysis"
+    );
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -731,10 +753,15 @@ async fn planner_cache_rejects_execution_dependent_plan_shaping_expressions() ->
     fixture
         .get_settings()
         .set_setting("enable_planner_cache".to_string(), "1".to_string())?;
+    fixture
+        .get_settings()
+        .set_setting("inlist_to_join_threshold".to_string(), "4".to_string())?;
     register_planner_cache_table(&fixture, "cache_execution_dependent_plan_shape")?;
 
     for sql in [
         "SELECT quantile_cont(to_second(now()) / 60.0)(a) \
+         FROM cache_execution_dependent_plan_shape",
+        "SELECT histogram(a, to_uint64(1 + to_second(now()))) \
          FROM cache_execution_dependent_plan_shape",
         "SELECT round(a::decimal(10, 2), to_second(now()) % 2) \
          FROM cache_execution_dependent_plan_shape",
@@ -744,6 +771,8 @@ async fn planner_cache_rejects_execution_dependent_plan_shaping_expressions() ->
          AND CURRENT ROW) FROM cache_execution_dependent_plan_shape",
         "SELECT COLUMNS(x -> x = 'a' OR rand() > 0.5) \
          FROM cache_execution_dependent_plan_shape",
+        "SELECT * FROM cache_execution_dependent_plan_shape \
+         WHERE a IN (1.0, 2.0, 3.0, to_second(now()))",
     ] {
         let first = plan_sql(&fixture, sql).await?;
         let second = plan_sql(&fixture, sql).await?;
@@ -751,7 +780,50 @@ async fn planner_cache_rejects_execution_dependent_plan_shaping_expressions() ->
             !Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
             "plan-shaping execution-dependent expressions must be rebound: {sql}"
         );
+        assert!(
+            !query_metadata(&first).read().is_plan_cacheable(),
+            "the late cache gate must see plan-shaping materialization: {sql}"
+        );
     }
+
+    let stable_in_list_sql = "SELECT * FROM cache_execution_dependent_plan_shape \
+                              WHERE a IN (1.0, 2.0, 3.0, to_second(now()))";
+    let stable_plan = plan_sql(&fixture, stable_in_list_sql).await?;
+    assert!(
+        contains_join(query_s_expr(&stable_plan)),
+        "a statement-local stable IN-list should retain the hash-join rewrite"
+    );
+
+    let volatile_in_list_sql = "SELECT * FROM cache_execution_dependent_plan_shape \
+                                WHERE a IN (1.0, 2.0, 3.0, rand())";
+    let first = plan_sql(&fixture, volatile_in_list_sql).await?;
+    let second = plan_sql(&fixture, volatile_in_list_sql).await?;
+    assert!(
+        Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+        "a volatile IN-list that remains symbolic should reuse the cached plan"
+    );
+    assert!(
+        !contains_join(query_s_expr(&first)),
+        "a volatile IN-list must not be materialized into an execute-once constant table"
+    );
+    let formatted_plan = first.format_indent(Default::default())?;
+    assert!(
+        formatted_plan.to_ascii_lowercase().contains("rand"),
+        "the cached plan must retain the volatile expression:\n{formatted_plan}"
+    );
+
+    let immutable_in_list_sql = "SELECT * FROM cache_execution_dependent_plan_shape \
+                                 WHERE a IN (1.0, 2.0, 3.0, 4.0)";
+    let first = plan_sql(&fixture, immutable_in_list_sql).await?;
+    let second = plan_sql(&fixture, immutable_in_list_sql).await?;
+    assert!(
+        Arc::ptr_eq(query_metadata(&first), query_metadata(&second)),
+        "an immutable constant-table scan should remain plan-cacheable"
+    );
+    assert!(
+        contains_join(query_s_expr(&first)),
+        "an immutable large IN-list should retain the hash-join rewrite"
+    );
     Ok(())
 }
 

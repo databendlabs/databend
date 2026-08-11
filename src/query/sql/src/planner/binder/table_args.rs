@@ -24,6 +24,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
@@ -123,10 +124,18 @@ fn try_fold_to_scalar(
     subquery_executor: &Option<Arc<dyn QueryExecutor>>,
 ) -> Result<Scalar> {
     let expr = scalar.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
+    let (expr, _, folded_volatility) = ConstantFolder::fold_with_policy_and_provenance(
+        &expr,
+        &scalar_binder.get_func_ctx()?,
+        &BUILTIN_FUNCTIONS,
+        ConstantFoldPolicy::AllowVolatile,
+    );
 
     match expr.into_constant() {
-        Ok(Constant { scalar, .. }) => Ok(scalar),
+        Ok(Constant { scalar, .. }) => {
+            scalar_binder.record_plan_constant(folded_volatility);
+            Ok(scalar)
+        }
         Err(_) => {
             if contains_subquery(ast_expr) {
                 if let Some(executor) = subquery_executor {

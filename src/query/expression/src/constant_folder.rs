@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 
 use databend_common_ast::Span;
@@ -24,6 +25,7 @@ use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
+use crate::FunctionVolatility;
 use crate::Scalar;
 use crate::Value;
 use crate::block::DataBlock;
@@ -44,10 +46,39 @@ use crate::types::number::NumberScalar;
 
 const MAX_FUNCTION_ARGS_TO_FOLD: usize = 4096;
 
+/// Controls which functions may be evaluated while folding an expression.
+///
+/// Logical-plan callers that persist the folded result should use the narrowest policy that
+/// matches the lifetime of that result. In particular, a cacheable logical plan should use
+/// [`ConstantFoldPolicy::ImmutableOnly`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConstantFoldPolicy {
+    /// Only functions whose result is independent of execution may be evaluated.
+    ImmutableOnly,
+    /// Statement-stable functions may also be evaluated.
+    AllowStableWithinStatement,
+    /// Preserve the legacy behavior and allow volatile functions to be evaluated.
+    AllowVolatile,
+}
+
+impl ConstantFoldPolicy {
+    pub fn allows(self, volatility: FunctionVolatility) -> bool {
+        match self {
+            ConstantFoldPolicy::ImmutableOnly => volatility == FunctionVolatility::Immutable,
+            ConstantFoldPolicy::AllowStableWithinStatement => {
+                volatility <= FunctionVolatility::StableWithinStatement
+            }
+            ConstantFoldPolicy::AllowVolatile => true,
+        }
+    }
+}
+
 pub struct ConstantFolder<'a, Index: ColumnIndex> {
     input_domains: &'a HashMap<Index, Domain>,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
+    policy: ConstantFoldPolicy,
+    folded_volatility: Cell<FunctionVolatility>,
 }
 
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
@@ -57,15 +88,45 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> (Expr<Index>, Option<Domain>) {
+        Self::fold_with_policy(
+            expr,
+            func_ctx,
+            fn_registry,
+            ConstantFoldPolicy::AllowVolatile,
+        )
+    }
+
+    /// Fold a single expression without evaluating functions disallowed by `policy`.
+    pub fn fold_with_policy(
+        expr: &Expr<Index>,
+        func_ctx: &'a FunctionContext,
+        fn_registry: &'a FunctionRegistry,
+        policy: ConstantFoldPolicy,
+    ) -> (Expr<Index>, Option<Domain>) {
+        let (expr, domain, _) =
+            Self::fold_with_policy_and_provenance(expr, func_ctx, fn_registry, policy);
+        (expr, domain)
+    }
+
+    /// Fold with an explicit policy and return the maximum volatility actually materialized.
+    pub fn fold_with_policy_and_provenance(
+        expr: &Expr<Index>,
+        func_ctx: &'a FunctionContext,
+        fn_registry: &'a FunctionRegistry,
+        policy: ConstantFoldPolicy,
+    ) -> (Expr<Index>, Option<Domain>, FunctionVolatility) {
         let input_domains = Self::full_input_domains(expr);
 
         let folder = ConstantFolder {
             input_domains: &input_domains,
             func_ctx,
             fn_registry,
+            policy,
+            folded_volatility: Cell::new(FunctionVolatility::Immutable),
         };
 
-        folder.fold_to_stable(expr)
+        let (expr, domain) = folder.fold_to_stable(expr);
+        (expr, domain, folder.folded_volatility.get())
     }
 
     /// Fold a single expression with columns' domain, and then return the new expression and the
@@ -76,10 +137,29 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> (Expr<Index>, Option<Domain>) {
+        Self::fold_with_domain_and_policy(
+            expr,
+            input_domains,
+            func_ctx,
+            fn_registry,
+            ConstantFoldPolicy::AllowVolatile,
+        )
+    }
+
+    /// Fold a single expression with column domains and an explicit volatility policy.
+    pub fn fold_with_domain_and_policy(
+        expr: &Expr<Index>,
+        input_domains: &'a HashMap<Index, Domain>,
+        func_ctx: &'a FunctionContext,
+        fn_registry: &'a FunctionRegistry,
+        policy: ConstantFoldPolicy,
+    ) -> (Expr<Index>, Option<Domain>) {
         let folder = ConstantFolder {
             input_domains,
             func_ctx,
             fn_registry,
+            policy,
+            folded_volatility: Cell::new(FunctionVolatility::Immutable),
         };
 
         folder.fold_to_stable(expr)
@@ -489,6 +569,15 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     return_type: return_type.clone(),
                 });
 
+                let volatility = self
+                    .fn_registry
+                    .get_property(&function.signature.name)
+                    .map(|property| property.volatility)
+                    .unwrap_or(FunctionVolatility::Volatile);
+                if !self.policy.allows(volatility) {
+                    return (func_expr, None);
+                }
+
                 let (calc_domain, eval) = match &function.eval {
                     FunctionEval::Scalar {
                         calc_domain, eval, ..
@@ -576,6 +665,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 });
 
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
+                    self.record_folded_volatility(volatility);
                     return (
                         Expr::Constant(Constant {
                             span: *span,
@@ -599,6 +689,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
+                        self.record_folded_volatility(volatility);
                         return (
                             Expr::Constant(Constant {
                                 span: *span,
@@ -640,12 +731,18 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     return_type: return_type.clone(),
                 });
 
+                let volatility = lambda_expr.volatility(self.fn_registry);
+                if !self.policy.allows(volatility) {
+                    return (func_expr, None);
+                }
+
                 if all_args_is_scalar {
                     let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
+                        self.record_folded_volatility(volatility);
                         return (
                             Expr::Constant(Constant {
                                 span: *span,
@@ -745,6 +842,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
             _ => None,
         }
+    }
+
+    fn record_folded_volatility(&self, volatility: FunctionVolatility) {
+        self.folded_volatility
+            .set(self.folded_volatility.get().max(volatility));
     }
 
     fn calculate_try_cast(
@@ -862,11 +964,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return None;
         }
 
-        let (_, output_domain) = ConstantFolder::fold_with_domain(
+        let (_, output_domain) = ConstantFolder::fold_with_domain_and_policy(
             &cast_expr,
             &[(0, domain.clone())].into_iter().collect(),
             self.func_ctx,
             self.fn_registry,
+            self.policy,
         );
 
         Some(output_domain)
@@ -1032,6 +1135,8 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             input_domains,
             func_ctx,
             fn_registry,
+            policy: ConstantFoldPolicy::AllowVolatile,
+            folded_volatility: Cell::new(FunctionVolatility::Immutable),
         }
     }
 }

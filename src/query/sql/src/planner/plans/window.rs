@@ -20,6 +20,7 @@ use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ConstantFoldPolicy;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -401,7 +402,12 @@ enum FoldedConstantStat {
 
 fn fold_constant_stat(expr: &ScalarExpr) -> Result<Option<FoldedConstantStat>> {
     let expr = expr.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
+    let (expr, _) = ConstantFolder::fold_with_policy(
+        &expr,
+        &FunctionContext::default(),
+        &BUILTIN_FUNCTIONS,
+        ConstantFoldPolicy::ImmutableOnly,
+    );
     let Ok(constant) = expr.into_constant() else {
         return Ok(None);
     };
