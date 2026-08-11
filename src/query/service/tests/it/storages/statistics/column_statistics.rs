@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_expression::Column;
@@ -88,7 +90,8 @@ fn test_column_statistic() -> anyhow::Result<()> {
         &sample_block,
         None,
         &schema,
-        &std::collections::BTreeMap::new(),
+        &BTreeMap::new(),
+        HashMap::new(),
     )?;
 
     assert_eq!(5, col_stats.len());

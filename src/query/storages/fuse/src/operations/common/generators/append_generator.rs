@@ -26,7 +26,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::DefaultExprBinder;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -134,7 +134,7 @@ impl SnapshotGenerator for AppendGenerator {
     fn do_generate_new_snapshot(
         &self,
         table_info: &TableInfo,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
@@ -205,11 +205,7 @@ impl SnapshotGenerator for AppendGenerator {
                     .cloned()
                     .collect();
 
-                merge_statistics_mut(
-                    &mut new_summary,
-                    &summary,
-                    cluster_key_meta.as_ref().map(|v| v.0),
-                );
+                merge_statistics_mut(&mut new_summary, &summary, cluster_key_info.as_ref());
             }
         }
 
@@ -228,7 +224,7 @@ impl SnapshotGenerator for AppendGenerator {
             table_schema.clone(),
             new_summary,
             new_segments,
-            cluster_key_meta,
+            cluster_key_info,
             table_statistics_location,
             table_meta_timestamps,
         )

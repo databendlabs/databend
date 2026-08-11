@@ -939,7 +939,8 @@ impl VirtualColumnBuilder {
             &virtual_block,
             None,
             &virtual_block_schema,
-            &std::collections::BTreeMap::new(),
+            &BTreeMap::new(),
+            HashMap::new(),
         )?;
 
         let SerializedParquet {

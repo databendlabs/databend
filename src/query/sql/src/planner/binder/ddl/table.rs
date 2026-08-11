@@ -23,6 +23,7 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
 use databend_common_ast::ast::ClusterOption;
+use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CompactTarget;
@@ -100,6 +101,7 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -1041,6 +1043,10 @@ impl Binder {
                 )
                 .await?;
             if !keys.is_empty() {
+                options.insert(
+                    OPT_KEY_CLUSTER_TYPE.to_owned(),
+                    cluster_opt.cluster_type.to_string().to_lowercase(),
+                );
                 options
                     .entry(OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
                     .or_insert_with(|| "1".to_owned());
@@ -1497,6 +1503,7 @@ impl Binder {
                         target: MaintenanceTarget::Table,
                         branch,
                         cluster_keys,
+                        cluster_type: cluster_by.cluster_type.to_string().parse()?,
                     },
                 )))
             }
@@ -2137,17 +2144,16 @@ impl Binder {
             if let Some(len) = column.stats_truncate_len {
                 let inner_type = schema_data_type.remove_nullable();
                 if inner_type != databend_common_expression::TableDataType::String {
-                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!(
-                            "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
-                            name, inner_type
-                        ),
-                    ));
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
+                        name, inner_type
+                    )));
                 }
                 if len == 0 || len > 4096 {
-                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!("STATS_TRUNCATE_LEN must be in range [1, 4096], got {}", len),
-                    ));
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "STATS_TRUNCATE_LEN must be in range [1, 4096], got {}",
+                        len
+                    )));
                 }
             }
             fields_stats_truncate_len.push(column.stats_truncate_len);
@@ -2491,6 +2497,14 @@ impl Binder {
         table_indexes: Option<&BTreeMap<String, TableIndex>>,
         allow_vector: bool,
     ) -> Result<Vec<String>> {
+        if cluster_opt.cluster_type == AstClusterType::Hilbert
+            && cluster_opt.cluster_exprs.len() != 2
+        {
+            return Err(ErrorCode::InvalidClusterKeys(
+                "Hilbert clustering requires exactly two dimensions",
+            ));
+        }
+        let allow_vector = allow_vector && cluster_opt.cluster_type == AstClusterType::Linear;
         self.analyze_table_keys(
             &cluster_opt.cluster_exprs,
             schema,

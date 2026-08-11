@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_session::TxnManagerRef;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
@@ -57,7 +57,7 @@ pub trait SnapshotGenerator {
     fn generate_new_snapshot(
         &self,
         table_info: &TableInfo,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         previous: Option<Arc<TableSnapshot>>,
         txn_mgr: TxnManagerRef,
         table_meta_timestamps: TableMetaTimestamps,
@@ -65,7 +65,7 @@ pub trait SnapshotGenerator {
     ) -> Result<TableSnapshot> {
         let mut snapshot = self.do_generate_new_snapshot(
             table_info,
-            cluster_key_meta,
+            cluster_key_info,
             &previous,
             table_meta_timestamps,
             table_stats_gen,
@@ -79,7 +79,7 @@ pub trait SnapshotGenerator {
     fn do_generate_new_snapshot(
         &self,
         table_info: &TableInfo,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,

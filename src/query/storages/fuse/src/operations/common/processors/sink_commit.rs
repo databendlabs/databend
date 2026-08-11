@@ -47,7 +47,7 @@ use databend_common_sql::plans::TruncateMode;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -84,7 +84,7 @@ enum State {
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
         table_stats_gen: TableStatsGenerator,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         table_info: TableInfo,
     },
     TryCommit {
@@ -487,7 +487,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             State::GenerateSnapshot {
                 previous,
                 mut table_stats_gen,
-                cluster_key_meta,
+                cluster_key_info,
                 table_info,
             } => {
                 let change_tracking_enabled_during_commit = {
@@ -521,7 +521,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 let mut table_statistics = table_stats_gen.take_table_statistics();
                 match self.snapshot_gen.generate_new_snapshot(
                     &table_info,
-                    cluster_key_meta,
+                    cluster_key_info,
                     previous,
                     self.ctx.txn_mgr(),
                     self.table_meta_timestamps,
@@ -635,7 +635,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     self.state = State::GenerateSnapshot {
                         previous,
                         table_stats_gen,
-                        cluster_key_meta: fuse_table.cluster_key_meta(),
+                        cluster_key_info: fuse_table.cluster_key_info(),
                         table_info,
                     };
                 }
@@ -839,7 +839,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 self.state = State::GenerateSnapshot {
                     previous,
                     table_stats_gen,
-                    cluster_key_meta: fuse_table.cluster_key_meta(),
+                    cluster_key_info: fuse_table.cluster_key_info(),
                     table_info,
                 };
             }
