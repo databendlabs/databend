@@ -17,8 +17,8 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
-use databend_common_catalog::table_context::TableContextQueryInfo;
 use databend_common_config::GlobalConfig;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_sql::QueryLineage;
@@ -41,20 +41,15 @@ const LINEAGE_LOG_TARGET: &str = "databend::log::lineage";
 #[derive(Serialize)]
 struct LineageLogEntry {
     operation: &'static str,
-    query_id: String,
     event_time: i64,
-    query_kind: String,
-    query_text: String,
+    user_name: String,
     query_parameterized_hash: String,
-    query_duration_ms: i64,
-    written_rows: u64,
-    scan_rows: u64,
+    query_info: LineageQueryInfo,
     lineage_kind: &'static str,
     source: LineageEndpoint,
     target: LineageEndpoint,
     column_lineage_hash: String,
-    source_to_target_columns: BTreeMap<String, Vec<String>>,
-    target_to_source_columns: BTreeMap<String, Vec<String>>,
+    column_lineage: Option<ColumnLineage>,
 }
 
 #[derive(Serialize)]
@@ -63,7 +58,6 @@ struct LineageObjectDeleteLogEntry {
     object_id: u64,
     query_id: String,
     event_time: i64,
-    query_kind: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -80,14 +74,38 @@ struct LineageEndpoint {
 
 #[derive(Clone)]
 struct LineageProcessMetadata {
-    query_id: String,
     event_time: i64,
-    query_kind: String,
-    query_text: String,
+    user_name: String,
     query_parameterized_hash: String,
+    query_info: LineageQueryInfo,
+}
+
+#[derive(Clone, Serialize)]
+struct LineageQueryInfo {
+    query_id: String,
+    query_text: String,
     query_duration_ms: i64,
     written_rows: u64,
     scan_rows: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct ColumnLineage {
+    source_column_address_kind: &'static str,
+    target_column_address_kind: &'static str,
+    mappings: Vec<ColumnLineageMapping>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct ColumnLineageMapping {
+    target: ColumnIdentity,
+    sources: Vec<ColumnIdentity>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct ColumnIdentity {
+    name: String,
+    id: Option<u32>,
 }
 
 pub fn log_query_lineage(ctx: &Arc<QueryContext>) {
@@ -96,14 +114,23 @@ pub fn log_query_lineage(ctx: &Arc<QueryContext>) {
     };
 
     let process = LineageProcessMetadata {
-        query_id: ctx.get_id(),
-        event_time: convert_query_log_timestamp(SystemTime::now()),
-        query_kind: ctx.get_query_kind().to_string(),
-        query_text: ctx.get_query_str(),
+        // Successful lineage logging runs after log_query_finished, so this is the query finish
+        // event time. Keep a fallback for non-standard test or embedding paths.
+        event_time: convert_query_log_timestamp(
+            ctx.get_query_finish_time().unwrap_or_else(SystemTime::now),
+        ),
+        user_name: ctx
+            .get_current_user()
+            .map(|user| user.name)
+            .unwrap_or_default(),
         query_parameterized_hash: ctx.get_query_parameterized_hash(),
-        query_duration_ms: ctx.get_query_duration_ms(),
-        written_rows: ctx.get_write_progress_value().rows as u64,
-        scan_rows: ctx.get_scan_progress_value().rows as u64,
+        query_info: LineageQueryInfo {
+            query_id: ctx.get_id(),
+            query_text: ctx.get_query_str(),
+            query_duration_ms: ctx.get_query_duration_ms(),
+            written_rows: ctx.get_write_progress_value().rows as u64,
+            scan_rows: ctx.get_scan_progress_value().rows as u64,
+        },
     };
 
     for entry in build_log_entries(lineage, process) {
@@ -126,7 +153,6 @@ pub fn log_lineage_object_deletion(ctx: &Arc<QueryContext>, object_id: u64) {
         object_id,
         query_id: ctx.get_id(),
         event_time: convert_query_log_timestamp(SystemTime::now()),
-        query_kind: ctx.get_query_kind().to_string(),
     };
     match serde_json::to_string(&entry) {
         Ok(json) => info!(target: LINEAGE_LOG_TARGET, "{}", json),
@@ -157,39 +183,28 @@ fn build_log_entries(
             }
 
             // Stages are object-level lineage endpoints. Their file fields are not stable schema
-            // columns, so COPY edges intentionally carry empty column maps.
-            let column_pairs = if source.object_type == "STAGE" || target.object_type == "STAGE" {
-                BTreeSet::new()
-            } else {
-                lineage_source
-                    .columns
-                    .into_iter()
-                    .map(|edge| {
-                        (
-                            column_address(&source, edge.source),
-                            column_address(&target, edge.target),
-                        )
-                    })
-                    .collect::<BTreeSet<_>>()
-            };
-            let (source_to_target_columns, target_to_source_columns) = column_maps(&column_pairs);
+            // columns, so COPY edges intentionally carry no column lineage.
+            let (column_lineage, column_pairs) =
+                if source.object_type == "STAGE" || target.object_type == "STAGE" {
+                    (None, BTreeSet::new())
+                } else {
+                    let column_lineage =
+                        build_column_lineage(&source, &target, lineage_source.columns.into_iter());
+                    let column_pairs = canonical_column_pairs(&column_lineage);
+                    (Some(column_lineage), column_pairs)
+                };
 
             entries.push(LineageLogEntry {
                 operation: "UPSERT_EDGE",
-                query_id: process.query_id.clone(),
                 event_time: process.event_time,
-                query_kind: process.query_kind.clone(),
-                query_text: process.query_text.clone(),
+                user_name: process.user_name.clone(),
                 query_parameterized_hash: process.query_parameterized_hash.clone(),
-                query_duration_ms: process.query_duration_ms,
-                written_rows: process.written_rows,
-                scan_rows: process.scan_rows,
+                query_info: process.query_info.clone(),
                 lineage_kind,
                 source: source.clone(),
                 target: target.clone(),
-                column_lineage_hash: column_lineage_hash(&column_pairs),
-                source_to_target_columns,
-                target_to_source_columns,
+                column_lineage_hash: column_lineage_hash(column_lineage.as_ref(), &column_pairs),
+                column_lineage,
             });
         }
     }
@@ -262,42 +277,98 @@ fn endpoint_from_relation(
     }
 }
 
-fn column_address(endpoint: &LineageEndpoint, column: QueryLineageColumn) -> String {
+fn column_address_kind(endpoint: &LineageEndpoint) -> &'static str {
     // View output column ids are query-plan ordinals rather than stable schema ids. Keep view
     // columns name-addressed even though the view object itself has a stable table id.
     if endpoint.object_type == "VIEW" || endpoint.address_kind == "NAME" {
-        column.name
+        "NAME"
     } else {
-        column.id.to_string()
+        "ID"
     }
 }
 
-fn column_maps(
+fn build_column_lineage(
+    source: &LineageEndpoint,
+    target: &LineageEndpoint,
+    columns: impl Iterator<Item = databend_common_sql::QueryLineageColumnEdge>,
+) -> ColumnLineage {
+    let source_kind = column_address_kind(source);
+    let target_kind = column_address_kind(target);
+    let mut mappings =
+        BTreeMap::<String, (ColumnIdentity, BTreeMap<String, ColumnIdentity>)>::new();
+
+    for edge in columns {
+        let source_column = column_identity(source_kind, edge.source);
+        let target_column = column_identity(target_kind, edge.target);
+        let source_key = canonical_column_address(source_kind, &source_column);
+        let target_key = canonical_column_address(target_kind, &target_column);
+        mappings
+            .entry(target_key)
+            .or_insert_with(|| (target_column, BTreeMap::new()))
+            .1
+            .insert(source_key, source_column);
+    }
+
+    ColumnLineage {
+        source_column_address_kind: source_kind,
+        target_column_address_kind: target_kind,
+        mappings: mappings
+            .into_values()
+            .map(|(target, sources)| ColumnLineageMapping {
+                target,
+                sources: sources.into_values().collect(),
+            })
+            .collect(),
+    }
+}
+
+fn column_identity(kind: &str, column: QueryLineageColumn) -> ColumnIdentity {
+    ColumnIdentity {
+        name: column.name,
+        id: (kind == "ID").then_some(column.id),
+    }
+}
+
+fn canonical_column_address(kind: &str, column: &ColumnIdentity) -> String {
+    if kind == "ID" {
+        column
+            .id
+            .expect("ID-addressed lineage column must have an id")
+            .to_string()
+    } else {
+        column.name.clone()
+    }
+}
+
+fn canonical_column_pairs(column_lineage: &ColumnLineage) -> BTreeSet<(String, String)> {
+    let mut pairs = BTreeSet::new();
+    for mapping in &column_lineage.mappings {
+        let target =
+            canonical_column_address(column_lineage.target_column_address_kind, &mapping.target);
+        for source in &mapping.sources {
+            pairs.insert((
+                canonical_column_address(column_lineage.source_column_address_kind, source),
+                target.clone(),
+            ));
+        }
+    }
+    pairs
+}
+
+fn column_lineage_hash(
+    column_lineage: Option<&ColumnLineage>,
     column_pairs: &BTreeSet<(String, String)>,
-) -> (BTreeMap<String, Vec<String>>, BTreeMap<String, Vec<String>>) {
-    let mut source_to_target = BTreeMap::<String, BTreeSet<String>>::new();
-    let mut target_to_source = BTreeMap::<String, BTreeSet<String>>::new();
-    for (source, target) in column_pairs {
-        source_to_target
-            .entry(source.clone())
-            .or_default()
-            .insert(target.clone());
-        target_to_source
-            .entry(target.clone())
-            .or_default()
-            .insert(source.clone());
-    }
-
-    let into_map = |map: BTreeMap<String, BTreeSet<String>>| {
-        map.into_iter()
-            .map(|(key, values)| (key, values.into_iter().collect()))
-            .collect()
-    };
-    (into_map(source_to_target), into_map(target_to_source))
-}
-
-fn column_lineage_hash(column_pairs: &BTreeSet<(String, String)>) -> String {
+) -> String {
     let mut hasher = Sha256::new();
+    if let Some(column_lineage) = column_lineage {
+        for value in [
+            column_lineage.source_column_address_kind,
+            column_lineage.target_column_address_kind,
+        ] {
+            hasher.update((value.len() as u64).to_be_bytes());
+            hasher.update(value.as_bytes());
+        }
+    }
     for (source, target) in column_pairs {
         for value in [source, target] {
             hasher.update((value.len() as u64).to_be_bytes());
@@ -316,7 +387,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_log_entries_uses_bidirectional_column_maps() {
+    fn test_build_log_entries_uses_canonical_column_lineage() {
         let captured = lineage(
             QueryLineageKind::Dml,
             relation("source", Some(10)),
@@ -328,32 +399,48 @@ mod tests {
             ],
         );
 
-        let entries = build_log_entries(captured, process("query-1", "INSERT", 1));
+        let entries = build_log_entries(captured, process("query-1", 1));
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].operation, "UPSERT_EDGE");
         assert_eq!(
-            entries[0].query_text,
+            entries[0].query_info.query_text,
             "INSERT INTO dst SELECT 'quoted'\nFROM src"
         );
         assert_eq!(entries[0].query_parameterized_hash, "parameterized-hash");
-        assert_eq!(entries[0].query_duration_ms, 123);
-        assert_eq!(entries[0].written_rows, 10);
-        assert_eq!(entries[0].scan_rows, 20);
+        assert_eq!(entries[0].query_info.query_duration_ms, 123);
+        assert_eq!(entries[0].query_info.written_rows, 10);
+        assert_eq!(entries[0].query_info.scan_rows, 20);
         let json = serde_json::to_value(&entries[0]).expect("lineage entry must serialize");
+        assert_eq!(json["user_name"], "test-user");
+        assert_eq!(json["query_info"]["query_id"], "query-1");
         assert_eq!(
-            json["query_text"],
+            json["query_info"]["query_text"],
             "INSERT INTO dst SELECT 'quoted'\nFROM src"
         );
+        assert!(json.get("query_id").is_none());
+        assert!(json.get("query_kind").is_none());
         assert_eq!(
-            entries[0].source_to_target_columns,
-            BTreeMap::from([
-                ("1".to_string(), vec!["3".to_string()]),
-                ("2".to_string(), vec!["3".to_string()]),
-            ])
-        );
-        assert_eq!(
-            entries[0].target_to_source_columns,
-            BTreeMap::from([("3".to_string(), vec!["1".to_string(), "2".to_string()],)])
+            entries[0].column_lineage,
+            Some(ColumnLineage {
+                source_column_address_kind: "ID",
+                target_column_address_kind: "ID",
+                mappings: vec![ColumnLineageMapping {
+                    target: ColumnIdentity {
+                        name: "x".to_string(),
+                        id: Some(3),
+                    },
+                    sources: vec![
+                        ColumnIdentity {
+                            name: "a".to_string(),
+                            id: Some(1),
+                        },
+                        ColumnIdentity {
+                            name: "b".to_string(),
+                            id: Some(2),
+                        },
+                    ],
+                }],
+            })
         );
 
         let reordered = lineage(
@@ -362,16 +449,31 @@ mod tests {
             relation("target", Some(20)),
             vec![edge(2, "b", 3, "x"), edge(1, "a", 3, "x")],
         );
-        let mut latest_process = process("query-2", "INSERT", 2);
-        latest_process.query_text = "INSERT INTO dst SELECT b, a FROM src".to_string();
+        let mut latest_process = process("query-2", 2);
+        latest_process.query_info.query_text = "INSERT INTO dst SELECT b, a FROM src".to_string();
         latest_process.query_parameterized_hash = "different-parameterized-hash".to_string();
-        latest_process.query_duration_ms = 456;
-        latest_process.written_rows = 30;
-        latest_process.scan_rows = 40;
+        latest_process.query_info.query_duration_ms = 456;
+        latest_process.query_info.written_rows = 30;
+        latest_process.query_info.scan_rows = 40;
         let reordered = build_log_entries(reordered, latest_process);
         assert_eq!(
             entries[0].column_lineage_hash,
             reordered[0].column_lineage_hash
+        );
+
+        let renamed = lineage(
+            QueryLineageKind::Dml,
+            relation("source", Some(10)),
+            relation("target", Some(20)),
+            vec![
+                edge(2, "renamed_b", 3, "renamed_x"),
+                edge(1, "renamed_a", 3, "renamed_x"),
+            ],
+        );
+        let renamed = build_log_entries(renamed, process("query-3", 3));
+        assert_eq!(
+            entries[0].column_lineage_hash, renamed[0].column_lineage_hash,
+            "display names must not affect an ID-addressed pattern"
         );
     }
 
@@ -384,16 +486,25 @@ mod tests {
             vec![edge(1, "a", 3, "x")],
         );
 
-        let entries = build_log_entries(lineage, process("query-1", "CREATE_VIEW", 1));
+        let entries = build_log_entries(lineage, process("query-1", 1));
         assert_eq!(entries[0].source.address_kind, "NAME");
         assert_eq!(entries[0].target.address_kind, "ID");
         assert_eq!(
-            entries[0].source_to_target_columns,
-            BTreeMap::from([("a".to_string(), vec!["x".to_string()],)])
-        );
-        assert_eq!(
-            entries[0].target_to_source_columns,
-            BTreeMap::from([("x".to_string(), vec!["a".to_string()],)])
+            entries[0].column_lineage,
+            Some(ColumnLineage {
+                source_column_address_kind: "NAME",
+                target_column_address_kind: "NAME",
+                mappings: vec![ColumnLineageMapping {
+                    target: ColumnIdentity {
+                        name: "x".to_string(),
+                        id: None,
+                    },
+                    sources: vec![ColumnIdentity {
+                        name: "a".to_string(),
+                        id: None,
+                    }],
+                }],
+            })
         );
     }
 
@@ -403,11 +514,11 @@ mod tests {
         let lineage = lineage(QueryLineageKind::Dml, same.clone(), same, vec![edge(
             1, "a", 1, "a",
         )]);
-        assert!(build_log_entries(lineage, process("query-1", "INSERT", 1)).is_empty());
+        assert!(build_log_entries(lineage, process("query-1", 1)).is_empty());
     }
 
     #[test]
-    fn test_copy_stage_uses_name_addressing_without_column_maps() {
+    fn test_copy_stage_uses_name_addressing_without_column_lineage() {
         let lineage = lineage(
             QueryLineageKind::Dml,
             relation_with_kind("named_stage", None, QueryLineageRelationKind::Stage),
@@ -415,14 +526,13 @@ mod tests {
             vec![edge(1, "file_col", 3, "x")],
         );
 
-        let entries = build_log_entries(lineage, process("query-1", "COPY", 1));
+        let entries = build_log_entries(lineage, process("query-1", 1));
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].source.object_type, "STAGE");
         assert_eq!(entries[0].source.address_kind, "NAME");
         assert_eq!(entries[0].source.catalog_type, None);
         assert_eq!(entries[0].source.lineage_key, "STAGE::NAME::named_stage");
-        assert!(entries[0].source_to_target_columns.is_empty());
-        assert!(entries[0].target_to_source_columns.is_empty());
+        assert_eq!(entries[0].column_lineage, None);
     }
 
     #[test]
@@ -442,12 +552,25 @@ mod tests {
             vec![edge(1, "a", 3, "x")],
         );
 
-        let entries = build_log_entries(lineage, process("query-1", "INSERT", 1));
+        let entries = build_log_entries(lineage, process("query-1", 1));
         assert_eq!(entries[0].source.catalog_type, Some("ICEBERG"));
         assert_eq!(entries[0].source.address_kind, "NAME");
         assert_eq!(
-            entries[0].source_to_target_columns,
-            BTreeMap::from([("a".to_string(), vec!["3".to_string()])])
+            entries[0].column_lineage,
+            Some(ColumnLineage {
+                source_column_address_kind: "NAME",
+                target_column_address_kind: "ID",
+                mappings: vec![ColumnLineageMapping {
+                    target: ColumnIdentity {
+                        name: "x".to_string(),
+                        id: Some(3),
+                    },
+                    sources: vec![ColumnIdentity {
+                        name: "a".to_string(),
+                        id: None,
+                    }],
+                }],
+            })
         );
     }
 
@@ -469,16 +592,18 @@ mod tests {
         }
     }
 
-    fn process(query_id: &str, query_kind: &str, event_time: i64) -> LineageProcessMetadata {
+    fn process(query_id: &str, event_time: i64) -> LineageProcessMetadata {
         LineageProcessMetadata {
-            query_id: query_id.to_string(),
             event_time,
-            query_kind: query_kind.to_string(),
-            query_text: "INSERT INTO dst SELECT 'quoted'\nFROM src".to_string(),
+            user_name: "test-user".to_string(),
             query_parameterized_hash: "parameterized-hash".to_string(),
-            query_duration_ms: 123,
-            written_rows: 10,
-            scan_rows: 20,
+            query_info: LineageQueryInfo {
+                query_id: query_id.to_string(),
+                query_text: "INSERT INTO dst SELECT 'quoted'\nFROM src".to_string(),
+                query_duration_ms: 123,
+                written_rows: 10,
+                scan_rows: 20,
+            },
         }
     }
 

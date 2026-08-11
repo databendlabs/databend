@@ -179,16 +179,25 @@ mod tests {
                 .create
                 .contains("column_lineage_hash STRING NOT NULL")
         );
-        assert!(lineage.create.contains("source_to_target_columns MAP"));
-        assert!(lineage.create.contains("target_to_source_columns MAP"));
         for field in [
-            "query_text STRING",
+            "updated_on TIMESTAMP",
+            "user_name STRING",
             "query_parameterized_hash STRING",
-            "query_duration_ms Int64",
-            "written_rows UInt64",
-            "scan_rows UInt64",
+            "query_info VARIANT",
+            "column_lineage VARIANT",
         ] {
             assert!(lineage.create.contains(field), "missing field {field}");
+        }
+        for removed in [
+            "query_kind STRING",
+            "query_text STRING",
+            "source_to_target_columns MAP",
+            "target_to_source_columns MAP",
+        ] {
+            assert!(
+                !lineage.create.contains(removed),
+                "obsolete field {removed}"
+            );
         }
         assert!(
             lineage
@@ -199,11 +208,11 @@ mod tests {
         assert!(lineage.create.contains("target_catalog_type STRING"));
         assert!(lineage.transform.contains("AS source_catalog_type"));
         for field in [
-            "AS query_text",
+            "AS updated_on",
+            "AS user_name",
             "AS query_parameterized_hash",
-            "AS query_duration_ms",
-            "AS written_rows",
-            "AS scan_rows",
+            "AS query_info",
+            "AS column_lineage",
         ] {
             assert!(
                 lineage.transform.contains(field),
@@ -211,6 +220,7 @@ mod tests {
             );
         }
         assert!(lineage.delete.contains("lineage_kind = 'DML'"));
+        assert!(lineage.delete.contains("updated_on <"));
         assert!(
             lineage
                 .transform
@@ -219,6 +229,11 @@ mod tests {
         assert!(lineage.transform.contains(
             "PARTITION BY m['source']['lineage_key']::STRING, m['target']['lineage_key']::STRING, m['lineage_kind']::STRING, m['column_lineage_hash']::STRING"
         ));
+        assert!(
+            lineage
+                .transform
+                .contains("m['query_info']['query_id']::STRING DESC")
+        );
         assert!(lineage.transform.contains(
             "target.source_lineage_key = source.source_lineage_key AND target.target_lineage_key = source.target_lineage_key AND target.lineage_kind = source.lineage_kind"
         ));
