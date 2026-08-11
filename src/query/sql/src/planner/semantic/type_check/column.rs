@@ -173,11 +173,9 @@ where A: TypeCheckAdapter
                 }
             }
             NameResolutionResult::InternalColumn(column) => {
-                // add internal column binding into `BindContext`
                 let column = self.bind_context.add_internal_column_binding(
                     &column,
                     self.metadata.clone(),
-                    None,
                     true,
                 )?;
                 let data_type = *column.data_type.clone();

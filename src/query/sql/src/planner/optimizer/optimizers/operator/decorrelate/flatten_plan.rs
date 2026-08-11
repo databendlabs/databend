@@ -1284,8 +1284,12 @@ impl SubqueryDecorrelatorOptimizer {
             .copied()
             .map(|col| {
                 let column_entry = metadata.column(col).clone();
-                let derived_index =
-                    metadata.add_derived_column(column_entry.name(), column_entry.data_type());
+                let derived_index = match column_entry {
+                    ColumnEntry::InternalColumn(column) => {
+                        metadata.add_internal_column(column.table_index, column.internal_column)
+                    }
+                    _ => metadata.add_derived_column(column_entry.name(), column_entry.data_type()),
+                };
                 derived_columns.record(col, derived_index);
                 derived_index
             })

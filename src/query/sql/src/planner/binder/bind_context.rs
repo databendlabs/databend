@@ -146,6 +146,8 @@ pub struct InternalColumnBinding {
     pub database_name: Option<String>,
     /// Table name of this `InternalColumnBinding` in current context
     pub table_name: Option<String>,
+    /// Owner table, if it has already been resolved.
+    pub table_index: Option<IndexType>,
 
     pub internal_column: InternalColumn,
 }
@@ -693,14 +695,27 @@ impl BindContext {
             return;
         }
 
-        // look up internal column
+        // Look up an internal column only when this scope contains a matching table. If it does
+        // not, recursive name resolution must continue with the parent scope.
         if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(&column.name) {
-            let column_binding = InternalColumnBinding {
-                database_name: database.map(|n| n.to_owned()),
-                table_name: table.map(|n| n.to_owned()),
-                internal_column,
-            };
-            result.push(NameResolutionResult::InternalColumn(column_binding));
+            for table_index in bind_context
+                .columns
+                .iter()
+                .filter(|binding| {
+                    database.is_none_or(|db| binding.database_name.as_deref() == Some(db))
+                        && table.is_none_or(|table| binding.table_name.as_deref() == Some(table))
+                })
+                .filter_map(|binding| binding.table_index)
+            {
+                result.push(NameResolutionResult::InternalColumn(
+                    InternalColumnBinding {
+                        database_name: database.map(ToOwned::to_owned),
+                        table_name: table.map(ToOwned::to_owned),
+                        table_index: Some(table_index),
+                        internal_column: internal_column.clone(),
+                    },
+                ));
+            }
         }
     }
 
@@ -902,30 +917,33 @@ impl BindContext {
         &mut self,
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
-        table_index: Option<IndexType>,
         visible: bool,
     ) -> Result<ColumnBinding> {
         let column_id = column_binding.internal_column.column_id();
-        let table_index = if let Some(table_index) = table_index {
+        let table_index = if let Some(table_index) = column_binding.table_index {
             table_index
         } else {
             self.get_internal_column_table_index(column_binding)?
         };
+        // Only local internal columns belong in this scope's visible column bindings. Correlated
+        // internal columns are tracked in `bound_internal_columns` but must not pollute the inner
+        // scope's name resolution.
+        let add_to_context = self
+            .columns
+            .iter()
+            .any(|column| column.table_index == Some(table_index));
 
-        let (column_index, is_new) =
-            match self.bound_internal_columns.entry((table_index, column_id)) {
-                btree_map::Entry::Vacant(e) => {
-                    let mut metadata = metadata.write();
-                    let column_index = metadata
-                        .add_internal_column(table_index, column_binding.internal_column.clone());
-                    e.insert(column_index);
-                    (column_index, true)
-                }
-                btree_map::Entry::Occupied(e) => {
-                    let column_index = e.get();
-                    (*column_index, false)
-                }
-            };
+        let key = (table_index, column_id);
+        let inherited =
+            std::iter::successors(self.parent.as_deref(), |context| context.parent.as_deref())
+                .find_map(|context| context.bound_internal_columns.get(&key).copied());
+        let column_index = *self.bound_internal_columns.entry(key).or_insert_with(|| {
+            inherited.unwrap_or_else(|| {
+                metadata
+                    .write()
+                    .add_internal_column(table_index, column_binding.internal_column.clone())
+            })
+        });
 
         let metadata = metadata.read();
         let table = metadata.table(table_index);
@@ -953,8 +971,12 @@ impl BindContext {
         .table_index(Some(table_index))
         .build();
 
-        if is_new {
-            debug_assert!(!self.columns.iter().any(|c| c == &column_binding));
+        if add_to_context
+            && !self
+                .columns
+                .iter()
+                .any(|column| column.index == column_index)
+        {
             self.columns.push(column_binding.clone());
         }
 

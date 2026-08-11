@@ -38,6 +38,7 @@ use super::FullTypeCheckAdapter;
 use super::TypeCheckSubqueryPlan;
 use super::TypeChecker;
 use crate::BindContext;
+use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::binder::Binder;
@@ -428,6 +429,19 @@ where A: super::TypeCheckAdapter
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
         let rel_prop = rel_expr.derive_relational_prop()?;
+
+        let metadata = self.metadata.read();
+        for &column_index in &rel_prop.outer_columns {
+            if let Some(ColumnEntry::InternalColumn(column)) =
+                metadata.columns().get(column_index.as_usize())
+            {
+                self.bind_context.bound_internal_columns.insert(
+                    (column.table_index, column.internal_column.column_id()),
+                    column_index,
+                );
+            }
+        }
+        drop(metadata);
 
         if typ == SubqueryType::Scalar
             && contain_agg == Some(true)

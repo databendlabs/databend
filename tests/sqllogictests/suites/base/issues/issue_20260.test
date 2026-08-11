@@ -1,0 +1,70 @@
+statement ok
+DROP TABLE IF EXISTS issue_20260;
+
+statement ok
+DROP TABLE IF EXISTS issue_20260_aux;
+
+statement ok
+CREATE TABLE issue_20260(a INT);
+
+statement ok
+ALTER TABLE issue_20260 SET OPTIONS(change_tracking = true);
+
+statement ok
+CREATE TABLE issue_20260_aux(a INT);
+
+statement ok
+INSERT INTO issue_20260 VALUES (1), (2);
+
+statement ok
+INSERT INTO issue_20260_aux VALUES (10), (20);
+
+# Qualified internal column from the outer scope.
+query I
+SELECT count(*) FROM issue_20260 AS t
+WHERE EXISTS (SELECT 1 WHERE t._row_id IS NOT NULL);
+----
+2
+
+# Unqualified internal column falls back to the only outer table.
+query I
+SELECT count(*) FROM issue_20260 AS t
+WHERE EXISTS (SELECT 1 WHERE _row_id IS NOT NULL);
+----
+2
+
+# Outer resolution skips the inner table without polluting nearest-scope lookup.
+query I
+SELECT count(*) FROM issue_20260 AS t
+WHERE EXISTS (
+    SELECT 1 FROM issue_20260_aux AS s
+    WHERE t._row_id IS NOT NULL AND _row_id = s._row_id
+);
+----
+2
+
+# Repeated references reuse the same internal-column symbol.
+query I
+SELECT count(*) FROM issue_20260 AS t
+WHERE EXISTS (SELECT 1 WHERE t._row_id > 0)
+  AND EXISTS (SELECT 1 WHERE t._row_id > 1);
+----
+2
+
+# change$row_id follows the same owner-resolution path.
+query I
+SELECT count(*) FROM issue_20260 AS t
+WHERE EXISTS (SELECT 1 WHERE length(t.change$row_id) = 38);
+----
+2
+
+# An unqualified internal column is ambiguous with multiple outer tables.
+statement error (?s)1065.*ambiguous
+SELECT * FROM issue_20260 AS t, issue_20260_aux AS s
+WHERE EXISTS (SELECT 1 WHERE _row_id > 0);
+
+statement ok
+DROP TABLE issue_20260;
+
+statement ok
+DROP TABLE issue_20260_aux;
