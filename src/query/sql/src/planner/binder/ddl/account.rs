@@ -39,8 +39,6 @@ use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
-use databend_common_meta_app::principal::ProcedureIdentity;
-use databend_common_meta_app::principal::ProcedureNameIdent;
 use databend_common_meta_app::principal::PublicKeyEntry;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
@@ -55,6 +53,7 @@ use crate::Binder;
 use crate::binder::show::get_show_options;
 use crate::binder::util::illegal_ident_name;
 use crate::meta_service_error;
+use crate::planner::binder::ddl::procedure::generate_procedure_name_ident;
 use crate::plans::AlterUserPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::GrantPrivilegePlan;
@@ -210,13 +209,11 @@ impl Binder {
             AccountMgrLevel::Connection(c) => Ok(GrantObject::Connection(c.clone())),
             AccountMgrLevel::Sequence(s) => Ok(GrantObject::Sequence(s.clone())),
             AccountMgrLevel::Procedure(p) => {
+                let procedure_ident = generate_procedure_name_ident(&tenant, p)?;
                 let procedure = UserApiProvider::instance()
                     .procedure_api(&tenant)
                     .get_procedure(&GetProcedureReq {
-                        inner: ProcedureNameIdent::new(
-                            tenant.clone(),
-                            ProcedureIdentity::from(p.clone()),
-                        ),
+                        inner: procedure_ident,
                     })
                     .await
                     .map_err(meta_service_error)?;
@@ -303,13 +300,11 @@ impl Binder {
             AccountMgrLevel::Connection(c) => Ok(vec![GrantObject::Connection(c.clone())]),
             AccountMgrLevel::Sequence(s) => Ok(vec![GrantObject::Sequence(s.clone())]),
             AccountMgrLevel::Procedure(p) => {
+                let procedure_ident = generate_procedure_name_ident(&tenant, p)?;
                 let procedure = UserApiProvider::instance()
                     .procedure_api(&tenant)
                     .get_procedure(&GetProcedureReq {
-                        inner: ProcedureNameIdent::new(
-                            tenant.clone(),
-                            ProcedureIdentity::from(p.clone()),
-                        ),
+                        inner: procedure_ident,
                     })
                     .await
                     .map_err(meta_service_error)?;
@@ -747,12 +742,12 @@ impl Binder {
                 )
             }
             GrantObjectName::Procedure(p) => {
-                let procedure_ident = ProcedureIdentity::from(p.clone());
                 let tenant = self.ctx.get_tenant();
+                let procedure_ident = generate_procedure_name_ident(&tenant, p)?;
                 let procedure = UserApiProvider::instance()
                     .procedure_api(&tenant)
                     .get_procedure(&GetProcedureReq {
-                        inner: ProcedureNameIdent::new(tenant, procedure_ident),
+                        inner: procedure_ident,
                     })
                     .await
                     .map_err(meta_service_error)?;
