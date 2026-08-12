@@ -1,0 +1,82 @@
+=== recent_fact_filter_changes_join_order ===
+description: A recent-time predicate should not estimate all historical fact rows as selected.
+sql: SELECT count()
+FROM fact_events AS e
+JOIN customers AS c ON e.customer_id = c.customer_id
+JOIN segments AS s ON c.segment_id = s.segment_id
+WHERE e.event_time >= subtract_hours(now(), 24)
+raw_plan:
+EvalScalar
+├── scalars: [count() (#6) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#6)]
+    └── Filter
+        ├── filters: [gte(fact_events.event_time (#2), subtract_hours(now(), 24))]
+        └── Join(Inner)
+            ├── build keys: [segments.segment_id (#5)]
+            ├── probe keys: [customers.segment_id (#4)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.segments (#2)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Join(Inner)
+                ├── build keys: [customers.customer_id (#3)]
+                ├── probe keys: [fact_events.customer_id (#1)]
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.customers (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.fact_events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+estimated_rows_before_join_reorder:
+EvalScalar: 1.00
+  Aggregate: 1.00
+    Filter: 0.00
+      Join: 1000000000.00
+        Join: 1000000000.00
+          Scan(fact_events): 1000000000.00
+          Scan(customers): 100000000.00
+        Scan(segments): 5000000.00
+optimized_plan:
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [count() AS (#6)]
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#6)]
+    └── Exchange(Merge)
+        └── Join(Inner)
+            ├── build keys: [customers.segment_id (#4)]
+            ├── probe keys: [segments.segment_id (#5)]
+            ├── other filters: []
+            ├── Exchange(Broadcast)
+            │   └── Join(Inner)
+            │       ├── build keys: [fact_events.customer_id (#1)]
+            │       ├── probe keys: [customers.customer_id (#3)]
+            │       ├── other filters: []
+            │       ├── Exchange(Broadcast)
+            │       │   └── Scan
+            │       │       ├── table: default.fact_events (#0)
+            │       │       ├── filters: [gte(fact_events.event_time (#2), subtract_hours(now(), 24))]
+            │       │       ├── order by: []
+            │       │       └── limit: NONE
+            │       └── Scan
+            │           ├── table: default.customers (#1)
+            │           ├── filters: []
+            │           ├── order by: []
+            │           └── limit: NONE
+            └── Scan
+                ├── table: default.segments (#2)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+

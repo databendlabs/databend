@@ -30,6 +30,8 @@ use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use jiff::Zoned;
+use jiff::tz::TimeZone;
 
 use super::constraint::ConstraintContext;
 use super::constraint::ValueConstraint;
@@ -109,6 +111,21 @@ impl SelectivityEstimator {
     }
 
     pub fn apply(&mut self, predicates: &[ScalarExpr]) -> Result<f64> {
+        // Selectivity is an estimate, but using the Unix epoch for time-dependent predicates can
+        // make current data look entirely selected or rejected. Capture the current time for this
+        // estimate while leaving other context fields at their existing defaults.
+        let func_ctx = FunctionContext {
+            now: Zoned::now().with_time_zone(TimeZone::UTC),
+            ..FunctionContext::default()
+        };
+        self.apply_with_context(predicates, &func_ctx)
+    }
+
+    fn apply_with_context(
+        &mut self,
+        predicates: &[ScalarExpr],
+        func_ctx: &FunctionContext,
+    ) -> Result<f64> {
         if self.cardinality == StatCardinality::Exact(0) {
             self.clear_column_stats_for_empty_result();
             return Ok(0.0);
@@ -125,12 +142,8 @@ impl SelectivityEstimator {
         };
         let expr = scalar_expr.as_expr()?;
         let input_domains = self.build_input_domains(&expr)?;
-        let (expr, output_domain) = ConstantFolder::fold_with_domain(
-            &expr,
-            &input_domains,
-            &FunctionContext::default(),
-            &BUILTIN_FUNCTIONS,
-        );
+        let (expr, output_domain) =
+            ConstantFolder::fold_with_domain(&expr, &input_domains, func_ctx, &BUILTIN_FUNCTIONS);
 
         // ConstantFolder owns expression/domain reasoning: boolean shortcuts and
         // contradictions visible from input column domains. It can still leave
@@ -1153,4 +1166,95 @@ fn boolean_comparison_selectivity(op: ComparisonOp, constant: bool) -> Selectivi
         (ComparisonOp::GTE, false) | (ComparisonOp::LTE, true) => MAX_SELECTIVITY,
     };
     Selectivity::N(selectivity)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use databend_common_expression::stat_distribution::NdvEstimate;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_statistics::Datum;
+    use jiff::Timestamp;
+
+    use super::*;
+    use crate::ColumnBindingBuilder;
+    use crate::Visibility;
+    use crate::plans::BoundColumnRef;
+    use crate::plans::ConstantExpr;
+
+    fn function_expr(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: func_name.to_string(),
+            params: vec![],
+            arguments,
+        })
+    }
+
+    #[test]
+    fn timestamp_current_time_selectivity_is_timezone_independent() -> Result<()> {
+        let event_time = ColumnBindingBuilder::new(
+            "event_time".to_string(),
+            Symbol::new(0),
+            Box::new(DataType::Timestamp),
+            Visibility::Visible,
+        )
+        .build();
+        let predicate = function_expr("gte", vec![
+            ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: event_time,
+            }),
+            function_expr("subtract_hours", vec![
+                function_expr("now", vec![]),
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Number(NumberScalar::Int64(24)),
+                }),
+            ]),
+        ]);
+
+        let instant = Timestamp::from_str("2025-01-01T04:00:00Z").unwrap();
+        let utc = TimeZone::UTC;
+        let shanghai = TimeZone::get("Asia/Shanghai").unwrap();
+        let utc_ctx = FunctionContext {
+            tz: utc.clone(),
+            now: instant.to_zoned(utc),
+            ..FunctionContext::default()
+        };
+        let shanghai_ctx = FunctionContext {
+            tz: shanghai.clone(),
+            now: instant.to_zoned(shanghai),
+            ..FunctionContext::default()
+        };
+
+        let column_stats = |min: &str, max: &str| {
+            let min = Timestamp::from_str(min).unwrap();
+            let max = Timestamp::from_str(max).unwrap();
+            ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+                min: Datum::Int(min.as_microsecond()),
+                max: Datum::Int(max.as_microsecond()),
+                ndv: NdvEstimate::exact(1_000.0),
+                null_count: StatCount::exact(0),
+                histogram: None,
+            })])
+        };
+        let estimate = |column_stats: ColumnStatSet, func_ctx: &FunctionContext| {
+            let mut estimator =
+                SelectivityEstimator::new(column_stats, StatCardinality::exact(1_000));
+            estimator.apply_with_context(std::slice::from_ref(&predicate), func_ctx)
+        };
+
+        let historical = column_stats("2024-01-01T00:00:00Z", "2024-12-01T00:00:00Z");
+        assert_eq!(estimate(historical.clone(), &utc_ctx)?, 0.0);
+        assert_eq!(estimate(historical, &shanghai_ctx)?, 0.0);
+
+        // The cutoff is 2024-12-31 04:00 UTC. This point remains selected even when `now` carries
+        // the Asia/Shanghai zone; interpreting its 12:00 local clock reading as UTC would reject it.
+        let boundary = column_stats("2024-12-31T08:00:00Z", "2024-12-31T08:00:00Z");
+        assert_eq!(estimate(boundary.clone(), &utc_ctx)?, 1_000.0);
+        assert_eq!(estimate(boundary, &shanghai_ctx)?, 1_000.0);
+        Ok(())
+    }
 }

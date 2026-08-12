@@ -21,6 +21,7 @@ use databend_common_sql_test_support::HistogramStats;
 use databend_common_statistics::Histogram;
 
 mod collect_statistics;
+mod current_time_selectivity;
 mod decorrelate_correlated_aliases;
 mod eager_aggregation;
 mod join_cardinality;
