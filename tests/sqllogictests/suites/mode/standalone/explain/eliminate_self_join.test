@@ -837,6 +837,8 @@ HashJoin
             ├── apply join filters: [#0]
             └── estimated rows: 1.00
 
+# Same filter set written in a different AND order on the two branches:
+# predicate signatures are sorted, so ordering must not prevent elimination.
 query T
 explain
 select t3.c1, t3.c2
@@ -859,11 +861,11 @@ Filter
 ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
 ├── filters: [is_true(c1 (#0) = t3.c1 (#0))]
 ├── estimated rows: 0.20
-        └── Filter
+└── Filter
     ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
     ├── filters: [is_true(sum(c2) (#2) > 0)]
     ├── estimated rows: 1.00
-        └── AggregateFinal
+    └── AggregateFinal
         ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
         ├── group by: [c1]
         ├── aggregate functions: [sum(c2)]
@@ -880,7 +882,7 @@ Filter
                 ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>,
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [t_nullable.c2 (#1) > 15 and t_nullable.c1 (#0) < 3], limit: NONE]
                 └── estimated rows: 2.00
 
@@ -904,6 +906,7 @@ order by t3.c1
 ----
 2 20
 
+# Same predicate written with flipped comparison syntax on one branch.
 query T
 explain
 select t3.c1, t3.c2
@@ -926,11 +929,11 @@ Filter
 ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
 ├── filters: [is_true(c1 (#0) = t3.c1 (#0))]
 ├── estimated rows: 0.26
-        └── Filter
+└── Filter
     ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
     ├── filters: [is_true(sum(c2) (#2) > 0)]
     ├── estimated rows: 1.28
-        └── AggregateFinal
+    └── AggregateFinal
         ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
         ├── group by: [c1]
         ├── aggregate functions: [sum(c2)]
@@ -947,10 +950,12 @@ Filter
                 ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>,
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [t_nullable.c2 (#1) > 15], limit: NONE]
                 └── estimated rows: 4.27
 
+# A filtered CTE referenced twice: with inlining the same predicate is pushed
+# into both scans, so the self join is eliminated.
 statement ok
 set enable_auto_materialize_cte = 0
 
@@ -966,11 +971,11 @@ EvalScalar
 ├── output columns: [t_nullable.c1 (#0), sum(c2) (#2)]
 ├── expressions: [c1 (#3), sum(c2) (#5)]
 ├── estimated rows: 0.26
-        └── Filter
+└── Filter
     ├── output columns: [sum(c2) (#5), t_nullable.c1 (#3)]
     ├── filters: [is_true(c1 (#3) = b.c1 (#3))]
     ├── estimated rows: 0.26
-        └── Filter
+    └── Filter
         ├── output columns: [sum(c2) (#5), t_nullable.c1 (#3)]
         ├── filters: [is_true(sum(c2) (#5) > 25)]
         ├── estimated rows: 1.28
@@ -991,7 +996,7 @@ EvalScalar
                     ├── read size: < 1 KiB
                     ├── partitions total: 1
                     ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignor
+                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                     ├── push downs: [filters: [t_nullable.c2 (#4) > 15], limit: NONE]
                     └── estimated rows: 4.27
 

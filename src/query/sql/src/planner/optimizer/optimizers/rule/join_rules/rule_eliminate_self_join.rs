@@ -88,11 +88,11 @@ struct Candidate {
     group_key: GroupKeyItemSignature,
     group_key_index: Symbol,
     agg_func_indexes: Vec<(AggFuncSignature, Symbol)>,
-    /// Canonical signatures of the scan's predicates (`push_down_predicates`
-    /// + prewhere), normalized to base-column identity and sorted. Two
-    /// candidates with equal signatures aggregate the same row set, so their
-    /// per-key aggregate values are identical and output-column substitution
-    /// is safe.
+    /// Canonical signatures of the scan's predicates
+    /// (`push_down_predicates` + prewhere), normalized to base-column
+    /// identity and sorted. Two candidates with equal signatures aggregate
+    /// the same row set, so their per-key aggregate values are identical and
+    /// output-column substitution is safe.
     scan_predicates: Vec<String>,
     /// Scalar items introduced above the (Filter +) Aggregate chain.
     ///
