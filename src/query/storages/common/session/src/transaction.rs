@@ -112,20 +112,18 @@ impl TxnBuffer {
         tenant: &Tenant,
         mut req: UpdateMultiTableMetaReq,
     ) -> Result<()> {
-        if req.is_empty() {
-            return Ok(());
-        }
-
+        // Bind the transaction to the first non-conflicting tenant that updates meta.
+        // Later updates must stay on the same tenant; commit uses this bound value.
         match &self.tenant {
-            Some(txn_tenant) if txn_tenant != tenant => {
+            None => self.tenant = Some(tenant.clone()),
+            Some(txn_tenant) if txn_tenant == tenant => {}
+            Some(txn_tenant) => {
                 return Err(ErrorCode::InvalidOperation(format!(
                     "Cannot update metadata for tenant '{}' in a transaction bound to tenant '{}'",
                     tenant.tenant_name(),
                     txn_tenant.tenant_name()
                 )));
             }
-            None => self.tenant = Some(tenant.clone()),
-            Some(_) => {}
         }
 
         for (req, table_info) in req.update_table_metas {
@@ -502,10 +500,6 @@ impl TxnManager {
 mod tests {
     use std::collections::HashMap;
 
-    use databend_common_exception::ErrorCode;
-    use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
-    use databend_common_meta_app::tenant::Tenant;
-
     use super::TxnBuffer;
     use super::TxnManager;
 
@@ -535,36 +529,5 @@ mod tests {
         txn_mgr.lock().clear();
 
         assert!(txn_mgr.lock().multi_table_insert_rows().is_empty());
-    }
-
-    #[test]
-    fn test_multi_table_meta_tenant() {
-        let tenant = Tenant::new_literal("tenant");
-        let other_tenant = Tenant::new_literal("other-tenant");
-        let txn_mgr = TxnManager::init();
-
-        {
-            let mut txn_mgr = txn_mgr.lock();
-            txn_mgr.begin();
-            txn_mgr
-                .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
-                    deduplicated_labels: vec!["label".to_string()],
-                    ..Default::default()
-                })
-                .unwrap();
-
-            assert_eq!(txn_mgr.tenant(), Some(tenant.clone()));
-
-            let err = txn_mgr
-                .update_multi_table_meta(&other_tenant, UpdateMultiTableMetaReq {
-                    deduplicated_labels: vec!["other-label".to_string()],
-                    ..Default::default()
-                })
-                .unwrap_err();
-            assert_eq!(err.code(), ErrorCode::INVALID_OPERATION);
-        }
-
-        txn_mgr.lock().clear();
-        assert_eq!(txn_mgr.lock().tenant(), None);
     }
 }

@@ -622,6 +622,9 @@ impl Binder {
 
         // FUSE tables can inherit database connection defaults for external storage
         let engine = engine.unwrap_or(catalog.default_table_engine());
+        // CREATE TABLE ... ENGINE = MATERIALIZED_VIEW is still parseable via Engine::MaterializedView,
+        // but it would bypass CREATE MATERIALIZED VIEW (definition, source binding, generation).
+        // Reject here so MV can only be published through bind_create_materialized_view.
         if engine == Engine::MaterializedView {
             return Err(ErrorCode::TableEngineNotSupported(
                 "MATERIALIZED_VIEW engine can only be created with CREATE MATERIALIZED VIEW",

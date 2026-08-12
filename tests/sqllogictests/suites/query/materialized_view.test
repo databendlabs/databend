@@ -325,7 +325,7 @@ ALTER TABLE mv_base_t SET OPTIONS (change_tracking = true)
 
 # EXPLAIN prints the metadata-only CREATE operation, not the stored definition query plan.
 query T
-EXPLAIN CREATE MATERIALIZED VIEW test_mv_explain AS SELECT id FROM mv_base_t
+EXPLAIN CREATE MATERIALIZED VIEW test_mv_explain AS SELECT id FROM mv_base_t WHERE 1 = 1
 ----
 CreateMaterializedView
 
@@ -370,11 +370,11 @@ SHOW MATERIALIZED VIEWS FROM default.default LIKE 'test_mv'
 
 # IF NOT EXISTS
 statement ok
-CREATE MATERIALIZED VIEW IF NOT EXISTS test_mv AS SELECT id FROM mv_base_t
+CREATE MATERIALIZED VIEW IF NOT EXISTS test_mv AS SELECT id FROM mv_base_t WHERE 1 = 1
 
 # Error: already exists
 statement error 2329
-CREATE MATERIALIZED VIEW test_mv AS SELECT id FROM mv_base_t
+CREATE MATERIALIZED VIEW test_mv AS SELECT id FROM mv_base_t WHERE 1 = 1
 
 # CREATE OR REPLACE MATERIALIZED VIEW
 statement ok
@@ -635,7 +635,7 @@ statement ok
 USE mv_src_db
 
 statement ok
-CREATE MATERIALIZED VIEW mv_dst_db.cross_mv AS SELECT id FROM t
+CREATE MATERIALIZED VIEW mv_dst_db.cross_mv AS SELECT id FROM t WHERE 1 = 1
 
 query I
 SELECT count(*) FROM mv_dst_db.cross_mv
@@ -645,7 +645,7 @@ SELECT count(*) FROM mv_dst_db.cross_mv
 query TT
 SHOW CREATE MATERIALIZED VIEW mv_dst_db.cross_mv
 ----
-cross_mv CREATE MATERIALIZED VIEW `mv_dst_db`.`cross_mv` (`id`) AS SELECT id FROM mv_src_db.t
+cross_mv CREATE MATERIALIZED VIEW `mv_dst_db`.`cross_mv` (`id`) AS SELECT id FROM mv_src_db.t WHERE 1 = 1
 
 statement ok
 USE default
@@ -723,7 +723,7 @@ statement ok
 ALTER TABLE mv_guard_source SET OPTIONS (change_tracking = true)
 
 statement ok
-CREATE MATERIALIZED VIEW mv_guard AS SELECT a, b FROM mv_guard_source
+CREATE MATERIALIZED VIEW mv_guard AS SELECT a, b FROM mv_guard_source WHERE 1 = 1
 
 # ADD COLUMN does not invalidate the bound columns and remains allowed.
 statement ok
@@ -747,11 +747,11 @@ SELECT * FROM mv_guard
 query TT
 SHOW CREATE MATERIALIZED VIEW mv_guard
 ----
-mv_guard CREATE MATERIALIZED VIEW `default`.`mv_guard` (`a`, `b`) AS SELECT a, b FROM default.mv_guard_source
+mv_guard CREATE MATERIALIZED VIEW `default`.`mv_guard` (`a`, `b`) AS SELECT a, b FROM default.mv_guard_source WHERE 1 = 1
 
 # CREATE observes the nonzero generation produced by RENAME and can publish a new binding.
 statement ok
-CREATE MATERIALIZED VIEW mv_guard_recreated AS SELECT renamed_a, b, c FROM mv_guard_source
+CREATE MATERIALIZED VIEW mv_guard_recreated AS SELECT renamed_a, b, c FROM mv_guard_source WHERE 1 = 1
 
 statement ok
 ALTER TABLE mv_guard_source MODIFY COLUMN renamed_a BIGINT

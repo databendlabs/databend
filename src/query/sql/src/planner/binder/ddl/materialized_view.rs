@@ -377,7 +377,7 @@ impl Binder {
             });
         let source_catalog = self.ctx.get_catalog(&source_catalog_name).await?;
         let expected_source_generation = source_catalog
-            .get_mv_source_generation(&tenant, source_table_id)
+            .get_mv_current_source_generation(&tenant, source_table_id)
             .await?
             .unwrap_or(0);
 
@@ -632,7 +632,6 @@ impl Binder {
         let (catalog, database, view_name, mv_table) = self
             .resolve_materialized_view_target(catalog, database, view)
             .await?;
-        let mv_table_id = mv_table.get_id();
         let source_table_id = mv_table
             .get_table_info()
             .meta
@@ -645,9 +644,6 @@ impl Binder {
                 catalog,
                 database,
                 view_name,
-                target: MaintenanceTarget::MaterializedView {
-                    table_id: mv_table_id,
-                },
                 source_table_id,
             },
         )))

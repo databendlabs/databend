@@ -265,7 +265,7 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
-    async fn get_mv_source_generation(
+    async fn get_mv_current_source_generation(
         &self,
         _tenant: &Tenant,
         _source_table_id: u64,

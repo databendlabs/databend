@@ -548,11 +548,6 @@ where
                             .into(),
                         ));
                     }
-                    // Keep the source existence/drop-state check in the CREATE transaction.
-                    // Ordinary source writes may make this condition fail, in which case the
-                    // create loop re-reads the source and retries.
-                    txn.condition
-                        .push(txn_cond_eq_seq(&source_table_ident, source_table_meta.seq));
                     let version_ident =
                         MVSourceBindingVersionIdent::new(req.tenant(), source_table_id);
                     let (version_seq, version) = self.get_pb_seq_and_value(&version_ident).await?;
@@ -1390,10 +1385,9 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
-        // A malformed request may contain the same table more than once. Transaction puts and
-        // `new_table_meta_map` are last-write-wins, so keep only the final invalidation decision
-        // for each table as well.
-        let mut invalidates_mv_source_bindings_by_table_id = BTreeMap::new();
+        // If a request repeats a table ID, use the final update to decide whether its MV bindings
+        // are invalidated, matching the transaction's final put for that table.
+        let mut invalidates_mv_source_bindings_by_table_id = HashMap::new();
         for ((req, _), (tb_meta_seq, old_table_meta)) in
             update_table_metas.iter_mut().zip(tb_meta_vec.iter())
         {

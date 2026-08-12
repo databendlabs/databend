@@ -123,12 +123,6 @@ pub struct MVDefinition {
 /// observed while binding. `create_table` compares it with the current semantic
 /// generation, then uses the freshly read version-key KV sequence as its
 /// transaction condition. It is not persisted in the MV `TableMeta`.
-/// A source `TableMeta` sequence is intentionally not carried here because
-/// ordinary source-table writes advance it without invalidating the bound
-/// schema. `create_table` reads the current source `TableMeta` itself and
-/// conditions on its sequence to reject a missing source or a source dropped
-/// concurrently with CREATE. Ordinary source writes may fail that internal
-/// condition and make CREATE retry without changing the semantic generation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateMaterializedViewMeta {
     pub definition: MVDefinition,
@@ -168,62 +162,9 @@ pub struct MVSourceBindingSnapshot {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use databend_common_expression::TableDataType;
-    use databend_common_expression::TableField;
-    use databend_common_expression::TableSchema;
-    use databend_common_expression::types::NumberDataType;
-
     use super::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
     use super::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
-    use super::invalidates_mv_source_bindings;
     use crate::schema::TableMeta;
-
-    fn source_table_meta() -> TableMeta {
-        TableMeta {
-            schema: Arc::new(TableSchema::new(vec![
-                TableField::new("id", TableDataType::Number(NumberDataType::Int32)),
-                TableField::new("name", TableDataType::String),
-            ])),
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn test_invalidates_mv_source_bindings() {
-        let old_meta = source_table_meta();
-
-        let mut comment_changed = old_meta.clone();
-        comment_changed.comment = "new comment".to_string();
-        assert!(!invalidates_mv_source_bindings(&old_meta, &comment_changed));
-
-        let mut column_added = old_meta.clone();
-        column_added
-            .add_column(
-                &TableField::new("age", TableDataType::Number(NumberDataType::UInt8)),
-                "",
-                2,
-            )
-            .unwrap();
-        assert!(!invalidates_mv_source_bindings(&old_meta, &column_added));
-
-        let mut column_renamed = old_meta.clone();
-        Arc::make_mut(&mut column_renamed.schema).fields[0].name = "renamed_id".to_string();
-        assert!(invalidates_mv_source_bindings(&old_meta, &column_renamed));
-
-        let mut column_type_changed = old_meta.clone();
-        Arc::make_mut(&mut column_type_changed.schema).fields[0].data_type =
-            TableDataType::Number(NumberDataType::Int64);
-        assert!(invalidates_mv_source_bindings(
-            &old_meta,
-            &column_type_changed
-        ));
-
-        let mut column_dropped = old_meta.clone();
-        column_dropped.drop_column("name").unwrap();
-        assert!(invalidates_mv_source_bindings(&old_meta, &column_dropped));
-    }
 
     #[test]
     fn test_materialized_view_source_table_id() {

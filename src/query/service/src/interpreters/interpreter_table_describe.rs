@@ -20,7 +20,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::StringType;
-use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::plans::DescribeTablePlan;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -60,13 +59,6 @@ impl Interpreter for DescribeTableInterpreter {
         let table = self.plan.table.as_str();
         let table = self.ctx.get_table(catalog, database, table).await?;
         let tbl_info = table.get_table_info();
-
-        if is_materialized_view_engine(tbl_info.engine()) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "DESCRIBE is not supported for MATERIALIZED VIEW {}.{}",
-                &self.plan.database, &self.plan.table
-            )));
-        }
 
         let schema = if tbl_info.engine() == VIEW_ENGINE {
             if let Some(query) = tbl_info.options().get(QUERY) {

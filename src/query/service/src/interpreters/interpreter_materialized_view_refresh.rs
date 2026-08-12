@@ -253,8 +253,6 @@ impl<'a> MaterializedViewRefresh<'a> {
         )?;
         let is_aggregating = MaterializedViewChecker::check_query(&logical_query).is_aggregating();
 
-        // TODO: Consider using the source name in the persisted physical query as a
-        // query-scoped binding to avoid these reverse name lookups.
         let source_database_id = source_meta
             .data
             .options

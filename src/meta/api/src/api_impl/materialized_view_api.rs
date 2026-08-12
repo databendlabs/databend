@@ -60,22 +60,13 @@
 //! record means generation 0 and is initialized atomically with the first MV.
 //! The record remains until source GC to prevent generation ABA.
 //!
-//! Generation increments do not add a second condition on the version key.
-//! Meta compares the persisted and replacement source schemas and advances the
-//! generation in the same transaction when an existing column is removed or
-//! changed. The exact source `TableMeta` sequence condition therefore serializes
-//! concurrent generation increments. CREATE remains ordered with those DDL
-//! transactions by its version-key sequence condition: if CREATE commits first,
-//! the later DDL advances the generation and invalidates the new edge; if DDL
-//! commits first, CREATE's condition fails and its stale expected generation is
-//! rejected.
+//! Invalidating source-schema updates advance the source generation atomically
+//! with the source `TableMeta` update.
 //!
 //! The metadata operations are:
 //!
 //! ```text
 //! CREATE MV txn:
-//!     read the source TableMeta and condition on its exact seq
-//!     reject a missing or dropped source
 //!     assert current_source_generation == expected_source_generation
 //!     initialize MVSourceBindingVersion { current_source_generation: 0 }
 //!         if the version record is missing
@@ -253,7 +244,7 @@ where
     /// Return `None` if the generation record has not been created.
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_mv_source_generation(
+    async fn get_mv_current_source_generation(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
@@ -301,7 +292,7 @@ where
         source_table_id: u64,
     ) -> Result<MVSourceBindingSnapshot, MetaError> {
         let Some(generation_before) = self
-            .get_mv_source_generation(tenant, source_table_id)
+            .get_mv_current_source_generation(tenant, source_table_id)
             .await?
         else {
             return Ok(MVSourceBindingSnapshot {
@@ -317,7 +308,7 @@ where
         )
         .await?;
         let generation_after = self
-            .get_mv_source_generation(tenant, source_table_id)
+            .get_mv_current_source_generation(tenant, source_table_id)
             .await?;
         if generation_after != Some(generation_before) {
             mvs.clear();

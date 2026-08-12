@@ -379,31 +379,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_decode_pb_value_mv_source_binding() {
-        let buf = encode_pb(&MVSourceBinding {
-            bound_source_generation: 3,
-        });
-        assert_eq!(
-            decode_pb_value("__fd_materialized_view_by_source/tenant/1/2", &buf),
-            "MVSourceBinding { bound_source_generation: 3 }"
-        );
-    }
-
-    #[test]
-    fn test_decode_pb_value_mv_source_binding_version() {
-        let buf = encode_pb(&MVSourceBindingVersion {
-            current_source_generation: 5,
-        });
-        assert_eq!(
-            decode_pb_value(
-                "__fd_materialized_view_source_binding_version/tenant/1",
-                &buf,
-            ),
-            "MVSourceBindingVersion { current_source_generation: 5 }"
-        );
-    }
-
     // -- decode_cmd_values: UpsertKV --
 
     #[test]

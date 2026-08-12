@@ -536,6 +536,7 @@ impl VisitorMut for AggregateExprRewriter<'_> {
 pub struct MaterializedViewChecker {
     has_aggregate: bool,
     has_group_by: bool,
+    has_selection: bool,
     not_supported: bool,
 }
 
@@ -551,10 +552,7 @@ impl MaterializedViewChecker {
     }
 
     pub fn is_supported(&self) -> bool {
-        // Unlike an aggregating index, a materialized view does not need an aggregate, GROUP BY,
-        // or WHERE clause to be useful. A plain projection is maintained by the non-aggregate
-        // rewriter using the source row ID.
-        !self.not_supported
+        !self.not_supported && (self.has_aggregate || self.has_group_by || self.has_selection)
     }
 }
 
@@ -600,6 +598,7 @@ impl Visitor for MaterializedViewChecker {
         {
             self.not_supported = true;
         }
+        self.has_selection |= stmt.selection.is_some();
         self.has_group_by |= stmt.group_by.is_some();
         Ok(VisitControl::Continue)
     }

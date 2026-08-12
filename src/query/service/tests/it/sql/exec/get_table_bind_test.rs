@@ -471,13 +471,13 @@ impl Catalog for FakedCatalog {
             .await
     }
 
-    async fn get_mv_source_generation(
+    async fn get_mv_current_source_generation(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
     ) -> Result<Option<u64>> {
         self.cat
-            .get_mv_source_generation(tenant, source_table_id)
+            .get_mv_current_source_generation(tenant, source_table_id)
             .await
     }
 

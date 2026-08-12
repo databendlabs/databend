@@ -282,7 +282,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<Option<SeqV<MVDefinition>>>;
 
     /// Get the current semantic source generation, if its record exists.
-    async fn get_mv_source_generation(
+    async fn get_mv_current_source_generation(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
