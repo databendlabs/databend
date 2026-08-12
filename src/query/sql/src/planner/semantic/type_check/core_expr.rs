@@ -53,6 +53,7 @@ impl<'a> CoreExprArena<'a> {
             week_start,
             aggregate_function_factory: AggregateFunctionFactory::instance(),
             in_lambda_function: false,
+            lambda_delimiter: None,
         }
     }
 
@@ -65,6 +66,7 @@ impl<'a> CoreExprArena<'a> {
             week_start,
             aggregate_function_factory,
             in_lambda_function: false,
+            lambda_delimiter: None,
         }
     }
 
@@ -112,6 +114,13 @@ impl<'a> CoreExprArena<'a> {
                 left,
                 right,
             } => self.lower_binary_op_expr(*span, op, left, right)?,
+            Expr::JsonOp { right, .. }
+                if self
+                    .lambda_delimiter
+                    .is_some_and(|delimiter| delimiter == expr.span()) =>
+            {
+                self.lower_ast_expr(right)?
+            }
             Expr::JsonOp {
                 span,
                 op,
@@ -1006,6 +1015,7 @@ mod tests {
                     func_name,
                     args,
                     lambda_params,
+                    lambda_expr,
                     ..
                 } = arena.get(root)
                 else {
@@ -1015,6 +1025,10 @@ mod tests {
                 assert_eq!(args.len(), 2);
                 assert_eq!(lambda_params.len(), 1);
                 assert_eq!(lambda_params[0].name, "value");
+                assert!(matches!(arena.get(*lambda_expr), CoreExpr::Call {
+                    func_name: "plus",
+                    ..
+                }));
             },
         );
 

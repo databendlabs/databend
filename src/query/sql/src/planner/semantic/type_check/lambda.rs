@@ -20,6 +20,9 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::JsonOperator;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor as ASTVisitor;
+use databend_common_ast::visit::Walk;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -59,20 +62,11 @@ impl<'a> CoreExprArena<'a> {
     /// trailing lambda initially has the same AST shape as a JSON `->`
     /// expression. Reinterpret it only after the callee has been classified
     /// as a registered lambda function.
-    fn trailing_lambda(args: &'a [Expr]) -> Option<(&'a [Expr], Vec<Identifier>, &'a Expr)> {
+    fn trailing_lambda(args: &'a [Expr]) -> Option<(&'a [Expr], Vec<Identifier>, &'a Expr, Span)> {
         let (expr, args) = args.split_last()?;
         if args.is_empty() {
             return None;
         }
-        let Expr::JsonOp {
-            op: JsonOperator::Arrow,
-            left,
-            right,
-            ..
-        } = expr
-        else {
-            return None;
-        };
 
         fn param(expr: &Expr) -> Option<Identifier> {
             let Expr::ColumnRef { column, .. } = expr else {
@@ -87,11 +81,41 @@ impl<'a> CoreExprArena<'a> {
             Some(param.clone())
         }
 
-        let params = match left.as_ref() {
-            Expr::Tuple { exprs, .. } => exprs.iter().map(param).collect::<Option<Vec<_>>>()?,
-            expr => vec![param(expr)?],
-        };
-        Some((args, params, right))
+        fn lambda_params(expr: &Expr) -> Option<Vec<Identifier>> {
+            let Expr::JsonOp {
+                op: JsonOperator::Arrow,
+                left,
+                ..
+            } = expr
+            else {
+                return None;
+            };
+            match left.as_ref() {
+                Expr::Tuple { exprs, .. } => exprs.iter().map(param).collect(),
+                expr => Some(vec![param(expr)?]),
+            }
+        }
+
+        #[derive(Default)]
+        struct LambdaDelimiter {
+            params: Option<Vec<Identifier>>,
+            span: Option<Span>,
+        }
+
+        impl ASTVisitor for LambdaDelimiter {
+            fn visit_expr(&mut self, expr: &Expr) -> Result<VisitControl, !> {
+                let Some(params) = lambda_params(expr) else {
+                    return Ok(VisitControl::Continue);
+                };
+                self.params = Some(params);
+                self.span = Some(expr.span());
+                Ok(VisitControl::Break(()))
+            }
+        }
+
+        let mut delimiter = LambdaDelimiter::default();
+        let _ = expr.walk(&mut delimiter);
+        Some((args, delimiter.params?, expr, delimiter.span?))
     }
 
     pub(super) fn try_lower_lambda(
@@ -116,27 +140,31 @@ impl<'a> CoreExprArena<'a> {
         else {
             return Ok(None);
         };
-        let (args, lambda_params, lambda_expr) = if let Some(lambda) = func.lambda.as_ref() {
-            (
-                func.args.as_slice(),
-                lambda.params.clone(),
-                lambda.expr.as_ref(),
-            )
-        } else {
-            let Some(lambda) = Self::trailing_lambda(&func.args) else {
-                return Err(ErrorCode::SemanticError(format!(
-                    "function {func_name} must have a lambda expression",
-                ))
-                .set_span(span));
+        let (args, lambda_params, lambda_expr, lambda_delimiter) =
+            if let Some(lambda) = func.lambda.as_ref() {
+                (
+                    func.args.as_slice(),
+                    lambda.params.clone(),
+                    lambda.expr.as_ref(),
+                    None,
+                )
+            } else {
+                let Some(lambda) = Self::trailing_lambda(&func.args) else {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "function {func_name} must have a lambda expression",
+                    ))
+                    .set_span(span));
+                };
+                let (args, params, expr, delimiter) = lambda;
+                (args, params, expr, Some(delimiter))
             };
-            lambda
-        };
         Ok(Some(self.lambda_function(
             span,
             func_name,
             args,
             lambda_params,
             lambda_expr,
+            lambda_delimiter,
         )?))
     }
 
@@ -147,12 +175,16 @@ impl<'a> CoreExprArena<'a> {
         args: &'a [Expr],
         lambda_params: Vec<Identifier>,
         lambda_expr: &'a Expr,
+        lambda_delimiter: Option<Span>,
     ) -> Result<CoreExprId> {
         let args = self.lower_expr_args(args)?;
         let previous_in_lambda_function = self.in_lambda_function;
+        let previous_lambda_delimiter = self.lambda_delimiter;
         self.in_lambda_function = true;
+        self.lambda_delimiter = lambda_delimiter;
         let lambda_expr = self.lower_ast_expr(lambda_expr);
         self.in_lambda_function = previous_in_lambda_function;
+        self.lambda_delimiter = previous_lambda_delimiter;
         let lambda_expr = lambda_expr?;
         Ok(self.alloc(CoreExpr::LambdaFunction {
             span,

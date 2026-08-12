@@ -96,6 +96,7 @@ pub struct CoreExprArena<'a> {
     week_start: u64,
     pub(super) aggregate_function_factory: &'static AggregateFunctionFactory,
     pub(super) in_lambda_function: bool,
+    pub(super) lambda_delimiter: Option<Span>,
 }
 
 enum CoreExpr<'a> {
