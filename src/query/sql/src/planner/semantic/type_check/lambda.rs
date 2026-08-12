@@ -15,10 +15,11 @@
 use std::collections::HashSet;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::JsonOperator;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -54,6 +55,45 @@ use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 
 impl<'a> CoreExprArena<'a> {
+    /// Multi-argument calls are parsed without function-name knowledge, so a
+    /// trailing lambda initially has the same AST shape as a JSON `->`
+    /// expression. Reinterpret it only after the callee has been classified
+    /// as a registered lambda function.
+    fn trailing_lambda(args: &'a [Expr]) -> Option<(&'a [Expr], Vec<Identifier>, &'a Expr)> {
+        let (expr, args) = args.split_last()?;
+        if args.is_empty() {
+            return None;
+        }
+        let Expr::JsonOp {
+            op: JsonOperator::Arrow,
+            left,
+            right,
+            ..
+        } = expr
+        else {
+            return None;
+        };
+
+        fn param(expr: &Expr) -> Option<Identifier> {
+            let Expr::ColumnRef { column, .. } = expr else {
+                return None;
+            };
+            if column.database.is_some() || column.table.is_some() {
+                return None;
+            }
+            let ColumnID::Name(param) = &column.column else {
+                return None;
+            };
+            Some(param.clone())
+        }
+
+        let params = match left.as_ref() {
+            Expr::Tuple { exprs, .. } => exprs.iter().map(param).collect::<Option<Vec<_>>>()?,
+            expr => vec![param(expr)?],
+        };
+        Some((args, params, right))
+    }
+
     pub(super) fn try_lower_lambda(
         &mut self,
         span: Span,
@@ -76,16 +116,28 @@ impl<'a> CoreExprArena<'a> {
         else {
             return Ok(None);
         };
-        let Some(lambda) = func.lambda.as_ref() else {
-            return Err(ErrorCode::SemanticError(format!(
-                "function {func_name} must have a lambda expression",
-            ))
-            .set_span(span));
+        let (args, lambda_params, lambda_expr) = if let Some(lambda) = func.lambda.as_ref() {
+            (
+                func.args.as_slice(),
+                lambda.params.clone(),
+                lambda.expr.as_ref(),
+            )
+        } else {
+            let Some(lambda) = Self::trailing_lambda(&func.args) else {
+                return Err(ErrorCode::SemanticError(format!(
+                    "function {func_name} must have a lambda expression",
+                ))
+                .set_span(span));
+            };
+            lambda
         };
-
-        Ok(Some(
-            self.lambda_function(span, func_name, &func.args, lambda)?,
-        ))
+        Ok(Some(self.lambda_function(
+            span,
+            func_name,
+            args,
+            lambda_params,
+            lambda_expr,
+        )?))
     }
 
     pub(super) fn lambda_function(
@@ -93,19 +145,20 @@ impl<'a> CoreExprArena<'a> {
         span: Span,
         func_name: &'static str,
         args: &'a [Expr],
-        lambda: &'a Lambda,
+        lambda_params: Vec<Identifier>,
+        lambda_expr: &'a Expr,
     ) -> Result<CoreExprId> {
         let args = self.lower_expr_args(args)?;
         let previous_in_lambda_function = self.in_lambda_function;
         self.in_lambda_function = true;
-        let lambda_expr = self.lower_ast_expr(&lambda.expr);
+        let lambda_expr = self.lower_ast_expr(lambda_expr);
         self.in_lambda_function = previous_in_lambda_function;
         let lambda_expr = lambda_expr?;
         Ok(self.alloc(CoreExpr::LambdaFunction {
             span,
             func_name,
             args,
-            lambda_params: &lambda.params,
+            lambda_params,
             lambda_expr,
         }))
     }

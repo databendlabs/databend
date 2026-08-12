@@ -998,6 +998,34 @@ mod tests {
     }
 
     #[test]
+    fn lowers_ambiguous_json_arrow_by_function_kind() {
+        assert_sql_lowers_to(
+            "json_path_transform(doc, path, value -> value)",
+            |arena, root| {
+                let CoreExpr::LambdaFunction {
+                    func_name,
+                    args,
+                    lambda_params,
+                    ..
+                } = arena.get(root)
+                else {
+                    panic!("json_path_transform should lower through the lambda path");
+                };
+                assert_eq!(*func_name, "json_path_transform");
+                assert_eq!(args.len(), 2);
+                assert_eq!(lambda_params.len(), 1);
+                assert_eq!(lambda_params[0].name, "value");
+            },
+        );
+
+        for sql in ["to_string(doc -> 'key')", "concat(a, b, doc -> 'key')"] {
+            assert_sql_lowers_to(sql, |arena, root| {
+                assert!(matches!(arena.get(root), CoreExpr::Call { .. }));
+            });
+        }
+    }
+
+    #[test]
     fn splits_static_and_runtime_function_names() {
         assert_sql_lowers_to("1 + 2", |arena, root| {
             let CoreExpr::Call { func_name, .. } = arena.get(root) else {

@@ -87,9 +87,9 @@ error:
   --> SQL:1:10
   |
 1 | TRIM(foo,
-  | -----    ^ unexpected end of input, expecting `)`
-  | |   |    
-  | |   while parsing `function(... [ ORDER BY <expr>, ... ] [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ FILTER ( WHERE <expr> ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
+  | ----     ^ unexpected end of input, expecting `)`
+  | |        
+  | while parsing `function(... [ ORDER BY <expr>, ... ] [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ FILTER ( WHERE <expr> ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
   | while parsing expression
 
 

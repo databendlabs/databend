@@ -1159,10 +1159,7 @@ impl Display for FunctionCall {
         }
         write_comma_separated_list(f, args)?;
         if let Some(lambda) = lambda {
-            if !args.is_empty() {
-                write!(f, ", ")?;
-            }
-            Display::fmt(lambda, f)?;
+            write!(f, ", {lambda}")?;
         }
         write!(f, ")")?;
 

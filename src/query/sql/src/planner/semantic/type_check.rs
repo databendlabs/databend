@@ -142,7 +142,7 @@ enum CoreExpr<'a> {
         span: Span,
         func_name: &'static str,
         args: CoreExprArgs,
-        lambda_params: &'a [Identifier],
+        lambda_params: Vec<Identifier>,
         lambda_expr: CoreExprId,
     },
     SearchFunction {
