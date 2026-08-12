@@ -207,9 +207,9 @@ select count(*) from source
 ----
 0
 
-# Aggregate semantic compaction is driven by state blocks appended since the last rebuild or
-# successful compact, not by the MV's total block count. Disable ordinary FUSE compact-after-write
-# so each incremental aggregate refresh contributes one observable state block.
+# Aggregate semantic compaction is driven only by state blocks appended since the last rebuild or
+# successful compact. Disable ordinary FUSE compact-after-write so each incremental aggregate
+# refresh contributes one observable state block.
 statement ok
 set enable_compact_after_write = 0
 
@@ -228,8 +228,22 @@ insert into compact_source values ('a', 1)
 statement ok
 refresh materialized view compact_mv
 
-# Accumulate 31 append-only state blocks. Together with the rebuild baseline this leaves 32
-# physical blocks, but the semantic compaction debt is still below its threshold of 32.
+# Accumulate some append debt, then force the aggregate Standard path to rebuild the MV. The
+# rebuild must reset that old debt because its INSERT OVERWRITE output is already globally merged.
+statement ok
+insert into compact_source values ('a', 1)
+
+statement ok
+refresh materialized view compact_mv
+
+statement ok
+update compact_source set amount = 2
+
+statement ok
+refresh materialized view compact_mv
+
+# Accumulate 31 append-only state blocks after the rebuild. Together with the rebuilt baseline this
+# leaves 32 physical blocks, but the semantic compaction debt is still below its fixed threshold.
 query I
 execute immediate $$
 begin
@@ -254,7 +268,7 @@ limit 1
 query TI
 select category, total_amount from compact_mv
 ----
-a 32
+a 35
 
 # The 32nd appended state block reaches the debt threshold. Semantic compaction merges all equal
 # groups with *_merge_state and overwrites the MV, reducing this single-group MV to one block.
@@ -275,7 +289,7 @@ limit 1
 query TI
 select category, total_amount from compact_mv
 ----
-a 33
+a 36
 
 query I
 select row_count from fuse_block('test_materialized_view', 'compact_mv')
@@ -301,7 +315,7 @@ limit 1
 query TI
 select category, total_amount from compact_mv
 ----
-a 34
+a 37
 
 statement ok
 drop materialized view compact_mv
