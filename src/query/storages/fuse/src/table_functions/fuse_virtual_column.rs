@@ -40,6 +40,7 @@ use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractBlockMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
+use log::warn;
 
 use crate::FuseTable;
 use crate::io::SegmentsIO;
@@ -81,6 +82,13 @@ impl TableMetaFunc for FuseVirtualColumn {
                 "bytes_compressed",
                 TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
             ),
+            TableField::new(
+                "source_column_id",
+                TableDataType::Number(NumberDataType::UInt32),
+            ),
+            TableField::new("source_column_name", TableDataType::String),
+            TableField::new("storage_kind", TableDataType::String),
+            TableField::new("num_values", TableDataType::Number(NumberDataType::UInt64)),
         ])
     }
 
@@ -123,6 +131,10 @@ impl FuseVirtualColumn {
         let mut column_id = vec![];
         let mut block_offset = vec![];
         let mut bytes_compressed = vec![];
+        let mut source_column_id = vec![];
+        let mut source_column_name = StringColumnBuilder::with_capacity(len);
+        let mut storage_kind = StringColumnBuilder::with_capacity(len);
+        let mut num_values = vec![];
 
         let schema = tbl.schema();
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), schema.clone());
@@ -145,10 +157,20 @@ impl FuseVirtualColumn {
                         continue;
                     };
                     let location = block_meta.virtual_location.0;
-                    let Ok(virtual_meta) =
-                        load_virtual_column_file_meta(tbl.operator.clone(), &location).await
-                    else {
-                        continue;
+                    let virtual_meta = match load_virtual_column_file_meta(
+                        tbl.operator.clone(),
+                        &location,
+                    )
+                    .await
+                    {
+                        Ok(meta) => meta,
+                        Err(error) => {
+                            warn!(
+                                "Failed to load virtual column metadata from {}: {}",
+                                location, error
+                            );
+                            continue;
+                        }
                     };
                     let entries =
                         collect_virtual_column_entries(&virtual_meta, &source_column_names);
@@ -165,6 +187,10 @@ impl FuseVirtualColumn {
 
                         block_offset.push(entry.offset);
                         bytes_compressed.push(entry.len);
+                        source_column_id.push(entry.source_column_id);
+                        source_column_name.put_and_commit(&entry.source_column_name);
+                        storage_kind.put_and_commit(entry.storage_kind);
+                        num_values.push(entry.num_values);
 
                         num_rows += 1;
 
@@ -189,20 +215,27 @@ impl FuseVirtualColumn {
                 UInt32Type::from_opt_data(column_id).into(),
                 UInt64Type::from_opt_data(block_offset).into(),
                 UInt64Type::from_opt_data(bytes_compressed).into(),
+                UInt32Type::from_data(source_column_id).into(),
+                Column::String(source_column_name.build()).into(),
+                Column::String(storage_kind.build()).into(),
+                UInt64Type::from_data(num_values).into(),
             ],
             num_rows,
         ))
     }
 }
 
-struct VirtualColumnEntry {
-    shared_paths: Option<String>,
-    column_name: String,
-    column_type: String,
-    column_id: Option<u32>,
-    offset: Option<u64>,
-    len: Option<u64>,
-    num_values: u64,
+pub(crate) struct VirtualColumnEntry {
+    pub(crate) source_column_id: u32,
+    pub(crate) source_column_name: String,
+    pub(crate) storage_kind: &'static str,
+    pub(crate) shared_paths: Option<String>,
+    pub(crate) column_name: String,
+    pub(crate) column_type: String,
+    pub(crate) column_id: Option<u32>,
+    pub(crate) offset: Option<u64>,
+    pub(crate) len: Option<u64>,
+    pub(crate) num_values: u64,
 }
 
 struct SharedPathBucket {
@@ -210,7 +243,7 @@ struct SharedPathBucket {
     paths: Vec<String>,
 }
 
-fn collect_virtual_column_entries(
+pub(crate) fn collect_virtual_column_entries(
     virtual_meta: &VirtualColumnFileMeta,
     source_column_names: &HashMap<u32, String>,
 ) -> Vec<VirtualColumnEntry> {
@@ -242,6 +275,7 @@ fn collect_virtual_column_entries(
             .and_then(|typed_metas| typed_metas.get(&data_type));
         if let Some((key_meta, value_meta)) = metas {
             push_shared_entries(
+                source_column_id,
                 &bucket.source_column_name,
                 data_type,
                 &bucket.paths,
@@ -274,6 +308,7 @@ fn shared_column_name(source_name: &str, data_type: VirtualColumnSharedDataType)
 }
 
 fn push_shared_entries(
+    source_column_id: u32,
     source_column_name: &str,
     data_type: VirtualColumnSharedDataType,
     paths: &[String],
@@ -282,8 +317,12 @@ fn push_shared_entries(
     entries: &mut Vec<VirtualColumnEntry>,
 ) {
     let column_name = shared_column_name(source_column_name, data_type);
+    let shared_paths = paths.join(", ");
     entries.push(VirtualColumnEntry {
-        shared_paths: Some(format_shared_paths(paths)),
+        source_column_id,
+        source_column_name: source_column_name.to_string(),
+        storage_kind: "shared_key",
+        shared_paths: Some(shared_paths),
         column_name: format!("{column_name}.entries.key"),
         column_type: key_meta.data_type.to_string(),
         column_id: Some(key_meta.column_id),
@@ -292,6 +331,9 @@ fn push_shared_entries(
         num_values: key_meta.meta.num_values,
     });
     entries.push(VirtualColumnEntry {
+        source_column_id,
+        source_column_name: source_column_name.to_string(),
+        storage_kind: "shared_value",
         shared_paths: None,
         column_name: format!("{column_name}.entries.value"),
         column_type: value_meta.data_type.to_string(),
@@ -319,10 +361,6 @@ fn push_shared_path(
         .push(virtual_path);
 }
 
-fn format_shared_paths(paths: &[String]) -> String {
-    paths.join(", ")
-}
-
 fn collect_virtual_column_leaves(
     virtual_meta: &VirtualColumnFileMeta,
     source_column_id: u32,
@@ -338,6 +376,9 @@ fn collect_virtual_column_leaves(
             VirtualColumnNameIndex::Column(leaf_index) => {
                 if let Some(meta) = virtual_meta.column_metas.get(*leaf_index as usize) {
                     entries.push(VirtualColumnEntry {
+                        source_column_id,
+                        source_column_name: source_column_name.to_string(),
+                        storage_kind: "direct",
                         shared_paths: None,
                         column_name: format!("{}{}", source_column_name, virtual_path),
                         column_type: meta.data_type.to_string(),
@@ -393,7 +434,7 @@ fn collect_virtual_column_leaves(
     }
 }
 
-fn build_source_column_name_map(schema: &TableSchema) -> HashMap<u32, String> {
+pub(crate) fn build_source_column_name_map(schema: &TableSchema) -> HashMap<u32, String> {
     schema
         .fields()
         .iter()

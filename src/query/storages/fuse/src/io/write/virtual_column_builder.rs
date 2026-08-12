@@ -71,6 +71,7 @@ use jsonb::TimestampTz as JsonbTimestampTz;
 use jsonb::Value as JsonbValue;
 use jsonb::keypath::KeyPath as JsonbKeyPath;
 use jsonb::keypath::KeyPaths as JsonbKeyPaths;
+use log::info;
 use parquet::file::metadata::KeyValue;
 use parquet::file::metadata::ParquetMetaData;
 use siphasher::sip128::Hasher128;
@@ -680,8 +681,17 @@ impl VirtualColumnBuilder {
 
         let total_rows = self.total_rows;
         self.total_rows = 0;
+        let extracted_path_count = virtual_paths.iter().map(HashMap::len).sum::<usize>();
+        let extracted_value_count = virtual_values.iter().map(Vec::len).sum::<usize>();
 
-        if total_rows == 0 || virtual_values.iter().all(|vals| vals.is_empty()) {
+        if total_rows == 0 || extracted_value_count == 0 {
+            info!(
+                "No virtual column data generated for block {}: rows={}, variant_fields={}, extracted_paths={}",
+                location.0,
+                total_rows,
+                self.variant_fields.len(),
+                extracted_path_count
+            );
             let draft_virtual_block_meta = DraftVirtualBlockMeta {
                 virtual_column_metas: vec![],
                 virtual_column_size: 0,
@@ -956,6 +966,14 @@ impl VirtualColumnBuilder {
         let virtual_column_location =
             TableMetaLocationGenerator::gen_virtual_block_location(&location.0);
 
+        info!(
+            "Generated virtual column data for block {}: virtual_columns={}, extracted_paths={}, rows={}, bytes={}",
+            location.0,
+            virtual_block_schema.num_fields(),
+            extracted_path_count,
+            total_rows,
+            data_size
+        );
         let draft_virtual_block_meta = DraftVirtualBlockMeta {
             virtual_column_metas: draft_virtual_column_metas,
             virtual_column_size: data_size,

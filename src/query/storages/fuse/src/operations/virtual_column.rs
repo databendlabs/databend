@@ -136,6 +136,11 @@ pub async fn prepare_refresh_virtual_column(
         ));
     }
     let virtual_column_builder = VirtualColumnBuilder::try_create(source_schema)?;
+    info!(
+        "Preparing virtual column refresh for table_id={} with {} variant source fields",
+        fuse_table.get_id(),
+        field_indices.len()
+    );
 
     let projection = Projection::Columns(field_indices);
     let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
@@ -770,8 +775,9 @@ async fn build_virtual_columns(
                     );
                 } else {
                     info!(
-                        "No virtual column data produced for block {}",
-                        task.block_location
+                        "No virtual column data produced for block {} (rows={}); no sidecar file will be written",
+                        task.block_location,
+                        block.num_rows()
                     );
                 }
 
