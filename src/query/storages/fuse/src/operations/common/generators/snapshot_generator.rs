@@ -42,6 +42,10 @@ pub trait SnapshotGenerator {
         (0, 0)
     }
 
+    fn skip_auto_vacuum(&self) -> bool {
+        false
+    }
+
     async fn fill_default_values(
         &mut self,
         _schema: &TableSchema,

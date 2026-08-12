@@ -360,10 +360,16 @@ impl StreamTable {
             .await
     }
 
-    #[fastrace::trace]
-    pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
-        let base_table = self.source_table(ctx).await?;
-        let status = if base_table.get_table_info().ident.seq == self.offset()? {
+    pub fn check_stream_status(
+        &self,
+        source_seq: u64,
+        source_snapshot_loc: Option<&str>,
+    ) -> Result<StreamStatus> {
+        // Enabling change tracking may advance only the source metadata sequence. Equal snapshot
+        // locations still represent the same data boundary and must not report pending data.
+        let at_same_data_boundary =
+            source_seq == self.offset()? || source_snapshot_loc == self.snapshot_loc().as_deref();
+        let status = if at_same_data_boundary {
             StreamStatus::NoData
         } else {
             StreamStatus::MayHaveData

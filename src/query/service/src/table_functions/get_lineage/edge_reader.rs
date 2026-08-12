@@ -37,6 +37,9 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use futures::TryStreamExt;
+use jsonb::RawJsonb;
+use jsonb::from_raw_jsonb;
+use serde::Deserialize;
 
 use crate::interpreters::QueryFinishHooks;
 use crate::physical_plans::PhysicalPlan;
@@ -51,7 +54,7 @@ use crate::sessions::TableContextQueryState;
 use crate::stream::PullingExecutorStream;
 
 const HISTORY_DATABASE: &str = "system_history";
-const LINEAGE_TABLE: &str = "lineage_unresolved";
+const LINEAGE_TABLE: &str = "lineage_history";
 // Keep each pushed-down key filter large enough to avoid too many child scans, but small
 // enough that expression construction and pruning stay bounded. Frontier keys come from
 // BTreeSet, so batches are deterministic and sorted by lineage key.
@@ -59,14 +62,9 @@ const FRONTIER_BATCH_SIZE: usize = 512;
 const FIRST_LINEAGE_SCAN_ID: usize = 1_000;
 
 const EDGE_COLUMNS: &[&str] = &[
-    "query_id",
-    "event_time",
-    "query_kind",
-    "query_text",
+    "updated_on",
+    "user_name",
     "query_parameterized_hash",
-    "query_duration_ms",
-    "written_rows",
-    "scan_rows",
     "lineage_kind",
     "column_lineage_hash",
     "source_lineage_key",
@@ -85,8 +83,8 @@ const EDGE_COLUMNS: &[&str] = &[
     "target_database",
     "target_name",
     "target_id",
-    "source_to_target_columns",
-    "target_to_source_columns",
+    "query_info",
+    "column_lineage",
 ];
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -155,18 +153,16 @@ impl CapturedObject {
 
 #[derive(Clone, Debug)]
 pub(super) struct RawLineageEdge {
-    pub query_id: Option<String>,
-    pub event_time: Option<i64>,
-    pub query_kind: Option<String>,
-    pub query_text: Option<String>,
+    pub updated_on: Option<i64>,
+    pub user_name: Option<String>,
     pub query_parameterized_hash: Option<String>,
-    pub query_duration_ms: Option<i64>,
-    pub written_rows: Option<u64>,
-    pub scan_rows: Option<u64>,
+    pub query_info: LineageQueryInfo,
     pub lineage_kind: Option<String>,
     pub column_lineage_hash: String,
     pub source: CapturedObject,
     pub target: CapturedObject,
+    pub source_column_address_kind: Option<AddressKind>,
+    pub target_column_address_kind: Option<AddressKind>,
     pub source_to_target_columns: BTreeMap<String, Vec<String>>,
     pub target_to_source_columns: BTreeMap<String, Vec<String>>,
 }
@@ -174,17 +170,54 @@ pub(super) struct RawLineageEdge {
 impl RawLineageEdge {
     pub(super) fn newer_than(&self, other: &Self) -> bool {
         (
-            self.event_time,
-            self.query_id.as_deref().unwrap_or_default(),
+            self.updated_on,
+            self.query_info.query_id.as_deref().unwrap_or_default(),
             self.lineage_kind.as_deref().unwrap_or_default(),
             self.column_lineage_hash.as_str(),
         ) > (
-            other.event_time,
-            other.query_id.as_deref().unwrap_or_default(),
+            other.updated_on,
+            other.query_info.query_id.as_deref().unwrap_or_default(),
             other.lineage_kind.as_deref().unwrap_or_default(),
             other.column_lineage_hash.as_str(),
         )
     }
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
+pub(super) struct LineageQueryInfo {
+    pub query_id: Option<String>,
+    pub query_text: Option<String>,
+    pub query_duration_ms: Option<i64>,
+    pub written_rows: Option<u64>,
+    pub scan_rows: Option<u64>,
+}
+
+#[derive(Deserialize)]
+struct PersistedColumnLineage {
+    source_column_address_kind: String,
+    target_column_address_kind: String,
+    mappings: Vec<PersistedColumnMapping>,
+}
+
+#[derive(Deserialize)]
+struct PersistedColumnMapping {
+    target: PersistedColumnIdentity,
+    sources: Vec<PersistedColumnIdentity>,
+}
+
+#[derive(Deserialize)]
+struct PersistedColumnIdentity {
+    name: String,
+    id: Option<u32>,
+}
+
+#[derive(Default)]
+struct DecodedColumnLineage {
+    source_address_kind: Option<AddressKind>,
+    target_address_kind: Option<AddressKind>,
+    source_to_target: BTreeMap<String, Vec<String>>,
+    target_to_source: BTreeMap<String, Vec<String>>,
 }
 
 pub(super) struct LineageEdgeReader {
@@ -414,33 +447,24 @@ fn decode_edges(
             name: optional_string(block, offset("target_name")?, row)?.unwrap_or_default(),
             id: optional_u64(block, offset("target_id")?, row)?,
         };
+        let column_lineage = decode_column_lineage(block, offset("column_lineage")?, row)?;
         edges.push(RawLineageEdge {
-            query_id: optional_string(block, offset("query_id")?, row)?,
-            event_time: optional_timestamp(block, offset("event_time")?, row)?,
-            query_kind: optional_string(block, offset("query_kind")?, row)?,
-            query_text: optional_string(block, offset("query_text")?, row)?,
+            updated_on: optional_timestamp(block, offset("updated_on")?, row)?,
+            user_name: optional_string(block, offset("user_name")?, row)?,
             query_parameterized_hash: optional_string(
                 block,
                 offset("query_parameterized_hash")?,
                 row,
             )?,
-            query_duration_ms: optional_i64(block, offset("query_duration_ms")?, row)?,
-            written_rows: optional_u64(block, offset("written_rows")?, row)?,
-            scan_rows: optional_u64(block, offset("scan_rows")?, row)?,
+            query_info: optional_variant(block, offset("query_info")?, row)?.unwrap_or_default(),
             lineage_kind: optional_string(block, offset("lineage_kind")?, row)?,
             column_lineage_hash: required_string(block, offset("column_lineage_hash")?, row)?,
             source,
             target,
-            source_to_target_columns: string_array_map(
-                block,
-                offset("source_to_target_columns")?,
-                row,
-            )?,
-            target_to_source_columns: string_array_map(
-                block,
-                offset("target_to_source_columns")?,
-                row,
-            )?,
+            source_column_address_kind: column_lineage.source_address_kind,
+            target_column_address_kind: column_lineage.target_address_kind,
+            source_to_target_columns: column_lineage.source_to_target,
+            target_to_source_columns: column_lineage.target_to_source,
         });
     }
     Ok(edges)
@@ -478,16 +502,6 @@ fn optional_u64(block: &DataBlock, offset: usize, row: usize) -> Result<Option<u
     }
 }
 
-fn optional_i64(block: &DataBlock, offset: usize, row: usize) -> Result<Option<i64>> {
-    match scalar_at(block, offset, row)? {
-        ScalarRef::Null => Ok(None),
-        ScalarRef::Number(NumberScalar::Int64(value)) => Ok(Some(value)),
-        value => Err(ErrorCode::Internal(format!(
-            "expected lineage Int64, got {value:?}"
-        ))),
-    }
-}
-
 fn optional_timestamp(block: &DataBlock, offset: usize, row: usize) -> Result<Option<i64>> {
     match scalar_at(block, offset, row)? {
         ScalarRef::Null => Ok(None),
@@ -498,64 +512,144 @@ fn optional_timestamp(block: &DataBlock, offset: usize, row: usize) -> Result<Op
     }
 }
 
-fn string_array_map(
+fn optional_variant<T>(block: &DataBlock, offset: usize, row: usize) -> Result<Option<T>>
+where T: for<'de> Deserialize<'de> {
+    match scalar_at(block, offset, row)? {
+        ScalarRef::Null => Ok(None),
+        ScalarRef::Variant(value) => deserialize_optional_variant(value),
+        value => Err(ErrorCode::Internal(format!(
+            "expected lineage variant, got {value:?}"
+        ))),
+    }
+}
+
+fn deserialize_optional_variant<T>(value: &[u8]) -> Result<Option<T>>
+where T: for<'de> Deserialize<'de> {
+    from_raw_jsonb::<Option<T>>(&RawJsonb::new(value))
+        .map_err(|err| ErrorCode::Internal(format!("invalid lineage variant: {err}")))
+}
+
+fn decode_column_lineage(
     block: &DataBlock,
     offset: usize,
     row: usize,
-) -> Result<BTreeMap<String, Vec<String>>> {
-    let scalar = scalar_at(block, offset, row)?;
-    let entries = match scalar {
-        ScalarRef::EmptyMap | ScalarRef::Null => return Ok(BTreeMap::new()),
-        ScalarRef::Map(entries) => entries,
-        value => {
-            return Err(ErrorCode::Internal(format!(
-                "expected lineage column map, got {value:?}"
-            )));
-        }
+) -> Result<DecodedColumnLineage> {
+    let Some(lineage) = optional_variant::<PersistedColumnLineage>(block, offset, row)? else {
+        return Ok(DecodedColumnLineage::default());
     };
+    decode_persisted_column_lineage(lineage)
+}
 
-    let mut result = BTreeMap::new();
-    for entry in entries.iter() {
-        let ScalarRef::Tuple(fields) = entry else {
-            return Err(ErrorCode::Internal(format!(
-                "expected lineage column map entry, got {entry:?}"
-            )));
-        };
-        if fields.len() != 2 {
-            return Err(ErrorCode::Internal(format!(
-                "expected lineage column map entry with 2 fields, got {}",
-                fields.len()
-            )));
+fn decode_persisted_column_lineage(
+    lineage: PersistedColumnLineage,
+) -> Result<DecodedColumnLineage> {
+    let source_address_kind = AddressKind::parse(Some(lineage.source_column_address_kind))?;
+    let target_address_kind = AddressKind::parse(Some(lineage.target_column_address_kind))?;
+    let mut source_to_target = BTreeMap::<String, BTreeSet<String>>::new();
+    let mut target_to_source = BTreeMap::<String, BTreeSet<String>>::new();
+    for mapping in lineage.mappings {
+        let target = persisted_column_address(target_address_kind, mapping.target)?;
+        for source in mapping.sources {
+            let source = persisted_column_address(source_address_kind, source)?;
+            source_to_target
+                .entry(source.clone())
+                .or_default()
+                .insert(target.clone());
+            target_to_source
+                .entry(target.clone())
+                .or_default()
+                .insert(source);
         }
-
-        let key = match &fields[0] {
-            ScalarRef::String(value) => value.to_string(),
-            ScalarRef::Null => continue,
-            value => {
-                return Err(ErrorCode::Internal(format!(
-                    "expected lineage column map key, got {value:?}"
-                )));
-            }
-        };
-        let values = match &fields[1] {
-            ScalarRef::EmptyArray | ScalarRef::Null => Vec::new(),
-            ScalarRef::Array(values) => values
-                .iter()
-                .filter_map(|value| match value {
-                    ScalarRef::String(value) => Some(Ok(value.to_string())),
-                    ScalarRef::Null => None,
-                    value => Some(Err(ErrorCode::Internal(format!(
-                        "expected lineage column reference, got {value:?}"
-                    )))),
-                })
-                .collect::<Result<Vec<_>>>()?,
-            value => {
-                return Err(ErrorCode::Internal(format!(
-                    "expected lineage column reference array, got {value:?}"
-                )));
-            }
-        };
-        result.insert(key, values);
     }
-    Ok(result)
+    let into_vec_map = |map: BTreeMap<String, BTreeSet<String>>| {
+        map.into_iter()
+            .map(|(key, values)| (key, values.into_iter().collect()))
+            .collect()
+    };
+    Ok(DecodedColumnLineage {
+        source_address_kind: Some(source_address_kind),
+        target_address_kind: Some(target_address_kind),
+        source_to_target: into_vec_map(source_to_target),
+        target_to_source: into_vec_map(target_to_source),
+    })
+}
+
+fn persisted_column_address(
+    address_kind: AddressKind,
+    column: PersistedColumnIdentity,
+) -> Result<String> {
+    match address_kind {
+        AddressKind::Id => column.id.map(|id| id.to_string()).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "ID-addressed lineage column '{}' has no id",
+                column.name
+            ))
+        }),
+        AddressKind::Name => Ok(column.name),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use jsonb::OwnedJsonb;
+
+    use super::*;
+
+    #[test]
+    fn test_decode_column_lineage_builds_both_directions() -> Result<()> {
+        let decoded = decode_persisted_column_lineage(PersistedColumnLineage {
+            source_column_address_kind: "NAME".to_string(),
+            target_column_address_kind: "ID".to_string(),
+            mappings: vec![PersistedColumnMapping {
+                target: PersistedColumnIdentity {
+                    name: "x".to_string(),
+                    id: Some(3),
+                },
+                sources: vec![
+                    PersistedColumnIdentity {
+                        name: "a".to_string(),
+                        id: None,
+                    },
+                    PersistedColumnIdentity {
+                        name: "b".to_string(),
+                        id: None,
+                    },
+                ],
+            }],
+        })?;
+
+        assert_eq!(decoded.source_address_kind, Some(AddressKind::Name));
+        assert_eq!(decoded.target_address_kind, Some(AddressKind::Id));
+        assert_eq!(
+            decoded.source_to_target,
+            BTreeMap::from([
+                ("a".to_string(), vec!["3".to_string()]),
+                ("b".to_string(), vec!["3".to_string()]),
+            ])
+        );
+        assert_eq!(
+            decoded.target_to_source,
+            BTreeMap::from([("3".to_string(), vec!["a".to_string(), "b".to_string()])])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_id_addressed_column_requires_id() {
+        let result = persisted_column_address(AddressKind::Id, PersistedColumnIdentity {
+            name: "a".to_string(),
+            id: None,
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_json_null_column_lineage_is_absent() {
+        let value = OwnedJsonb::from_str("null").expect("valid JSON");
+        let decoded = deserialize_optional_variant::<PersistedColumnLineage>(value.as_ref())
+            .expect("valid lineage variant");
+        assert!(decoded.is_none());
+    }
 }

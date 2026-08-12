@@ -610,6 +610,7 @@ impl CreateTableInterpreter {
                 table_name: self.plan.table.to_string(),
             },
             table_meta,
+            source_table_option: None,
             as_dropped: false,
             materialized_view: None,
             table_properties: self.plan.table_properties.clone(),
