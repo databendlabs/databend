@@ -67,6 +67,8 @@ use rand::Rng;
 use rand::SeedableRng;
 use uuid::Uuid;
 
+use crate::PLAN_PARAMETER_FUNCTION;
+
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("inet_aton", &["ipv4_string_to_num"]);
     registry.register_aliases("try_inet_aton", &["try_ipv4_string_to_num"]);
@@ -89,6 +91,19 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.properties.insert(
         "gen_random_uuid".to_string(),
         FunctionProperty::default().non_deterministic(),
+    );
+
+    // This function is only used while binding a parameterized plan-cache template. Marking it
+    // non-deterministic prevents constant folding from erasing the parameter slot. The planner
+    // replaces every call before optimization and execution.
+    registry.properties.insert(
+        PLAN_PARAMETER_FUNCTION.to_string(),
+        FunctionProperty::default().non_deterministic(),
+    );
+    registry.register_2_arg_core::<NumberType<u64>, GenericType<0>, GenericType<0>, _, _>(
+        PLAN_PARAMETER_FUNCTION,
+        |_, _, domain| FunctionDomain::Domain(domain.clone()),
+        |_, value, _| value.to_owned(),
     );
 
     registry

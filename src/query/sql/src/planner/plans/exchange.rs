@@ -48,6 +48,14 @@ impl Operator for Exchange {
         }
     }
 
+    fn visit_scalar_expr_mut(&mut self, visitor: &mut dyn FnMut(&mut ScalarExpr)) {
+        if let Exchange::NodeToNodeHash(hash_keys) | Exchange::GlobalHash(hash_keys) = self {
+            for key in hash_keys {
+                visitor(key);
+            }
+        }
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         rel_expr.derive_relational_prop_child(0)
     }

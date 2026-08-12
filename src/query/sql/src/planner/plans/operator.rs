@@ -70,6 +70,8 @@ pub trait Operator {
         Box::new(std::iter::empty())
     }
 
+    fn visit_scalar_expr_mut(&mut self, _visitor: &mut dyn FnMut(&mut ScalarExpr)) {}
+
     /// Derive relational property
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         Ok(Arc::new(RelationalProperty::default()))
@@ -214,6 +216,10 @@ impl Operator for RelOperator {
 
     fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         match_rel_op!(self, scalar_expr_iter)
+    }
+
+    fn visit_scalar_expr_mut(&mut self, visitor: &mut dyn FnMut(&mut ScalarExpr)) {
+        match_rel_op!(self, visit_scalar_expr_mut(visitor))
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {

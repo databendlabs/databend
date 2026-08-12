@@ -25,6 +25,7 @@ mod execution;
 mod expression;
 pub mod optimizer;
 mod planner_cache;
+mod planner_cache_parameter;
 pub mod plans;
 
 pub use binder::BindContext;
@@ -45,6 +46,9 @@ pub use optimizer::optimize;
 pub use planner::PlanExtras;
 pub use planner::Planner;
 pub use planner::get_query_kind;
+pub use planner_cache::clear_planner_cache;
+pub use planner_cache::invalidate_planner_cache_for_tables;
+pub use planner_cache::set_planner_cache_max_bytes;
 pub use plans::DELETE_NAME;
 pub use plans::INSERT_NAME;
 pub use plans::InsertInputSource;

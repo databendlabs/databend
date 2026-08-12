@@ -121,6 +121,8 @@ use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_sql::clear_planner_cache;
+use databend_common_sql::invalidate_planner_cache_for_tables;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaId;
@@ -136,6 +138,13 @@ use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::TableFunctionFactory;
 use crate::table_functions::UDTFTable;
+
+fn clear_planner_cache_on_success<T>(result: Result<T>) -> Result<T> {
+    if result.is_ok() {
+        clear_planner_cache();
+    }
+    result
+}
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
@@ -252,7 +261,8 @@ impl Catalog for DatabaseCatalog {
             )));
         }
         // create db in BOTTOM layer only
-        self.mutable_catalog.create_database(req).await
+        let result = self.mutable_catalog.create_database(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -267,7 +277,8 @@ impl Catalog for DatabaseCatalog {
         {
             return self.immutable_catalog.drop_database(req).await;
         }
-        self.mutable_catalog.drop_database(req).await
+        let result = self.mutable_catalog.drop_database(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -286,7 +297,8 @@ impl Catalog for DatabaseCatalog {
             return self.immutable_catalog.rename_database(req).await;
         }
 
-        self.mutable_catalog.rename_database(req).await
+        let result = self.mutable_catalog.rename_database(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
@@ -453,12 +465,14 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
-        self.mutable_catalog.create_table_tag(req).await
+        let result = self.mutable_catalog.create_table_tag(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
     async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<()> {
-        self.mutable_catalog.drop_table_tag(req).await
+        let result = self.mutable_catalog.drop_table_tag(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -577,13 +591,14 @@ impl Catalog for DatabaseCatalog {
         {
             return self.immutable_catalog.create_table(req).await;
         }
-        self.mutable_catalog.create_table(req).await
+        let result = self.mutable_catalog.create_table(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
-        let res = self.mutable_catalog.drop_table_by_id(req).await?;
-        Ok(res)
+        let result = self.mutable_catalog.drop_table_by_id(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -597,7 +612,8 @@ impl Catalog for DatabaseCatalog {
         {
             return self.immutable_catalog.undrop_table(req).await;
         }
-        self.mutable_catalog.undrop_table(req).await
+        let result = self.mutable_catalog.undrop_table(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -611,7 +627,8 @@ impl Catalog for DatabaseCatalog {
         {
             return self.immutable_catalog.undrop_table_by_id(req).await;
         }
-        self.mutable_catalog.undrop_table_by_id(req).await
+        let result = self.mutable_catalog.undrop_table_by_id(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -625,13 +642,15 @@ impl Catalog for DatabaseCatalog {
         {
             return self.immutable_catalog.undrop_database(req).await;
         }
-        self.mutable_catalog.undrop_database(req).await
+        let result = self.mutable_catalog.undrop_database(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         info!("commit_table_meta from req:{:?}", req);
 
-        self.mutable_catalog.commit_table_meta(req).await
+        let result = self.mutable_catalog.commit_table_meta(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -652,7 +671,8 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        self.mutable_catalog.rename_table(req).await
+        let result = self.mutable_catalog.rename_table(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -669,17 +689,20 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        self.mutable_catalog.swap_table(req).await
+        let result = self.mutable_catalog.swap_table(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
     async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<()> {
-        self.mutable_catalog.create_table_index(req).await
+        let result = self.mutable_catalog.create_table_index(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<()> {
-        self.mutable_catalog.drop_table_index(req).await
+        let result = self.mutable_catalog.drop_table_index(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -712,7 +735,12 @@ impl Catalog for DatabaseCatalog {
         table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
-        self.mutable_catalog.truncate_table(table_info, req).await
+        let table_id = table_info.ident.table_id;
+        let result = self.mutable_catalog.truncate_table(table_info, req).await;
+        if result.is_ok() {
+            invalidate_planner_cache_for_tables(&[table_id]);
+        }
+        result
     }
 
     #[async_backtrace::framed]
@@ -722,9 +750,11 @@ impl Catalog for DatabaseCatalog {
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        self.mutable_catalog
+        let result = self
+            .mutable_catalog
             .upsert_table_option(tenant, db_name, req)
-            .await
+            .await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -732,9 +762,20 @@ impl Catalog for DatabaseCatalog {
         &self,
         reqs: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
-        self.mutable_catalog
+        let table_ids = reqs
+            .update_table_metas
+            .iter()
+            .map(|(req, _)| req.table_id)
+            .chain(reqs.update_temp_tables.iter().map(|req| req.table_id))
+            .collect::<Vec<_>>();
+        let result = self
+            .mutable_catalog
             .retryable_update_multi_table_meta(reqs)
-            .await
+            .await;
+        if matches!(&result, Ok(Ok(_))) {
+            invalidate_planner_cache_for_tables(&table_ids);
+        }
+        result
     }
 
     #[async_backtrace::framed]
@@ -742,7 +783,8 @@ impl Catalog for DatabaseCatalog {
         &self,
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
-        self.mutable_catalog.set_table_column_mask_policy(req).await
+        let result = self.mutable_catalog.set_table_column_mask_policy(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -750,19 +792,22 @@ impl Catalog for DatabaseCatalog {
         &self,
         req: SetTableRowAccessPolicyReq,
     ) -> Result<SetTableRowAccessPolicyReply> {
-        self.mutable_catalog.set_table_row_access_policy(req).await
+        let result = self.mutable_catalog.set_table_row_access_policy(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     // Table index
 
     #[async_backtrace::framed]
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply> {
-        self.mutable_catalog.create_index(req).await
+        let result = self.mutable_catalog.create_index(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
     async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
-        self.mutable_catalog.drop_index(req).await
+        let result = self.mutable_catalog.drop_index(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -818,7 +863,8 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        self.mutable_catalog.update_index(req).await
+        let result = self.mutable_catalog.update_index(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -897,7 +943,8 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply> {
-        self.mutable_catalog.create_sequence(req).await
+        let result = self.mutable_catalog.create_sequence(req).await;
+        clear_planner_cache_on_success(result)
     }
     async fn get_sequence(
         &self,
@@ -940,7 +987,8 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
-        self.mutable_catalog.drop_sequence(req).await
+        let result = self.mutable_catalog.drop_sequence(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     fn set_session_state(&self, state: SessionState) -> Arc<dyn Catalog> {
@@ -978,7 +1026,8 @@ impl Catalog for DatabaseCatalog {
     /// Dictionary
     #[async_backtrace::framed]
     async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
-        self.mutable_catalog.create_dictionary(req).await
+        let result = self.mutable_catalog.create_dictionary(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -995,9 +1044,11 @@ impl Catalog for DatabaseCatalog {
         id_ident: DictionaryIdIdent,
         dictionary_meta: DictionaryMeta,
     ) -> Result<Change<DictionaryMeta>> {
-        self.mutable_catalog
+        let result = self
+            .mutable_catalog
             .update_dictionary_by_id(id_ident, dictionary_meta)
-            .await
+            .await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -1005,7 +1056,8 @@ impl Catalog for DatabaseCatalog {
         &self,
         dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
-        self.mutable_catalog.drop_dictionary(dict_ident).await
+        let result = self.mutable_catalog.drop_dictionary(dict_ident).await;
+        clear_planner_cache_on_success(result)
     }
 
     #[async_backtrace::framed]
@@ -1037,7 +1089,8 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
-        self.mutable_catalog.rename_dictionary(req).await
+        let result = self.mutable_catalog.rename_dictionary(req).await;
+        clear_planner_cache_on_success(result)
     }
 
     async fn get_autoincrement_next_value(

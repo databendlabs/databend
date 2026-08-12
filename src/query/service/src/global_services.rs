@@ -34,6 +34,7 @@ use databend_common_management::WorkloadMgr;
 use databend_common_meta_api::kv_pb_api::compress;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_store::MetaStoreProvider;
+use databend_common_sql::set_planner_cache_max_bytes;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
@@ -185,6 +186,7 @@ impl GlobalServices {
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
+        set_planner_cache_max_bytes(config.cache.planner_cache_max_bytes);
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
         if let Some(addr) = config

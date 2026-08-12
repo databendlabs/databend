@@ -53,6 +53,12 @@ impl Operator for ProjectSet {
         Box::new(self.srfs.iter().map(|expr| &expr.scalar))
     }
 
+    fn visit_scalar_expr_mut(&mut self, visitor: &mut dyn FnMut(&mut ScalarExpr)) {
+        for item in &mut self.srfs {
+            visitor(&mut item.scalar);
+        }
+    }
+
     fn derive_relational_prop(
         &self,
         rel_expr: &RelExpr,

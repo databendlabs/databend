@@ -249,6 +249,15 @@ impl Operator for Aggregate {
         Box::new(iter)
     }
 
+    fn visit_scalar_expr_mut(&mut self, visitor: &mut dyn FnMut(&mut ScalarExpr)) {
+        for item in &mut self.group_items {
+            visitor(&mut item.scalar);
+        }
+        for item in &mut self.aggregate_functions {
+            visitor(&mut item.scalar);
+        }
+    }
+
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let input_physical_prop = rel_expr.derive_physical_prop_child(0)?;
 
