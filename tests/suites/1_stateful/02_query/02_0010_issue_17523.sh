@@ -4,8 +4,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 # Skip in standalone mode
-port_check=$(sudo lsof -i :9093)
-if [ -z "$port_check" ]; then
+node_3_pid=$(sudo lsof -nP -t -a -iTCP:9093 -sTCP:LISTEN)
+if [ -z "$node_3_pid" ]; then
     echo -e "1\n1\n1\n1\ntest_text1\ntest_text2\ntest_text3\ntest_text4\n2\ntest_text1\ntest_text2\ntest_text3\ntest_text4\n3"
     exit 0
 fi
@@ -30,7 +30,8 @@ done
 echo "select * from table_test_02_0010 order by text;" | bendsql_connect_root
 
 # kill a node
-sudo lsof -i :9093 -t | xargs -r sudo kill -9
+node_3_pid=$(sudo lsof -nP -t -a -iTCP:9093 -sTCP:LISTEN)
+sudo kill -9 "$node_3_pid"
 # wait for the node to be killed
 sleep 5
 
