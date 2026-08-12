@@ -118,29 +118,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         folder.fold_to_stable(expr)
     }
 
-    /// Fold with input domains without evaluating non-deterministic or
-    /// `FunctionContext`-dependent operations.
-    ///
-    /// `input_domains` must contain every referenced column and conservatively include every value
-    /// each column can take in the executions covered by this analysis.
-    pub fn fold_with_domain_context_independent(
-        expr: &Expr<Index>,
-        input_domains: &HashMap<Index, Domain>,
-        fn_registry: &FunctionRegistry,
-    ) -> (Expr<Index>, Option<Domain>) {
-        // Context-dependent overloads are rejected before domain or value evaluation, so this
-        // placeholder is observed only by functions registered as context independent.
-        let context_placeholder = FunctionContext::default();
-        let folder = ConstantFolder {
-            input_domains,
-            func_ctx: &context_placeholder,
-            fn_registry,
-            mode: FoldMode::ContextIndependent,
-        };
-
-        folder.fold_to_stable(expr)
-    }
-
     pub fn full_input_domains(expr: &Expr<Index>) -> HashMap<Index, Domain> {
         expr.column_refs()
             .into_iter()

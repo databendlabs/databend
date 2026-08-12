@@ -388,6 +388,18 @@ fn context_independent_folding_respects_function_overloads() -> anyhow::Result<(
             .as_constant()
             .is_some()
     );
+    // Decimal arithmetic accepts Decimal and integer operands. This exercises the Decimal
+    // arithmetic factory directly: aligning the integer operand to scale 1 is exact, so the
+    // comparison is safe to fold without consulting the session rounding mode.
+    assert!(matches!(
+        fold(
+            "cast(1.5 as decimal(10, 1)) + cast(0 as decimal(10, 0)) = \
+             cast(2 as decimal(10, 0))"
+        )
+        .as_constant()
+        .map(|constant| &constant.scalar),
+        Some(databend_common_expression::Scalar::Boolean(false))
+    ));
 
     // `now()` is non-deterministic and reads the statement time from `FunctionContext`; folding it
     // without that context would freeze an unrelated placeholder value into the expression.
