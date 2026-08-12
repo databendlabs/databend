@@ -6,7 +6,7 @@
 # identical column mapping was deduplicated, so DML keeps two records for two distinct mappings.
 query TII rowsort
 SELECT lineage_kind, count(*), count(DISTINCT column_lineage_hash)
-FROM system_history.lineage_unresolved
+FROM system_history.lineage_history
 WHERE source_database = 'lineage_history_multi_kind'
   AND target_database = 'lineage_history_multi_kind'
   AND source_name = 'src'

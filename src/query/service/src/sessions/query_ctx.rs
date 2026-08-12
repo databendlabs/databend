@@ -610,6 +610,11 @@ impl QueryContext {
         *self.shared.finish_time.write() = Some(time)
     }
 
+    /// Return the completion time captured by the query-finish logger.
+    pub fn get_query_finish_time(&self) -> Option<SystemTime> {
+        *self.shared.finish_time.read()
+    }
+
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
     }

@@ -14,7 +14,7 @@ FROM get_lineage('lineage_history_statements.self_insert_dst.a', 'COLUMN', 'UPST
 
 query I
 SELECT count(*)
-FROM system_history.lineage_unresolved
+FROM system_history.lineage_history
 WHERE target_database = 'lineage_history_statements'
   AND source_lineage_key = target_lineage_key
 ----
@@ -28,7 +28,7 @@ FROM get_lineage('lineage_history_statements.insert_dst', 'TABLE', 'UPSTREAM', 1
 
 query I
 SELECT count(*)
-FROM system_history.lineage_unresolved
+FROM system_history.lineage_history
 WHERE source_database = 'lineage_history_statements'
   AND source_name = 'src'
   AND target_database = 'lineage_history_statements'
@@ -36,7 +36,7 @@ WHERE source_database = 'lineage_history_statements'
 ----
 0
 
-# Process metadata matches the selected history edge. Its timestamp is stable UTC RFC3339,
+# Process metadata matches the selected history edge. Its updated timestamp is stable UTC RFC3339,
 # independent of the session timezone used to query GET_LINEAGE.
 query BBBBBBBBB
 SETTINGS (timezone = 'UTC')
@@ -44,25 +44,27 @@ WITH result AS (
   SELECT parse_json(process) AS process
   FROM get_lineage('lineage_history_statements.insert_dst', 'TABLE', 'UPSTREAM', 1)
 ), history AS (
-  SELECT query_id, query_kind, lineage_kind, event_time, query_text,
-         query_parameterized_hash, query_duration_ms, written_rows, scan_rows
-  FROM system_history.lineage_unresolved
+  SELECT updated_on, user_name, query_parameterized_hash, lineage_kind, query_info
+  FROM system_history.lineage_history
   WHERE source_database = 'lineage_history_statements'
     AND source_name = 'src'
     AND target_database = 'lineage_history_statements'
     AND target_name = 'insert_dst'
-  QUALIFY row_number() OVER (ORDER BY event_time DESC, query_id DESC) = 1
+  QUALIFY row_number() OVER (
+    ORDER BY updated_on DESC, query_info['query_id']::STRING DESC
+  ) = 1
 )
-SELECT result.process['query_id']::STRING = history.query_id,
-       result.process['query_kind']::STRING = history.query_kind,
-       result.process['lineage_kind']::STRING = history.lineage_kind,
-       result.process['event_time']::STRING =
-         concat(replace(to_string(history.event_time), ' ', 'T'), 'Z'),
-       result.process['query_text']::STRING = history.query_text,
+SELECT result.process['query_id']::STRING = history.query_info['query_id']::STRING,
+       result.process['updated_on']::STRING =
+         concat(replace(to_string(history.updated_on), ' ', 'T'), 'Z'),
+       result.process['user_name']::STRING = history.user_name,
        result.process['query_parameterized_hash']::STRING = history.query_parameterized_hash,
-       result.process['query_duration_ms']::Int64 = history.query_duration_ms,
-       result.process['written_rows']::UInt64 = history.written_rows,
-       result.process['scan_rows']::UInt64 = history.scan_rows
+       result.process['lineage_kind']::STRING = history.lineage_kind,
+       result.process['query_text']::STRING = history.query_info['query_text']::STRING,
+       result.process['query_duration_ms']::Int64 =
+         history.query_info['query_duration_ms']::Int64,
+       result.process['written_rows']::UInt64 = history.query_info['written_rows']::UInt64,
+       result.process['scan_rows']::UInt64 = history.query_info['scan_rows']::UInt64
 FROM result CROSS JOIN history
 ----
 1 1 1 1 1 1 1 1 1
@@ -70,19 +72,21 @@ FROM result CROSS JOIN history
 query B
 SETTINGS (timezone = 'Asia/Shanghai')
 WITH result AS (
-  SELECT parse_json(process)['event_time']::STRING AS event_time
+  SELECT parse_json(process)['updated_on']::STRING AS updated_on
   FROM get_lineage('lineage_history_statements.insert_dst', 'TABLE', 'UPSTREAM', 1)
 ), history AS (
-  SELECT event_time
-  FROM system_history.lineage_unresolved
+  SELECT updated_on, query_info
+  FROM system_history.lineage_history
   WHERE source_database = 'lineage_history_statements'
     AND source_name = 'src'
     AND target_database = 'lineage_history_statements'
     AND target_name = 'insert_dst'
-  QUALIFY row_number() OVER (ORDER BY event_time DESC, query_id DESC) = 1
+  QUALIFY row_number() OVER (
+    ORDER BY updated_on DESC, query_info['query_id']::STRING DESC
+  ) = 1
 )
-SELECT result.event_time = concat(
-         replace(to_string(convert_timezone('UTC', history.event_time)), ' ', 'T'),
+SELECT result.updated_on = concat(
+         replace(to_string(convert_timezone('UTC', history.updated_on)), ' ', 'T'),
          'Z'
        )
 FROM result CROSS JOIN history
@@ -157,7 +161,7 @@ FROM get_lineage('lineage_history_statements.stream_dst.x', 'COLUMN', 'UPSTREAM'
 # The Stream wrapper itself must not be persisted as a lineage endpoint.
 query I
 SELECT count(*)
-FROM system_history.lineage_unresolved
+FROM system_history.lineage_history
 WHERE source_database = 'lineage_history_statements'
   AND source_name = 'src_stream'
   AND target_database = 'lineage_history_statements'
