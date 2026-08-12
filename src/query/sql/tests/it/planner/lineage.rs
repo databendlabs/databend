@@ -471,7 +471,7 @@ async fn lineage_test_context() -> Result<Arc<LiteTableContext>> {
     let mut config = InnerConfig::default();
     config.log.history.on = true;
     config.log.history.tables.push(HistoryTableConfig {
-        table_name: "lineage_unresolved".to_string(),
+        table_name: "lineage_history".to_string(),
         retention: 168,
         invisible: false,
     });

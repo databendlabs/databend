@@ -24,7 +24,7 @@ use crate::HistoryConfig;
 const TABLES_TOML: &str = include_str!("./history_tables.toml");
 const DEFAULT_RETENTION_HOURS: u64 = 24 * 7;
 #[cfg(test)]
-const LINEAGE_UNRESOLVED_TABLE: &str = "lineage_unresolved";
+const LINEAGE_HISTORY_TABLE: &str = "lineage_history";
 
 #[derive(Debug)]
 pub struct HistoryTable {
@@ -166,12 +166,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_lineage_unresolved_uses_hash_pattern_merge() {
+    fn test_lineage_history_uses_hash_pattern_merge() {
         let tables: PredefinedTables = toml::from_str(TABLES_TOML).unwrap();
         let lineage = tables
             .tables
             .iter()
-            .find(|table| table.name == "lineage_unresolved")
+            .find(|table| table.name == "lineage_history")
             .unwrap();
 
         assert!(
@@ -179,31 +179,40 @@ mod tests {
                 .create
                 .contains("column_lineage_hash STRING NOT NULL")
         );
-        assert!(lineage.create.contains("source_to_target_columns MAP"));
-        assert!(lineage.create.contains("target_to_source_columns MAP"));
         for field in [
-            "query_text STRING",
+            "updated_on TIMESTAMP",
+            "user_name STRING",
             "query_parameterized_hash STRING",
-            "query_duration_ms Int64",
-            "written_rows UInt64",
-            "scan_rows UInt64",
+            "query_info VARIANT",
+            "column_lineage VARIANT",
         ] {
             assert!(lineage.create.contains(field), "missing field {field}");
+        }
+        for removed in [
+            "query_kind STRING",
+            "query_text STRING",
+            "source_to_target_columns MAP",
+            "target_to_source_columns MAP",
+        ] {
+            assert!(
+                !lineage.create.contains(removed),
+                "obsolete field {removed}"
+            );
         }
         assert!(
             lineage
                 .transform
-                .contains("MERGE INTO system_history.lineage_unresolved")
+                .contains("MERGE INTO system_history.lineage_history")
         );
         assert!(lineage.create.contains("source_catalog_type STRING"));
         assert!(lineage.create.contains("target_catalog_type STRING"));
         assert!(lineage.transform.contains("AS source_catalog_type"));
         for field in [
-            "AS query_text",
+            "AS updated_on",
+            "AS user_name",
             "AS query_parameterized_hash",
-            "AS query_duration_ms",
-            "AS written_rows",
-            "AS scan_rows",
+            "AS query_info",
+            "AS column_lineage",
         ] {
             assert!(
                 lineage.transform.contains(field),
@@ -211,6 +220,7 @@ mod tests {
             );
         }
         assert!(lineage.delete.contains("lineage_kind = 'DML'"));
+        assert!(lineage.delete.contains("updated_on <"));
         assert!(
             lineage
                 .transform
@@ -219,6 +229,11 @@ mod tests {
         assert!(lineage.transform.contains(
             "PARTITION BY m['source']['lineage_key']::STRING, m['target']['lineage_key']::STRING, m['lineage_kind']::STRING, m['column_lineage_hash']::STRING"
         ));
+        assert!(
+            lineage
+                .transform
+                .contains("m['query_info']['query_id']::STRING DESC")
+        );
         assert!(lineage.transform.contains(
             "target.source_lineage_key = source.source_lineage_key AND target.target_lineage_key = source.target_lineage_key AND target.lineage_kind = source.lineage_kind"
         ));
@@ -244,7 +259,7 @@ mod tests {
         let lineage = tables
             .tables
             .into_iter()
-            .find(|table| table.name == LINEAGE_UNRESOLVED_TABLE)
+            .find(|table| table.name == LINEAGE_HISTORY_TABLE)
             .unwrap();
         let history = HistoryTable::create(lineage, DEFAULT_RETENTION_HOURS);
 
@@ -254,9 +269,9 @@ mod tests {
         let replay = history.assemble_normal_transforms(17, 23);
         assert_eq!(first_attempt, replay);
         assert_eq!(first_attempt.len(), 2);
-        assert!(first_attempt[0].contains("MERGE INTO system_history.lineage_unresolved"));
+        assert!(first_attempt[0].contains("MERGE INTO system_history.lineage_history"));
         assert!(first_attempt[0].contains("= 'UPSERT_EDGE'"));
-        assert!(first_attempt[1].starts_with("DELETE FROM system_history.lineage_unresolved"));
+        assert!(first_attempt[1].starts_with("DELETE FROM system_history.lineage_history"));
         assert!(first_attempt[1].contains("= 'DELETE_OBJECT'"));
         for phase in first_attempt {
             assert!(phase.contains("batch_number >= 17"));
@@ -276,22 +291,22 @@ mod tests {
         };
 
         let lineage = init_history_tables(&config(
-            LINEAGE_UNRESOLVED_TABLE,
+            LINEAGE_HISTORY_TABLE,
             DEFAULT_RETENTION_HOURS as usize,
         ))
         .unwrap();
         let default_delete = &lineage
             .iter()
-            .find(|table| table.name == LINEAGE_UNRESOLVED_TABLE)
+            .find(|table| table.name == LINEAGE_HISTORY_TABLE)
             .unwrap()
             .delete;
         assert!(default_delete.contains("lineage_kind = 'DML'"));
         assert!(default_delete.contains("subtract_hours(NOW(), 168)"));
 
-        let lineage = init_history_tables(&config(LINEAGE_UNRESOLVED_TABLE, 24)).unwrap();
+        let lineage = init_history_tables(&config(LINEAGE_HISTORY_TABLE, 24)).unwrap();
         let explicit_delete = &lineage
             .iter()
-            .find(|table| table.name == LINEAGE_UNRESOLVED_TABLE)
+            .find(|table| table.name == LINEAGE_HISTORY_TABLE)
             .unwrap()
             .delete;
         assert!(explicit_delete.contains("lineage_kind = 'DML'"));

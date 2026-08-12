@@ -956,5 +956,5 @@ fn lineage_enabled() -> bool {
     GlobalConfig::instance()
         .log
         .history
-        .is_table_enabled("lineage_unresolved")
+        .is_table_enabled("lineage_history")
 }
