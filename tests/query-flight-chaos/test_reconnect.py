@@ -190,11 +190,41 @@ class ClusterFault:
         ).strip()
         return int(output)
 
-    def crash_worker(self, pod: str) -> int:
+    def signal_query(self, pod: str, signal: str) -> None:
         if pod not in WORKER_PODS:
-            raise AssertionError(f"cannot crash unknown worker {pod}")
+            raise AssertionError(f"cannot signal unknown worker {pod}")
+        if signal not in {"STOP", "CONT", "KILL"}:
+            raise AssertionError(f"unsupported query signal {signal}")
+        self._exec_pod(
+            pod,
+            "query_pid=; "
+            "for executable in /proc/[0-9]*/exe; do "
+            '[ "$(readlink "$executable" 2>/dev/null)" = /databend-query ] || continue; '
+            'pid="${executable#/proc/}"; pid="${pid%/exe}"; '
+            '[ -z "$query_pid" ] || { echo "multiple databend-query processes" >&2; exit 1; }; '
+            'query_pid="$pid"; done; '
+            '[ -n "$query_pid" ] || { echo "databend-query process not found" >&2; exit 1; }; '
+            '[ "$query_pid" -ne 1 ] || { echo "databend-query unexpectedly has PID 1" >&2; exit 1; }; '
+            f'kill -{signal} "$query_pid"',
+        )
+
+    def wait_for_restart_count(
+        self, pod: str, previous_restart_count: int, timeout: float = 30
+    ) -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                if self.query_restart_count(pod) > previous_restart_count:
+                    return
+            except (subprocess.CalledProcessError, ValueError):
+                pass
+            time.sleep(POLL_INTERVAL)
+        raise AssertionError(f"query container in {pod} did not restart after SIGKILL")
+
+    def crash_worker(self, pod: str) -> int:
         restart_count = self.query_restart_count(pod)
-        self._exec_pod(pod, "kill -KILL 1", container="query", check=False)
+        self.signal_query(pod, "KILL")
+        self.wait_for_restart_count(pod, restart_count)
         return restart_count
 
     def wait_for_worker_restart(
@@ -266,7 +296,7 @@ class ClusterFault:
             # Freeze userspace after the Flight transports exist. Kernel TCP timers
             # continue running, so a silent partition can only be detected by keepalive.
             for pod in WORKER_PODS:
-                self._exec_pod(pod, "kill -STOP 1", container="query")
+                self.signal_query(pod, "STOP")
                 paused.append(pod)
             self.apply_partition()
             yield
@@ -275,7 +305,7 @@ class ClusterFault:
                 self.recover()
             finally:
                 for pod in paused:
-                    self._exec_pod(pod, "kill -CONT 1", container="query")
+                    self.signal_query(pod, "CONT")
 
 
 def connect_mysql() -> Any:
@@ -708,11 +738,14 @@ class ReconnectHarness:
         *,
         keep_alive: bool = False,
     ) -> tuple[QueryTask, QueryIdentity]:
+        baseline = flight_endpoints(self._namespace, self._coordinator_ip)
         configure_session(self._query_connection, retry_interval, keep_alive=keep_alive)
         task = QueryTask(self._query_connection, sql)
         task.start()
         identity = wait_for_query(self._control_cursor, marker, task)
-        wait_for_flight_connections(self._namespace, self._coordinator_ip, task)
+        wait_for_flight_connections(
+            self._namespace, self._coordinator_ip, task, exclude=baseline
+        )
         return task, identity
 
     def reconnect(
@@ -759,7 +792,12 @@ class ReconnectHarness:
         task, identity = self._start_query(sql, marker, retry_interval=1)
         failed_at = time.monotonic()
         restart_count = self._fault.crash_worker(FAILED_WORKER)
-        error = task.error(timeout=NODE_FAILURE_TIMEOUT)
+        remaining = NODE_FAILURE_TIMEOUT - (time.monotonic() - failed_at)
+        if remaining <= 0:
+            raise AssertionError(
+                f"worker crash was not confirmed within {NODE_FAILURE_TIMEOUT} seconds"
+            )
+        error = task.error(timeout=remaining)
         elapsed = time.monotonic() - failed_at
         self._fault.wait_for_worker_restart(FAILED_WORKER, restart_count)
         wait_for_cluster(self._control_cursor)

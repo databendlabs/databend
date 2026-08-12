@@ -156,6 +156,8 @@ spec:
       labels:
         app: databend-query
     spec:
+      # Let the net-admin sidecar signal the query process without targeting container PID 1.
+      shareProcessNamespace: true
       containers:
         - name: query
           image: databend-query-flight-chaos:ci
