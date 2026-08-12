@@ -97,8 +97,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         folder.fold_to_stable(expr)
     }
 
-    /// Fold a single expression with columns' domain, and then return the new expression and the
-    /// domain of the new expression.
+    /// Fold a single expression with columns' domains, and return the new expression and its
+    /// domain.
+    ///
+    /// `input_domains` must contain every referenced column and conservatively include every value
+    /// each column can take in the executions covered by this analysis.
     pub fn fold_with_domain(
         expr: &Expr<Index>,
         input_domains: &'a HashMap<Index, Domain>,
@@ -117,6 +120,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
     /// Fold with input domains without evaluating non-deterministic or
     /// `FunctionContext`-dependent operations.
+    ///
+    /// `input_domains` must contain every referenced column and conservatively include every value
+    /// each column can take in the executions covered by this analysis.
     pub fn fold_with_domain_context_independent(
         expr: &Expr<Index>,
         input_domains: &HashMap<Index, Domain>,
@@ -770,6 +776,14 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return dest_size.scale() >= src_size.scale();
         }
 
+        if let (DataType::Number(src_type), DataType::Decimal(_)) = (src_type, simple_dest_type)
+            && src_type.is_integer()
+        {
+            // Integer-to-Decimal conversion does not round. Its value or overflow is independent
+            // of the session rounding mode.
+            return true;
+        }
+
         if let Some(cast_fn) = get_simple_cast_function(is_try, src_type, simple_dest_type) {
             let input = Expr::ColumnRef(ColumnRef {
                 span: None,
@@ -1017,20 +1031,15 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
 
         let input_domains = [(0, domain.clone())].into_iter().collect();
-        let (_, output_domain) = if self.mode == FoldMode::ContextIndependent {
-            ConstantFolder::fold_with_domain_context_independent(
-                &cast_expr,
-                &input_domains,
-                self.fn_registry,
-            )
-        } else {
-            ConstantFolder::fold_with_domain(
-                &cast_expr,
-                &input_domains,
-                self.func_ctx,
-                self.fn_registry,
-            )
-        };
+        // The caller has already checked `can_evaluate_cast` for this source and destination type.
+        // Some cast factories serve both context-independent and context-dependent type pairs, so
+        // the resolved factory ID alone is too coarse to make this nested domain calculation.
+        let (_, output_domain) = ConstantFolder::fold_with_domain(
+            &cast_expr,
+            &input_domains,
+            self.func_ctx,
+            self.fn_registry,
+        );
 
         Some(output_domain)
     }

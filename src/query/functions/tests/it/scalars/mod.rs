@@ -375,6 +375,13 @@ fn context_independent_folding_respects_function_overloads() -> anyhow::Result<(
     assert!(fold("1 + 2").as_constant().is_some());
     assert!(fold("to_string(42)").as_constant().is_some());
     assert!(fold("to_int64(to_uint8(1))").as_constant().is_some());
+    // Integer-to-Decimal conversion does not read the session rounding mode. In particular, a
+    // typed NULL introduced by outer-join analysis must still propagate through this cast.
+    assert!(
+        fold("cast(cast(null as int64 null) as decimal(19, 0) null)")
+            .as_constant()
+            .is_some()
+    );
     assert!(fold("cast(2.00 as decimal(10, 2))").as_constant().is_some());
     assert!(
         fold("cast(null as decimal(10, 2) null)")
@@ -382,8 +389,14 @@ fn context_independent_folding_respects_function_overloads() -> anyhow::Result<(
             .is_some()
     );
 
+    // `now()` is non-deterministic and reads the statement time from `FunctionContext`; folding it
+    // without that context would freeze an unrelated placeholder value into the expression.
     assert!(fold("now()").as_constant().is_none());
+    // Formatting a timestamp reads the session time zone, so there is no context-independent
+    // string constant for this expression.
     assert!(fold("to_string(to_timestamp(0))").as_constant().is_none());
+    // Numeric and Decimal scale-reducing casts read the session rounding mode. Their constants
+    // cannot be chosen until that session context is available.
     assert!(fold("to_int64(1.5)").as_constant().is_none());
     assert!(
         fold("cast(cast(2.25 as decimal(10, 2)) as decimal(10, 1))")
