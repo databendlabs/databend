@@ -148,7 +148,7 @@ impl<'a> MaterializedViewRefresh<'a> {
         // and both generations at one transaction point. Once admitted, a concurrent source-schema
         // change may let this refresh finish; subsequent MV reads reject the stale binding.
         let definition = catalog
-            .get_valid_mv_definition(
+            .get_active_mv_definition(
                 &self.plan.tenant,
                 source_table_id,
                 self.mv_table.get_id(),

@@ -874,7 +874,7 @@ async fn test_vacuum_dropped_database_cleans_materialized_view() -> anyhow::Resu
     fixture
         .execute_command(&format!(
             "create materialized view {db_name}.{mv_name} as \
-             select number from {db_name}.{source_name}"
+             select number from {db_name}.{source_name} where 1 = 1"
         ))
         .await?;
 

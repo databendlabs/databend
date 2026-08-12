@@ -214,7 +214,7 @@ impl Binder {
                     .materialized_view_source_table_id()
                     .map_err(ErrorCode::from)?;
                 let mv_definition = catalog
-                    .get_valid_mv_definition(&tenant, source_table_id, table_meta.get_id())
+                    .get_active_mv_definition(&tenant, source_table_id, table_meta.get_id())
                     .await?
                     .ok_or_else(|| {
                         ErrorCode::InvalidMaterializedView(format!(

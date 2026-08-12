@@ -204,25 +204,30 @@ where
         }
 
         let [definition_response, binding_response, generation_response]: [TxnOpResponse; 3] =
-            responses.try_into().map_err(|_| {
-                invalid_reply("malformed materialized-view definition snapshot response")
+            responses.try_into().map_err(|responses: Vec<_>| {
+                invalid_reply(format!(
+                    "materialized-view definition snapshot expected 3 responses, got {}",
+                    responses.len()
+                ))
             })?;
         let (Some(definition_response), Some(binding_response), Some(generation_response)) = (
             definition_response.into_get(),
             binding_response.into_get(),
             generation_response.into_get(),
         ) else {
-            return Err(
-                invalid_reply("malformed materialized-view definition snapshot response").into(),
-            );
+            return Err(invalid_reply(
+                "materialized-view definition snapshot contained a non-get response",
+            )
+            .into());
         };
         if definition_response.key != definition_ident.to_string_key()
             || binding_response.key != binding_ident.to_string_key()
             || generation_response.key != generation_ident.to_string_key()
         {
-            return Err(
-                invalid_reply("malformed materialized-view definition snapshot response").into(),
-            );
+            return Err(invalid_reply(
+                "materialized-view definition snapshot response key mismatch",
+            )
+            .into());
         }
 
         let (_, definition) =
@@ -300,7 +305,7 @@ where
                 materialized_views: vec![],
             });
         };
-        let mut mvs = list_mvs_by_source_table_id_impl(
+        let mvs = list_mvs_by_source_table_id_impl(
             self,
             tenant,
             source_table_id,
@@ -310,13 +315,18 @@ where
         let generation_after = self
             .get_mv_current_source_generation(tenant, source_table_id)
             .await?;
-        if generation_after != Some(generation_before) {
-            mvs.clear();
+        match generation_after {
+            Some(generation_after) if generation_after == generation_before => {
+                Ok(MVSourceBindingSnapshot {
+                    generation: generation_after,
+                    materialized_views: mvs,
+                })
+            }
+            _ => Ok(MVSourceBindingSnapshot {
+                generation: 0,
+                materialized_views: vec![],
+            }),
         }
-        Ok(MVSourceBindingSnapshot {
-            generation: generation_after.unwrap_or(0),
-            materialized_views: mvs,
-        })
     }
 
     /// List every MV that depends on a source table, including invalid MVs.

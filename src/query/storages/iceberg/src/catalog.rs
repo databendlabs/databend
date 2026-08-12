@@ -459,14 +459,14 @@ impl Catalog for IcebergMutableCatalog {
         ))
     }
 
-    async fn get_valid_mv_definition(
+    async fn get_active_mv_definition(
         &self,
         _tenant: &Tenant,
         _source_table_id: u64,
         _mv_table_id: u64,
     ) -> Result<Option<SeqV<MVDefinition>>> {
         Err(ErrorCode::Unimplemented(
-            "ICEBERG catalog does not support valid materialized-view definitions",
+            "ICEBERG catalog does not support active materialized-view definitions",
         ))
     }
 
@@ -477,17 +477,6 @@ impl Catalog for IcebergMutableCatalog {
     ) -> Result<Option<u64>> {
         Err(ErrorCode::Unimplemented(
             "ICEBERG catalog does not support materialized-view source generations",
-        ))
-    }
-
-    async fn get_mv_bound_source_generation(
-        &self,
-        _tenant: &Tenant,
-        _source_table_id: u64,
-        _mv_table_id: u64,
-    ) -> Result<Option<u64>> {
-        Err(ErrorCode::Unimplemented(
-            "ICEBERG catalog does not support materialized-view source bindings",
         ))
     }
 

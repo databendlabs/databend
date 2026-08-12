@@ -571,7 +571,7 @@ impl Catalog for MutableCatalog {
             .map_err(meta_service_error)
     }
 
-    async fn get_valid_mv_definition(
+    async fn get_active_mv_definition(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
@@ -599,19 +599,6 @@ impl Catalog for MutableCatalog {
         self.ctx
             .meta
             .get_mv_current_source_generation(tenant, source_table_id)
-            .await
-            .map_err(meta_service_error)
-    }
-
-    async fn get_mv_bound_source_generation(
-        &self,
-        tenant: &Tenant,
-        source_table_id: u64,
-        mv_table_id: u64,
-    ) -> Result<Option<u64>> {
-        self.ctx
-            .meta
-            .get_mv_bound_source_generation(tenant, source_table_id, mv_table_id)
             .await
             .map_err(meta_service_error)
     }

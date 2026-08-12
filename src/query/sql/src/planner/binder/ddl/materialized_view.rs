@@ -313,22 +313,27 @@ impl Binder {
         // Resolve the direct AST source before query binding. Binding a view or another MV expands
         // it to its underlying query, which must not allow that object to masquerade as a FUSE
         // base-table source.
-        let (direct_source_catalog, direct_source_database, direct_source_name) = match &query.body
-        {
+        let direct_source = match &query.body {
             SetExpr::Select(select) => match select.from.as_slice() {
-                [
-                    TableReference::Table {
-                        table: table_ref, ..
-                    },
-                ] => self.normalize_object_identifier_triple(
-                    &table_ref.catalog,
-                    &table_ref.database,
-                    &table_ref.table,
-                ),
-                _ => unreachable!("materialized view checker accepted a non-table source"),
+                [TableReference::Table { table, .. }] => table,
+                _ => {
+                    return Err(ErrorCode::InvalidMaterializedView(
+                        "Materialized view requires exactly one base table source".to_string(),
+                    ));
+                }
             },
-            _ => unreachable!("materialized view checker accepted a non-SELECT query"),
+            _ => {
+                return Err(ErrorCode::InvalidMaterializedView(
+                    "Materialized view definition must be a SELECT query".to_string(),
+                ));
+            }
         };
+        let (direct_source_catalog, direct_source_database, direct_source_name) = self
+            .normalize_object_identifier_triple(
+                &direct_source.catalog,
+                &direct_source.database,
+                &direct_source.table,
+            );
         let direct_source = self
             .ctx
             .get_table(

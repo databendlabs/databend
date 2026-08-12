@@ -17,11 +17,11 @@ create table mv_rbac_source_0020(c int) change_tracking = true;
 "
 
 echo "=== CREATE MV requires CREATE on the database and SELECT on the source ==="
-echo "create materialized view mv_rbac_0020 as select c from mv_rbac_source_0020" | $MV_PRIV_USER_CONNECT
+echo "create materialized view mv_rbac_0020 as select c from mv_rbac_source_0020 where 1 = 1" | $MV_PRIV_USER_CONNECT
 run_root_sql "grant create on default.* to role mv_priv_role;"
-echo "create materialized view mv_rbac_0020 as select c from mv_rbac_source_0020" | $MV_PRIV_USER_CONNECT
+echo "create materialized view mv_rbac_0020 as select c from mv_rbac_source_0020 where 1 = 1" | $MV_PRIV_USER_CONNECT
 run_root_sql "grant select on default.mv_rbac_source_0020 to role mv_priv_role;"
-echo "create materialized view mv_rbac_0020 as select c from mv_rbac_source_0020" | $MV_PRIV_USER_CONNECT
+echo "create materialized view mv_rbac_0020 as select c from mv_rbac_source_0020 where 1 = 1" | $MV_PRIV_USER_CONNECT
 
 # Materialized-view access is authorized through the source table.
 run_root_sql "revoke select on default.mv_rbac_source_0020 from role mv_priv_role;"

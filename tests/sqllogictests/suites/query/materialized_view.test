@@ -354,10 +354,10 @@ SHOW CREATE TABLE test_mv
 
 # Materialized view creation is always asynchronous; explicit creation modes are rejected.
 statement error
-CREATE SYNC MATERIALIZED VIEW test_mv_sync AS SELECT id FROM mv_base_t
+CREATE SYNC MATERIALIZED VIEW test_mv_sync AS SELECT id FROM mv_base_t WHERE 1 = 1
 
 statement error
-CREATE ASYNC MATERIALIZED VIEW test_mv_async AS SELECT id FROM mv_base_t
+CREATE ASYNC MATERIALIZED VIEW test_mv_async AS SELECT id FROM mv_base_t WHERE 1 = 1
 
 # SHOW CREATE MATERIALIZED VIEW rejects base tables.
 statement error 1302
@@ -378,7 +378,7 @@ CREATE MATERIALIZED VIEW test_mv AS SELECT id FROM mv_base_t WHERE 1 = 1
 
 # CREATE OR REPLACE MATERIALIZED VIEW
 statement ok
-CREATE OR REPLACE MATERIALIZED VIEW test_mv AS SELECT val, COUNT(*) AS cnt FROM mv_base_t GROUP BY val
+CREATE OR REPLACE MATERIALIZED VIEW test_mv AS SELECT val, COUNT(*) AS cnt FROM mv_base_t WHERE 1 = 1 GROUP BY val
 
 query I
 SELECT count(*) FROM test_mv
@@ -387,7 +387,7 @@ SELECT count(*) FROM test_mv
 
 # CREATE OR REPLACE MATERIALIZED VIEW cannot depend on the old MV object.
 statement error 1302
-CREATE OR REPLACE MATERIALIZED VIEW test_mv AS SELECT val, cnt FROM test_mv
+CREATE OR REPLACE MATERIALIZED VIEW test_mv AS SELECT val, cnt FROM test_mv WHERE 1 = 1
 
 # Replace back to a stable definition for guard/drop tests.
 statement ok
@@ -576,15 +576,15 @@ DROP ROLE mv_maintenance_role
 
 # Snowflake-compatible syntax requires a column list whenever CLUSTER BY is present.
 statement error 1065
-CREATE MATERIALIZED VIEW test_mv_cluster_without_columns CLUSTER BY (val) AS SELECT val FROM mv_base_t
+CREATE MATERIALIZED VIEW test_mv_cluster_without_columns CLUSTER BY (val) AS SELECT val FROM mv_base_t WHERE 1 = 1
 
 # Invalid cluster keys are rejected before table metadata is stored.
 statement error 1081
-CREATE MATERIALIZED VIEW test_mv_bad_cluster (val) CLUSTER BY (missing_col) AS SELECT val FROM mv_base_t
+CREATE MATERIALIZED VIEW test_mv_bad_cluster (val) CLUSTER BY (missing_col) AS SELECT val FROM mv_base_t WHERE 1 = 1
 
 # CREATE MATERIALIZED VIEW with CLUSTER BY
 statement ok
-CREATE MATERIALIZED VIEW test_mv2 (val, cnt) CLUSTER BY (val) AS SELECT val, COUNT(*) AS cnt FROM mv_base_t GROUP BY val
+CREATE MATERIALIZED VIEW test_mv2 (val, cnt) CLUSTER BY (val) AS SELECT val, COUNT(*) AS cnt FROM mv_base_t WHERE 1 = 1 GROUP BY val
 
 statement ok
 REFRESH MATERIALIZED VIEW test_mv2
@@ -597,11 +597,11 @@ SELECT count(*) FROM test_mv2
 query TT
 SHOW CREATE MATERIALIZED VIEW test_mv2
 ----
-test_mv2 CREATE MATERIALIZED VIEW `default`.`test_mv2` (`val`, `cnt`) CLUSTER BY (val) AS SELECT val, COUNT(*) AS cnt FROM default.mv_base_t GROUP BY val
+test_mv2 CREATE MATERIALIZED VIEW `default`.`test_mv2` (`val`, `cnt`) CLUSTER BY (val) AS SELECT val, COUNT(*) AS cnt FROM default.mv_base_t WHERE 1 = 1 GROUP BY val
 
 # Aggregate result/state columns cannot be used as MV cluster keys.
 statement error 1081
-CREATE MATERIALIZED VIEW test_mv_bad_aggregate_cluster (val, cnt) CLUSTER BY (cnt) AS SELECT val, COUNT(*) AS cnt FROM mv_base_t GROUP BY val
+CREATE MATERIALIZED VIEW test_mv_bad_aggregate_cluster (val, cnt) CLUSTER BY (cnt) AS SELECT val, COUNT(*) AS cnt FROM mv_base_t WHERE 1 = 1 GROUP BY val
 
 statement error 1081
 ALTER MATERIALIZED VIEW test_mv2 CLUSTER BY (cnt)
@@ -652,39 +652,39 @@ USE default
 
 # CTE definitions remain outside the query shapes supported by feat-mv-insert.
 statement error
-CREATE MATERIALIZED VIEW test_mv_cte AS WITH c AS (SELECT val, SUM(amount) AS total FROM mv_base_t GROUP BY val) SELECT * FROM c
+CREATE MATERIALIZED VIEW test_mv_cte AS WITH c AS (SELECT val, SUM(amount) AS total FROM mv_base_t GROUP BY val) SELECT * FROM c WHERE 1 = 1
 
 # CTE in materialized view: nested CTE inside subquery
 statement error
-CREATE MATERIALIZED VIEW test_mv_nested_cte AS SELECT * FROM (WITH c AS (SELECT val, SUM(amount) AS total FROM mv_base_t GROUP BY val) SELECT * FROM c) s
+CREATE MATERIALIZED VIEW test_mv_nested_cte AS SELECT * FROM (WITH c AS (SELECT val, SUM(amount) AS total FROM mv_base_t GROUP BY val) SELECT * FROM c) s WHERE 1 = 1
 
 # MV metadata records one real, persistent, ordinary FUSE source identity.
 statement error
-CREATE MATERIALIZED VIEW test_mv_no_source AS SELECT 1
+CREATE MATERIALIZED VIEW test_mv_no_source AS SELECT 1 WHERE 1 = 1
 
 statement error
-CREATE MATERIALIZED VIEW test_mv_join AS SELECT a.id FROM mv_base_t a JOIN mv_base_t2 b ON a.id = b.id
+CREATE MATERIALIZED VIEW test_mv_join AS SELECT a.id FROM mv_base_t a JOIN mv_base_t2 b ON a.id = b.id WHERE 1 = 1
 
 statement ok
 CREATE VIEW mv_source_view AS SELECT id FROM mv_base_t
 
 statement error
-CREATE MATERIALIZED VIEW test_mv_from_view AS SELECT id FROM mv_source_view
+CREATE MATERIALIZED VIEW test_mv_from_view AS SELECT id FROM mv_source_view WHERE 1 = 1
 
 statement error
-CREATE MATERIALIZED VIEW test_mv_from_mv AS SELECT id FROM test_mv
+CREATE MATERIALIZED VIEW test_mv_from_mv AS SELECT id FROM test_mv WHERE 1 = 1
 
 statement ok
 CREATE TABLE mv_null_source (id INT) ENGINE = NULL
 
 statement error
-CREATE MATERIALIZED VIEW test_mv_from_null AS SELECT * FROM mv_null_source
+CREATE MATERIALIZED VIEW test_mv_from_null AS SELECT * FROM mv_null_source WHERE 1 = 1
 
 statement ok
 CREATE TEMPORARY TABLE mv_temp_source (id INT)
 
 statement error
-CREATE MATERIALIZED VIEW test_mv_from_temp AS SELECT * FROM mv_temp_source
+CREATE MATERIALIZED VIEW test_mv_from_temp AS SELECT * FROM mv_temp_source WHERE 1 = 1
 
 statement ok
 DROP TABLE mv_temp_source

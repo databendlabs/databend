@@ -123,6 +123,10 @@ pub struct MVDefinition {
 /// observed while binding. `create_table` compares it with the current semantic
 /// generation, then uses the freshly read version-key KV sequence as its
 /// transaction condition. It is not persisted in the MV `TableMeta`.
+/// A source `TableMeta` sequence is intentionally not carried here because
+/// ordinary source-table writes advance it without invalidating the bound
+/// schema. `create_table` reads the current source `TableMeta` itself to reject
+/// a missing or dropped source.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateMaterializedViewMeta {
     pub definition: MVDefinition,
@@ -130,8 +134,8 @@ pub struct CreateMaterializedViewMeta {
     ///
     /// A missing version key is generation 0. MV-invalidating source DDL
     /// increments the stored generation, rejecting a CREATE bound before that
-    /// DDL. CREATE uses the version key's KV sequence as an internal transaction
-    /// CAS token.
+    /// DDL. The version key's KV sequence is intentionally kept inside the
+    /// Meta API as a transaction CAS token.
     pub expected_source_generation: u64,
 }
 

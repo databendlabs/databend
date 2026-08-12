@@ -273,27 +273,21 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         mv_table_id: u64,
     ) -> Result<Option<SeqV<MVDefinition>>>;
 
-    /// Get an MV definition only when its source binding is currently valid.
-    async fn get_valid_mv_definition(
+    /// Get an MV definition if its source binding is active.
+    async fn get_active_mv_definition(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
         mv_table_id: u64,
     ) -> Result<Option<SeqV<MVDefinition>>>;
 
-    /// Get the current semantic source generation, if its record exists.
+    /// Get a source table's current materialized-view binding generation.
+    ///
+    /// `None` means the generation record is not initialized and represents generation 0.
     async fn get_mv_current_source_generation(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
-    ) -> Result<Option<u64>>;
-
-    /// Point-read the immutable source generation on one materialized-view binding.
-    async fn get_mv_bound_source_generation(
-        &self,
-        tenant: &Tenant,
-        source_table_id: u64,
-        mv_table_id: u64,
     ) -> Result<Option<u64>>;
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.

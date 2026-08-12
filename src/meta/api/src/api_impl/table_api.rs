@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CommitTableMetaError;
@@ -1396,9 +1397,11 @@ where
             };
 
             let new_table_meta = req.new_table_meta.clone();
-            let old_table_meta = old_table_meta
-                .as_ref()
-                .expect("table metadata existence was checked above");
+            let old_table_meta = old_table_meta.as_ref().ok_or_else(|| {
+                KVAppError::AppError(AppError::UnknownTableId(
+                    tbid.unknown_error("update_multi_table_meta"),
+                ))
+            })?;
             invalidates_mv_source_bindings_by_table_id.insert(
                 req.table_id,
                 invalidates_mv_source_bindings(old_table_meta, &new_table_meta),
