@@ -111,9 +111,10 @@ impl SelectivityEstimator {
     }
 
     pub fn apply(&mut self, predicates: &[ScalarExpr]) -> Result<f64> {
-        // Selectivity is an estimate, but using the Unix epoch for time-dependent predicates can
-        // make current data look entirely selected or rejected. Capture the current time for this
-        // estimate while leaving other context fields at their existing defaults.
+        // FunctionContext::default() initializes `now` to the Unix epoch. Folding relative-time
+        // predicates with that value can place the cutoff outside the column statistics range and
+        // distort the selectivity estimate. Use the current UTC instant for this estimation path;
+        // other context fields keep their existing defaults.
         let func_ctx = FunctionContext {
             now: Zoned::now().with_time_zone(TimeZone::UTC),
             ..FunctionContext::default()
