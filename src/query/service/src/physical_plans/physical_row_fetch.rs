@@ -51,6 +51,8 @@ pub struct RowFetch {
     pub row_id_col_offset: usize,
     pub fetched_fields: Vec<DataField>,
     pub need_wrap_nullable: bool,
+    #[serde(default = "default_populate_cache")]
+    pub populate_cache: bool,
     /// When true, a block_id repartition is inserted before RowFetch to reduce
     /// duplicate block reads. Applicable to join-based mutation paths (MERGE INTO,
     /// UPDATE...FROM). Not applicable to SELECT+LIMIT where the exchange would
@@ -59,6 +61,10 @@ pub struct RowFetch {
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+fn default_populate_cache() -> bool {
+    true
 }
 
 #[typetag::serde]
@@ -115,6 +121,7 @@ impl IPhysicalPlan for RowFetch {
             row_id_col_offset: self.row_id_col_offset,
             fetched_fields: self.fetched_fields.clone(),
             need_wrap_nullable: self.need_wrap_nullable,
+            populate_cache: self.populate_cache,
             enable_block_id_repartition: self.enable_block_id_repartition,
             stat_info: self.stat_info.clone(),
         })
@@ -131,6 +138,7 @@ impl IPhysicalPlan for RowFetch {
             &self.source,
             self.cols_to_fetch.clone(),
             self.need_wrap_nullable,
+            self.populate_cache,
             io_semaphore,
         )?;
 

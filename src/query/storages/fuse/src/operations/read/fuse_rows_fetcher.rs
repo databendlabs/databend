@@ -51,6 +51,7 @@ pub fn row_fetch_processor(
     source: &DataSourcePlan,
     projection: Projection,
     need_wrap_nullable: bool,
+    populate_cache: bool,
     io_semaphore: Arc<Semaphore>,
 ) -> Result<RowFetcher> {
     let table = ctx.build_table_from_source_plan(source)?;
@@ -67,7 +68,8 @@ pub fn row_fetch_processor(
         .iter()
         .map(|field| DataType::from(field.data_type()))
         .collect::<Vec<_>>();
-    let block_reader = fuse_table.create_block_reader(ctx.clone(), projection.clone(), true)?;
+    let block_reader =
+        fuse_table.create_block_reader(ctx.clone(), projection.clone(), populate_cache)?;
 
     match &fuse_table.storage_format {
         FuseStorageFormat::Parquet => {
