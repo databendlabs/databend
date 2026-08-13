@@ -72,6 +72,24 @@ impl From<TableCompression> for ParquetCompression {
     }
 }
 
+impl TryFrom<ParquetCompression> for meta::Compression {
+    type Error = ErrorCode;
+
+    fn try_from(value: ParquetCompression) -> Result<Self, Self::Error> {
+        match value {
+            ParquetCompression::UNCOMPRESSED => Ok(meta::Compression::None),
+            ParquetCompression::SNAPPY => Ok(meta::Compression::Snappy),
+            ParquetCompression::GZIP(_) => Ok(meta::Compression::Gzip),
+            ParquetCompression::LZ4 => Ok(meta::Compression::Lz4),
+            ParquetCompression::ZSTD(_) => Ok(meta::Compression::Zstd),
+            ParquetCompression::LZ4_RAW => Ok(meta::Compression::Lz4Raw),
+            compression => Err(ErrorCode::UnknownCompressionType(format!(
+                "unsupported parquet compression: {compression:?}"
+            ))),
+        }
+    }
+}
+
 impl From<meta::Compression> for ParquetCompression {
     fn from(value: meta::Compression) -> Self {
         match value {
