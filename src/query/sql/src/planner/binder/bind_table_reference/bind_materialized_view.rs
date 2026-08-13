@@ -588,20 +588,18 @@ impl Binder {
         let mv_definition = databend_common_base::runtime::block_on(async {
             let catalog = self.ctx.get_catalog(catalog_name).await?;
             catalog
-                .get_mv_definition(&tenant, table_meta.get_id())
+                .get_active_mv_definition(&tenant, source_table_id, table_meta.get_id())
                 .await?
                 .ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "materialized view {} has no definition",
+                    ErrorCode::InvalidMaterializedView(format!(
+                        "materialized view {} has an invalid source binding; recreate the materialized view",
                         table_meta.name()
                     ))
                 })
         })?;
 
-        // Aggregate MV storage contains serialized states. Reading and merging those states across
-        // cluster nodes needs an explicit distributed plan boundary, which is deferred to a follow-up
-        // change. Until then, aggregate MVs always execute their persisted logical definition against
-        // the source table, even when their storage checkpoint is fresh.
+        // Bind the persisted physical definition to validate its source identity and determine
+        // whether hybrid reads must merge aggregate states before the logical projection.
         let query = parse_materialized_view_query(
             &mv_definition.data.query,
             "invalid materialized view physical query",
@@ -621,7 +619,6 @@ impl Binder {
             source_table_id,
             table_meta.name(),
         )?;
-
         let is_aggregating = find_materialized_view_aggregate(&definition_expr).is_some();
 
         let (source_table, source_database, source_seq, source_snapshot_location) =

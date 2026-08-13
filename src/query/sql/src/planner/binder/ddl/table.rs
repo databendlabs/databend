@@ -100,6 +100,7 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
+use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
@@ -156,6 +157,7 @@ use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTableTagPlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::MaintenanceTarget;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
@@ -620,6 +622,14 @@ impl Binder {
 
         // FUSE tables can inherit database connection defaults for external storage
         let engine = engine.unwrap_or(catalog.default_table_engine());
+        // CREATE TABLE ... ENGINE = MATERIALIZED_VIEW is still parseable via Engine::MaterializedView,
+        // but it would bypass CREATE MATERIALIZED VIEW (definition, source binding, generation).
+        // Reject here so MV can only be published through bind_create_materialized_view.
+        if engine == Engine::MaterializedView {
+            return Err(ErrorCode::TableEngineNotSupported(
+                "MATERIALIZED_VIEW engine can only be created with CREATE MATERIALIZED VIEW",
+            ));
+        }
         let stage_resolver = StageResolver::from_table_context(
             self.ctx.clone(),
             UserApiProvider::instance(),
@@ -1032,7 +1042,7 @@ impl Binder {
                 .await?;
             if !keys.is_empty() {
                 options
-                    .entry("aggressive_recluster".to_owned())
+                    .entry(OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
                     .or_insert_with(|| "1".to_owned());
                 cluster_key = Some(format!("({})", keys.join(", ")));
             }
@@ -1484,6 +1494,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        target: MaintenanceTarget::Table,
                         branch,
                         cluster_keys,
                     },
@@ -1554,6 +1565,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                     branch,
                 },
             ))),
@@ -1565,6 +1577,7 @@ impl Binder {
                 catalog,
                 database,
                 table,
+                target: MaintenanceTarget::Table,
                 limit: limit.map(|v| v as usize),
                 selection: selection.clone(),
                 is_final: *is_final,

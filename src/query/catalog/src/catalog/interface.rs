@@ -82,7 +82,7 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
-use databend_common_meta_app::schema::MVInfo;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -270,34 +270,37 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Get a materialized-view definition by its table ID.
     async fn get_mv_definition(
         &self,
-        _tenant: &Tenant,
-        _mv_table_id: u64,
-    ) -> Result<Option<SeqV<MVDefinition>>> {
-        Err(ErrorCode::Unimplemented(format!(
-            "'get_mv_definition' not implemented for catalog {}",
-            self.name()
-        )))
-    }
+        tenant: &Tenant,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>>;
 
-    /// Get the semantic MV-binding generation of a source table. A missing
-    /// generation record is generation zero.
-    async fn get_mv_source_binding_generation(
+    /// Get an MV definition if its source binding is active.
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>>;
+
+    /// Get a source table's current materialized-view binding generation.
+    ///
+    /// `None` means the generation record is not initialized and represents generation 0.
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>>;
+
+    /// Get a consistent snapshot of active MV bindings for a source table.
+    async fn get_mv_source_binding_snapshot(
         &self,
         _tenant: &Tenant,
         _source_table_id: u64,
-    ) -> Result<u64> {
-        Ok(0)
-    }
-
-    /// List materialized views whose source binding matches the caller's
-    /// stable source generation.
-    async fn list_valid_mvs_by_source_table_id(
-        &self,
-        _tenant: &Tenant,
-        _source_table_id: u64,
-        _expected_source_generation: u64,
-    ) -> Result<Vec<MVInfo>> {
-        Ok(vec![])
+    ) -> Result<MVSourceBindingSnapshot> {
+        Ok(MVSourceBindingSnapshot {
+            generation: 0,
+            materialized_views: vec![],
+        })
     }
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.
@@ -533,6 +536,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn retryable_update_multi_table_meta(
         &self,
+        _tenant: &Tenant,
         _req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         Err(ErrorCode::Unimplemented(
@@ -542,9 +546,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        let result = self.retryable_update_multi_table_meta(req).await?;
+        let result = self.retryable_update_multi_table_meta(tenant, req).await?;
         match result {
             Ok(reply) => Ok(reply),
             Err(failed_tables) => {
@@ -567,9 +572,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // update stream metas, currently used by "copy into location form stream"
     async fn update_stream_metas(
         &self,
+        tenant: &Tenant,
         update_stream_metas: Vec<UpdateStreamMetaReq>,
     ) -> Result<()> {
-        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+        self.update_multi_table_meta(tenant, UpdateMultiTableMetaReq {
             update_stream_metas,
             ..Default::default()
         })
@@ -579,6 +585,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn update_single_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateTableMetaReq,
         table_info: &TableInfo,
     ) -> Result<UpdateTableMetaReply> {
@@ -595,7 +602,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         } else {
             update_table_metas.push((req, table_info.clone()));
         }
-        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+        self.update_multi_table_meta(tenant, UpdateMultiTableMetaReq {
             update_table_metas,
             update_temp_tables,
             ..Default::default()

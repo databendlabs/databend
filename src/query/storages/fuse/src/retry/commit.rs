@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
@@ -31,6 +32,7 @@ use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use log::info;
 use tokio::time::sleep;
 
@@ -40,10 +42,9 @@ use crate::operations::set_backoff;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
 
-const FUSE_ENGINE: &str = "FUSE";
-
 pub async fn commit_with_backoff(
     ctx: Arc<dyn TableContext>,
+    tenant: &Tenant,
     mut req: UpdateMultiTableMetaReq,
 ) -> Result<()> {
     let catalog = ctx.get_default_catalog()?;
@@ -59,7 +60,7 @@ pub async fn commit_with_backoff(
 
     loop {
         let ret = catalog
-            .retryable_update_multi_table_meta(req.clone())
+            .retryable_update_multi_table_meta(tenant, req.clone())
             .await?;
         let Err(update_failed_tbls) = ret else {
             return Ok(());
@@ -100,7 +101,7 @@ async fn compute_table_segments_diffs(
         let tid = update_table_meta_req.table_id;
         let engine = update_table_meta_req.new_table_meta.engine.as_str();
 
-        if engine != FUSE_ENGINE {
+        if !is_fuse_backed_engine(engine) {
             log::info!(
                 "Skipping segments diff pre-compute for table {} with engine {}",
                 tid,

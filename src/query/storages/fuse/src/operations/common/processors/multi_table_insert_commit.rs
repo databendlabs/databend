@@ -98,6 +98,7 @@ impl AsyncSink for CommitMultiTableInsert {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
+        let tenant = self.ctx.get_tenant();
         let mut update_table_metas = Vec::with_capacity(self.commit_metas.len());
         let mut update_temp_tables = Vec::with_capacity(self.commit_metas.len());
         let mut snapshot_generators = HashMap::with_capacity(self.commit_metas.len());
@@ -157,7 +158,7 @@ impl AsyncSink for CommitMultiTableInsert {
             } else {
                 match self
                     .catalog
-                    .retryable_update_multi_table_meta(update_multi_table_meta_req)
+                    .retryable_update_multi_table_meta(&tenant, update_multi_table_meta_req)
                     .await
                 {
                     Ok(ret) => ret,
@@ -176,9 +177,12 @@ impl AsyncSink for CommitMultiTableInsert {
             let Err(update_failed_tbls) = update_meta_result else {
                 if !update_temp_tables.is_empty() {
                     self.catalog
-                        .update_multi_table_meta(build_temp_update_multi_table_meta_req(
-                            std::mem::take(&mut update_temp_tables),
-                        ))
+                        .update_multi_table_meta(
+                            &tenant,
+                            build_temp_update_multi_table_meta_req(std::mem::take(
+                                &mut update_temp_tables,
+                            )),
+                        )
                         .await?;
                 }
 
@@ -324,10 +328,9 @@ fn build_non_temp_update_multi_table_meta_req(
 ) -> UpdateMultiTableMetaReq {
     UpdateMultiTableMetaReq {
         update_table_metas,
-        copied_files: vec![],
         update_stream_metas,
         deduplicated_labels: deduplicated_label.into_iter().collect(),
-        update_temp_tables: vec![],
+        ..Default::default()
     }
 }
 

@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::plans::UndropTablePlan;
 
 use crate::interpreters::Interpreter;
@@ -47,6 +49,20 @@ impl Interpreter for UndropTableInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.as_str();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let history = catalog
+            .get_table_history(&self.plan.tenant, &self.plan.database, &self.plan.table)
+            .await?;
+        if history
+            .last()
+            .is_some_and(|table| is_materialized_view_engine(table.engine()))
+        {
+            // DROP MV removes its immutable definition and source binding, so
+            // restoring only the backing table would create an invalid object.
+            return Err(ErrorCode::UndropTableHasNoHistory(format!(
+                "materialized view '{}.{}' cannot be undropped",
+                self.plan.database, self.plan.table
+            )));
+        }
         catalog.undrop_table(self.plan.clone().into()).await?;
 
         Ok(PipelineBuildResult::create())

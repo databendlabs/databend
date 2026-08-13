@@ -84,7 +84,7 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
-use databend_common_meta_app::schema::MVInfo;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -331,28 +331,34 @@ impl Catalog for SessionCatalog {
         self.inner.get_mv_definition(tenant, mv_table_id).await
     }
 
-    async fn get_mv_source_binding_generation(
+    async fn get_active_mv_definition(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
-    ) -> Result<u64> {
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
         self.inner
-            .get_mv_source_binding_generation(tenant, source_table_id)
+            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
             .await
     }
 
-    async fn list_valid_mvs_by_source_table_id(
+    async fn get_mv_current_source_generation(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
-        expected_source_generation: u64,
-    ) -> Result<Vec<MVInfo>> {
+    ) -> Result<Option<u64>> {
         self.inner
-            .list_valid_mvs_by_source_table_id(
-                tenant,
-                source_table_id,
-                expected_source_generation,
-            )
+            .get_mv_current_source_generation(tenant, source_table_id)
+            .await
+    }
+
+    async fn get_mv_source_binding_snapshot(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<MVSourceBindingSnapshot> {
+        self.inner
+            .get_mv_source_binding_snapshot(tenant, source_table_id)
             .await
     }
 
@@ -643,6 +649,7 @@ impl Catalog for SessionCatalog {
 
     async fn retryable_update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         mut req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         let state = self.txn_mgr.lock().state();
@@ -652,7 +659,9 @@ impl Catalog for SessionCatalog {
                 let reply = if req.is_empty() {
                     Ok(Default::default())
                 } else {
-                    self.inner.retryable_update_multi_table_meta(req).await?
+                    self.inner
+                        .retryable_update_multi_table_meta(tenant, req)
+                        .await?
                 };
                 self.temp_tbl_mgr
                     .lock()
@@ -660,7 +669,7 @@ impl Catalog for SessionCatalog {
                 Ok(reply)
             }
             TxnState::Active => {
-                self.txn_mgr.lock().update_multi_table_meta(req);
+                self.txn_mgr.lock().update_multi_table_meta(tenant, req)?;
                 Ok(Ok(Default::default()))
             }
             TxnState::Fail => unreachable!(),

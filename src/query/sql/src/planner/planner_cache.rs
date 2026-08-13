@@ -355,17 +355,10 @@ impl TableRefVisitor {
                     if let Ok(catalog) = self.ctx.get_catalog(&catalog_name).await {
                         let tenant = self.ctx.get_tenant();
                         let source_table_id = table.get_id();
-                        if let Ok(generation) = catalog
-                            .get_mv_source_binding_generation(&tenant, source_table_id)
+                        if let Ok(snapshot) = catalog
+                            .get_mv_source_binding_snapshot(&tenant, source_table_id)
                             .await
-                            && let Ok(mvs) = catalog
-                                .list_valid_mvs_by_source_table_id(
-                                    &tenant,
-                                    source_table_id,
-                                    generation,
-                                )
-                                .await
-                            && !mvs.is_empty()
+                            && !snapshot.materialized_views.is_empty()
                         {
                             // Automatic MV rewrite depends on an MV collection and endpoint that
                             // are not represented by the source-only planner-cache snapshot.

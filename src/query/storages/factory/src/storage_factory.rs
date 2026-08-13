@@ -32,6 +32,7 @@ use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_paimon::PaimonTable;
 use databend_common_storages_stream::stream_table::StreamTable;
+use databend_storages_common_table_meta::table::FUSE_ENGINE;
 
 use crate::Table;
 use crate::fuse::FuseTable;
@@ -113,9 +114,14 @@ pub struct StorageFactory {
 impl StorageFactory {
     pub fn with_storage_class_specs(&self, storage_class: S3StorageClass) -> Self {
         let mut new_creators = self.storages.clone();
-        new_creators.insert("FUSE".to_string(), Storage {
-            creator: Arc::new(FuseTableCreator::with_storage_class_spec(storage_class)),
+        let fuse_creator = Arc::new(FuseTableCreator::with_storage_class_spec(storage_class));
+        new_creators.insert(FUSE_ENGINE.to_string(), Storage {
+            creator: fuse_creator.clone(),
             descriptor: Arc::new(FuseTable::description),
+        });
+        new_creators.insert(MATERIALIZED_VIEW_ENGINE.to_string(), Storage {
+            creator: fuse_creator,
+            descriptor: Arc::new(materialized_view_description),
         });
 
         Self {
@@ -140,14 +146,15 @@ impl StorageFactory {
         });
 
         // Register FUSE table engine.
-        creators.insert("FUSE".to_string(), Storage {
+        let fuse_creator = Arc::new(FuseTableCreator::default());
+        creators.insert(FUSE_ENGINE.to_string(), Storage {
             // TODO should get default storage specs
-            creator: Arc::new(FuseTableCreator::default()),
+            creator: fuse_creator.clone(),
             descriptor: Arc::new(FuseTable::description),
         });
 
-        creators.insert("MATERIALIZED_VIEW".to_string(), Storage {
-            creator: Arc::new(FuseTableCreator::default()),
+        creators.insert(MATERIALIZED_VIEW_ENGINE.to_string(), Storage {
+            creator: fuse_creator,
             descriptor: Arc::new(materialized_view_description),
         });
 

@@ -43,6 +43,7 @@ use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
+use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableIdent;
@@ -265,11 +266,17 @@ impl<'a> MaterializedViewRefresh<'a> {
         };
 
         let catalog = ctx.get_catalog(&plan.catalog).await?;
+        // Binding validity is an admission check, not a refresh fence. Meta reads the definition
+        // and both generations at one transaction point. Once admitted, a concurrent source-schema
+        // change may let this refresh finish; subsequent MV reads reject the stale binding.
         let definition = catalog
-            .get_mv_definition(&plan.tenant, mv_table.get_id())
+            .get_active_mv_definition(&plan.tenant, source_table_id, mv_table.get_id())
             .await?
             .ok_or_else(|| {
-                ErrorCode::InvalidMaterializedView("materialized view definition not found")
+                ErrorCode::InvalidMaterializedView(format!(
+                    "materialized view {}.{} has an invalid source binding; recreate the materialized view",
+                    plan.database, plan.view_name
+                ))
             })?;
         Self::validate_source_table_id(ctx.clone(), plan, &definition.data.query, source_table_id)
             .await?;
@@ -282,6 +289,12 @@ impl<'a> MaterializedViewRefresh<'a> {
                     plan.database, plan.view_name, source_table_id
                 ))
             })?;
+        if source_meta.data.drop_on.is_some() {
+            return Err(ErrorCode::UnknownTable(format!(
+                "materialized view {}.{} source table id {} has been dropped",
+                plan.database, plan.view_name, source_table_id
+            )));
+        }
         let source_seq = source_meta.seq;
         let source_snapshot_location = source_meta
             .data
@@ -350,14 +363,15 @@ impl<'a> MaterializedViewRefresh<'a> {
                     source_table_id
                 ))
             })?;
-        let current_source_table = catalog
-            .get_table(&plan.tenant, &source_database, &source_table_name)
-            .await?;
-        let source_table = catalog.get_table_by_info(&TableInfo {
-            ident: TableIdent::new(source_table_id, source_seq),
-            meta: source_meta.data.clone(),
-            ..current_source_table.get_table_info().clone()
-        })?;
+        let source_table_info = TableInfo::new_full(
+            &source_database,
+            &source_table_name,
+            TableIdent::new(source_table_id, source_seq),
+            source_meta.data.clone(),
+            catalog.info(),
+            DatabaseType::NormalDB,
+        );
+        let source_table = catalog.get_table_by_info(&source_table_info)?;
         let source_table = FuseTable::try_from_table(source_table.as_ref())?;
         if let Some((mv_source_seq, Some(_))) = &checkpoint {
             source_table

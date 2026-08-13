@@ -101,6 +101,7 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -1001,6 +1002,35 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_meta_by_id(table_id).await
     }
 
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.cat.get_mv_definition(tenant, mv_id).await
+    }
+
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.cat
+            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
+            .await
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        self.cat
+            .get_mv_current_source_generation(tenant, source_table_id)
+            .await
+    }
+
     #[async_backtrace::framed]
     async fn mget_table_names_by_ids(
         &self,
@@ -1226,12 +1256,15 @@ impl Catalog for FakedCatalog {
 
     async fn retryable_update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         if let Some(e) = &self.error_injection {
             Err(e.clone())
         } else {
-            self.cat.retryable_update_multi_table_meta(req).await
+            self.cat
+                .retryable_update_multi_table_meta(tenant, req)
+                .await
         }
     }
 
