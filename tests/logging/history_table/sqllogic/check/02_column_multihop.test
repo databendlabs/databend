@@ -1,28 +1,31 @@
 # Column patterns and multi-hop traversal correspond to setup/02_column_multihop.test.
 
-query ITTTT rowsort
-SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+query ITTTTTT rowsort
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
 FROM get_lineage('lineage_history_columns.mid.x', 'COLUMN', 'UPSTREAM', 1)
 ----
-1 default.lineage_history_columns.src a default.lineage_history_columns.mid x
-1 default.lineage_history_columns.src b default.lineage_history_columns.mid x
+1 lineage_history_columns src a lineage_history_columns mid x
+1 lineage_history_columns src b lineage_history_columns mid x
 
-query ITTTT rowsort
-SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+query ITTTTTT rowsort
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
 FROM get_lineage('lineage_history_columns.dst.z', 'COLUMN', 'UPSTREAM', 2)
 ----
-1 default.lineage_history_columns.mid x default.lineage_history_columns.dst z
-2 default.lineage_history_columns.src a default.lineage_history_columns.mid x
-2 default.lineage_history_columns.src b default.lineage_history_columns.mid x
+1 lineage_history_columns mid x lineage_history_columns dst z
+2 lineage_history_columns src a lineage_history_columns mid x
+2 lineage_history_columns src b lineage_history_columns mid x
 
 # Masking applies to a concrete target column, not to the whole object or traversal path.
-query ITTTTT rowsort
-SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name, target_status
+query ITTTTTTTT rowsort
+SELECT distance, source_object_database, source_object_name, source_column_name, source_status,
+       target_object_database, target_object_name, target_column_name, target_status
 FROM get_lineage('lineage_history_columns.dst.z', 'COLUMN', 'UPSTREAM', 2)
 ----
-1 default.lineage_history_columns.mid x default.lineage_history_columns.dst z MASKED
-2 default.lineage_history_columns.src a default.lineage_history_columns.mid x ACTIVE
-2 default.lineage_history_columns.src b default.lineage_history_columns.mid x ACTIVE
+1 lineage_history_columns mid x ACTIVE lineage_history_columns dst z MASKED
+2 lineage_history_columns src a ACTIVE lineage_history_columns mid x ACTIVE
+2 lineage_history_columns src b ACTIVE lineage_history_columns mid x ACTIVE
 
 query T
 SELECT target_status
@@ -30,13 +33,36 @@ FROM get_lineage('lineage_history_columns.dst', 'TABLE', 'UPSTREAM', 1)
 ----
 ACTIVE
 
-query ITTTT rowsort
-SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+query ITTTTTT rowsort
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
 FROM get_lineage('lineage_history_columns.src.a', 'COLUMN', 'DOWNSTREAM', 2)
 ----
-1 default.lineage_history_columns.src a default.lineage_history_columns.mid x
-1 default.lineage_history_columns.src a default.lineage_history_columns.mid y
-2 default.lineage_history_columns.mid x default.lineage_history_columns.dst z
+1 lineage_history_columns src a lineage_history_columns mid x
+1 lineage_history_columns src a lineage_history_columns mid y
+2 lineage_history_columns mid x lineage_history_columns dst z
+
+# Object identity is returned as separate catalog, database, and name columns.
+query TTTTTT
+SELECT source_object_catalog, source_object_database, source_object_name,
+       target_object_catalog, target_object_database, target_object_name
+FROM get_lineage('lineage_history_columns.mid', 'TABLE', 'UPSTREAM', 1)
+----
+default lineage_history_columns src default lineage_history_columns mid
+
+# Source and target masking are reported independently for each resolved column endpoint.
+statement ok
+ALTER TABLE lineage_history_columns.src MODIFY COLUMN a SET MASKING POLICY lineage_history_columns_mask
+
+query TT
+SELECT source_status, target_status
+FROM get_lineage('lineage_history_columns.src.a', 'COLUMN', 'DOWNSTREAM', 1)
+WHERE target_column_name = 'x'
+----
+MASKED ACTIVE
+
+statement ok
+ALTER TABLE lineage_history_columns.src MODIFY COLUMN a UNSET MASKING POLICY
 
 statement ok
 ALTER TABLE lineage_history_columns.dst MODIFY COLUMN z UNSET MASKING POLICY

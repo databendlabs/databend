@@ -59,6 +59,7 @@ struct TraversedColumnEdge {
     edge: RawLineageEdge,
     source: ResolvedObject,
     source_column: String,
+    source_masked: bool,
     target: ResolvedObject,
     target_column: String,
     target_masked: bool,
@@ -155,16 +156,27 @@ async fn traverse_objects(
 
     let mut rows = results
         .into_values()
-        .map(|result| LineageResultRow {
-            distance: i32::from(result.distance),
-            source_object_domain: Some(result.source.object_type.as_str().to_string()),
-            source_object_name: Some(result.source.qualified_name()),
-            source_column_name: None,
-            target_object_domain: Some(result.target.object_type.as_str().to_string()),
-            target_object_name: Some(result.target.qualified_name()),
-            target_column_name: None,
-            target_status: "ACTIVE".to_string(),
-            process: Some(process_json(&result.edge)),
+        .map(|result| {
+            let (source_object_catalog, source_object_database, source_object_name) =
+                result.source.output_address();
+            let (target_object_catalog, target_object_database, target_object_name) =
+                result.target.output_address();
+            LineageResultRow {
+                source_object_catalog,
+                source_object_database,
+                source_object_name,
+                source_object_domain: Some(result.source.object_type.as_str().to_string()),
+                source_column_name: None,
+                source_status: "ACTIVE".to_string(),
+                target_object_catalog,
+                target_object_database,
+                target_object_name,
+                target_object_domain: Some(result.target.object_type.as_str().to_string()),
+                target_column_name: None,
+                target_status: "ACTIVE".to_string(),
+                distance: i32::from(result.distance),
+                process: Some(process_json(&result.edge)),
+            }
         })
         .collect::<Vec<_>>();
     sort_rows(&mut rows);
@@ -286,11 +298,15 @@ async fn traverse_columns(
                             (current_column.column_name.clone(), next_name.clone())
                         }
                     };
-                    let target_masked = match args.direction {
-                        QueryDirection::Upstream => {
-                            target.is_column_masked(&current_column.column_id)
-                        }
-                        QueryDirection::Downstream => target.is_column_masked(&next_id),
+                    let (source_masked, target_masked) = match args.direction {
+                        QueryDirection::Upstream => (
+                            source.is_column_masked(&next_id),
+                            target.is_column_masked(&current_column.column_id),
+                        ),
+                        QueryDirection::Downstream => (
+                            source.is_column_masked(&current_column.column_id),
+                            target.is_column_masked(&next_id),
+                        ),
                     };
                     let key = (
                         source.object_key.clone(),
@@ -305,6 +321,7 @@ async fn traverse_columns(
                         source_column,
                         target: target.clone(),
                         target_column,
+                        source_masked,
                         target_masked,
                     };
                     match level_edges.get_mut(&key) {
@@ -363,16 +380,27 @@ async fn traverse_columns(
 
     let mut rows = results
         .into_values()
-        .map(|result| LineageResultRow {
-            distance: i32::from(result.distance),
-            source_object_domain: Some(result.source.object_type.as_str().to_string()),
-            source_object_name: Some(result.source.qualified_name()),
-            source_column_name: Some(result.source_column),
-            target_object_domain: Some(result.target.object_type.as_str().to_string()),
-            target_object_name: Some(result.target.qualified_name()),
-            target_column_name: Some(result.target_column),
-            target_status: target_status(result.target_masked).to_string(),
-            process: Some(process_json(&result.edge)),
+        .map(|result| {
+            let (source_object_catalog, source_object_database, source_object_name) =
+                result.source.output_address();
+            let (target_object_catalog, target_object_database, target_object_name) =
+                result.target.output_address();
+            LineageResultRow {
+                source_object_catalog,
+                source_object_database,
+                source_object_name,
+                source_object_domain: Some(result.source.object_type.as_str().to_string()),
+                source_column_name: Some(result.source_column),
+                source_status: target_status(result.source_masked).to_string(),
+                target_object_catalog,
+                target_object_database,
+                target_object_name,
+                target_object_domain: Some(result.target.object_type.as_str().to_string()),
+                target_column_name: Some(result.target_column),
+                target_status: target_status(result.target_masked).to_string(),
+                distance: i32::from(result.distance),
+                process: Some(process_json(&result.edge)),
+            }
         })
         .collect::<Vec<_>>();
     sort_rows(&mut rows);
@@ -464,15 +492,23 @@ fn sort_rows(rows: &mut [LineageResultRow]) {
     rows.sort_by(|left, right| {
         (
             left.distance,
+            left.source_object_catalog.as_deref().unwrap_or_default(),
+            left.source_object_database.as_deref().unwrap_or_default(),
             left.source_object_name.as_deref().unwrap_or_default(),
             left.source_column_name.as_deref().unwrap_or_default(),
+            left.target_object_catalog.as_deref().unwrap_or_default(),
+            left.target_object_database.as_deref().unwrap_or_default(),
             left.target_object_name.as_deref().unwrap_or_default(),
             left.target_column_name.as_deref().unwrap_or_default(),
         )
             .cmp(&(
                 right.distance,
+                right.source_object_catalog.as_deref().unwrap_or_default(),
+                right.source_object_database.as_deref().unwrap_or_default(),
                 right.source_object_name.as_deref().unwrap_or_default(),
                 right.source_column_name.as_deref().unwrap_or_default(),
+                right.target_object_catalog.as_deref().unwrap_or_default(),
+                right.target_object_database.as_deref().unwrap_or_default(),
                 right.target_object_name.as_deref().unwrap_or_default(),
                 right.target_column_name.as_deref().unwrap_or_default(),
             ))

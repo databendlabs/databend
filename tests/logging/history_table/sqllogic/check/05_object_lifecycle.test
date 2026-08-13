@@ -22,11 +22,11 @@ FROM get_lineage('lineage_history_lifecycle.dropped_fuse', 'TABLE', 'UPSTREAM', 
 statement ok
 UNDROP TABLE lineage_history_lifecycle.dropped_fuse
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage('lineage_history_lifecycle.dropped_fuse', 'TABLE', 'UPSTREAM', 1)
 ----
-1 default.lineage_history_lifecycle.src default.lineage_history_lifecycle.dropped_fuse
+1 lineage_history_lifecycle src lineage_history_lifecycle dropped_fuse
 
 # Renaming preserves column ids, so the existing DataMovement edge resolves both current names.
 statement ok
@@ -35,8 +35,9 @@ ALTER TABLE lineage_history_lifecycle.renamed_column_src RENAME COLUMN a TO rena
 statement ok
 ALTER TABLE lineage_history_lifecycle.renamed_column_dst RENAME COLUMN a TO renamed_a
 
-query ITTTT
-SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+query ITTTTTT
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
 FROM get_lineage(
     'lineage_history_lifecycle.renamed_column_dst.renamed_a',
     'COLUMN',
@@ -44,7 +45,7 @@ FROM get_lineage(
     1
 )
 ----
-1 default.lineage_history_lifecycle.renamed_column_src renamed_a default.lineage_history_lifecycle.renamed_column_dst renamed_a
+1 lineage_history_lifecycle renamed_column_src renamed_a lineage_history_lifecycle renamed_column_dst renamed_a
 
 # Dropping and adding the same name allocates a new column id. The object edge remains valid, but
 # the old column mapping must not attach itself to the replacement column.
@@ -54,8 +55,8 @@ ALTER TABLE lineage_history_lifecycle.replaced_column_src DROP COLUMN a
 statement ok
 ALTER TABLE lineage_history_lifecycle.replaced_column_src ADD COLUMN a INT
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage(
     'lineage_history_lifecycle.replaced_column_dst',
     'TABLE',
@@ -63,7 +64,7 @@ FROM get_lineage(
     1
 )
 ----
-1 default.lineage_history_lifecycle.replaced_column_src default.lineage_history_lifecycle.replaced_column_dst
+1 lineage_history_lifecycle replaced_column_src lineage_history_lifecycle replaced_column_dst
 
 query I
 SELECT count(*)
