@@ -1,10 +1,10 @@
 # Statement coverage corresponds to setup/04_statement_coverage.test.
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.self_insert_dst', 'TABLE', 'UPSTREAM', 1)
 ----
-1 default.lineage_history_statements.src default.lineage_history_statements.self_insert_dst
+1 lineage_history_statements src lineage_history_statements self_insert_dst
 
 query ISS
 SELECT distance, source_column_name, target_column_name
@@ -20,11 +20,11 @@ WHERE target_database = 'lineage_history_statements'
 ----
 0
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.insert_dst', 'TABLE', 'UPSTREAM', 1)
 ----
-1 default.lineage_history_statements.src default.lineage_history_statements.insert_dst
+1 lineage_history_statements src lineage_history_statements insert_dst
 
 query I
 SELECT count(*)
@@ -93,30 +93,30 @@ FROM result CROSS JOIN history
 ----
 1
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.multi_a', 'TABLE', 'UPSTREAM', 1)
 ----
-1 default.lineage_history_statements.src default.lineage_history_statements.multi_a
+1 lineage_history_statements src lineage_history_statements multi_a
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.multi_b', 'TABLE', 'UPSTREAM', 1)
 ----
-1 default.lineage_history_statements.src default.lineage_history_statements.multi_b
+1 lineage_history_statements src lineage_history_statements multi_b
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.replace_dst', 'TABLE', 'UPSTREAM', 1)
 ----
-1 default.lineage_history_statements.src default.lineage_history_statements.replace_dst
+1 lineage_history_statements src lineage_history_statements replace_dst
 
 # MERGE INTO records a single DML edge for the src -> merge_dst pair.
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.merge_dst', 'TABLE', 'UPSTREAM', 1)
 ----
-1 default.lineage_history_statements.src default.lineage_history_statements.merge_dst
+1 lineage_history_statements src lineage_history_statements merge_dst
 
 query T
 SELECT parse_json(process)['lineage_kind']::STRING
@@ -146,11 +146,11 @@ FROM get_lineage('lineage_history_statements.merge_dst.n', 'COLUMN', 'UPSTREAM',
 1 c n
 
 # Stream data lineage passes through to the backing table.
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.stream_dst', 'TABLE', 'UPSTREAM', 1)
 ----
-1 default.lineage_history_statements.stream_src default.lineage_history_statements.stream_dst
+1 lineage_history_statements stream_src lineage_history_statements stream_dst
 
 query ISS
 SELECT distance, source_column_name, target_column_name
@@ -169,34 +169,37 @@ WHERE source_database = 'lineage_history_statements'
 ----
 0
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITSTTT
+SELECT distance, source_object_catalog, source_object_database, source_object_name,
+       target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.copy_dst', 'TABLE', 'UPSTREAM', 2)
 ORDER BY distance, source_object_name, target_object_name
 ----
-1 lineage_history_statements_stage default.lineage_history_statements.copy_dst
-2 default.lineage_history_statements.src lineage_history_statements_stage
+1 NULL NULL lineage_history_statements_stage lineage_history_statements copy_dst
+2 default lineage_history_statements src NULL lineage_history_statements_stage
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTSTTT rowsort
+SELECT distance, source_object_catalog, source_object_database, source_object_name,
+       target_object_catalog, target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements_stage', 'STAGE', 'DOWNSTREAM', 1)
-ORDER BY target_object_name
 ----
-1 lineage_history_statements_stage default.lineage_history_statements.copy_dst
-1 lineage_history_statements_stage default.lineage_history_statements.insert_select_stage_dst
-1 lineage_history_statements_stage default.lineage_history_statements.insert_stage_dst
+1 NULL NULL lineage_history_statements_stage default lineage_history_statements copy_dst
+1 NULL NULL lineage_history_statements_stage default lineage_history_statements insert_select_stage_dst
+1 NULL NULL lineage_history_statements_stage default lineage_history_statements insert_stage_dst
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITSTTT
+SELECT distance, source_object_catalog, source_object_database, source_object_name,
+       target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.insert_select_stage_dst', 'TABLE', 'UPSTREAM', 1)
 ----
-1 lineage_history_statements_stage default.lineage_history_statements.insert_select_stage_dst
+1 NULL NULL lineage_history_statements_stage lineage_history_statements insert_select_stage_dst
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITSTTT
+SELECT distance, source_object_catalog, source_object_database, source_object_name,
+       target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.insert_stage_dst', 'TABLE', 'UPSTREAM', 1)
 ----
-1 lineage_history_statements_stage default.lineage_history_statements.insert_stage_dst
+1 NULL NULL lineage_history_statements_stage lineage_history_statements insert_stage_dst
 
 # Stage file fields are not stable columns, so Stage-to-table edges stay object-only.
 query I

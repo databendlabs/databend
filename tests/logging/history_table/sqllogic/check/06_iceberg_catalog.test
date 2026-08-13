@@ -1,16 +1,18 @@
 # Iceberg lineage corresponds to setup/06_iceberg_catalog.test.
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTTTT
+SELECT distance, source_object_catalog, source_object_database, source_object_name,
+       target_object_catalog, target_object_database, target_object_name
 FROM get_lineage('lineage_history_iceberg.dst', 'TABLE', 'UPSTREAM', 1)
 ----
-1 lineage_history_iceberg_catalog.lineage_db.src default.lineage_history_iceberg.dst
+1 lineage_history_iceberg_catalog lineage_db src default lineage_history_iceberg dst
 
-query ITTTT
-SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+query ITTTTTTTT
+SELECT distance, source_object_catalog, source_object_database, source_object_name, source_column_name,
+       target_object_catalog, target_object_database, target_object_name, target_column_name
 FROM get_lineage('lineage_history_iceberg.dst.a', 'COLUMN', 'UPSTREAM', 1)
 ----
-1 lineage_history_iceberg_catalog.lineage_db.src a default.lineage_history_iceberg.dst a
+1 lineage_history_iceberg_catalog lineage_db src a default lineage_history_iceberg dst a
 
 # External catalog ids are not stable across catalog reloads. Both the object and its column data
 # must therefore be name-addressed in the aggregated physical record.

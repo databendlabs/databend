@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use databend_common_ast::ast::CreateMaterializedViewStmt;
 use databend_common_ast::ast::DropMaterializedViewStmt;
@@ -24,7 +23,6 @@ use databend_common_ast::ast::ShowMaterializedViewsStmt;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::visit::WalkMut;
-use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
@@ -32,7 +30,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -45,6 +43,7 @@ use log::debug;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::SelectBuilder;
+use crate::TableEntry;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
@@ -112,19 +111,16 @@ impl Binder {
                         "materialized view only supports built-in aggregate functions",
                     ));
                 };
-                let agg_name = function
-                    .func_name
-                    .strip_suffix("_state")
-                    .unwrap_or(&function.func_name);
-                let argument_types = function
-                    .args
-                    .iter()
-                    .map(ScalarExpr::data_type)
-                    .collect::<Result<Vec<_>>>()?;
-                let state_type = AggregateFunctionFactory::instance()
-                    .get(agg_name, function.params.clone(), argument_types, vec![])?
-                    .serialize_data_type();
-                data_types.push(infer_schema_type(&state_type)?);
+                if !matches!(
+                    function.return_type.remove_nullable(),
+                    DataType::AggregateState(_)
+                ) {
+                    return Err(ErrorCode::Internal(format!(
+                        "materialized view state function '{}' did not produce AggregateState",
+                        function.func_name
+                    )));
+                }
+                data_types.push(infer_schema_type(function.return_type.as_ref())?);
             }
             for item in &aggregate.group_items {
                 data_types.push(infer_schema_type(&item.scalar.data_type()?)?);
@@ -191,15 +187,14 @@ impl Binder {
     }
 
     /// Resolve the single base table referenced by the defining query.
-    fn materialized_view_source_table(metadata: &MetadataRef) -> Result<(Arc<dyn Table>, String)> {
+    fn materialized_view_source_table(metadata: &MetadataRef) -> Result<TableEntry> {
         let metadata = metadata.read();
         if metadata.tables().len() != 1 {
             return Err(ErrorCode::SemanticError(
                 "Materialized view requires exactly one base table source".to_string(),
             ));
         }
-        let table = &metadata.tables()[0];
-        Ok((table.table(), table.database().to_string()))
+        Ok(metadata.tables()[0].clone())
     }
 
     #[async_backtrace::framed]
@@ -249,16 +244,17 @@ impl Binder {
                 "materialized view AS clause must produce a Query plan",
             ));
         };
-        let (source_table, source_database) =
-            Self::materialized_view_source_table(original_metadata)?;
+        let source_entry = Self::materialized_view_source_table(original_metadata)?;
+        let source_table = source_entry.table();
         if source_table.engine() != "FUSE" {
             return Err(ErrorCode::SemanticError(format!(
-                "Materialized view source table '{}.{}' must use FUSE engine, but uses {}",
-                source_database,
-                source_table.name(),
+                "Materialized view source table '{}' must use FUSE engine, but uses {}",
+                source_table.get_table_info().desc,
                 source_table.engine()
             )));
         }
+        let source_database = source_entry.database().to_string();
+        let source_table_name = source_entry.name().to_string();
         let source_table_id = source_table.get_id();
         let source_table_seq = source_table.get_table_info().ident.seq;
         let source_table_option =
@@ -276,6 +272,25 @@ impl Binder {
                     ),
                 ]),
             });
+
+        // The source option update is intentionally deferred to CREATE so publishing the MV and
+        // enabling CHANGE_TRACKING remain atomic. Bind the physical definition against an exact,
+        // Binder-local clone that reflects that pending option; otherwise change$row_id would be
+        // rejected before CREATE gets a chance to commit the source update.
+        let physical_source = if source_table_option.is_some() {
+            let mut source_info = source_table.get_table_info().clone();
+            source_info
+                .meta
+                .options
+                .insert(OPT_KEY_CHANGE_TRACKING.to_string(), "true".to_string());
+            source_info.meta.options.insert(
+                OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(),
+                source_table_seq.to_string(),
+            );
+            target_catalog.get_table_by_info(&source_info)?
+        } else {
+            source_table.clone()
+        };
 
         // Qualify the logical definition once so stale fallback is independent of the session's
         // current database. The physical definition starts from that same canonical source SQL.
@@ -307,6 +322,14 @@ impl Binder {
             crate::Metadata::default_ref(),
         )
         .with_subquery_executor(self.subquery_executor.clone());
+        physical_binder.pre_resolved_tables.insert(
+            (
+                catalog_name.clone(),
+                source_database.clone(),
+                source_table_name,
+            ),
+            physical_source,
+        );
         let physical_query_plan = physical_binder.as_query_plan(&physical_query).await?;
         let Plan::Query {
             s_expr: storage_expr,
