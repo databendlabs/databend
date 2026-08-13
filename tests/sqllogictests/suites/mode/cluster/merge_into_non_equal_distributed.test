@@ -288,6 +288,7 @@ CommitSink
                             ├── partitions scanned: 1
                             ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                             ├── push downs: [filters: [], limit: NONE]
+                            ├── apply join filters: [#0]
                             └── estimated rows: 2.00
 
 query II
