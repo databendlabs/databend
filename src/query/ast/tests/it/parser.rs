@@ -1762,6 +1762,8 @@ fn test_expr() {
         r#"ARRAY_MAP(v -> v + 1)"#,
         r#"ARRAY_FILTER(a, v -> v + 1)"#,
         r#"JSON_PATH_TRANSFORM(a, b, v -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(a, b, v -> v -> 'name')"#,
+        r#"ARRAY_TRANSFORM(a, (v -> v) + 1)"#,
         r#"MAP_FILTER(a, b, c, (k, v) -> k + v)"#,
         r#"JSON_ARRAY_MAP(doc -> 'items', v -> upper(v))"#,
         r#"TO_STRING(col -> 'name')"#,
