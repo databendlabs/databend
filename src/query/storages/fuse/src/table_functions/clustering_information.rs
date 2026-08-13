@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_args::parse_table_name;
@@ -30,6 +29,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
@@ -177,28 +177,37 @@ impl<'a> ClusteringInformationImpl<'a> {
         let (cluster_key, stats_exprs, use_hilbert_stats) =
             match (self.table.cluster_key_str(), cluster_key) {
                 (default_key, Some(custom_key)) => {
-                    let (normalized_key, _) =
+                    let (normalized_key, custom_exprs) =
                         analyze_cluster_keys(self.ctx.clone(), table.clone(), custom_key)?;
                     let is_default = default_key == Some(normalized_key.as_str());
-                    let ast_exprs = if is_default {
+                    if is_default {
                         default_cluster_key_id = self.table.cluster_key_id();
-                        self.table.resolve_cluster_keys().unwrap()
+                        let parsed_cluster_keys = parse_cluster_keys(
+                            self.ctx.clone(),
+                            table.clone(),
+                            self.table.resolve_cluster_keys().unwrap(),
+                        )?;
+                        let is_hilbert = parsed_cluster_keys.is_hilbert();
+                        (
+                            normalized_key,
+                            parsed_cluster_keys.into_stats_keys(),
+                            is_hilbert,
+                        )
                     } else {
-                        parse_cluster_key_exprs(custom_key)?
-                    };
-                    let parsed_cluster_keys =
-                        parse_cluster_keys(self.ctx.clone(), table.clone(), ast_exprs)?;
-                    let is_hilbert = parsed_cluster_keys.is_hilbert();
-                    if is_hilbert && !is_default {
-                        return Err(ErrorCode::InvalidClusterKeys(
-                            "Custom hilbert cluster key must match the table default cluster key",
-                        ));
+                        // The optional third argument is an alternative key analysis, not a
+                        // replacement Hilbert layout. Preserve its existing linear diagnostics
+                        // semantics and derive ranges from column statistics.
+                        let stats_exprs = custom_exprs
+                            .into_iter()
+                            .map(|expr| expr.project_column_ref(|index| Ok(index.as_usize())))
+                            .collect::<Result<Vec<_>>>()?
+                            .into_iter()
+                            .filter(|expr| {
+                                !matches!(expr.data_type().remove_nullable(), DataType::Vector(_))
+                            })
+                            .collect();
+                        (normalized_key, stats_exprs, false)
                     }
-                    (
-                        normalized_key,
-                        parsed_cluster_keys.into_stats_keys(),
-                        is_hilbert,
-                    )
                 }
                 (Some(default_key), None) => {
                     let cluster_keys = self.table.resolve_cluster_keys().unwrap();
