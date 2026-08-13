@@ -241,8 +241,19 @@ impl OutboundChannel for RoundRobinOutboundChannel {
             return Ok(SendOutcome::ReceiverClosed);
         }
 
-        let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.channels.len();
-        self.channels[idx].add_block(block).await
+        let start = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.channels.len();
+        for offset in 0..self.channels.len() {
+            let channel = &self.channels[(start + offset) % self.channels.len()];
+            if channel.is_closed() {
+                continue;
+            }
+
+            if channel.add_block(block.clone()).await? == SendOutcome::Accepted {
+                return Ok(SendOutcome::Accepted);
+            }
+        }
+
+        Ok(SendOutcome::ReceiverClosed)
     }
 }
 
