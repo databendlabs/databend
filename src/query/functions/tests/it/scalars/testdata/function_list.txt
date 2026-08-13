@@ -326,6 +326,7 @@ Functions overloads:
 0 asin(Float64) :: Float64
 1 asin(Float64 NULL) :: Float64 NULL
 0 assume_not_null(T0 NULL) :: T0
+0 assume_true_on_error(Boolean) :: Boolean
 0 atan(Float64) :: Float64
 1 atan(Float64 NULL) :: Float64 NULL
 0 atan2(Float64, Float64) :: Float64

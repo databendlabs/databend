@@ -161,9 +161,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             Some((valids, _)) => {
                 let no_error: Bitmap = valids.into();
                 match arg {
-                    Value::Scalar(b) => {
-                        Value::Scalar(b || !no_error.get(0).unwrap_or(true))
-                    }
+                    Value::Scalar(b) => Value::Scalar(b || !no_error.get(0).unwrap_or(true)),
                     Value::Column(bitmap) => Value::Column(
                         bitmap
                             .iter()

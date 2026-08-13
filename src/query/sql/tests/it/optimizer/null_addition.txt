@@ -355,6 +355,51 @@ EvalScalar
             └── limit: NONE
 
 
+=== deterministic_computed_key_wraps_inlined_predicate ===
+description: A derived is_not_null on a deterministic computed key is inlined through the EvalScalar and wrapped in assume_true_on_error, so a throwing key expression (e.g. a failing cast) keeps the row and defers the error to the real key evaluation. The plain-column side still derives an unwrapped predicate.
+sql: SELECT *
+FROM null_addition_a AS a
+JOIN (SELECT id, CAST(s AS INT) AS k FROM null_addition_s) AS v
+ON a.id = v.k
+raw_plan:
+EvalScalar
+├── scalars: [null_addition_a.id (#0) AS (#0), null_addition_s.id (#1) AS (#1), k (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [k (#3)]
+    ├── probe keys: [null_addition_a.id (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [null_addition_s.id (#1) AS (#1), CAST(null_addition_s.s (#2) AS Int32 NULL) AS (#3)]
+    │   └── Scan
+    │       ├── table: default.null_addition_s (#1)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_a (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Join(Inner)
+├── build keys: [k (#3)]
+├── probe keys: [null_addition_a.id (#0)]
+├── other filters: []
+├── EvalScalar
+│   ├── scalars: [null_addition_s.id (#1) AS (#1), CAST(null_addition_s.s (#2) AS Int32 NULL) AS (#3)]
+│   └── Scan
+│       ├── table: default.null_addition_s (#1)
+│       ├── filters: [assume_true_on_error(is_not_null(CAST(null_addition_s.s (#2) AS Int32 NULL)))]
+│       ├── order by: []
+│       └── limit: NONE
+└── Scan
+    ├── table: default.null_addition_a (#0)
+    ├── filters: [is_not_null(null_addition_a.id (#0))]
+    ├── order by: []
+    └── limit: NONE
+
+
 === nondeterministic_key_derives_nothing ===
 description: A join key computed by a nondeterministic expression must not get a derived is_not_null: the materialized value is computed once by the EvalScalar, and later re-evaluation (e.g. inlining) could produce a different value. The plain-column side still derives.
 sql: SELECT *

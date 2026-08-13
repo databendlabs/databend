@@ -111,6 +111,15 @@ FROM null_addition_left AS l
 JOIN null_addition_right AS r ON l.k IS NOT DISTINCT FROM r.k",
         },
         SqlTestCase {
+            name: "deterministic_computed_key_wraps_inlined_predicate",
+            description: "A derived is_not_null on a deterministic computed key is inlined through the EvalScalar and wrapped in assume_true_on_error, so a throwing key expression (e.g. a failing cast) keeps the row and defers the error to the real key evaluation. The plain-column side still derives an unwrapped predicate.",
+            setup_sqls: &[A_TABLE, S_TABLE],
+            sql: "SELECT *
+FROM null_addition_a AS a
+JOIN (SELECT id, CAST(s AS INT) AS k FROM null_addition_s) AS v
+ON a.id = v.k",
+        },
+        SqlTestCase {
             name: "nondeterministic_key_derives_nothing",
             description: "A join key computed by a nondeterministic expression must not get a derived is_not_null: the materialized value is computed once by the EvalScalar, and later re-evaluation (e.g. inlining) could produce a different value. The plain-column side still derives.",
             setup_sqls: &[A_TABLE, B_TABLE],
@@ -166,4 +175,10 @@ const B_TABLE: &str = "CREATE TABLE null_addition_b
 const C_TABLE: &str = "CREATE TABLE null_addition_c
 (
     id INTEGER
+)";
+
+const S_TABLE: &str = "CREATE TABLE null_addition_s
+(
+    id INTEGER,
+    s STRING
 )";
