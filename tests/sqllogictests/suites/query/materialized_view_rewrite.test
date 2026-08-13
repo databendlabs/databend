@@ -1,0 +1,162 @@
+# Materialized-view rewrite can filter an MV grouping key and answer a query
+# whose GROUP BY becomes coarser after the equality predicate is applied.
+
+statement ok
+drop database if exists test_materialized_view_rewrite
+
+statement ok
+create database test_materialized_view_rewrite
+
+statement ok
+use test_materialized_view_rewrite
+
+statement ok
+create table source (
+    a int,
+    b int,
+    c string,
+    t int
+)
+
+statement ok
+insert into source values
+    (1, 10, 'xxxxxxx', 5),
+    (1, 10, 'xxxxxxx', 9),
+    (1, 10, 'other', 100),
+    (2, 20, 'xxxxxxx', 7),
+    (2, 20, 'other', 70)
+
+statement ok
+create materialized view mv_by_abc (
+    a,
+    b,
+    c,
+    min_t,
+    max_t,
+    sum_t,
+    count_t,
+    avg_t,
+    approx_count_distinct_t
+) as
+select a, b, c, min(t), max(t), sum(t), count(t), avg(t), approx_count_distinct(t)
+from source
+group by a, b, c
+
+statement ok
+refresh materialized view mv_by_abc
+
+# The equality predicate fixes c to a single value, so the query's (a, b)
+# groups correspond one-to-one with the MV's (a, b, c) groups. The rewrite
+# should filter the MV by c and read the precomputed max_t value.
+query T
+explain select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t),
+    avg(t),
+    approx_count_distinct(t)
+from source
+where c = 'xxxxxxx'
+group by a, b
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>
+
+query IIIIIIRI rowsort
+select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t),
+    avg(t),
+    approx_count_distinct(t)
+from source
+where c = 'xxxxxxx'
+group by a, b
+----
+1 10 5 9 14 2 7.0 2
+2 20 7 7 7 1 7.0 1
+
+# Without a singleton predicate on the MV's extra group key, re-aggregation
+# would be required. This first implementation must keep scanning the source.
+query T
+explain select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t),
+    avg(t),
+    approx_count_distinct(t)
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.source<slt:ignore>
+
+query IIIIIIRI rowsort
+select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t),
+    avg(t),
+    approx_count_distinct(t)
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+----
+1 10 5 100 114 3 38.0 3
+2 20 7 70 77 2 38.5 2
+
+# Appends after the checkpoint use a hybrid candidate: persisted MV rows are
+# combined with source CHANGE_TRACKING rows before the rewrite is applied.
+statement ok
+insert into source values
+    (1, 10, 'xxxxxxx', 13),
+    (1, 10, 'other', 200),
+    (3, 30, 'xxxxxxx', 8)
+
+query T
+explain select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t),
+    avg(t),
+    approx_count_distinct(t)
+from source
+where c = 'xxxxxxx'
+group by a, b
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>table: default.test_materialized_view_rewrite.source<slt:ignore>
+
+query IIIIIIRI rowsort
+select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t),
+    avg(t),
+    approx_count_distinct(t)
+from source
+where c = 'xxxxxxx'
+group by a, b
+----
+1 10 5 13 27 3 9.0 3
+2 20 7 7 7 1 7.0 1
+3 30 8 8 8 1 8.0 1
+
+statement ok
+drop database test_materialized_view_rewrite

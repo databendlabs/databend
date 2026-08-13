@@ -55,26 +55,28 @@ pub(crate) fn try_rewrite(
             metadata.columns_by_table_index(table_index),
             &candidate.definition,
         )?;
-        if definition_info.output_cols().len() != candidate.read_output_columns.len() {
+        if candidate.definition_output_columns.len() != candidate.read_output_columns.len() {
             continue;
         }
 
         let mut outputs = HashMap::with_capacity(definition_info.output_cols().len());
-        for (definition_output, read_output) in definition_info
-            .output_cols()
-            .iter()
-            .zip(&candidate.read_output_columns)
-        {
-            let display_name = format_scalar(
-                &definition_output.scalar,
-                definition_info.column_map(),
-            );
+        for definition_output in definition_info.output_cols() {
+            let Some(position) = candidate
+                .definition_output_columns
+                .iter()
+                .position(|column| *column == definition_output.index)
+            else {
+                continue;
+            };
+            let read_output = candidate.read_output_columns[position];
+            let display_name =
+                format_scalar(&definition_output.scalar, definition_info.column_map());
             let replacement = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: None,
                 column: ColumnBindingBuilder::new(
-                    metadata.column(*read_output).name(),
-                    *read_output,
-                    Box::new(metadata.column(*read_output).data_type()),
+                    metadata.column(read_output).name(),
+                    read_output,
+                    Box::new(metadata.column(read_output).data_type()),
                     Visibility::Visible,
                 )
                 .build(),
@@ -82,15 +84,12 @@ pub(crate) fn try_rewrite(
             // Aggregate MVs expose finalized logical aggregate values. The
             // first implementation supports only equal-granularity aggregate
             // matching; the shared matcher rejects use as an ordinary scalar.
-            let is_aggregate = definition_info
-                .aggregate
-                .as_ref()
-                .is_some_and(|aggregate| {
-                    aggregate
-                        .aggregate_functions
-                        .iter()
-                        .any(|item| item.index == definition_output.index)
-                });
+            let is_aggregate = definition_info.aggregate.as_ref().is_some_and(|aggregate| {
+                aggregate
+                    .aggregate_functions
+                    .iter()
+                    .any(|item| item.index == definition_output.index)
+            });
             outputs.insert(display_name, (replacement, is_aggregate));
         }
 
@@ -108,19 +107,23 @@ pub(crate) fn try_rewrite(
         let mut replacement = candidate.read_plan.clone();
         if !matched.predicates.is_empty() {
             replacement = SExpr::create_unary(
-                Arc::new(Filter {
-                    predicates: matched.predicates,
-                }
-                .into()),
+                Arc::new(
+                    Filter {
+                        predicates: matched.predicates,
+                    }
+                    .into(),
+                ),
                 Arc::new(replacement),
             );
         }
         if !matched.selection.is_empty() {
             replacement = SExpr::create_unary(
-                Arc::new(EvalScalar {
-                    items: matched.selection,
-                }
-                .into()),
+                Arc::new(
+                    EvalScalar {
+                        items: matched.selection,
+                    }
+                    .into(),
+                ),
                 Arc::new(replacement),
             );
         }

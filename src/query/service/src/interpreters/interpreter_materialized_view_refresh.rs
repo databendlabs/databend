@@ -38,6 +38,7 @@ use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -400,15 +401,18 @@ impl<'a> MaterializedViewRefresh<'a> {
                 ctx.as_ref(),
             ))),
         );
+        let can_scan_from_auxiliary_storage = ctx.get_can_scan_from_agg_index();
+        ctx.set_can_scan_from_agg_index(false);
         let plan = planner
             .plan_stmt(&Statement::Query(Box::new(query)), false)
-            .await
-            .map_err(|error| {
-                ErrorCode::InvalidMaterializedView(format!(
-                    "materialized view {}.{} source table changed: expected table id {}: {}",
-                    refresh_plan.database, refresh_plan.view_name, expected_source_table_id, error
-                ))
-            })?;
+            .await;
+        ctx.set_can_scan_from_agg_index(can_scan_from_auxiliary_storage);
+        let plan = plan.map_err(|error| {
+            ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {}.{} source table changed: expected table id {}: {}",
+                refresh_plan.database, refresh_plan.view_name, expected_source_table_id, error
+            ))
+        })?;
         let databend_common_sql::plans::Plan::Query { metadata, .. } = plan else {
             return Err(ErrorCode::InvalidMaterializedView(format!(
                 "materialized view {}.{} physical definition is not a query",
@@ -538,7 +542,12 @@ impl<'a> MaterializedViewRefresh<'a> {
                 self.ctx.as_ref(),
             ))),
         );
-        let plan = planner.plan_stmt(statement, false).await?;
+        let can_scan_from_auxiliary_storage = self.ctx.get_can_scan_from_agg_index();
+        self.ctx.set_can_scan_from_agg_index(false);
+        let plan = planner.plan_stmt(statement, false).await;
+        self.ctx
+            .set_can_scan_from_agg_index(can_scan_from_auxiliary_storage);
+        let plan = plan?;
         let interpreter = match plan {
             Plan::Insert(insert) => InsertInterpreter::try_create_materialized_view_refresh(
                 self.ctx.clone(),

@@ -685,6 +685,18 @@ impl RangeClasses {
         }
     }
 
+    fn fixes_column_to_single_value(&self, column: &str) -> bool {
+        self.column_to_range_class
+            .get(column)
+            .and_then(|range| range.bounds.as_ref())
+            .is_some_and(|(lower, upper)| {
+                matches!(
+                    (lower, upper),
+                    (BoundValue::Closed(_), BoundValue::Closed(_))
+                ) && lower == upper
+            })
+    }
+
     // Range subsumption test.
     #[allow(clippy::type_complexity)]
     fn check(
@@ -1045,8 +1057,7 @@ impl ViewMatcher {
         match (query_group_items.is_empty(), view_group_items.is_empty()) {
             // both query and view have group, check for same group items.
             (false, false) => {
-                // TODO: query can support continue group
-                if query_group_items.len() != view_group_items.len() {
+                if query_group_items.len() > view_group_items.len() {
                     return false;
                 }
                 let mut query_group_names = HashSet::with_capacity(query_group_items.len());
@@ -1065,15 +1076,22 @@ impl ViewMatcher {
                         return false;
                     }
                 }
+                for view_group_name in view_group_names {
+                    if !query_group_items.iter().any(|item| {
+                        format_scalar(&item.scalar, &self.query_info.column_map) == view_group_name
+                    }) && !self
+                        .query_info
+                        .range_classes
+                        .fixes_column_to_single_value(&view_group_name)
+                    {
+                        return false;
+                    }
+                }
 
                 for item in query_group_items {
                     if self
                         .query_info
-                        .check_output_cols(
-                            &item.scalar,
-                            &view_info.output_cols,
-                            new_selection_set,
-                        )
+                        .check_output_cols(&item.scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
                     {
                         return false;
@@ -1086,11 +1104,7 @@ impl ViewMatcher {
                 for item in query_group_items {
                     if self
                         .query_info
-                        .check_output_cols(
-                            &item.scalar,
-                            &view_info.output_cols,
-                            new_selection_set,
-                        )
+                        .check_output_cols(&item.scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
                     {
                         return false;
@@ -1274,4 +1288,3 @@ fn format_sort_desc(
     }
     expr
 }
-

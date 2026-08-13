@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use databend_common_ast::ast::CreateMaterializedViewStmt;
-use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::DropMaterializedViewStmt;
+use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::RefreshMaterializedViewStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowMaterializedViewsStmt;
@@ -43,9 +43,9 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::debug;
 
 use crate::BindContext;
-use crate::MetadataRef;
 use crate::MaterializedViewCandidate;
 use crate::MaterializedViewCandidateReadMode;
+use crate::MetadataRef;
 use crate::SelectBuilder;
 use crate::TableEntry;
 use crate::binder::Binder;
@@ -132,6 +132,9 @@ impl Binder {
         if bind_context.planning_materialized_view_rewrite {
             return Ok(());
         }
+        if !self.ctx.get_can_scan_from_agg_index() {
+            return Ok(());
+        }
 
         let tenant = self.ctx.get_tenant();
         let source_entries = metadata.read().tables().to_vec();
@@ -153,11 +156,7 @@ impl Binder {
                 .get_mv_source_binding_generation(&tenant, source_table_id)
                 .await?;
             let mvs = catalog
-                .list_valid_mvs_by_source_table_id(
-                    &tenant,
-                    source_table_id,
-                    source_generation,
-                )
+                .list_valid_mvs_by_source_table_id(&tenant, source_table_id, source_generation)
                 .await?;
             if mvs.is_empty() {
                 continue;
@@ -193,14 +192,15 @@ impl Binder {
                     continue;
                 };
                 let current_mv = catalog.get_table(&tenant, &mv_database, &mv_name).await?;
-                let mv_table = catalog.get_table_by_info(&databend_common_meta_app::schema::TableInfo {
-                    ident: databend_common_meta_app::schema::TableIdent::new(
-                        mv.mv_id,
-                        mv.table_meta.seq,
-                    ),
-                    meta: mv.table_meta.data.clone(),
-                    ..current_mv.get_table_info().clone()
-                })?;
+                let mv_table =
+                    catalog.get_table_by_info(&databend_common_meta_app::schema::TableInfo {
+                        ident: databend_common_meta_app::schema::TableIdent::new(
+                            mv.mv_id,
+                            mv.table_meta.seq,
+                        ),
+                        meta: mv.table_meta.data.clone(),
+                        ..current_mv.get_table_info().clone()
+                    })?;
 
                 let logical_query = parse_materialized_view_query(
                     &mv.definition.data.original_query,
@@ -208,7 +208,8 @@ impl Binder {
                 )?;
                 let mut candidate_context = BindContext::with_parent(bind_context.clone())?;
                 candidate_context.planning_materialized_view_rewrite = true;
-                let (definition, _) = self.bind_query(&mut candidate_context, &logical_query)?;
+                let (definition, definition_context) =
+                    self.bind_query(&mut candidate_context, &logical_query)?;
 
                 let mut read_context = BindContext::with_parent(bind_context.clone())?;
                 read_context.planning_materialized_view_rewrite = true;
@@ -247,6 +248,11 @@ impl Binder {
                         .cloned(),
                     source_table_seq,
                     source_snapshot_location: source_snapshot_location.clone(),
+                    definition_output_columns: definition_context
+                        .columns
+                        .iter()
+                        .map(|column| column.index)
+                        .collect(),
                     read_output_columns: read_context
                         .columns
                         .iter()

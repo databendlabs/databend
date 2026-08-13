@@ -372,9 +372,7 @@ impl Metadata {
         }
     }
 
-    pub fn materialized_view_candidates(
-        &self,
-    ) -> &HashMap<u64, Vec<MaterializedViewCandidate>> {
+    pub fn materialized_view_candidates(&self) -> &HashMap<u64, Vec<MaterializedViewCandidate>> {
         &self.materialized_view_candidates
     }
 
@@ -794,6 +792,8 @@ pub struct MaterializedViewCandidate {
     pub mv_snapshot_location: Option<String>,
     pub source_table_seq: u64,
     pub source_snapshot_location: Option<String>,
+    /// Logical output columns produced by `definition`, in SELECT-list order.
+    pub definition_output_columns: Vec<Symbol>,
     /// Logical output columns produced by `read_plan`, in MV definition order.
     pub read_output_columns: Vec<Symbol>,
 }
