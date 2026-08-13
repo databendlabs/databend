@@ -7,3 +7,18 @@ query ?
 select error_or(from_base64('aak') ,  from_base64('aaj'),  from_base64('MzQz'));
 ----
 333433
+
+# is_not_error as a filter predicate: rows whose argument evaluation fails
+# are removed (1/(number-1) throws for number = 1).
+query I
+select number from numbers(3) where is_not_error(1 / (number - 1)) order by number
+----
+0
+2
+
+# Errors nested inside the argument expression must also be observed.
+query I
+select number from numbers(3) where is_not_error((1 / (number - 1)) > 0) order by number
+----
+0
+2

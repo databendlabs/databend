@@ -106,6 +106,28 @@ impl<'a> EvaluateOptions<'a> {
     }
 }
 
+/// Merge a source error set into a target error set, keeping the union of
+/// error rows and the first error message. Error sets travel upward through
+/// nested calls while suppression is active, so both sibling arguments and
+/// parent calls must accumulate instead of overwrite.
+fn merge_eval_errors(
+    target: &mut Option<(MutableBitmap, String)>,
+    source: Option<(MutableBitmap, String)>,
+) {
+    if let Some((src_valids, src_msg)) = source {
+        match target {
+            Some((valids, _)) => {
+                for (row, valid) in src_valids.iter().enumerate() {
+                    if !valid && row < valids.len() {
+                        valids.set(row, false);
+                    }
+                }
+            }
+            None => *target = Some((src_valids, src_msg)),
+        }
+    }
+}
+
 pub struct Evaluator<'a> {
     data_block: &'a DataBlock,
     func_ctx: &'a FunctionContext,
@@ -304,7 +326,11 @@ impl<'a> Evaluator<'a> {
             ..
         } = call;
         let child_suppress_error = function.signature.name == "is_not_error";
-        let mut child_option = options.with_suppress_error(child_suppress_error);
+        // Suppression is sticky downward: once a boundary function opts in
+        // (is_not_error), nested evaluations stay suppressed so row errors
+        // bubble up to the boundary as data instead of raising midway.
+        let mut child_option =
+            options.with_suppress_error(options.suppress_error || child_suppress_error);
         if child_option.strict_eval && call.generics.is_empty() {
             child_option.strict_eval = false;
         }
@@ -352,9 +378,17 @@ impl<'a> Evaluator<'a> {
         let (_, _, eval) = function.eval.as_scalar().unwrap();
         let result = eval.eval(&args, &mut ctx);
 
+        // Non-boundary calls are transparent to suppression: errors from
+        // nested evaluations keep bubbling up so a boundary function
+        // (is_not_error) observes errors from its whole subtree, not only
+        // from its direct children.
+        if !child_suppress_error {
+            merge_eval_errors(&mut ctx.errors, child_option.errors.take());
+        }
+
         if options.suppress_error {
             // inject errors into options, parent will handle it
-            options.errors = ctx.errors.take();
+            merge_eval_errors(&mut options.errors, ctx.errors.take());
         } else {
             EvalContext::render_error(
                 *span,
@@ -2488,7 +2522,11 @@ impl<'a> Evaluator<'a> {
                 ..
             }) => {
                 let child_suppress_error = function.signature.name == "is_not_error";
-                let mut child_option = options.with_suppress_error(child_suppress_error);
+                // Suppression is sticky downward: once a boundary function
+                // opts in (is_not_error), nested evaluations stay suppressed
+                // so row errors bubble up to the boundary as data.
+                let mut child_option =
+                    options.with_suppress_error(options.suppress_error || child_suppress_error);
                 let args = args
                     .iter()
                     .map(|expr| self.get_select_child(expr, &mut child_option))
@@ -2521,9 +2559,17 @@ impl<'a> Evaluator<'a> {
                 let (_, _, eval) = function.eval.as_scalar().unwrap();
                 let result = eval.eval(&args, &mut ctx);
 
+                // Non-boundary calls are transparent to suppression: errors
+                // from nested evaluations keep bubbling up so a boundary
+                // function (is_not_error) observes errors from its whole
+                // subtree, not only from its direct children.
+                if !child_suppress_error {
+                    merge_eval_errors(&mut ctx.errors, child_option.errors.take());
+                }
+
                 // inject errors into options, parent will handle it
                 if options.suppress_error {
-                    options.errors = ctx.errors.take();
+                    merge_eval_errors(&mut options.errors, ctx.errors.take());
                 } else {
                     EvalContext::render_error(
                         *span,
