@@ -119,13 +119,19 @@ async fn handle(
         .await?;
 
     let catalog_name = query.catalog.as_deref().unwrap_or(CATALOG_DEFAULT);
+    let is_default_catalog = catalog_name.eq_ignore_ascii_case(CATALOG_DEFAULT);
     let (catalog, query_ctx) = resolve_catalog(ctx, catalog_name).await?;
     let db = catalog.get_database(&tenant, &database).await?;
-    if !visibility_checker.check_database_visibility(
-        catalog.name().as_str(),
-        db.name(),
-        db.get_db_info().database_id.db_id,
-    ) {
+    let database_visible = if is_default_catalog {
+        visibility_checker.check_database_visibility(
+            catalog.name().as_str(),
+            db.name(),
+            db.get_db_info().database_id.db_id,
+        )
+    } else {
+        visibility_checker.check_database_visibility_by_name(catalog.name().as_str(), db.name())
+    };
+    if !database_visible {
         return Err(ErrorCode::UnknownDatabase(format!(
             "[HTTP-CATALOG] Unknown database: '{}'",
             database
@@ -133,13 +139,22 @@ async fn handle(
     }
 
     let tbl = db.get_table(&table).await?;
-    if !visibility_checker.check_table_visibility(
-        catalog.name().as_str(),
-        db.name(),
-        tbl.name(),
-        db.get_db_info().database_id.db_id,
-        tbl.get_table_info().ident.table_id,
-    ) {
+    let table_visible = if is_default_catalog {
+        visibility_checker.check_table_visibility(
+            catalog.name().as_str(),
+            db.name(),
+            tbl.name(),
+            db.get_db_info().database_id.db_id,
+            tbl.get_table_info().ident.table_id,
+        )
+    } else {
+        visibility_checker.check_table_visibility_by_name(
+            catalog.name().as_str(),
+            db.name(),
+            tbl.name(),
+        )
+    };
+    if !table_visible {
         return Err(ErrorCode::UnknownTable(format!(
             "[HTTP-CATALOG] Unknown table: '{}'",
             table
