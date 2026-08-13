@@ -683,10 +683,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                             order_by: vec![],
                             filter: None,
                             window: None,
-                            lambda: Some(Lambda {
+                            lambda: Some(LambdaArgument::Lambda(Lambda {
                                 params: vec![param.clone()],
                                 expr: Box::new(filter),
-                            }),
+                            })),
                         },
                     };
                 }
@@ -701,10 +701,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                         order_by: vec![],
                         filter: None,
                         window: None,
-                        lambda: Some(Lambda {
+                        lambda: Some(LambdaArgument::Lambda(Lambda {
                             params: vec![param.clone()],
                             expr: Box::new(result),
-                        }),
+                        })),
                     },
                 }
             }
@@ -922,7 +922,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     order_by: vec![],
                     filter: None,
                     window: None,
-                    lambda,
+                    lambda: lambda.map(LambdaArgument::Lambda),
                 },
             },
             ExprElement::IsNull { not } => Expr::IsNull {
@@ -2707,11 +2707,39 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             .collect()
     }
 
-    let lambda_params = followed_by_text(lambda_params, "->");
+    fn ambiguous_lambda_arg(i: Input) -> IResult<(Expr, Lambda)> {
+        let original = i;
+        let (rest, params) = followed_by_text(lambda_params, "->").parse(i)?;
+        let (rest, _) = match_text("->").parse(rest)?;
+        let (lambda_rest, expr) = subexpr(0).parse(rest)?;
+
+        // Preserve the complete ordinary-expression parse as well. Requiring
+        // both parses to stop immediately before the closing parenthesis keeps
+        // the ambiguity limited to the top-level trailing argument.
+        let (ordinary_rest, ordinary_expr) = subexpr(0).parse(original)?;
+        if lambda_rest.tokens.as_ptr() != ordinary_rest.tokens.as_ptr()
+            || lambda_rest.tokens.len() != ordinary_rest.tokens.len()
+            || match_text(")").parse(lambda_rest).is_err()
+        {
+            return Err(nom::Err::Error(Error::from_error_kind(
+                original,
+                ErrorKind::other("expected trailing lambda argument"),
+            )));
+        }
+
+        Ok((
+            lambda_rest,
+            (ordinary_expr, Lambda {
+                params,
+                expr: Box::new(expr),
+            }),
+        ))
+    }
+
     let leading_param = map(rule! { #subexpr(0) ~ "," }, |(arg, _)| arg);
     let function_call_body = map_res(
         rule! {
-            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ #leading_param* ~ (#lambda_params ~ "->" ~ ^#subexpr(0))? ~ #comma_separated_list1(subexpr(0))? ~ #aggregate_order_by? ~ ")"
+            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ #leading_param* ~ #ambiguous_lambda_arg? ~ #comma_separated_list1(subexpr(0))? ~ #aggregate_order_by? ~ ")"
             ~ ("(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ #aggregate_order_by? ~ ")")?
             ~ #within_group?
             ~ #aggregate_filter?
@@ -2723,7 +2751,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             first_param,
             _,
             leading_params,
-            opt_lambda,
+            ambiguous_lambda,
             params_0,
             argument_order_by,
             _,
@@ -2735,7 +2763,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             match (
                 first_param,
                 leading_params,
-                opt_lambda,
+                ambiguous_lambda,
                 opt_distinct_0,
                 params_0,
                 argument_order_by,
@@ -2747,7 +2775,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 (
                     Some(first_param),
                     leading_params,
-                    Some((lambda_params, _, lambda_body)),
+                    Some((ordinary_expr, lambda)),
                     None,
                     None,
                     None,
@@ -2756,9 +2784,9 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     None,
                     None,
                 ) => Ok(FunctionCallSuffix::Lambda {
-                    args: merge_args(Some(first_param), leading_params, None),
-                    params: lambda_params,
-                    expr: Box::new(lambda_body),
+                    args: merge_args(Some(first_param), leading_params, Some(vec![ordinary_expr])),
+                    params: lambda.params,
+                    expr: lambda.expr,
                 }),
                 (
                     Some(first_param),
@@ -2900,12 +2928,14 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
         },
     );
 
-    map(
-        rule!(
-            #function_name
-            ~ #function_call_body : "`function(... [ ORDER BY <expr>, ... ] [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ FILTER ( WHERE <expr> ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`"
-        ),
-        |(name, suffix)| match suffix {
+    let (rest, name) = function_name.parse(i)?;
+    let (rest, suffix) = context(
+        "`function(... [ ORDER BY <expr>, ... ] [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ FILTER ( WHERE <expr> ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`",
+        function_call_body,
+    )
+    .parse(rest)?;
+
+    let elem = match suffix {
         FunctionCallSuffix::Simple { distinct, args } => ExprElement::FunctionCall {
             func: FunctionCall {
                 distinct,
@@ -2985,7 +3015,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 order_by: vec![],
                 filter: None,
                 window: None,
-                lambda: Some(Lambda { params, expr }),
+                lambda: Some(LambdaArgument::Ambiguous(Lambda { params, expr })),
             },
         },
         FunctionCallSuffix::ParamsWindow {
@@ -3007,9 +3037,9 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 lambda: None,
             },
         },
-        },
-    )
-    .parse(i)
+    };
+
+    Ok((rest, elem))
 }
 
 pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {

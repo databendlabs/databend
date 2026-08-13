@@ -1040,6 +1040,16 @@ mod tests {
         assert_sql_lowers_to("to_string(doc -> 'key')", |arena, root| {
             assert!(matches!(arena.get(root), CoreExpr::Call { .. }));
         });
+        assert_sql_lowers_to("concat(a, b, doc -> 'key')", |arena, root| {
+            let CoreExpr::Call { args, .. } = arena.get(root) else {
+                panic!("concat should lower as a scalar function");
+            };
+            assert_eq!(args.len(), 3);
+            assert!(matches!(arena.get(args[2]), CoreExpr::Call {
+                func_name: "get",
+                ..
+            }));
+        });
     }
 
     #[test]

@@ -6696,29 +6696,36 @@ FunctionCall {
                     },
                 ],
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
+            BinaryOp {
+                span: Some(
+                    28..29,
+                ),
+                op: Plus,
+                left: JsonOp {
+                    span: Some(
+                        23..25,
+                    ),
+                    op: Arrow,
+                    left: ColumnRef {
                         span: Some(
                             21..22,
                         ),
-                        name: "x",
-                        quote: None,
-                        ident_type: None,
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        21..22,
+                                    ),
+                                    name: "x",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
                     },
-                ],
-                expr: BinaryOp {
-                    span: Some(
-                        28..29,
-                    ),
-                    op: Plus,
-                    left: ColumnRef {
+                    right: ColumnRef {
                         span: Some(
                             26..27,
                         ),
@@ -6737,16 +6744,23 @@ FunctionCall {
                             ),
                         },
                     },
-                    right: Literal {
-                        span: Some(
-                            30..31,
-                        ),
-                        value: UInt64(
-                            1,
-                        ),
-                    },
+                },
+                right: Literal {
+                    span: Some(
+                        30..31,
+                    ),
+                    value: UInt64(
+                        1,
+                    ),
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -6791,34 +6805,41 @@ FunctionCall {
                     ),
                 },
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
-                        span: Some(
-                            18..19,
-                        ),
-                        name: "y",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ],
-                expr: BinaryOp {
+            BinaryOp {
+                span: Some(
+                    29..30,
+                ),
+                op: Eq,
+                left: BinaryOp {
                     span: Some(
-                        29..30,
+                        25..26,
                     ),
-                    op: Eq,
-                    left: BinaryOp {
+                    op: Modulo,
+                    left: JsonOp {
                         span: Some(
-                            25..26,
+                            20..22,
                         ),
-                        op: Modulo,
+                        op: Arrow,
                         left: ColumnRef {
+                            span: Some(
+                                18..19,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            18..19,
+                                        ),
+                                        name: "y",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        right: ColumnRef {
                             span: Some(
                                 23..24,
                             ),
@@ -6837,25 +6858,32 @@ FunctionCall {
                                 ),
                             },
                         },
-                        right: Literal {
-                            span: Some(
-                                27..28,
-                            ),
-                            value: UInt64(
-                                2,
-                            ),
-                        },
                     },
                     right: Literal {
                         span: Some(
-                            31..32,
+                            27..28,
                         ),
                         value: UInt64(
-                            0,
+                            2,
                         ),
                     },
                 },
+                right: Literal {
+                    span: Some(
+                        31..32,
+                    ),
+                    value: UInt64(
+                        0,
+                    ),
+                },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -6992,37 +7020,62 @@ FunctionCall {
                     },
                 ],
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
-                        span: Some(
-                            23..26,
-                        ),
-                        name: "acc",
-                        quote: None,
-                        ident_type: None,
-                    },
-                    Identifier {
-                        span: Some(
-                            27..28,
-                        ),
-                        name: "t",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ],
-                expr: BinaryOp {
+            BinaryOp {
+                span: Some(
+                    37..38,
+                ),
+                op: Plus,
+                left: JsonOp {
                     span: Some(
-                        37..38,
+                        30..32,
                     ),
-                    op: Plus,
-                    left: ColumnRef {
+                    op: Arrow,
+                    left: Tuple {
+                        span: Some(
+                            22..29,
+                        ),
+                        exprs: [
+                            ColumnRef {
+                                span: Some(
+                                    23..26,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                23..26,
+                                            ),
+                                            name: "acc",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    27..28,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                27..28,
+                                            ),
+                                            name: "t",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                    },
+                    right: ColumnRef {
                         span: Some(
                             33..36,
                         ),
@@ -7041,27 +7094,34 @@ FunctionCall {
                             ),
                         },
                     },
-                    right: ColumnRef {
-                        span: Some(
-                            39..40,
+                },
+                right: ColumnRef {
+                    span: Some(
+                        39..40,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    39..40,
+                                ),
+                                name: "t",
+                                quote: None,
+                                ident_type: None,
+                            },
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        39..40,
-                                    ),
-                                    name: "t",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                            ),
-                        },
                     },
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -7133,37 +7193,62 @@ FunctionCall {
                     ),
                 ],
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
-                        span: Some(
-                            27..28,
-                        ),
-                        name: "k",
-                        quote: None,
-                        ident_type: None,
-                    },
-                    Identifier {
-                        span: Some(
-                            30..31,
-                        ),
-                        name: "v",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ],
-                expr: BinaryOp {
+            BinaryOp {
+                span: Some(
+                    38..39,
+                ),
+                op: Gt,
+                left: JsonOp {
                     span: Some(
-                        38..39,
+                        33..35,
                     ),
-                    op: Gt,
-                    left: ColumnRef {
+                    op: Arrow,
+                    left: Tuple {
+                        span: Some(
+                            26..32,
+                        ),
+                        exprs: [
+                            ColumnRef {
+                                span: Some(
+                                    27..28,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                27..28,
+                                            ),
+                                            name: "k",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    30..31,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                30..31,
+                                            ),
+                                            name: "v",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                    },
+                    right: ColumnRef {
                         span: Some(
                             36..37,
                         ),
@@ -7182,27 +7267,34 @@ FunctionCall {
                             ),
                         },
                     },
-                    right: ColumnRef {
-                        span: Some(
-                            40..41,
+                },
+                right: ColumnRef {
+                    span: Some(
+                        40..41,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    40..41,
+                                ),
+                                name: "v",
+                                quote: None,
+                                ident_type: None,
+                            },
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        40..41,
-                                    ),
-                                    name: "v",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                            ),
-                        },
                     },
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -7274,37 +7366,62 @@ FunctionCall {
                     ),
                 ],
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
-                        span: Some(
-                            38..39,
-                        ),
-                        name: "k",
-                        quote: None,
-                        ident_type: None,
-                    },
-                    Identifier {
-                        span: Some(
-                            41..42,
-                        ),
-                        name: "v",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ],
-                expr: BinaryOp {
+            BinaryOp {
+                span: Some(
+                    49..50,
+                ),
+                op: Plus,
+                left: JsonOp {
                     span: Some(
-                        49..50,
+                        44..46,
                     ),
-                    op: Plus,
-                    left: ColumnRef {
+                    op: Arrow,
+                    left: Tuple {
+                        span: Some(
+                            37..43,
+                        ),
+                        exprs: [
+                            ColumnRef {
+                                span: Some(
+                                    38..39,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                38..39,
+                                            ),
+                                            name: "k",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    41..42,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                41..42,
+                                            ),
+                                            name: "v",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                    },
+                    right: ColumnRef {
                         span: Some(
                             47..48,
                         ),
@@ -7323,16 +7440,23 @@ FunctionCall {
                             ),
                         },
                     },
-                    right: Literal {
-                        span: Some(
-                            51..52,
-                        ),
-                        value: UInt64(
-                            1,
-                        ),
-                    },
+                },
+                right: Literal {
+                    span: Some(
+                        51..52,
+                    ),
+                    value: UInt64(
+                        1,
+                    ),
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -7404,37 +7528,62 @@ FunctionCall {
                     ),
                 ],
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
-                        span: Some(
-                            40..41,
-                        ),
-                        name: "k",
-                        quote: None,
-                        ident_type: None,
-                    },
-                    Identifier {
-                        span: Some(
-                            43..44,
-                        ),
-                        name: "v",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ],
-                expr: BinaryOp {
+            BinaryOp {
+                span: Some(
+                    51..52,
+                ),
+                op: Plus,
+                left: JsonOp {
                     span: Some(
-                        51..52,
+                        46..48,
                     ),
-                    op: Plus,
-                    left: ColumnRef {
+                    op: Arrow,
+                    left: Tuple {
+                        span: Some(
+                            39..45,
+                        ),
+                        exprs: [
+                            ColumnRef {
+                                span: Some(
+                                    40..41,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                40..41,
+                                            ),
+                                            name: "k",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    43..44,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                43..44,
+                                            ),
+                                            name: "v",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                    },
+                    right: ColumnRef {
                         span: Some(
                             49..50,
                         ),
@@ -7453,16 +7602,23 @@ FunctionCall {
                             ),
                         },
                     },
-                    right: Literal {
-                        span: Some(
-                            53..54,
-                        ),
-                        value: UInt64(
-                            1,
-                        ),
-                    },
+                },
+                right: Literal {
+                    span: Some(
+                        53..54,
+                    ),
+                    value: UInt64(
+                        1,
+                    ),
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -7515,24 +7671,31 @@ FunctionCall {
                     "$[*].name",
                 ),
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
-                        span: Some(
-                            38..39,
+            JsonOp {
+                span: Some(
+                    40..42,
+                ),
+                op: Arrow,
+                left: ColumnRef {
+                    span: Some(
+                        38..39,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    38..39,
+                                ),
+                                name: "v",
+                                quote: None,
+                                ident_type: None,
+                            },
                         ),
-                        name: "v",
-                        quote: None,
-                        ident_type: None,
                     },
-                ],
-                expr: FunctionCall {
+                },
+                right: FunctionCall {
                     span: Some(
                         43..51,
                     ),
@@ -7575,6 +7738,13 @@ FunctionCall {
                     },
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -7707,29 +7877,36 @@ FunctionCall {
                     ),
                 },
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
+            BinaryOp {
+                span: Some(
+                    23..24,
+                ),
+                op: Plus,
+                left: JsonOp {
+                    span: Some(
+                        18..20,
+                    ),
+                    op: Arrow,
+                    left: ColumnRef {
                         span: Some(
                             16..17,
                         ),
-                        name: "v",
-                        quote: None,
-                        ident_type: None,
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        16..17,
+                                    ),
+                                    name: "v",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
                     },
-                ],
-                expr: BinaryOp {
-                    span: Some(
-                        23..24,
-                    ),
-                    op: Plus,
-                    left: ColumnRef {
+                    right: ColumnRef {
                         span: Some(
                             21..22,
                         ),
@@ -7748,16 +7925,23 @@ FunctionCall {
                             ),
                         },
                     },
-                    right: Literal {
-                        span: Some(
-                            25..26,
-                        ),
-                        value: UInt64(
-                            1,
-                        ),
-                    },
+                },
+                right: Literal {
+                    span: Some(
+                        25..26,
+                    ),
+                    value: UInt64(
+                        1,
+                    ),
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -7821,29 +8005,36 @@ FunctionCall {
                     ),
                 },
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
+            BinaryOp {
+                span: Some(
+                    33..34,
+                ),
+                op: Plus,
+                left: JsonOp {
+                    span: Some(
+                        28..30,
+                    ),
+                    op: Arrow,
+                    left: ColumnRef {
                         span: Some(
                             26..27,
                         ),
-                        name: "v",
-                        quote: None,
-                        ident_type: None,
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        26..27,
+                                    ),
+                                    name: "v",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
                     },
-                ],
-                expr: BinaryOp {
-                    span: Some(
-                        33..34,
-                    ),
-                    op: Plus,
-                    left: ColumnRef {
+                    right: ColumnRef {
                         span: Some(
                             31..32,
                         ),
@@ -7862,16 +8053,23 @@ FunctionCall {
                             ),
                         },
                     },
-                    right: Literal {
-                        span: Some(
-                            35..36,
-                        ),
-                        value: UInt64(
-                            1,
-                        ),
-                    },
+                },
+                right: Literal {
+                    span: Some(
+                        35..36,
+                    ),
+                    value: UInt64(
+                        1,
+                    ),
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -7935,29 +8133,36 @@ FunctionCall {
                     ),
                 },
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
-                        span: Some(
-                            26..27,
-                        ),
-                        name: "v",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ],
-                expr: JsonOp {
+            JsonOp {
+                span: Some(
+                    33..35,
+                ),
+                op: Arrow,
+                left: JsonOp {
                     span: Some(
-                        33..35,
+                        28..30,
                     ),
                     op: Arrow,
                     left: ColumnRef {
+                        span: Some(
+                            26..27,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        26..27,
+                                    ),
+                                    name: "v",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: ColumnRef {
                         span: Some(
                             31..32,
                         ),
@@ -7976,16 +8181,23 @@ FunctionCall {
                             ),
                         },
                     },
-                    right: Literal {
-                        span: Some(
-                            36..42,
-                        ),
-                        value: String(
-                            "name",
-                        ),
-                    },
+                },
+                right: Literal {
+                    span: Some(
+                        36..42,
+                    ),
+                    value: String(
+                        "name",
+                    ),
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -8175,37 +8387,62 @@ FunctionCall {
                     ),
                 },
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
-                        span: Some(
-                            21..22,
-                        ),
-                        name: "k",
-                        quote: None,
-                        ident_type: None,
-                    },
-                    Identifier {
-                        span: Some(
-                            24..25,
-                        ),
-                        name: "v",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ],
-                expr: BinaryOp {
+            BinaryOp {
+                span: Some(
+                    32..33,
+                ),
+                op: Plus,
+                left: JsonOp {
                     span: Some(
-                        32..33,
+                        27..29,
                     ),
-                    op: Plus,
-                    left: ColumnRef {
+                    op: Arrow,
+                    left: Tuple {
+                        span: Some(
+                            20..26,
+                        ),
+                        exprs: [
+                            ColumnRef {
+                                span: Some(
+                                    21..22,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                21..22,
+                                            ),
+                                            name: "k",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    24..25,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                24..25,
+                                            ),
+                                            name: "v",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                    },
+                    right: ColumnRef {
                         span: Some(
                             30..31,
                         ),
@@ -8224,27 +8461,34 @@ FunctionCall {
                             ),
                         },
                     },
-                    right: ColumnRef {
-                        span: Some(
-                            34..35,
+                },
+                right: ColumnRef {
+                    span: Some(
+                        34..35,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    34..35,
+                                ),
+                                name: "v",
+                                quote: None,
+                                ident_type: None,
+                            },
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        34..35,
-                                    ),
-                                    name: "v",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                            ),
-                        },
                     },
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -8303,24 +8547,31 @@ FunctionCall {
                     ),
                 },
             },
-        ],
-        params: [],
-        order_by: [],
-        filter: None,
-        window: None,
-        lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
-                        span: Some(
-                            31..32,
+            JsonOp {
+                span: Some(
+                    33..35,
+                ),
+                op: Arrow,
+                left: ColumnRef {
+                    span: Some(
+                        31..32,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    31..32,
+                                ),
+                                name: "v",
+                                quote: None,
+                                ident_type: None,
+                            },
                         ),
-                        name: "v",
-                        quote: None,
-                        ident_type: None,
                     },
-                ],
-                expr: FunctionCall {
+                },
+                right: FunctionCall {
                     span: Some(
                         36..44,
                     ),
@@ -8363,6 +8614,13 @@ FunctionCall {
                     },
                 },
             },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
         ),
     },
 }
@@ -8427,6 +8685,109 @@ FunctionCall {
         filter: None,
         window: None,
         lambda: None,
+    },
+}
+
+
+---------- Input ----------
+CONCAT(a, b, doc -> 'key')
+---------- Output ---------
+CONCAT(a, b, doc -> 'key')
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..26,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..6,
+            ),
+            name: "CONCAT",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    7..8,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                7..8,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            ColumnRef {
+                span: Some(
+                    10..11,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                10..11,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            JsonOp {
+                span: Some(
+                    17..19,
+                ),
+                op: Arrow,
+                left: ColumnRef {
+                    span: Some(
+                        13..16,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    13..16,
+                                ),
+                                name: "doc",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Literal {
+                    span: Some(
+                        20..25,
+                    ),
+                    value: String(
+                        "key",
+                    ),
+                },
+            },
+        ],
+        params: [],
+        order_by: [],
+        filter: None,
+        window: None,
+        lambda: Some(
+            Ambiguous,
+        ),
     },
 }
 

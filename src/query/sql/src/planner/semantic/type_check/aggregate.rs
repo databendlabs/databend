@@ -65,7 +65,7 @@ impl<'a> CoreExprArena<'a> {
         func_name: &str,
         func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
-        if func.lambda.is_some() || !self.aggregate_function_factory.contains(func_name) {
+        if func.has_explicit_lambda() || !self.aggregate_function_factory.contains(func_name) {
             return Ok(None);
         }
 

@@ -95,7 +95,7 @@ impl<'a> CoreExprArena<'a> {
         func_name: &str,
         func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
-        if func.lambda.is_some() {
+        if func.has_explicit_lambda() {
             return Ok(None);
         }
         let func_name = Ascii::new(func_name);

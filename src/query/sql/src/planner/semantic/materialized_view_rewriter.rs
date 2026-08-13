@@ -482,7 +482,7 @@ impl VisitorMut for AggregateExprRewriter<'_> {
                 if !func.distinct
                     && func.filter.is_none()
                     && func.window.is_none()
-                    && func.lambda.is_none()
+                    && !func.has_explicit_lambda()
                     && func.order_by.is_empty()
                     && func.params.is_empty()
                     && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS

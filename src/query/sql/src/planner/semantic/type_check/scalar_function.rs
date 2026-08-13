@@ -94,7 +94,6 @@ impl<'a> CoreExprArena<'a> {
             order_by,
             filter,
             window,
-            lambda,
             ..
         } = func;
 
@@ -109,7 +108,7 @@ impl<'a> CoreExprArena<'a> {
             && params.is_empty()
             && order_by.is_empty()
             && window.is_none()
-            && lambda.is_none()
+            && !func.has_explicit_lambda()
         {
             if let Some(expr) = self.lower_rewrite_function(span, func_name, args)? {
                 return Ok(expr);

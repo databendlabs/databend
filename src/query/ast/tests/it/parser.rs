@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -1767,6 +1769,7 @@ fn test_expr() {
         r#"MAP_FILTER(a, b, c, (k, v) -> k + v)"#,
         r#"JSON_ARRAY_MAP(doc -> 'items', v -> upper(v))"#,
         r#"TO_STRING(col -> 'name')"#,
+        r#"CONCAT(a, b, doc -> 'key')"#,
         r#"CONCAT(a -> 'k', b)"#,
         r#"INTERVAL '1 YEAR'"#,
         r#"(?, ?)"#,
@@ -1776,6 +1779,28 @@ fn test_expr() {
     for case in cases {
         run_parser(file, expr, case);
     }
+}
+
+#[test]
+fn test_ambiguous_trailing_lambda_argument() {
+    let tokens = tokenize_sql("concat(a, b, doc -> 'key')").unwrap();
+    let input = Input {
+        tokens: &tokens,
+        dialect: Dialect::PostgreSQL,
+        mode: ParseMode::Default,
+    };
+    let (_, expr) = expr(input).unwrap();
+    let Expr::FunctionCall { func, .. } = expr else {
+        panic!("expected a function call");
+    };
+
+    assert_eq!(func.args.len(), 3);
+    assert!(matches!(func.args[2], Expr::JsonOp { .. }));
+    let Some(LambdaArgument::Ambiguous(lambda)) = func.lambda else {
+        panic!("expected an ambiguous trailing lambda argument");
+    };
+    assert_eq!(lambda.params[0].name, "doc");
+    assert!(matches!(*lambda.expr, Expr::Literal { .. }));
 }
 
 // FIXME: this test cause stack overflow
