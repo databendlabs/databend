@@ -63,6 +63,7 @@ use crate::optimizer::optimizers::rule::RulePushDownSortScan;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
 use crate::optimizer::optimizers::rule::RuleSplitAggregate;
 use crate::optimizer::optimizers::rule::RuleTryApplyAggIndex;
+use crate::optimizer::optimizers::rule::RuleTryApplyMaterializedView;
 
 pub struct RuleFactory;
 
@@ -124,6 +125,9 @@ impl RuleFactory {
             RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
+            RuleID::TryApplyMaterializedView => {
+                Ok(Box::new(RuleTryApplyMaterializedView::new(ctx)))
+            }
             RuleID::EliminateSelfJoin => Ok(Box::new(RuleEliminateSelfJoin::new(ctx))),
             RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
             RuleID::DeduplicateSort => Ok(Box::new(RuleDeduplicateSort::new())),

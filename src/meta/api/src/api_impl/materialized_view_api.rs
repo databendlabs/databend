@@ -125,6 +125,7 @@
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::MVInfo;
+use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::TableId;
@@ -159,6 +160,21 @@ where
     ) -> Result<Option<SeqV<MVDefinition>>, MetaError> {
         let ident = MVDefinitionIdent::new(tenant, mv_table_id);
         self.get_pb(&ident).await
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_mv_source_binding_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<u64, MetaError> {
+        let ident = MVSourceBindingVersionIdent::new(tenant, source_table_id);
+        Ok(self
+            .get_pb(&ident)
+            .await?
+            .map(|version| version.data.current_source_generation)
+            .unwrap_or_default())
     }
 
     /// List every MV that depends on a source table, including invalid MVs.

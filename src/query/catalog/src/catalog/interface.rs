@@ -82,6 +82,7 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVInfo;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -276,6 +277,27 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             "'get_mv_definition' not implemented for catalog {}",
             self.name()
         )))
+    }
+
+    /// Get the semantic MV-binding generation of a source table. A missing
+    /// generation record is generation zero.
+    async fn get_mv_source_binding_generation(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<u64> {
+        Ok(0)
+    }
+
+    /// List materialized views whose source binding matches the caller's
+    /// stable source generation.
+    async fn list_valid_mvs_by_source_table_id(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+        _expected_source_generation: u64,
+    ) -> Result<Vec<MVInfo>> {
+        Ok(vec![])
     }
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.

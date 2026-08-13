@@ -84,6 +84,7 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVInfo;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -328,6 +329,31 @@ impl Catalog for SessionCatalog {
         mv_table_id: u64,
     ) -> Result<Option<SeqV<MVDefinition>>> {
         self.inner.get_mv_definition(tenant, mv_table_id).await
+    }
+
+    async fn get_mv_source_binding_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<u64> {
+        self.inner
+            .get_mv_source_binding_generation(tenant, source_table_id)
+            .await
+    }
+
+    async fn list_valid_mvs_by_source_table_id(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        expected_source_generation: u64,
+    ) -> Result<Vec<MVInfo>> {
+        self.inner
+            .list_valid_mvs_by_source_table_id(
+                tenant,
+                source_table_id,
+                expected_source_generation,
+            )
+            .await
     }
 
     async fn mget_table_names_by_ids(

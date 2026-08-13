@@ -76,6 +76,8 @@ pub struct Metadata {
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, Symbol>,
     agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>,
+    /// Valid materialized-view rewrite candidates grouped by source table ID.
+    materialized_view_candidates: HashMap<u64, Vec<MaterializedViewCandidate>>,
     max_column_position: usize, // for CSV
     has_column_name_ref: bool,  // for schema inference from stage files
 
@@ -355,6 +357,38 @@ impl Metadata {
 
     pub fn has_agg_indices(&self) -> bool {
         !self.agg_indices.is_empty()
+    }
+
+    pub fn add_materialized_view_candidates(
+        &mut self,
+        source_table_id: u64,
+        candidates: Vec<MaterializedViewCandidate>,
+    ) {
+        match self.materialized_view_candidates.entry(source_table_id) {
+            Entry::Occupied(occupied) => occupied.into_mut().extend(candidates),
+            Entry::Vacant(vacant) => {
+                vacant.insert(candidates);
+            }
+        }
+    }
+
+    pub fn materialized_view_candidates(
+        &self,
+    ) -> &HashMap<u64, Vec<MaterializedViewCandidate>> {
+        &self.materialized_view_candidates
+    }
+
+    pub fn get_materialized_view_candidates(
+        &self,
+        source_table_id: u64,
+    ) -> Option<&[MaterializedViewCandidate]> {
+        self.materialized_view_candidates
+            .get(&source_table_id)
+            .map(Vec::as_slice)
+    }
+
+    pub fn has_materialized_view_candidates(&self) -> bool {
+        !self.materialized_view_candidates.is_empty()
     }
 
     fn remove_cte_suffix(mut table_name: String, cte_suffix_name: Option<String>) -> String {
@@ -731,6 +765,37 @@ pub struct TableInternalColumn {
     pub table_index: IndexType,
     pub column_index: Symbol,
     pub internal_column: InternalColumn,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MaterializedViewCandidateReadMode {
+    Fresh,
+    Hybrid,
+}
+
+/// A materialized view that has passed source-binding validation and can be
+/// considered by optimizer rewrite rules.
+///
+/// Both plans use this query's [`MetadataRef`] symbol namespace. `definition`
+/// describes the source-based logical query used for semantic matching, while
+/// `read_plan` reads the materialized view using the endpoint captured here.
+#[derive(Clone, Debug)]
+pub struct MaterializedViewCandidate {
+    pub source_table_id: u64,
+    /// Exact source occurrence in the outer query. Candidate-internal source
+    /// scans must not recursively reuse this candidate.
+    pub source_table_index: IndexType,
+    pub mv_table_id: u64,
+    pub definition: SExpr,
+    pub read_plan: SExpr,
+    pub read_mode: MaterializedViewCandidateReadMode,
+    pub logical_sql: String,
+    pub mv_table_seq: u64,
+    pub mv_snapshot_location: Option<String>,
+    pub source_table_seq: u64,
+    pub source_snapshot_location: Option<String>,
+    /// Logical output columns produced by `read_plan`, in MV definition order.
+    pub read_output_columns: Vec<Symbol>,
 }
 
 #[derive(Clone, Debug)]

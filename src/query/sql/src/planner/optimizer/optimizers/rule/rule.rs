@@ -56,6 +56,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownLimitScan,
         RuleID::SemiToInnerJoin,
         RuleID::FoldCountAggregate,
+        RuleID::TryApplyMaterializedView,
         RuleID::TryApplyAggIndex,
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
@@ -132,6 +133,7 @@ pub enum RuleID {
     FoldCountAggregate,
     PushDownPrewhere,
     TryApplyAggIndex,
+    TryApplyMaterializedView,
     EliminateSelfJoin,
     CommuteJoin,
 
@@ -189,6 +191,7 @@ impl Display for RuleID {
             RuleID::LeftExchangeJoin => write!(f, "LeftExchangeJoin"),
             RuleID::EagerAggregation => write!(f, "EagerAggregation"),
             RuleID::TryApplyAggIndex => write!(f, "TryApplyAggIndex"),
+            RuleID::TryApplyMaterializedView => write!(f, "TryApplyMaterializedView"),
             RuleID::SemiToInnerJoin => write!(f, "SemiToInnerJoin"),
             RuleID::EliminateUnion => write!(f, "EliminateUnion"),
 
