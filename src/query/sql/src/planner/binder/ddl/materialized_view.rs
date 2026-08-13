@@ -574,6 +574,7 @@ impl Binder {
                         target: MaintenanceTarget::MaterializedView { table_id },
                         branch: None,
                         cluster_keys,
+                        cluster_type: cluster_by.cluster_type.to_string().parse()?,
                     },
                 )))
             }

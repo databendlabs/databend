@@ -1638,7 +1638,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ MATERIALIZED ~ ^VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ ( CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ ( CLUSTER ~ ^BY ~ ^#cluster_option )?
             ~ AS ~ #query
         },
         |(
@@ -1664,9 +1664,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     columns: opt_columns
                         .map(|(_, columns, _)| columns)
                         .unwrap_or_default(),
-                    cluster_by: opt_cluster_by.map(|(_, _, _, _, exprs, _)| ClusterOption {
-                        cluster_exprs: exprs,
-                    }),
+                    cluster_by: opt_cluster_by.map(|(_, _, cluster_by)| cluster_by),
                     query: Box::new(query),
                 },
             ))
