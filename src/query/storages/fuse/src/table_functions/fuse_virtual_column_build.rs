@@ -192,21 +192,20 @@ async fn read_block_location(
         )));
     }
 
-    let physical_schema = Arc::new(table.schema().remove_virtual_computed_fields());
-    let parquet_leaf_columns = parquet_meta.file_metadata().schema_descr().num_columns();
-    let table_leaf_columns = physical_schema.to_leaf_column_ids().len();
-    if parquet_leaf_columns != table_leaf_columns {
-        return Err(ErrorCode::ParquetFileInvalid(format!(
-            "Fuse block {} has {} parquet leaf columns, but table {}.{} currently has {}; the supplied table schema does not match this block",
-            block_location,
-            parquet_leaf_columns,
-            table.get_table_info().desc,
-            table.name(),
-            table_leaf_columns
-        )));
-    }
+    let physical_schema = Arc::new(table.schema_with_stream().remove_virtual_computed_fields());
     let column_metas = column_parquet_metas(&parquet_meta, &physical_schema)?;
     let row_group = &parquet_meta.row_groups()[0];
+    let compression = row_group
+        .columns()
+        .first()
+        .ok_or_else(|| {
+            ErrorCode::ParquetFileInvalid(format!(
+                "Fuse block {} has no parquet columns",
+                block_location
+            ))
+        })?
+        .compression()
+        .try_into()?;
     let reader = table.create_block_reader(ctx.clone(), projection, false)?;
     let settings = ReadSettings::from_ctx(ctx)?;
     let data = reader
@@ -216,7 +215,7 @@ async fn read_block_location(
         location: block_location.to_string(),
         row_count: row_group.num_rows() as u64,
         col_metas: column_metas,
-        compression: table.get_write_settings().table_compression.into(),
+        compression,
         block_size: 0,
     };
     reader.deserialize_chunks_with_meta(&meta, &table.storage_format, data)
