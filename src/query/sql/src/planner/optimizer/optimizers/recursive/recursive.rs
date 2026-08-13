@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -25,6 +26,7 @@ use crate::optimizer::optimizers::rule::RuleFactory;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::optimizer::pipeline::OptimizerTraceCollector;
+use crate::Symbol;
 
 /// Optimizer that recursively applies a set of transformation rules
 #[derive(Clone)]
@@ -32,6 +34,7 @@ pub struct RecursiveRuleOptimizer {
     ctx: Arc<OptimizerContext>,
     rules: &'static [RuleID],
     trace_collector: Option<Arc<OptimizerTraceCollector>>,
+    materialized_view_output_columns: Option<HashSet<Symbol>>,
 }
 
 impl RecursiveRuleOptimizer {
@@ -40,24 +43,57 @@ impl RecursiveRuleOptimizer {
             ctx,
             rules,
             trace_collector: None,
+            materialized_view_output_columns: None,
+        }
+    }
+
+    pub fn new_with_materialized_view_output_columns(
+        ctx: Arc<OptimizerContext>,
+        rules: &'static [RuleID],
+        output_columns: Option<HashSet<Symbol>>,
+    ) -> Self {
+        Self {
+            ctx,
+            rules,
+            trace_collector: None,
+            materialized_view_output_columns: output_columns,
         }
     }
 
     /// Run the optimizer on the given expression.
     #[recursive::recursive]
     pub fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
-        self.optimize_expression(s_expr)
+        self.optimize_expression(s_expr, self.materialized_view_output_columns.as_ref())
     }
 
     #[recursive::recursive]
-    fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
+    fn optimize_expression(
+        &self,
+        s_expr: &SExpr,
+        materialized_view_output_columns: Option<&HashSet<Symbol>>,
+    ) -> Result<SExpr> {
         let mut current = s_expr.clone();
 
         loop {
+            // Materialized-view substitution must inspect the largest query subtree before its
+            // children. A bottom-up attempt at Filter's child treats predicate-only columns as
+            // required outputs and cannot consume a predicate guaranteed by the MV definition.
+            if self.rules.contains(&RuleID::TryApplyMaterializedView)
+                && materialized_view_output_columns.is_some()
+                && let Some(new_expr) = self.apply_transform_rules(
+                    &current,
+                    &[RuleID::TryApplyMaterializedView],
+                    materialized_view_output_columns,
+                )?
+            {
+                current = new_expr;
+                continue;
+            }
+
             let mut optimized_children = Vec::with_capacity(current.arity());
             let mut children_changed = false;
             for expr in current.children() {
-                let optimized_child = self.optimize_sync(expr)?;
+                let optimized_child = self.optimize_expression(expr, None)?;
                 if !optimized_child.eq(expr) {
                     children_changed = true;
                 }
@@ -68,7 +104,11 @@ impl RecursiveRuleOptimizer {
                 current = current.replace_children(optimized_children);
             }
 
-            match self.apply_transform_rules(&current, self.rules)? {
+            match self.apply_transform_rules(
+                &current,
+                self.rules,
+                materialized_view_output_columns,
+            )? {
                 Some(new_expr) => {
                     current = new_expr;
                 }
@@ -111,10 +151,29 @@ impl RecursiveRuleOptimizer {
         Ok(())
     }
 
-    fn apply_transform_rules(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<Option<SExpr>> {
+    fn apply_transform_rules(
+        &self,
+        s_expr: &SExpr,
+        rules: &[RuleID],
+        materialized_view_output_columns: Option<&HashSet<Symbol>>,
+    ) -> Result<Option<SExpr>> {
         let mut s_expr = s_expr.clone();
         for rule_id in rules {
-            let rule = RuleFactory::create_rule(*rule_id, self.ctx.clone())?;
+            if *rule_id == RuleID::TryApplyMaterializedView
+                && materialized_view_output_columns.is_none()
+            {
+                continue;
+            }
+            let rule = if *rule_id == RuleID::TryApplyMaterializedView {
+                Box::new(
+                    crate::optimizer::optimizers::rule::RuleTryApplyMaterializedView::new_with_output_columns(
+                        self.ctx.clone(),
+                        materialized_view_output_columns.cloned(),
+                    ),
+                ) as crate::optimizer::optimizers::rule::RulePtr
+            } else {
+                RuleFactory::create_rule(*rule_id, self.ctx.clone())?
+            };
 
             // Skip disabled rules
             if self.ctx.is_optimizer_disabled(&rule.name()) {

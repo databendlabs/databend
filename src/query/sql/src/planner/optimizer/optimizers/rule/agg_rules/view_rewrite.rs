@@ -112,6 +112,9 @@ impl QueryInfo {
                         if let Some(prewhere) = &scan.prewhere {
                             debug_assert!(predicates.is_none());
                             predicates = Some(prewhere.predicates.as_ref());
+                        } else if let Some(push_down_predicates) = &scan.push_down_predicates {
+                            debug_assert!(predicates.is_none());
+                            predicates = Some(push_down_predicates.as_ref());
                         }
                         // Finish the recursion.
                         break;
@@ -207,6 +210,10 @@ impl QueryInfo {
 
     pub(crate) fn column_map(&self) -> &HashMap<Symbol, ScalarExpr> {
         &self.column_map
+    }
+
+    pub(crate) fn retain_output_columns(&mut self, required: &HashSet<Symbol>) {
+        self.output_cols.retain(|item| required.contains(&item.index));
     }
 
     // check whether the scalar can be computed from index output columns.
