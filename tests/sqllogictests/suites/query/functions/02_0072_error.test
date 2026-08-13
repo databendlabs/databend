@@ -22,3 +22,24 @@ select number from numbers(3) where is_not_error((1 / (number - 1)) > 0) order b
 ----
 0
 2
+
+# is_error is rewritten to not(is_not_error(x)) at type-check time, so it
+# observes nested errors as well, in projection and filter position.
+query I
+select number from numbers(3) where is_error((1 / (number - 1)) > 0)
+----
+1
+
+query B
+select is_error((1 / 0) > 0)
+----
+true
+
+# error_or rewrites to if(is_not_error(a), a, ...): nested errors must not
+# raise midway and must skip the erroring argument.
+query ?
+select error_or(1 / (number - 1), 42) from numbers(3) order by number
+----
+-1
+42
+1
