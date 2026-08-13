@@ -23,12 +23,12 @@ pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
         .equi_conditions
         .iter()
         .map(|equi_condition| {
-            Ok(ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "eq".to_string(),
-                params: vec![],
-                arguments: vec![equi_condition.left.clone(), equi_condition.right.clone()],
-            }))
+            Ok(ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                "eq".to_string(),
+                vec![],
+                vec![equi_condition.left.clone(), equi_condition.right.clone()],
+            )))
         })
         .collect::<Result<Vec<_>>>()?
         .into_iter()

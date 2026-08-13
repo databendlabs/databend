@@ -835,11 +835,11 @@ impl SubqueryDecorrelatorOptimizer {
 
         let mut predicates = Vec::new();
         if let Some(row_limit) = limit.limit {
-            predicates.push(ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "lte".to_string(),
-                params: vec![],
-                arguments: vec![
+            predicates.push(ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                "lte".to_string(),
+                vec![],
+                vec![
                     row_number_column.clone(),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
@@ -848,22 +848,22 @@ impl SubqueryDecorrelatorOptimizer {
                         )),
                     }),
                 ],
-            }));
+            )));
         }
 
         if limit.offset > 0 {
-            predicates.push(ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "gt".to_string(),
-                params: vec![],
-                arguments: vec![
+            predicates.push(ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                "gt".to_string(),
+                vec![],
+                vec![
                     row_number_column,
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
                         value: Scalar::Number(NumberScalar::UInt64(limit.offset as u64)),
                     }),
                 ],
-            }));
+            )));
         }
 
         Ok((

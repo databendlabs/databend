@@ -144,13 +144,7 @@ fn make_and_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
     if scalars.len() == 1 {
         return scalars.pop().unwrap();
     }
-    FunctionCall {
-        span: None,
-        func_name: "and_filters".to_string(),
-        params: vec![],
-        arguments: scalars,
-    }
-    .into()
+    FunctionCall::new(None, "and_filters".to_string(), vec![], scalars).into()
 }
 
 // Merge predicates to OR scalar
@@ -158,11 +152,5 @@ fn make_or_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
     if scalars.len() == 1 {
         return scalars.pop().unwrap();
     }
-    FunctionCall {
-        span: None,
-        func_name: "or_filters".to_string(),
-        params: vec![],
-        arguments: scalars,
-    }
-    .into()
+    FunctionCall::new(None, "or_filters".to_string(), vec![], scalars).into()
 }

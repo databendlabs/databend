@@ -213,18 +213,15 @@ fn normalize_string(s: &str) -> String {
 }
 
 fn is_null(expr: ScalarExpr) -> ScalarExpr {
-    let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "is_not_null".to_string(),
-        params: vec![],
-        arguments: vec![expr],
-    });
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "not".to_string(),
-        params: vec![],
-        arguments: vec![is_not_null],
-    })
+    let is_not_null = ScalarExpr::FunctionCall(FunctionCall::new(
+        None,
+        "is_not_null".to_string(),
+        vec![],
+        vec![expr],
+    ));
+    ScalarExpr::FunctionCall(FunctionCall::new(None, "not".to_string(), vec![], vec![
+        is_not_null,
+    ]))
 }
 
 /// Run a single join filter test case

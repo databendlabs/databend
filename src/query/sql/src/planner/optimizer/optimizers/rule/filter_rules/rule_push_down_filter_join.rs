@@ -226,12 +226,12 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
         for equi_condition in join.equi_conditions.iter() {
             let left = equi_condition.left.clone();
             let right = equi_condition.right.clone();
-            push_down_predicates.push(ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: String::from(ComparisonOp::Equal.to_func_name()),
-                params: vec![],
-                arguments: vec![left, right],
-            }));
+            push_down_predicates.push(ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                String::from(ComparisonOp::Equal.to_func_name()),
+                vec![],
+                vec![left, right],
+            )));
         }
         join.equi_conditions.clear();
         match join.join_type {

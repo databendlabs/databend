@@ -1388,18 +1388,18 @@ fn test_replaced_remaining_predicate_must_still_type_check() -> anyhow::Result<(
         "",
         0,
     );
-    let strip_null_value = ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "strip_null_value".to_string(),
-        params: vec![],
-        arguments: vec![variant_col.clone()],
-    });
-    let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "is_not_null".to_string(),
-        params: vec![],
-        arguments: vec![strip_null_value],
-    });
+    let strip_null_value = ScalarExpr::FunctionCall(FunctionCall::new(
+        None,
+        "strip_null_value".to_string(),
+        vec![],
+        vec![variant_col.clone()],
+    ));
+    let is_not_null = ScalarExpr::FunctionCall(FunctionCall::new(
+        None,
+        "is_not_null".to_string(),
+        vec![],
+        vec![strip_null_value],
+    ));
 
     let result = run_optimizer(vec![builder.eq(int_col, variant_col), is_not_null])?;
 

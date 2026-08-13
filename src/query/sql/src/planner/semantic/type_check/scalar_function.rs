@@ -473,21 +473,21 @@ where A: TypeCheckAdapter
             }
         };
 
-        let wrap_new_arg = ScalarExpr::FunctionCall(FunctionCall {
-            span: func.span,
-            func_name: "to_variant".to_string(),
-            params: vec![],
-            arguments: vec![constant_arg.clone()],
-        });
+        let wrap_new_arg = ScalarExpr::FunctionCall(FunctionCall::new(
+            func.span,
+            "to_variant".to_string(),
+            vec![],
+            vec![constant_arg.clone()],
+        ));
         let mut new_arguments = func.arguments.clone();
         new_arguments[constant_arg_index] = wrap_new_arg;
 
-        let new_func = ScalarExpr::FunctionCall(FunctionCall {
-            span: func.span,
-            func_name: func.func_name.clone(),
-            params: func.params.clone(),
-            arguments: new_arguments,
-        });
+        let new_func = ScalarExpr::FunctionCall(FunctionCall::new(
+            func.span,
+            func.func_name.clone(),
+            func.params.clone(),
+            new_arguments,
+        ));
 
         Ok(Box::new((new_func, data_type)))
     }
@@ -730,13 +730,7 @@ where A: TypeCheckAdapter
         }
 
         Ok(Box::new((
-            FunctionCall {
-                span,
-                params,
-                arguments: folded_args,
-                func_name: func_name.to_string(),
-            }
-            .into(),
+            FunctionCall::new(span, func_name.to_string(), params, folded_args).into(),
             expr.data_type().clone(),
         )))
     }

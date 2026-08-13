@@ -117,21 +117,17 @@ impl StreamContext {
                 }
             };
 
-            let new_stream_column_scalar_expr = ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "if".to_string(),
-                params: vec![],
-                arguments: vec![
-                    ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "is_not_null".to_string(),
-                        params: vec![],
-                        arguments: vec![origin_stream_column_scalar_expr.clone()],
-                    }),
+            let new_stream_column_scalar_expr =
+                ScalarExpr::FunctionCall(FunctionCall::new(None, "if".to_string(), vec![], vec![
+                    ScalarExpr::FunctionCall(FunctionCall::new(
+                        None,
+                        "is_not_null".to_string(),
+                        vec![],
+                        vec![origin_stream_column_scalar_expr.clone()],
+                    )),
                     origin_stream_column_scalar_expr,
                     current_stream_column_scalar_expr,
-                ],
-            });
+                ]));
 
             exprs.push(new_stream_column_scalar_expr.as_field_index_expr()?);
         }

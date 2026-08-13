@@ -86,10 +86,32 @@ impl PullUpFilterOptimizer {
 
     fn pull_up_filter(&mut self, s_expr: &SExpr, filter: &Filter) -> Result<SExpr> {
         let child = self.pull_up(s_expr.child(0)?)?;
+        let mut kept_predicates = vec![];
         for predicate in filter.predicates.iter() {
-            self.predicates.extend(conjunctions(predicate).cloned());
+            // Optimizer-derived predicates (e.g. `is_not_null` from the null
+            // addition rule) are only guaranteed by an operator *below* this
+            // filter — pulling them up detaches them from that operator and
+            // lets them participate in inference or join rewrites they must
+            // not influence. Keep them in place.
+            if predicate.is_derived() {
+                kept_predicates.push(predicate.clone());
+            } else {
+                self.predicates.extend(conjunctions(predicate).cloned());
+            }
         }
-        Ok(child)
+        if kept_predicates.is_empty() {
+            Ok(child)
+        } else {
+            Ok(SExpr::create_unary(
+                Arc::new(
+                    Filter {
+                        predicates: kept_predicates,
+                    }
+                    .into(),
+                ),
+                Arc::new(child),
+            ))
+        }
     }
 
     fn pull_up_join(&mut self, s_expr: &SExpr, join: &Join) -> Result<SExpr> {
@@ -125,12 +147,12 @@ impl PullUpFilterOptimizer {
         let mut join = join.clone();
         if left_need_pull_up && right_need_pull_up {
             for condition in std::mem::take(&mut join.equi_conditions) {
-                let predicate = ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "eq".to_string(),
-                    params: vec![],
-                    arguments: vec![condition.left, condition.right],
-                });
+                let predicate = ScalarExpr::FunctionCall(FunctionCall::new(
+                    None,
+                    "eq".to_string(),
+                    vec![],
+                    vec![condition.left, condition.right],
+                ));
                 self.predicates.push(predicate);
             }
             for predicate in std::mem::take(&mut join.non_equi_conditions) {

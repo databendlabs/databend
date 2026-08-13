@@ -127,18 +127,18 @@ impl RuleNormalizeAggregateOptimizer {
                     }
 
                     let scalar = if nullable {
-                        let not_null_check = ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: "is_not_null".to_string(),
-                            params: vec![],
-                            arguments: vec![function.args[0].clone()],
-                        });
+                        let not_null_check = ScalarExpr::FunctionCall(FunctionCall::new(
+                            None,
+                            "is_not_null".to_string(),
+                            vec![],
+                            vec![function.args[0].clone()],
+                        ));
 
-                        ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: "if".to_string(),
-                            params: vec![],
-                            arguments: vec![
+                        ScalarExpr::FunctionCall(FunctionCall::new(
+                            None,
+                            "if".to_string(),
+                            vec![],
+                            vec![
                                 not_null_check,
                                 ScalarExpr::ConstantExpr(ConstantExpr {
                                     span: None,
@@ -149,7 +149,7 @@ impl RuleNormalizeAggregateOptimizer {
                                     value: 0u64.into(),
                                 }),
                             ],
-                        })
+                        ))
                     } else {
                         ScalarExpr::ConstantExpr(ConstantExpr {
                             span: None,

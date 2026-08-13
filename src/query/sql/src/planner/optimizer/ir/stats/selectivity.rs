@@ -124,14 +124,36 @@ impl SelectivityEstimator {
             return Ok(0.0);
         }
 
-        let scalar_expr = match predicates {
+        // Optimizer-derived predicates restate a fact another operator
+        // already enforces (e.g. a null-rejecting join discards NULL-key rows
+        // anyway), so counting them double-counts NULL filtering. Worse, on
+        // stats-less expressions (unnest output, aggregate results, ...) they
+        // pick up the default selectivity and can badly distort cardinality
+        // estimates. Skip a derived predicate unless every referenced column
+        // has real column statistics.
+        let predicates: Vec<ScalarExpr> = predicates
+            .iter()
+            .filter(|pred| {
+                !pred.is_derived()
+                    || pred
+                        .used_columns()
+                        .iter()
+                        .all(|index| self.column_stats.contains_key(index))
+            })
+            .cloned()
+            .collect();
+        if predicates.is_empty() {
+            return Ok(self.cardinality.value());
+        }
+
+        let scalar_expr = match predicates.as_slice() {
             [pred] => pred.clone(),
-            predicates => ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "and_filters".to_string(),
-                params: vec![],
-                arguments: predicates.to_vec(),
-            }),
+            predicates => ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                "and_filters".to_string(),
+                vec![],
+                predicates.to_vec(),
+            )),
         };
         let expr = scalar_expr.as_expr()?;
         let input_domains = self.build_input_domains(&expr)?;

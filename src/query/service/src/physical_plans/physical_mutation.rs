@@ -897,12 +897,11 @@ pub fn generate_update_list(
                 // change into nullable, so we need to cast this. but we will do cast after all matched clauses,please
                 // see `cast_data_type_for_merge()`.
 
-                ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "if".to_string(),
-                    params: vec![],
-                    arguments: vec![predicate.clone(), left, right],
-                })
+                ScalarExpr::FunctionCall(FunctionCall::new(None, "if".to_string(), vec![], vec![
+                    predicate.clone(),
+                    left,
+                    right,
+                ]))
             };
             let expr = scalar
                 .as_expr()?
@@ -984,12 +983,12 @@ pub fn mutation_update_expr(
                 scalar.clone()
             };
 
-            let scalar = ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "if".to_string(),
-                params: vec![],
-                arguments: vec![predicate.clone(), left, right],
-            });
+            let scalar =
+                ScalarExpr::FunctionCall(FunctionCall::new(None, "if".to_string(), vec![], vec![
+                    predicate.clone(),
+                    left,
+                    right,
+                ]));
             let expr = scalar
                 .type_check(input_schema.as_ref())?
                 .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;

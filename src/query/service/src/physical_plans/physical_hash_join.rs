@@ -1457,12 +1457,12 @@ mod tests {
     fn still_builds_nested_loop_filter_for_inner_non_equi_join() -> Result<()> {
         let join = Join {
             join_type: JoinType::Inner,
-            non_equi_conditions: vec![ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "gt".to_string(),
-                params: vec![],
-                arguments: vec![column(0), column(1)],
-            })],
+            non_equi_conditions: vec![ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                "gt".to_string(),
+                vec![],
+                vec![column(0), column(1)],
+            ))],
             ..Default::default()
         };
         let (probe, build, target) = schemas();

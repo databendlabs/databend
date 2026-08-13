@@ -121,12 +121,12 @@ where A: super::TypeCheckAdapter
         self.bind_context.expr_context = original_context;
         let (arguments, _) = arguments_result?;
 
-        let srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
+        let srf_scalar = ScalarExpr::FunctionCall(FunctionCall::new(
             span,
-            func_name: func_name.to_string(),
-            params: vec![],
+            func_name.to_string(),
+            vec![],
             arguments,
-        });
+        ));
         let srf_expr = srf_scalar.as_expr()?;
         let srf_tuple_types = srf_expr.data_type().as_tuple().ok_or_else(|| {
             ErrorCode::Internal(format!(
@@ -138,12 +138,12 @@ where A: super::TypeCheckAdapter
         let (return_scalar, return_type) = if srf_tuple_types.len() > 1 {
             (srf_scalar, srf_expr.data_type().clone())
         } else {
-            let child_scalar = ScalarExpr::FunctionCall(FunctionCall {
+            let child_scalar = ScalarExpr::FunctionCall(FunctionCall::new(
                 span,
-                func_name: "get".to_string(),
-                params: vec![Scalar::Number(NumberScalar::Int64(1))],
-                arguments: vec![srf_scalar],
-            });
+                "get".to_string(),
+                vec![Scalar::Number(NumberScalar::Int64(1))],
+                vec![srf_scalar],
+            ));
             (child_scalar, srf_tuple_types[0].clone())
         };
 

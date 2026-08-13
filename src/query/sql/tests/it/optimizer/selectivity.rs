@@ -219,15 +219,14 @@ fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> Scala
         }),
         RawExpr::FunctionCall {
             name, args, params, ..
-        } => ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: name.clone(),
-            params: params.clone(),
-            arguments: args
-                .iter()
+        } => ScalarExpr::FunctionCall(FunctionCall::new(
+            None,
+            name.clone(),
+            params.clone(),
+            args.iter()
                 .map(|arg| raw_expr_to_scalar(arg, columns))
                 .collect(),
-        }),
+        )),
         RawExpr::LambdaFunctionCall { .. } => {
             unreachable!("lambda expressions are not used in tests")
         }
@@ -697,11 +696,11 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         &[("number", DataType::Number(NumberDataType::Int32))],
         number_stats.clone(),
     )?;
-    let typed_number_predicate = ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: ComparisonOp::Equal.to_func_name().to_string(),
-        params: vec![],
-        arguments: vec![
+    let typed_number_predicate = ScalarExpr::FunctionCall(FunctionCall::new(
+        None,
+        ComparisonOp::Equal.to_func_name().to_string(),
+        vec![],
+        vec![
             ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: None,
                 column: ColumnBindingBuilder::new(
@@ -720,7 +719,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
                 DataType::Number(NumberDataType::UInt64),
             ),
         ],
-    });
+    ));
     run_scalar_case_with_predicates(
         &mut file,
         &["number = UInt64(5)"],
@@ -973,12 +972,12 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         )
     };
     let float_predicate = |op: ComparisonOp, value| {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: op.to_func_name().to_string(),
-            params: vec![],
-            arguments: vec![float_column(), float_constant(value)],
-        })
+        ScalarExpr::FunctionCall(FunctionCall::new(
+            None,
+            op.to_func_name().to_string(),
+            vec![],
+            vec![float_column(), float_constant(value)],
+        ))
     };
     let float_gte_15 = float_predicate(ComparisonOp::GTE, 15.0);
     let float_lte_19 = float_predicate(ComparisonOp::LTE, 19.0);

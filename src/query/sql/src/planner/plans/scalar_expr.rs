@@ -159,6 +159,42 @@ impl ScalarExpr {
         )
     }
 
+    /// If this expression was derived by an optimizer rule, return the name
+    /// of the rule that derived it. See `FunctionCall::derived_from`.
+    ///
+    /// Provenance survives *moves* (e.g. a predicate pushed from `Filter`
+    /// into `Scan.push_down_predicates` arrives unchanged) and transparent
+    /// boolean casts (a derived predicate is already Boolean, so casting it
+    /// to `Boolean [NULL]` is an identity wrap that must not hide the tag).
+    /// Any rewrite that rebuilds the root in a non-transparent way — negation,
+    /// merging into a conjunction, substitution — is considered a deliberate
+    /// strip: such rewrites must re-attach provenance with
+    /// `FunctionCall::derived` if the result is still rule-derived.
+    pub fn derived_from(&self) -> Option<DerivedFrom> {
+        match self {
+            ScalarExpr::FunctionCall(func) => func.derived_from,
+            ScalarExpr::CastExpr(cast)
+                if matches!(
+                    *cast.target_type,
+                    DataType::Boolean | DataType::Nullable(box DataType::Boolean)
+                ) =>
+            {
+                cast.argument.derived_from()
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether this expression was derived by an optimizer rule rather than
+    /// written in the query. Derived expressions restate a fact another
+    /// operator already guarantees, so they must be handled with care:
+    /// evaluating them must never introduce new errors (evaluate in
+    /// non-throwing mode), and they must not be inlined or re-evaluated on
+    /// rows the original plan never touches.
+    pub fn is_derived(&self) -> bool {
+        self.derived_from().is_some()
+    }
+
     pub fn data_type(&self) -> Result<DataType> {
         match self {
             ScalarExpr::BoundColumnRef(column) => Ok((*column.column.data_type).clone()),
@@ -997,19 +1033,11 @@ impl SubqueryComparisonOp {
                     value: Scalar::String(escape.clone()),
                 }))
             }
-            return FunctionCall {
-                span,
-                func_name: "like".to_string(),
-                params: vec![],
-                arguments,
-            };
+            return FunctionCall::new(span, "like".to_string(), vec![], arguments);
         }
-        FunctionCall {
-            span,
-            func_name: self.to_func_name().to_string(),
-            params: vec![],
-            arguments: vec![left, right],
-        }
+        FunctionCall::new(span, self.to_func_name().to_string(), vec![], vec![
+            left, right,
+        ])
     }
 }
 
@@ -1160,6 +1188,72 @@ pub struct FunctionCall {
     pub func_name: String,
     pub params: Vec<Scalar>,
     pub arguments: Vec<ScalarExpr>,
+    /// Provenance of an optimizer-derived expression: the rule that derived
+    /// it, or `None` for expressions coming from the query itself.
+    ///
+    /// A derived predicate's guarantee is **positional**: it holds only at
+    /// the plan position where the deriving rule placed it, justified by an
+    /// operator below (e.g. `is_not_null(key)` below a null-rejecting join —
+    /// the join discards NULL-key rows anyway). How strong that guarantee is
+    /// depends entirely on the deriving rule's own argument, which is why the
+    /// tag names the rule rather than being a boolean.
+    ///
+    /// Consequences for consumers:
+    /// - Evaluating a derived predicate must never introduce new errors
+    ///   (e.g. a derived `is_not_null(a / b)` must not fail on `b = 0` when
+    ///   another conjunct would have removed that row). This is enforced
+    ///   *structurally*: derived predicates are kept in pure column-reference
+    ///   form (never inlined below an EvalScalar, never re-evaluated on rows
+    ///   the original plan never touches), so their evaluation is total.
+    ///   A future consumer that needs richer derived expressions must either
+    ///   prove them non-throwing or evaluate them in non-throwing mode.
+    /// - Do not move a derived predicate away from its position (pull-up,
+    ///   inlining below an EvalScalar, ...) — the guarantee may not hold
+    ///   elsewhere.
+    /// - Do not let it influence cardinality estimates or rule matching as if
+    ///   it were a user-written filter.
+    ///
+    /// Excluded from Hash/PartialEq (like `span`): provenance is metadata,
+    /// not expression identity, so a derived expression and its non-derived
+    /// counterpart remain interchangeable in the memo.
+    #[educe(Hash(ignore), PartialEq(ignore))]
+    pub derived_from: Option<DerivedFrom>,
+}
+
+/// The optimizer rule an expression was derived from. See
+/// `FunctionCall::derived_from`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DerivedFrom {
+    NullAddition,
+    FilterNulls,
+}
+
+impl FunctionCall {
+    pub fn new(
+        span: Span,
+        func_name: String,
+        params: Vec<Scalar>,
+        arguments: Vec<ScalarExpr>,
+    ) -> Self {
+        Self {
+            derived_from: None,
+            span,
+            func_name,
+            params,
+            arguments,
+        }
+    }
+
+    /// Tag the expression as derived by an optimizer rule.
+    pub fn derived(mut self, from: DerivedFrom) -> Self {
+        self.derived_from = Some(from);
+        self
+    }
+
+    /// Whether this expression was derived by an optimizer rule.
+    pub fn is_derived(&self) -> bool {
+        self.derived_from.is_some()
+    }
 }
 
 #[derive(Clone, Debug, Educe)]

@@ -275,12 +275,12 @@ mod tests {
         };
         let up = EvalScalar {
             items: vec![ScalarItem {
-                scalar: ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "is_not_null".to_string(),
-                    params: vec![],
-                    arguments: vec![column(lower_index)],
-                }),
+                scalar: ScalarExpr::FunctionCall(FunctionCall::new(
+                    None,
+                    "is_not_null".to_string(),
+                    vec![],
+                    vec![column(lower_index)],
+                )),
                 index: output_index,
             }],
         };
@@ -307,12 +307,12 @@ mod tests {
         };
         let up = EvalScalar {
             items: vec![ScalarItem {
-                scalar: ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "is_not_null".to_string(),
-                    params: vec![],
-                    arguments: vec![column(lower_index)],
-                }),
+                scalar: ScalarExpr::FunctionCall(FunctionCall::new(
+                    None,
+                    "is_not_null".to_string(),
+                    vec![],
+                    vec![column(lower_index)],
+                )),
                 index: output_index,
             }],
         };
@@ -347,12 +347,12 @@ mod tests {
         let input = [input_index].into_iter().collect();
         let down = EvalScalar {
             items: vec![ScalarItem {
-                scalar: ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "is_not_null".to_string(),
-                    params: vec![],
-                    arguments: vec![column(input_index)],
-                }),
+                scalar: ScalarExpr::FunctionCall(FunctionCall::new(
+                    None,
+                    "is_not_null".to_string(),
+                    vec![],
+                    vec![column(input_index)],
+                )),
                 index: lower_index,
             }],
         };

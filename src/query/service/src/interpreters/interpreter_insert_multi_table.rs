@@ -470,21 +470,15 @@ impl InsertMultiTableInterpreter {
 }
 
 fn and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "and".to_string(),
-        params: vec![],
-        arguments: vec![left, right],
-    })
+    ScalarExpr::FunctionCall(FunctionCall::new(None, "and".to_string(), vec![], vec![
+        left, right,
+    ]))
 }
 
 fn not(expr: ScalarExpr) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "not".to_string(),
-        params: vec![],
-        arguments: vec![expr],
-    })
+    ScalarExpr::FunctionCall(FunctionCall::new(None, "not".to_string(), vec![], vec![
+        expr,
+    ]))
 }
 
 fn ordered_source_projection_columns(

@@ -41,6 +41,14 @@ impl Filter {
         }
         Ok(used_columns)
     }
+
+    /// Whether any predicate of this filter was derived by an optimizer rule.
+    /// See `ScalarExpr::is_derived`.
+    pub fn has_derived_predicate(&self) -> bool {
+        self.predicates
+            .iter()
+            .any(|predicate| predicate.is_derived())
+    }
 }
 
 impl Operator for Filter {

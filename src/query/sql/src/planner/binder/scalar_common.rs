@@ -214,12 +214,9 @@ mod tests {
     }
 
     fn and(lhs: ScalarExpr, rhs: ScalarExpr) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "and".to_string(),
-            params: vec![],
-            arguments: vec![lhs, rhs],
-        })
+        ScalarExpr::FunctionCall(FunctionCall::new(None, "and".to_string(), vec![], vec![
+            lhs, rhs,
+        ]))
     }
 
     #[test]
@@ -234,16 +231,16 @@ mod tests {
 
     #[test]
     fn test_conjunctions_handles_and_filters() {
-        let expr = ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "and_filters".to_string(),
-            params: vec![],
-            arguments: vec![
+        let expr = ScalarExpr::FunctionCall(FunctionCall::new(
+            None,
+            "and_filters".to_string(),
+            vec![],
+            vec![
                 bool_constant(true),
                 and(bool_constant(true), bool_constant(true)),
                 bool_constant(false),
             ],
-        });
+        ));
 
         assert_eq!(conjunctions(&expr).count(), 4);
         assert_eq!(into_conjunctions(expr).count(), 4);
@@ -346,15 +343,7 @@ fn fold_or_arguments(iter: impl Iterator<Item = ScalarExpr>) -> ScalarExpr {
             value: Scalar::Boolean(false),
         }
         .into(),
-        |acc, arg| {
-            FunctionCall {
-                span: None,
-                func_name: "or".to_string(),
-                params: vec![],
-                arguments: vec![acc, arg],
-            }
-            .into()
-        },
+        |acc, arg| FunctionCall::new(None, "or".to_string(), vec![], vec![acc, arg]).into(),
     )
 }
 

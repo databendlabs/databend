@@ -765,12 +765,12 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .cloned()
                     .reduce(|lhs, rhs| {
-                        ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: "and_filters".to_string(),
-                            params: vec![],
-                            arguments: vec![lhs, rhs],
-                        })
+                        ScalarExpr::FunctionCall(FunctionCall::new(
+                            None,
+                            "and_filters".to_string(),
+                            vec![],
+                            vec![lhs, rhs],
+                        ))
                     })
                     .expect("there should be at least one predicate in prewhere");
 
@@ -972,12 +972,9 @@ impl PhysicalPlanBuilder {
         let output_schema = projection.project_schema(&agg.schema);
 
         let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "and".to_string(),
-                params: vec![],
-                arguments: vec![lhs, rhs],
-            })
+            ScalarExpr::FunctionCall(FunctionCall::new(None, "and".to_string(), vec![], vec![
+                lhs, rhs,
+            ]))
         });
         let filter = predicate
             .map(|pred| -> Result<_> {

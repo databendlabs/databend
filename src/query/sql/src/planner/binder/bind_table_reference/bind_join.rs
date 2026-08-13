@@ -985,12 +985,12 @@ impl<'a> JoinConditionResolver<'a> {
             }
 
             if Some(index) == asof_range_column {
-                non_equi_conditions.push(ScalarExpr::FunctionCall(FunctionCall {
-                    span: *span,
-                    func_name: ASOF_USING_RANGE_FUNC.to_string(),
-                    params: vec![],
-                    arguments: vec![left_scalar, right_scalar],
-                }));
+                non_equi_conditions.push(ScalarExpr::FunctionCall(FunctionCall::new(
+                    *span,
+                    ASOF_USING_RANGE_FUNC.to_string(),
+                    vec![],
+                    vec![left_scalar, right_scalar],
+                )));
             } else {
                 self.add_equi_conditions(
                     left_scalar,
