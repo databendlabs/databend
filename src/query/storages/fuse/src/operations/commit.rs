@@ -279,7 +279,7 @@ impl FuseTable {
 
         // 3. let's roll
         catalog
-            .update_multi_table_meta(UpdateMultiTableMetaReq {
+            .update_multi_table_meta(&ctx.get_tenant(), UpdateMultiTableMetaReq {
                 update_table_metas,
                 update_stream_metas: update_stream_meta.to_vec(),
                 copied_files: copied_files_req,

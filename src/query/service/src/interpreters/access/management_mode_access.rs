@@ -71,6 +71,7 @@ impl AccessChecker for ManagementModeAccess {
                 // Show.
                 Plan::ShowCreateDatabase(_)
                 | Plan::ShowCreateTable(_)
+                | Plan::ShowCreateMaterializedView(_)
 
                 // Set
                 | Plan::Set(_)
@@ -83,7 +84,9 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateTable(_)
                 | Plan::DropTable(_)
                 | Plan::DropView(_)
+                | Plan::DropMaterializedView(_)
                 | Plan::CreateView(_)
+                | Plan::CreateMaterializedView(_)
                 | Plan::CreateStream(_)
                 | Plan::DropStream(_)
 

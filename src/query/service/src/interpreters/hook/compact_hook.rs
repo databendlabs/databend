@@ -26,6 +26,7 @@ use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::plans::RelOperator;
@@ -277,6 +278,7 @@ pub(crate) async fn compact_table(
                 catalog: compact_target.catalog,
                 database: compact_target.database,
                 table: compact_target.table,
+                target: MaintenanceTarget::Table,
                 limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
                 selection: None,
                 is_final: false,

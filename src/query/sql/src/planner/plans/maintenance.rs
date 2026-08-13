@@ -12,18 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::Expr;
-
-use crate::plans::MaintenanceTarget;
-
-#[derive(Debug, Clone)]
-pub struct ReclusterPlan {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub target: MaintenanceTarget,
-
-    pub limit: Option<usize>,
-    pub selection: Option<Expr>,
-    pub is_final: bool,
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum MaintenanceTarget {
+    Table,
+    MaterializedView { table_id: u64 },
 }

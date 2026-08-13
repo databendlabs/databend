@@ -571,6 +571,38 @@ impl Catalog for MutableCatalog {
             .map_err(meta_service_error)
     }
 
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        let snapshot = self
+            .ctx
+            .meta
+            .get_mv_definition_snapshot(tenant, source_table_id, mv_table_id)
+            .await
+            .map_err(meta_service_error)?;
+        if snapshot.current_source_generation.is_none()
+            || snapshot.bound_source_generation != snapshot.current_source_generation
+        {
+            return Ok(None);
+        }
+        Ok(snapshot.definition)
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        self.ctx
+            .meta
+            .get_mv_current_source_generation(tenant, source_table_id)
+            .await
+            .map_err(meta_service_error)
+    }
+
     async fn mget_table_names_by_ids(
         &self,
         _tenant: &Tenant,
@@ -844,6 +876,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn retryable_update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         // deal with share table
@@ -878,7 +911,7 @@ impl Catalog for MutableCatalog {
             req.update_temp_tables.len()
         );
         let begin = Instant::now();
-        let res = self.ctx.meta.update_multi_table_meta(req).await;
+        let res = self.ctx.meta.update_multi_table_meta(tenant, req).await;
         info!(
             "[CATALOG] Multiple table metadata update completed: elapsed_time={:?}, result={:?}",
             begin.elapsed(),

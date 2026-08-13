@@ -211,6 +211,20 @@ impl AccessLogger {
                     self.log(inner)
                 }
             }
+            Plan::CreateMaterializedView(plan) => {
+                let table_plan = &plan.table_plan;
+                let object_name = format!(
+                    "{}.{}.{}",
+                    table_plan.catalog, table_plan.database, table_plan.table
+                );
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Table,
+                    object_name,
+                    operation_type: DDLOperationType::Create,
+                    ..Default::default()
+                });
+                self.log(&plan.query_plan)
+            }
             Plan::SetOptions(plan) => {
                 let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
                 let operation_type = DDLOperationType::Alter;
@@ -424,6 +438,17 @@ impl AccessLogger {
             }
             Plan::UnsetObjectTags(plan) => {
                 self.log_tag_object_modify(&plan.object);
+            }
+
+            Plan::DropMaterializedView(plan) => {
+                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.view_name);
+                let operation_type = DDLOperationType::Drop;
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Table,
+                    object_name,
+                    operation_type,
+                    ..Default::default()
+                });
             }
 
             _ => {}
