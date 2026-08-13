@@ -158,7 +158,8 @@ impl Binder {
         bind_context: &mut BindContext,
         metadata: &MetadataRef,
     ) -> Result<()> {
-        if bind_context.planning_materialized_view_rewrite
+        if bind_context.planning_agg_index
+            || bind_context.planning_materialized_view_rewrite
             || !self.ctx.get_can_scan_from_agg_index()
         {
             return Ok(());

@@ -353,6 +353,7 @@ pub(crate) struct ViewRewriteMatch {
     pub(crate) selection: Vec<ScalarItem>,
     pub(crate) is_aggregate: bool,
     pub(crate) num_aggregate_functions: usize,
+    pub(crate) requires_aggregate_rollup: bool,
 }
 
 struct PredicatesSplitter {
@@ -828,11 +829,20 @@ impl ResidualClasses {
 // A Practical, Scalable Solution" by Goldstein and Larson."
 pub(crate) struct ViewMatcher {
     query_info: QueryInfo,
+    allow_aggregate_rollup: bool,
 }
 
 impl ViewMatcher {
     pub(crate) fn new(query_info: QueryInfo) -> Self {
-        Self { query_info }
+        Self {
+            query_info,
+            allow_aggregate_rollup: false,
+        }
+    }
+
+    pub(crate) fn with_aggregate_rollup(mut self) -> Self {
+        self.allow_aggregate_rollup = true;
+        self
     }
 
     pub(crate) fn try_match(&self, view_info: &ViewInfo) -> Result<Option<ViewRewriteMatch>> {
@@ -859,7 +869,28 @@ impl ViewMatcher {
                 .as_ref()
                 .map(|aggregate| aggregate.aggregate_functions.len())
                 .unwrap_or_default(),
+            requires_aggregate_rollup: self.requires_aggregate_rollup(view_info),
         }))
+    }
+
+    fn requires_aggregate_rollup(&self, view_info: &ViewInfo) -> bool {
+        let Some(query_aggregate) = &self.query_info.aggregate else {
+            return false;
+        };
+        let Some(view_aggregate) = &view_info.query_info.aggregate else {
+            return false;
+        };
+
+        view_aggregate.group_items.iter().any(|view_item| {
+            let view_group_name =
+                format_scalar(&view_item.scalar, &view_info.query_info.column_map);
+            !query_aggregate.group_items.iter().any(|query_item| {
+                format_scalar(&query_item.scalar, &self.query_info.column_map) == view_group_name
+            }) && !self
+                .query_info
+                .range_classes
+                .fixes_column_to_single_value(&view_group_name)
+        })
     }
 
     fn check_predicates(
@@ -1083,6 +1114,7 @@ impl ViewMatcher {
                         .query_info
                         .range_classes
                         .fixes_column_to_single_value(&view_group_name)
+                        && !self.allow_aggregate_rollup
                     {
                         return false;
                     }

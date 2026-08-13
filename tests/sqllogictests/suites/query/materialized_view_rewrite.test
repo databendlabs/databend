@@ -81,8 +81,39 @@ group by a, b
 1 10 5 9 14 2 7.0 2
 2 20 7 7 7 1 7.0 1
 
-# Without a singleton predicate on the MV's extra group key, re-aggregation
-# would be required. This first implementation must keep scanning the source.
+# Multiple values on the MV's extra group key require a roll-up aggregate.
+# MIN, MAX, SUM, and COUNT can be safely composed from finalized MV values.
+query T
+explain select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t)
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>
+
+query IIIIII rowsort
+select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t)
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+----
+1 10 5 100 114 3
+2 20 7 70 77 2
+
+# AVG and approximate distinct values cannot be accurately rolled up from
+# their finalized MV outputs, so this query must keep scanning the source.
 query T
 explain select
     a,
@@ -123,6 +154,38 @@ insert into source values
     (1, 10, 'xxxxxxx', 13),
     (1, 10, 'other', 200),
     (3, 30, 'xxxxxxx', 8)
+
+# Roll-up also works when the MV read is hybrid: persisted MV rows and source
+# change rows are combined before the second aggregate.
+query T
+explain select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t)
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>table: default.test_materialized_view_rewrite.source<slt:ignore>
+
+query IIIIII rowsort
+select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t)
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+----
+1 10 5 200 327 5
+2 20 7 70 77 2
+3 30 8 8 8 1
 
 query T
 explain select

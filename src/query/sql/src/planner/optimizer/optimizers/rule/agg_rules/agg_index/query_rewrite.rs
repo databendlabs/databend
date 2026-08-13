@@ -24,6 +24,10 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use log::info;
 
+use super::super::view_rewrite::QueryInfo;
+use super::super::view_rewrite::ViewInfo;
+use super::super::view_rewrite::ViewMatcher;
+use super::super::view_rewrite::format_scalar;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
@@ -35,10 +39,6 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::BoundColumnRef;
 use crate::plans::RelOperator;
-use super::super::view_rewrite::QueryInfo;
-use super::super::view_rewrite::format_scalar;
-use super::super::view_rewrite::ViewInfo;
-use super::super::view_rewrite::ViewMatcher;
 
 pub fn try_rewrite(
     table_index: IndexType,
@@ -97,7 +97,12 @@ impl AggIndexView {
         s_expr: &SExpr,
     ) -> Result<Self> {
         let base_columns = base_columns.into_iter().collect::<Vec<_>>();
-        let query_info = QueryInfo::new(table_index, table_name, base_columns.iter().copied(), s_expr)?;
+        let query_info = QueryInfo::new(
+            table_index,
+            table_name,
+            base_columns.iter().copied(),
+            s_expr,
+        )?;
 
         // collect the output columns of aggregating index,
         // query can use those columns to compute expressions.

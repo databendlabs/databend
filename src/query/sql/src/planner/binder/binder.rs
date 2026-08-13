@@ -155,7 +155,6 @@ impl Binder {
             .set_status_info("[SQL-BINDER] Binding SQL statement");
         let mut bind_context = BindContext::new();
         let plan = self.bind_statement(&mut bind_context, stmt).await?;
-        self.bind_query_index(&mut bind_context, &plan).await?;
         self.bind_query_materialized_views(&mut bind_context, &plan)
             .await?;
         self.ctx.set_status_info(&format!(

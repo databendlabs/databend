@@ -29,9 +29,13 @@ use crate::ScalarExpr;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::SExpr;
+use crate::plans::Aggregate;
+use crate::plans::AggregateFunction;
+use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
+use crate::plans::ScalarItem;
 
 pub(crate) fn try_rewrite(
     table_index: IndexType,
@@ -46,7 +50,8 @@ pub(crate) fn try_rewrite(
         metadata.columns_by_table_index(table_index),
         s_expr,
     )?;
-    let matcher = ViewMatcher::new(query_info);
+    let query_aggregate = query_info.aggregate.clone();
+    let matcher = ViewMatcher::new(query_info).with_aggregate_rollup();
 
     for candidate in candidates {
         let definition_info = QueryInfo::new(
@@ -127,6 +132,15 @@ pub(crate) fn try_rewrite(
                 Arc::new(replacement),
             );
         }
+        if matched.requires_aggregate_rollup {
+            let Some(query_aggregate) = &query_aggregate else {
+                continue;
+            };
+            let Some(aggregate) = build_rollup_aggregate(metadata, query_aggregate)? else {
+                continue;
+            };
+            replacement = SExpr::create_unary(Arc::new(aggregate.into()), Arc::new(replacement));
+        }
 
         info!(
             "Use materialized view {}: {}",
@@ -136,4 +150,69 @@ pub(crate) fn try_rewrite(
     }
 
     Ok(None)
+}
+
+fn build_rollup_aggregate(
+    metadata: &Metadata,
+    query_aggregate: &Aggregate,
+) -> Result<Option<Aggregate>> {
+    let group_items = query_aggregate
+        .group_items
+        .iter()
+        .map(|item| ScalarItem {
+            index: item.index,
+            scalar: column_ref(metadata, item.index),
+        })
+        .collect();
+    let mut aggregate_functions = Vec::with_capacity(query_aggregate.aggregate_functions.len());
+    for item in &query_aggregate.aggregate_functions {
+        let ScalarExpr::AggregateFunction(function) = &item.scalar else {
+            return Ok(None);
+        };
+        if function.distinct || !function.params.is_empty() || !function.sort_descs.is_empty() {
+            return Ok(None);
+        }
+        let rollup_name = match function.func_name.as_str() {
+            "sum" => "sum",
+            "count" => "sum0",
+            "min" => "min",
+            "max" => "max",
+            _ => return Ok(None),
+        };
+        aggregate_functions.push(ScalarItem {
+            index: item.index,
+            scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+                span: None,
+                func_name: rollup_name.to_string(),
+                distinct: false,
+                params: vec![],
+                args: vec![column_ref(metadata, item.index)],
+                return_type: function.return_type.clone(),
+                sort_descs: vec![],
+                display_name: function.display_name.clone(),
+            }),
+        });
+    }
+
+    Ok(Some(Aggregate {
+        mode: AggregateMode::Initial,
+        group_items,
+        aggregate_functions,
+        from_distinct: false,
+        rank_limit: None,
+        grouping_sets: None,
+    }))
+}
+
+fn column_ref(metadata: &Metadata, index: crate::Symbol) -> ScalarExpr {
+    ScalarExpr::BoundColumnRef(BoundColumnRef {
+        span: None,
+        column: ColumnBindingBuilder::new(
+            metadata.column(index).name(),
+            index,
+            Box::new(metadata.column(index).data_type()),
+            Visibility::Visible,
+        )
+        .build(),
+    })
 }

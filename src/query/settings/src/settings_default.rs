@@ -1203,8 +1203,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Refresh aggregating index after new data written",
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Deprecated: aggregating index refresh is disabled",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
