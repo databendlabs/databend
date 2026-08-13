@@ -30,6 +30,38 @@ FROM get_lineage('lineage_history_multi_kind.dst', 'TABLE', 'UPSTREAM', 1)
 ----
 DML
 
+# Neighbors collapse physical patterns for the same direction/object pair to the newest event.
+# The last DML restores the CTAS-shaped mapping, so historical b -> x / a -> y is not unioned in.
+query TTTTTTT
+SELECT direction, object_domain, catalog, database, object_name,
+       column_neighbors['x'][0]::STRING,
+       column_neighbors['y'][0]::STRING
+FROM get_lineage_neighbors('TABLE', 'lineage_history_multi_kind.dst')
+----
+UPSTREAM TABLE default lineage_history_multi_kind src a b
+
+query BB
+WITH neighbor AS (
+  SELECT parse_json(process) AS process
+  FROM get_lineage_neighbors('TABLE', 'lineage_history_multi_kind.dst')
+), history AS (
+  SELECT lineage_kind, query_info
+  FROM system_history.lineage_history
+  WHERE source_database = 'lineage_history_multi_kind'
+    AND source_name = 'src'
+    AND target_database = 'lineage_history_multi_kind'
+    AND target_name = 'dst'
+  QUALIFY row_number() OVER (
+    ORDER BY updated_on DESC, query_info['query_id']::STRING DESC,
+             lineage_kind DESC, column_lineage_hash DESC
+  ) = 1
+)
+SELECT neighbor.process['lineage_kind']::STRING = history.lineage_kind,
+       neighbor.process['query_text']::STRING = history.query_info['query_text']::STRING
+FROM neighbor CROSS JOIN history
+----
+1 1
+
 # Column lineage accumulates every mapping across kinds: dst.x is fed by both src.a (CTAS and the
 # last DML) and src.b (the first DML), deduplicated into one row per distinct source column.
 query ISS rowsort

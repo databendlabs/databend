@@ -18,6 +18,12 @@ FROM get_lineage('lineage_history_lifecycle.dropped_fuse', 'TABLE', 'UPSTREAM', 
 ----
 0
 
+query I
+SELECT count(*)
+FROM get_lineage_neighbors('TABLE', 'lineage_history_lifecycle.dropped_fuse')
+----
+0
+
 # UNDROP restores the same table id, so the retained edge becomes active without a rewrite.
 statement ok
 UNDROP TABLE lineage_history_lifecycle.dropped_fuse
@@ -27,6 +33,12 @@ SELECT distance, source_object_database, source_object_name, target_object_datab
 FROM get_lineage('lineage_history_lifecycle.dropped_fuse', 'TABLE', 'UPSTREAM', 1)
 ----
 1 lineage_history_lifecycle src lineage_history_lifecycle dropped_fuse
+
+query TTTTT
+SELECT direction, object_domain, catalog, database, object_name
+FROM get_lineage_neighbors('TABLE', 'lineage_history_lifecycle.dropped_fuse')
+----
+UPSTREAM TABLE default lineage_history_lifecycle src
 
 # Renaming preserves column ids, so the existing DataMovement edge resolves both current names.
 statement ok

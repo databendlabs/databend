@@ -50,6 +50,42 @@ FROM get_lineage('lineage_history_columns.mid', 'TABLE', 'UPSTREAM', 1)
 ----
 default lineage_history_columns src default lineage_history_columns mid
 
+# A table-level neighbor query returns both directions in one result. Column maps are oriented
+# around the queried object: current mid columns are keys and neighbor columns are values.
+query TTTTTTT rowsort
+SELECT direction, object_domain, catalog, database, object_name,
+       column_neighbors['x'][0]::STRING,
+       column_neighbors['y'][0]::STRING
+FROM get_lineage_neighbors('TABLE', 'lineage_history_columns.mid')
+----
+DOWNSTREAM TABLE default lineage_history_columns dst z NULL
+UPSTREAM TABLE default lineage_history_columns src b a
+
+# Column mode keeps the same one-row-per-neighbor schema, but filters each map to the requested
+# current column. The latest matching pattern maps mid.x upstream to src.b and downstream to dst.z.
+query TTTTTT rowsort
+SELECT direction, object_domain, catalog, database, object_name,
+       to_string(column_neighbors)
+FROM get_lineage_neighbors('COLUMN', 'lineage_history_columns.mid.x')
+----
+DOWNSTREAM TABLE default lineage_history_columns dst {"x":["z"]}
+UPSTREAM TABLE default lineage_history_columns src {"x":["b"]}
+
+query I
+SELECT count(*)
+FROM get_lineage_neighbors('COLUMN', 'lineage_history_columns.mid.missing')
+----
+0
+
+# The same resolved object is retained once per direction, rather than collapsed across direction.
+query TTIT rowsort
+SELECT direction, object_name, count(*), column_neighbors['a'][0]::STRING
+FROM get_lineage_neighbors('TABLE', 'lineage_history_columns.cycle_left')
+GROUP BY direction, object_name, column_neighbors['a'][0]::STRING
+----
+DOWNSTREAM cycle_right 1 b
+UPSTREAM cycle_right 1 b
+
 # Source and target masking are reported independently for each resolved column endpoint.
 statement ok
 ALTER TABLE lineage_history_columns.src MODIFY COLUMN a SET MASKING POLICY lineage_history_columns_mask
