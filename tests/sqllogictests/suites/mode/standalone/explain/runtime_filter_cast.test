@@ -175,3 +175,225 @@ drop table rf_cast_probe_nullable;
 
 statement ok
 drop table rf_cast_build_nn;
+
+statement ok
+drop table if exists rf_expr_probe;
+
+statement ok
+drop table if exists rf_expr_build;
+
+statement ok
+drop table if exists rf_expr_connector;
+
+statement ok
+drop table if exists rf_expr_equiv;
+
+statement ok
+create table rf_expr_probe (a Int not null);
+
+statement ok
+create table rf_expr_build (id BigInt not null);
+
+statement ok
+create table rf_expr_connector (id BigInt not null);
+
+statement ok
+create table rf_expr_equiv (c Int not null);
+
+statement ok
+insert into rf_expr_probe values (1), (2), (3);
+
+statement ok
+insert into rf_expr_build values (11), (13);
+
+statement ok
+insert into rf_expr_connector values (11), (12), (13);
+
+statement ok
+insert into rf_expr_equiv values (1);
+
+# Bloom must hash the Int64 result of `a + 10`, not the underlying Int32 column.
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+statement ok
+set min_max_runtime_filter_threshold = 0;
+
+statement ok
+set bloom_runtime_filter_threshold = 1000;
+
+query I
+SELECT count(*)
+FROM rf_expr_probe p
+JOIN rf_expr_build b ON p.a + 10 = b.id;
+----
+2
+
+# A nullable-only wrapper does not turn its value-changing argument into an
+# equivalence connector. Propagating the build value 11 to e.c=1 would wrongly
+# prune the only matching row.
+statement ok
+set min_max_runtime_filter_threshold = 0;
+
+statement ok
+set bloom_runtime_filter_threshold = 0;
+
+statement ok
+set inlist_runtime_filter_threshold = 1000;
+
+statement ok
+set disable_join_reorder = 1;
+
+query I
+SELECT count(*)
+FROM rf_expr_probe p
+JOIN rf_expr_equiv e ON p.a = e.c
+JOIN rf_expr_build b ON CAST(p.a + 10 AS Nullable(BigInt)) = b.id;
+----
+1
+
+# In-list must compare build values with the complete probe expression.
+statement ok
+set bloom_runtime_filter_threshold = 0;
+
+statement ok
+set inlist_runtime_filter_threshold = 1000;
+
+query I
+SELECT count(*)
+FROM rf_expr_probe p
+JOIN rf_expr_build b ON p.a + 10 = b.id;
+----
+2
+
+# Min-max must use the same complete expression.
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+statement ok
+set min_max_runtime_filter_threshold = 1000;
+
+query I
+SELECT count(*)
+FROM rf_expr_probe p
+JOIN rf_expr_build b ON p.a + 10 = b.id;
+----
+2
+
+query T
+EXPLAIN SELECT *
+FROM rf_expr_probe p
+JOIN rf_expr_build b ON p.a + 10 = b.id;
+----
+HashJoin
+├── output columns: [p.a (#0), b.id (#1)]
+├── join type: INNER
+├── build keys: [b.id (#1)]
+├── probe keys: [p.a (#0) + 10]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:b.id (#1), probe targets:[p.a (#0) + 10@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 6.00
+├── TableScan(Build)
+│   ├── table: default.default.rf_expr_build
+│   ├── scan id: 1
+│   ├── output columns: [id (#1)]
+│   ├── read rows: 2
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 2.00
+└── TableScan(Probe)
+    ├── table: default.default.rf_expr_probe
+    ├── scan id: 0
+    ├── output columns: [a (#0)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 3.00
+
+# A value-changing root expression stays on its own scan even when the probe
+# subtree contains an equivalent connector.
+
+query T
+EXPLAIN SELECT *
+FROM rf_expr_probe p
+JOIN rf_expr_connector c ON p.a + 10 = c.id
+JOIN rf_expr_build b ON c.id = b.id;
+----
+HashJoin
+├── output columns: [p.a (#0), c.id (#1), b.id (#2)]
+├── join type: INNER
+├── build keys: [b.id (#2)]
+├── probe keys: [p.a (#0) + 10]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:1, build key:b.id (#2), probe targets:[p.a (#0) + 10@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 18.00
+├── TableScan(Build)
+│   ├── table: default.default.rf_expr_build
+│   ├── scan id: 2
+│   ├── output columns: [id (#2)]
+│   ├── read rows: 2
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 2.00
+└── HashJoin(Probe)
+    ├── output columns: [p.a (#0), c.id (#1)]
+    ├── join type: INNER
+    ├── build keys: [c.id (#1)]
+    ├── probe keys: [p.a (#0) + 10]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:c.id (#1), probe targets:[p.a (#0) + 10@scan0], filter type:bloom,inlist,min_max
+    ├── estimated rows: 9.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.rf_expr_connector
+    │   ├── scan id: 1
+    │   ├── output columns: [id (#1)]
+    │   ├── read rows: 3
+    │   ├── read size: < 1 KiB
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 3.00
+    └── TableScan(Probe)
+        ├── table: default.default.rf_expr_probe
+        ├── scan id: 0
+        ├── output columns: [a (#0)]
+        ├── read rows: 3
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], limit: NONE]
+        ├── apply join filters: [#1, #0]
+        └── estimated rows: 3.00
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+drop table rf_expr_probe;
+
+statement ok
+drop table rf_expr_build;
+
+statement ok
+drop table rf_expr_connector;
+
+statement ok
+drop table rf_expr_equiv;

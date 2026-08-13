@@ -247,7 +247,10 @@ impl TableContextRuntimeFilter for QueryContext {
         self.shared.runtime_filter_state.get_runtime_filters(id)
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, RuntimeBloomFilter)> {
+    fn get_bloom_runtime_filter_with_id(
+        &self,
+        id: IndexType,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)> {
         self.shared
             .runtime_filter_state
             .get_bloom_runtime_filter_with_id(id)

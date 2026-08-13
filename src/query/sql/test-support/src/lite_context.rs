@@ -2058,7 +2058,10 @@ impl TableContextRuntimeFilter for LiteTableContext {
         vec![]
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
+    fn get_bloom_runtime_filter_with_id(
+        &self,
+        _id: usize,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)> {
         vec![]
     }
 
