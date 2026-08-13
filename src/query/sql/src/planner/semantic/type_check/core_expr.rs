@@ -1009,7 +1009,7 @@ mod tests {
     #[test]
     fn lowers_ambiguous_json_arrow_by_function_kind() {
         assert_sql_lowers_to(
-            "json_path_transform(doc, path, value -> value)",
+            "json_path_transform(doc, path, value -> value + 1)",
             |arena, root| {
                 let CoreExpr::LambdaFunction {
                     func_name,
@@ -1030,6 +1030,15 @@ mod tests {
                     ..
                 }));
             },
+        );
+
+        assert_sql_lower_error_contains(
+            "json_path_transform(doc, path, coalesce(value -> value, 0))",
+            "must have a lambda expression",
+        );
+        assert_sql_lower_error_contains(
+            "json_path_transform(doc, path, [value -> value])",
+            "must have a lambda expression",
         );
 
         for sql in ["to_string(doc -> 'key')", "concat(a, b, doc -> 'key')"] {

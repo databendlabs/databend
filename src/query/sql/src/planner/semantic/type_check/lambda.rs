@@ -20,9 +20,6 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::JsonOperator;
-use databend_common_ast::visit::VisitControl;
-use databend_common_ast::visit::Visitor as ASTVisitor;
-use databend_common_ast::visit::Walk;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -96,26 +93,27 @@ impl<'a> CoreExprArena<'a> {
             }
         }
 
-        #[derive(Default)]
-        struct LambdaDelimiter {
-            params: Option<Vec<Identifier>>,
-            span: Option<Span>,
-        }
-
-        impl ASTVisitor for LambdaDelimiter {
-            fn visit_expr(&mut self, expr: &Expr) -> Result<VisitControl, !> {
-                let Some(params) = lambda_params(expr) else {
-                    return Ok(VisitControl::Continue);
-                };
-                self.params = Some(params);
-                self.span = Some(expr.span());
-                Ok(VisitControl::Break(()))
+        fn delimiter(expr: &Expr) -> Option<(Vec<Identifier>, Span)> {
+            if let Some(params) = lambda_params(expr) {
+                return Some((params, expr.span()));
             }
+            let left = match expr {
+                Expr::BinaryOp { left, .. }
+                | Expr::IsDistinctFrom { left, .. }
+                | Expr::LikeAnyWithEscape { left, .. }
+                | Expr::LikeWithEscape { left, .. } => left.as_ref(),
+                Expr::IsNull { expr, .. }
+                | Expr::InList { expr, .. }
+                | Expr::InSubquery { expr, .. }
+                | Expr::LikeSubquery { expr, .. }
+                | Expr::Between { expr, .. } => expr.as_ref(),
+                _ => return None,
+            };
+            delimiter(left)
         }
 
-        let mut delimiter = LambdaDelimiter::default();
-        let _ = expr.walk(&mut delimiter);
-        Some((args, delimiter.params?, expr, delimiter.span?))
+        let (params, delimiter) = delimiter(expr)?;
+        Some((args, params, expr, delimiter))
     }
 
     pub(super) fn try_lower_lambda(
