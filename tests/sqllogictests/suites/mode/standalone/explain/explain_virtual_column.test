@@ -569,8 +569,8 @@ EvalScalar
                 ├── keys is null equal: [false, false, false]
                 ├── filters: []
                 ├── build join filters:
-                │   ├── filter id:2, build key:a.entity_id (#0), probe targets:[a.entity_id (#5)@scan1, c.entity_id (#10)@scan2], filter type:bloom,inlist,min_max
-                │   └── filter id:3, build key:a.source_id (#1), probe targets:[a.source_id (#6)@scan1, c.source_id (#11)@scan2], filter type:bloom,inlist,min_max
+                │   ├── filter id:2, build key:a.entity_id (#0), probe targets:[p.entity_id (#5)@scan1, c.entity_id (#10)@scan2], filter type:bloom,inlist,min_max
+                │   └── filter id:3, build key:a.source_id (#1), probe targets:[p.source_id (#6)@scan1, c.source_id (#11)@scan2], filter type:bloom,inlist,min_max
                 ├── estimated rows: 0.20
                 ├── Filter(Build)
                 │   ├── output columns: [a.entity_id (#0), a.source_id (#1), a.content_object['event_date'] (#16), a.metadata_object['type'] (#18), a.content_object['category_a'] (#19), a.content_object['category_b'] (#20)]

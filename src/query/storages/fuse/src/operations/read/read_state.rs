@@ -225,7 +225,9 @@ impl ReadState {
         // the static prewhere predicate. Expand their bitmap back to the
         // original row positions before combining it with prewhere.
         let runtime_filter_bitmap = if self.runtime_filters.is_empty() {
-            None
+            // Preserve the profile entry emitted before expression probes were
+            // supported, even when there is no Bloom filter to evaluate.
+            self.runtime_filter(&preread_block, part.nums_rows)?
         } else if let Some(filter_bitmap) = &filter_bitmap {
             let filter_bitmap: Bitmap = filter_bitmap.clone().into();
             let filtered_block = preread_block.clone().filter_with_bitmap(&filter_bitmap)?;
