@@ -98,7 +98,8 @@ impl<'a> CoreExprArena<'a> {
                 return Some((params, expr.span()));
             }
             let left = match expr {
-                Expr::BinaryOp { left, .. }
+                Expr::JsonOp { left, .. }
+                | Expr::BinaryOp { left, .. }
                 | Expr::IsDistinctFrom { left, .. }
                 | Expr::LikeAnyWithEscape { left, .. }
                 | Expr::LikeWithEscape { left, .. } => left.as_ref(),

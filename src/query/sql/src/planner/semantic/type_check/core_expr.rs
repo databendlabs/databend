@@ -1032,6 +1032,19 @@ mod tests {
             },
         );
 
+        assert_sql_lowers_to(
+            "json_path_transform(doc, path, value -> value -> 'name')",
+            |arena, root| {
+                let CoreExpr::LambdaFunction { lambda_expr, .. } = arena.get(root) else {
+                    panic!("json_path_transform should lower through the lambda path");
+                };
+                assert!(matches!(arena.get(*lambda_expr), CoreExpr::Call {
+                    func_name: "get",
+                    ..
+                }));
+            },
+        );
+
         assert_sql_lower_error_contains(
             "json_path_transform(doc, path, coalesce(value -> value, 0))",
             "must have a lambda expression",
