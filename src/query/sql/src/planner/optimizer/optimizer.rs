@@ -298,11 +298,13 @@ async fn optimize_query_inner(
         )
         // Run default rewrite rules. Only an outer Plan::Query supplies authoritative result
         // columns; internal mutation/query fragments leave them unset.
-        .add(RecursiveRuleOptimizer::new_with_materialized_view_output_columns(
-            opt_ctx.clone(),
-            &DEFAULT_REWRITE_RULES,
-            output_columns,
-        ))
+        .add(
+            RecursiveRuleOptimizer::new_with_materialized_view_output_columns(
+                opt_ctx.clone(),
+                &DEFAULT_REWRITE_RULES,
+                output_columns,
+            ),
+        )
         // CTE filter pushdown optimization
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
         // Run post rewrite rules

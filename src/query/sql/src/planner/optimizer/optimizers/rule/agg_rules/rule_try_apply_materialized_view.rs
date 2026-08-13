@@ -18,8 +18,8 @@ use databend_common_exception::Result;
 
 use super::materialized_view;
 use crate::IndexType;
-use crate::optimizer::OptimizerContext;
 use crate::match_op;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
@@ -51,10 +51,7 @@ impl RuleTryApplyMaterializedView {
             | RelOperator::Aggregate(_)
             | RelOperator::Sort(_)
             | RelOperator::TopN(_) => {
-                s_expr.arity() == 1
-                    && s_expr
-                        .child(0)
-                        .is_ok_and(Self::is_supported_query_subtree)
+                s_expr.arity() == 1 && s_expr.child(0).is_ok_and(Self::is_supported_query_subtree)
             }
             _ => false,
         }
@@ -115,7 +112,8 @@ impl Rule for RuleTryApplyMaterializedView {
         }
         let metadata = self.metadata.read();
         let source_table_id = metadata.table(table_index).table().get_id();
-        let Some(all_candidates) = metadata.get_materialized_view_candidates(source_table_id) else {
+        let Some(all_candidates) = metadata.get_materialized_view_candidates(source_table_id)
+        else {
             return Ok(());
         };
         let candidates = all_candidates
@@ -145,14 +143,14 @@ impl Rule for RuleTryApplyMaterializedView {
                     .get_table_ctx()
                     .result_cache_state()
                     .add_cache_key_extra(format!(
-                    "mv:{}:{}:{:?}|source:{}:{}:{:?}",
-                    candidate.mv_table_id,
-                    candidate.mv_table_seq,
-                    candidate.mv_snapshot_location,
-                    candidate.source_table_id,
-                    candidate.source_table_seq,
-                    candidate.source_snapshot_location
-                ));
+                        "mv:{}:{}:{:?}|source:{}:{}:{:?}",
+                        candidate.mv_table_id,
+                        candidate.mv_table_seq,
+                        candidate.mv_snapshot_location,
+                        candidate.source_table_id,
+                        candidate.source_table_seq,
+                        candidate.source_snapshot_location
+                    ));
             }
             result.set_applied_rule(&self.id);
             state.add_result(result);

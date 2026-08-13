@@ -213,7 +213,8 @@ impl QueryInfo {
     }
 
     pub(crate) fn retain_output_columns(&mut self, required: &HashSet<Symbol>) {
-        self.output_cols.retain(|item| required.contains(&item.index));
+        self.output_cols
+            .retain(|item| required.contains(&item.index));
     }
 
     // check whether the scalar can be computed from index output columns.

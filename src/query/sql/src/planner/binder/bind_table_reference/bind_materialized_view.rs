@@ -621,25 +621,33 @@ impl Binder {
         )?;
         let is_aggregating = find_materialized_view_aggregate(&definition_expr).is_some();
 
-        let (source_table, source_database, source_seq, source_snapshot_location) =
-            if let Some((source_table, source_database)) = source_override {
-                if source_table.get_id() != source_table_id {
-                    return Err(ErrorCode::InvalidMaterializedView(format!(
-                        "materialized view {} source table changed: expected table id {}, got {}",
-                        table_meta.name(),
-                        source_table_id,
-                        source_table.get_id()
-                    )));
-                }
-                let source_info = source_table.get_table_info();
-                (
-                    source_table.clone(),
-                    source_database,
-                    source_info.ident.seq,
-                    source_info.meta.options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned(),
-                )
-            } else {
-                databend_common_base::runtime::block_on(async {
+        let (source_table, source_database, source_seq, source_snapshot_location) = if let Some((
+            source_table,
+            source_database,
+        )) =
+            source_override
+        {
+            if source_table.get_id() != source_table_id {
+                return Err(ErrorCode::InvalidMaterializedView(format!(
+                    "materialized view {} source table changed: expected table id {}, got {}",
+                    table_meta.name(),
+                    source_table_id,
+                    source_table.get_id()
+                )));
+            }
+            let source_info = source_table.get_table_info();
+            (
+                source_table.clone(),
+                source_database,
+                source_info.ident.seq,
+                source_info
+                    .meta
+                    .options
+                    .get(OPT_KEY_SNAPSHOT_LOCATION)
+                    .cloned(),
+            )
+        } else {
+            databend_common_base::runtime::block_on(async {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
                 let source_meta = catalog
                     .get_table_meta_by_id(source_table_id)
