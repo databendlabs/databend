@@ -193,30 +193,34 @@ Exchange
     │   └── filter id:0, build key:t.number (#1), probe targets:[CAST(t1.number (#2) AS UInt64 NULL)@scan1], filter type:bloom,inlist,min_max
     ├── estimated rows: 2.00
     ├── Exchange(Build)
-    │   ├── output columns: [sum(number) (#1), numbers.number (#0)]
+    │   ├── output columns: [sum(number) (#1)]
     │   ├── exchange type: Broadcast
-    │   └── AggregateFinal
-    │       ├── output columns: [sum(number) (#1), numbers.number (#0)]
-    │       ├── group by: [number]
-    │       ├── aggregate functions: [sum(number)]
+    │   └── Filter
+    │       ├── output columns: [sum(number) (#1)]
+    │       ├── filters: [is_not_null(sum(number) (#1))]
     │       ├── estimated rows: 1.00
-    │       └── Exchange
+    │       └── AggregateFinal
     │           ├── output columns: [sum(number) (#1), numbers.number (#0)]
-    │           ├── exchange type: Hash(0)
-    │           └── AggregatePartial
-    │               ├── group by: [number]
-    │               ├── aggregate functions: [sum(number)]
-    │               ├── estimated rows: 1.00
-    │               └── TableScan
-    │                   ├── table: default.system.numbers
-    │                   ├── scan id: 0
-    │                   ├── output columns: [number (#0)]
-    │                   ├── read rows: 1
-    │                   ├── read size: < 1 KiB
-    │                   ├── partitions total: 1
-    │                   ├── partitions scanned: 1
-    │                   ├── push downs: [filters: [], limit: NONE]
-    │                   └── estimated rows: 1.00
+    │           ├── group by: [number]
+    │           ├── aggregate functions: [sum(number)]
+    │           ├── estimated rows: 1.00
+    │           └── Exchange
+    │               ├── output columns: [sum(number) (#1), numbers.number (#0)]
+    │               ├── exchange type: Hash(0)
+    │               └── AggregatePartial
+    │                   ├── group by: [number]
+    │                   ├── aggregate functions: [sum(number)]
+    │                   ├── estimated rows: 1.00
+    │                   └── TableScan
+    │                       ├── table: default.system.numbers
+    │                       ├── scan id: 0
+    │                       ├── output columns: [number (#0)]
+    │                       ├── read rows: 1
+    │                       ├── read size: < 1 KiB
+    │                       ├── partitions total: 1
+    │                       ├── partitions scanned: 1
+    │                       ├── push downs: [filters: [], limit: NONE]
+    │                       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
         ├── scan id: 1
@@ -256,16 +260,20 @@ Fragment 0:
 Fragment 1:
   DataExchange: Broadcast
     ExchangeSink
-    ├── output columns: [sum(number) (#1), numbers.number (#0)]
+    ├── output columns: [sum(number) (#1)]
     ├── destination fragment: [2]
-    └── AggregateFinal
-        ├── output columns: [sum(number) (#1), numbers.number (#0)]
-        ├── group by: [number]
-        ├── aggregate functions: [sum(number)]
+    └── Filter
+        ├── output columns: [sum(number) (#1)]
+        ├── filters: [is_not_null(sum(number) (#1))]
         ├── estimated rows: 1.00
-        └── ExchangeSource
+        └── AggregateFinal
             ├── output columns: [sum(number) (#1), numbers.number (#0)]
-            └── source fragment: [0]
+            ├── group by: [number]
+            ├── aggregate functions: [sum(number)]
+            ├── estimated rows: 1.00
+            └── ExchangeSource
+                ├── output columns: [sum(number) (#1), numbers.number (#0)]
+                └── source fragment: [0]
 (empty)
 (empty)
 Fragment 2:
@@ -284,7 +292,7 @@ Fragment 2:
         │   └── filter id:0, build key:t.number (#1), probe targets:[CAST(t1.number (#2) AS UInt64 NULL)@scan1], filter type:bloom,inlist,min_max
         ├── estimated rows: 2.00
         ├── ExchangeSource(Build)
-        │   ├── output columns: [sum(number) (#1), numbers.number (#0)]
+        │   ├── output columns: [sum(number) (#1)]
         │   └── source fragment: [1]
         └── TableScan(Probe)
             ├── table: default.system.numbers

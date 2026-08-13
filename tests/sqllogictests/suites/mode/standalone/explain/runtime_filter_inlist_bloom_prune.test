@@ -187,33 +187,40 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:subquery_1 (#1), probe targets:[test_nullable_string_b.s (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 100000.00
-├── Limit(Build)
+├── Filter(Build)
 │   ├── cpu time: <slt:ignore>
 │   ├── output rows: <slt:ignore>
 │   ├── output bytes: <slt:ignore>
 │   ├── output columns: [test_nullable_string_a.s (#1)]
-│   ├── limit: 10
-│   ├── offset: 0
+│   ├── filters: [is_not_null(test_nullable_string_a.s (#1))]
 │   ├── estimated rows: 10.00
-│   └── TableScan
+│   └── Limit
 │       ├── cpu time: <slt:ignore>
-│       ├── wait time: <slt:ignore>
 │       ├── output rows: <slt:ignore>
 │       ├── output bytes: <slt:ignore>
-│       ├── bytes scanned: <slt:ignore>
-│       ├── read from remote: <slt:ignore>
-│       ├── runtime filter bloom time: <slt:ignore>
-│       ├── runtime filter inlist/min-max time: <slt:ignore>
-│       ├── table: default.default.test_nullable_string_a
-│       ├── scan id: 1
-│       ├── output columns: [s (#1)]
-│       ├── read rows: 1000
-│       ├── read size: <slt:ignore>
-│       ├── partitions total: 10
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [], limit: 10]
-│       └── estimated rows: 10000.00
+│       ├── output columns: [test_nullable_string_a.s (#1)]
+│       ├── limit: 10
+│       ├── offset: 0
+│       ├── estimated rows: 10.00
+│       └── TableScan
+│           ├── cpu time: <slt:ignore>
+│           ├── wait time: <slt:ignore>
+│           ├── output rows: <slt:ignore>
+│           ├── output bytes: <slt:ignore>
+│           ├── bytes scanned: <slt:ignore>
+│           ├── read from remote: <slt:ignore>
+│           ├── runtime filter bloom time: <slt:ignore>
+│           ├── runtime filter inlist/min-max time: <slt:ignore>
+│           ├── table: default.default.test_nullable_string_a
+│           ├── scan id: 1
+│           ├── output columns: [s (#1)]
+│           ├── read rows: 1000
+│           ├── read size: < 1 KiB
+│           ├── partitions total: 10
+│           ├── partitions scanned: 1
+│           ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│           ├── push downs: [filters: [], limit: 10]
+│           └── estimated rows: 10000.00
 └── TableScan(Probe)
     ├── cpu time: <slt:ignore>
     ├── wait time: <slt:ignore>
@@ -232,7 +239,7 @@ HashJoin
     ├── partitions total: 99
     ├── partitions scanned: 99
     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
-    ├── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [is_not_null(test_nullable_string_b.s (#0))], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00
 
@@ -262,22 +269,26 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:subquery_1 (#1), probe targets:[CAST(test_non_nullable_probe_token.s (#0) AS String NULL)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 100000.00
-├── Limit(Build)
+├── Filter(Build)
 │   ├── output columns: [test_nullable_build_token.s (#1)]
-│   ├── limit: 10
-│   ├── offset: 0
+│   ├── filters: [is_not_null(test_nullable_build_token.s (#1))]
 │   ├── estimated rows: 10.00
-│   └── TableScan
-│       ├── table: default.default.test_nullable_build_token
-│       ├── scan id: 1
-│       ├── output columns: [s (#1)]
-│       ├── read rows: 1000
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 10
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [], limit: 10]
-│       └── estimated rows: 10000.00
+│   └── Limit
+│       ├── output columns: [test_nullable_build_token.s (#1)]
+│       ├── limit: 10
+│       ├── offset: 0
+│       ├── estimated rows: 10.00
+│       └── TableScan
+│           ├── table: default.default.test_nullable_build_token
+│           ├── scan id: 1
+│           ├── output columns: [s (#1)]
+│           ├── read rows: 1000
+│           ├── read size: < 1 KiB
+│           ├── partitions total: 10
+│           ├── partitions scanned: 1
+│           ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│           ├── push downs: [filters: [], limit: 10]
+│           └── estimated rows: 10000.00
 └── TableScan(Probe)
     ├── table: default.default.test_non_nullable_probe_token
     ├── scan id: 0

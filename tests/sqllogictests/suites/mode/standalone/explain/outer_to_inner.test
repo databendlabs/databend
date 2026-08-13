@@ -32,7 +32,7 @@ HashJoin
 │   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
-│   ├── push downs: [filters: [is_true(t2.a (#2) > 'a')], limit: NONE]
+│   ├── push downs: [filters: [is_not_null(t2.b (#3)) and t2.a (#2) > 'a'], limit: NONE]
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
@@ -42,7 +42,7 @@ HashJoin
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [is_not_null(t1.b (#1))], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 0.00
 
@@ -81,7 +81,7 @@ HashJoin
 │   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
-│   ├── push downs: [filters: [is_true(t2.a (#2) > '2022-01-01')], limit: NONE]
+│   ├── push downs: [filters: [is_not_null(t2.b (#3)) and t2.a (#2) > '2022-01-01'], limit: NONE]
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
@@ -91,7 +91,7 @@ HashJoin
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [is_not_null(t1.b (#1))], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 0.00
 
@@ -129,7 +129,7 @@ HashJoin
 │   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
-│   ├── push downs: [filters: [is_true(t2.a (#2) > 1.1)], limit: NONE]
+│   ├── push downs: [filters: [is_not_null(t2.b (#3)) and t2.a (#2) > 1.1], limit: NONE]
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
@@ -139,7 +139,7 @@ HashJoin
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [is_not_null(t1.b (#1))], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 0.00
 
@@ -177,7 +177,7 @@ HashJoin
 │   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
-│   ├── push downs: [filters: [is_true(t2.a (#2) > 1.1)], limit: NONE]
+│   ├── push downs: [filters: [is_not_null(t2.b (#3)) and t2.a (#2) > 1.1], limit: NONE]
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
@@ -187,7 +187,7 @@ HashJoin
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [is_not_null(t1.b (#1))], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 0.00
 

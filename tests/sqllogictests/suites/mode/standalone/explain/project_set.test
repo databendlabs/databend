@@ -187,20 +187,24 @@ HashJoin
     ├── output columns: [numbers.number (#0), a (#2)]
     ├── expressions: [get(1)(unnest([1, 2, 3]) (#1))]
     ├── estimated rows: 30.00
-    └── ProjectSet
+    └── Filter
         ├── output columns: [numbers.number (#0), unnest([1, 2, 3]) (#1)]
+        ├── filters: [assume_true_on_error(is_not_null(get(1)(unnest([1, 2, 3]) (#1))))]
         ├── estimated rows: 30.00
-        ├── set returning functions: unnest([1, 2, 3])
-        └── TableScan
-            ├── table: default.system.numbers
-            ├── scan id: 0
-            ├── output columns: [number (#0)]
-            ├── read rows: 10
-            ├── read size: < 1 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 10.00
+        └── ProjectSet
+            ├── output columns: [numbers.number (#0), unnest([1, 2, 3]) (#1)]
+            ├── estimated rows: 30.00
+            ├── set returning functions: unnest([1, 2, 3])
+            └── TableScan
+                ├── table: default.system.numbers
+                ├── scan id: 0
+                ├── output columns: [number (#0)]
+                ├── read rows: 10
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 10.00
 
 statement ok
 drop database project_set

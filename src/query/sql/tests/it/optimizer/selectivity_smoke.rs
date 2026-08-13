@@ -128,12 +128,44 @@ fn derived_predicate_selectivity_requires_column_stats() {
         null_count: StatCount::exact(3),
         histogram: None,
     })]);
-    let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(30.0));
+    let mut estimator =
+        SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(30.0));
     let rows = estimator.apply(&[is_not_null(true)]).unwrap();
     assert!(
         rows < 30.0,
         "derived predicate with real null_count stats must still filter"
     );
+
+    // A derived predicate on a computed expression (e.g. a join key inlined
+    // below an EvalScalar, optionally wrapped in assume_true_on_error) must
+    // be skipped even though the referenced column has stats: its selectivity
+    // is not exactly computable and would fall back to the default.
+    let computed_key = ScalarFunctionCall::new(None, "gt".to_string(), vec![], vec![
+        column.clone(),
+        constant_expr(Scalar::Number(NumberScalar::UInt64(1))),
+    ]);
+    let computed_pred = |wrapped: bool| {
+        let is_not_null = ScalarFunctionCall::new(None, "is_not_null".to_string(), vec![], vec![
+            ScalarExpr::FunctionCall(computed_key.clone()),
+        ]);
+        let pred = if wrapped {
+            ScalarFunctionCall::new(None, "assume_true_on_error".to_string(), vec![], vec![
+                ScalarExpr::FunctionCall(is_not_null),
+            ])
+        } else {
+            is_not_null
+        };
+        ScalarExpr::FunctionCall(pred.derived(DerivedFrom::NullAddition))
+    };
+    for wrapped in [false, true] {
+        let mut estimator =
+            SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(30.0));
+        let rows = estimator.apply(&[computed_pred(wrapped)]).unwrap();
+        assert_eq!(
+            rows, 30.0,
+            "derived predicate on a computed key must be a no-op (wrapped: {wrapped})"
+        );
+    }
 }
 
 #[test]

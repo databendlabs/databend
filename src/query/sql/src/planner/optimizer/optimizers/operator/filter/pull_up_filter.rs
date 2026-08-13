@@ -93,10 +93,23 @@ impl PullUpFilterOptimizer {
             // filter — pulling them up detaches them from that operator and
             // lets them participate in inference or join rewrites they must
             // not influence. Keep them in place.
+            //
+            // Classify per conjunct, not per list item: a conjunction scalar
+            // that mixes derived and user predicates has an untagged root, so
+            // checking the root alone would leak the derived conjunct into
+            // the inference set. `conjunctions` yields the predicate itself
+            // when it is not an `and`/`and_filters` call, so a standalone
+            // derived conjunct is kept whole.
             if predicate.is_derived() {
                 kept_predicates.push(predicate.clone());
-            } else {
-                self.predicates.extend(conjunctions(predicate).cloned());
+                continue;
+            }
+            for conjunct in conjunctions(predicate) {
+                if conjunct.is_derived() {
+                    kept_predicates.push(conjunct.clone());
+                } else {
+                    self.predicates.push(conjunct.clone());
+                }
             }
         }
         if kept_predicates.is_empty() {

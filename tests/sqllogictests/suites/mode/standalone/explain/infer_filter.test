@@ -713,7 +713,7 @@ HashJoin
 │   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
-│   ├── push downs: [filters: [is_not_null(strip_null_value(t4.b (#3)))], limit: NONE]
+│   ├── push downs: [filters: [is_not_null(strip_null_value(t4.b (#3))) and is_not_null(t4.b (#3))], limit: NONE]
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t3
@@ -723,7 +723,7 @@ HashJoin
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [is_not_null(t3.b (#1))], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 0.00
 
@@ -768,7 +768,7 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-│   ├── push downs: [filters: [is_true(t2.id (#1) = 869550529)], limit: NONE]
+│   ├── push downs: [filters: [t2.id (#1) = 869550529 and is_not_null(t2.id (#1))], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1

@@ -76,10 +76,10 @@ right ddl      : CREATE TABLE r(k INT NULL, payload INT NOT NULL)
 right rows     : 5
 input stat    : right.k min=10, max=14, ndv=Some(5), null=1
 input stat    : right.payload min=20, max=24, ndv=Some(5), null=0
-join          : RIGHT OUTER cardinality=4.000
+join          : LEFT OUTER cardinality=4.000
 stat          : l.k (#0) min=1, max=3, ndv=3.000, null=1.000, histogram=rows=3.000, ndv=3.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000]
-stat          : r.k (#1) min=10, max=14, ndv=4.000, null=1.000, histogram=none
-stat          : r.payload (#2) min=20, max=24, ndv=4.000, null=0.000, histogram=rows=5.000, ndv=5.000, buckets=[20..20:1.000/1.000, 21..21:1.000/1.000, 22..22:1.000/1.000, 23..23:1.000/1.000, 24..24:1.000/1.000]
+stat          : r.k (#1) min=10, max=14, ndv=4.000, null=0.000, histogram=none
+stat          : r.payload (#2) min=20, max=24, ndv=4.000, null=0.000, histogram=rows=4.000, ndv=4.000, buckets=[20..20:0.800/1.000, 21..21:0.800/1.000, 22..22:0.800/1.000, 23..23:0.800/1.000, 24..24:0.800/1.000]
 stat          : payload (#3) min=20, max=24, ndv=4.000, null=0.000, histogram=none
 
 === left_outer_partial_overlap ===
@@ -213,7 +213,7 @@ right rows     : 4
 input stat    : right.k min=42, max=45, ndv=Some(3), null=1
 join          : LEFT OUTER cardinality=4.000
 stat          : l.k (#0) min=42, max=44, ndv=2.000, null=1.000, histogram=none
-stat          : r.k (#1) min=42, max=44, ndv=2.750 (upper=3.000), null=1.000, histogram=none
+stat          : r.k (#1) min=42, max=44, ndv=2.750 (upper=3.000), null=0.000, histogram=none
 
 === inner_lossless_cast_key ===
 description: A lossless injective cast participates in join estimation and rejects NULLs from its source column.
@@ -304,9 +304,9 @@ input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k BIGINT NULL)
 right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
-join          : INNER cardinality=12.000
-stat          : l.k (#0) min=1, max=3, ndv=3.000, null=3.000, histogram=none
-stat          : r.k (#1) min=1, max=2, ndv=2.000, null=4.000, histogram=none
+join          : INNER cardinality=8.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=none
 
 === inner_lossy_cast_key ===
 description: A narrowing cast is outside the reverse-propagation whitelist, so the golden captures its fallback cardinality and per-side output statistics.
@@ -330,9 +330,9 @@ input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
-join          : INNER cardinality=12.000
-stat          : l.k (#0) min=1, max=3, ndv=3.000, null=3.000, histogram=none
-stat          : r.k (#1) min=1, max=2, ndv=2.000, null=4.000, histogram=none
+join          : INNER cardinality=8.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=none
 
 === inner_string_equality ===
 description: String bounds pass through the byte-statistics path and narrow both join keys to their shared range.
@@ -396,7 +396,7 @@ left rows     : 4
 input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 20
-join          : INNER cardinality=80.000
+join          : INNER cardinality=60.000
 stat          : l.k (#0) min=1, max=3, ndv=3.000, null=0.000, histogram=rows=3.000, ndv=3.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000]
 
 === inner_known_and_upper_only_ndv ===
@@ -434,6 +434,6 @@ input stat    : left.k all_null=true, ndv=Some(0), null=4
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 10
 input stat    : right.k min=1, max=3, ndv=Some(3), null=2
-join          : INNER cardinality=40.000
+join          : INNER cardinality=32.000
 stat          : r.k (#1) min=1, max=3, ndv=3.000, null=0.000, histogram=rows=8.000, ndv=3.000, buckets=[1..1:2.667/1.000, 2..2:2.667/1.000, 3..3:2.667/1.000]
 

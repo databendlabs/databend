@@ -20,7 +20,7 @@ Exchange(Merge)
                             ├── Exchange(Broadcast)
                             │   └── Scan
                             │       ├── table: default.a5r (#3)
-                            │       ├── filters: [eq(substring(a5r.a5w (#156), 1, 1), '1')]
+                            │       ├── filters: [is_not_null(a5r.a5t (#151)), eq(substring(a5r.a5w (#156), 1, 1), '1')]
                             │       ├── order by: []
                             │       └── limit: NONE
                             └── Join(Inner)
@@ -42,12 +42,12 @@ Exchange(Merge)
                                     ├── Exchange(Broadcast)
                                     │   └── Scan
                                     │       ├── table: default.a1z (#1)
-                                    │       ├── filters: [eq(a1z.a2t (#70), '624100')]
+                                    │       ├── filters: [is_not_null(a1z.a0k (#48)), is_not_null(a1z.a0n (#50)), eq(a1z.a2t (#70), '624100')]
                                     │       ├── order by: []
                                     │       └── limit: NONE
                                     └── Scan
                                         ├── table: default.a0c (#0)
-                                        ├── filters: [gte(a0c.a0d (#0), '20240526'), lte(a0c.a0d (#0), '20250525')]
+                                        ├── filters: [gte(a0c.a0d (#0), '20240526'), lte(a0c.a0d (#0), '20250525'), is_not_null(a0c.a0k (#7)), is_not_null(a0c.a0n (#10)), is_not_null(a0c.a0m (#9)), is_not_null(a0c.a0l (#8))]
                                         ├── order by: []
                                         └── limit: NONE
 

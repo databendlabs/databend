@@ -113,7 +113,7 @@ Exchange
                 │       ├── partitions total: 1
                 │       ├── partitions scanned: 1
                 │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                │       ├── push downs: [filters: [], limit: NONE]
+                │       ├── push downs: [filters: [is_not_null(departments.department_id (#4))], limit: NONE]
                 │       └── estimated rows: 4.00
                 └── TableScan(Probe)
                     ├── table: default.default.employees
@@ -124,7 +124,7 @@ Exchange
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                    ├── push downs: [filters: [], limit: NONE]
+                    ├── push downs: [filters: [is_not_null(employees.department_id (#2))], limit: NONE]
                     ├── apply join filters: [#0]
                     └── estimated rows: 10.00
 

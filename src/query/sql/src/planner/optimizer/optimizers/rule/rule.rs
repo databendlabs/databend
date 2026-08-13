@@ -33,6 +33,9 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         // Filter
         RuleID::NormalizeScalarFilter,
         RuleID::FilterNulls,
+        // Derive `is_not_null` filters from inner join conditions before
+        // pushdown rules, so the derived filters can be pushed into branches.
+        RuleID::NullAddition,
         RuleID::EliminateFilter,
         RuleID::MergeFilter,
         RuleID::PushDownFilterUnion,
@@ -106,6 +109,7 @@ pub enum RuleID {
     PushDownFilterProjectSet,
     PushDownFilterWindow,
     PushDownFilterWindowTopN,
+    NullAddition,
     MergeLimit,
     PushDownLimit,
     PushDownLimitUnion,
@@ -149,6 +153,7 @@ impl Display for RuleID {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             RuleID::FilterNulls => write!(f, "FilterNulls"),
+            RuleID::NullAddition => write!(f, "NullAddition"),
             RuleID::PushDownFilterUnion => write!(f, "PushDownFilterUnion"),
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),

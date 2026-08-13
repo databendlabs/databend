@@ -24,6 +24,7 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -79,6 +80,29 @@ impl RulePushDownFilterEvalScalar {
         visitor.visit(&mut predicate)?;
         Ok(predicate.clone())
     }
+
+    /// Whether substituting the predicate's columns with their `EvalScalar`
+    /// items keeps every referenced expression a plain column reference.
+    /// Columns not defined by `items` pass through unchanged.
+    fn is_column_ref_only_rewrite(predicate: &ScalarExpr, items: &[ScalarItem]) -> bool {
+        predicate.used_columns().iter().all(|index| {
+            match items.iter().find(|item| item.index == *index) {
+                None => true,
+                Some(item) => matches!(item.scalar, ScalarExpr::BoundColumnRef(_)),
+            }
+        })
+    }
+
+    /// Whether every `EvalScalar` item defining the predicate's columns is
+    /// deterministic. Columns not defined by `items` pass through unchanged.
+    fn items_are_deterministic(predicate: &ScalarExpr, items: &[ScalarItem]) -> bool {
+        predicate.used_columns().iter().all(|index| {
+            match items.iter().find(|item| item.index == *index) {
+                None => true,
+                Some(item) => item.scalar.is_deterministic(),
+            }
+        })
+    }
 }
 
 impl Rule for RulePushDownFilterEvalScalar {
@@ -102,7 +126,51 @@ impl Rule for RulePushDownFilterEvalScalar {
             {
                 // Replace `BoundColumnRef` with the column expression introduced in `EvalScalar`.
                 let rewritten_predicate = Self::replace_predicate(pred, &eval_scalar.items)?;
-                pushed_down_predicates.push(rewritten_predicate);
+                let pushed = match pred.derived_from() {
+                    None => rewritten_predicate,
+                    Some(from) => {
+                        if Self::is_column_ref_only_rewrite(pred, &eval_scalar.items) {
+                            // Pure column renaming: the derived predicate
+                            // still reads a materialized value.
+                            rewritten_predicate
+                        } else if Self::items_are_deterministic(pred, &eval_scalar.items) {
+                            // Inlining is value-identical (the expression was
+                            // computed once anyway), but the inlined expression
+                            // may throw on rows the original plan never
+                            // evaluates it on (e.g. a throwing CAST below a user
+                            // filter). Wrap it so an evaluation error keeps the
+                            // row and defers the error to the real evaluation
+                            // site; rows proven false are still dropped.
+                            // Already wrapped (inlined through nested
+                            // EvalScalars)? Keep the existing wrapper.
+                            let is_wrapped = matches!(
+                                &rewritten_predicate,
+                                ScalarExpr::FunctionCall(f) if f.func_name == "assume_true_on_error"
+                            );
+                            if is_wrapped {
+                                rewritten_predicate
+                            } else {
+                                ScalarExpr::FunctionCall(
+                                    FunctionCall::new(
+                                        None,
+                                        "assume_true_on_error".to_string(),
+                                        vec![],
+                                        vec![rewritten_predicate],
+                                    )
+                                    .derived(from),
+                                )
+                            }
+                        } else {
+                            // Nondeterministic definition: inlining would
+                            // re-evaluate it and could produce a different
+                            // value than the materialized join key. Keep the
+                            // derived predicate above the EvalScalar.
+                            remaining_predicates.push(pred.clone());
+                            continue;
+                        }
+                    }
+                };
+                pushed_down_predicates.push(pushed);
             } else {
                 remaining_predicates.push(pred.clone());
             }

@@ -1,0 +1,402 @@
+=== inner_join_derives_is_not_null_on_both_sides ===
+description: Null-rejecting equi keys on an inner join should derive is_not_null filters on both branches.
+sql: SELECT l.k, r.w
+FROM null_addition_left AS l
+JOIN null_addition_right AS r ON l.k = r.k
+raw_plan:
+EvalScalar
+├── scalars: [null_addition_left.k (#0) AS (#0), null_addition_right.w (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [null_addition_right.k (#2)]
+    ├── probe keys: [null_addition_left.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.null_addition_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [null_addition_left.k (#0) AS (#0), null_addition_right.w (#3) AS (#3), null_addition_right.k (#2) AS (#4)]
+└── Join(Inner)
+    ├── build keys: [null_addition_right.k (#2)]
+    ├── probe keys: [null_addition_left.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.null_addition_right (#1)
+    │   ├── filters: [is_not_null(null_addition_right.k (#2))]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_left (#0)
+        ├── filters: [is_not_null(null_addition_left.k (#0))]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== left_join_derives_only_on_null_supplying_side ===
+description: A left outer join preserves NULL-key rows on the left, so only the right branch may derive is_not_null.
+sql: SELECT l.k, r.w
+FROM null_addition_left AS l
+LEFT JOIN null_addition_right AS r ON l.k = r.k
+raw_plan:
+EvalScalar
+├── scalars: [null_addition_left.k (#0) AS (#0), null_addition_right.w (#3) AS (#3)]
+└── Join(Left)
+    ├── build keys: [null_addition_right.k (#2)]
+    ├── probe keys: [null_addition_left.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.null_addition_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Join(Left)
+├── build keys: [null_addition_right.k (#2)]
+├── probe keys: [null_addition_left.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.null_addition_right (#1)
+│   ├── filters: [is_not_null(null_addition_right.k (#2))]
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.null_addition_left (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== right_join_derives_only_on_null_supplying_side ===
+description: A right outer join preserves NULL-key rows on the right, so only the left branch may derive is_not_null.
+sql: SELECT l.k, r.w
+FROM null_addition_left AS l
+RIGHT JOIN null_addition_right AS r ON l.k = r.k
+raw_plan:
+EvalScalar
+├── scalars: [null_addition_left.k (#0) AS (#0), null_addition_right.w (#3) AS (#3)]
+└── Join(Right)
+    ├── build keys: [null_addition_right.k (#2)]
+    ├── probe keys: [null_addition_left.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.null_addition_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Join(Left)
+├── build keys: [null_addition_left.k (#0)]
+├── probe keys: [null_addition_right.k (#2)]
+├── other filters: []
+├── Scan
+│   ├── table: default.null_addition_left (#0)
+│   ├── filters: [is_not_null(null_addition_left.k (#0))]
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.null_addition_right (#1)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== semi_join_derives_is_not_null_on_both_sides ===
+description: A semi join never preserves unmatched probe rows and NULL keys never match, so both branches may derive is_not_null.
+sql: SELECT l.k
+FROM null_addition_left AS l
+WHERE l.k IN (SELECT r.k FROM null_addition_right AS r)
+raw_plan:
+EvalScalar
+├── scalars: [null_addition_left.k (#0) AS (#0)]
+└── Filter
+    ├── filters: [SUBQUERY AS (#2)]
+    ├── subquerys
+    │   └── Subquery (Any)
+    │       ├── compare_op: Equal
+    │       ├── output_column: null_addition_right.k (#2)
+    │       └── EvalScalar
+    │           ├── scalars: [null_addition_right.k (#2) AS (#2)]
+    │           └── Scan
+    │               ├── table: default.null_addition_right (#1)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [null_addition_left.k (#0) AS (#0), marker (#4) AS (#5)]
+└── Join(LeftSemi)
+    ├── build keys: [null_addition_right.k (#2)]
+    ├── probe keys: [null_addition_left.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.null_addition_right (#1)
+    │   ├── filters: [is_not_null(null_addition_right.k (#2))]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_left (#0)
+        ├── filters: [is_not_null(null_addition_left.k (#0))]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== derived_filter_enables_outer_to_inner_in_subquery ===
+description: The is_not_null derived on the inner join key should push into the subquery and turn its left outer join into an inner join.
+sql: SELECT *
+FROM null_addition_a AS a
+JOIN (SELECT c.id, b.name
+      FROM null_addition_b AS b
+      LEFT JOIN null_addition_c AS c ON b.id = c.id) AS v
+ON a.id = v.id
+raw_plan:
+EvalScalar
+├── scalars: [null_addition_a.id (#0) AS (#0), null_addition_b.name (#2) AS (#2), null_addition_c.id (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [null_addition_c.id (#3)]
+    ├── probe keys: [null_addition_a.id (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [null_addition_b.name (#2) AS (#2), null_addition_c.id (#3) AS (#3)]
+    │   └── Join(Left)
+    │       ├── build keys: [null_addition_c.id (#3)]
+    │       ├── probe keys: [null_addition_b.id (#1)]
+    │       ├── other filters: []
+    │       ├── Scan
+    │       │   ├── table: default.null_addition_c (#2)
+    │       │   ├── filters: []
+    │       │   ├── order by: []
+    │       │   └── limit: NONE
+    │       └── Scan
+    │           ├── table: default.null_addition_b (#1)
+    │           ├── filters: []
+    │           ├── order by: []
+    │           └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_a (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Join(Inner)
+├── build keys: [null_addition_c.id (#3)]
+├── probe keys: [null_addition_a.id (#0)]
+├── other filters: []
+├── Join(Inner)
+│   ├── build keys: [null_addition_c.id (#3)]
+│   ├── probe keys: [null_addition_b.id (#1)]
+│   ├── other filters: []
+│   ├── Scan
+│   │   ├── table: default.null_addition_c (#2)
+│   │   ├── filters: [is_not_null(null_addition_c.id (#3))]
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Scan
+│       ├── table: default.null_addition_b (#1)
+│       ├── filters: [is_not_null(null_addition_b.id (#1))]
+│       ├── order by: []
+│       └── limit: NONE
+└── Scan
+    ├── table: default.null_addition_a (#0)
+    ├── filters: [is_not_null(null_addition_a.id (#0))]
+    ├── order by: []
+    └── limit: NONE
+
+
+=== full_outer_join_derives_nothing ===
+description: A full outer join preserves NULL-key rows on both sides, so no is_not_null may be derived.
+sql: SELECT l.k, r.w
+FROM null_addition_left AS l
+FULL OUTER JOIN null_addition_right AS r ON l.k = r.k
+raw_plan:
+EvalScalar
+├── scalars: [null_addition_left.k (#0) AS (#0), null_addition_right.w (#3) AS (#3)]
+└── Join(Full)
+    ├── build keys: [null_addition_right.k (#2)]
+    ├── probe keys: [null_addition_left.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.null_addition_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Join(Full)
+├── build keys: [null_addition_right.k (#2)]
+├── probe keys: [null_addition_left.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.null_addition_right (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.null_addition_left (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== non_nullable_keys_derive_nothing ===
+description: Join keys that are already NOT NULL need no derived is_not_null filter.
+sql: SELECT l.k, r.w
+FROM null_addition_nn_left AS l
+JOIN null_addition_nn_right AS r ON l.k = r.k
+raw_plan:
+EvalScalar
+├── scalars: [null_addition_nn_left.k (#0) AS (#0), null_addition_nn_right.w (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [null_addition_nn_right.k (#2)]
+    ├── probe keys: [null_addition_nn_left.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.null_addition_nn_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_nn_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [null_addition_nn_left.k (#0) AS (#0), null_addition_nn_right.w (#3) AS (#3), null_addition_nn_right.k (#2) AS (#4)]
+└── Join(Inner)
+    ├── build keys: [null_addition_nn_right.k (#2)]
+    ├── probe keys: [null_addition_nn_left.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.null_addition_nn_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_nn_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== null_safe_equals_derives_nothing ===
+description: IS NOT DISTINCT FROM matches NULL keys, so it is not null-rejecting and must not derive is_not_null.
+sql: SELECT l.k, r.w
+FROM null_addition_left AS l
+JOIN null_addition_right AS r ON l.k IS NOT DISTINCT FROM r.k
+raw_plan:
+EvalScalar
+├── scalars: [null_addition_left.k (#0) AS (#0), null_addition_right.w (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: [assume_not_null(if(and(not(is_not_null(null_addition_left.k (#0))), not(is_not_null(null_addition_right.k (#2)))), true, or(not(is_not_null(null_addition_left.k (#0))), not(is_not_null(null_addition_right.k (#2)))), false, eq(null_addition_left.k (#0), null_addition_right.k (#2))))]
+    ├── Scan
+    │   ├── table: default.null_addition_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [null_addition_left.k (#0) AS (#0), null_addition_right.w (#3) AS (#3), null_addition_right.k (#2) AS (#4)]
+└── Filter
+    ├── filters: [assume_not_null(if(and(not(is_not_null(null_addition_left.k (#0))), not(is_not_null(null_addition_right.k (#2)))), true, or(not(is_not_null(null_addition_left.k (#0))), not(is_not_null(null_addition_right.k (#2)))), false, eq(null_addition_left.k (#0), null_addition_right.k (#2))))]
+    └── Join(Cross)
+        ├── build keys: []
+        ├── probe keys: []
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.null_addition_right (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.null_addition_left (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== nondeterministic_key_derives_nothing ===
+description: A join key computed by a nondeterministic expression must not get a derived is_not_null: the materialized value is computed once by the EvalScalar, and later re-evaluation (e.g. inlining) could produce a different value. The plain-column side still derives.
+sql: SELECT *
+FROM null_addition_a AS a
+JOIN (SELECT id, if(rand() > 0.5, NULL, id) AS k FROM null_addition_b) AS v
+ON a.id = v.k
+raw_plan:
+EvalScalar
+├── scalars: [null_addition_a.id (#0) AS (#0), null_addition_b.id (#1) AS (#1), k (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [k (#3)]
+    ├── probe keys: [null_addition_a.id (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [null_addition_b.id (#1) AS (#1), if(gt(rand(), 0.5), NULL, null_addition_b.id (#1)) AS (#3)]
+    │   └── Scan
+    │       ├── table: default.null_addition_b (#1)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Scan
+        ├── table: default.null_addition_a (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Join(Inner)
+├── build keys: [k (#3)]
+├── probe keys: [null_addition_a.id (#0)]
+├── other filters: []
+├── EvalScalar
+│   ├── scalars: [null_addition_b.id (#1) AS (#1), if(gt(rand(), 0.5), NULL, null_addition_b.id (#1)) AS (#3)]
+│   └── Scan
+│       ├── table: default.null_addition_b (#1)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Scan
+    ├── table: default.null_addition_a (#0)
+    ├── filters: [is_not_null(null_addition_a.id (#0))]
+    ├── order by: []
+    └── limit: NONE
+
+

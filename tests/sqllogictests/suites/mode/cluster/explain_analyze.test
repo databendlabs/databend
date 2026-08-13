@@ -215,7 +215,7 @@ Exchange
     │       ├── partitions total: 5
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 5 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    │       ├── push downs: [filters: [is_true(author.name (#5) = 'mark4')], limit: NONE]
+    │       ├── push downs: [filters: [author.name (#5) = 'mark4' and is_not_null(author.id (#4))], limit: NONE]
     │       └── estimated rows: 1.25
     └── TableScan(Probe)
         ├── cpu time: <slt:ignore>
@@ -235,7 +235,7 @@ Exchange
         ├── partitions total: 6
         ├── partitions scanned: 6
         ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
-        ├── push downs: [filters: [], limit: NONE]
+        ├── push downs: [filters: [is_not_null(article.author_id (#1))], limit: NONE]
         ├── apply join filters: [#0]
         └── estimated rows: 6.00
 
