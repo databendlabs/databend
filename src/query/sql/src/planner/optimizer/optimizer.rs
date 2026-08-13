@@ -74,14 +74,24 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             rewrite_kind,
             formatted_ast,
             ignore_result,
-        } => Ok(Plan::Query {
-            s_expr: Box::new(optimize_query(opt_ctx, *s_expr).await?),
-            bind_context,
-            metadata,
-            rewrite_kind,
-            formatted_ast,
-            ignore_result,
-        }),
+        } => {
+            let query_output_columns = bind_context
+                .columns
+                .iter()
+                .map(|column| column.index)
+                .collect();
+            Ok(Plan::Query {
+                s_expr: Box::new(
+                    optimize_query_with_output_columns(opt_ctx, *s_expr, query_output_columns)
+                        .await?,
+                ),
+                bind_context,
+                metadata,
+                rewrite_kind,
+                formatted_ast,
+                ignore_result,
+            })
+        }
         Plan::Explain { kind, config, plan } => match kind {
             ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {
                 Ok(Plan::Explain { config, kind, plan })
@@ -251,6 +261,22 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 }
 
 pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<SExpr> {
+    optimize_query_inner(opt_ctx, s_expr, None).await
+}
+
+async fn optimize_query_with_output_columns(
+    opt_ctx: Arc<OptimizerContext>,
+    s_expr: SExpr,
+    output_columns: std::collections::HashSet<Symbol>,
+) -> Result<SExpr> {
+    optimize_query_inner(opt_ctx, s_expr, Some(output_columns)).await
+}
+
+async fn optimize_query_inner(
+    opt_ctx: Arc<OptimizerContext>,
+    s_expr: SExpr,
+    output_columns: Option<std::collections::HashSet<Symbol>>,
+) -> Result<SExpr> {
     let settings = opt_ctx.get_table_ctx().get_settings();
     let mut pipeline = OptimizerPipeline::new(opt_ctx.clone(), s_expr.clone())
         .await?
@@ -270,11 +296,15 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             settings.get_enable_cse_optimizer()?,
             CommonSubexpressionOptimizer::new(opt_ctx.clone()),
         )
-        // Run default rewrite rules
-        .add(RecursiveRuleOptimizer::new(
-            opt_ctx.clone(),
-            &DEFAULT_REWRITE_RULES,
-        ))
+        // Run default rewrite rules. Only an outer Plan::Query supplies authoritative result
+        // columns; internal mutation/query fragments leave them unset.
+        .add(
+            RecursiveRuleOptimizer::new_with_materialized_view_output_columns(
+                opt_ctx.clone(),
+                &DEFAULT_REWRITE_RULES,
+                output_columns,
+            ),
+        )
         // CTE filter pushdown optimization
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
         // Run post rewrite rules

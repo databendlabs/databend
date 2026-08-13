@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_exception::Result;
 
 use super::materialized_view;
@@ -22,110 +24,37 @@ use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
-use crate::plans::RelOp;
 use crate::plans::RelOperator;
 
 pub struct RuleTryApplyMaterializedView {
     id: RuleID,
     ctx: std::sync::Arc<OptimizerContext>,
     metadata: crate::MetadataRef,
+    output_columns: Option<HashSet<crate::Symbol>>,
 
     matchers: Vec<Matcher>,
 }
 
 impl RuleTryApplyMaterializedView {
-    fn sorted_matchers() -> Vec<Matcher> {
-        vec![
-            match_op!(EvalScalar -> Sort -> Scan),
-            match_op!(EvalScalar -> Sort -> Filter -> Scan),
-            match_op!(EvalScalar -> Sort -> Aggregate -> EvalScalar -> Scan),
-            match_op!(EvalScalar -> Sort -> Aggregate -> EvalScalar -> Filter -> Scan),
-            match_op!(EvalScalar -> TopN -> Scan),
-            match_op!(EvalScalar -> TopN -> Filter -> Scan),
-            match_op!(EvalScalar -> TopN -> Aggregate -> EvalScalar -> Scan),
-            match_op!(EvalScalar -> TopN -> Aggregate -> EvalScalar -> Filter -> Scan),
-        ]
-    }
-
-    fn normal_matchers() -> Vec<Matcher> {
-        vec![
-            // Expression
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Scan,
-                    children: vec![],
-                }],
-            },
-            // Expression
-            //     |
-            //   Filter
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Filter,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Scan,
-                        children: vec![],
-                    }],
-                }],
-            },
-            // Expression
-            //     |
-            // Aggregation
-            //     |
-            // Expression
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Aggregate,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::EvalScalar,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Scan,
-                            children: vec![],
-                        }],
-                    }],
-                }],
-            },
-            // Expression
-            //     |
-            // Aggregation
-            //     |
-            // Expression
-            //     |
-            //   Filter
-            //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Aggregate,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::EvalScalar,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Filter,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Scan,
-                                children: vec![],
-                            }],
-                        }],
-                    }],
-                }],
-            },
-        ]
-    }
-
     fn matchers() -> Vec<Matcher> {
-        let mut patterns = Self::normal_matchers();
-        patterns.extend(Self::sorted_matchers());
-        patterns
+        // QueryInfo walks the complete unary query subtree and supports arbitrary combinations of
+        // EvalScalar, Filter, Aggregate, Sort and TopN. Expression binding can introduce multiple
+        // intermediate EvalScalar nodes, so do not enumerate fixed-depth shapes here.
+        vec![match_op!(EvalScalar -> *)]
+    }
+
+    fn is_supported_query_subtree(s_expr: &SExpr) -> bool {
+        match s_expr.plan() {
+            RelOperator::Scan(_) => true,
+            RelOperator::EvalScalar(_)
+            | RelOperator::Filter(_)
+            | RelOperator::Aggregate(_)
+            | RelOperator::Sort(_)
+            | RelOperator::TopN(_) => {
+                s_expr.arity() == 1 && s_expr.child(0).is_ok_and(Self::is_supported_query_subtree)
+            }
+            _ => false,
+        }
     }
 
     pub fn new(ctx: std::sync::Arc<OptimizerContext>) -> Self {
@@ -134,6 +63,21 @@ impl RuleTryApplyMaterializedView {
             id: RuleID::TryApplyMaterializedView,
             ctx,
             metadata,
+            output_columns: None,
+            matchers: Self::matchers(),
+        }
+    }
+
+    pub fn new_with_output_columns(
+        ctx: std::sync::Arc<OptimizerContext>,
+        output_columns: Option<HashSet<crate::Symbol>>,
+    ) -> Self {
+        let metadata = ctx.get_metadata();
+        Self {
+            id: RuleID::TryApplyMaterializedView,
+            ctx,
+            metadata,
+            output_columns,
             matchers: Self::matchers(),
         }
     }
@@ -149,6 +93,10 @@ impl Rule for RuleTryApplyMaterializedView {
         s_expr: &SExpr,
         state: &mut crate::optimizer::optimizers::rule::TransformResult,
     ) -> Result<()> {
+        if !Self::is_supported_query_subtree(s_expr) {
+            return Ok(());
+        }
+
         // Row access policy tables must not use materialized-view rewrites, because
         // the pre-aggregated results were computed over the full table without
         // applying the policy's row-level filter.
@@ -178,9 +126,15 @@ impl Rule for RuleTryApplyMaterializedView {
         }
         let table_name = metadata.table(table_index).name();
 
-        if let Some((mut result, mv_table_id)) =
-            materialized_view::try_rewrite(table_index, table_name, &metadata, s_expr, &candidates)?
-        {
+        let required_output_columns = self.output_columns.as_ref();
+        if let Some((mut result, mv_table_id)) = materialized_view::try_rewrite(
+            table_index,
+            table_name,
+            &metadata,
+            s_expr,
+            &candidates,
+            required_output_columns,
+        )? {
             if let Some(candidate) = candidates
                 .iter()
                 .find(|candidate| candidate.mv_table_id == mv_table_id)

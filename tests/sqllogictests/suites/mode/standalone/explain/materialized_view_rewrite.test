@@ -1,0 +1,204 @@
+# Materialized-view query rewrite covers projection/expression matching, predicate
+# compensation, rejection cases, Fresh and Hybrid reads, and aggregate roll-up.
+# The aggregate case is based on "Optimizing Queries Using Materialized Views:
+# A Practical, Scalable Solution".
+
+statement ok
+drop database if exists explain_materialized_view_rewrite
+
+statement ok
+create database explain_materialized_view_rewrite
+
+statement ok
+use explain_materialized_view_rewrite
+
+statement ok
+create table source (
+    a int,
+    b int,
+    c string,
+    t int
+)
+
+statement ok
+insert into source values
+    (1, 10, 'xxxxxxx', 5),
+    (1, 10, 'xxxxxxx', 9),
+    (1, 10, 'other', 100),
+    (2, 20, 'xxxxxxx', 7),
+    (2, 20, 'other', 70)
+
+statement ok
+create materialized view mv_by_abc (
+    a,
+    b,
+    c,
+    min_t,
+    max_t,
+    sum_t,
+    count_t,
+    avg_t,
+    approx_count_distinct_t
+) as
+select a, b, c, min(t), max(t), sum(t), count(t), avg(t), approx_count_distinct(t)
+from source
+group by a, b, c
+
+statement ok
+refresh materialized view mv_by_abc
+
+# Exact aggregate/grouping match reads finalized aggregate values from the MV.
+query T
+explain select
+    a,
+    b,
+    c,
+    min(t),
+    max(t),
+    sum(t),
+    count(t),
+    avg(t),
+    approx_count_distinct(t)
+from source
+group by a, b, c
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.mv_by_abc<slt:ignore>
+
+# An aggregate query may request a subset of the persisted aggregate outputs.
+query T
+explain select a, b, c, sum(t), count(t)
+from source
+group by a, b, c
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.mv_by_abc<slt:ignore>
+
+# c is fixed to one value, so each query (a, b) group corresponds to one
+# materialized (a, b, c) group. The optimized plan must scan the MV.
+query T
+explain select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t),
+    avg(t),
+    approx_count_distinct(t)
+from source
+where c = 'xxxxxxx'
+group by a, b
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.mv_by_abc<slt:ignore>
+
+# Without a singleton predicate for the MV's extra grouping key, this rewrite
+# is not valid yet and the plan must continue to scan the source table.
+query T
+explain select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t),
+    avg(t),
+    approx_count_distinct(t)
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.source<slt:ignore>
+
+# A required aggregate not persisted by the MV cannot be computed from its
+# finalized outputs, so the source remains in the plan.
+query T
+explain select a, b, c, stddev_pop(t)
+from source
+group by a, b, c
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.source<slt:ignore>
+
+# Appending after the aggregate checkpoint produces an aggregate Hybrid read:
+# persisted aggregate states and live delta states are merged before finalization.
+statement ok
+insert into source values (3, 30, 'xxxxxxx', 8)
+
+query T
+explain select a, b, c, sum(t), count(t)
+from source
+group by a, b, c
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.mv_by_abc<slt:ignore>table: default.explain_materialized_view_rewrite.source<slt:ignore>
+
+# A separate detail MV covers non-aggregate projection and predicate matching.
+statement ok
+create table detail_source (
+    id int,
+    amount int,
+    active boolean,
+    note string
+)
+
+statement ok
+insert into detail_source values
+    (1, 10, true, 'first'),
+    (2, 20, true, 'second'),
+    (3, 30, false, 'third')
+
+statement ok
+create materialized view mv_active_detail (id, amount, doubled_amount) as
+select id, amount, amount * 2
+from detail_source
+where active
+
+statement ok
+refresh materialized view mv_active_detail
+
+# Exact predicate and computed-output matching use the Fresh MV endpoint.
+query T
+explain select id, amount * 2
+from detail_source
+where active
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.mv_active_detail<slt:ignore>
+
+# A query predicate may be stricter than the MV predicate when the MV exposes
+# the column needed by the compensating filter.
+query T
+explain select id, amount * 2
+from detail_source
+where active and amount >= 20
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.mv_active_detail<slt:ignore>
+
+# The MV only contains active rows, so it cannot answer a wider query that does
+# not include the MV predicate.
+query T
+explain select id, amount * 2
+from detail_source
+where amount >= 20
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.detail_source<slt:ignore>
+
+# A query output that is not computable from the MV keeps the source scan.
+query T
+explain select id, note
+from detail_source
+where active
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.detail_source<slt:ignore>
+
+# Appends after the checkpoint produce a Hybrid candidate. Its plan reads both
+# persisted MV rows and the live CHANGE_TRACKING delta from the source.
+statement ok
+insert into detail_source values (4, 40, true, 'fourth')
+
+query T
+explain select id, amount * 2
+from detail_source
+where active
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.mv_active_detail<slt:ignore>table: default.explain_materialized_view_rewrite.detail_source<slt:ignore>
+
+statement ok
+drop database explain_materialized_view_rewrite
+

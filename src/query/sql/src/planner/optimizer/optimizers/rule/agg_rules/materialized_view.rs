@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -26,6 +27,7 @@ use crate::IndexType;
 use crate::MaterializedViewCandidate;
 use crate::Metadata;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::SExpr;
@@ -43,13 +45,17 @@ pub(crate) fn try_rewrite(
     metadata: &Metadata,
     s_expr: &SExpr,
     candidates: &[MaterializedViewCandidate],
+    required_output_columns: Option<&HashSet<Symbol>>,
 ) -> Result<Option<(SExpr, u64)>> {
-    let query_info = QueryInfo::new(
+    let mut query_info = QueryInfo::new(
         table_index,
         table_name,
         metadata.columns_by_table_index(table_index),
         s_expr,
     )?;
+    if let Some(required_output_columns) = required_output_columns {
+        query_info.retain_output_columns(required_output_columns);
+    }
     let query_aggregate = query_info.aggregate.clone();
     let matcher = ViewMatcher::new(query_info).with_aggregate_rollup();
 
