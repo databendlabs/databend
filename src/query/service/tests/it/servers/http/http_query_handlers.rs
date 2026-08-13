@@ -960,6 +960,51 @@ async fn test_catalog_apis() -> anyhow::Result<()> {
     assert_eq!(body.fields.len(), 1);
     assert_eq!(body.fields[0].name, "a");
 
+    // Explicitly selecting the default catalog keeps the same schema result.
+    let response = get_uri(
+        &ep,
+        "/v1/catalog/databases/default/tables/t1/fields?catalog=default",
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().into_string().await.unwrap();
+    let body: catalog::list_database_table_fields::ListDatabaseTableFieldsResponse =
+        serde_json::from_str(&body).unwrap();
+    assert_eq!(body.fields.len(), 1);
+    assert_eq!(body.fields[0].name, "a");
+
+    let sql = "create view v1 as select a as b from t1";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 10).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+
+    // Resolving a view remains opt-in because it requires planning the stored query.
+    let response = get_uri(&ep, "/v1/catalog/databases/default/tables/v1/fields").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().into_string().await.unwrap();
+    let body: catalog::list_database_table_fields::ListDatabaseTableFieldsResponse =
+        serde_json::from_str(&body).unwrap();
+    assert!(body.fields.is_empty());
+
+    let response = get_uri(
+        &ep,
+        "/v1/catalog/databases/default/tables/v1/fields?resolve_view=true",
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().into_string().await.unwrap();
+    let body: catalog::list_database_table_fields::ListDatabaseTableFieldsResponse =
+        serde_json::from_str(&body).unwrap();
+    assert_eq!(body.fields.len(), 1);
+    assert_eq!(body.fields[0].name, "b");
+    assert_eq!(body.fields[0].r#type, "Int32 NULL");
+
+    let (status, result) = post_sql_to_endpoint(&ep, "drop view v1", 10).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+
     let response = get_uri(&ep, "/v1/catalog/stats").await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = response.into_body().into_string().await.unwrap();
