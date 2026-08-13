@@ -59,6 +59,7 @@ use log::debug;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::SelectBuilder;
+use crate::TableEntry;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
@@ -246,22 +247,14 @@ impl Binder {
     }
 
     /// Resolve the single base table referenced by the defining query.
-    fn materialized_view_source_table(
-        metadata: &MetadataRef,
-    ) -> Result<(Arc<dyn Table>, String, String, String)> {
+    fn materialized_view_source_table(metadata: &MetadataRef) -> Result<TableEntry> {
         let metadata = metadata.read();
         if metadata.tables().len() != 1 {
             return Err(ErrorCode::SemanticError(
                 "Materialized view requires exactly one base table source".to_string(),
             ));
         }
-        let table = &metadata.tables()[0];
-        Ok((
-            table.table(),
-            table.catalog().to_string(),
-            table.database().to_string(),
-            table.name().to_string(),
-        ))
+        Ok(metadata.tables()[0].clone())
     }
 
     #[async_backtrace::framed]
@@ -307,9 +300,6 @@ impl Binder {
         let target_database = target_catalog.get_database(&tenant, &database_name).await?;
         let target_database_id = target_database.get_db_info().database_id.db_id;
 
-        // Resolve the direct AST source before query binding. Binding a view or another MV expands
-        // it to its underlying query, which must not allow that object to masquerade as a FUSE
-        // base-table source.
         let direct_source = match &query.body {
             SetExpr::Select(select) => match select.from.as_slice() {
                 [TableReference::Table { table, .. }] => table,
@@ -331,22 +321,6 @@ impl Binder {
                 &direct_source.database,
                 &direct_source.table,
             );
-        let direct_source = self
-            .ctx
-            .get_table(
-                &direct_source_catalog,
-                &direct_source_database,
-                &direct_source_name,
-            )
-            .await?;
-        if !direct_source_catalog.eq_ignore_ascii_case(CATALOG_DEFAULT)
-            || !is_supported_materialized_view_source(direct_source.as_ref())
-        {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "Materialized view source '{}.{}.{}' must be a persistent base table in the default catalog using FUSE engine",
-                direct_source_catalog, direct_source_database, direct_source_name
-            )));
-        }
         let original_query_plan = self.as_query_plan(query).await?;
         let Plan::Query {
             metadata: original_metadata,
@@ -358,8 +332,25 @@ impl Binder {
                 "materialized view AS clause must produce a Query plan",
             ));
         };
-        let (source_table, source_catalog_name, source_database, source_table_name) =
-            Self::materialized_view_source_table(original_metadata)?;
+        let source_entry = Self::materialized_view_source_table(original_metadata)?;
+        let source_table = source_entry.table();
+        // CREATE records source_entry, not the FROM name in SQL. Binding a stale MV falls back to
+        // its original query, so metadata contains only the underlying FUSE table. That leftover
+        // table passes the engine check; comparing it with the AST name rejects CREATE FROM mv.
+        if direct_source_catalog != source_entry.catalog()
+            || direct_source_database != source_entry.database()
+            || direct_source_name != source_entry.name()
+            || !source_entry.catalog().eq_ignore_ascii_case(CATALOG_DEFAULT)
+            || !is_supported_materialized_view_source(source_table.as_ref())
+        {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Materialized view source '{}.{}.{}' must be a persistent base table in the default catalog using FUSE engine",
+                direct_source_catalog, direct_source_database, direct_source_name
+            )));
+        }
+        let source_catalog_name = source_entry.catalog().to_string();
+        let source_database = source_entry.database().to_string();
+        let source_table_name = source_entry.name().to_string();
         let source_table_id = source_table.get_id();
         let source_table_seq = source_table.get_table_info().ident.seq;
         let source_table_option =
@@ -657,23 +648,15 @@ impl Binder {
             database,
             view,
         } = stmt;
-        let tenant = self.ctx.get_tenant();
-        let (catalog, database, view_name, mv_table) = self
-            .resolve_materialized_view_target(catalog, database, view)
-            .await?;
-        let source_table_id = mv_table
-            .get_table_info()
-            .meta
-            .materialized_view_source_table_id()
-            .map_err(ErrorCode::from)?;
+        let (catalog, database, view_name) =
+            self.normalize_object_identifier_triple(catalog, database, view);
 
         Ok(Plan::RefreshMaterializedView(Box::new(
             RefreshMaterializedViewPlan {
-                tenant,
+                tenant: self.ctx.get_tenant(),
                 catalog,
                 database,
                 view_name,
-                source_table_id,
             },
         )))
     }
