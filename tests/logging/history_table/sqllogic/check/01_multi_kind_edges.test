@@ -17,11 +17,11 @@ CTAS 1 1
 DML 2 2
 
 # GET_LINEAGE collapses every retained record for the pair into a single object edge.
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage('lineage_history_multi_kind.dst', 'TABLE', 'UPSTREAM', 1)
 ----
-1 default.lineage_history_multi_kind.src default.lineage_history_multi_kind.dst
+1 lineage_history_multi_kind src lineage_history_multi_kind dst
 
 # The collapsed edge carries the process of the newest statement, which is the last DML.
 query T
