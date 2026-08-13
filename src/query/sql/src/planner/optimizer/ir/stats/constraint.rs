@@ -16,10 +16,10 @@ use std::ops::Bound;
 
 use databend_common_exception::Result;
 use databend_common_statistics::Datum;
-use databend_common_statistics::HistogramBounds;
-use databend_common_statistics::HistogramRangeBounds;
 use databend_common_statistics::NdvEstimate;
+use databend_common_statistics::StatBounds;
 use databend_common_statistics::StatCount;
+use databend_common_statistics::StatRangeBounds;
 
 use super::finite_range_ndv_upper;
 use crate::optimizer::ir::ColumnStat;
@@ -66,7 +66,7 @@ impl ValueConstraint {
                 column_stat.null_count = StatCount::exact(0);
             }
             ValueConstraint::Eq(datum) => {
-                let bounds = HistogramBounds::new(column_stat.min.clone(), column_stat.max.clone());
+                let bounds = StatBounds::new(column_stat.min.clone(), column_stat.max.clone())?;
                 if contains_bounds_datum(&bounds, datum)? {
                     *column_stat = ColumnStat::from_const(datum.clone());
                 } else {
@@ -75,24 +75,24 @@ impl ValueConstraint {
             }
             ValueConstraint::NotEq => {}
             ValueConstraint::Range { lower, upper } => {
-                let bounds = HistogramBounds::from_range_constraint(
+                let bounds = StatBounds::from_range_constraint(
                     &column_stat.min,
                     &column_stat.max,
                     lower,
                     upper,
                 )?;
                 match bounds {
-                    HistogramRangeBounds::Bounds(bounds) => {
+                    StatRangeBounds::Bounds(bounds) => {
                         apply_range_bounds(
                             column_stat,
                             bounds.lower_bound().clone(),
                             bounds.upper_bound().clone(),
                         )?;
                     }
-                    HistogramRangeBounds::Empty => {
+                    StatRangeBounds::Empty => {
                         clear_for_empty_result(column_stat);
                     }
-                    HistogramRangeBounds::Imprecise => {}
+                    StatRangeBounds::Imprecise => {}
                 }
             }
         }
@@ -113,7 +113,7 @@ impl ValueConstraint {
     }
 }
 
-fn contains_bounds_datum(bounds: &HistogramBounds, datum: &Datum) -> Result<bool> {
+fn contains_bounds_datum(bounds: &StatBounds, datum: &Datum) -> Result<bool> {
     Ok(
         bounds.lower_bound().compare(datum)? != std::cmp::Ordering::Greater
             && bounds.upper_bound().compare(datum)? != std::cmp::Ordering::Less,

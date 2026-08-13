@@ -286,7 +286,7 @@ pub enum NumberColumnBuilder {
     Float64(Vec<F64>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumAsInner, Serialize, Deserialize)]
 pub enum NumberDomain {
     UInt8(SimpleDomain<u8>),
     UInt16(SimpleDomain<u16>),
@@ -300,7 +300,7 @@ pub enum NumberDomain {
     Float64(SimpleDomain<F64>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SimpleDomain<T> {
     pub min: T,
     pub max: T,
@@ -321,7 +321,30 @@ where T: PartialOrd + Debug
     }
 }
 
+impl<T: Ord + Clone> SimpleDomain<T> {
+    pub fn merge(&mut self, other: &Self) {
+        if other.min < self.min {
+            self.min = other.min.clone()
+        }
+        if other.max > self.max {
+            self.max = other.max.clone()
+        }
+    }
+}
+
 impl NumberDomain {
+    pub fn merge(&mut self, other: &Self) -> Result<()> {
+        crate::with_number_type!(|NUM_TYPE| match (self, other) {
+            (NumberDomain::NUM_TYPE(lhs), NumberDomain::NUM_TYPE(rhs)) => {
+                lhs.merge(rhs);
+                Ok(())
+            }
+            (lhs, rhs) => Err(ErrorCode::InvalidArgument(format!(
+                "cannot merge number domains {lhs:?} and {rhs:?}"
+            ))),
+        })
+    }
+
     pub fn check_valid(&self) -> Result<()> {
         match self {
             NumberDomain::UInt8(domain) => domain.check_valid(),
@@ -600,19 +623,6 @@ impl NumberColumn {
         crate::with_number_type!(|NUM_TYPE| match self {
             NumberColumn::NUM_TYPE(col) => {
                 NumberColumn::NUM_TYPE(col.clone().sliced(range.start, range.end - range.start))
-            }
-        })
-    }
-
-    pub fn domain(&self) -> NumberDomain {
-        assert!(self.len() > 0);
-        crate::with_number_type!(|NUM_TYPE| match self {
-            NumberColumn::NUM_TYPE(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::NUM_TYPE(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
             }
         })
     }

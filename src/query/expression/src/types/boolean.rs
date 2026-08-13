@@ -333,10 +333,17 @@ pub fn take_nullable_boolean_from_views(
     NullableType::<BooleanType>::upcast_column(column).into()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BooleanDomain {
     pub has_false: bool,
     pub has_true: bool,
+}
+
+impl BooleanDomain {
+    pub fn merge(&mut self, other: &Self) {
+        self.has_false |= other.has_false;
+        self.has_true |= other.has_true;
+    }
 }
 
 impl ColumnView<BooleanType> {

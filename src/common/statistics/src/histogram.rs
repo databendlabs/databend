@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::ops::Bound;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result as ExceptionResult;
@@ -675,108 +674,6 @@ impl HistogramBucket {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq)]
-pub struct HistogramBounds {
-    lower_bound: Datum,
-    upper_bound: Datum,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum HistogramRangeBounds {
-    Bounds(HistogramBounds),
-    Empty,
-    Imprecise,
-}
-
-impl HistogramBounds {
-    pub fn new(lower_bound: Datum, upper_bound: Datum) -> Self {
-        Self {
-            lower_bound,
-            upper_bound,
-        }
-    }
-
-    pub fn from_range_constraint(
-        min: &Datum,
-        max: &Datum,
-        lower: &Bound<Datum>,
-        upper: &Bound<Datum>,
-    ) -> ExceptionResult<HistogramRangeBounds> {
-        let new_min = match lower {
-            Bound::Unbounded => Some(min.clone()),
-            Bound::Included(datum) => Datum::max(Some(min.clone()), Some(datum.clone())),
-            Bound::Excluded(datum) => {
-                if datum.compare(max)? != std::cmp::Ordering::Less {
-                    return Ok(HistogramRangeBounds::Empty);
-                }
-                if datum.compare(min)? == std::cmp::Ordering::Less {
-                    Some(min.clone())
-                } else {
-                    let datum = match datum {
-                        Datum::Bool(false) => Some(Datum::Bool(true)),
-                        Datum::Int(value) => value.checked_add(1).map(Datum::Int),
-                        Datum::UInt(value) => value.checked_add(1).map(Datum::UInt),
-                        // Column stats store closed bounds. For types without
-                        // a representable adjacent value, keep the literal as
-                        // a coarse bound for the strict predicate.
-                        Datum::Float(_) | Datum::Bytes(_) => Some(datum.clone()),
-                        Datum::Bool(true) => None,
-                    };
-                    if datum.is_none() {
-                        return Ok(HistogramRangeBounds::Imprecise);
-                    };
-                    datum
-                }
-            }
-        };
-        let new_max = match upper {
-            Bound::Unbounded => Some(max.clone()),
-            Bound::Included(datum) => Datum::min(Some(max.clone()), Some(datum.clone())),
-            Bound::Excluded(datum) => {
-                if datum.compare(min)? != std::cmp::Ordering::Greater {
-                    return Ok(HistogramRangeBounds::Empty);
-                }
-                if datum.compare(max)? == std::cmp::Ordering::Greater {
-                    Some(max.clone())
-                } else {
-                    let datum = match datum {
-                        Datum::Bool(false) => None,
-                        Datum::Bool(true) => Some(Datum::Bool(false)),
-                        Datum::Int(value) => value.checked_sub(1).map(Datum::Int),
-                        Datum::UInt(value) => value.checked_sub(1).map(Datum::UInt),
-                        // See the lower-bound case above.
-                        Datum::Float(_) | Datum::Bytes(_) => Some(datum.clone()),
-                    };
-                    if datum.is_none() {
-                        return Ok(HistogramRangeBounds::Imprecise);
-                    };
-                    datum
-                }
-            }
-        };
-
-        let (Some(new_min), Some(new_max)) = (new_min, new_max) else {
-            return Ok(HistogramRangeBounds::Empty);
-        };
-        if new_min.compare(&new_max)? == std::cmp::Ordering::Greater {
-            return Ok(HistogramRangeBounds::Empty);
-        }
-
-        Ok(HistogramRangeBounds::Bounds(Self {
-            lower_bound: new_min,
-            upper_bound: new_max,
-        }))
-    }
-
-    pub fn lower_bound(&self) -> &Datum {
-        &self.lower_bound
-    }
-
-    pub fn upper_bound(&self) -> &Datum {
-        &self.upper_bound
-    }
-}
-
 impl fmt::Display for Histogram {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for bucket in self.bucket_iter() {
@@ -795,7 +692,11 @@ impl fmt::Display for Histogram {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Bound;
+
     use super::*;
+    use crate::StatBounds;
+    use crate::StatRangeBounds;
 
     #[test]
     fn test_restrict_to_bounds_uses_existing_buckets() -> ExceptionResult<()> {
@@ -829,7 +730,7 @@ mod tests {
 
     #[test]
     fn test_range_constraint_bounds_use_discrete_exclusive_edges() -> ExceptionResult<()> {
-        let bounds = HistogramBounds::from_range_constraint(
+        let bounds = StatBounds::from_range_constraint(
             &Datum::UInt(0),
             &Datum::UInt(19),
             &Bound::Unbounded,
@@ -838,7 +739,7 @@ mod tests {
 
         assert_eq!(
             bounds,
-            HistogramRangeBounds::Bounds(HistogramBounds::new(Datum::UInt(0), Datum::UInt(14)))
+            StatRangeBounds::Bounds(StatBounds::new(Datum::UInt(0), Datum::UInt(14)).unwrap())
         );
         Ok(())
     }

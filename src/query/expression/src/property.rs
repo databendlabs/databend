@@ -14,9 +14,9 @@
 
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
+use databend_common_exception::ErrorCode;
 use enum_as_inner::EnumAsInner;
 
-use crate::ColumnBuilder;
 use crate::FunctionContext;
 use crate::Scalar;
 use crate::types::AccessType;
@@ -151,6 +151,178 @@ pub enum Domain {
     Undefined,
 }
 
+/// Type-erased exact extrema observed in a set of values.
+///
+/// The typed payloads are shared with [`Domain`], but this is not a domain: its
+/// bounds are actual non-NULL values observed in a column. The boolean in each
+/// variant records whether NULL also occurred in the same set.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum MinMax {
+    Number(NumberDomain, bool),
+    Decimal(DecimalDomain, bool),
+    Boolean(BooleanDomain, bool),
+    String(SimpleDomain<String>, bool),
+    Timestamp(SimpleDomain<i64>, bool),
+    TimestampTz(SimpleDomain<timestamp_tz>, bool),
+    Date(SimpleDomain<i32>, bool),
+    Interval(SimpleDomain<months_days_micros>, bool),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ColumnMinMax {
+    Empty,
+    AllNull,
+    Values(MinMax),
+}
+
+impl ColumnMinMax {
+    pub fn merge(&mut self, other: &Self) -> Result<(), ErrorCode> {
+        match (self, other) {
+            (_, ColumnMinMax::Empty) => Ok(()),
+            (this @ ColumnMinMax::Empty, other) => {
+                *this = other.clone();
+                Ok(())
+            }
+            (ColumnMinMax::AllNull, ColumnMinMax::AllNull) => Ok(()),
+            (this @ ColumnMinMax::AllNull, ColumnMinMax::Values(min_max)) => {
+                let mut min_max = min_max.clone();
+                min_max.set_has_null();
+                *this = ColumnMinMax::Values(min_max);
+                Ok(())
+            }
+            (ColumnMinMax::Values(min_max), ColumnMinMax::AllNull) => {
+                min_max.set_has_null();
+                Ok(())
+            }
+            (ColumnMinMax::Values(lhs), ColumnMinMax::Values(rhs)) => lhs.merge(rhs),
+        }
+    }
+
+    pub fn into_option(self) -> Option<MinMax> {
+        match self {
+            ColumnMinMax::Values(min_max) => Some(min_max),
+            ColumnMinMax::Empty | ColumnMinMax::AllNull => None,
+        }
+    }
+}
+
+impl MinMax {
+    pub fn has_null(&self) -> bool {
+        match self {
+            MinMax::Number(_, has_null)
+            | MinMax::Decimal(_, has_null)
+            | MinMax::Boolean(_, has_null)
+            | MinMax::String(_, has_null)
+            | MinMax::Timestamp(_, has_null)
+            | MinMax::TimestampTz(_, has_null)
+            | MinMax::Date(_, has_null)
+            | MinMax::Interval(_, has_null) => *has_null,
+        }
+    }
+
+    fn set_has_null(&mut self) {
+        match self {
+            MinMax::Number(_, value)
+            | MinMax::Decimal(_, value)
+            | MinMax::Boolean(_, value)
+            | MinMax::String(_, value)
+            | MinMax::Timestamp(_, value)
+            | MinMax::TimestampTz(_, value)
+            | MinMax::Date(_, value)
+            | MinMax::Interval(_, value) => *value = true,
+        }
+    }
+
+    pub fn with_null(mut self) -> Self {
+        self.set_has_null();
+        self
+    }
+
+    pub fn merge(&mut self, other: &Self) -> Result<(), ErrorCode> {
+        match (self, other) {
+            (MinMax::Number(lhs, lhs_has_null), MinMax::Number(rhs, rhs_has_null)) => {
+                lhs.merge(rhs)?;
+                *lhs_has_null |= *rhs_has_null;
+                Ok(())
+            }
+            (MinMax::Decimal(lhs, lhs_has_null), MinMax::Decimal(rhs, rhs_has_null)) => {
+                lhs.merge(rhs)?;
+                *lhs_has_null |= *rhs_has_null;
+                Ok(())
+            }
+            (MinMax::Boolean(lhs, lhs_has_null), MinMax::Boolean(rhs, rhs_has_null)) => {
+                lhs.merge(rhs);
+                *lhs_has_null |= *rhs_has_null;
+                Ok(())
+            }
+            (MinMax::String(lhs, lhs_has_null), MinMax::String(rhs, rhs_has_null)) => {
+                lhs.merge(rhs);
+                *lhs_has_null |= *rhs_has_null;
+                Ok(())
+            }
+            (MinMax::Timestamp(lhs, lhs_has_null), MinMax::Timestamp(rhs, rhs_has_null)) => {
+                lhs.merge(rhs);
+                *lhs_has_null |= *rhs_has_null;
+                Ok(())
+            }
+            (MinMax::TimestampTz(lhs, lhs_has_null), MinMax::TimestampTz(rhs, rhs_has_null)) => {
+                lhs.merge(rhs);
+                *lhs_has_null |= *rhs_has_null;
+                Ok(())
+            }
+            (MinMax::Date(lhs, lhs_has_null), MinMax::Date(rhs, rhs_has_null)) => {
+                lhs.merge(rhs);
+                *lhs_has_null |= *rhs_has_null;
+                Ok(())
+            }
+            (MinMax::Interval(lhs, lhs_has_null), MinMax::Interval(rhs, rhs_has_null)) => {
+                lhs.merge(rhs);
+                *lhs_has_null |= *rhs_has_null;
+                Ok(())
+            }
+            (lhs, rhs) => Err(ErrorCode::InvalidArgument(format!(
+                "cannot merge min/max values {lhs:?} and {rhs:?}"
+            ))),
+        }
+    }
+
+    pub fn scalars(&self) -> (Scalar, Scalar) {
+        with_number_type!(|NUM| match self {
+            MinMax::Number(NumberDomain::NUM(values), _) => (
+                Scalar::Number(NumberScalar::NUM(values.min)),
+                Scalar::Number(NumberScalar::NUM(values.max)),
+            ),
+            MinMax::Decimal(decimal, _) => with_decimal_type!(|DECIMAL| match decimal {
+                DecimalDomain::DECIMAL(values, size) => (
+                    Scalar::Decimal(DecimalScalar::DECIMAL(values.min, *size)),
+                    Scalar::Decimal(DecimalScalar::DECIMAL(values.max, *size)),
+                ),
+            }),
+            MinMax::Boolean(values, _) => match (values.has_false, values.has_true) {
+                (true, true) => (Scalar::Boolean(false), Scalar::Boolean(true)),
+                (true, false) => (Scalar::Boolean(false), Scalar::Boolean(false)),
+                (false, true) => (Scalar::Boolean(true), Scalar::Boolean(true)),
+                (false, false) => unreachable!("MinMax cannot contain an empty boolean range"),
+            },
+            MinMax::String(values, _) => (
+                Scalar::String(values.min.clone()),
+                Scalar::String(values.max.clone()),
+            ),
+            MinMax::Timestamp(values, _) =>
+                (Scalar::Timestamp(values.min), Scalar::Timestamp(values.max),),
+            MinMax::TimestampTz(values, _) => (
+                Scalar::TimestampTz(values.min),
+                Scalar::TimestampTz(values.max),
+            ),
+            MinMax::Date(values, _) => {
+                (Scalar::Date(values.min), Scalar::Date(values.max))
+            }
+            MinMax::Interval(values, _) =>
+                (Scalar::Interval(values.min), Scalar::Interval(values.max),),
+        })
+    }
+}
+
 impl<T: AccessType> FunctionDomain<T> {
     pub fn map<U: AccessType>(self, f: impl Fn(T::Domain) -> U::Domain) -> FunctionDomain<U> {
         match self {
@@ -175,13 +347,6 @@ impl<T: ArgType> FunctionDomain<T> {
 }
 
 impl Domain {
-    pub fn from_min_max(min: Scalar, max: Scalar, t: &DataType) -> Self {
-        let mut builder = ColumnBuilder::with_capacity(t, 2);
-        builder.push(min.as_ref());
-        builder.push(max.as_ref());
-        builder.build().domain()
-    }
-
     pub fn check_data_type(&self, data_type: &DataType) -> Result<(), String> {
         if self.matches_data_type(data_type) {
             Ok(())
@@ -343,32 +508,24 @@ impl Domain {
     pub fn merge(&self, other: &Domain) -> Domain {
         match (self, other) {
             (Domain::Number(this), Domain::Number(other)) => {
-                with_number_type!(|TYPE| match (this, other) {
-                    (NumberDomain::TYPE(this), NumberDomain::TYPE(other)) =>
-                        Domain::Number(NumberDomain::TYPE(SimpleDomain {
-                            min: this.min.min(other.min),
-                            max: this.max.max(other.max),
-                        })),
-                    _ => unreachable!("unable to merge {this:?} with {other:?}"),
-                })
+                let mut merged = *this;
+                merged
+                    .merge(other)
+                    .unwrap_or_else(|_| unreachable!("unable to merge {this:?} with {other:?}"));
+                Domain::Number(merged)
             }
             (Domain::Decimal(this), Domain::Decimal(other)) => {
-                with_decimal_type!(|TYPE| match (this, other) {
-                    (DecimalDomain::TYPE(x, size), DecimalDomain::TYPE(y, _)) =>
-                        Domain::Decimal(DecimalDomain::TYPE(
-                            SimpleDomain {
-                                min: x.min.min(y.min),
-                                max: x.max.max(y.max),
-                            },
-                            *size
-                        ),),
-                    _ => unreachable!("unable to merge {this:?} with {other:?}"),
-                })
+                let mut merged = *this;
+                merged
+                    .merge(other)
+                    .unwrap_or_else(|_| unreachable!("unable to merge {this:?} with {other:?}"));
+                Domain::Decimal(merged)
             }
-            (Domain::Boolean(this), Domain::Boolean(other)) => Domain::Boolean(BooleanDomain {
-                has_false: this.has_false || other.has_false,
-                has_true: this.has_true || other.has_true,
-            }),
+            (Domain::Boolean(this), Domain::Boolean(other)) => {
+                let mut merged = *this;
+                merged.merge(other);
+                Domain::Boolean(merged)
+            }
             (Domain::String(this), Domain::String(other)) => Domain::String(StringDomain {
                 min: this.min.as_str().min(&other.min).to_string(),
                 max: this
@@ -378,19 +535,20 @@ impl Domain {
                     .map(|(self_max, other_max)| self_max.max(other_max).to_string()),
             }),
             (Domain::Timestamp(this), Domain::Timestamp(other)) => {
-                Domain::Timestamp(SimpleDomain {
-                    min: this.min.min(other.min),
-                    max: this.max.max(other.max),
-                })
+                let mut merged = *this;
+                merged.merge(other);
+                Domain::Timestamp(merged)
             }
-            (Domain::Date(this), Domain::Date(other)) => Domain::Date(SimpleDomain {
-                min: this.min.min(other.min),
-                max: this.max.max(other.max),
-            }),
-            (Domain::Interval(this), Domain::Interval(other)) => Domain::Interval(SimpleDomain {
-                min: this.min.min(other.min),
-                max: this.max.max(other.max),
-            }),
+            (Domain::Date(this), Domain::Date(other)) => {
+                let mut merged = *this;
+                merged.merge(other);
+                Domain::Date(merged)
+            }
+            (Domain::Interval(this), Domain::Interval(other)) => {
+                let mut merged = *this;
+                merged.merge(other);
+                Domain::Interval(merged)
+            }
             (
                 Domain::Nullable(NullableDomain {
                     has_null: true,
@@ -549,110 +707,6 @@ impl Domain {
                     .collect::<Option<Vec<_>>>()?,
             )),
             _ => None,
-        }
-    }
-
-    pub fn to_minmax(&self) -> (Scalar, Scalar) {
-        match self {
-            Domain::Number(NumberDomain::Int8(SimpleDomain { min, max })) => (
-                Scalar::Number(NumberScalar::Int8(*min)),
-                Scalar::Number(NumberScalar::Int8(*max)),
-            ),
-            Domain::Number(NumberDomain::Int16(SimpleDomain { min, max })) => (
-                Scalar::Number(NumberScalar::Int16(*min)),
-                Scalar::Number(NumberScalar::Int16(*max)),
-            ),
-            Domain::Number(NumberDomain::Int32(SimpleDomain { min, max })) => (
-                Scalar::Number(NumberScalar::Int32(*min)),
-                Scalar::Number(NumberScalar::Int32(*max)),
-            ),
-            Domain::Number(NumberDomain::Int64(SimpleDomain { min, max })) => (
-                Scalar::Number(NumberScalar::Int64(*min)),
-                Scalar::Number(NumberScalar::Int64(*max)),
-            ),
-            Domain::Number(NumberDomain::UInt8(SimpleDomain { min, max })) => (
-                Scalar::Number(NumberScalar::UInt8(*min)),
-                Scalar::Number(NumberScalar::UInt8(*max)),
-            ),
-            Domain::Number(NumberDomain::UInt16(SimpleDomain { min, max })) => (
-                Scalar::Number(NumberScalar::UInt16(*min)),
-                Scalar::Number(NumberScalar::UInt16(*max)),
-            ),
-            Domain::Number(NumberDomain::UInt32(SimpleDomain { min, max })) => (
-                Scalar::Number(NumberScalar::UInt32(*min)),
-                Scalar::Number(NumberScalar::UInt32(*max)),
-            ),
-            Domain::Number(NumberDomain::UInt64(SimpleDomain { min, max })) => (
-                Scalar::Number(NumberScalar::UInt64(*min)),
-                Scalar::Number(NumberScalar::UInt64(*max)),
-            ),
-            Domain::Number(NumberDomain::Float32(SimpleDomain { min, max })) => (
-                Scalar::Number(NumberScalar::Float32(*min)),
-                Scalar::Number(NumberScalar::Float32(*max)),
-            ),
-            Domain::Number(NumberDomain::Float64(SimpleDomain { min, max })) => (
-                Scalar::Number(NumberScalar::Float64(*min)),
-                Scalar::Number(NumberScalar::Float64(*max)),
-            ),
-            Domain::Decimal(decimal_domain) => match decimal_domain {
-                DecimalDomain::Decimal64(SimpleDomain { min, max }, size) => (
-                    Scalar::Decimal(DecimalScalar::Decimal64(*min, *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal64(*max, *size)),
-                ),
-                DecimalDomain::Decimal128(SimpleDomain { min, max }, size) => (
-                    Scalar::Decimal(DecimalScalar::Decimal128(*min, *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal128(*max, *size)),
-                ),
-                DecimalDomain::Decimal256(SimpleDomain { min, max }, size) => (
-                    Scalar::Decimal(DecimalScalar::Decimal256(*min, *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal256(*max, *size)),
-                ),
-            },
-            Domain::Boolean(BooleanDomain {
-                has_false,
-                has_true,
-            }) => (Scalar::Boolean(!*has_false), Scalar::Boolean(*has_true)),
-            Domain::String(StringDomain { min, max }) => {
-                let max = if let Some(max) = max {
-                    Scalar::String(max.clone())
-                } else {
-                    Scalar::Null
-                };
-                (Scalar::String(min.clone()), max)
-            }
-            Domain::Timestamp(SimpleDomain { min, max }) => {
-                (Scalar::Timestamp(*min), Scalar::Timestamp(*max))
-            }
-            Domain::TimestampTz(SimpleDomain { min, max }) => {
-                (Scalar::TimestampTz(*min), Scalar::TimestampTz(*max))
-            }
-            Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
-            Domain::Interval(SimpleDomain { min, max }) => {
-                (Scalar::Interval(*min), Scalar::Interval(*max))
-            }
-            Domain::Nullable(NullableDomain { has_null, value }) => {
-                if let Some(v) = value {
-                    let (min, mut max) = v.to_minmax();
-                    if *has_null {
-                        max = Scalar::Null;
-                    }
-                    (min, max)
-                } else {
-                    (Scalar::Null, Scalar::Null)
-                }
-            }
-            Domain::Tuple(fields) => {
-                let mut mins = Vec::with_capacity(fields.len());
-                let mut maxs = Vec::with_capacity(fields.len());
-                for field in fields {
-                    let (min, max) = field.to_minmax();
-                    mins.push(min);
-                    maxs.push(max);
-                }
-                (Scalar::Tuple(mins), Scalar::Tuple(maxs))
-            }
-            // cluster key only allow number|string|boolean|date|timestamp|decimal, so unreachable.
-            _ => (Scalar::Null, Scalar::Null),
         }
     }
 }

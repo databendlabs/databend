@@ -51,6 +51,5 @@ pub(crate) use stats::JoinStatsEstimator;
 pub use stats::MAX_SELECTIVITY;
 pub use stats::SelectivityEstimator;
 pub use stats::TopNSet;
-pub use stats::UniformSampleSet;
 pub(crate) use stats::cap_stat_info_by_rows;
 pub(crate) use stats::finite_range_ndv_upper;

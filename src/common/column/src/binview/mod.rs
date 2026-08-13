@@ -515,6 +515,37 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         }
     }
 
+    /// Return the minimum and maximum values without materializing every view.
+    ///
+    /// Comparisons use the four-byte prefixes stored in [`View`]. The backing
+    /// buffers are only accessed when two prefixes are equal and when the final
+    /// extrema are returned.
+    pub fn min_max(&self) -> Option<(&T, &T)> {
+        if self.is_empty() {
+            return None;
+        }
+
+        let mut min_index = 0;
+        let mut max_index = 0;
+        for index in 1..self.len() {
+            if Self::compare(self, index, self, min_index).is_lt() {
+                min_index = index;
+                continue;
+            }
+            if Self::compare(self, index, self, max_index).is_gt() {
+                max_index = index;
+            }
+        }
+
+        unsafe {
+            Some((
+                self.value_unchecked(min_index),
+                self.value_unchecked(max_index),
+            ))
+        }
+    }
+
+    #[inline]
     pub fn compare(col_i: &Self, i: usize, col_j: &Self, j: usize) -> std::cmp::Ordering {
         let view_i = unsafe { col_i.views().as_slice().get_unchecked(i) };
         let view_j = unsafe { col_j.views().as_slice().get_unchecked(j) };

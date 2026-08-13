@@ -21,7 +21,7 @@ use databend_common_expression::types::DataType;
 use databend_common_statistics::Datum;
 use databend_common_statistics::DatumKind;
 use databend_common_statistics::Histogram;
-use databend_common_statistics::UniformSampleSet;
+use databend_common_statistics::StatBounds;
 
 use super::ColumnStat;
 use super::ColumnStatSet;
@@ -304,8 +304,8 @@ impl<'a> JoinColumnInput<'a> {
         })
     }
 
-    fn interval(&self) -> UniformSampleSet {
-        UniformSampleSet::new(self.min.clone(), self.max.clone())
+    fn interval(&self) -> StatBounds {
+        StatBounds::new(self.min.clone(), self.max.clone()).unwrap()
     }
 }
 
