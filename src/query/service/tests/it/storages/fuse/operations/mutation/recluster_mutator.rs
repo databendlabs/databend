@@ -308,6 +308,44 @@ async fn gen_recluster_segments_by_ranges(
     Ok(segment_locations)
 }
 
+async fn gen_recluster_segments_by_block_specs(
+    data_accessor: &opendal::Operator,
+    location_generator: &TableMetaLocationGenerator,
+    specs_by_segment: &[Vec<(i32, i32, u64, u64)>],
+    file_size: u64,
+    thresholds: BlockThresholds,
+    cluster_key_id: u32,
+) -> anyhow::Result<Vec<meta::Location>> {
+    let mut segment_locations = Vec::with_capacity(specs_by_segment.len());
+    for specs in specs_by_segment {
+        let blocks = specs
+            .iter()
+            .map(|&(min, max, row_count, block_size)| {
+                make_recluster_block(
+                    cluster_key_id,
+                    min,
+                    max,
+                    0,
+                    row_count,
+                    block_size,
+                    file_size,
+                )
+            })
+            .collect::<Vec<_>>();
+        segment_locations.push(
+            write_recluster_segment(
+                data_accessor,
+                location_generator,
+                blocks,
+                thresholds,
+                cluster_key_id,
+            )
+            .await?,
+        );
+    }
+    Ok(segment_locations)
+}
+
 fn test_vector_cluster_key_expr() -> Expr<usize> {
     Expr::ColumnRef(ColumnRef {
         span: None,
@@ -721,6 +759,83 @@ async fn test_removed_segments_match_selected_blocks() -> anyhow::Result<()> {
     assert_eq!(task_part_counts(&parts), vec![2]);
     assert_eq!(parts.removed_segment_indexes, vec![0]);
     assert_eq!(parts.remained_blocks.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_density_selection_accounts_for_task_slot_cost() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 12);
+
+    // Both regions fit one memory budget, but only one task slot is available.
+    // The tiny region has a better raw bytes/gain ratio, while the large region
+    // removes much more depth in one distributed task. Selection accounts for
+    // that fixed task-slot cost, so the high-total-gain task runs first instead
+    // of spending the slot on a small local cleanup.
+    let segment_locations = gen_recluster_segments_by_block_specs(
+        &data_accessor,
+        &location_generator,
+        &[
+            vec![(1, 10, 100, 100)],
+            vec![(1, 10, 100, 100)],
+            vec![(1, 10, 100, 100)],
+            vec![(1, 10, 100, 100)],
+            vec![(1, 10, 100, 100)],
+            vec![(1, 10, 100, 100)],
+            vec![(3, 9, 1000, 1000)],
+            vec![(11, 12, 10, 10)],
+            vec![(11, 12, 10, 10)],
+            vec![(11, 12, 10, 10)],
+        ],
+        10,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = test_cluster_schema();
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let compact_segments = segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        create_segment_location_vector(segment_locations, None),
+    )
+    .await?;
+    let mutator = new_test_mutator(
+        ctx.clone(),
+        data_accessor,
+        schema,
+        thresholds,
+        cluster_key_id,
+        1,
+        ReclusterMode::Conservative,
+    );
+    let selected_segs = mutator
+        .select_segments(&compact_segments, 16)?
+        .into_iter()
+        .next()
+        .expect("single window should be selected");
+
+    let (block_num, parts) = materialize_candidate_window(&mutator, selected_segs, 1).await?;
+
+    assert_eq!(block_num, 6);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].total_bytes, 600);
+    assert_eq!(task_part_counts(&parts), vec![6]);
+    let small_task_output_blocks = thresholds.calc_compact_block_num(30, 30);
+    let selected_output_blocks =
+        thresholds.calc_compact_block_num(parts.tasks[0].total_rows, parts.tasks[0].total_bytes);
+    assert_eq!(small_task_output_blocks, 1);
+    assert_eq!(selected_output_blocks, 6);
+    assert!(parts.tasks[0].total_bytes > 30);
 
     Ok(())
 }

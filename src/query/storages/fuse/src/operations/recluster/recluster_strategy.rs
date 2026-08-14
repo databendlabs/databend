@@ -280,21 +280,56 @@ impl fmt::Display for ReclusterGroup {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CandidateScore {
     pub selected_total_bytes: usize,
+    pub selected_block_count: usize,
     pub max_depth: usize,
     pub average_depth: f64,
+    pub estimated_depth_gain: u64,
 }
 
 impl CandidateScore {
+    const TASK_SLOT_COST_BYTES: usize = 8 * 1024 * 1024;
+    const MAX_TASK_COST_ADJUSTED_BYTES_PER_DEPTH_GAIN: f64 = 32.0 * 1024.0;
+
+    pub fn bytes_per_depth_gain(&self) -> f64 {
+        if self.estimated_depth_gain == 0 {
+            f64::INFINITY
+        } else {
+            self.selected_total_bytes as f64 / self.estimated_depth_gain as f64
+        }
+    }
+
+    pub fn task_cost_adjusted_bytes_per_depth_gain(&self) -> f64 {
+        if self.estimated_depth_gain == 0 {
+            return f64::INFINITY;
+        }
+
+        let fragmentation_ratio =
+            self.selected_block_count.max(1) as f64 / self.max_depth.max(1) as f64;
+        let task_cost = self
+            .selected_total_bytes
+            .saturating_add(Self::TASK_SLOT_COST_BYTES);
+        task_cost as f64 / self.estimated_depth_gain as f64 * fragmentation_ratio.sqrt()
+    }
+
+    pub fn passes_tail_efficiency_threshold(&self) -> bool {
+        self.task_cost_adjusted_bytes_per_depth_gain()
+            <= Self::MAX_TASK_COST_ADJUSTED_BYTES_PER_DEPTH_GAIN
+    }
+
     /// Compare scores in descending priority order.
     pub fn cmp_desc(&self, other: &Self) -> cmp::Ordering {
-        self.max_depth
-            .cmp(&other.max_depth)
+        other
+            .task_cost_adjusted_bytes_per_depth_gain()
+            .partial_cmp(&self.task_cost_adjusted_bytes_per_depth_gain())
+            .unwrap_or(cmp::Ordering::Equal)
             .then_with(|| {
-                self.average_depth
-                    .partial_cmp(&other.average_depth)
+                other
+                    .bytes_per_depth_gain()
+                    .partial_cmp(&self.bytes_per_depth_gain())
                     .unwrap_or(cmp::Ordering::Equal)
             })
-            .then_with(|| self.selected_total_bytes.cmp(&other.selected_total_bytes))
+            .then_with(|| self.estimated_depth_gain.cmp(&other.estimated_depth_gain))
+            .then_with(|| other.selected_total_bytes.cmp(&self.selected_total_bytes))
     }
 }
 
@@ -326,12 +361,15 @@ impl fmt::Display for ReclusterTaskCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "output_level={} max_depth={} avg_depth={} selected_count={} bytes={}",
+            "output_level={} max_depth={} avg_depth={} selected_count={} bytes={} estimated_depth_gain={} bytes_per_depth_gain={} task_cost_adjusted_bytes_per_depth_gain={}",
             self.output_level,
             self.score.max_depth,
             self.score.average_depth,
             self.selected_block_count(),
             self.score.selected_total_bytes,
+            self.score.estimated_depth_gain,
+            self.score.bytes_per_depth_gain(),
+            self.score.task_cost_adjusted_bytes_per_depth_gain(),
         )
     }
 }
