@@ -14,6 +14,25 @@ FROM get_lineage('lineage_history_iceberg.dst.a', 'COLUMN', 'UPSTREAM', 1)
 ----
 1 lineage_history_iceberg_catalog lineage_db src a default lineage_history_iceberg dst a
 
+# An external-catalog table can be both the lookup object and the returned neighbor. Its public
+# shape matches a regular TABLE while preserving the external catalog address.
+query TTTTTT
+SELECT direction, object_domain, catalog, database, object_name,
+       to_string(column_neighbors)
+FROM get_lineage_neighbors(
+    'lineage_history_iceberg_catalog.lineage_db.src',
+    'TABLE'
+)
+----
+DOWNSTREAM TABLE default lineage_history_iceberg dst {"a":["a"]}
+
+query TTTTTT
+SELECT direction, object_domain, catalog, database, object_name,
+       to_string(column_neighbors)
+FROM get_lineage_neighbors('lineage_history_iceberg.dst', 'TABLE')
+----
+UPSTREAM TABLE lineage_history_iceberg_catalog lineage_db src {"a":["a"]}
+
 # External catalog ids are not stable across catalog reloads. Both the object and its column data
 # must therefore be name-addressed in the aggregated physical record.
 query IIII

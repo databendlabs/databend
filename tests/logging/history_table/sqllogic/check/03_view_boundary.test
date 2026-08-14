@@ -58,6 +58,15 @@ FROM get_lineage('lineage_history_views.src_view', 'VIEW', 'DOWNSTREAM', 1)
 ----
 1 lineage_history_views src_view lineage_history_views view_dst
 
+# Direct neighbors preserve the VIEW domain and orient both column maps around src_view.
+query TTTTTT rowsort
+SELECT direction, object_domain, catalog, database, object_name,
+       to_string(column_neighbors)
+FROM get_lineage_neighbors('lineage_history_views.src_view', 'VIEW')
+----
+DOWNSTREAM TABLE default lineage_history_views view_dst {"p":["q"],"v":["z"]}
+UPSTREAM TABLE default lineage_history_views src {"p":["a"],"v":["a","b"]}
+
 # Column lineage always retains display names. View columns are explicitly NAME-addressed with no
 # schema id, while the CTAS target table column retains both its name and stable id.
 query BB

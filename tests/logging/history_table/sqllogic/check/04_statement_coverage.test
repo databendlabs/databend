@@ -187,6 +187,22 @@ FROM get_lineage('lineage_history_statements_stage', 'STAGE', 'DOWNSTREAM', 1)
 1 NULL NULL lineage_history_statements_stage default lineage_history_statements insert_select_stage_dst
 1 NULL NULL lineage_history_statements_stage default lineage_history_statements insert_stage_dst
 
+# Stage neighbors have no catalog/database or stable file-column mapping.
+query TTTTTT rowsort
+SELECT direction, object_domain, catalog, database, object_name, to_string(column_neighbors)
+FROM get_lineage_neighbors('lineage_history_statements_stage', 'STAGE')
+----
+DOWNSTREAM TABLE default lineage_history_statements copy_dst {}
+DOWNSTREAM TABLE default lineage_history_statements insert_select_stage_dst {}
+DOWNSTREAM TABLE default lineage_history_statements insert_stage_dst {}
+UPSTREAM TABLE default lineage_history_statements src {}
+
+query TTTTTT
+SELECT direction, object_domain, catalog, database, object_name, to_string(column_neighbors)
+FROM get_lineage_neighbors('lineage_history_statements.copy_dst', 'TABLE')
+----
+UPSTREAM STAGE NULL NULL lineage_history_statements_stage {}
+
 query ITSTTT
 SELECT distance, source_object_catalog, source_object_database, source_object_name,
        target_object_database, target_object_name

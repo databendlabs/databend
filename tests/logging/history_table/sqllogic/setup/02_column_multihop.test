@@ -27,6 +27,36 @@ statement ok
 CREATE TABLE lineage_history_columns.dst AS
 SELECT x AS z FROM lineage_history_columns.mid
 
+# The same object can be both an upstream and downstream neighbor. Keep this cycle separate from
+# the multi-hop chain above so its traversal assertions remain unambiguous.
+statement ok
+CREATE TABLE lineage_history_columns.cycle_left(a INT)
+
+statement ok
+CREATE TABLE lineage_history_columns.cycle_right(b INT)
+
+statement ok
+INSERT INTO lineage_history_columns.cycle_right SELECT a FROM lineage_history_columns.cycle_left
+
+statement ok
+INSERT INTO lineage_history_columns.cycle_left SELECT b FROM lineage_history_columns.cycle_right
+
+# The latest pattern for this object pair maps only y. Column-neighbor lookup for x must not fall
+# back to the older x pattern retained in history.
+statement ok
+CREATE TABLE lineage_history_columns.pattern_src(a INT, b INT)
+
+statement ok
+CREATE TABLE lineage_history_columns.pattern_dst(x INT, y INT)
+
+statement ok
+INSERT INTO lineage_history_columns.pattern_dst
+SELECT a, 0 FROM lineage_history_columns.pattern_src
+
+statement ok
+INSERT INTO lineage_history_columns.pattern_dst
+SELECT 0, b FROM lineage_history_columns.pattern_src
+
 # Target status is column-specific: only dst.z has a masking policy.
 statement ok
 CREATE MASKING POLICY lineage_history_columns_mask AS (val INT) RETURNS INT -> -1
