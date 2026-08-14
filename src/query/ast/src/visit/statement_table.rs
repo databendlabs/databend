@@ -185,6 +185,40 @@ impl WalkMut for CreateTableStmt {
     }
 }
 
+impl Walk for CreateMaterializedViewStmt {
+    fn walk<V: Visitor + ?Sized>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<VisitControl<V::Break>, V::Error> {
+        try_walk!((&self.catalog, &self.database, &self.view).walk(visitor));
+        for column in &self.columns {
+            try_walk!(column.walk(visitor));
+        }
+        if let Some(cluster_by) = &self.cluster_by {
+            try_walk!(cluster_by.walk(visitor));
+        }
+        try_walk!(self.query.walk(visitor));
+        Ok(VisitControl::Continue)
+    }
+}
+
+impl WalkMut for CreateMaterializedViewStmt {
+    fn walk_mut<V: VisitorMut + ?Sized>(
+        &mut self,
+        visitor: &mut V,
+    ) -> Result<VisitControl<V::Break>, V::Error> {
+        try_walk!((&mut self.catalog, &mut self.database, &mut self.view).walk_mut(visitor));
+        for column in &mut self.columns {
+            try_walk!(column.walk_mut(visitor));
+        }
+        if let Some(cluster_by) = &mut self.cluster_by {
+            try_walk!(cluster_by.walk_mut(visitor));
+        }
+        try_walk!(self.query.walk_mut(visitor));
+        Ok(VisitControl::Continue)
+    }
+}
+
 impl Walk for AlterTableAction {
     fn walk<V: Visitor + ?Sized>(
         &self,

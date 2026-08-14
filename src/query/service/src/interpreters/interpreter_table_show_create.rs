@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::quote::QuotedIdent;
@@ -72,6 +73,15 @@ pub struct ShowCreateQuerySettings {
 impl ShowCreateTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: ShowCreateTablePlan) -> Result<Self> {
         Ok(ShowCreateTableInterpreter { ctx, plan })
+    }
+
+    fn format_table_options(options: &BTreeMap<String, String>) -> String {
+        options
+            .iter()
+            .filter(|(key, _)| !is_internal_opt_key(key))
+            .sorted_by_key(|(key, _)| *key)
+            .map(|(key, value)| format!(" {}={}", key.to_uppercase(), QuotedString(value, '\'')))
+            .join("")
     }
 }
 
@@ -161,7 +171,10 @@ impl ShowCreateTableInterpreter {
             STREAM_ENGINE => Self::show_create_stream_query(catalog, table).await,
             VIEW_ENGINE => Self::show_create_view_query(table, database),
             MATERIALIZED_VIEW_ENGINE => {
-                Self::show_create_materialized_view_query(catalog, tenant, table, database).await
+                Self::show_create_materialized_view_query(
+                    catalog, tenant, table, database, settings,
+                )
+                .await
             }
             _ => match table.options().get(OPT_KEY_STORAGE_PREFIX) {
                 Some(_) => Ok(Self::show_attach_table_query(table, database)),
@@ -370,15 +383,7 @@ impl ShowCreateTableInterpreter {
         }
 
         if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
-            let mut opts = table_info.options().iter().collect::<Vec<_>>();
-            opts.sort_by_key(|(k, _)| *k);
-            let s = opts
-                .iter()
-                .filter(|(k, _)| !is_internal_opt_key(k))
-                .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
-                .collect::<Vec<_>>()
-                .join("");
-            table_create_sql.push_str(&s);
+            table_create_sql.push_str(&Self::format_table_options(table_info.options()));
         }
 
         if engine != "ICEBERG" && engine != "DELTA" {
@@ -419,6 +424,7 @@ impl ShowCreateTableInterpreter {
         tenant: &Tenant,
         table: &dyn Table,
         database: &str,
+        settings: &ShowCreateQuerySettings,
     ) -> Result<String> {
         let name = table.name();
         let definition = get_materialized_view_handler()
@@ -449,6 +455,17 @@ impl ShowCreateTableInterpreter {
 
         if let Some(cluster_key) = table_info.meta.cluster_key_str() {
             create_sql.push_str(&format!(" CLUSTER BY {}", cluster_key));
+        }
+
+        if !table_info.meta.comment.is_empty() {
+            create_sql.push_str(&format!(
+                " COMMENT = {}",
+                QuotedString(&table_info.meta.comment, '\'')
+            ));
+        }
+
+        if !settings.hide_options_in_show_create_table {
+            create_sql.push_str(&Self::format_table_options(table_info.options()));
         }
 
         create_sql.push_str(&format!(" AS {}", definition.original_query));

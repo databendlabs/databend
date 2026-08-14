@@ -278,6 +278,7 @@ pub struct ModifyTableCommentPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
 }
 
 impl ModifyTableCommentPlan {
@@ -308,6 +309,7 @@ pub struct SetOptionsPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
 }
 
 impl SetOptionsPlan {
@@ -322,6 +324,7 @@ pub struct UnsetOptionsPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
 }
 
 impl UnsetOptionsPlan {
