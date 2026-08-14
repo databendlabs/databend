@@ -101,9 +101,7 @@ impl Operator for CacheScan {
     }
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Serial,
-        })
+        Ok(PhysicalProperty::new(Distribution::Serial))
     }
 
     fn compute_required_prop_child(

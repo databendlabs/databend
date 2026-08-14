@@ -193,6 +193,378 @@ Exchange
                         ├── push downs: [filters: [], limit: NONE]
                         └── estimated rows: 3.00
 
+statement ok
+drop table if exists t_limit_in_subquery all;
+
+statement ok
+create table t_limit_in_subquery(a int not null) row_per_block = 5 block_per_segment = 1;
+
+statement ok
+insert into t_limit_in_subquery select number from numbers(30);
+
+# A global LIMIT on the IN build side must be gathered once and then
+# broadcast back to the distributed semi join. The probe scan must not be
+# gathered below the join.
+query T nosort
+explain
+select t.a
+from t_limit_in_subquery t
+where a in (
+    select a
+    from t_limit_in_subquery
+    limit 10
+)
+order by a;
+----
+Sort(Final)
+├── output columns: [t.a (#0)]
+├── sort keys: [a ASC NULLS LAST]
+├── estimated rows: <slt:ignore>
+└── Exchange
+    ├── output columns: [t.a (#0)]
+    ├── exchange type: Merge
+    └── Sort(Partial)
+        ├── output columns: [t.a (#0)]
+        ├── sort keys: [a ASC NULLS LAST]
+        ├── estimated rows: <slt:ignore>
+        └── HashJoin
+            ├── output columns: [t.a (#0)]
+            ├── join type: LEFT SEMI
+            ├── build keys: [subquery_1 (#1)]
+            ├── probe keys: [t.a (#0)]
+            ├── keys is null equal: [false]
+            ├── filters: []
+            ├── build join filters:
+            │   └── filter id:0, build key:subquery_1 (#1), probe targets:[t.a (#0)@scan0], filter type:bloom,inlist,min_max
+            ├── estimated rows: <slt:ignore>
+            ├── Exchange(Build)
+            │   ├── output columns: [t_limit_in_subquery.a (#1)]
+            │   ├── exchange type: Broadcast
+            │   └── Limit
+            │       ├── output columns: [t_limit_in_subquery.a (#1)]
+            │       ├── limit: 10
+            │       ├── offset: 0
+            │       ├── estimated rows: <slt:ignore>
+            │       └── Exchange
+            │           ├── output columns: [t_limit_in_subquery.a (#1)]
+            │           ├── exchange type: Merge
+            │           └── Limit
+            │               ├── output columns: [t_limit_in_subquery.a (#1)]
+            │               ├── limit: 10
+            │               ├── offset: 0
+            │               ├── estimated rows: <slt:ignore>
+            │               └── TableScan
+            │                   ├── table: default.d_subquery.t_limit_in_subquery
+            │                   ├── scan id: 1
+            │                   ├── output columns: [a (#1)]
+            │                   ├── read rows: <slt:ignore>
+            │                   ├── read size: <slt:ignore>
+            │                   ├── partitions total: <slt:ignore>
+            │                   ├── partitions scanned: <slt:ignore>
+            │                   ├── pruning stats: <slt:ignore>
+            │                   ├── push downs: [filters: [], limit: 10]
+            │                   └── estimated rows: <slt:ignore>
+            └── TableScan(Probe)
+                ├── table: default.d_subquery.t_limit_in_subquery
+                ├── scan id: 0
+                ├── output columns: [a (#0)]
+                ├── read rows: <slt:ignore>
+                ├── read size: <slt:ignore>
+                ├── partitions total: <slt:ignore>
+                ├── partitions scanned: <slt:ignore>
+                ├── pruning stats: <slt:ignore>
+                ├── push downs: [filters: [], limit: NONE]
+                ├── apply join filters: [#0]
+                └── estimated rows: <slt:ignore>
+
+# A preserved build side cannot be broadcast. The optimizer must keep this
+# physical RIGHT OUTER join Serial even though its pushed LIMIT is gathered by
+# a Merge exchange; otherwise it could duplicate unmatched rows.
+query T nosort
+explain
+select l.a, r.a
+from t_limit_in_subquery l
+left join t_limit_in_subquery r on l.a = r.a
+limit 3;
+----
+Limit
+├── output columns: [a (#2), l.a (#0)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: <slt:ignore>
+└── HashJoin
+    ├── output columns: [a (#2), l.a (#0)]
+    ├── join type: RIGHT OUTER
+    ├── build keys: [CAST(l.a (#0) AS Int32 NULL)]
+    ├── probe keys: [r.a (#2)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── estimated rows: <slt:ignore>
+    ├── Limit(Build)
+    │   ├── output columns: [l.a (#0)]
+    │   ├── limit: 3
+    │   ├── offset: 0
+    │   ├── estimated rows: <slt:ignore>
+    │   └── Exchange
+    │       ├── output columns: [l.a (#0)]
+    │       ├── exchange type: Merge
+    │       └── Limit
+    │           ├── output columns: [l.a (#0)]
+    │           ├── limit: 3
+    │           ├── offset: 0
+    │           ├── estimated rows: <slt:ignore>
+    │           └── TableScan
+    │               ├── table: default.d_subquery.t_limit_in_subquery
+    │               ├── scan id: 0
+    │               ├── output columns: [a (#0)]
+    │               ├── read rows: <slt:ignore>
+    │               ├── read size: <slt:ignore>
+    │               ├── partitions total: <slt:ignore>
+    │               ├── partitions scanned: <slt:ignore>
+    │               ├── pruning stats: <slt:ignore>
+    │               ├── push downs: [filters: [], limit: 3]
+    │               └── estimated rows: <slt:ignore>
+    └── Exchange(Probe)
+        ├── output columns: [a (#2)]
+        ├── exchange type: Merge
+        └── EvalScalar
+            ├── output columns: [a (#2)]
+            ├── expressions: [CAST(r.a (#1) AS Int32 NULL)]
+            ├── estimated rows: <slt:ignore>
+            └── TableScan
+                ├── table: default.d_subquery.t_limit_in_subquery
+                ├── scan id: 1
+                ├── output columns: [a (#1)]
+                ├── read rows: <slt:ignore>
+                ├── read size: <slt:ignore>
+                ├── partitions total: <slt:ignore>
+                ├── partitions scanned: <slt:ignore>
+                ├── pruning stats: <slt:ignore>
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: <slt:ignore>
+
+# Unlike a literal LIMIT 0, this build input becomes empty only while scanning.
+# Its plan must retain Merge -> final Limit -> Broadcast so the execution also
+# verifies that every remote-only receiver observes EOF from a zero-block producer.
+query T nosort
+explain
+select count(*)
+from t_limit_in_subquery o
+where a in (
+    select a
+    from t_limit_in_subquery
+    where a < a
+    limit 10
+);
+----
+AggregateFinal
+├── output columns: [COUNT(*) (#1)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: <slt:ignore>
+└── Exchange
+    ├── output columns: [COUNT(*) (#1)]
+    ├── exchange type: Merge
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: <slt:ignore>
+        └── HashJoin
+            ├── output columns: []
+            ├── join type: LEFT SEMI
+            ├── build keys: [subquery_2 (#2)]
+            ├── probe keys: [o.a (#0)]
+            ├── keys is null equal: [false]
+            ├── filters: []
+            ├── build join filters:
+            │   └── filter id:0, build key:subquery_2 (#2), probe targets:[o.a (#0)@scan0], filter type:bloom,inlist,min_max
+            ├── estimated rows: <slt:ignore>
+            ├── Exchange(Build)
+            │   ├── output columns: [t_limit_in_subquery.a (#2)]
+            │   ├── exchange type: Broadcast
+            │   └── Limit
+            │       ├── output columns: [t_limit_in_subquery.a (#2)]
+            │       ├── limit: 10
+            │       ├── offset: 0
+            │       ├── estimated rows: <slt:ignore>
+            │       └── Exchange
+            │           ├── output columns: [t_limit_in_subquery.a (#2)]
+            │           ├── exchange type: Merge
+            │           └── Limit
+            │               ├── output columns: [t_limit_in_subquery.a (#2)]
+            │               ├── limit: 10
+            │               ├── offset: 0
+            │               ├── estimated rows: <slt:ignore>
+            │               └── TableScan
+            │                   ├── table: default.d_subquery.t_limit_in_subquery
+            │                   ├── scan id: 1
+            │                   ├── output columns: [a (#2)]
+            │                   ├── read rows: <slt:ignore>
+            │                   ├── read size: <slt:ignore>
+            │                   ├── partitions total: <slt:ignore>
+            │                   ├── partitions scanned: <slt:ignore>
+            │                   ├── pruning stats: <slt:ignore>
+            │                   ├── push downs: [filters: [t_limit_in_subquery.a (#2) < t_limit_in_subquery.a (#2)], limit: 10]
+            │                   └── estimated rows: <slt:ignore>
+            └── TableScan(Probe)
+                ├── table: default.d_subquery.t_limit_in_subquery
+                ├── scan id: 0
+                ├── output columns: [a (#0)]
+                ├── read rows: <slt:ignore>
+                ├── read size: <slt:ignore>
+                ├── partitions total: <slt:ignore>
+                ├── partitions scanned: <slt:ignore>
+                ├── pruning stats: <slt:ignore>
+                ├── push downs: [filters: [], limit: NONE]
+                ├── apply join filters: [#0]
+                └── estimated rows: <slt:ignore>
+
+# Serial-to-Hash redistribution is intentionally still unsupported. Forcing a
+# shuffle join must retain the safe all-Serial fallback instead of constructing
+# a remote-only Hash exchange that the executor cannot consume.
+query T nosort
+settings(enforce_shuffle_join = 1) explain
+select t.a
+from t_limit_in_subquery t
+where a in (
+    select a
+    from t_limit_in_subquery
+    limit 10
+)
+order by a;
+----
+Sort(Single)
+├── output columns: [t.a (#0)]
+├── sort keys: [a ASC NULLS LAST]
+├── estimated rows: <slt:ignore>
+└── HashJoin
+    ├── output columns: [t.a (#0)]
+    ├── join type: LEFT SEMI
+    ├── build keys: [subquery_1 (#1)]
+    ├── probe keys: [t.a (#0)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:subquery_1 (#1), probe targets:[t.a (#0)@scan0], filter type:bloom,inlist,min_max
+    ├── estimated rows: <slt:ignore>
+    ├── Limit(Build)
+    │   ├── output columns: [t_limit_in_subquery.a (#1)]
+    │   ├── limit: 10
+    │   ├── offset: 0
+    │   ├── estimated rows: <slt:ignore>
+    │   └── Exchange
+    │       ├── output columns: [t_limit_in_subquery.a (#1)]
+    │       ├── exchange type: Merge
+    │       └── Limit
+    │           ├── output columns: [t_limit_in_subquery.a (#1)]
+    │           ├── limit: 10
+    │           ├── offset: 0
+    │           ├── estimated rows: <slt:ignore>
+    │           └── TableScan
+    │               ├── table: default.d_subquery.t_limit_in_subquery
+    │               ├── scan id: 1
+    │               ├── output columns: [a (#1)]
+    │               ├── read rows: <slt:ignore>
+    │               ├── read size: <slt:ignore>
+    │               ├── partitions total: <slt:ignore>
+    │               ├── partitions scanned: <slt:ignore>
+    │               ├── pruning stats: <slt:ignore>
+    │               ├── push downs: [filters: [], limit: 10]
+    │               └── estimated rows: <slt:ignore>
+    └── Exchange(Probe)
+        ├── output columns: [t.a (#0)]
+        ├── exchange type: Merge
+        └── TableScan
+            ├── table: default.d_subquery.t_limit_in_subquery
+            ├── scan id: 0
+            ├── output columns: [a (#0)]
+            ├── read rows: <slt:ignore>
+            ├── read size: <slt:ignore>
+            ├── partitions total: <slt:ignore>
+            ├── partitions scanned: <slt:ignore>
+            ├── pruning stats: <slt:ignore>
+            ├── push downs: [filters: [], limit: NONE]
+            ├── apply join filters: [#0]
+            └── estimated rows: <slt:ignore>
+
+statement ok
+set max_execute_time_in_seconds = 10;
+
+# LIMIT without ORDER BY does not define which ten keys are selected. Count
+# unique outer keys instead of asserting a particular unordered result set.
+query I
+select count(*)
+from t_limit_in_subquery t
+where a in (
+    select a
+    from t_limit_in_subquery
+    limit 10
+);
+----
+10
+
+query I
+settings(enforce_shuffle_join = 1) select count(*)
+from t_limit_in_subquery t
+where a in (
+    select a
+    from t_limit_in_subquery
+    limit 10
+);
+----
+10
+
+query I
+select count(*)
+from (
+    select l.a, r.a
+    from t_limit_in_subquery l
+    left join t_limit_in_subquery r on l.a = r.a
+    limit 3
+);
+----
+3
+
+query I
+select count(*)
+from t_limit_in_subquery t
+where a in (
+    select a
+    from t_limit_in_subquery
+    limit 7 offset 5
+);
+----
+7
+
+query I
+select count(*)
+from t_limit_in_subquery o
+where a in (
+    select a
+    from t_limit_in_subquery
+    where a < a
+    limit 10
+);
+----
+0
+
+query I
+select count(*)
+from t_limit_in_subquery t
+where a in (
+    select a
+    from t_limit_in_subquery
+    limit 0
+);
+----
+0
+
+statement ok
+unset max_execute_time_in_seconds;
+
+statement ok
+drop table if exists t_limit_in_subquery all;
+
 
 statement ok
 drop database d_subquery

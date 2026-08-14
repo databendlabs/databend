@@ -92,7 +92,7 @@ Fragment 0:
   DataExchange: Merge
     ExchangeSink
     ├── output columns: []
-    ├── destination fragment: [2]
+    ├── destination fragment: [1]
     └── CommitMeta
         └── WriteData
             └── EvalScalar
@@ -118,7 +118,7 @@ Fragment 0:
                             └── estimated rows: 100.00
 (empty)
 (empty)
-Fragment 2:
+Fragment 1:
     Commit
     └── ExchangeSource
         ├── output columns: []

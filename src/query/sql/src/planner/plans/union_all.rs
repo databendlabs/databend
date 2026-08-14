@@ -266,14 +266,12 @@ impl Operator for UnionAll {
         if left_physical_prop.distribution == Distribution::Serial
             || right_physical_prop.distribution == Distribution::Serial
         {
-            return Ok(PhysicalProperty {
-                distribution: Distribution::Serial,
-            });
+            // Keep newly synthesized multi-input Serial plans out of the
+            // Serial-to-distributed path until mixed topologies are supported.
+            return Ok(PhysicalProperty::new(Distribution::Serial));
         }
 
-        Ok(PhysicalProperty {
-            distribution: Distribution::Random,
-        })
+        Ok(PhysicalProperty::new(Distribution::Random))
     }
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {

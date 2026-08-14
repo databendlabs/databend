@@ -1,0 +1,27 @@
+name: "02_in_subquery_limit_broadcast"
+description: "Broadcast a globally limited IN-subquery while keeping the probe side distributed"
+
+sql: |
+  SELECT *
+  FROM integers AS t1
+  WHERE t1.i IN (SELECT t2.i FROM integers AS t2 LIMIT 10);
+
+auto_statistics: false
+node_num: 2
+
+tables:
+  integers: basic/02_integers.sql
+
+table_statistics:
+  integers:
+    num_rows: 5000
+    data_size: 40000
+    number_of_blocks: 1
+    number_of_segments: 1
+
+column_statistics:
+  integers.i:
+    min: 0
+    max: 4999
+    ndv: 5000
+    null_count: 0

@@ -97,9 +97,9 @@ impl Operator for Sort {
             .iter()
             .map(|s| s.scalar.clone())
             .collect();
-        Ok(PhysicalProperty {
-            distribution: Distribution::GlobalHash(partition_by),
-        })
+        Ok(PhysicalProperty::new(Distribution::GlobalHash(
+            partition_by,
+        )))
     }
 
     fn compute_required_prop_child(

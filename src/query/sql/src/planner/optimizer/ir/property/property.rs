@@ -88,8 +88,39 @@ pub struct RelationalProperty {
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
+enum SerialProvenance {
+    #[default]
+    NotGathered,
+    Gathered,
+}
+
+#[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PhysicalProperty {
     pub distribution: Distribution,
+    serial_provenance: SerialProvenance,
+}
+
+impl PhysicalProperty {
+    pub fn new(distribution: Distribution) -> Self {
+        Self {
+            distribution,
+            serial_provenance: SerialProvenance::NotGathered,
+        }
+    }
+
+    /// Construct a Serial result anchored by a Merge exchange. Only such a
+    /// result can safely become the source of a Broadcast exchange.
+    pub fn gathered_serial() -> Self {
+        Self {
+            distribution: Distribution::Serial,
+            serial_provenance: SerialProvenance::Gathered,
+        }
+    }
+
+    pub fn is_gathered_serial(&self) -> bool {
+        self.distribution == Distribution::Serial
+            && self.serial_provenance == SerialProvenance::Gathered
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

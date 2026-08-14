@@ -78,6 +78,12 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
         default_node_num: 2,
     },
     LiteReplayCaseSpec {
+        name: "02_in_subquery_limit_broadcast",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 2,
+    },
+    LiteReplayCaseSpec {
         name: "01_multi_join_avg_case_expression",
         warehouse_distribution: true,
         optimizer_skip_list: &[],

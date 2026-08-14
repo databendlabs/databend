@@ -14,6 +14,7 @@
 
 use std::any::Any;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::core::PlanScope;
@@ -24,6 +25,8 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::servers::flight::v1::exchange::DataExchange;
+use crate::servers::flight::v1::exchange::via_broadcast_exchange_source;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
@@ -34,6 +37,7 @@ pub struct ExchangeSource {
 
     // Fragment ID of source fragment
     pub source_fragment_id: usize,
+    pub source_exchange: Option<DataExchange>,
     pub query_id: String,
 }
 
@@ -73,30 +77,49 @@ impl IPhysicalPlan for ExchangeSource {
             meta: self.meta.clone(),
             schema: self.schema.clone(),
             source_fragment_id: self.source_fragment_id,
+            source_exchange: self.source_exchange.clone(),
             query_id: self.query_id.clone(),
         })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let exchange_manager = builder.ctx.get_exchange_manager();
-        let build_res = exchange_manager.get_fragment_source(
+        if let Some(build_res) = exchange_manager.get_fragment_source(
             &self.query_id,
             self.source_fragment_id,
             builder.exchange_injector.clone(),
-        )?;
+        )? {
+            let plan_scope = PlanScope::get_plan_scope();
+            let build_pipeline = build_res.main_pipeline.finalize(plan_scope);
 
-        let plan_scope = PlanScope::get_plan_scope();
-        let build_pipeline = build_res.main_pipeline.finalize(plan_scope);
+            // add sharing data
+            builder.join_state = build_res.builder_data.input_join_state;
+            builder.merge_into_probe_data_fields = build_res.builder_data.input_probe_schema;
 
-        // add sharing data
-        builder.join_state = build_res.builder_data.input_join_state;
-        builder.merge_into_probe_data_fields = build_res.builder_data.input_probe_schema;
+            // Merge pipeline
+            assert_eq!(builder.main_pipeline.output_len(), 0);
+            let sinks = builder.main_pipeline.merge(build_pipeline)?;
+            builder.main_pipeline.extend_sinks(sinks);
+            builder.pipelines.extend(build_res.sources_pipelines);
+            return Ok(());
+        }
 
-        // Merge pipeline
-        assert_eq!(builder.main_pipeline.output_len(), 0);
-        let sinks = builder.main_pipeline.merge(build_pipeline)?;
-        builder.main_pipeline.extend_sinks(sinks);
-        builder.pipelines.extend(build_res.sources_pipelines);
-        Ok(())
+        match self.source_exchange.as_ref() {
+            Some(DataExchange::Broadcast(exchange)) => via_broadcast_exchange_source(
+                &builder.ctx,
+                &self.query_id,
+                &self.schema,
+                exchange,
+                &mut builder.main_pipeline,
+            ),
+            Some(exchange) => Err(ErrorCode::Unimplemented(format!(
+                "Remote-only exchange source does not support {:?} for fragment {}",
+                exchange, self.source_fragment_id
+            ))),
+            None => Err(ErrorCode::Internal(format!(
+                "ExchangeSource {} is missing source exchange metadata",
+                self.source_fragment_id
+            ))),
+        }
     }
 }

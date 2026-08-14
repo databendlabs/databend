@@ -14,11 +14,13 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_catalog::cluster_info::Cluster;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_meta_client::types::NodeInfo;
@@ -105,25 +107,78 @@ impl Fragmenter {
             fragment_type = FragmentType::Intermediate;
         }
 
-        fragments.insert(self.ctx.fragment_id().next_fragment_id(), PlanFragment {
+        let root_fragment_id = self.ctx.fragment_id().next_fragment_id();
+        fragments.insert(root_fragment_id, PlanFragment {
             plan: root,
             fragment_type,
-            fragment_id: self.ctx.fragment_id().next_fragment_id(),
+            fragment_id: root_fragment_id,
             exchange: None,
             query_id: self.query_id.clone(),
             source_fragments: self.fragments,
         });
 
         let edges = Self::collect_fragments_edge(fragments.values());
+        let mut target_sources = BTreeMap::<usize, Vec<usize>>::new();
 
         for (source, target) in edges {
-            let Some(fragment) = fragments.get_mut(&source) else {
-                continue;
-            };
+            let fragment = fragments.get_mut(&source).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Fragment edge references missing source fragment {}",
+                    source
+                ))
+            })?;
+            let exchange_sink = ExchangeSink::from_mut_physical_plan(&mut fragment.plan)
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Source fragment {} does not contain an ExchangeSink",
+                        source
+                    ))
+                })?;
+            exchange_sink.destination_fragment_id = target;
 
-            if let Some(exchange_sink) = ExchangeSink::from_mut_physical_plan(&mut fragment.plan) {
-                exchange_sink.destination_fragment_id = target;
-            }
+            target_sources.entry(target).or_default().push(source);
+        }
+
+        // Clone dependencies only after their sink destinations have been
+        // connected, so source_fragments contains a self-consistent topology.
+        let source_ids = target_sources
+            .values()
+            .flatten()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let mut source_lookup = BTreeMap::new();
+        for source_id in source_ids {
+            let mut source_fragment = fragments.get(&source_id).cloned().ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Fragment dependency {} is missing from the fragment map",
+                    source_id
+                ))
+            })?;
+            source_fragment.source_fragments.clear();
+            source_lookup.insert(source_id, source_fragment);
+        }
+
+        for (target, mut sources) in target_sources {
+            let fragment = fragments.get_mut(&target).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Fragment edge references missing target fragment {}",
+                    target
+                ))
+            })?;
+
+            sources.sort_unstable();
+            let source_fragments = sources
+                .into_iter()
+                .map(|source| {
+                    source_lookup.remove(&source).ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Fragment dependency {} is missing from the source lookup",
+                            source
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            fragment.source_fragments = source_fragments;
         }
 
         Ok(fragments.into_values().collect::<Vec<_>>())
@@ -315,7 +370,7 @@ impl DeriveHandle for FragmentDeriveHandle {
 
             let source_fragment = PlanFragment {
                 plan,
-                exchange,
+                exchange: exchange.clone(),
                 fragment_type,
                 source_fragments: vec![],
                 fragment_id: source_fragment_id,
@@ -329,6 +384,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 query_id: self.query_id.clone(),
 
                 source_fragment_id,
+                source_exchange: exchange,
                 meta: PhysicalPlanMeta::with_plan_id("ExchangeSource", plan_id),
             }));
         }
@@ -406,6 +462,184 @@ impl PhysicalPlanVisitor for FragmentTypeVisitor {
         if MutationSource::check_physical_plan(v) {
             self.fragment_type = FragmentType::MutationSource;
         }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::Result;
+    use databend_common_expression::DataSchemaRef;
+    use databend_common_sql::executor::physical_plans::FragmentKind;
+
+    use super::Fragmenter;
+    use crate::physical_plans::ConstantTableScan;
+    use crate::physical_plans::Exchange;
+    use crate::physical_plans::ExchangeSink;
+    use crate::physical_plans::ExchangeSource;
+    use crate::physical_plans::PhysicalPlan;
+    use crate::physical_plans::PhysicalPlanCast;
+    use crate::physical_plans::PhysicalPlanMeta;
+    use crate::schedulers::QueryFragmentsActions;
+    use crate::servers::flight::v1::exchange::DataExchange;
+    use crate::test_kits::ClusterDescriptor;
+    use crate::test_kits::TestFixture;
+
+    const MERGE_PLAN_ID: u32 = 11;
+    const BROADCAST_PLAN_ID: u32 = 22;
+
+    fn exchange(input: PhysicalPlan, kind: FragmentKind, plan_id: u32) -> PhysicalPlan {
+        PhysicalPlan::new(Exchange {
+            meta: PhysicalPlanMeta::with_plan_id("Exchange", plan_id),
+            input,
+            kind,
+            keys: vec![],
+            ignore_exchange: false,
+            allow_adjust_parallelism: true,
+        })
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_remote_only_broadcast_fragment_topology() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture
+            .new_query_ctx_with_cluster(
+                ClusterDescriptor::new()
+                    .with_node_info("node-a", "127.0.0.1:9090", "cluster", "warehouse")
+                    .with_node_info("node-b", "127.0.0.1:9091", "cluster", "warehouse")
+                    .with_node_info("node-c", "127.0.0.1:9092", "cluster", "warehouse")
+                    .with_local_id("node-a"),
+            )
+            .await?;
+
+        // Model the exchange boundary introduced by an IN-subquery global LIMIT:
+        // distributed input -> Merge -> Broadcast -> distributed consumer.
+        let input = PhysicalPlan::new(ConstantTableScan {
+            meta: PhysicalPlanMeta::with_plan_id("ConstantTableScan", 33),
+            values: vec![],
+            num_rows: 1,
+            output_schema: DataSchemaRef::default(),
+        });
+        let plan = exchange(
+            exchange(input, FragmentKind::Merge, MERGE_PLAN_ID),
+            FragmentKind::Expansive,
+            BROADCAST_PLAN_ID,
+        );
+
+        let fragments = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
+        assert_eq!(fragments.len(), 3);
+        let mut fragment_ids = fragments
+            .iter()
+            .map(|fragment| fragment.fragment_id)
+            .collect::<Vec<_>>();
+        fragment_ids.sort_unstable();
+        assert!(fragment_ids.windows(2).all(|ids| ids[1] == ids[0] + 1));
+
+        let merge_fragment = fragments
+            .iter()
+            .find(|fragment| matches!(fragment.exchange.as_ref(), Some(DataExchange::Merge(_))))
+            .expect("expected a merge source fragment");
+        let broadcast_fragment = fragments
+            .iter()
+            .find(|fragment| matches!(fragment.exchange.as_ref(), Some(DataExchange::Broadcast(_))))
+            .expect("expected a broadcast intermediate fragment");
+        let root_fragment = fragments
+            .iter()
+            .find(|fragment| fragment.exchange.is_none())
+            .expect("expected a root fragment");
+
+        // The fragment that directly consumes a Merge is coordinator-only. This
+        // is what makes the global LIMIT run once before its rows are broadcast.
+        assert_eq!(broadcast_fragment.source_fragments.len(), 1);
+        assert_eq!(
+            broadcast_fragment.source_fragments[0].fragment_id,
+            merge_fragment.fragment_id
+        );
+        assert!(
+            broadcast_fragment.source_fragments[0]
+                .source_fragments
+                .is_empty()
+        );
+        let dependency_sink =
+            ExchangeSink::from_physical_plan(&broadcast_fragment.source_fragments[0].plan)
+                .expect("dependency clone must retain its ExchangeSink");
+        assert_eq!(
+            dependency_sink.destination_fragment_id,
+            broadcast_fragment.fragment_id
+        );
+        let mut intermediate_actions = QueryFragmentsActions::create(ctx.clone());
+        broadcast_fragment.get_actions(ctx.clone(), &mut intermediate_actions)?;
+        let scheduled = intermediate_actions
+            .fragments_actions
+            .iter()
+            .find(|actions| actions.fragment_id == broadcast_fragment.fragment_id)
+            .expect("expected actions for the broadcast fragment");
+        assert_eq!(scheduled.fragment_actions.len(), 1);
+        assert_eq!(scheduled.fragment_actions[0].executor, "node-a");
+
+        let DataExchange::Broadcast(broadcast_exchange) = broadcast_fragment
+            .exchange
+            .as_ref()
+            .expect("broadcast fragment must carry exchange metadata")
+        else {
+            unreachable!()
+        };
+        let mut destinations = broadcast_exchange.destination_ids.clone();
+        destinations.sort();
+        assert_eq!(destinations, vec![
+            "node-a".to_string(),
+            "node-b".to_string(),
+            "node-c".to_string()
+        ]);
+
+        // Fragment edges, ExchangeSource metadata, and physical plan IDs must
+        // describe the same topology on every executor.
+        let merge_sink = ExchangeSink::from_physical_plan(&merge_fragment.plan)
+            .expect("merge fragment must end in ExchangeSink");
+        assert_eq!(
+            merge_sink.destination_fragment_id,
+            broadcast_fragment.fragment_id
+        );
+        assert_eq!(merge_sink.meta.plan_id, MERGE_PLAN_ID);
+
+        let broadcast_sink = ExchangeSink::from_physical_plan(&broadcast_fragment.plan)
+            .expect("broadcast fragment must end in ExchangeSink");
+        assert_eq!(
+            broadcast_sink.destination_fragment_id,
+            root_fragment.fragment_id
+        );
+        assert_eq!(broadcast_sink.meta.plan_id, BROADCAST_PLAN_ID);
+        let merge_source = ExchangeSource::from_physical_plan(&broadcast_sink.input)
+            .expect("broadcast fragment must consume the merge source");
+        assert_eq!(merge_source.source_fragment_id, merge_fragment.fragment_id);
+        assert_eq!(merge_source.meta.plan_id, MERGE_PLAN_ID);
+        assert_eq!(merge_source.query_id, merge_fragment.query_id);
+        assert!(matches!(
+            merge_source.source_exchange.as_ref(),
+            Some(DataExchange::Merge(_))
+        ));
+
+        let broadcast_source = ExchangeSource::from_physical_plan(&root_fragment.plan)
+            .expect("root fragment must consume the broadcast source");
+        assert_eq!(
+            broadcast_source.source_fragment_id,
+            broadcast_fragment.fragment_id
+        );
+        assert_eq!(broadcast_source.meta.plan_id, BROADCAST_PLAN_ID);
+        assert_eq!(broadcast_source.query_id, broadcast_fragment.query_id);
+        assert!(matches!(
+            broadcast_source.source_exchange.as_ref(),
+            Some(DataExchange::Broadcast(_))
+        ));
+
+        let mut all_actions = QueryFragmentsActions::create(ctx.clone());
+        for fragment in &fragments {
+            fragment.get_actions(ctx.clone(), &mut all_actions)?;
+        }
+        assert_eq!(all_actions.get_root_fragment_ids()?, vec![
+            root_fragment.fragment_id
+        ]);
 
         Ok(())
     }

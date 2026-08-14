@@ -49,6 +49,7 @@ pub use exchange_manager::DataExchangeManager;
 pub use exchange_params::MergeExchangeParams;
 pub use exchange_params::ShuffleExchangeParams;
 pub use exchange_sorting::ExchangeSorting;
+pub use exchange_source::via_broadcast_exchange_source;
 pub use exchange_transform_scatter::ScatterTransform;
 pub use exchange_transform_shuffle::ExchangeShuffleMeta;
 pub use exchange_transform_shuffle::ExchangeShuffleTransform;

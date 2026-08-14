@@ -751,8 +751,8 @@ impl DataExchangeManager {
         }
     }
 
-    /// Return the inbound channels for a ping-pong exchange, creating them when
-    /// the exchange has only local edges and therefore no do_exchange request.
+    /// Return the inbound channels for an exchange, creating them when they
+    /// have not been initialized by a do_exchange request, such as for local edges.
     pub fn get_or_create_exchange_channel_set(
         &self,
         query_id: &str,
@@ -994,7 +994,7 @@ impl DataExchangeManager {
         query_id: &str,
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
-    ) -> Result<PipelineBuildResult> {
+    ) -> Result<Option<PipelineBuildResult>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -1008,7 +1008,7 @@ impl DataExchangeManager {
                     .query_ctx
                     .clone();
 
-                query_coordinator.subscribe_fragment(&query_ctx, fragment_id, injector)
+                query_coordinator.try_subscribe_fragment(&query_ctx, fragment_id, injector)
             }
         }
     }
@@ -1211,6 +1211,16 @@ impl QueryCoordinator {
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
+        self.try_subscribe_fragment(ctx, fragment_id, injector)?
+            .ok_or_else(|| ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
+    }
+
+    pub fn try_subscribe_fragment(
+        &mut self,
+        ctx: &Arc<QueryContext>,
+        fragment_id: usize,
+        injector: Arc<dyn ExchangeInjector>,
+    ) -> Result<Option<PipelineBuildResult>> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
             let info = self.info.as_ref().expect("QueryInfo is none");
@@ -1225,7 +1235,7 @@ impl QueryCoordinator {
             if fragment_coordinator.data_exchange.is_none() {
                 // When the root fragment and the data has been send to the coordination node,
                 // we do not need to wait for the data of other nodes.
-                return Ok(fragment_coordinator.pipeline_build_res.unwrap());
+                return Ok(Some(fragment_coordinator.pipeline_build_res.unwrap()));
             }
 
             let exchange_params = fragment_coordinator
@@ -1251,9 +1261,9 @@ impl QueryCoordinator {
                 injector,
             )?;
 
-            return Ok(build_res);
+            return Ok(Some(build_res));
         }
-        Err(ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
+        Ok(None)
     }
 
     pub fn shutdown_query(&mut self, cause: Option<ErrorCode>) {
@@ -1451,6 +1461,7 @@ impl FragmentCoordinator {
                     executor_id: info.current_executor.to_string(),
                     schema: self.physical_plan.output_schema()?,
                     exchange_id: exchange.id.clone(),
+                    destination_ids: exchange.destination_ids.to_owned(),
                     destination_channels: exchange.destination_channels.to_owned(),
                 },
             ))),
@@ -1507,6 +1518,30 @@ impl FragmentCoordinator {
             self.pipeline_build_res = Some(res);
         }
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_exception::Result;
+
+    use super::QueryCoordinator;
+
+    #[test]
+    fn test_inbound_channel_set_rejects_parallelism_mismatch() -> Result<()> {
+        let mut coordinator = QueryCoordinator::create();
+        let first = coordinator.get_or_create_inbound_channel_set("broadcast", 2)?;
+        let reused = coordinator.get_or_create_inbound_channel_set("broadcast", 2)?;
+        assert!(Arc::ptr_eq(&first, &reused));
+
+        let error = match coordinator.get_or_create_inbound_channel_set("broadcast", 1) {
+            Ok(_) => panic!("changing exchange parallelism must fail"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("has 2 channels, expected 1"));
         Ok(())
     }
 }

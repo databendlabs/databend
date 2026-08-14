@@ -1,0 +1,24 @@
+EvalScalar
+├── scalars: [integers.i (#0) AS (#0)]
+└── Filter
+    ├── filters: [SUBQUERY AS (#1)]
+    ├── subquerys
+    │   └── Subquery (Any)
+    │       ├── compare_op: Equal
+    │       ├── output_column: integers.i (#1)
+    │       └── Limit
+    │           ├── limit: [10]
+    │           ├── offset: [0]
+    │           └── EvalScalar
+    │               ├── scalars: [integers.i (#1) AS (#1)]
+    │               └── Scan
+    │                   ├── table: default.integers (#1)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Scan
+        ├── table: default.integers (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+

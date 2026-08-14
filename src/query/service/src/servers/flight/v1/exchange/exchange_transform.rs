@@ -25,6 +25,7 @@ use super::broadcast_send_transform::BroadcastSendTransform;
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::GlobalExchangeParams;
+use super::exchange_params::validate_broadcast_destinations;
 use super::exchange_sink_writer::create_writer_item;
 use super::exchange_source::via_exchange_source;
 use super::exchange_source_reader::create_reader_item;
@@ -125,15 +126,14 @@ impl ExchangeTransform {
         pipeline: &mut Pipeline,
         params: &BroadcastExchangeParams,
     ) -> Result<()> {
-        let mut local_pos = 0;
-        let mut local_threads = 0;
-
-        for (idx, (dest, threads)) in params.destination_channels.iter().enumerate() {
-            if dest == &params.executor_id {
-                local_pos = idx;
-                local_threads = threads.len();
-            }
-        }
+        let local_destination = validate_broadcast_destinations(
+            &params.exchange_id,
+            &params.executor_id,
+            &params.destination_ids,
+            &params.destination_channels,
+        )?;
+        let local_pos = local_destination.index;
+        let local_threads = local_destination.num_threads;
 
         let compression = ctx.get_settings().get_query_flight_compression()?;
         let waker = pipeline.get_waker();
@@ -149,8 +149,6 @@ impl ExchangeTransform {
             exchange_id,
             local_threads,
         )?;
-
-        assert_eq!(channel_set.channels.len(), local_threads);
 
         let local_outbound = create_local_channels(&channel_set);
         let channels = build_broadcast_outbound_channels(params, local_outbound, compression)?;

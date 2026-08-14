@@ -103,9 +103,7 @@ impl Operator for MaterializedCTERef {
 
     /// Derive physical property
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Random,
-        })
+        Ok(PhysicalProperty::new(Distribution::Random))
     }
 
     /// Compute required property for child with index `child_index`
