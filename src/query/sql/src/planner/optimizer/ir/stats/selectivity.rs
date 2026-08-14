@@ -30,6 +30,8 @@ use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use jiff::Zoned;
+use jiff::tz::TimeZone;
 
 use super::constraint::ConstraintContext;
 use super::constraint::ValueConstraint;
@@ -109,6 +111,14 @@ impl SelectivityEstimator {
     }
 
     pub fn apply(&mut self, predicates: &[ScalarExpr]) -> Result<f64> {
+        // FunctionContext::default() initializes `now` to the Unix epoch. Folding relative-time
+        // predicates with that value can place the cutoff outside the column statistics range and
+        // distort the selectivity estimate. Use the current UTC instant for this estimation path;
+        // other context fields keep their existing defaults.
+        let func_ctx = FunctionContext {
+            now: Zoned::now().with_time_zone(TimeZone::UTC),
+            ..FunctionContext::default()
+        };
         if self.cardinality == StatCardinality::Exact(0) {
             self.clear_column_stats_for_empty_result();
             return Ok(0.0);
@@ -125,12 +135,8 @@ impl SelectivityEstimator {
         };
         let expr = scalar_expr.as_expr()?;
         let input_domains = self.build_input_domains(&expr)?;
-        let (expr, output_domain) = ConstantFolder::fold_with_domain(
-            &expr,
-            &input_domains,
-            &FunctionContext::default(),
-            &BUILTIN_FUNCTIONS,
-        );
+        let (expr, output_domain) =
+            ConstantFolder::fold_with_domain(&expr, &input_domains, &func_ctx, &BUILTIN_FUNCTIONS);
 
         // ConstantFolder owns expression/domain reasoning: boolean shortcuts and
         // contradictions visible from input column domains. It can still leave
