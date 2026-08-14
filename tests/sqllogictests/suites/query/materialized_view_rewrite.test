@@ -82,7 +82,7 @@ group by a, b
 2 20 7 7 7 1 7.0 1
 
 # Multiple values on the MV's extra group key require a roll-up aggregate.
-# MIN, MAX, SUM, and COUNT can be safely composed from finalized MV values.
+# MIN, MAX, SUM, and COUNT are rolled up directly from stored aggregate states.
 query T
 explain select
     a,
@@ -95,7 +95,7 @@ from source
 where c in ('xxxxxxx', 'other')
 group by a, b
 ----
-<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>
+<slt:ignore>aggregate functions: [min_merge(min_t), max_merge(max_t), sum_merge(sum_t), count_merge(count_t)]<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>
 
 query IIIIII rowsort
 select
@@ -155,8 +155,8 @@ insert into source values
     (1, 10, 'other', 200),
     (3, 30, 'xxxxxxx', 8)
 
-# Roll-up also works when the MV read is hybrid: persisted MV rows and source
-# change rows are combined before the second aggregate.
+# Roll-up also works when the MV read is hybrid: persisted MV states and source
+# change states are merged directly at the query grouping granularity.
 query T
 explain select
     a,
@@ -169,7 +169,7 @@ from source
 where c in ('xxxxxxx', 'other')
 group by a, b
 ----
-<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>table: default.test_materialized_view_rewrite.source<slt:ignore>
+<slt:ignore>aggregate functions: [min_merge(min_t), max_merge(max_t), sum_merge(sum_t), count_merge(count_t)]<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>table: default.test_materialized_view_rewrite.source<slt:ignore>
 
 query IIIIII rowsort
 select

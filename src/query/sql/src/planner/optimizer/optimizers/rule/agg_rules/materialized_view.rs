@@ -115,6 +115,20 @@ pub(crate) fn try_rewrite(
             continue;
         };
 
+        if matched.requires_aggregate_rollup {
+            let Some(query_aggregate) = &query_aggregate else {
+                continue;
+            };
+            if let Some(replacement) = try_build_state_rollup(candidate, &matched, query_aggregate)?
+            {
+                info!(
+                    "Use materialized view {} with aggregate-state rollup: {}",
+                    candidate.mv_table_id, candidate.logical_sql
+                );
+                return Ok(Some((replacement, candidate.mv_table_id)));
+            }
+        }
+
         let mut replacement = candidate.read_plan.clone();
         if !matched.predicates.is_empty() {
             replacement = SExpr::create_unary(
@@ -156,6 +170,126 @@ pub(crate) fn try_rewrite(
     }
 
     Ok(None)
+}
+
+fn try_build_state_rollup(
+    candidate: &MaterializedViewCandidate,
+    matched: &super::view_rewrite::ViewRewriteMatch,
+    query_aggregate: &Aggregate,
+) -> Result<Option<SExpr>> {
+    let Some(final_projection) = candidate.read_plan.plan().as_eval_scalar() else {
+        return Ok(None);
+    };
+    let state_merge_expr = candidate.read_plan.unary_child();
+    let Some(state_merge) = state_merge_expr.plan().as_aggregate() else {
+        return Ok(None);
+    };
+
+    let mut logical_to_merged = HashMap::with_capacity(final_projection.items.len());
+    for item in &final_projection.items {
+        let ScalarExpr::BoundColumnRef(column) = &item.scalar else {
+            return Ok(None);
+        };
+        logical_to_merged.insert(item.index, column.column.clone());
+    }
+
+    let mut query_to_logical = HashMap::with_capacity(matched.selection.len());
+    for item in &matched.selection {
+        let ScalarExpr::BoundColumnRef(column) = &item.scalar else {
+            return Ok(None);
+        };
+        query_to_logical.insert(item.index, column.column.index);
+    }
+
+    let mut group_projection = Vec::with_capacity(query_aggregate.group_items.len());
+    for query_item in &query_aggregate.group_items {
+        let Some(logical_index) = query_to_logical.get(&query_item.index) else {
+            return Ok(None);
+        };
+        let Some(merged_column) = logical_to_merged.get(logical_index) else {
+            return Ok(None);
+        };
+        let Some(merged_group_item) = state_merge
+            .group_items
+            .iter()
+            .find(|item| item.index == merged_column.index)
+        else {
+            return Ok(None);
+        };
+        group_projection.push(ScalarItem {
+            index: query_item.index,
+            scalar: merged_group_item.scalar.clone(),
+        });
+    }
+
+    let mut aggregate_functions = Vec::with_capacity(query_aggregate.aggregate_functions.len());
+    for query_item in &query_aggregate.aggregate_functions {
+        let ScalarExpr::AggregateFunction(query_function) = &query_item.scalar else {
+            return Ok(None);
+        };
+        let Some(logical_index) = query_to_logical.get(&query_item.index) else {
+            return Ok(None);
+        };
+        let Some(merged_column) = logical_to_merged.get(logical_index) else {
+            return Ok(None);
+        };
+        let Some(merged_item) = state_merge
+            .aggregate_functions
+            .iter()
+            .find(|item| item.index == merged_column.index)
+        else {
+            return Ok(None);
+        };
+        let ScalarExpr::AggregateFunction(merge_function) = &merged_item.scalar else {
+            return Ok(None);
+        };
+        if merge_function.return_type != query_function.return_type {
+            return Ok(None);
+        }
+        let mut merge_function = merge_function.clone();
+        merge_function.display_name = query_function.display_name.clone();
+        aggregate_functions.push(ScalarItem {
+            index: query_item.index,
+            scalar: ScalarExpr::AggregateFunction(merge_function),
+        });
+    }
+
+    let mut child = state_merge_expr.unary_child().clone();
+    if !matched.predicates.is_empty() {
+        let mut predicates = matched.predicates.clone();
+        for predicate in &mut predicates {
+            for (logical_index, merged_column) in &logical_to_merged {
+                predicate.replace_column_binding(*logical_index, merged_column)?;
+            }
+        }
+        child = SExpr::create_unary(Arc::new(Filter { predicates }.into()), Arc::new(child));
+    }
+    if !group_projection.is_empty() {
+        child = SExpr::create_unary(
+            Arc::new(
+                EvalScalar {
+                    items: group_projection,
+                }
+                .into(),
+            ),
+            Arc::new(child),
+        );
+    }
+
+    Ok(Some(SExpr::create_unary(
+        Arc::new(
+            Aggregate {
+                mode: AggregateMode::Initial,
+                group_items: query_aggregate.group_items.clone(),
+                aggregate_functions,
+                from_distinct: false,
+                rank_limit: None,
+                grouping_sets: None,
+            }
+            .into(),
+        ),
+        Arc::new(child),
+    )))
 }
 
 fn build_rollup_aggregate(
