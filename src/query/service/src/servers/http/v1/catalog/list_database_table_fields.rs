@@ -61,10 +61,6 @@ pub struct ListDatabaseTableFieldsQuery {
     pub resolve_view: bool,
 }
 
-fn requires_visibility_check(catalog_name: &str) -> bool {
-    catalog_name.eq_ignore_ascii_case(CATALOG_DEFAULT)
-}
-
 async fn resolve_catalog(
     ctx: &HttpQueryContext,
     catalog_name: &str,
@@ -117,16 +113,19 @@ async fn handle(
     query: ListDatabaseTableFieldsQuery,
 ) -> Result<ListDatabaseTableFieldsResponse> {
     let tenant = ctx.session.get_current_tenant();
-    let visibility_checker = ctx
-        .session
-        .get_visibility_checker(false, Object::All)
-        .await?;
-
     let catalog_name = query.catalog.as_deref().unwrap_or(CATALOG_DEFAULT);
-    let check_visibility = requires_visibility_check(catalog_name);
+    let visibility_checker = if catalog_name.eq_ignore_ascii_case(CATALOG_DEFAULT) {
+        Some(
+            ctx.session
+                .get_visibility_checker(false, Object::All)
+                .await?,
+        )
+    } else {
+        None
+    };
     let (catalog, query_ctx) = resolve_catalog(ctx, catalog_name).await?;
     let db = catalog.get_database(&tenant, &database).await?;
-    if check_visibility
+    if let Some(visibility_checker) = &visibility_checker
         && !visibility_checker.check_database_visibility(
             catalog.name().as_str(),
             db.name(),
@@ -140,7 +139,7 @@ async fn handle(
     }
 
     let tbl = db.get_table(&table).await?;
-    if check_visibility
+    if let Some(visibility_checker) = &visibility_checker
         && !visibility_checker.check_table_visibility(
             catalog.name().as_str(),
             db.name(),
@@ -185,16 +184,4 @@ pub async fn list_database_table_fields_handler(
             _ => InternalServerError(e),
         })?;
     Ok(Json(resp))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_external_catalog_skips_visibility_checks() {
-        assert!(requires_visibility_check(CATALOG_DEFAULT));
-        assert!(requires_visibility_check("DEFAULT"));
-        assert!(!requires_visibility_check("iceberg_catalog"));
-    }
 }

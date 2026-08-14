@@ -43,6 +43,24 @@ execute_query_silent "grant alter on system_history.* to role ra" "root:"
 execute_query_silent "grant role ra to a" "root:"
 execute_query_silent "grant write, read on stage log_1f93b76af0bd4b1d8e018667865fbc65 to a" "root:"
 
+external_catalog_user="external_catalog_fields_user"
+external_catalog_password="external_catalog_fields_password"
+execute_query_silent "drop user if exists ${external_catalog_user}" "root:"
+execute_query_silent "create user ${external_catalog_user} identified by '${external_catalog_password}'" "root:"
+
+check_external_catalog_fields_access() {
+    local response
+
+    response=$(curl -fsS \
+        -u "${external_catalog_user}:${external_catalog_password}" \
+        "http://localhost:8000/v1/catalog/databases/lineage_db/tables/src/fields?catalog=lineage_history_iceberg_catalog")
+    if ! echo "$response" | jq -e '.fields | length == 1 and .[0].name == "a"' >/dev/null; then
+        echo "External catalog fields API returned an unexpected response"
+        echo "$response"
+        exit 1
+    fi
+}
+
 check_system_history_permissions() {
     # Test 1: User 'a:123' attempts to create a table in 'system_history' (expected to fail)
     execute_and_verify \
@@ -116,7 +134,9 @@ check_system_history_permissions() {
 }
 
 check_system_history_permissions
+check_external_catalog_fields_access
 
 # Cleanup
 execute_query_silent "drop user if exists a" "root:"
 execute_query_silent "drop role if exists ra" "root:"
+execute_query_silent "drop user if exists ${external_catalog_user}" "root:"
