@@ -20,7 +20,6 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_fuse::FuseTable;
