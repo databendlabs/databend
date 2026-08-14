@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::AlterMaterializedViewStmt;
 use databend_common_ast::ast::AlterTableAction;
+use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::CreateMaterializedViewStmt;
 use databend_common_ast::ast::DropMaterializedViewStmt;
 use databend_common_ast::ast::Engine;
@@ -44,11 +45,14 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_enterprise_materialized_view::get_materialized_view_handler;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -295,6 +299,11 @@ impl Binder {
         Ok(())
     }
 
+    fn check_materialized_view_license(&self) -> Result<()> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)
+    }
+
     async fn resolve_materialized_view_target(
         &self,
         catalog: &Option<Identifier>,
@@ -436,6 +445,8 @@ impl Binder {
         &mut self,
         stmt: &CreateMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let CreateMaterializedViewStmt {
             create_option,
             catalog,
@@ -446,6 +457,14 @@ impl Binder {
             query,
         } = stmt;
 
+        if cluster_by
+            .as_ref()
+            .is_some_and(|cluster_by| cluster_by.cluster_type == AstClusterType::Hilbert)
+        {
+            return Err(ErrorCode::Unimplemented(
+                "Hilbert clustering is not supported for materialized views".to_string(),
+            ));
+        }
         if cluster_by.is_some() && columns.is_empty() {
             return Err(ErrorCode::SemanticError(
                 "Materialized view with CLUSTER BY must include a column list".to_string(),
@@ -543,8 +562,8 @@ impl Binder {
                 ]),
             });
         let source_catalog = self.ctx.get_catalog(&source_catalog_name).await?;
-        let expected_source_generation = source_catalog
-            .get_mv_current_source_generation(&tenant, source_table_id)
+        let expected_source_generation = get_materialized_view_handler()
+            .get_mv_current_source_generation(source_catalog.as_ref(), &tenant, source_table_id)
             .await?
             .unwrap_or(0);
 
@@ -715,6 +734,8 @@ impl Binder {
         &mut self,
         stmt: &AlterMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let AlterMaterializedViewStmt {
             catalog,
             database,
@@ -729,6 +750,11 @@ impl Binder {
 
         match action {
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
+                if cluster_by.cluster_type == AstClusterType::Hilbert {
+                    return Err(ErrorCode::Unimplemented(
+                        "Hilbert clustering is not supported for materialized views".to_string(),
+                    ));
+                }
                 let cluster_schema = Self::materialized_view_cluster_schema(&mv_table.schema());
                 let cluster_keys = self
                     .analyze_cluster_keys(cluster_by, cluster_schema, None, true)
@@ -748,6 +774,7 @@ impl Binder {
                         target: MaintenanceTarget::MaterializedView { table_id },
                         branch: None,
                         cluster_keys,
+                        cluster_type: cluster_by.cluster_type.to_string().parse()?,
                     },
                 )))
             }
@@ -792,6 +819,8 @@ impl Binder {
         &mut self,
         stmt: &DropMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let DropMaterializedViewStmt {
             if_exists,
             catalog,
@@ -817,6 +846,8 @@ impl Binder {
         &mut self,
         stmt: &RefreshMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let RefreshMaterializedViewStmt {
             catalog,
             database,
@@ -841,6 +872,8 @@ impl Binder {
         _bind_context: &mut BindContext,
         stmt: &ShowCreateMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let ShowCreateMaterializedViewStmt {
             catalog,
             database,
@@ -868,6 +901,8 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &ShowMaterializedViewsStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let ShowMaterializedViewsStmt {
             catalog,
             database,

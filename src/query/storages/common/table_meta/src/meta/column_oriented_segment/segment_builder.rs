@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
@@ -42,6 +40,7 @@ use super::schema::segment_schema;
 use super::segment::ColumnOrientedSegment;
 use crate::meta::AdditionalStatsMeta;
 use crate::meta::BlockMeta;
+use crate::meta::ClusterKeyInfo;
 use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
 use crate::meta::Location;
@@ -50,6 +49,7 @@ use crate::meta::PartitionStatistics;
 use crate::meta::Statistics;
 use crate::meta::VirtualBlockMeta;
 use crate::meta::format::encode;
+use crate::meta::reduce_cluster_statistics;
 use crate::meta::supported_stat_type;
 use crate::meta::validate_segment_partition_statistics;
 
@@ -60,7 +60,7 @@ pub trait SegmentBuilder: Send + Sync + 'static {
     fn build(
         &mut self,
         thresholds: BlockThresholds,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<&ClusterKeyInfo>,
         additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self::Segment>;
     fn new(table_schema: TableSchemaRef, block_per_segment: usize) -> Self;
@@ -164,15 +164,14 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
     fn build(
         &mut self,
         thresholds: BlockThresholds,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<&ClusterKeyInfo>,
         additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self::Segment> {
         let mut this = std::mem::replace(
             self,
             ColumnOrientedSegmentBuilder::new(self.table_schema.clone(), self.block_per_segment),
         );
-        let summary =
-            this.build_summary(thresholds, default_cluster_key_id, additional_stats_meta)?;
+        let summary = this.build_summary(thresholds, cluster_key_info, additional_stats_meta)?;
         let cluster_stats = this.cluster_stats;
         let mut cluster_stats_binary = Vec::with_capacity(cluster_stats.len());
         for stats in cluster_stats {
@@ -278,7 +277,7 @@ impl ColumnOrientedSegmentBuilder {
     pub fn build_summary(
         &mut self,
         thresholds: BlockThresholds,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<&ClusterKeyInfo>,
         additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Statistics> {
         let row_count = self.row_count.iter().sum();
@@ -355,7 +354,7 @@ impl ColumnOrientedSegmentBuilder {
         }
         self.column_stats = self_column_stats;
 
-        let cluster_stats = reduce_cluster_statistics(&self.cluster_stats, default_cluster_key_id);
+        let cluster_stats = reduce_cluster_statistics(&self.cluster_stats, cluster_key_info);
         let partition_stats =
             validate_segment_partition_statistics(self.partition_stats.iter().map(Option::as_ref))?;
 
@@ -380,61 +379,6 @@ impl ColumnOrientedSegmentBuilder {
             virtual_block_count: Some(virtual_block_count),
             additional_stats_meta,
         })
-    }
-}
-
-fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
-    blocks_cluster_stats: &[T],
-    default_cluster_key_id: Option<u32>,
-) -> Option<ClusterStatistics> {
-    if blocks_cluster_stats.is_empty() || default_cluster_key_id.is_none() {
-        return None;
-    }
-
-    let cluster_key_id = default_cluster_key_id.unwrap();
-    let len = blocks_cluster_stats.len();
-    let mut min_stats = Vec::with_capacity(len);
-    let mut max_stats = Vec::with_capacity(len);
-    let mut levels = Vec::with_capacity(len);
-
-    for cluster_stats in blocks_cluster_stats.iter() {
-        if let Some(stat) = cluster_stats.borrow() {
-            if stat.cluster_key_id != cluster_key_id {
-                return None;
-            }
-
-            min_stats.push(stat.min());
-            max_stats.push(stat.max());
-            levels.push(stat.level);
-        } else {
-            return None;
-        }
-    }
-
-    let min = min_stats
-        .into_iter()
-        .min_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
-        .unwrap();
-    let max = max_stats
-        .into_iter()
-        .max_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
-        .unwrap();
-    let level = levels.into_iter().max().unwrap_or(0);
-
-    Some(ClusterStatistics::new(
-        cluster_key_id,
-        min.clone(),
-        max.clone(),
-        level,
-    ))
-}
-
-fn cmp_with_null(v1: &Scalar, v2: &Scalar) -> Ordering {
-    match (v1.is_null(), v2.is_null()) {
-        (true, true) => Ordering::Equal,
-        (true, false) => Ordering::Greater,
-        (false, true) => Ordering::Less,
-        (false, false) => v1.cmp(v2),
     }
 }
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod edge_reader;
+mod neighbors;
 mod resolver;
 mod traversal;
 
@@ -49,6 +50,7 @@ use databend_common_pipeline::core::processor::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_meta_client::types::MetaId;
+pub use neighbors::GetLineageNeighborsTable;
 
 use crate::sessions::TableContext;
 

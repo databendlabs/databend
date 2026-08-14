@@ -31,6 +31,7 @@ mod fuse_vacuum_drop_aggregating_index;
 mod fuse_vacuum_drop_inverted_index;
 mod fuse_vacuum_temporary_table;
 mod fuse_virtual_column;
+mod fuse_virtual_column_build;
 mod set_cache_capacity;
 
 pub use clustering_information::ClusteringInformationFunc;
@@ -60,4 +61,5 @@ pub use fuse_vacuum_drop_inverted_index::FuseVacuumDropInvertedIndex;
 pub use fuse_vacuum_temporary_table::FuseVacuumTemporaryTable;
 pub use fuse_vacuum_temporary_table::vacuum_inactive_temp_tables;
 pub use fuse_virtual_column::FuseVirtualColumnFunc;
+pub use fuse_virtual_column_build::FuseVirtualColumnBuildFunc;
 pub use set_cache_capacity::SetCacheCapacity;
