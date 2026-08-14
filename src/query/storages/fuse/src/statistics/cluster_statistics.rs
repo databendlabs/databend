@@ -822,6 +822,7 @@ mod tests {
     use databend_common_expression::type_check::check;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::UInt32Type;
     use databend_common_expression::types::number::NumberScalar;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
 
@@ -1065,6 +1066,39 @@ mod tests {
         assert_eq!(stats.min(), &vec![int32_scalar(3), int32_scalar(7)]);
         assert_eq!(stats.max(), &vec![int32_scalar(3), int32_scalar(7)]);
         assert_eq!(stats.level, -1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_hilbert_append_removes_all_trailing_temporary_columns() -> Result<()> {
+        let generator = stats_generator_with_thresholds(
+            vec![
+                ClusterStatsKey {
+                    offset: 0,
+                    source_column_id: Some(10),
+                },
+                ClusterStatsKey {
+                    offset: 1,
+                    source_column_id: Some(20),
+                },
+            ],
+            1,
+            4,
+            ClusterStatsLayout::Hilbert,
+            BlockThresholds::new(2, 125 * 1024 * 1024, 16 * 1024 * 1024, 1000),
+        );
+        let block = DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![1, 3]),
+            Int32Type::from_data(vec![2, 4]),
+            UInt32Type::from_data(vec![0, u32::MAX]),
+        ]);
+
+        let state = generator.gen_stats_for_append(block)?;
+        assert_eq!(state.data_block.num_columns(), 2);
+        let stats = state.cluster_stats.unwrap();
+        assert_eq!(stats.min(), &vec![int32_scalar(1), int32_scalar(2)]);
+        assert_eq!(stats.max(), &vec![int32_scalar(3), int32_scalar(4)]);
+        assert_eq!(stats.level, 4);
         Ok(())
     }
 
