@@ -280,32 +280,92 @@ impl fmt::Display for ReclusterGroup {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CandidateScore {
     pub selected_total_bytes: usize,
+    pub selected_block_count: usize,
     pub max_depth: usize,
     pub average_depth: f64,
+    pub estimated_depth_gain: u64,
 }
 
 impl CandidateScore {
+    // A recluster task has a fixed scheduling cost even if it rewrites little
+    // data: it consumes one distributed task slot, builds one pipeline, and
+    // advances a whole candidate window. Model that fixed cost as 8 MiB so FINAL
+    // prefers candidates that remove enough overlap depth per occupied slot,
+    // instead of spending late rounds on many tiny low-gain cleanups.
+    const TASK_SLOT_COST_BYTES: usize = 8 * 1024 * 1024;
+    // Aggressive FINAL tail cutoff, expressed as adjusted bytes per removed
+    // overlap-depth point. 32 KiB means a large-table cleanup task should remove
+    // at least roughly one depth point per 32 KiB of input plus fixed slot cost.
+    // Tiny candidates are exempted below because the fixed 8 MiB cost would
+    // otherwise dominate ordinary small-table FINAL recluster behavior.
+    const MAX_TASK_COST_ADJUSTED_BYTES_PER_DEPTH_GAIN: f64 = 32.0 * 1024.0;
+
+    pub fn bytes_per_depth_gain(&self) -> f64 {
+        if self.estimated_depth_gain == 0 {
+            f64::INFINITY
+        } else {
+            self.selected_total_bytes as f64 / self.estimated_depth_gain as f64
+        }
+    }
+
+    pub fn task_cost_adjusted_bytes_per_depth_gain(&self) -> f64 {
+        if self.estimated_depth_gain == 0 {
+            return f64::INFINITY;
+        }
+
+        let fragmentation_ratio =
+            self.selected_block_count.max(1) as f64 / self.max_depth.max(1) as f64;
+        let task_cost = self
+            .selected_total_bytes
+            .saturating_add(Self::TASK_SLOT_COST_BYTES);
+        task_cost as f64 / self.estimated_depth_gain as f64 * fragmentation_ratio.sqrt()
+    }
+
+    pub fn passes_tail_efficiency_threshold(&self) -> bool {
+        // The tail threshold is meant to stop large-table FINAL recluster from
+        // spending distributed task slots on low-gain cleanup. Do not apply it
+        // to tiny candidates: for small tables the fixed slot cost dominates
+        // the score and would make FINAL skip the only valid rewrite.
+        if self.selected_total_bytes < Self::TASK_SLOT_COST_BYTES {
+            return true;
+        }
+
+        self.task_cost_adjusted_bytes_per_depth_gain()
+            <= Self::MAX_TASK_COST_ADJUSTED_BYTES_PER_DEPTH_GAIN
+    }
+
     /// Compare scores in descending priority order.
     pub fn cmp_desc(&self, other: &Self) -> cmp::Ordering {
-        self.max_depth
-            .cmp(&other.max_depth)
+        other
+            .task_cost_adjusted_bytes_per_depth_gain()
+            .partial_cmp(&self.task_cost_adjusted_bytes_per_depth_gain())
+            .unwrap_or(cmp::Ordering::Equal)
             .then_with(|| {
-                self.average_depth
-                    .partial_cmp(&other.average_depth)
+                other
+                    .bytes_per_depth_gain()
+                    .partial_cmp(&self.bytes_per_depth_gain())
                     .unwrap_or(cmp::Ordering::Equal)
             })
-            .then_with(|| self.selected_total_bytes.cmp(&other.selected_total_bytes))
+            .then_with(|| self.estimated_depth_gain.cmp(&other.estimated_depth_gain))
+            .then_with(|| other.selected_total_bytes.cmp(&self.selected_total_bytes))
     }
 }
 
 /// In-memory rewrite candidate produced from one probed window.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ReclusterTaskKind {
+    Recluster,
+    PhysicalCompaction,
+    RepackOnly,
+}
+
 #[derive(Clone)]
 pub(crate) struct ReclusterTaskCandidate {
     pub(crate) score: CandidateScore,
-    // Empty means a rebuild-only repack candidate.
     pub(crate) selected_blocks: Vec<(usize, Vec<usize>)>,
     pub(crate) output_level: i32,
     pub(crate) all_ordered: bool,
+    pub(crate) kind: ReclusterTaskKind,
 }
 
 impl ReclusterTaskCandidate {
@@ -318,7 +378,17 @@ impl ReclusterTaskCandidate {
 
     /// Whether this candidate only repacks unchanged blocks into fewer segments.
     pub(crate) fn is_repack_only(&self) -> bool {
-        self.selected_blocks.is_empty()
+        self.kind == ReclusterTaskKind::RepackOnly
+    }
+
+    pub(crate) fn is_physical_compaction(&self) -> bool {
+        self.kind == ReclusterTaskKind::PhysicalCompaction
+    }
+
+    pub(crate) fn passes_aggressive_tail_filter(&self) -> bool {
+        self.is_repack_only()
+            || self.is_physical_compaction()
+            || self.score.passes_tail_efficiency_threshold()
     }
 }
 
@@ -326,12 +396,16 @@ impl fmt::Display for ReclusterTaskCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "output_level={} max_depth={} avg_depth={} selected_count={} bytes={}",
+            "kind={:?} output_level={} max_depth={} avg_depth={} selected_count={} bytes={} estimated_depth_gain={} bytes_per_depth_gain={} task_cost_adjusted_bytes_per_depth_gain={}",
+            self.kind,
             self.output_level,
             self.score.max_depth,
             self.score.average_depth,
             self.selected_block_count(),
             self.score.selected_total_bytes,
+            self.score.estimated_depth_gain,
+            self.score.bytes_per_depth_gain(),
+            self.score.task_cost_adjusted_bytes_per_depth_gain(),
         )
     }
 }
@@ -374,6 +448,7 @@ pub(crate) fn task_candidate(
     score: CandidateScore,
     task_indices: &[usize],
     blocks: &[&ReclusterBlock],
+    kind: ReclusterTaskKind,
 ) -> ReclusterTaskCandidate {
     use std::collections::HashMap;
 
@@ -399,6 +474,7 @@ pub(crate) fn task_candidate(
         selected_blocks,
         output_level,
         all_ordered,
+        kind,
     }
 }
 
