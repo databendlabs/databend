@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseType;
@@ -23,6 +22,7 @@ use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -60,8 +60,7 @@ impl Interpreter for ModifyTableCommentInterpreter {
             .await
         {
             Ok(table) => {
-                // check mutability
-                table.check_mutable()?;
+                check_maintenance_target(table.as_ref(), &self.plan.target)?;
 
                 let table_info = table.get_table_info();
                 let engine = table.engine();
