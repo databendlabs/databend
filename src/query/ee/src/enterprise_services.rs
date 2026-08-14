@@ -21,6 +21,7 @@ use crate::attach_table::RealAttachTableHandler;
 use crate::data_mask::RealDatamaskHandler;
 use crate::fail_safe::RealFailSafeHandler;
 use crate::license::license_mgr::RealLicenseManager;
+use crate::materialized_view::RealMaterializedViewHandler;
 use crate::resource_management::init_resources_management;
 use crate::row_access_policy::row_access_policy_handler::RealRowAccessPolicyHandler;
 use crate::storage_encryption::RealStorageEncryptionHandler;
@@ -37,6 +38,7 @@ impl EnterpriseServices {
         RealVacuumHandler::init()?;
         RealDatamaskHandler::init()?;
         RealRowAccessPolicyHandler::init()?;
+        RealMaterializedViewHandler::init()?;
         RealStreamHandler::init()?;
         RealTableRefHandler::init()?;
         RealAttachTableHandler::init()?;
