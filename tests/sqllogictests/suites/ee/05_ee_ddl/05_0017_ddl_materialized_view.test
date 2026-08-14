@@ -336,6 +336,133 @@ SHOW CREATE MATERIALIZED VIEW test_mv
 ----
 test_mv CREATE MATERIALIZED VIEW `test_mv_ddl`.`test_mv` (`id`, `val`, `amount`) AS SELECT id, val, amount FROM test_mv_ddl.mv_base_t WHERE id <= 2
 
+# Dedicated MV SET OPTIONS updates Fuse layout options without opening TABLE syntax.
+statement ok
+ALTER MATERIALIZED VIEW test_mv SET OPTIONS (row_per_block = 2)
+
+query B
+SELECT table_option LIKE '%ROW_PER_BLOCK=''2''%'
+FROM system.tables
+WHERE database = 'test_mv_ddl' AND name = 'test_mv'
+----
+1
+
+statement ok
+ALTER MATERIALIZED VIEW test_mv UNSET OPTIONS (row_per_block)
+
+query B
+SELECT table_option LIKE '%ROW_PER_BLOCK=%'
+FROM system.tables
+WHERE database = 'test_mv_ddl' AND name = 'test_mv'
+----
+0
+
+# Physical layout: SET OPTIONS is only metadata until the next write. Refresh should honor
+# row_per_block when materializing storage. MV storage is not subject to ordinary compact-after-write.
+statement ok
+CREATE MATERIALIZED VIEW test_mv_opts AS SELECT id, val, amount FROM mv_base_t WHERE 1 = 1
+
+statement ok
+ALTER MATERIALIZED VIEW test_mv_opts SET OPTIONS (row_per_block = 2)
+
+query B
+SELECT table_option LIKE '%ROW_PER_BLOCK=''2''%'
+FROM system.tables
+WHERE database = 'test_mv_ddl' AND name = 'test_mv_opts'
+----
+1
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_opts
+
+# 4 source rows with row_per_block = 2 should land as two full blocks.
+query I
+SELECT row_count FROM fuse_block('test_mv_ddl', 'test_mv_opts') ORDER BY block_location
+----
+2
+2
+
+query I
+SELECT block_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_opts')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+2
+
+statement ok
+DROP MATERIALIZED VIEW test_mv_opts
+
+statement error 1301
+ALTER MATERIALIZED VIEW test_mv SET OPTIONS (foo = 1)
+
+statement error 1301
+ALTER MATERIALIZED VIEW test_mv SET OPTIONS (materialized_view_source_table_id = 1)
+
+statement error 1301
+ALTER MATERIALIZED VIEW test_mv SET OPTIONS (row_per_block = 1000001)
+
+statement error 1301
+ALTER MATERIALIZED VIEW test_mv SET OPTIONS (transient = 'T')
+
+query B
+SELECT table_option LIKE '%TRANSIENT%'
+FROM system.tables
+WHERE database = 'test_mv_ddl' AND name = 'test_mv'
+----
+0
+
+# CREATE TABLE and CREATE MATERIALIZED VIEW use the same compression validation. Rejected ALTERs
+# must leave both the source table and the existing MV readable.
+statement error 1075
+ALTER TABLE mv_base_t SET OPTIONS (compression = 'bogus')
+
+statement error 1075
+ALTER MATERIALIZED VIEW test_mv SET OPTIONS (compression = 'bogus')
+
+query I
+SELECT count(*) FROM test_mv
+----
+2
+
+statement error 1301
+ALTER MATERIALIZED VIEW test_mv UNSET OPTIONS (change_tracking)
+
+# COMMENT is a first-class MV clause, not a SET OPTIONS key.
+statement error 1301
+ALTER MATERIALIZED VIEW test_mv SET OPTIONS (comment = 'option comment')
+
+statement ok
+ALTER MATERIALIZED VIEW test_mv COMMENT = 'mv comment'
+
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv
+----
+test_mv CREATE MATERIALIZED VIEW `test_mv_ddl`.`test_mv` (`id`, `val`, `amount`) COMMENT = 'mv comment' AS SELECT id, val, amount FROM test_mv_ddl.mv_base_t WHERE id <= 2
+
+query T
+SELECT comment FROM system.tables WHERE database = 'test_mv_ddl' AND name = 'test_mv'
+----
+mv comment
+
+statement ok
+ALTER MATERIALIZED VIEW test_mv COMMENT = ''
+
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv
+----
+test_mv CREATE MATERIALIZED VIEW `test_mv_ddl`.`test_mv` (`id`, `val`, `amount`) AS SELECT id, val, amount FROM test_mv_ddl.mv_base_t WHERE id <= 2
+
+# TABLE syntax stays blocked on materialized views.
+statement error 3905
+ALTER TABLE test_mv SET OPTIONS (row_per_block = 2)
+
+statement error 3905
+ALTER TABLE test_mv UNSET OPTIONS (row_per_block)
+
+statement error 3905
+ALTER TABLE test_mv COMMENT = 'blocked'
+
 # The dedicated syntax rejects ordinary tables and unrelated ALTER actions.
 statement error 1302
 ALTER MATERIALIZED VIEW mv_base_t CLUSTER BY (id)
@@ -363,7 +490,19 @@ statement ok
 ALTER MATERIALIZED VIEW test_mv RECLUSTER LIMIT 1
 
 statement ok
+ALTER MATERIALIZED VIEW test_mv SET OPTIONS (row_per_block = 4)
+
+statement ok
+ALTER MATERIALIZED VIEW test_mv UNSET OPTIONS (row_per_block)
+
+statement ok
+ALTER MATERIALIZED VIEW test_mv COMMENT = 'role comment'
+
+statement ok
 SET ROLE account_admin
+
+statement ok
+ALTER MATERIALIZED VIEW test_mv COMMENT = ''
 
 statement ok
 DROP ROLE mv_maintenance_role
@@ -392,6 +531,104 @@ query TT
 SHOW CREATE MATERIALIZED VIEW test_mv2
 ----
 test_mv2 CREATE MATERIALIZED VIEW `test_mv_ddl`.`test_mv2` (`val`, `cnt`) CLUSTER BY (val) AS SELECT val, COUNT(*) AS cnt FROM test_mv_ddl.mv_base_t WHERE 1 = 1 GROUP BY val
+
+# CREATE MATERIALIZED VIEW COMMENT is stored independently of CLUSTER BY.
+statement ok
+CREATE MATERIALIZED VIEW test_mv_comment COMMENT = 'created comment' AS SELECT id FROM mv_base_t WHERE 1 = 1
+
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv_comment
+----
+test_mv_comment CREATE MATERIALIZED VIEW `test_mv_ddl`.`test_mv_comment` (`id`) COMMENT = 'created comment' AS SELECT id FROM test_mv_ddl.mv_base_t WHERE 1 = 1
+
+query T
+SELECT comment FROM system.tables WHERE database = 'test_mv_ddl' AND name = 'test_mv_comment'
+----
+created comment
+
+statement ok
+DROP MATERIALIZED VIEW test_mv_comment
+
+# Fuse table options can be specified when the MV is created. SHOW CREATE hides them by default
+# and reconstructs them when hide_options_in_show_create_table is off.
+statement ok
+CREATE MATERIALIZED VIEW test_mv_create_options COMMENT = 'option comment' BLOOM_INDEX_COLUMNS = 'id' ROW_PER_BLOCK = 2 AS SELECT id FROM mv_base_t WHERE 1 = 1
+
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv_create_options
+----
+test_mv_create_options CREATE MATERIALIZED VIEW `test_mv_ddl`.`test_mv_create_options` (`id`) COMMENT = 'option comment' AS SELECT id FROM test_mv_ddl.mv_base_t WHERE 1 = 1
+
+statement ok
+SET hide_options_in_show_create_table = 0
+
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv_create_options
+----
+test_mv_create_options CREATE MATERIALIZED VIEW `test_mv_ddl`.`test_mv_create_options` (`id`) COMMENT = 'option comment' BLOOM_INDEX_COLUMNS='id' ROW_PER_BLOCK='2' AS SELECT id FROM test_mv_ddl.mv_base_t WHERE 1 = 1
+
+# SHOW CREATE escapes quotes in string-valued table options.
+statement ok
+CREATE MATERIALIZED VIEW test_mv_quoted_option BLOOM_INDEX_COLUMNS = '`quoted\'column`' AS SELECT id AS `quoted'column` FROM mv_base_t WHERE 1 = 1
+
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv_quoted_option
+----
+test_mv_quoted_option CREATE MATERIALIZED VIEW `test_mv_ddl`.`test_mv_quoted_option` (`quoted'column`) BLOOM_INDEX_COLUMNS='`quoted\'column`' AS SELECT id AS `quoted'column` FROM test_mv_ddl.mv_base_t WHERE 1 = 1
+
+statement ok
+DROP MATERIALIZED VIEW test_mv_quoted_option
+
+statement ok
+SET hide_options_in_show_create_table = 1
+
+query BB
+SELECT table_option LIKE '%ROW_PER_BLOCK=''2''%', comment = 'option comment'
+FROM system.tables
+WHERE database = 'test_mv_ddl' AND name = 'test_mv_create_options'
+----
+1 1
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_create_options
+
+query I
+SELECT row_count FROM fuse_block('test_mv_ddl', 'test_mv_create_options') ORDER BY block_location
+----
+2
+2
+
+statement ok
+DROP MATERIALIZED VIEW test_mv_create_options
+
+statement error 1301
+CREATE MATERIALIZED VIEW test_mv_bad_option ROW_PER_BLOCK = 1000001 AS SELECT id FROM mv_base_t WHERE 1 = 1
+
+statement error 1075
+CREATE MATERIALIZED VIEW test_mv_bad_compression COMPRESSION = 'bogus' AS SELECT id FROM mv_base_t WHERE 1 = 1
+
+statement error 1301
+CREATE MATERIALIZED VIEW test_mv_bad_distribution WRITE_DISTRIBUTION_MODE = 'bogus' AS SELECT id FROM mv_base_t WHERE 1 = 1
+
+statement error 1301
+CREATE MATERIALIZED VIEW test_mv_hash_distribution WRITE_DISTRIBUTION_MODE = 'hash' AS SELECT id FROM mv_base_t WHERE 1 = 1
+
+statement error 1301
+CREATE MATERIALIZED VIEW test_mv_temp_prefix TEMP_PREFIX = 'x' AS SELECT id FROM mv_base_t WHERE 1 = 1
+
+statement error 1301
+CREATE MATERIALIZED VIEW test_mv_transient TRANSIENT = 'T' AS SELECT id FROM mv_base_t WHERE 1 = 1
+
+query I
+SELECT count(*)
+FROM system.tables
+WHERE database = 'test_mv_ddl'
+  AND name IN ('test_mv_bad_compression', 'test_mv_bad_distribution', 'test_mv_hash_distribution', 'test_mv_temp_prefix', 'test_mv_transient')
+----
+0
+
+statement error 1301
+CREATE MATERIALIZED VIEW test_mv_reserved_option MATERIALIZED_VIEW_SOURCE_TABLE_ID = 1 AS SELECT id FROM mv_base_t WHERE 1 = 1
 
 # Aggregate result/state columns cannot be used as MV cluster keys.
 statement error 1081
