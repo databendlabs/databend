@@ -54,7 +54,6 @@ use tokio::sync::Semaphore;
 use crate::DEFAULT_RECLUSTER_DEPTH;
 use crate::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use crate::FuseTable;
-use crate::MAX_RECLUSTER_DEPTH;
 use crate::MIN_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
 use crate::io::MetaReaders;
@@ -352,8 +351,10 @@ impl ReclusterMutator {
                 candidate_window.tasks.push(ReclusterTaskCandidate {
                     score: CandidateScore {
                         selected_total_bytes: 0,
+                        selected_block_count: 0,
                         max_depth: 0,
                         average_depth: 0.0,
+                        estimated_depth_gain: 0,
                     },
                     selected_blocks: Vec::new(),
                     output_level: 0,
@@ -423,52 +424,25 @@ impl ReclusterMutator {
                 .push(idx);
         }
 
-        let mut tasks: Vec<ReclusterTaskCandidate> = Vec::new();
-        let mut deferred_candidates = Vec::new();
-        let large_task_bytes_threshold = self.large_task_bytes_threshold();
+        let mut candidates = Vec::new();
         for ((group, _), indices) in blocks_map {
-            if tasks.len() >= task_budget {
-                break;
-            }
-            let remaining_task_budget = task_budget - tasks.len();
-            let candidates = self.build_recluster_task_candidates_for_indices(
+            candidates.extend(self.build_recluster_task_candidates_for_indices(
                 group,
                 indices,
                 blocks,
-                remaining_task_budget,
-            )?;
-
-            for candidate in candidates {
-                let defer = candidate.score.selected_total_bytes < large_task_bytes_threshold
-                    && (candidate.score.max_depth as f64) < 4.0 * self.properties.depth_threshold;
-                if defer {
-                    debug!(
-                        "recluster: defer candidate group={} selected_bytes={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
-                        group,
-                        candidate.score.selected_total_bytes,
-                        candidate.score.max_depth,
-                        self.properties.depth_threshold,
-                    );
-                    deferred_candidates.push(candidate);
-                } else {
-                    tasks.push(candidate);
-                    if tasks.len() >= task_budget {
-                        break;
-                    }
-                }
-            }
+                task_budget,
+            )?);
         }
 
-        if tasks.len() < task_budget {
-            deferred_candidates.sort_by(|left, right| right.score.cmp_desc(&left.score));
-            let remaining_task_budget = task_budget - tasks.len();
-            for candidate in deferred_candidates.into_iter().take(remaining_task_budget) {
-                debug!("recluster: backfill deferred candidate {}", candidate);
-                tasks.push(candidate);
-            }
-        }
+        candidates.sort_by(|left, right| {
+            right
+                .score
+                .cmp_desc(&left.score)
+                .then_with(|| left.output_level.cmp(&right.output_level))
+        });
+        candidates.truncate(task_budget);
 
-        Ok(tasks)
+        Ok(candidates)
     }
 
     /// Convert selected in-memory candidates into physical recluster parts.
@@ -657,8 +631,10 @@ impl ReclusterMutator {
         {
             let score = CandidateScore {
                 selected_total_bytes: total_bytes as usize,
+                selected_block_count: block_count,
                 max_depth: block_count,
                 average_depth: block_count as f64,
+                estimated_depth_gain: block_count.saturating_sub(1) as u64,
             };
             return Ok(vec![task_candidate(group, score, &indices, blocks)]);
         }
@@ -680,19 +656,6 @@ impl ReclusterMutator {
         );
 
         Ok(candidates)
-    }
-
-    /// Fast-path acceptance for very deep, sufficiently large candidates.
-    pub(crate) fn passes_early_accept(&self, candidate: &ReclusterTaskCandidate) -> bool {
-        let mature_gate = (2.0 * self.properties.depth_threshold).min(MAX_RECLUSTER_DEPTH as f64);
-        let early_accept_depth = (mature_gate + 1.0).max(self.properties.depth_threshold * 4.0);
-        let min_task_bytes = self.large_task_bytes_threshold();
-        candidate.score.max_depth as f64 >= early_accept_depth
-            && candidate.score.selected_total_bytes >= min_task_bytes
-    }
-
-    fn large_task_bytes_threshold(&self) -> usize {
-        self.properties.memory_threshold.saturating_mul(3) / 4
     }
 
     /// Group segments by partition before selecting strategy-specific windows, then split oversized

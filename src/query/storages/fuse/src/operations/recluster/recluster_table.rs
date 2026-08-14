@@ -44,7 +44,7 @@ use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 
 const DEFAULT_RECLUSTER_SEGMENT_LIMIT: usize = 1024;
-const DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW: usize = 32;
+const DEFAULT_RECLUSTER_SEGMENT_WINDOW: usize = 32;
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -102,10 +102,10 @@ impl FuseTable {
         // LIMIT is applied to scan/window sizing, not task selection. It is a
         // soft scan bound because recluster still keeps a minimum candidate window.
         let chunk_size = segment_limit.max(max_threads * 4);
-        // LIMIT also caps one candidate window; select_segments treats this as
-        // a soft upper bound when hotspot blocks are inseparable.
-        let max_seg_num =
-            segment_limit.min((max_threads * 2).max(DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW));
+        // Keep candidate selection stable across executor parallelism. LIMIT
+        // still caps one candidate window; select_segments treats this as a soft
+        // upper bound when hotspot blocks are inseparable.
+        let max_seg_num = segment_limit.min(DEFAULT_RECLUSTER_SEGMENT_WINDOW);
 
         // Snapshot index for carry validation and task materialization.
         let live_segments = snapshot
@@ -162,14 +162,7 @@ impl FuseTable {
             );
 
             // Step 2: scan this fixed range, excluding still-carried windows.
-            // Carried tasks count toward early accept before new probing.
-            let mut early_accept_count = valid_carry
-                .iter()
-                .flat_map(|window| window.tasks.iter())
-                .filter(|task| mutator.passes_early_accept(task))
-                .count();
-            let scan_locations = if scan_start < scan_end && early_accept_count < mutator.max_tasks
-            {
+            let scan_locations = if scan_start < scan_end {
                 let scan_range = &snapshot.segments[scan_start..scan_end];
                 let carry_locations = (!valid_carry.is_empty()).then(|| {
                     valid_carry
@@ -263,13 +256,7 @@ impl FuseTable {
                         .get_or_insert_with(|| Arc::new(Semaphore::new(max_threads * 2)))
                         .clone();
                     let mut segment_windows = segment_windows.into_iter().enumerate();
-                    while early_accept_count < mutator.max_tasks {
-                        let remaining_task_budget =
-                            mutator.max_tasks.saturating_sub(early_accept_count);
-                        if remaining_task_budget == 0 {
-                            break;
-                        }
-
+                    loop {
                         let batch = segment_windows
                             .by_ref()
                             .take(probe_parallelism)
@@ -287,7 +274,7 @@ impl FuseTable {
                                 mutator
                                     .probe_candidate_window(
                                         selected_segs,
-                                        remaining_task_budget,
+                                        mutator.max_tasks,
                                         decode_runtime,
                                         decode_semaphore,
                                     )
@@ -308,11 +295,6 @@ impl FuseTable {
                         for window in probed {
                             probe_windows += 1;
                             probe_tasks += window.tasks.len();
-                            early_accept_count += window
-                                .tasks
-                                .iter()
-                                .filter(|task| mutator.passes_early_accept(task))
-                                .count();
                             pending_windows.push(window);
                         }
                     }
@@ -330,18 +312,21 @@ impl FuseTable {
             let (block_count, parts) = if pending_windows.is_empty() {
                 (0, ReclusterParts::default())
             } else {
-                // Step 3: choose task candidates. If early accept fills the budget,
-                // only early-accept tasks compete; otherwise rank all pending tasks.
-                let early_accept_only = early_accept_count >= mutator.max_tasks;
+                // Step 3: choose task candidates by the same benefit-density score
+                // used inside each probed window.
                 let mut sorted_tasks = Vec::new();
                 for (window_idx, window) in pending_windows.iter().enumerate() {
                     for (task_idx, task) in window.tasks.iter().enumerate() {
-                        if !early_accept_only || mutator.passes_early_accept(task) {
-                            sorted_tasks.push((window_idx, task_idx, task.score));
-                        }
+                        sorted_tasks.push((window_idx, task_idx, task));
                     }
                 }
-                sorted_tasks.sort_by(|left, right| right.2.cmp_desc(&left.2));
+                sorted_tasks.sort_by(|left, right| {
+                    right
+                        .2
+                        .score
+                        .cmp_desc(&left.2.score)
+                        .then_with(|| left.2.output_level.cmp(&right.2.output_level))
+                });
 
                 let mut selected_task_indices = vec![Vec::new(); pending_windows.len()];
                 let mut selected_count = 0;
@@ -351,6 +336,16 @@ impl FuseTable {
                         break;
                     }
                     let task = &pending_windows[window_idx].tasks[task_idx];
+                    if mode == ReclusterMode::Aggressive
+                        && !task.is_repack_only()
+                        && !task.score.passes_tail_efficiency_threshold()
+                    {
+                        debug!(
+                            "recluster: skip inefficient task candidate window_idx={} task_idx={} {}",
+                            window_idx, task_idx, task,
+                        );
+                        continue;
+                    }
                     // Repack-only candidates rewrite no blocks, but each one
                     // consumes a whole window. Keep one per round so max_tasks
                     // does not repack multiple disjoint windows at once.
