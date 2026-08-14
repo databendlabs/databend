@@ -32,6 +32,7 @@ use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
 use crate::operations::recluster::ReclusterTaskCandidate;
+use crate::operations::recluster::ReclusterTaskKind;
 use crate::operations::recluster::SelectedReclusterSegment;
 use crate::operations::recluster::passes_depth_gate;
 use crate::operations::recluster::task_candidate;
@@ -39,6 +40,21 @@ use crate::statistics::RangeMaxTree;
 
 /// Linear cluster-key recluster behavior.
 pub(crate) struct LinearReclusterStrategy;
+
+// Bound the expensive all-peak probing stage. Peaks are already sorted by
+// depth, width, and position, while only `task_budget` candidates can be used in
+// one round. Probe at least 32 peaks to keep enough choice when only one task
+// slot is available, then grow the search space proportionally to the task
+// budget. This keeps fragmented windows from rescanning all blocks for thousands
+// of disjoint peaks before most plans are discarded.
+const MIN_LINEAR_PEAK_PROBE_COUNT: usize = 32;
+const LINEAR_PEAK_PROBE_FACTOR: usize = 4;
+
+struct CandidatePlan {
+    peak_pos: usize,
+    local_indices: Vec<usize>,
+    score: CandidateScore,
+}
 
 impl ReclusterStrategy for LinearReclusterStrategy {
     fn select_segments(
@@ -182,38 +198,39 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             },
         );
 
-        let push_task = |candidates: &mut Vec<ReclusterTaskCandidate>,
-                         used_blocks: &mut [bool],
+        let push_plan = |plans: &mut Vec<CandidatePlan>,
+                         peak_pos: usize,
                          local_indices: Vec<usize>,
                          task_bytes: usize,
                          max_depth: usize| {
-            for &local_idx in &local_indices {
-                used_blocks[local_idx] = true;
-            }
+            let estimated_depth_gain =
+                estimate_selected_depth_gain(&local_indices, &open_pos, &close_pos, &point_depths);
             // Memory cap may have truncated the hotspot's full peak-depth set;
             // the actual overlap depth of what got selected cannot exceed how
             // many blocks made it into the task.
             let max_depth = max_depth.min(local_indices.len());
-            let task_indices = local_indices
-                .into_iter()
-                .map(|local_idx| indices[local_idx])
-                .collect::<Vec<_>>();
             let score = CandidateScore {
                 selected_total_bytes: task_bytes,
+                selected_block_count: local_indices.len(),
                 max_depth,
                 average_depth,
+                estimated_depth_gain,
             };
-            candidates.push(task_candidate(group, score, &task_indices, blocks));
+            plans.push(CandidatePlan {
+                peak_pos,
+                local_indices,
+                score,
+            });
         };
 
-        let mut candidates = Vec::new();
-        let mut used_blocks = vec![false; block_count];
+        let mut plans = Vec::new();
 
-        for &(peak_pos, peak_depth, _) in &peaks {
-            if candidates.len() >= task_budget {
-                break;
-            }
-
+        let peak_probe_count = peaks.len().min(
+            task_budget
+                .saturating_mul(LINEAR_PEAK_PROBE_FACTOR)
+                .max(MIN_LINEAR_PEAK_PROBE_COUNT),
+        );
+        for &(peak_pos, peak_depth, _) in peaks.iter().take(peak_probe_count) {
             // Treat adjacent peak-depth points as one hotspot plateau, so blocks
             // covering the same peak area stay ahead of side expansion.
             let mut hotspot_left = peak_pos;
@@ -224,17 +241,13 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             while hotspot_right + 1 < num_points && point_depths[hotspot_right + 1] == peak_depth {
                 hotspot_right += 1;
             }
-
             // Pack hotspot-overlapping blocks first. Tasks split only on memory,
             // so a deep hotspot is not scattered by parallelism balancing.
-            // Keep the peak depth from the initial sweep. Here used_blocks only
-            // prevents the same block from being assigned to multiple tasks.
+            // Keep the peak depth from the initial sweep. Blocks are not marked
+            // as used until all peak plans have been scored and ranked.
             let mut task_bytes = 0usize;
             let mut task_indices = Vec::new();
             for local_idx in 0..block_count {
-                if used_blocks[local_idx] {
-                    continue;
-                }
                 if open_pos[local_idx] > hotspot_right || close_pos[local_idx] < hotspot_left {
                     continue;
                 }
@@ -246,16 +259,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 if should_split_for_memory {
                     if task_indices.len() >= 2 {
                         let local_indices = std::mem::take(&mut task_indices);
-                        push_task(
-                            &mut candidates,
-                            &mut used_blocks,
-                            local_indices,
-                            task_bytes,
-                            peak_depth,
-                        );
-                        if candidates.len() >= task_budget {
-                            break;
-                        }
+                        push_plan(&mut plans, peak_pos, local_indices, task_bytes, peak_depth);
                     } else {
                         task_indices.clear();
                     }
@@ -302,9 +306,6 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                         &values[cur].0
                     };
                     for &local_idx in group_indices {
-                        if used_blocks[local_idx] {
-                            continue;
-                        }
                         let idx = indices[local_idx];
                         let block_size = blocks[idx].meta.block_size as usize;
                         if !task_indices.is_empty()
@@ -319,29 +320,102 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             }
 
             if task_indices.len() >= 2 {
-                push_task(
-                    &mut candidates,
-                    &mut used_blocks,
-                    task_indices,
-                    task_bytes,
-                    peak_depth,
-                );
+                push_plan(&mut plans, peak_pos, task_indices, task_bytes, peak_depth);
             }
         }
 
+        plans.sort_by(|left, right| {
+            right
+                .score
+                .cmp_desc(&left.score)
+                .then_with(|| left.peak_pos.cmp(&right.peak_pos))
+        });
+
+        let mut candidates = Vec::new();
+        let mut used_blocks = vec![false; block_count];
+        let mut rejected_conflict_count = 0usize;
+        for plan in &plans {
+            if candidates.len() >= task_budget {
+                break;
+            }
+            if plan.local_indices.iter().any(|idx| used_blocks[*idx]) {
+                rejected_conflict_count += 1;
+                continue;
+            }
+            for &local_idx in &plan.local_indices {
+                used_blocks[local_idx] = true;
+            }
+            let task_indices = plan
+                .local_indices
+                .iter()
+                .map(|local_idx| indices[*local_idx])
+                .collect::<Vec<_>>();
+            candidates.push(task_candidate(
+                group,
+                plan.score,
+                &task_indices,
+                blocks,
+                ReclusterTaskKind::Recluster,
+            ));
+        }
+
         debug!(
-            "recluster: probed task candidates group={} block_count={} avg_depth={} depth_threshold={} max_depth={} peak_count={} task_count={}",
+            "recluster: probed task candidates group={} block_count={} avg_depth={} depth_threshold={} max_depth={} peak_count={} peak_probe_count={} task_count={} rejected_conflict_count={}",
             group,
             block_count,
             average_depth,
             properties.depth_threshold,
             max_depth,
             peaks.len(),
+            peak_probe_count,
             candidates.len(),
+            rejected_conflict_count,
         );
 
         Ok(candidates)
     }
+}
+
+fn estimate_selected_depth_gain(
+    local_indices: &[usize],
+    open_pos: &[usize],
+    close_pos: &[usize],
+    point_depths: &[usize],
+) -> u64 {
+    if local_indices.len() < 2 {
+        return 0;
+    }
+
+    // Estimate how much overlap-depth area this rewrite can remove.
+    //
+    // At each folded cluster-key point, `point_depths[pos]` is the overlap depth
+    // of the whole candidate window, while `selected_depth` is the overlap depth
+    // contributed by the blocks selected for this task. Rewriting N selected
+    // blocks that overlap at the same point can reduce that point's depth by at
+    // most N - 1, because one rewritten output range may still cover it. Summing
+    // `selected_depth - 1` over all points gives an area-like benefit estimate:
+    // a task that fixes a wide moderate overlap can outrank a very deep but tiny
+    // peak if it removes more depth per byte rewritten.
+    let mut events = Vec::with_capacity(local_indices.len() * 2);
+    for &local_idx in local_indices {
+        events.push((open_pos[local_idx], 1i32));
+        events.push((close_pos[local_idx].saturating_add(1), -1i32));
+    }
+    events.sort_unstable_by_key(|(pos, _)| *pos);
+
+    let mut gain = 0u64;
+    let mut selected_depth = 0i32;
+    let mut event_idx = 0usize;
+    for (pos, point_depth) in point_depths.iter().enumerate() {
+        while event_idx < events.len() && events[event_idx].0 == pos {
+            selected_depth += events[event_idx].1;
+            event_idx += 1;
+        }
+        if selected_depth > 1 && *point_depth > 1 {
+            gain += (selected_depth.min(*point_depth as i32) - 1) as u64;
+        }
+    }
+    gain
 }
 
 /// Select scalar segment windows with a sweep over segment min/max points.
