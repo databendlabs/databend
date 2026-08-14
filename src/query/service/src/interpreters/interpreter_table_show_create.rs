@@ -433,6 +433,13 @@ impl ShowCreateTableInterpreter {
             create_sql.push_str(&format!(" CLUSTER BY {}", cluster_key));
         }
 
+        if !table_info.meta.comment.is_empty() {
+            create_sql.push_str(&format!(
+                " COMMENT = {}",
+                QuotedString(&table_info.meta.comment, '\'')
+            ));
+        }
+
         create_sql.push_str(&format!(" AS {}", definition.original_query));
         Ok(create_sql)
     }

@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
@@ -59,6 +60,7 @@ use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use log::error;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::common::table_option_validation::analyze_count_min_sketch_error_rate_from_options;
 use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_count_min_sketch_error_rate;
@@ -190,6 +192,7 @@ impl Interpreter for SetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
+        check_maintenance_target(table.as_ref(), &self.plan.target)?;
 
         if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
             let mode = mode.parse::<WriteDistributionMode>()?;
@@ -202,7 +205,11 @@ impl Interpreter for SetOptionsInterpreter {
             }
         }
 
-        let engine = Engine::from(table.engine());
+        // MV storage is Fuse-backed; reuse the Fuse option set for ALTER SET OPTIONS.
+        let engine = match self.plan.target {
+            MaintenanceTarget::MaterializedView { .. } => Engine::Fuse,
+            MaintenanceTarget::Table => Engine::from(table.engine()),
+        };
         for table_option in self.plan.set_options.iter() {
             let key = table_option.0.to_lowercase();
             if !is_valid_create_opt(&key, &engine) {
@@ -231,9 +238,6 @@ impl Interpreter for SetOptionsInterpreter {
                 options_map.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(), begin_version);
             }
         }
-
-        // check mutability
-        table.check_mutable()?;
 
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;

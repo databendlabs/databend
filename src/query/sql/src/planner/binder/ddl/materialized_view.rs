@@ -52,6 +52,7 @@ use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
+use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::is_fuse_engine;
 use log::debug;
@@ -74,13 +75,16 @@ use crate::plans::CreateTablePlan;
 use crate::plans::DropMaterializedViewPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::MaintenanceTarget;
+use crate::plans::ModifyTableCommentPlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ScalarExpr;
+use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateMaterializedViewPlan;
+use crate::plans::UnsetOptionsPlan;
 
 fn is_supported_materialized_view_source(table: &dyn Table) -> bool {
     !table.is_temp()
@@ -269,6 +273,7 @@ impl Binder {
             view,
             columns,
             cluster_by,
+            comment,
             query,
         } = stmt;
 
@@ -472,6 +477,9 @@ impl Binder {
             OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID.to_owned(),
             source_table_id.to_string(),
         );
+        if let Some(comment) = comment {
+            options.insert(OPT_KEY_COMMENT.to_owned(), comment.clone());
+        }
 
         let mut cluster_key = None;
         if let Some(cluster_opt) = cluster_by {
@@ -605,6 +613,34 @@ impl Binder {
                     limit: limit.map(|value| value as usize),
                     selection: None,
                     is_final: *is_final,
+                })))
+            }
+            AlterTableAction::SetOptions { set_options } => {
+                Ok(Plan::SetOptions(Box::new(SetOptionsPlan {
+                    set_options: set_options.clone(),
+                    catalog,
+                    database,
+                    table,
+                    target: MaintenanceTarget::MaterializedView { table_id },
+                })))
+            }
+            AlterTableAction::UnsetOptions { targets } => {
+                Ok(Plan::UnsetOptions(Box::new(UnsetOptionsPlan {
+                    options: targets.iter().map(|i| i.name.to_lowercase()).collect(),
+                    catalog,
+                    database,
+                    table,
+                    target: MaintenanceTarget::MaterializedView { table_id },
+                })))
+            }
+            AlterTableAction::ModifyTableComment { new_comment } => {
+                Ok(Plan::ModifyTableComment(Box::new(ModifyTableCommentPlan {
+                    if_exists: false,
+                    new_comment: new_comment.to_string(),
+                    catalog,
+                    database,
+                    table,
+                    target: MaintenanceTarget::MaterializedView { table_id },
                 })))
             }
             _ => Err(ErrorCode::SemanticError(format!(

@@ -26,6 +26,7 @@ use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::ShowLimit;
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 
@@ -59,6 +60,7 @@ pub struct CreateMaterializedViewStmt {
     pub view: Identifier,
     pub columns: Vec<Identifier>,
     pub cluster_by: Option<ClusterOption>,
+    pub comment: Option<String>,
     pub query: Box<Query>,
 }
 
@@ -86,6 +88,9 @@ impl Display for CreateMaterializedViewStmt {
         }
         if let Some(cluster_by) = &self.cluster_by {
             write!(f, " {cluster_by}")?;
+        }
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
         }
         write!(f, " AS {}", self.query)
     }
