@@ -129,6 +129,45 @@ group by a, b, c
 ----
 <slt:ignore>table: default.explain_materialized_view_rewrite.mv_by_abc<slt:ignore>table: default.explain_materialized_view_rewrite.source<slt:ignore>
 
+# Compacting the source after refreshing the MV changes its physical snapshot
+# without creating a logical append delta. The plan should omit both UnionAll
+# and the source changes scan.
+statement ok
+refresh materialized view mv_by_abc
+
+statement ok
+optimize table source compact
+
+query T
+explain select a, b, c, sum(t), count(t)
+from source
+group by a, b, c
+----
+EvalScalar
+├── output columns: [source.a (#0), source.b (#1), source.c (#2), sum(t) (#7), count(t) (#8)]
+├── expressions: [mv_by_abc.a (#27), mv_by_abc.b (#28), mv_by_abc.c (#29), sum_t (#32), count_t (#33)]
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── output columns: [sum_t (#32), count_t (#33), mv_by_abc.a (#27), mv_by_abc.b (#28), mv_by_abc.c (#29)]
+    ├── group by: [a, b, c]
+    ├── aggregate functions: [sum_merge(sum_t), count_merge(count_t)]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: [a, b, c]
+        ├── aggregate functions: [sum_merge(sum_t), count_merge(count_t)]
+        ├── estimated rows: 1.00
+        └── TableScan
+            ├── table: default.explain_materialized_view_rewrite.mv_by_abc
+            ├── scan id: 2
+            ├── output columns: [sum_t (#24), count_t (#25), a (#27), b (#28), c (#29)]
+            ├── read rows: 5
+            ├── read size: < 1 KiB
+            ├── partitions total: 2
+            ├── partitions scanned: 2
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
+
 # A separate detail MV covers non-aggregate projection and predicate matching.
 statement ok
 create table detail_source (
@@ -201,4 +240,3 @@ where active
 
 statement ok
 drop database explain_materialized_view_rewrite
-

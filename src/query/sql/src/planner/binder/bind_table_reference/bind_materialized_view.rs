@@ -71,6 +71,11 @@ pub(crate) enum MaterializedViewReadMode {
     LiveFallback,
 }
 
+enum MaterializedViewHybridBindResult {
+    Hybrid(SExpr, Box<BindContext>),
+    EmptyDelta,
+}
+
 #[derive(Default)]
 struct MaterializedViewChangeScanFinder {
     change_types: Vec<ChangeType>,
@@ -403,7 +408,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         sample: &Option<SampleConfig>,
         cte_suffix_name: Option<String>,
-    ) -> Result<Option<(SExpr, BindContext)>> {
+    ) -> Result<Option<MaterializedViewHybridBindResult>> {
         let internal_source_name = format!(
             "_mv_read_changes_{}_{}",
             table_meta.get_id(),
@@ -496,6 +501,27 @@ impl Binder {
             return Ok(None);
         }
 
+        let changes_statistics = match databend_common_base::runtime::block_on(
+            changes_table.table_statistics(self.ctx.clone(), true, Some(ChangeType::Append)),
+        ) {
+            Ok(statistics) => statistics,
+            Err(error) if Self::is_materialized_view_hybrid_history_unavailable(&error) => {
+                info!(
+                    "materialized view {} cannot inspect its source changes because checkpoint history is unavailable: {}; fallback to live compute",
+                    table_meta.name(),
+                    error
+                );
+                return Ok(None);
+            }
+            Err(error) => return Err(error),
+        };
+        // Append mode is selected only when the logical update/delete counters are both zero.
+        // Its row count is therefore the exact number of inserted endpoint rows, so zero safely
+        // means the source branch can be omitted rather than merely estimated as empty.
+        if changes_statistics.is_some_and(|statistics| statistics.num_rows == Some(0)) {
+            return Ok(Some(MaterializedViewHybridBindResult::EmptyDelta));
+        }
+
         self.pre_resolved_tables.insert(
             (
                 catalog_name.to_string(),
@@ -561,7 +587,10 @@ impl Binder {
                 column.table_name = Some(table_name.to_string());
             }
         }
-        Ok(Some((union_expr, logical_context)))
+        Ok(Some(MaterializedViewHybridBindResult::Hybrid(
+            union_expr,
+            Box::new(logical_context),
+        )))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -748,7 +777,7 @@ impl Binder {
                 .options()
                 .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION)
                 .cloned();
-            if let Some(result) = self.bind_materialized_view_hybrid(
+            match self.bind_materialized_view_hybrid(
                 bind_context,
                 catalog_name,
                 database,
@@ -765,28 +794,38 @@ impl Binder {
                 sample,
                 cte_suffix_name.clone(),
             )? {
-                info!(
-                    "materialized view {} uses append-only hybrid read",
-                    table_meta.name()
-                );
-                return Ok((result.0, result.1, MaterializedViewReadMode::Hybrid));
+                Some(MaterializedViewHybridBindResult::Hybrid(s_expr, context)) => {
+                    info!(
+                        "materialized view {} uses append-only hybrid read",
+                        table_meta.name()
+                    );
+                    return Ok((s_expr, *context, MaterializedViewReadMode::Hybrid));
+                }
+                Some(MaterializedViewHybridBindResult::EmptyDelta) => {
+                    info!(
+                        "materialized view {} source snapshot changed without append delta; use persisted storage only",
+                        table_meta.name()
+                    );
+                }
+                None => {
+                    info!(
+                        "materialized view {} is stale (source_snapshot={:?}, base_snapshot={:?}); fallback to live compute",
+                        table_meta.name(),
+                        table_meta
+                            .options()
+                            .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION),
+                        source_snapshot_location
+                    );
+                    let (s_expr, context) = self.bind_materialized_view_fallback(
+                        bind_context,
+                        &mv_definition.data,
+                        database,
+                        table_name,
+                        alias,
+                    )?;
+                    return Ok((s_expr, context, MaterializedViewReadMode::LiveFallback));
+                }
             }
-            info!(
-                "materialized view {} is stale (source_snapshot={:?}, base_snapshot={:?}); fallback to live compute",
-                table_meta.name(),
-                table_meta
-                    .options()
-                    .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION),
-                source_snapshot_location
-            );
-            let (s_expr, context) = self.bind_materialized_view_fallback(
-                bind_context,
-                &mv_definition.data,
-                database,
-                table_name,
-                alias,
-            )?;
-            return Ok((s_expr, context, MaterializedViewReadMode::LiveFallback));
         }
 
         let table_index = self.metadata.write().add_table(

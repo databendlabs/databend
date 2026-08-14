@@ -221,5 +221,32 @@ group by a, b
 2 20 7 7 7 1 7.0 1
 3 30 8 8 8 1 8.0 1
 
+# A physical source rewrite changes the snapshot endpoint without adding logical
+# rows. The empty append delta is removed, so the rewritten query reads only MV
+# storage instead of building a hybrid UNION with the source changes scan.
+statement ok
+refresh materialized view mv_by_abc
+
+statement ok
+optimize table source compact
+
+query T
+explain select a, b, c, sum(t), count(t)
+from source
+group by a, b, c
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>
+
+query IITII rowsort
+select a, b, c, sum(t), count(t)
+from source
+group by a, b, c
+----
+1 10 other 300 2
+1 10 xxxxxxx 27 3
+2 20 other 70 1
+2 20 xxxxxxx 7 1
+3 30 xxxxxxx 8 1
+
 statement ok
 drop database test_materialized_view_rewrite
