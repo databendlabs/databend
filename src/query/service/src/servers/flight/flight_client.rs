@@ -44,11 +44,13 @@ use crate::servers::flight::request_builder::RequestBuilder;
 use crate::servers::flight::v1::packets::DataPacket;
 
 /// Parameters for a do_exchange RPC call, serialized as JSON in metadata.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DoExchangeParams {
     pub query_id: String,
     pub exchange_id: String,
+    pub source_id: String,
     pub num_threads: usize,
+    pub receiver_lease_secs: u64,
 }
 
 pub struct FlightClient {
