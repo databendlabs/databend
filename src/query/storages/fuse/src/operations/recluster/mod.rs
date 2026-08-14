@@ -31,6 +31,7 @@ pub use recluster_strategy::ReclusterMode;
 pub(crate) use recluster_strategy::ReclusterProperties;
 pub(crate) use recluster_strategy::ReclusterStrategy;
 pub(crate) use recluster_strategy::ReclusterTaskCandidate;
+pub(crate) use recluster_strategy::ReclusterTaskKind;
 pub use recluster_strategy::SelectedReclusterSegment;
 pub(crate) use recluster_strategy::passes_depth_gate;
 pub(crate) use recluster_strategy::task_candidate;
