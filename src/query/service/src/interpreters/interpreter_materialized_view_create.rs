@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::CreateMaterializedViewMeta;
 use databend_common_sql::plans::CreateMaterializedViewPlan;
 
@@ -22,6 +24,7 @@ use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextTableAccess;
 
 pub struct CreateMaterializedViewInterpreter {
@@ -47,6 +50,9 @@ impl Interpreter for CreateMaterializedViewInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
+
         let table_interpreter =
             CreateTableInterpreter::try_create(self.ctx.clone(), self.plan.table_plan.clone())?;
 
