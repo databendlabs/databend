@@ -335,3 +335,73 @@ evaluation (internal):
 +--------------+-----------------------------------------------------------------------------------+
 
 
+ast            : is_not_error(1 / denom)
+raw expr       : is_not_error(divide(1, denom::Int64))
+checked expr   : is_not_error<T0=Float64><T0>(divide<UInt8, Int64>(1_u8, denom))
+evaluation:
++--------+----------+---------+
+|        | denom    | Output  |
++--------+----------+---------+
+| Type   | Int64    | Boolean |
+| Domain | {-1..=4} | Unknown |
+| Row 0  | 2        | true    |
+| Row 1  | 0        | false   |
+| Row 2  | -1       | true    |
+| Row 3  | 4        | true    |
++--------+----------+---------+
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| denom  | Column(Int64([2, 0, -1, 4])) |
+| Output | Boolean([0b____1101])        |
++--------+------------------------------+
+
+
+ast            : is_not_error((1 / denom) > 0)
+raw expr       : is_not_error(gt(divide(1, denom::Int64), 0))
+checked expr   : is_not_error<T0=Boolean><T0>(gt<Float64, Float64>(divide<UInt8, Int64>(1_u8, denom), CAST<UInt8>(0_u8 AS Float64)))
+optimized expr : is_not_error<T0=Boolean><T0>(gt<Float64, Float64>(divide<UInt8, Int64>(1_u8, denom), 0_f64))
+evaluation:
++--------+----------+---------+
+|        | denom    | Output  |
++--------+----------+---------+
+| Type   | Int64    | Boolean |
+| Domain | {-1..=4} | Unknown |
+| Row 0  | 2        | true    |
+| Row 1  | 0        | false   |
+| Row 2  | -1       | true    |
+| Row 3  | 4        | true    |
++--------+----------+---------+
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| denom  | Column(Int64([2, 0, -1, 4])) |
+| Output | Boolean([0b____1101])        |
++--------+------------------------------+
+
+
+ast            : is_not_error((1 / denom) + cast('x' as int64))
+raw expr       : is_not_error(plus(divide(1, denom::Int64), CAST('x' AS Int64)))
+checked expr   : is_not_error<T0=Float64><T0>(plus<Float64, Int64>(divide<UInt8, Int64>(1_u8, denom), CAST<String>("x" AS Int64)))
+evaluation:
++--------+----------+---------+
+|        | denom    | Output  |
++--------+----------+---------+
+| Type   | Int64    | Boolean |
+| Domain | {-1..=4} | Unknown |
+| Row 0  | 2        | false   |
+| Row 1  | 0        | false   |
+| Row 2  | -1       | false   |
+| Row 3  | 4        | false   |
++--------+----------+---------+
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| denom  | Column(Int64([2, 0, -1, 4])) |
+| Output | Boolean([0b____0000])        |
++--------+------------------------------+
+
+

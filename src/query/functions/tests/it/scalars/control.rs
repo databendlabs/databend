@@ -28,6 +28,7 @@ fn test_control() {
 
     test_if(file);
     test_is_not_null(file);
+    test_is_not_error(file);
 }
 
 fn test_if(file: &mut impl Write) {
@@ -135,5 +136,25 @@ fn test_is_not_null(file: &mut impl Write) {
     run_ast(file, "is_not_null(nullable_col)", &[(
         "nullable_col",
         Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![true, true, false, false]),
+    )]);
+}
+
+fn test_is_not_error(file: &mut impl Write) {
+    run_ast(file, "is_not_error(1 / denom)", &[(
+        "denom",
+        Int64Type::from_data(vec![2i64, 0, -1, 4]),
+    )]);
+    // The throwing expression is nested inside a comparison: the error must
+    // bubble up through the non-boundary `gt` call to reach the boundary.
+    run_ast(file, "is_not_error((1 / denom) > 0)", &[(
+        "denom",
+        Int64Type::from_data(vec![2i64, 0, -1, 4]),
+    )]);
+    // A scalar subexpression that errors invalidates every row: the constant
+    // cast is evaluated in a one-row block, and its error bitmap must
+    // broadcast to all rows when merged with the column error set.
+    run_ast(file, "is_not_error((1 / denom) + cast('x' as int64))", &[(
+        "denom",
+        Int64Type::from_data(vec![2i64, 0, -1, 4]),
     )]);
 }
