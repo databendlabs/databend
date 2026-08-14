@@ -31,19 +31,23 @@ pub struct HistoryTable {
     pub name: String,
     pub create: String,
     pub transforms: Vec<String>,
-    pub delete: String,
+    pub delete: Option<String>,
 }
 
 impl HistoryTable {
-    pub fn create(predefined: PredefinedTable, retention: u64) -> Self {
+    pub fn create(predefined: PredefinedTable, retention: Option<u64>) -> Self {
         let transforms = predefined.transforms();
+        let retention = retention
+            .or_else(|| (!predefined.permanent_by_default).then_some(DEFAULT_RETENTION_HOURS));
         HistoryTable {
             name: predefined.name,
             create: predefined.create,
             transforms,
-            delete: predefined
-                .delete
-                .replace("{retention_hours}", &retention.to_string()),
+            delete: retention.map(|retention| {
+                predefined
+                    .delete
+                    .replace("{retention_hours}", &retention.to_string())
+            }),
         }
     }
 
@@ -87,6 +91,8 @@ pub struct PredefinedTable {
     pub transform: String,
     #[serde(default)]
     pub additional_transforms: Vec<String>,
+    #[serde(default)]
+    pub permanent_by_default: bool,
     pub delete: String,
 }
 
@@ -121,7 +127,7 @@ pub fn init_history_tables(cfg: &HistoryConfig) -> Result<Vec<Arc<HistoryTable>>
         if let Some(predefined_table) = predefined_map.remove(&enable_table.table_name) {
             history_tables.push(Arc::new(HistoryTable::create(
                 predefined_table,
-                enable_table.retention as u64,
+                enable_table.retention.map(|retention| retention as u64),
             )));
         } else {
             return Err(ErrorCode::InvalidConfig(format!(
@@ -133,7 +139,7 @@ pub fn init_history_tables(cfg: &HistoryConfig) -> Result<Vec<Arc<HistoryTable>>
     if !user_defined_log_history {
         history_tables.push(Arc::new(HistoryTable::create(
             predefined_map.remove("log_history").unwrap(),
-            DEFAULT_RETENTION_HOURS,
+            None,
         )));
     }
     Ok(history_tables)
@@ -174,6 +180,7 @@ mod tests {
             .find(|table| table.name == "lineage_history")
             .unwrap();
 
+        assert!(lineage.permanent_by_default);
         assert!(
             lineage
                 .create
@@ -261,7 +268,7 @@ mod tests {
             .into_iter()
             .find(|table| table.name == LINEAGE_HISTORY_TABLE)
             .unwrap();
-        let history = HistoryTable::create(lineage, DEFAULT_RETENTION_HOURS);
+        let history = HistoryTable::create(lineage, Some(DEFAULT_RETENTION_HOURS));
 
         // A same-batch tombstone must run after edge upserts. Replaying a batch repeats the same
         // order, so the MERGE cannot resurrect an edge removed by the tombstone phase.
@@ -280,7 +287,7 @@ mod tests {
     }
 
     #[test]
-    fn test_lineage_retention_matches_other_history_tables() {
+    fn test_lineage_retention_defaults_to_permanent() {
         let config = |table_name: &str, retention| HistoryConfig {
             tables: vec![crate::HistoryTableConfig {
                 table_name: table_name.to_string(),
@@ -290,36 +297,70 @@ mod tests {
             ..Default::default()
         };
 
-        let lineage = init_history_tables(&config(
-            LINEAGE_HISTORY_TABLE,
-            DEFAULT_RETENTION_HOURS as usize,
-        ))
-        .unwrap();
+        let lineage = init_history_tables(&config(LINEAGE_HISTORY_TABLE, None)).unwrap();
         let default_delete = &lineage
             .iter()
             .find(|table| table.name == LINEAGE_HISTORY_TABLE)
             .unwrap()
             .delete;
-        assert!(default_delete.contains("lineage_kind = 'DML'"));
-        assert!(default_delete.contains("subtract_hours(NOW(), 168)"));
+        assert!(default_delete.is_none());
 
-        let lineage = init_history_tables(&config(LINEAGE_HISTORY_TABLE, 24)).unwrap();
+        let lineage = init_history_tables(&config(LINEAGE_HISTORY_TABLE, Some(24))).unwrap();
         let explicit_delete = &lineage
             .iter()
             .find(|table| table.name == LINEAGE_HISTORY_TABLE)
             .unwrap()
-            .delete;
+            .delete
+            .as_deref()
+            .unwrap();
         assert!(explicit_delete.contains("lineage_kind = 'DML'"));
         assert!(explicit_delete.contains("subtract_hours(NOW(), 24)"));
 
-        let query = init_history_tables(&config("query_history", DEFAULT_RETENTION_HOURS as usize))
-            .unwrap();
+        let zero_retention = init_history_tables(&config(LINEAGE_HISTORY_TABLE, Some(0))).unwrap();
+        assert!(
+            zero_retention
+                .iter()
+                .find(|table| table.name == LINEAGE_HISTORY_TABLE)
+                .unwrap()
+                .delete
+                .as_deref()
+                .unwrap()
+                .contains("subtract_hours(NOW(), 0)")
+        );
+
+        let query = init_history_tables(&config("query_history", None)).unwrap();
         assert!(
             query
                 .iter()
                 .find(|table| table.name == "query_history")
                 .unwrap()
                 .delete
+                .as_deref()
+                .unwrap()
+                .contains("subtract_hours(NOW(), 168)")
+        );
+
+        let explicit_query = init_history_tables(&config("query_history", Some(48))).unwrap();
+        assert!(
+            explicit_query
+                .iter()
+                .find(|table| table.name == "query_history")
+                .unwrap()
+                .delete
+                .as_deref()
+                .unwrap()
+                .contains("subtract_hours(NOW(), 48)")
+        );
+
+        let log_history = init_history_tables(&HistoryConfig::default()).unwrap();
+        assert!(
+            log_history
+                .iter()
+                .find(|table| table.name == "log_history")
+                .unwrap()
+                .delete
+                .as_deref()
+                .unwrap()
                 .contains("subtract_hours(NOW(), 168)")
         );
     }

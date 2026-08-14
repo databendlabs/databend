@@ -2725,8 +2725,9 @@ pub struct HistoryLogTableConfig {
     pub table_name: String,
 
     /// The retention period (in hours) for history logs.
-    /// Data older than this period will be deleted during retention tasks.
-    pub retention: usize,
+    /// Data older than this period will be deleted during retention tasks. When omitted, the
+    /// predefined table policy applies.
+    pub retention: Option<usize>,
 
     /// Whether this history table is invisible for querying.
     /// Default is false.
@@ -3764,6 +3765,22 @@ mod test {
             setting_default, config_default,
             "default setting is different from default config, please check again"
         )
+    }
+
+    #[test]
+    fn test_history_table_retention_is_optional() {
+        let omitted: HistoryLogTableConfig =
+            toml::from_str("table_name = 'lineage_history'").unwrap();
+        assert_eq!(omitted.retention, None);
+        let inner: InnerHistoryTableConfig = omitted.try_into().unwrap();
+        assert_eq!(inner.retention, None);
+
+        let explicit: HistoryLogTableConfig =
+            toml::from_str("table_name = 'lineage_history'\nretention = 0").unwrap();
+        assert_eq!(explicit.retention, Some(0));
+
+        let inner: InnerHistoryTableConfig = explicit.try_into().unwrap();
+        assert_eq!(inner.retention, Some(0));
     }
 
     #[test]
