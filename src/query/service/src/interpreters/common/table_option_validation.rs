@@ -132,10 +132,13 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
 /// Table option keys that can occur in 'create materialized view statement'.
 pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
     LazyLock::new(|| {
-        let mut r = HashSet::new();
-        r.insert(OPT_KEY_DATABASE_ID);
+        // Materialized-view storage is Fuse-backed and accepts the same physical table options.
+        // COMMENT is transported separately into TableMeta.comment rather than persisted as an
+        // option. Internal keys remain in the set because the binder adds them after rejecting
+        // user-specified reserved keys.
+        let mut r = CREATE_FUSE_OPTIONS.clone();
+        r.remove(OPT_KEY_COMMENT);
         r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
-        r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
         r
     });
 

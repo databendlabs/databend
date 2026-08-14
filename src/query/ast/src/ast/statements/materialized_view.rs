@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -26,8 +27,10 @@ use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::ShowLimit;
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
+use crate::ast::write_space_separated_string_map;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct AlterMaterializedViewStmt {
@@ -51,7 +54,7 @@ impl Display for AlterMaterializedViewStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateMaterializedViewStmt {
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
@@ -59,6 +62,8 @@ pub struct CreateMaterializedViewStmt {
     pub view: Identifier,
     pub columns: Vec<Identifier>,
     pub cluster_by: Option<ClusterOption>,
+    pub comment: Option<String>,
+    pub table_options: BTreeMap<String, String>,
     pub query: Box<Query>,
 }
 
@@ -86,6 +91,13 @@ impl Display for CreateMaterializedViewStmt {
         }
         if let Some(cluster_by) = &self.cluster_by {
             write!(f, " {cluster_by}")?;
+        }
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
+        }
+        if !self.table_options.is_empty() {
+            write!(f, " ")?;
+            write_space_separated_string_map(f, &self.table_options)?;
         }
         write!(f, " AS {}", self.query)
     }
