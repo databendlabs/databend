@@ -61,7 +61,7 @@ const LINEAGE_TABLE: &str = "lineage_history";
 const FRONTIER_BATCH_SIZE: usize = 512;
 const FIRST_LINEAGE_SCAN_ID: usize = 1_000;
 
-const EDGE_COLUMNS: &[&str] = &[
+pub(super) const EDGE_COLUMNS: &[&str] = &[
     "updated_on",
     "user_name",
     "query_parameterized_hash",
@@ -352,7 +352,11 @@ impl LineageEdgeReader {
     }
 }
 
-fn build_key_filter(schema: &TableSchema, column: &str, keys: &[String]) -> Result<Filters> {
+pub(super) fn build_key_filter(
+    schema: &TableSchema,
+    column: &str,
+    keys: &[String],
+) -> Result<Filters> {
     let field = schema.field_with_name(column)?;
     let data_type = DataType::from(field.data_type());
     let column_expr = || {
@@ -395,7 +399,7 @@ fn build_key_filter(schema: &TableSchema, column: &str, keys: &[String]) -> Resu
     })
 }
 
-fn decode_edges(
+pub(super) fn decode_edges(
     block: &DataBlock,
     schema: &TableSchema,
     match_column: &str,

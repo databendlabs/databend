@@ -407,7 +407,7 @@ async fn traverse_columns(
     Ok(rows)
 }
 
-fn resolve_column_ref(
+pub(super) fn resolve_column_ref(
     captured: &CapturedObject,
     object: &ResolvedObject,
     address_kind: AddressKind,
@@ -425,7 +425,7 @@ fn resolve_column_ref(
     }
 }
 
-fn same_object(source: &ResolvedObject, target: &ResolvedObject) -> bool {
+pub(super) fn same_object(source: &ResolvedObject, target: &ResolvedObject) -> bool {
     match (source.id, target.id) {
         (Some(source_id), Some(target_id))
             if source.catalog_type.eq_ignore_ascii_case("DEFAULT")
@@ -460,7 +460,7 @@ fn column_frontier_key(column: &ColumnFrontier) -> (String, String) {
     )
 }
 
-fn process_json(edge: &RawLineageEdge) -> String {
+pub(super) fn process_json(edge: &RawLineageEdge) -> String {
     // Keep embedded JSON timestamps stable across session timezones and self-describing.
     let updated_on = edge.updated_on.map(|timestamp| {
         strtime::format(
@@ -515,7 +515,7 @@ fn sort_rows(rows: &mut [LineageResultRow]) {
     });
 }
 
-fn split_column_name(input: &str) -> Result<(String, String)> {
+pub(super) fn split_column_name(input: &str) -> Result<(String, String)> {
     let input = input.trim();
     let Some(index) = last_unquoted_dot(input) else {
         return Err(ErrorCode::BadArguments(
@@ -532,7 +532,7 @@ fn split_column_name(input: &str) -> Result<(String, String)> {
     Ok((table.to_string(), column.to_string()))
 }
 
-fn normalize_column_name(ctx: &Arc<dyn TableContext>, value: &str) -> Result<String> {
+pub(super) fn normalize_column_name(ctx: &Arc<dyn TableContext>, value: &str) -> Result<String> {
     let settings = ctx.get_settings();
     let resolution = NameResolutionContext::try_from(settings.as_ref())?;
     let dialect = settings.get_sql_dialect().unwrap_or_default();
