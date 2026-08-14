@@ -1803,6 +1803,25 @@ fn test_ambiguous_trailing_lambda_argument() {
     assert!(matches!(*lambda.expr, Expr::Literal { .. }));
 }
 
+#[test]
+fn test_json_arrow_argument_before_aggregate_filter() {
+    let tokens = tokenize_sql("json_object_agg('k', doc -> 'v') FILTER (WHERE ok)").unwrap();
+    let input = Input {
+        tokens: &tokens,
+        dialect: Dialect::PostgreSQL,
+        mode: ParseMode::Default,
+    };
+    let (_, expr) = expr(input).unwrap();
+    let Expr::FunctionCall { func, .. } = expr else {
+        panic!("expected a function call");
+    };
+
+    assert_eq!(func.args.len(), 2);
+    assert!(matches!(func.args[1], Expr::JsonOp { .. }));
+    assert!(func.lambda.is_none());
+    assert!(func.filter.is_some());
+}
+
 // FIXME: this test cause stack overflow
 // https://github.com/databendlabs/databend/issues/18625
 #[test]

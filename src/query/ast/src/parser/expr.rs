@@ -2760,6 +2760,23 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             filter,
             window,
         )| {
+            let can_preserve_lambda = first_param.is_some()
+                && opt_distinct_0.is_none()
+                && params_0.is_none()
+                && argument_order_by.is_none()
+                && params_1.is_none()
+                && within_group_order_by.is_none()
+                && filter.is_none()
+                && window.is_none();
+            let (leading_params, ambiguous_lambda) = match ambiguous_lambda {
+                Some((ordinary_expr, _)) if !can_preserve_lambda => {
+                    let mut leading_params = leading_params;
+                    leading_params.push(ordinary_expr);
+                    (leading_params, None)
+                }
+                ambiguous_lambda => (leading_params, ambiguous_lambda),
+            };
+
             match (
                 first_param,
                 leading_params,
