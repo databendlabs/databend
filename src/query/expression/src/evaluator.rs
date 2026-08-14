@@ -110,21 +110,34 @@ impl<'a> EvaluateOptions<'a> {
 /// error rows and the first error message. Error sets travel upward through
 /// nested calls while suppression is active, so both sibling arguments and
 /// parent calls must accumulate instead of overwrite.
+///
+/// A length-1 source bitmap comes from a scalar subexpression (evaluated in
+/// a one-row block, e.g. a constant cast in `run_simple_cast`); a scalar
+/// error applies to every row, so it is broadcast to `num_rows` instead of
+/// marking only row 0.
 fn merge_eval_errors(
     target: &mut Option<(MutableBitmap, String)>,
     source: Option<(MutableBitmap, String)>,
+    num_rows: usize,
 ) {
-    if let Some((src_valids, src_msg)) = source {
-        match target {
-            Some((valids, _)) => {
-                for (row, valid) in src_valids.iter().enumerate() {
-                    if !valid && row < valids.len() {
-                        valids.set(row, false);
-                    }
+    let Some((src_valids, src_msg)) = source else {
+        return;
+    };
+    if src_valids.len() == 1 && num_rows > 1 {
+        if !src_valids.get(0) {
+            *target = Some((Bitmap::new_constant(false, num_rows).make_mut(), src_msg));
+        }
+        return;
+    }
+    match target {
+        Some((valids, _)) => {
+            for (row, valid) in src_valids.iter().enumerate() {
+                if !valid && row < valids.len() {
+                    valids.set(row, false);
                 }
             }
-            None => *target = Some((src_valids, src_msg)),
         }
+        None => *target = Some((src_valids, src_msg)),
     }
 }
 
@@ -383,12 +396,12 @@ impl<'a> Evaluator<'a> {
         // (is_not_error) observes errors from its whole subtree, not only
         // from its direct children.
         if !child_suppress_error {
-            merge_eval_errors(&mut ctx.errors, child_option.errors.take());
+            merge_eval_errors(&mut ctx.errors, child_option.errors.take(), ctx.num_rows);
         }
 
         if options.suppress_error {
             // inject errors into options, parent will handle it
-            merge_eval_errors(&mut options.errors, ctx.errors.take());
+            merge_eval_errors(&mut options.errors, ctx.errors.take(), ctx.num_rows);
         } else {
             EvalContext::render_error(
                 *span,
@@ -1624,7 +1637,17 @@ impl<'a> Evaluator<'a> {
         let entry = BlockEntry::new(value, || (src_type.clone(), num_rows));
         let block = DataBlock::new(vec![entry], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        let result = evaluator.eval_common_call(&call, validity, expr_display, options)?;
+        // The cast may run on a one-row temporary block for scalar values, so
+        // its error bitmap is scoped to that block. Collect it in local
+        // options first, then merge into the shared options with the outer
+        // row count so a scalar error broadcasts to every row.
+        let mut local_options = options.with_suppress_error(options.suppress_error);
+        let result = evaluator.eval_common_call(&call, validity, expr_display, &mut local_options)?;
+        merge_eval_errors(
+            &mut options.errors,
+            local_options.errors.take(),
+            self.data_block.num_rows(),
+        );
         Ok(Some(result))
     }
 
@@ -2564,12 +2587,12 @@ impl<'a> Evaluator<'a> {
                 // function (is_not_error) observes errors from its whole
                 // subtree, not only from its direct children.
                 if !child_suppress_error {
-                    merge_eval_errors(&mut ctx.errors, child_option.errors.take());
+                    merge_eval_errors(&mut ctx.errors, child_option.errors.take(), ctx.num_rows);
                 }
 
                 // inject errors into options, parent will handle it
                 if options.suppress_error {
-                    merge_eval_errors(&mut options.errors, ctx.errors.take());
+                    merge_eval_errors(&mut options.errors, ctx.errors.take(), ctx.num_rows);
                 } else {
                     EvalContext::render_error(
                         *span,

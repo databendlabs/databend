@@ -43,3 +43,17 @@ select error_or(1 / (number - 1), 42) from numbers(3) order by number
 -1
 42
 1
+
+# A scalar subexpression that errors invalidates every row: the constant
+# cast fails for the whole expression, so its (one-row) error bitmap must
+# broadcast to all rows when merged with the column error set.
+query I
+select number from numbers(3) where is_not_error((1 / (number - 1)) + cast('x' as int))
+----
+
+query B
+select is_not_error((1 / (number - 1)) + cast('x' as int)) from numbers(3) order by number
+----
+0
+0
+0
