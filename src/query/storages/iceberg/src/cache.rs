@@ -14,9 +14,6 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -28,14 +25,13 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 
 use crate::IcebergTable;
+use crate::credential::credential_refresh_at;
 
 pub struct LoaderWrapper<T>(T);
 pub type IcebergTableReader = InMemoryCacheTTLReader<
     IcebergTableCacheValue,
     LoaderWrapper<(Arc<dyn iceberg::Catalog>, Arc<CatalogInfo>)>,
 >;
-
-const CREDENTIAL_REFRESH_MARGIN: Duration = Duration::from_secs(300);
 
 pub(crate) const SEP_STR: &str = "\u{001f}";
 
@@ -77,30 +73,6 @@ impl Loader<IcebergTableCacheValue>
     }
 }
 
-fn credential_refresh_at(table: &iceberg::table::Table) -> Option<Instant> {
-    let (_, props, _) = table.file_io().clone().into_builder().into_parts();
-    let expires_at_ms = props
-        .iter()
-        .find(|(key, _)| key.as_str() == "expires-at-ms")
-        .or_else(|| props.iter().find(|(key, _)| key.ends_with("expires-at-ms")))?
-        .1
-        .parse::<u64>()
-        .ok()?;
-
-    credential_refresh_at_from(expires_at_ms, SystemTime::now(), Instant::now())
-}
-
-fn credential_refresh_at_from(
-    expires_at_ms: u64,
-    now_system: SystemTime,
-    now_instant: Instant,
-) -> Option<Instant> {
-    let expires_at = UNIX_EPOCH.checked_add(Duration::from_millis(expires_at_ms))?;
-    let remaining = expires_at.duration_since(now_system).unwrap_or_default();
-    let margin = CREDENTIAL_REFRESH_MARGIN.min(remaining / 10);
-    now_instant.checked_add(remaining.saturating_sub(margin))
-}
-
 pub fn iceberg_table_cache_reader(
     catalog: Arc<dyn iceberg::Catalog>,
     info: Arc<CatalogInfo>,
@@ -129,26 +101,5 @@ mod tests {
     fn test_parse_invalid_table_cache_key() {
         let err = parse_table_cache_key("db1\u{001f}tbl1").unwrap_err();
         assert!(err.message().contains("Invalid iceberg table cache key"));
-    }
-
-    #[test]
-    fn test_credential_refresh_at_uses_safety_margin() {
-        let now_system = UNIX_EPOCH + Duration::from_secs(1_000);
-        let now_instant = Instant::now();
-        let refresh_at = credential_refresh_at_from(4_600_000, now_system, now_instant).unwrap();
-
-        assert_eq!(
-            refresh_at.duration_since(now_instant),
-            Duration::from_secs(3_300)
-        );
-    }
-
-    #[test]
-    fn test_expired_credential_refreshes_immediately() {
-        let now_system = UNIX_EPOCH + Duration::from_secs(2_000);
-        let now_instant = Instant::now();
-        let refresh_at = credential_refresh_at_from(1_000_000, now_system, now_instant).unwrap();
-
-        assert_eq!(refresh_at, now_instant);
     }
 }
