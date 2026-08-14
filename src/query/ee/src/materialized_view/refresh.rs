@@ -129,6 +129,13 @@ impl RefreshStrategy {
             _ => None,
         }
     }
+
+    fn is_empty_aggregate_append(&self) -> bool {
+        matches!(self, RefreshStrategy::AppendAggregate {
+            appended_blocks: 0,
+            ..
+        })
+    }
 }
 
 pub struct MaterializedViewRefresh<'a> {
@@ -932,7 +939,13 @@ impl<'a> MaterializedViewRefresh<'a> {
         let updated = txn_mgr
             .lock()
             .update_table_options(self.mv_table.get_id(), checkpoint_options.clone());
-        if !updated && aggregate_effect != AggregateRefreshEffect::None {
+        // An append-only source endpoint can advance while all changed rows are rejected by the
+        // MV predicate. FUSE then legitimately skips the empty INSERT commit, so there is no table
+        // mutation in the transaction buffer to decorate with checkpoint options.
+        if !updated
+            && aggregate_effect != AggregateRefreshEffect::None
+            && !strategy.is_empty_aggregate_append()
+        {
             return Err(ErrorCode::Internal(format!(
                 "aggregate materialized view {}.{} refresh did not buffer its table mutation",
                 self.database, self.view_name
