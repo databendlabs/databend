@@ -27,6 +27,7 @@ use crate::optimizer::optimizers::rule::RuleFactory;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::optimizer::pipeline::OptimizerTraceCollector;
+use crate::plans::RelOperator;
 
 /// Optimizer that recursively applies a set of transformation rules
 #[derive(Clone)]
@@ -38,6 +39,31 @@ pub struct RecursiveRuleOptimizer {
 }
 
 impl RecursiveRuleOptimizer {
+    fn materialized_view_child_output_columns(
+        s_expr: &SExpr,
+        output_columns: Option<&HashSet<Symbol>>,
+    ) -> Result<Option<HashSet<Symbol>>> {
+        let Some(output_columns) = output_columns else {
+            return Ok(None);
+        };
+        let mut child_output_columns = output_columns.clone();
+        match s_expr.plan() {
+            RelOperator::Limit(_) => {}
+            RelOperator::Sort(sort) => child_output_columns.extend(sort.used_columns()),
+            RelOperator::TopN(top_n) => child_output_columns.extend(top_n.used_columns()),
+            _ => return Ok(None),
+        }
+        child_output_columns.extend(
+            s_expr
+                .child(0)?
+                .derive_relational_prop()?
+                .output_columns
+                .iter()
+                .copied(),
+        );
+        Ok(Some(child_output_columns))
+    }
+
     pub fn new(ctx: Arc<OptimizerContext>, rules: &'static [RuleID]) -> Self {
         Self {
             ctx,
@@ -90,10 +116,16 @@ impl RecursiveRuleOptimizer {
                 continue;
             }
 
+            let child_materialized_view_output_columns =
+                Self::materialized_view_child_output_columns(
+                    &current,
+                    materialized_view_output_columns,
+                )?;
             let mut optimized_children = Vec::with_capacity(current.arity());
             let mut children_changed = false;
             for expr in current.children() {
-                let optimized_child = self.optimize_expression(expr, None)?;
+                let optimized_child = self
+                    .optimize_expression(expr, child_materialized_view_output_columns.as_ref())?;
                 if !optimized_child.eq(expr) {
                     children_changed = true;
                 }

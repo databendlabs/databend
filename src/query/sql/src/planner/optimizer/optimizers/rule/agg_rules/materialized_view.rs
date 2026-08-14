@@ -114,13 +114,16 @@ pub(crate) fn try_rewrite(
         let Some(matched) = matcher.try_match(&view_info)? else {
             continue;
         };
+        let post_aggregate_predicates = matched.post_aggregate_predicates.clone();
 
         if matched.requires_aggregate_rollup {
             let Some(query_aggregate) = &query_aggregate else {
                 continue;
             };
-            if let Some(replacement) = try_build_state_rollup(candidate, &matched, query_aggregate)?
+            if let Some(mut replacement) =
+                try_build_state_rollup(candidate, &matched, query_aggregate)?
             {
+                replacement = apply_post_aggregate_filter(replacement, &post_aggregate_predicates);
                 info!(
                     "Use materialized view {} with aggregate-state rollup: {}",
                     candidate.mv_table_id, candidate.logical_sql
@@ -161,6 +164,7 @@ pub(crate) fn try_rewrite(
             };
             replacement = SExpr::create_unary(Arc::new(aggregate.into()), Arc::new(replacement));
         }
+        replacement = apply_post_aggregate_filter(replacement, &post_aggregate_predicates);
 
         info!(
             "Use materialized view {}: {}",
@@ -170,6 +174,25 @@ pub(crate) fn try_rewrite(
     }
 
     Ok(None)
+}
+
+fn apply_post_aggregate_filter(
+    replacement: SExpr,
+    post_aggregate_predicates: &[ScalarExpr],
+) -> SExpr {
+    if post_aggregate_predicates.is_empty() {
+        replacement
+    } else {
+        SExpr::create_unary(
+            Arc::new(
+                Filter {
+                    predicates: post_aggregate_predicates.to_vec(),
+                }
+                .into(),
+            ),
+            Arc::new(replacement),
+        )
+    }
 }
 
 fn try_build_state_rollup(

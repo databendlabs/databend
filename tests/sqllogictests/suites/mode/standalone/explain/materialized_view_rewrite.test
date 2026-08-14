@@ -117,6 +117,30 @@ group by a, b, c
 ----
 <slt:ignore>table: default.explain_materialized_view_rewrite.source<slt:ignore>
 
+# Sort and limit stay above the aggregate rewrite while the MV supplies the
+# roll-up aggregate states required by the ordering expression.
+query T
+explain select a, b, sum(t) as total
+from source
+group by a, b
+order by total desc
+limit 1
+----
+<slt:ignore>TopN(Final)<slt:ignore>table: default.explain_materialized_view_rewrite.mv_by_abc<slt:ignore>
+
+# HAVING is a post-aggregate filter. It must remain above the rewritten
+# aggregate while WHERE continues to constrain the MV's grouping key.
+query T
+explain select a, b, sum(t) as total
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+having sum(t) > 80
+order by total desc
+limit 1
+----
+<slt:ignore>Filter<slt:ignore>table: default.explain_materialized_view_rewrite.mv_by_abc<slt:ignore>
+
 # Appending after the aggregate checkpoint produces an aggregate Hybrid read:
 # persisted aggregate states and live delta states are merged before finalization.
 statement ok

@@ -147,6 +147,30 @@ group by a, b
 1 10 5 100 114 3 38.0 3
 2 20 7 70 77 2 38.5 2
 
+# ORDER BY and LIMIT remain above the MV roll-up, and HAVING filters the merged
+# aggregate rather than being treated as a source-table predicate.
+query T
+explain select a, b, sum(t) as total
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+having sum(t) > 80
+order by total desc
+limit 1
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>
+
+query III
+select a, b, sum(t) as total
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+having sum(t) > 80
+order by total desc
+limit 1
+----
+1 10 114
+
 # Appends after the checkpoint use a hybrid candidate: persisted MV rows are
 # combined with source CHANGE_TRACKING rows before the rewrite is applied.
 statement ok

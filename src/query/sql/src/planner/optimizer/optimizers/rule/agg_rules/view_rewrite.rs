@@ -44,6 +44,7 @@ pub(crate) struct QueryInfo {
     range_classes: RangeClasses,
     residual_classes: ResidualClasses,
     sort_items: Option<Vec<SortItem>>,
+    post_aggregate_predicates: Vec<ScalarExpr>,
     pub(crate) aggregate: Option<Aggregate>,
     pub(crate) column_map: HashMap<Symbol, ScalarExpr>,
     column_display_map: HashMap<String, Symbol>,
@@ -51,6 +52,13 @@ pub(crate) struct QueryInfo {
 }
 
 impl QueryInfo {
+    fn contains_aggregate(s_expr: &SExpr) -> bool {
+        if matches!(s_expr.plan(), RelOperator::Aggregate(_)) {
+            return true;
+        }
+        s_expr.arity() == 1 && s_expr.child(0).is_ok_and(Self::contains_aggregate)
+    }
+
     pub(crate) fn new<'a>(
         table_index: IndexType,
         table_name: &str,
@@ -60,7 +68,8 @@ impl QueryInfo {
         if let RelOperator::EvalScalar(eval) = s_expr.plan() {
             let selection = eval;
 
-            let mut predicates: std::option::Option<&[ScalarExpr]> = None;
+            let mut predicates = Vec::new();
+            let mut post_aggregate_predicates = Vec::new();
             let mut sort_items = None;
             let mut aggregate = None;
             let mut column_map = HashMap::new();
@@ -106,15 +115,17 @@ impl QueryInfo {
                         sort_items = Some(top_n.items.clone());
                     }
                     RelOperator::Filter(filter) => {
-                        predicates = Some(filter.predicates.as_ref());
+                        if s_expr.child(0).is_ok_and(Self::contains_aggregate) {
+                            post_aggregate_predicates.extend(filter.predicates.iter().cloned());
+                        } else {
+                            predicates.extend(filter.predicates.iter().cloned());
+                        }
                     }
                     RelOperator::Scan(scan) => {
                         if let Some(prewhere) = &scan.prewhere {
-                            debug_assert!(predicates.is_none());
-                            predicates = Some(prewhere.predicates.as_ref());
+                            predicates.extend(prewhere.predicates.iter().cloned());
                         } else if let Some(push_down_predicates) = &scan.push_down_predicates {
-                            debug_assert!(predicates.is_none());
-                            predicates = Some(push_down_predicates.as_ref());
+                            predicates.extend(push_down_predicates.iter().cloned());
                         }
                         // Finish the recursion.
                         break;
@@ -162,21 +173,19 @@ impl QueryInfo {
             let mut residual_classes = ResidualClasses::new();
 
             // split predicates as equal predicate, range predicate, and residual predicate.
-            if let Some(predicates) = predicates {
-                for pred in predicates {
-                    preds_splitter.split(pred, &column_map);
-                }
+            for pred in &predicates {
+                preds_splitter.split(pred, &column_map);
+            }
 
-                for equi_pred in &preds_splitter.equi_columns_preds {
-                    equi_classes.add_equivalence_class(&equi_pred.0, &equi_pred.1);
-                }
-                for range_pred in &preds_splitter.range_preds {
-                    range_classes.add_range_class(&range_pred.0, &range_pred.1, &range_pred.2);
-                }
-                for residual_pred in &preds_splitter.residual_preds {
-                    let display_name = format_scalar(residual_pred, &column_map);
-                    residual_classes.add_residual_pred(display_name, residual_pred);
-                }
+            for equi_pred in &preds_splitter.equi_columns_preds {
+                equi_classes.add_equivalence_class(&equi_pred.0, &equi_pred.1);
+            }
+            for range_pred in &preds_splitter.range_preds {
+                range_classes.add_range_class(&range_pred.0, &range_pred.1, &range_pred.2);
+            }
+            for residual_pred in &preds_splitter.residual_preds {
+                let display_name = format_scalar(residual_pred, &column_map);
+                residual_classes.add_residual_pred(display_name, residual_pred);
             }
 
             let mut output_cols = Vec::with_capacity(selection.items.len());
@@ -195,6 +204,7 @@ impl QueryInfo {
                 residual_classes,
                 aggregate,
                 sort_items,
+                post_aggregate_predicates,
                 column_map,
                 column_display_map,
                 output_cols,
@@ -358,6 +368,7 @@ impl ViewInfo {
 #[derive(Debug)]
 pub(crate) struct ViewRewriteMatch {
     pub(crate) predicates: Vec<ScalarExpr>,
+    pub(crate) post_aggregate_predicates: Vec<ScalarExpr>,
     pub(crate) selection: Vec<ScalarItem>,
     pub(crate) is_aggregate: bool,
     pub(crate) num_aggregate_functions: usize,
@@ -860,6 +871,7 @@ impl ViewMatcher {
         if !self.check_predicates(view_info, &mut new_predicates, &mut new_selection_set)
             || !self.check_output_expressions(view_info, &mut new_selection_set)
             || !self.check_aggregation(view_info, &mut new_selection_set)
+            || !self.check_post_aggregate_predicates(view_info, &mut new_selection_set)
             || !self.check_sort_items(view_info, &mut new_selection_set)
         {
             return Ok(None);
@@ -869,6 +881,7 @@ impl ViewMatcher {
         selection.sort_by_key(|item| item.index);
         Ok(Some(ViewRewriteMatch {
             predicates: new_predicates,
+            post_aggregate_predicates: self.query_info.post_aggregate_predicates.clone(),
             selection,
             is_aggregate: self.query_info.aggregate.is_some(),
             num_aggregate_functions: self
@@ -1184,6 +1197,21 @@ impl ViewMatcher {
         }
 
         true
+    }
+
+    fn check_post_aggregate_predicates(
+        &self,
+        view_info: &ViewInfo,
+        new_selection_set: &mut HashSet<ScalarItem>,
+    ) -> bool {
+        self.query_info
+            .post_aggregate_predicates
+            .iter()
+            .all(|predicate| {
+                self.query_info
+                    .check_output_cols(predicate, &view_info.output_cols, new_selection_set)
+                    .is_ok()
+            })
     }
 }
 
