@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 
 use arrow_flight::FlightData;
 use arrow_flight::utils::flight_data_to_arrow_batch;
@@ -30,16 +29,16 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_io::prelude::BinaryRead;
 use databend_common_io::prelude::bincode_deserialize_from_stream;
-use tokio::sync::Semaphore;
+use parking_lot::Mutex;
 
 use super::inbound_quota::QueueItem;
-use super::inbound_quota::SubQueue;
 
 pub struct NetworkInboundChannel {
     pub sender: Sender<QueueItem>,
     pub receiver: Receiver<QueueItem>,
 
     pub sender_count: Arc<AtomicUsize>,
+    pub failure: Arc<Mutex<Option<ErrorCode>>>,
 }
 
 impl NetworkInboundChannel {
@@ -49,15 +48,22 @@ impl NetworkInboundChannel {
             sender: tx,
             receiver: rx,
             sender_count: Arc::new(AtomicUsize::new(0)),
+            failure: Arc::new(Mutex::new(None)),
         }
     }
 
-    pub async fn recv_raw(&self) -> Option<QueueItem> {
+    pub async fn recv_raw(&self) -> Result<Option<QueueItem>, ErrorCode> {
         if let Ok(item) = self.receiver.try_recv() {
-            return Some(item);
+            return Ok(Some(item));
         }
 
-        self.receiver.recv().await.ok()
+        match self.receiver.recv().await {
+            Ok(item) => Ok(Some(item)),
+            Err(_) => match self.failure.lock().clone() {
+                Some(cause) => Err(cause),
+                None => Ok(None),
+            },
+        }
     }
 }
 
@@ -78,93 +84,6 @@ impl NetworkInboundChannelSet {
 
     pub fn create_receiver(&self, t_idx: usize, schema: &DataSchemaRef) -> Arc<dyn InboundChannel> {
         NetworkInboundReceiver::create(schema, self.channels[t_idx].clone())
-    }
-}
-
-/// Network-side handle. Each do_exchange connection gets one.
-///
-/// When dropped, closes this connection's sub-queues and notifies processors.
-pub struct NetworkInboundSender {
-    /// This connection's sub-queue in each tid's NetworkInboundChannel.
-    sub_queues: Vec<Arc<SubQueue>>,
-}
-
-impl NetworkInboundSender {
-    /// Create a new sender for a connection.
-    /// Adds a sub-queue to each NetworkInboundChannel for this connection.
-    pub fn new(channel_set: &NetworkInboundChannelSet, max_bytes_per_connection: usize) -> Self {
-        let semaphore = Arc::new(Semaphore::new(max_bytes_per_connection));
-        let mut sub_queues = Vec::with_capacity(channel_set.channels.len());
-
-        for channel in channel_set.channels.iter() {
-            channel.sender_count.fetch_add(1, Ordering::AcqRel);
-
-            let sub_queue = Arc::new(SubQueue {
-                max_bytes_per_connection,
-                sender: channel.sender.clone(),
-                receiver: channel.receiver.clone(),
-                semaphore: semaphore.clone(),
-                sender_count: channel.sender_count.clone(),
-            });
-
-            sub_queues.push(sub_queue);
-        }
-
-        Self { sub_queues }
-    }
-
-    /// Add data to the inbound channel.
-    ///
-    /// Extracts tid from the FlightData, pushes to the appropriate sub-queue,
-    /// and waits for backpressure to clear.
-    ///
-    /// Returns `Err(())` only when ALL receivers are closed (network should disconnect).
-    /// If only the target tid's receiver is closed, discards the data and returns `Ok(())`.
-    pub async fn add_data(&self, data: FlightData) -> Result<(), ()> {
-        if is_batch(&data) {
-            return self.add_batch_data(data).await;
-        }
-
-        let tid = extract_tid(&data);
-
-        match self.sub_queues[tid].add_data(data).await {
-            Ok(()) => Ok(()),
-            Err(()) => match self.all_receivers_closed() {
-                true => Err(()),
-                false => Ok(()),
-            },
-        }
-    }
-
-    async fn add_batch_data(&self, data: FlightData) -> Result<(), ()> {
-        let items = split_batch_flight_data(data);
-        for item in items {
-            let tid = extract_tid(&item);
-            match self.sub_queues[tid].add_data(item).await {
-                Ok(()) => {}
-                Err(()) => {
-                    if self.all_receivers_closed() {
-                        return Err(());
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Check if all channels are closed by receivers.
-    pub fn all_receivers_closed(&self) -> bool {
-        self.sub_queues.iter().all(|q| q.sender.is_closed())
-    }
-}
-
-impl Drop for NetworkInboundSender {
-    fn drop(&mut self) {
-        for sub_queue in &self.sub_queues {
-            if sub_queue.sender_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                sub_queue.sender.close();
-            }
-        }
     }
 }
 
@@ -210,7 +129,7 @@ impl InboundChannel for NetworkInboundReceiver {
     }
 
     async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode> {
-        match self.channel.recv_raw().await {
+        match self.channel.recv_raw().await? {
             None => Ok(None),
             Some(QueueItem::LocalData(v)) => Ok(Some(v.into_data())),
             Some(QueueItem::RemoteData(r)) => {
@@ -249,14 +168,14 @@ pub fn strip_tid(mut data: FlightData) -> FlightData {
 }
 
 /// Detect a batch FlightData by checking for the BATCH_MARKER (0x02) as the last byte.
-fn is_batch(data: &FlightData) -> bool {
+pub(super) fn is_batch(data: &FlightData) -> bool {
     const BATCH_MARKER: u8 = 0x02;
     data.app_metadata.len() >= 5 && data.app_metadata[data.app_metadata.len() - 1] == BATCH_MARKER
 }
 
 /// Split a batch FlightData back into individual FlightData items.
 /// Uses zero-copy `Bytes::split_to()` for the large data_header and data_body fields.
-fn split_batch_flight_data(data: FlightData) -> Vec<FlightData> {
+pub(super) fn split_batch_flight_data(data: FlightData) -> Vec<FlightData> {
     let meta = &data.app_metadata;
     let tid_bytes: [u8; 2] = [meta[0], meta[1]];
     let num_items = u16::from_le_bytes([meta[2], meta[3]]) as usize;
