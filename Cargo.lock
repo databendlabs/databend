@@ -4081,6 +4081,7 @@ dependencies = [
  "log",
  "serde",
  "serde_ignored",
+ "serde_json",
  "serde_with",
  "serfig",
  "temp-env",

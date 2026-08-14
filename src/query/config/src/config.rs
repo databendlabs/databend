@@ -18,6 +18,7 @@ use std::env;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::marker::PhantomData;
 use std::str::FromStr;
 
 use clap::ArgAction;
@@ -64,7 +65,11 @@ use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig as InnerStructLogConfig;
 use databend_common_tracing::TracingConfig as InnerTracingConfig;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde::de::SeqAccess;
+use serde::de::Visitor;
 use serde_with::with_prefix;
 use serfig::collectors::from_env;
 use serfig::collectors::from_file;
@@ -2700,9 +2705,11 @@ pub struct HistoryLogConfig {
     #[serde(rename = "retention_interval")]
     pub log_history_retention_interval: usize,
 
-    /// Specifies which history table to enable
+    /// Specifies which history table to enable.
+    ///
+    /// The `LOG_HISTORY_TABLES` environment variable accepts a JSON array of table configs.
     #[clap(skip)]
-    #[serde(rename = "tables")]
+    #[serde(rename = "tables", deserialize_with = "deserialize_json_string_or_seq")]
     pub log_history_tables: Vec<HistoryLogTableConfig>,
 
     /// Specifies whether enable external storage
@@ -2731,6 +2738,47 @@ pub struct HistoryLogTableConfig {
     /// Whether this history table is invisible for querying.
     /// Default is false.
     pub invisible: bool,
+}
+
+struct JsonStringOrSeqVisitor<T>(PhantomData<T>);
+
+impl<'de, T> Visitor<'de> for JsonStringOrSeqVisitor<T>
+where T: DeserializeOwned
+{
+    type Value = Vec<T>;
+
+    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+        formatter.write_str("a JSON-encoded array or a native sequence")
+    }
+
+    fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+    where E: serde::de::Error {
+        serde_json::from_str(value).map_err(E::custom)
+    }
+
+    fn visit_string<E>(self, value: String) -> std::result::Result<Self::Value, E>
+    where E: serde::de::Error {
+        self.visit_str(&value)
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+    where A: SeqAccess<'de> {
+        let mut configs = Vec::with_capacity(seq.size_hint().unwrap_or_default());
+        while let Some(config) = seq.next_element()? {
+            configs.push(config);
+        }
+        Ok(configs)
+    }
+}
+
+fn deserialize_json_string_or_seq<'de, D, T>(
+    deserializer: D,
+) -> std::result::Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: DeserializeOwned,
+{
+    deserializer.deserialize_any(JsonStringOrSeqVisitor(PhantomData))
 }
 
 impl Default for HistoryLogConfig {
@@ -3783,6 +3831,55 @@ mod test {
                 assert_eq!(cfg.log.tracing.tracing_capture_log_level, "DebuG");
             },
         );
+    }
+
+    #[test]
+    fn test_env_history_tables() {
+        with_vars(
+            vec![
+                (
+                    "LOG_HISTORY_TABLES",
+                    Some(
+                        r#"[{"table_name":"query_history","retention":24,"invisible":true},{"table_name":"lineage_history"}]"#,
+                    ),
+                ),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::default().merge("").unwrap();
+                let default_table = HistoryLogTableConfig::default();
+                assert_eq!(cfg.log.history.log_history_tables, vec![
+                    HistoryLogTableConfig {
+                        table_name: "query_history".to_string(),
+                        retention: 24,
+                        invisible: true,
+                    },
+                    HistoryLogTableConfig {
+                        table_name: "lineage_history".to_string(),
+                        ..default_table
+                    },
+                ]);
+            },
+        );
+    }
+
+    #[test]
+    fn test_history_tables_toml_config_is_unchanged() {
+        let cfg: HistoryLogConfig = toml::from_str(
+            r#"
+                [[tables]]
+                table_name = "lineage_history"
+                retention = 24
+                invisible = true
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(cfg.log_history_tables, vec![HistoryLogTableConfig {
+            table_name: "lineage_history".to_string(),
+            retention: 24,
+            invisible: true,
+        }]);
     }
 
     #[test]
