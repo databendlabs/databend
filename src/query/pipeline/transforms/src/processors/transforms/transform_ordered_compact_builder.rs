@@ -22,6 +22,18 @@ use crate::processors::BlockCompactMeta;
 use crate::processors::TransformCompactBlock;
 use crate::processors::TransformPipelineHelper;
 
+pub fn build_local_ordered_compact_pipeline(
+    pipeline: &mut Pipeline,
+    thresholds: BlockThresholds,
+    extra_key_num: usize,
+) -> Result<()> {
+    pipeline.add_accumulating_transformer(move || {
+        OrderedBlockCompactBuilder::new(thresholds, extra_key_num)
+    });
+    pipeline.add_block_meta_transformer(|| TransformCompactBlock);
+    Ok(())
+}
+
 pub fn build_ordered_compact_pipeline(
     pipeline: &mut Pipeline,
     thresholds: BlockThresholds,

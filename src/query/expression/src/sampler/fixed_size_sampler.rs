@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::mem::take;
 
 use rand::Rng;
 use reservoir_sampling::AlgoL;
@@ -126,7 +127,7 @@ impl<R: Rng> FixedSizeSampler<R> {
     }
 
     pub fn take_blocks(&mut self) -> Vec<DataBlock> {
-        std::mem::take(&mut self.blocks)
+        take(&mut self.blocks)
     }
 
     pub fn k(&self) -> usize {
@@ -241,12 +242,98 @@ mod reservoir_sampling {
     }
 }
 
+/// A non-owning reservoir sampler that retains logical `(block, row)` positions.
+///
+/// This is useful when callers already keep the source blocks for replay and do not want the
+/// sampler to duplicate projected block data.
+pub struct FixedSizeIndexSampler<R: Rng> {
+    k: usize,
+    indices: Vec<BlockIndex>,
+    core: AlgoL<R>,
+    skip: usize,
+    rows_seen: usize,
+}
+
+impl<R: Rng> FixedSizeIndexSampler<R> {
+    /// Create a sampler retaining at most `k` row positions.
+    pub fn new(k: usize, rng: R) -> Self {
+        assert!(k > 0, "sample size must be greater than zero");
+        Self {
+            k,
+            indices: Vec::with_capacity(k),
+            core: AlgoL::new(k.try_into().unwrap(), rng),
+            skip: usize::MAX,
+            rows_seen: 0,
+        }
+    }
+
+    /// Add one logical block and retain a uniform sample of `(block, row)` positions.
+    pub fn add_block(&mut self, rows: usize, block_idx: u32) {
+        let mut row = 0;
+        if self.indices.len() < self.k {
+            let take = (self.k - self.indices.len()).min(rows);
+            self.indices
+                .extend((0..take).map(|i| (block_idx, i as u32)));
+            row = take;
+            if self.indices.len() == self.k {
+                self.skip = self.core.search();
+            }
+        }
+
+        while rows - row >= self.skip {
+            row += self.skip;
+            self.indices[self.core.pos()] = (block_idx, (row - 1) as u32);
+            self.core.update_w();
+            self.skip = self.core.search();
+        }
+        self.skip -= rows - row;
+        self.rows_seen += rows;
+    }
+
+    pub fn rows_seen(&self) -> usize {
+        self.rows_seen
+    }
+
+    pub fn indices(&self) -> &[BlockIndex] {
+        &self.indices
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
     use super::*;
+
+    #[test]
+    fn test_index_sampler_matches_algorithm_l_across_blocks() {
+        let k = 5;
+        let mut expected = (0..k).collect::<Vec<_>>();
+        let mut core = AlgoL::new(k.try_into().unwrap(), StdRng::seed_from_u64(7));
+        let mut index = k - 1;
+        loop {
+            index += core.search();
+            if index >= 100 {
+                break;
+            }
+            expected[core.pos()] = index;
+            core.update_w();
+        }
+
+        let mut sampler = FixedSizeIndexSampler::new(k, StdRng::seed_from_u64(7));
+        let block_sizes = [3, 11, 1, 29, 56];
+        for (block, rows) in block_sizes.into_iter().enumerate() {
+            sampler.add_block(rows, block as u32);
+        }
+        let offsets = [0, 3, 14, 15, 44];
+        let actual = sampler
+            .indices()
+            .iter()
+            .map(|&(block, row)| offsets[block as usize] + row as usize)
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn test_add_indices() {
