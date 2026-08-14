@@ -33,15 +33,24 @@ use crate::SegmentLocation;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
 use crate::operations::recluster::ReclusterGroup;
+use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
 use crate::operations::recluster::ReclusterTaskCandidate;
+use crate::operations::recluster::ReclusterTaskKind;
 use crate::operations::recluster::SelectedReclusterSegment;
 use crate::operations::recluster::passes_depth_gate;
 use crate::operations::recluster::select_scalar_segments;
 use crate::operations::recluster::task_candidate;
 use crate::statistics::VectorClusterInfo;
 use crate::statistics::vector_cluster_info_from_column;
+
+// Vector component discovery is still seeded by overlap depth, but FINAL uses
+// the density score plus tail eligibility to decide which task is worth one
+// task slot. Probe a bounded component pool before enforcing `task_budget`, so a
+// high-depth but inefficient component cannot hide a lower-depth eligible one.
+const MIN_VECTOR_COMPONENT_PROBE_COUNT: usize = 32;
+const VECTOR_COMPONENT_PROBE_FACTOR: usize = 4;
 
 /// Vector cluster-key recluster behavior.
 pub(crate) struct VectorReclusterStrategy {
@@ -337,7 +346,14 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         let mut selector = VectorOverlapSelector::new(overlaps);
         let mut candidates = Vec::new();
         let mut used = vec![false; block_count];
-        while candidates.len() < task_budget {
+        let candidate_probe_count = if properties.mode == ReclusterMode::Aggressive {
+            task_budget
+                .saturating_mul(VECTOR_COMPONENT_PROBE_FACTOR)
+                .max(MIN_VECTOR_COMPONENT_PROBE_COUNT)
+        } else {
+            task_budget
+        };
+        while candidates.len() < candidate_probe_count {
             let Some((seed, depth)) = selector.next_seed(&used) else {
                 break;
             };
@@ -356,6 +372,7 @@ impl ReclusterStrategy for VectorReclusterStrategy {
             if selected.len() < 2 {
                 continue;
             }
+            let estimated_depth_gain = selector.estimate_depth_gain(&selected);
             for &local_idx in &selected {
                 used[local_idx] = true;
             }
@@ -368,21 +385,36 @@ impl ReclusterStrategy for VectorReclusterStrategy {
                 group,
                 CandidateScore {
                     selected_total_bytes: task_bytes,
+                    selected_block_count: task_indices.len(),
                     max_depth: task_depth,
                     average_depth,
+                    estimated_depth_gain,
                 },
                 &task_indices,
                 blocks,
+                ReclusterTaskKind::Recluster,
             ));
         }
 
+        candidates.sort_by(|left, right| {
+            right
+                .score
+                .cmp_desc(&left.score)
+                .then_with(|| left.output_level.cmp(&right.output_level))
+        });
+        if properties.mode == ReclusterMode::Aggressive {
+            candidates.retain(|candidate| candidate.passes_aggressive_tail_filter());
+        }
+        candidates.truncate(task_budget);
+
         debug!(
-            "recluster: vector candidate selection group={} block_count={} avg_depth={} depth_threshold={} max_depth={} task_count={}",
+            "recluster: vector candidate selection group={} block_count={} avg_depth={} depth_threshold={} max_depth={} candidate_probe_count={} task_count={}",
             group,
             block_count,
             average_depth,
             depth_threshold,
             max_depth,
+            candidate_probe_count,
             candidates.len(),
         );
         Ok(candidates)
@@ -459,6 +491,18 @@ impl VectorOverlapSelector {
                 .then_with(|| left.cmp(right))
         });
         members
+    }
+
+    fn estimate_depth_gain(&self, selected: &[usize]) -> u64 {
+        let mut gain = 0u64;
+        for (pos, &left) in selected.iter().enumerate() {
+            for &right in &selected[pos + 1..] {
+                if self.overlaps[left].contains(&right) {
+                    gain += 1;
+                }
+            }
+        }
+        gain
     }
 
     fn next_window(
