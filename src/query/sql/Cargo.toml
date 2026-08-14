@@ -57,6 +57,7 @@ fastrace = { workspace = true }
 globiter = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 num-derive = { workspace = true }
