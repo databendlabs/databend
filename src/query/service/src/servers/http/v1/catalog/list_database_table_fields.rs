@@ -61,6 +61,10 @@ pub struct ListDatabaseTableFieldsQuery {
     pub resolve_view: bool,
 }
 
+fn requires_visibility_check(catalog_name: &str) -> bool {
+    catalog_name.eq_ignore_ascii_case(CATALOG_DEFAULT)
+}
+
 async fn resolve_catalog(
     ctx: &HttpQueryContext,
     catalog_name: &str,
@@ -119,19 +123,16 @@ async fn handle(
         .await?;
 
     let catalog_name = query.catalog.as_deref().unwrap_or(CATALOG_DEFAULT);
-    let is_default_catalog = catalog_name.eq_ignore_ascii_case(CATALOG_DEFAULT);
+    let check_visibility = requires_visibility_check(catalog_name);
     let (catalog, query_ctx) = resolve_catalog(ctx, catalog_name).await?;
     let db = catalog.get_database(&tenant, &database).await?;
-    let database_visible = if is_default_catalog {
-        visibility_checker.check_database_visibility(
+    if check_visibility
+        && !visibility_checker.check_database_visibility(
             catalog.name().as_str(),
             db.name(),
             db.get_db_info().database_id.db_id,
         )
-    } else {
-        visibility_checker.check_database_visibility_by_name(catalog.name().as_str(), db.name())
-    };
-    if !database_visible {
+    {
         return Err(ErrorCode::UnknownDatabase(format!(
             "[HTTP-CATALOG] Unknown database: '{}'",
             database
@@ -139,22 +140,15 @@ async fn handle(
     }
 
     let tbl = db.get_table(&table).await?;
-    let table_visible = if is_default_catalog {
-        visibility_checker.check_table_visibility(
+    if check_visibility
+        && !visibility_checker.check_table_visibility(
             catalog.name().as_str(),
             db.name(),
             tbl.name(),
             db.get_db_info().database_id.db_id,
             tbl.get_table_info().ident.table_id,
         )
-    } else {
-        visibility_checker.check_table_visibility_by_name(
-            catalog.name().as_str(),
-            db.name(),
-            tbl.name(),
-        )
-    };
-    if !table_visible {
+    {
         return Err(ErrorCode::UnknownTable(format!(
             "[HTTP-CATALOG] Unknown table: '{}'",
             table
@@ -191,4 +185,16 @@ pub async fn list_database_table_fields_handler(
             _ => InternalServerError(e),
         })?;
     Ok(Json(resp))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_external_catalog_skips_visibility_checks() {
+        assert!(requires_visibility_check(CATALOG_DEFAULT));
+        assert!(requires_visibility_check("DEFAULT"));
+        assert!(!requires_visibility_check("iceberg_catalog"));
+    }
 }
