@@ -736,26 +736,27 @@ impl GrantObjectVisibilityChecker {
             }
         }
 
-        self.check_database_visibility_by_name(catalog, db)
-    }
-
-    /// Check database visibility without consulting ID-based grants.
-    ///
-    /// External catalogs may expose synthetic or non-unique object IDs, so callers
-    /// must use stable catalog/database names for authorization instead.
-    #[inline]
-    pub fn check_database_visibility_by_name(&self, catalog: &str, db: &str) -> bool {
-        if self.has_global_db_table_privilege() || is_system_database(db) {
-            return true;
+        if self.granted_databases.is_empty()
+            && self.extra_databases.is_empty()
+            && self.sys_databases.is_empty()
+        {
+            return false;
         }
 
         let catalog: Arc<str> = Arc::from(catalog);
         let db: Arc<str> = Arc::from(db);
-        self.sys_databases.contains(&(catalog.clone(), db.clone()))
-            || self
-                .extra_databases
-                .contains(&(catalog.clone(), db.clone()))
-            || self.granted_databases.contains(&(catalog, db))
+        if self.sys_databases.contains(&(catalog.clone(), db.clone())) {
+            return true;
+        }
+
+        if self
+            .extra_databases
+            .contains(&(catalog.clone(), db.clone()))
+        {
+            return true;
+        }
+
+        self.granted_databases.contains(&(catalog, db))
     }
 
     #[inline]
@@ -782,26 +783,13 @@ impl GrantObjectVisibilityChecker {
             }
         }
 
-        self.check_table_visibility_by_name(catalog, database, table)
-    }
-
-    /// Check table visibility without consulting ID-based grants.
-    ///
-    /// This is the safe path for external catalogs whose database/table IDs may
-    /// be synthetic and shared by multiple objects.
-    #[inline]
-    pub fn check_table_visibility_by_name(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-    ) -> bool {
-        if self.has_global_db_table_privilege() || is_system_database(database) {
-            return true;
+        if self.granted_databases.is_empty() && self.granted_tables.is_empty() {
+            return false;
         }
 
         let catalog: Arc<str> = Arc::from(catalog);
         let database: Arc<str> = Arc::from(database);
+
         if self
             .granted_databases
             .contains(&(catalog.clone(), database.clone()))
@@ -810,7 +798,11 @@ impl GrantObjectVisibilityChecker {
         }
 
         let table: Arc<str> = Arc::from(table);
-        self.granted_tables.contains(&(catalog, database, table))
+        if self.granted_tables.contains(&(catalog, database, table)) {
+            return true;
+        }
+
+        false
     }
 
     #[inline]
@@ -1108,44 +1100,4 @@ pub async fn filter_db_tables_by_visibility(
         visible_table_indexes,
         db_visible,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn select_privilege() -> UserPrivilegeSet {
-        let mut privileges = UserPrivilegeSet::empty();
-        privileges.set_privilege(UserPrivilegeType::Select);
-        privileges
-    }
-
-    #[test]
-    fn test_external_catalog_visibility_ignores_synthetic_ids() {
-        let mut user = UserInfo::new_no_auth("external_reader", "%");
-        user.grants.grant_privileges(
-            &GrantObject::TableById("iceberg".to_string(), 0, 0),
-            select_privilege(),
-        );
-        user.grants.grant_privileges(
-            &GrantObject::Table(
-                "iceberg".to_string(),
-                "allowed_db".to_string(),
-                "allowed_table".to_string(),
-            ),
-            select_privilege(),
-        );
-
-        let checker = GrantObjectVisibilityChecker::new_from_grants(&user, &[]);
-
-        // The generic ID path demonstrates why synthetic zero IDs cannot be
-        // used to authorize external catalog objects.
-        assert!(checker.check_table_visibility("iceberg", "denied_db", "denied_table", 0, 0,));
-        assert!(checker.check_database_visibility("iceberg", "denied_db", 0));
-
-        assert!(checker.check_database_visibility_by_name("iceberg", "allowed_db"));
-        assert!(checker.check_table_visibility_by_name("iceberg", "allowed_db", "allowed_table",));
-        assert!(!checker.check_database_visibility_by_name("iceberg", "denied_db"));
-        assert!(!checker.check_table_visibility_by_name("iceberg", "denied_db", "denied_table",));
-    }
 }
