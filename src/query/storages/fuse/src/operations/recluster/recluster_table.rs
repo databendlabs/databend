@@ -84,15 +84,18 @@ impl FuseTable {
         // Carry is tied to the current cluster key because cached block metas
         // may be normalized during candidate probing.
         let carry_has_state = !carry.pending.is_empty() || carry.scan_cursor != 0;
-        if carry_has_state && carry.cluster_key_id != mutator.properties.cluster_key_id {
+        if carry_has_state
+            && carry.cluster_key_id != mutator.properties.cluster_key_info.cluster_key_id()
+        {
             debug!(
                 "recluster: reset carry reason=cluster_key_changed old_cluster_key_id={} new_cluster_key_id={}",
-                carry.cluster_key_id, mutator.properties.cluster_key_id,
+                carry.cluster_key_id,
+                mutator.properties.cluster_key_info.cluster_key_id(),
             );
             carry.scan_cursor = 0;
             carry.pending.clear();
         }
-        carry.cluster_key_id = mutator.properties.cluster_key_id;
+        carry.cluster_key_id = mutator.properties.cluster_key_info.cluster_key_id();
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let segment_limit = limit.unwrap_or(DEFAULT_RECLUSTER_SEGMENT_LIMIT);

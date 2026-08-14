@@ -89,6 +89,7 @@ pub const OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
 pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
+pub const HILBERT_CLUSTER_DIMENSIONS: usize = 2;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum WriteDistributionMode {
@@ -212,6 +213,13 @@ impl Display for ClusterType {
             ClusterType::Linear => LINEAR_CLUSTER_TYPE.to_string(),
             ClusterType::Hilbert => HILBERT_CLUSTER_TYPE.to_string(),
         })
+    }
+}
+
+pub fn cluster_type_from_options(options: &BTreeMap<String, String>) -> ClusterType {
+    match options.get(OPT_KEY_CLUSTER_TYPE) {
+        Some(value) if value.eq_ignore_ascii_case(HILBERT_CLUSTER_TYPE) => ClusterType::Hilbert,
+        _ => ClusterType::Linear,
     }
 }
 

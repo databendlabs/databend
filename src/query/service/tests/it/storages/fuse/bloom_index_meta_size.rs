@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -405,7 +406,7 @@ async fn setup() -> databend_common_exception::Result<ParquetMetaData> {
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     let col_stats =
-        gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
+        gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())?;
     let block_writer = BlockWriter::new(
         &operator,
         &loc_generator,

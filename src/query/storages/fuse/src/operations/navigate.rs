@@ -777,15 +777,23 @@ impl FuseTable {
     ) -> Result<bool> {
         let snapshot_cluster_key_meta = snapshot.cluster_key_meta.clone();
         let cluster_key_meta = match snapshot.cluster_type {
-            Some(ClusterType::Linear) => snapshot_cluster_key_meta,
-            Some(ClusterType::Hilbert) => None,
+            Some(ClusterType::Linear | ClusterType::Hilbert) => snapshot_cluster_key_meta,
             None if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_meta() => {
                 snapshot_cluster_key_meta
             }
             None => None,
         };
 
-        table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+        match snapshot.cluster_type {
+            Some(cluster_type) if cluster_key_meta.is_some() => {
+                table_meta
+                    .options
+                    .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type.to_string());
+            }
+            _ => {
+                table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+            }
+        }
         table_meta.cluster_key = None;
         table_meta.cluster_key_v2 = cluster_key_meta;
 

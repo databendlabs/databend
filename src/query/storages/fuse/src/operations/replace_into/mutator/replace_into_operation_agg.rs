@@ -562,9 +562,7 @@ impl AggregationContext {
         let serialized = GlobalIORuntime::instance()
             .spawn(async move {
                 block_builder.build(new_block, |block, generator| {
-                    let cluster_stats =
-                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    Ok((cluster_stats, block))
+                    generator.gen_with_origin_stats(block, origin_stats.clone())
                 })
             })
             .await
