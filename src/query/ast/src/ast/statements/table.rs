@@ -138,14 +138,33 @@ impl Display for ShowDropTablesStmt {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
+pub enum ClusterType {
+    Linear,
+    Hilbert,
+}
+
+impl Display for ClusterType {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ClusterType::Linear => write!(f, "LINEAR"),
+            ClusterType::Hilbert => write!(f, "HILBERT"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ClusterOption {
+    pub cluster_type: ClusterType,
     pub cluster_exprs: Vec<Expr>,
 }
 
 impl Display for ClusterOption {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CLUSTER BY (")?;
+        match self.cluster_type {
+            ClusterType::Linear => write!(f, "CLUSTER BY (")?,
+            ClusterType::Hilbert => write!(f, "CLUSTER BY HILBERT(")?,
+        }
         write_comma_separated_list(f, &self.cluster_exprs)?;
         write!(f, ")")
     }

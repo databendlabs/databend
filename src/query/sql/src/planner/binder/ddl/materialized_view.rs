@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::AlterMaterializedViewStmt;
 use databend_common_ast::ast::AlterTableAction;
+use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::CreateMaterializedViewStmt;
 use databend_common_ast::ast::DropMaterializedViewStmt;
 use databend_common_ast::ast::Engine;
@@ -272,6 +273,14 @@ impl Binder {
             query,
         } = stmt;
 
+        if cluster_by
+            .as_ref()
+            .is_some_and(|cluster_by| cluster_by.cluster_type == AstClusterType::Hilbert)
+        {
+            return Err(ErrorCode::Unimplemented(
+                "Hilbert clustering is not supported for materialized views".to_string(),
+            ));
+        }
         if cluster_by.is_some() && columns.is_empty() {
             return Err(ErrorCode::SemanticError(
                 "Materialized view with CLUSTER BY must include a column list".to_string(),
@@ -555,6 +564,11 @@ impl Binder {
 
         match action {
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
+                if cluster_by.cluster_type == AstClusterType::Hilbert {
+                    return Err(ErrorCode::Unimplemented(
+                        "Hilbert clustering is not supported for materialized views".to_string(),
+                    ));
+                }
                 let cluster_schema = Self::materialized_view_cluster_schema(&mv_table.schema());
                 let cluster_keys = self
                     .analyze_cluster_keys(cluster_by, cluster_schema, None, true)
@@ -574,6 +588,7 @@ impl Binder {
                         target: MaintenanceTarget::MaterializedView { table_id },
                         branch: None,
                         cluster_keys,
+                        cluster_type: cluster_by.cluster_type.to_string().parse()?,
                     },
                 )))
             }

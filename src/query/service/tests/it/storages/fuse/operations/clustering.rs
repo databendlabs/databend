@@ -23,6 +23,9 @@ use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::LINEAR_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -71,6 +74,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         target: MaintenanceTarget::Table,
         branch: None,
         cluster_keys: vec!["id".to_string()],
+        cluster_type: ClusterType::Linear,
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
@@ -83,8 +87,10 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         Some((1, "(id)".to_string()))
     );
     assert_eq!(table_info.meta.cluster_key_seq, 1);
-    assert!(!table_info.meta.options.contains_key("cluster_type"));
-
+    assert_eq!(
+        table_info.meta.options.get(OPT_KEY_CLUSTER_TYPE),
+        Some(&LINEAR_CLUSTER_TYPE.to_string())
+    );
     // drop cluster key
     let drop_table_cluster_key_plan = DropTableClusterKeyPlan {
         tenant: fixture.default_tenant(),
@@ -102,6 +108,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
     let table_info = table.get_table_info();
     assert_eq!(table_info.meta.cluster_key_v2, None);
     assert_eq!(table_info.meta.cluster_key_seq, 1);
+    assert!(!table_info.meta.options.contains_key(OPT_KEY_CLUSTER_TYPE));
 
     Ok(())
 }

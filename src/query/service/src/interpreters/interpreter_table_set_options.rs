@@ -319,10 +319,11 @@ async fn set_segment_format(
                         segment_builder.add_block(block.as_ref().clone())?;
                     }
                     let additional_stats_meta = segment.summary.additional_stats_meta;
+                    let cluster_key_info = fuse_table.cluster_key_info();
                     let segment = segment_builder
                         .build(
                             fuse_table.get_block_thresholds(),
-                            fuse_table.cluster_key_id(),
+                            cluster_key_info.as_ref(),
                             additional_stats_meta,
                         )?
                         .serialize()?;
@@ -341,7 +342,7 @@ async fn set_segment_format(
         table.schema().as_ref().clone(),
         table_snapshot.summary.clone(),
         new_segment_locations,
-        fuse_table.cluster_key_meta(),
+        fuse_table.cluster_key_info(),
         table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;

@@ -28,6 +28,7 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -59,7 +60,7 @@ pub struct BlockCompactMutator {
 
     pub thresholds: BlockThresholds,
     pub compact_params: CompactOptions,
-    pub cluster_key_id: Option<u32>,
+    pub cluster_key_info: Option<ClusterKeyInfo>,
     pub partition_key_count: usize,
 }
 
@@ -69,14 +70,14 @@ impl BlockCompactMutator {
         thresholds: BlockThresholds,
         compact_params: CompactOptions,
         operator: Operator,
-        cluster_key_id: Option<u32>,
+        cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Self {
         Self {
             ctx,
             operator,
             thresholds,
             compact_params,
-            cluster_key_id,
+            cluster_key_info,
             partition_key_count: 0,
         }
     }
@@ -116,7 +117,10 @@ impl BlockCompactMutator {
             Arc::new(self.compact_params.base_snapshot.schema.clone()),
         );
         let mut checker = SegmentCompactChecker::new(self.thresholds);
-        checker.cluster_key_id = self.cluster_key_id;
+        checker.cluster_key_id = self
+            .cluster_key_info
+            .as_ref()
+            .map(ClusterKeyInfo::cluster_key_id);
         checker.partition_key_count = self.partition_key_count;
 
         let mut segment_idx = 0;
@@ -139,7 +143,8 @@ impl BlockCompactMutator {
                 })
                 .collect::<Result<Vec<_>>>()?;
 
-            if let Some(default_cluster_key) = self.cluster_key_id {
+            if let Some(cluster_key_info) = self.cluster_key_info.as_ref() {
+                let default_cluster_key = cluster_key_info.cluster_key_id();
                 // sort descending.
                 segment_infos.sort_by(|a, b| {
                     sort_by_cluster_stats(
@@ -219,7 +224,7 @@ impl BlockCompactMutator {
                 BlockCompactMutator::build_compact_tasks(
                     self.ctx.clone(),
                     self.operator.clone(),
-                    self.cluster_key_id,
+                    self.cluster_key_info.clone(),
                     self.partition_key_count,
                     self.thresholds,
                     lazy_parts,
@@ -244,7 +249,7 @@ impl BlockCompactMutator {
     pub async fn build_compact_tasks(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
-        cluster_key_id: Option<u32>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         partition_key_count: usize,
         thresholds: BlockThresholds,
         lazy_parts: Vec<CompactLazyPartInfo>,
@@ -270,6 +275,7 @@ impl BlockCompactMutator {
             let semaphore = semaphore.clone();
             let dal = dal.clone();
 
+            let cluster_key_info = cluster_key_info.clone();
             let batch = lazy_parts
                 .by_ref()
                 .take(current_batch_size)
@@ -279,7 +285,7 @@ impl BlockCompactMutator {
                 for lazy_part in batch {
                     let mut builder = CompactTaskBuilder::new(
                         dal.clone(),
-                        cluster_key_id,
+                        cluster_key_info.clone(),
                         partition_key_count,
                         thresholds,
                     );
@@ -478,7 +484,7 @@ impl SegmentCompactChecker {
 
 struct CompactTaskBuilder {
     dal: Operator,
-    cluster_key_id: Option<u32>,
+    cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
     thresholds: BlockThresholds,
 
@@ -497,13 +503,13 @@ enum TailMergeSource {
 impl CompactTaskBuilder {
     fn new(
         dal: Operator,
-        cluster_key_id: Option<u32>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         partition_key_count: usize,
         thresholds: BlockThresholds,
     ) -> Self {
         Self {
             dal,
-            cluster_key_id,
+            cluster_key_info,
             partition_key_count,
             thresholds,
             blocks: vec![],
@@ -586,11 +592,13 @@ impl CompactTaskBuilder {
     }
 
     fn can_start_compact(&self, block_meta: &BlockMeta) -> bool {
-        let Some(default_cluster_key) = self.cluster_key_id else {
+        let Some(cluster_key_info) = self.cluster_key_info.as_ref() else {
             return true;
         };
         match block_meta.cluster_stats.as_ref() {
-            Some(stats) if stats.cluster_key_id == default_cluster_key => stats.level == 0,
+            Some(stats) if stats.cluster_key_id == cluster_key_info.cluster_key_id() => {
+                stats.level == 0
+            }
             _ => true,
         }
     }
@@ -653,7 +661,11 @@ impl CompactTaskBuilder {
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .flat_map(|(blocks, summary, hlls)| {
-                merge_statistics_mut(&mut removed_segment_summary, &summary, self.cluster_key_id);
+                merge_statistics_mut(
+                    &mut removed_segment_summary,
+                    &summary,
+                    self.cluster_key_info.as_ref(),
+                );
 
                 blocks.into_iter().enumerate().map(move |(idx, v)| {
                     let column_hlls = hlls.as_ref().and_then(|v| v.block_hlls.get(idx)).cloned();
@@ -662,7 +674,8 @@ impl CompactTaskBuilder {
             })
             .collect::<Vec<_>>();
 
-        if let Some(default_cluster_key) = self.cluster_key_id {
+        if let Some(cluster_key_info) = self.cluster_key_info.as_ref() {
+            let default_cluster_key = cluster_key_info.cluster_key_id();
             // sort ascending.
             blocks.sort_by(|a, b| {
                 sort_by_cluster_stats(

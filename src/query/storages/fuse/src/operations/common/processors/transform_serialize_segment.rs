@@ -32,6 +32,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -93,7 +94,7 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     current_partition: Option<Vec<Scalar>>,
 
     thresholds: BlockThresholds,
-    default_cluster_key_id: Option<u32>,
+    cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
     table_meta_timestamps: TableMetaTimestamps,
     is_column_oriented: bool,
@@ -112,7 +113,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
         let virtual_column_accumulator =
             VirtualColumnAccumulator::try_create(&table_meta.schema, &table_meta.virtual_schema);
 
-        let default_cluster_key_id = table.cluster_key_id();
+        let cluster_key_info = table.cluster_key_info();
 
         let block_top_n_template =
             table
@@ -140,7 +141,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             block_top_ns: Vec::new(),
             top_n: HashMap::new(),
             thresholds,
-            default_cluster_key_id,
+            cluster_key_info,
             partition_key_count: table.partition_key_count(),
             table_meta_timestamps,
             is_column_oriented: table.is_column_oriented(),
@@ -363,7 +364,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
 
                 let segment_info = self.segment_builder.build(
                     self.thresholds,
-                    self.default_cluster_key_id,
+                    self.cluster_key_info.as_ref(),
                     additional_stats_meta,
                 )?;
                 self.current_partition = None;

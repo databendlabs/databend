@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -48,6 +49,8 @@ use databend_common_storages_fuse::statistics::Trim;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
+use databend_query::storages::fuse::statistics::ClusterStatsKey;
+use databend_query::storages::fuse::statistics::ClusterStatsLayout;
 use databend_query::storages::fuse::statistics::RowOrientedSegmentBuilder;
 use databend_query::storages::fuse::statistics::VectorClusterInfo;
 use databend_query::storages::fuse::statistics::VectorClusterOperator;
@@ -56,6 +59,7 @@ use databend_query::storages::fuse::statistics::reducers;
 use databend_query::test_kits::*;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
@@ -65,6 +69,7 @@ use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::table::ClusterType;
 use opendal::Operator;
 use rand::Rng;
 
@@ -79,7 +84,7 @@ fn test_ft_stats_block_stats() -> anyhow::Result<()> {
         StringType::from_data(vec!["aa", "aa", "bb"]),
     ]);
 
-    let r = gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
+    let r = gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
@@ -110,7 +115,8 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> anyhow::Result<()> 
         &block,
         Some(column_distinct_count),
         &schema,
-        &std::collections::BTreeMap::new(),
+        &BTreeMap::new(),
+        HashMap::new(),
     )?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
@@ -145,7 +151,7 @@ fn test_ft_tuple_stats_block_stats() -> anyhow::Result<()> {
 
     let block = DataBlock::new_from_columns(vec![column]);
 
-    let r = gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
+    let r = gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())?;
     assert_eq!(2, r.len());
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(col0_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
@@ -172,7 +178,8 @@ fn test_ft_stats_col_stats_reduce() -> anyhow::Result<()> {
                 &b.clone().unwrap(),
                 None,
                 &schema,
-                &std::collections::BTreeMap::new(),
+                &BTreeMap::new(),
+                HashMap::new(),
             )
         })
         .collect::<databend_common_exception::Result<Vec<_>>>()?;
@@ -444,7 +451,7 @@ fn test_reduce_virtual_column_statistics_in_memory_size() -> anyhow::Result<()> 
 
 #[test]
 fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
-    let default_cluster_key_id = Some(0);
+    let default_cluster_key_info = ClusterKeyInfo::new((0, "(a)".to_string()), ClusterType::Linear);
     let cluster_stats_0 = Some(ClusterStatistics::new(
         0,
         vec![Scalar::from(2i64)],
@@ -468,7 +475,7 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
 
     let res_0 = reducers::reduce_cluster_statistics(
         &[cluster_stats_0.clone(), cluster_stats_1.clone()],
-        default_cluster_key_id,
+        Some(&default_cluster_key_info),
     );
     let expect = Some(ClusterStatistics::new(
         0,
@@ -480,7 +487,7 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
 
     let res_1 = reducers::reduce_cluster_statistics(
         &[cluster_stats_2, cluster_stats_0.clone()],
-        default_cluster_key_id,
+        Some(&default_cluster_key_info),
     );
     let expect = Some(ClusterStatistics::new(
         0,
@@ -492,11 +499,15 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
 
     let res_2 = reducers::reduce_cluster_statistics(
         &[cluster_stats_0.clone(), None],
-        default_cluster_key_id,
+        Some(&default_cluster_key_info),
     );
     assert_eq!(res_2, None);
 
-    let res_3 = reducers::reduce_cluster_statistics(&[cluster_stats_0, cluster_stats_1], Some(1));
+    let other_cluster_key_info = ClusterKeyInfo::new((1, "(a)".to_string()), ClusterType::Linear);
+    let res_3 = reducers::reduce_cluster_statistics(
+        &[cluster_stats_0, cluster_stats_1],
+        Some(&other_cluster_key_info),
+    );
     assert_eq!(res_3, None);
 
     // multi cluster keys.
@@ -514,7 +525,7 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
     ));
     let res_4 = reducers::reduce_cluster_statistics(
         &[multi_cluster_stats_0, multi_cluster_stats_2],
-        default_cluster_key_id,
+        Some(&default_cluster_key_info),
     );
     let expect = Some(ClusterStatistics::new(
         0,
@@ -523,6 +534,32 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
         0,
     ));
     assert_eq!(res_4, expect);
+
+    let hilbert_cluster_stats_0 = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(5i64), Scalar::from(2i64)],
+        vec![Scalar::from(6i64), Scalar::from(4i64)],
+        1,
+    ));
+    let hilbert_cluster_stats_1 = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(1i64), Scalar::from(3i64)],
+        vec![Scalar::from(7i64), Scalar::from(8i64)],
+        2,
+    ));
+    let hilbert_cluster_key_info =
+        ClusterKeyInfo::new((0, "HILBERT(a, b)".to_string()), ClusterType::Hilbert);
+    let res_5 = reducers::reduce_cluster_statistics(
+        &[hilbert_cluster_stats_0, hilbert_cluster_stats_1],
+        Some(&hilbert_cluster_key_info),
+    );
+    let expect = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(1i64), Scalar::from(2i64)],
+        vec![Scalar::from(7i64), Scalar::from(8i64)],
+        2,
+    ));
+    assert_eq!(res_5, expect);
 
     Ok(())
 }
@@ -552,12 +589,21 @@ async fn test_ft_cluster_stats_with_vector_keeps_full_block_for_scalar_suffix() 
         BlockThresholds::new(1_000_000, 125 * 1024 * 1024, 16 * 1024 * 1024, 1000);
     let stats_gen = ClusterStatsGenerator::new(
         0,
-        vec![0, 1, 2],
+        vec![
+            ClusterStatsKey {
+                offset: 0,
+                source_column_id: Some(10),
+            },
+            ClusterStatsKey {
+                offset: 2,
+                source_column_id: Some(20),
+            },
+        ],
         0,
         0,
         block_compactor,
         vec![],
-        Some(VectorClusterOperator {
+        ClusterStatsLayout::Vector(VectorClusterOperator {
             info: VectorClusterInfo {
                 key_index: 1,
                 column_id: 1,
@@ -572,22 +618,23 @@ async fn test_ft_cluster_stats_with_vector_keeps_full_block_for_scalar_suffix() 
         FunctionContext::default(),
     );
 
-    let stats = stats_gen.gen_with_origin_stats(&blocks, origin)?;
-    assert!(stats.is_some());
-    let stats = stats.unwrap();
+    let state = stats_gen.gen_with_origin_stats(blocks, origin)?;
+    let stats = state.cluster_stats.unwrap();
+    assert_eq!(stats.min().as_slice(), &[
+        Scalar::from(1i32),
+        Scalar::from(1i32)
+    ]);
+    assert_eq!(stats.max().as_slice(), &[
+        Scalar::from(4i32),
+        Scalar::from(100i32)
+    ]);
     assert_eq!(
-        &vec![
-            Scalar::Number(NumberScalar::Int32(1)),
-            Scalar::Number(NumberScalar::Int32(1))
-        ],
-        stats.min()
+        state.column_min_max[&10],
+        (Some(Scalar::from(1i32)), Some(Scalar::from(4i32)))
     );
     assert_eq!(
-        &vec![
-            Scalar::Number(NumberScalar::Int32(4)),
-            Scalar::Number(NumberScalar::Int32(100))
-        ],
-        stats.max()
+        state.column_min_max[&20],
+        (Some(Scalar::from(1i32)), Some(Scalar::from(100i32)))
     );
 
     Ok(())
@@ -603,7 +650,7 @@ async fn test_accumulator() -> anyhow::Result<()> {
     for item in blocks {
         let block = item?;
         let col_stats =
-            gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
+            gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())?;
         let block_writer = BlockWriter::new(
             &operator,
             &loc_generator,
@@ -642,20 +689,22 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         BlockThresholds::new(1_000_000, 125 * 1024 * 1024, 16 * 1024 * 1024, 1000);
     let stats_gen = ClusterStatsGenerator::new(
         0,
-        vec![0],
+        vec![ClusterStatsKey {
+            offset: 0,
+            source_column_id: None,
+        }],
         0,
         0,
         block_compactor,
         vec![],
-        None,
+        ClusterStatsLayout::Linear,
         vec![],
         FunctionContext::default(),
     );
-    let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
-    assert!(stats.is_some());
-    let stats = stats.unwrap();
-    assert_eq!(&vec![Scalar::Number(NumberScalar::Int32(1))], stats.min());
-    assert_eq!(&vec![Scalar::Number(NumberScalar::Int32(3))], stats.max());
+    let state = stats_gen.gen_with_origin_stats(blocks.clone(), origin.clone())?;
+    let stats = state.cluster_stats.unwrap();
+    assert_eq!(stats.min().as_slice(), &[Scalar::from(1i32)]);
+    assert_eq!(stats.max().as_slice(), &[Scalar::from(3i32)]);
 
     // add expression executor.
     let expr = RawExpr::FunctionCall {
@@ -684,35 +733,40 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
 
     let stats_gen = ClusterStatsGenerator::new(
         0,
-        vec![1],
+        vec![ClusterStatsKey {
+            offset: 1,
+            source_column_id: None,
+        }],
         0,
         0,
         block_compactor,
         operators,
-        None,
+        ClusterStatsLayout::Linear,
         vec![],
         FunctionContext::default(),
     );
-    let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
-    assert!(stats.is_some());
-    let stats = stats.unwrap();
-    assert_eq!(&vec![Scalar::Number(NumberScalar::Int64(2))], stats.min());
-    assert_eq!(&vec![Scalar::Number(NumberScalar::Int64(4))], stats.max());
+    let state = stats_gen.gen_with_origin_stats(blocks.clone(), origin.clone())?;
+    let stats = state.cluster_stats.unwrap();
+    assert_eq!(stats.min().as_slice(), &[Scalar::from(2i64)]);
+    assert_eq!(stats.max().as_slice(), &[Scalar::from(4i64)]);
 
     // different cluster_key_id.
     let stats_gen = ClusterStatsGenerator::new(
         1,
-        vec![0],
+        vec![ClusterStatsKey {
+            offset: 0,
+            source_column_id: None,
+        }],
         0,
         0,
         block_compactor,
         vec![],
-        None,
+        ClusterStatsLayout::Linear,
         vec![],
         FunctionContext::default(),
     );
-    let stats = stats_gen.gen_with_origin_stats(&blocks, origin)?;
-    assert!(stats.is_none());
+    let state = stats_gen.gen_with_origin_stats(blocks, origin)?;
+    assert!(state.cluster_stats.is_none());
 
     Ok(())
 }
@@ -818,7 +872,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> anyhow::Res
 
         // generate the statistics of column
         let stats_of_columns =
-            gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())
+            gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())
                 .unwrap();
 
         // check if the max value (untrimmed) is in degenerated condition:
