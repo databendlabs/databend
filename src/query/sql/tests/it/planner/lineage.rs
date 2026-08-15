@@ -472,7 +472,7 @@ async fn lineage_test_context() -> Result<Arc<LiteTableContext>> {
     config.log.history.on = true;
     config.log.history.tables.push(HistoryTableConfig {
         table_name: "lineage_history".to_string(),
-        retention: 168,
+        retention: None,
         invisible: false,
     });
     // Lite globals are thread-local in debug builds. Initialize capture on the test's current

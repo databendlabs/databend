@@ -358,9 +358,11 @@ impl GlobalHistoryLog {
             .await?;
         if got_permit {
             let start = Instant::now();
-            self.execute_sql(&table.delete).await?;
-            let context = self.create_context().await?;
+            if let Some(delete) = &table.delete {
+                self.execute_sql(delete).await?;
+            }
             let delete_elapsed = start.elapsed().as_secs();
+            let context = self.create_context().await?;
             if LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
                 .is_ok()
