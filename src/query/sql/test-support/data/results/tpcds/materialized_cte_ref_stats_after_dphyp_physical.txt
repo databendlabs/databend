@@ -382,7 +382,7 @@ Exchange
     │                                               │       │       ├── keys is null equal: [false]
     │                                               │       │       ├── filters: []
     │                                               │       │       ├── build join filters(distributed):
-    │                                               │       │       │   └── filter id:2, build key:item.i_item_sk (#317), probe targets:[catalog_sales.cs_item_sk (#58)@scan2, catalog_returns.cr_item_sk (#79)@scan3], filter type:bloom,inlist,min_max
+    │                                               │       │       │   └── filter id:2, build key:item.i_item_sk (#317), probe targets:[cs_ui.cs_item_sk (#58)@scan2, catalog_returns.cr_item_sk (#79)@scan3], filter type:bloom,inlist,min_max
     │                                               │       │       ├── estimated rows: 18150.03
     │                                               │       │       ├── Exchange(Build)
     │                                               │       │       │   ├── output columns: [item.i_item_sk (#317), item.i_product_name (#338)]

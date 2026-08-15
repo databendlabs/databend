@@ -64,7 +64,8 @@ HashJoin
 ├── keys is null equal: [false, false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t.number (#0), probe targets:[t1.number (#1)@scan1], filter type:bloom,inlist,min_max
+│   ├── filter id:0, build key:t.number (#0), probe targets:[t1.number (#1)@scan1], filter type:bloom,inlist,min_max
+│   └── filter id:1, build key:t.number (#0), probe targets:[t1.number (#1) + 1@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
@@ -87,7 +88,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [t1.number (#1) = t1.number (#1) + 1], limit: NONE]
-    ├── apply join filters: [#0]
+    ├── apply join filters: [#0, #1]
     └── estimated rows: 2.00
 
 query T
@@ -849,6 +850,8 @@ EvalScalar
     ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:t6.wms_id (#4), probe targets:[replace(t1.ext (#1), '33', '44')@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t2
@@ -869,6 +872,7 @@ EvalScalar
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(substr(replace(t1.ext (#1), '33', '44'), 1) = 'R006')], limit: NONE]
+        ├── apply join filters: [#0]
         └── estimated rows: 0.00
 
 query T
@@ -885,6 +889,8 @@ EvalScalar
     ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:t6.wms_id (#4), probe targets:[replace(t1.ext (#1), '33', '44')@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t2
@@ -905,6 +911,7 @@ EvalScalar
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(replace(t1.ext (#1), '33', '44') = 'R006')], limit: NONE]
+        ├── apply join filters: [#0]
         └── estimated rows: 0.00
 
 query T
@@ -921,6 +928,8 @@ EvalScalar
     ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:t6.wms_id (#4), probe targets:[replace(t1.ext (#1), '33', '44')@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t2
@@ -941,6 +950,7 @@ EvalScalar
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(replace(substr(t1.ext (#1), 1), '33', '44') = 'R006')], limit: NONE]
+        ├── apply join filters: [#0]
         └── estimated rows: 0.00
 
 statement ok
@@ -1066,6 +1076,8 @@ HashJoin
 ├── probe keys: [CAST(t1.a (#0) AS Decimal(38, 5) NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:CAST(t3.a (#1) AS Decimal(38, 5) NULL), probe targets:[CAST(t1.a (#0) AS Decimal(38, 5) NULL)@scan0], filter type:inlist
 ├── estimated rows: 12.00
 ├── TableScan(Build)
 │   ├── table: default.default.t3
@@ -1088,6 +1100,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 4.00
 
 query T
