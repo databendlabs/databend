@@ -20,6 +20,8 @@ use std::time::SystemTime;
 use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_sql::QueryLineage;
 use databend_common_sql::QueryLineageColumn;
@@ -42,8 +44,8 @@ const LINEAGE_LOG_TARGET: &str = "databend::log::lineage";
 struct LineageLogEntry {
     operation: &'static str,
     event_time: i64,
-    user_name: String,
-    query_parameterized_hash: String,
+    user_name: Option<String>,
+    query_parameterized_hash: Option<String>,
     query_info: LineageQueryInfo,
     lineage_kind: &'static str,
     source: LineageEndpoint,
@@ -60,7 +62,18 @@ struct LineageObjectDeleteLogEntry {
     event_time: i64,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Serialize)]
+struct LineageEdgeDeleteLogEntry {
+    operation: &'static str,
+    event_time: i64,
+    query_id: String,
+    source_lineage_key: String,
+    target_lineage_key: String,
+    lineage_kind: String,
+    column_lineage_hash: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
 struct LineageEndpoint {
     object_type: &'static str,
     address_kind: &'static str,
@@ -72,21 +85,51 @@ struct LineageEndpoint {
     lineage_key: String,
 }
 
-#[derive(Clone)]
-struct LineageProcessMetadata {
-    event_time: i64,
-    user_name: String,
-    query_parameterized_hash: String,
-    query_info: LineageQueryInfo,
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) struct LineageEdgeIdentity {
+    pub source_lineage_key: String,
+    pub target_lineage_key: String,
+    pub lineage_kind: String,
+    pub column_lineage_hash: String,
 }
 
-#[derive(Clone, Serialize)]
-struct LineageQueryInfo {
-    query_id: String,
-    query_text: String,
-    query_duration_ms: i64,
-    written_rows: u64,
-    scan_rows: u64,
+#[derive(Clone, Debug)]
+pub(crate) struct SemanticLineageEdge {
+    lineage_kind: &'static str,
+    source: LineageEndpoint,
+    target: LineageEndpoint,
+    column_lineage_hash: String,
+    column_lineage: Option<ColumnLineage>,
+}
+
+impl SemanticLineageEdge {
+    pub(crate) fn identity(&self) -> LineageEdgeIdentity {
+        LineageEdgeIdentity {
+            source_lineage_key: self.source.lineage_key.clone(),
+            target_lineage_key: self.target.lineage_key.clone(),
+            lineage_kind: self.lineage_kind.to_string(),
+            column_lineage_hash: self.column_lineage_hash.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct LineageProcessMetadata {
+    pub event_time: i64,
+    pub user_name: Option<String>,
+    pub query_parameterized_hash: Option<String>,
+    pub query_info: LineageQueryInfo,
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
+pub(crate) struct LineageQueryInfo {
+    pub query_id: Option<String>,
+    pub query_text: Option<String>,
+    pub query_duration_ms: Option<i64>,
+    pub written_rows: Option<u64>,
+    pub scan_rows: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backfilled_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -109,35 +152,39 @@ struct ColumnIdentity {
 }
 
 pub fn log_query_lineage(ctx: &Arc<QueryContext>) {
-    let Some(lineage) = ctx.get_query_lineage() else {
-        return;
-    };
+    if let Some(lineage) = ctx.get_query_lineage() {
+        let process = LineageProcessMetadata {
+            // Successful lineage logging runs after log_query_finished, so this is the query
+            // finish event time. Keep a fallback for non-standard test or embedding paths.
+            event_time: convert_query_log_timestamp(
+                ctx.get_query_finish_time().unwrap_or_else(SystemTime::now),
+            ),
+            user_name: Some(
+                ctx.get_current_user()
+                    .map(|user| user.name)
+                    .unwrap_or_default(),
+            ),
+            query_parameterized_hash: Some(ctx.get_query_parameterized_hash()),
+            query_info: LineageQueryInfo {
+                query_id: Some(ctx.get_id()),
+                query_text: Some(ctx.get_query_str()),
+                query_duration_ms: Some(ctx.get_query_duration_ms()),
+                written_rows: Some(ctx.get_write_progress_value().rows as u64),
+                scan_rows: Some(ctx.get_scan_progress_value().rows as u64),
+                backfilled_at: None,
+            },
+        };
 
-    let process = LineageProcessMetadata {
-        // Successful lineage logging runs after log_query_finished, so this is the query finish
-        // event time. Keep a fallback for non-standard test or embedding paths.
-        event_time: convert_query_log_timestamp(
-            ctx.get_query_finish_time().unwrap_or_else(SystemTime::now),
-        ),
-        user_name: ctx
-            .get_current_user()
-            .map(|user| user.name)
-            .unwrap_or_default(),
-        query_parameterized_hash: ctx.get_query_parameterized_hash(),
-        query_info: LineageQueryInfo {
-            query_id: ctx.get_id(),
-            query_text: ctx.get_query_str(),
-            query_duration_ms: ctx.get_query_duration_ms(),
-            written_rows: ctx.get_write_progress_value().rows as u64,
-            scan_rows: ctx.get_scan_progress_value().rows as u64,
-        },
-    };
-
-    for entry in build_log_entries(lineage, process) {
-        match serde_json::to_string(&entry) {
-            Ok(json) => info!(target: LINEAGE_LOG_TARGET, "{}", json),
-            Err(err) => warn!("Failed to serialize query lineage log: {:?}", err),
+        for edge in build_semantic_edges(lineage) {
+            match serialize_upsert_edge(edge, process.clone()) {
+                Ok(json) => info!(target: LINEAGE_LOG_TARGET, "{}", json),
+                Err(err) => warn!("Failed to serialize query lineage log: {:?}", err),
+            }
         }
+    }
+
+    for json in ctx.take_pending_lineage_logs() {
+        info!(target: LINEAGE_LOG_TARGET, "{}", json);
     }
 }
 
@@ -167,10 +214,18 @@ fn lineage_enabled() -> bool {
         .is_table_enabled("lineage_history")
 }
 
+#[cfg(test)]
 fn build_log_entries(
     lineage: QueryLineage,
     process: LineageProcessMetadata,
 ) -> Vec<LineageLogEntry> {
+    build_semantic_edges(lineage)
+        .into_iter()
+        .map(|edge| into_log_entry(edge, process.clone()))
+        .collect()
+}
+
+pub(crate) fn build_semantic_edges(lineage: QueryLineage) -> Vec<SemanticLineageEdge> {
     let lineage_kind = lineage_kind_name(lineage.kind);
     let mut entries = Vec::new();
 
@@ -194,12 +249,7 @@ fn build_log_entries(
                     (Some(column_lineage), column_pairs)
                 };
 
-            entries.push(LineageLogEntry {
-                operation: "UPSERT_EDGE",
-                event_time: process.event_time,
-                user_name: process.user_name.clone(),
-                query_parameterized_hash: process.query_parameterized_hash.clone(),
-                query_info: process.query_info.clone(),
+            entries.push(SemanticLineageEdge {
                 lineage_kind,
                 source: source.clone(),
                 target: target.clone(),
@@ -210,6 +260,46 @@ fn build_log_entries(
     }
 
     entries
+}
+
+fn into_log_entry(edge: SemanticLineageEdge, process: LineageProcessMetadata) -> LineageLogEntry {
+    LineageLogEntry {
+        operation: "UPSERT_EDGE",
+        event_time: process.event_time,
+        user_name: process.user_name,
+        query_parameterized_hash: process.query_parameterized_hash,
+        query_info: process.query_info,
+        lineage_kind: edge.lineage_kind,
+        source: edge.source,
+        target: edge.target,
+        column_lineage_hash: edge.column_lineage_hash,
+        column_lineage: edge.column_lineage,
+    }
+}
+
+pub(crate) fn serialize_upsert_edge(
+    edge: SemanticLineageEdge,
+    process: LineageProcessMetadata,
+) -> Result<String> {
+    serde_json::to_string(&into_log_entry(edge, process))
+        .map_err(|err| ErrorCode::Internal(format!("failed to serialize lineage edge: {err}")))
+}
+
+pub(crate) fn serialize_delete_edge(
+    identity: LineageEdgeIdentity,
+    event_time: i64,
+    query_id: String,
+) -> Result<String> {
+    serde_json::to_string(&LineageEdgeDeleteLogEntry {
+        operation: "DELETE_EDGE",
+        event_time,
+        query_id,
+        source_lineage_key: identity.source_lineage_key,
+        target_lineage_key: identity.target_lineage_key,
+        lineage_kind: identity.lineage_kind,
+        column_lineage_hash: identity.column_lineage_hash,
+    })
+    .map_err(|err| ErrorCode::Internal(format!("failed to serialize lineage deletion: {err}")))
 }
 
 fn lineage_kind_name(kind: QueryLineageKind) -> &'static str {
@@ -403,13 +493,16 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].operation, "UPSERT_EDGE");
         assert_eq!(
-            entries[0].query_info.query_text,
-            "INSERT INTO dst SELECT 'quoted'\nFROM src"
+            entries[0].query_info.query_text.as_deref(),
+            Some("INSERT INTO dst SELECT 'quoted'\nFROM src")
         );
-        assert_eq!(entries[0].query_parameterized_hash, "parameterized-hash");
-        assert_eq!(entries[0].query_info.query_duration_ms, 123);
-        assert_eq!(entries[0].query_info.written_rows, 10);
-        assert_eq!(entries[0].query_info.scan_rows, 20);
+        assert_eq!(
+            entries[0].query_parameterized_hash.as_deref(),
+            Some("parameterized-hash")
+        );
+        assert_eq!(entries[0].query_info.query_duration_ms, Some(123));
+        assert_eq!(entries[0].query_info.written_rows, Some(10));
+        assert_eq!(entries[0].query_info.scan_rows, Some(20));
         let json = serde_json::to_value(&entries[0]).expect("lineage entry must serialize");
         assert_eq!(json["user_name"], "test-user");
         assert_eq!(json["query_info"]["query_id"], "query-1");
@@ -450,11 +543,12 @@ mod tests {
             vec![edge(2, "b", 3, "x"), edge(1, "a", 3, "x")],
         );
         let mut latest_process = process("query-2", 2);
-        latest_process.query_info.query_text = "INSERT INTO dst SELECT b, a FROM src".to_string();
-        latest_process.query_parameterized_hash = "different-parameterized-hash".to_string();
-        latest_process.query_info.query_duration_ms = 456;
-        latest_process.query_info.written_rows = 30;
-        latest_process.query_info.scan_rows = 40;
+        latest_process.query_info.query_text =
+            Some("INSERT INTO dst SELECT b, a FROM src".to_string());
+        latest_process.query_parameterized_hash = Some("different-parameterized-hash".to_string());
+        latest_process.query_info.query_duration_ms = Some(456);
+        latest_process.query_info.written_rows = Some(30);
+        latest_process.query_info.scan_rows = Some(40);
         let reordered = build_log_entries(reordered, latest_process);
         assert_eq!(
             entries[0].column_lineage_hash,
@@ -574,6 +668,29 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_delete_edge_serializes_complete_identity() {
+        let json = serialize_delete_edge(
+            LineageEdgeIdentity {
+                source_lineage_key: "TABLE::NAME::default.db.src".to_string(),
+                target_lineage_key: "VIEW::ID::42".to_string(),
+                lineage_kind: "CREATE_VIEW".to_string(),
+                column_lineage_hash: "column-hash".to_string(),
+            },
+            123,
+            "refresh-query".to_string(),
+        )
+        .unwrap();
+        let json: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(json["operation"], "DELETE_EDGE");
+        assert_eq!(json["event_time"], 123);
+        assert_eq!(json["query_id"], "refresh-query");
+        assert_eq!(json["source_lineage_key"], "TABLE::NAME::default.db.src");
+        assert_eq!(json["target_lineage_key"], "VIEW::ID::42");
+        assert_eq!(json["lineage_kind"], "CREATE_VIEW");
+        assert_eq!(json["column_lineage_hash"], "column-hash");
+    }
+
     fn lineage(
         kind: QueryLineageKind,
         source: QueryLineageRelation,
@@ -595,14 +712,15 @@ mod tests {
     fn process(query_id: &str, event_time: i64) -> LineageProcessMetadata {
         LineageProcessMetadata {
             event_time,
-            user_name: "test-user".to_string(),
-            query_parameterized_hash: "parameterized-hash".to_string(),
+            user_name: Some("test-user".to_string()),
+            query_parameterized_hash: Some("parameterized-hash".to_string()),
             query_info: LineageQueryInfo {
-                query_id: query_id.to_string(),
-                query_text: "INSERT INTO dst SELECT 'quoted'\nFROM src".to_string(),
-                query_duration_ms: 123,
-                written_rows: 10,
-                scan_rows: 20,
+                query_id: Some(query_id.to_string()),
+                query_text: Some("INSERT INTO dst SELECT 'quoted'\nFROM src".to_string()),
+                query_duration_ms: Some(123),
+                written_rows: Some(10),
+                scan_rows: Some(20),
+                backfilled_at: None,
             },
         }
     }

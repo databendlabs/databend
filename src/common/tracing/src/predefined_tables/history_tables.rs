@@ -247,17 +247,35 @@ mod tests {
         assert!(
             lineage
                 .transform
-                .contains("WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *")
+                .contains("WHEN MATCHED AND (target.updated_on IS NULL")
+        );
+        assert!(lineage.transform.contains(
+            "coalesce(target.query_info['query_id']::STRING, '') < coalesce(source.query_info['query_id']::STRING, '')"
+        ));
+        assert!(
+            lineage
+                .transform
+                .contains("THEN UPDATE * WHEN NOT MATCHED THEN INSERT *")
         );
         assert!(
             lineage
                 .transform
                 .contains("coalesce(m['operation']::STRING, 'UPSERT_EDGE') = 'UPSERT_EDGE'")
         );
-        assert_eq!(lineage.additional_transforms.len(), 1);
+        assert_eq!(lineage.additional_transforms.len(), 2);
         assert!(lineage.additional_transforms[0].contains("DELETE_OBJECT"));
         assert!(lineage.additional_transforms[0].contains("source_id IN"));
         assert!(lineage.additional_transforms[0].contains("target_id IN"));
+        assert!(lineage.additional_transforms[1].contains("DELETE_EDGE"));
+        for identity in [
+            "source_lineage_key",
+            "target_lineage_key",
+            "lineage_kind",
+            "column_lineage_hash",
+        ] {
+            assert!(lineage.additional_transforms[1].contains(identity));
+        }
+        assert!(lineage.additional_transforms[1].contains("target.updated_on < to_timestamp"));
     }
 
     #[test]
@@ -275,11 +293,14 @@ mod tests {
         let first_attempt = history.assemble_normal_transforms(17, 23);
         let replay = history.assemble_normal_transforms(17, 23);
         assert_eq!(first_attempt, replay);
-        assert_eq!(first_attempt.len(), 2);
+        assert_eq!(first_attempt.len(), 3);
         assert!(first_attempt[0].contains("MERGE INTO system_history.lineage_history"));
         assert!(first_attempt[0].contains("= 'UPSERT_EDGE'"));
         assert!(first_attempt[1].starts_with("DELETE FROM system_history.lineage_history"));
         assert!(first_attempt[1].contains("= 'DELETE_OBJECT'"));
+        assert!(first_attempt[2].starts_with("DELETE FROM system_history.lineage_history"));
+        assert!(first_attempt[2].contains("= 'DELETE_EDGE'"));
+        assert!(first_attempt[2].contains("target.updated_on < to_timestamp"));
         for phase in first_attempt {
             assert!(phase.contains("batch_number >= 17"));
             assert!(phase.contains("batch_number < 23"));

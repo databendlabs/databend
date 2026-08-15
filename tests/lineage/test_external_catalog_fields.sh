@@ -2,10 +2,12 @@
 
 set -e
 
+QUERY_HTTP_HANDLER_PORT="${QUERY_HTTP_HANDLER_PORT:-8000}"
+
 execute_query() {
     local sql="$1"
 
-    curl -fsS -u root: -XPOST "http://localhost:8000/v1/query" \
+    curl -fsS -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" \
         -H 'Content-Type: application/json' \
         -d "$(jq -nc --arg sql "$sql" '{sql: $sql, pagination: {wait_time_secs: 10}}')"
 }
@@ -30,7 +32,7 @@ execute_query_silent "create user ${user} identified by '${password}'"
 
 response=$(curl -fsS \
     -u "${user}:${password}" \
-    "http://localhost:8000/v1/catalog/databases/lineage_db/tables/src/fields?catalog=lineage_history_iceberg_catalog")
+    "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/catalog/databases/lineage_db/tables/src/fields?catalog=lineage_history_iceberg_catalog")
 if ! echo "$response" | jq -e '.fields | length == 1 and .[0].name == "a"' >/dev/null; then
     echo "External catalog fields API returned an unexpected response"
     echo "$response"
