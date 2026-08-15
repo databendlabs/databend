@@ -5150,6 +5150,7 @@ dependencies = [
 name = "databend-common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow-array 58.1.0",
  "arrow-schema 58.1.0",
  "async-backtrace",
@@ -5181,8 +5182,10 @@ dependencies = [
  "iceberg-catalog-s3tables",
  "log",
  "parquet 58.1.0",
+ "reqwest",
  "serde",
  "serde_json",
+ "tokio",
  "typetag",
  "uuid",
 ]
