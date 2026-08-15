@@ -1626,28 +1626,71 @@ impl<'a> Evaluator<'a> {
             return Ok(None);
         }
 
-        let num_rows = validity
-            .as_ref()
-            .map(|validity| validity.len())
-            .unwrap_or_else(|| match &value {
-                Value::Scalar(_) => 1,
-                Value::Column(col) => col.len(),
-            });
+        // A scalar cast is evaluated once, and its result (or error) applies
+        // to every row enabled by `validity`. It therefore runs on a one-row
+        // temporary block without the validity mask, and any error is expanded
+        // over the enabled rows when merging below. Passing `validity` through
+        // would size the temporary block to the full outer length, so a scalar
+        // error would be pinned to row 0 of a full-length bitmap — or dropped
+        // when row 0 is not enabled — and the scalar broadcast in
+        // `merge_eval_errors` would not recognize it.
+        let is_scalar = matches!(&value, Value::Scalar(_));
+        if is_scalar {
+            let has_enabled_rows = validity
+                .as_ref()
+                .map(|validity| validity.null_count() < validity.len())
+                .unwrap_or(true);
+            if !has_enabled_rows {
+                // No outer row selected this branch; skip the cast entirely.
+                return Ok(Some(Value::Scalar(Scalar::default_value(dest_type))));
+            }
+        }
+
+        let num_rows = if is_scalar {
+            1
+        } else {
+            validity
+                .as_ref()
+                .map(|validity| validity.len())
+                .unwrap_or_else(|| match &value {
+                    Value::Scalar(_) => unreachable!(),
+                    Value::Column(col) => col.len(),
+                })
+        };
 
         let entry = BlockEntry::new(value, || (src_type.clone(), num_rows));
         let block = DataBlock::new(vec![entry], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
         // The cast may run on a one-row temporary block for scalar values, so
         // its error bitmap is scoped to that block. Collect it in local
-        // options first, then merge into the shared options with the outer
-        // row count so a scalar error broadcasts to every row.
+        // options first, then merge into the shared options, expanding a
+        // scalar error over the rows enabled by `validity` (all rows when
+        // there is no partial selection).
         let mut local_options = options.with_suppress_error(options.suppress_error);
-        let result = evaluator.eval_common_call(&call, validity, expr_display, &mut local_options)?;
-        merge_eval_errors(
-            &mut options.errors,
-            local_options.errors.take(),
-            self.data_block.num_rows(),
-        );
+        let block_validity = if is_scalar { None } else { validity.clone() };
+        let result =
+            evaluator.eval_common_call(&call, block_validity, expr_display, &mut local_options)?;
+        if is_scalar {
+            if let Some((valids, msg)) = local_options.errors.take() {
+                if valids.null_count() > 0 {
+                    let expanded = match &validity {
+                        Some(validity) => validity.not().make_mut(),
+                        None => Bitmap::new_constant(false, self.data_block.num_rows()).make_mut(),
+                    };
+                    merge_eval_errors(
+                        &mut options.errors,
+                        Some((expanded, msg)),
+                        self.data_block.num_rows(),
+                    );
+                }
+            }
+        } else {
+            merge_eval_errors(
+                &mut options.errors,
+                local_options.errors.take(),
+                self.data_block.num_rows(),
+            );
+        }
         Ok(Some(result))
     }
 

@@ -57,3 +57,37 @@ select is_not_error((1 / (number - 1)) + cast('x' as int)) from numbers(3) order
 0
 0
 0
+
+# A failing scalar cast inside a partially selected if branch invalidates
+# exactly the rows the branch runs on: the scalar error must be expanded
+# over the branch validity, not pinned to (or dropped at) row 0.
+
+# Only number = 3 selects the branch; row 0 is not selected, so the scalar
+# error must not be dropped.
+query B
+select is_not_error(if(number = 3, cast('x' as int), 1)) from numbers(4) order by number
+----
+1
+1
+1
+0
+
+# number = 0 and number = 2 select the branch; both must be flagged, not
+# only row 0.
+query B
+select is_not_error(if(number % 2 = 0, cast('x' as int), 1)) from numbers(4) order by number
+----
+0
+1
+0
+1
+
+# No row selects the branch: the failing scalar cast never runs, so nothing
+# is an error.
+query B
+select is_not_error(if(number > 100, cast('x' as int), 1)) from numbers(4) order by number
+----
+1
+1
+1
+1

@@ -15,11 +15,15 @@
 use std::io::Write;
 
 use databend_common_expression::Column;
+use databend_common_expression::Domain;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::types::*;
 use goldenfile::Mint;
 
+use super::TestContext;
 use super::run_ast;
+use super::run_ast_with_context;
 
 #[test]
 fn test_control() {
@@ -157,4 +161,41 @@ fn test_is_not_error(file: &mut impl Write) {
         "denom",
         Int64Type::from_data(vec![2i64, 0, -1, 4]),
     )]);
+    // A scalar cast inside a partially selected `if` branch invalidates
+    // exactly the rows the branch runs on: the scalar error must be expanded
+    // over the branch validity instead of being pinned to (or dropped at)
+    // row 0.
+    run_ast(file, "is_not_error(if(denom = 4, cast('x' as int64), 1))", &[(
+        "denom",
+        Int64Type::from_data(vec![2i64, 0, -1, 4]),
+    )]);
+    run_ast(file, "is_not_error(if(denom > 0, cast('x' as int64), 1))", &[(
+        "denom",
+        Int64Type::from_data(vec![2i64, 0, -1, 4]),
+    )]);
+    // No row selects the branch, so the failing scalar cast never runs and
+    // its error must not leak into the result.
+    run_ast(file, "is_not_error(if(denom > 100, cast('x' as int64), 1))", &[(
+        "denom",
+        Int64Type::from_data(vec![2i64, 0, -1, 4]),
+    )]);
+    // Same shape with an input domain wider than the concrete values, so the
+    // optimizer cannot prove the branch dead: at runtime no row selects the
+    // branch, and the failing scalar cast must stay silent.
+    run_ast_with_context(
+        file,
+        "is_not_error(if(denom > 100, cast('x' as int64), 1))",
+        TestContext {
+            entries: &[(
+                "denom",
+                Int64Type::from_data(vec![2i64, 0, -1, 4]).into(),
+            )],
+            input_domains: Some(&[(
+                "denom",
+                Domain::Number(NumberDomain::Int64(SimpleDomain { min: -1, max: 200 })),
+            )]),
+            func_ctx: FunctionContext::default(),
+            strict_eval: true,
+        },
+    );
 }
