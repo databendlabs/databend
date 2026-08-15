@@ -52,7 +52,7 @@ The optimized branch uses released Databend Meta tags that include the `raft-log
 
 ## Benchmark Setup
 
-All runs use `scripts/benchmark/meta-cluster-bench.py` with a 2-node Databend Meta cluster. Workload is `upsert_kv`.
+All runs use `scripts/benchmark/meta/meta-cluster-bench.py` with a 2-node Databend Meta cluster. Workload is `upsert_kv`.
 
 | clients | build | ops/client | total ops | client pool |
 |---:|---|---:|---:|---:|

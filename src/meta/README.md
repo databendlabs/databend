@@ -29,7 +29,7 @@ Databend Meta is a transactional metadata service.
 
 **Binaries** (`binaries/`):
 - `databend-meta`: The meta service binary.
-- `databend-metabench`: Benchmarking tool.
+- `databend-metabench`: Benchmarking tool; ready-to-run benchmarks are in [`scripts/benchmark/meta`](../../scripts/benchmark/meta/).
 - `databend-metactl`: Command-line control tool.
 - `databend-metaverifier`: Data verification tool.
 
