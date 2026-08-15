@@ -141,6 +141,42 @@ fn merge_eval_errors(
     }
 }
 
+/// Expand the error set of an all-scalar evaluation over the rows the
+/// evaluation ran for: the rows enabled by `validity`, or every row when
+/// there is no partial selection.
+///
+/// A scalar evaluation records its error at row 0, which is
+/// indistinguishable from a row-0-only column error; expanding here, where
+/// the scalar-ness of the evaluation is still known, lets `merge_eval_errors`
+/// and `render_error` treat every incoming bitmap as row-aligned. When no
+/// row is enabled the error is dropped: the expression ran for nobody.
+fn expand_scalar_error(
+    errors: &mut Option<(MutableBitmap, String)>,
+    validity: Option<&Bitmap>,
+    num_rows: usize,
+) {
+    let Some((valids, msg)) = errors.take() else {
+        return;
+    };
+    let has_enabled_rows = match validity {
+        Some(validity) => validity.null_count() < validity.len(),
+        None => true,
+    };
+    if !has_enabled_rows {
+        return;
+    }
+    if valids.null_count() == 0 {
+        // No error recorded; keep the (empty) error set.
+        *errors = Some((valids, msg));
+        return;
+    }
+    let expanded = match validity {
+        Some(validity) => validity.not().make_mut(),
+        None => Bitmap::new_constant(false, num_rows).make_mut(),
+    };
+    *errors = Some((expanded, msg));
+}
+
 pub struct Evaluator<'a> {
     data_block: &'a DataBlock,
     func_ctx: &'a FunctionContext,
@@ -378,10 +414,17 @@ impl<'a> Evaluator<'a> {
         } else {
             None
         };
+        // A call whose arguments are all scalars is evaluated once, and an
+        // error it records applies to every row the call runs for. Strip the
+        // validity mask during eval so the error is always recorded — a
+        // scalar reports at row 0, which the validity gate in `set_error`
+        // would otherwise drop whenever row 0 is not enabled — then expand
+        // the recorded error over the enabled rows.
+        let all_scalar = args.iter().all(|arg| matches!(arg, Value::Scalar(_)));
         let mut ctx = EvalContext {
             generics,
             num_rows: self.data_block.num_rows(),
-            validity,
+            validity: if all_scalar { None } else { validity.clone() },
             errors,
             func_ctx: self.func_ctx,
             suppress_error: options.suppress_error,
@@ -390,6 +433,10 @@ impl<'a> Evaluator<'a> {
 
         let (_, _, eval) = function.eval.as_scalar().unwrap();
         let result = eval.eval(&args, &mut ctx);
+
+        if all_scalar {
+            expand_scalar_error(&mut ctx.errors, validity.as_ref(), ctx.num_rows);
+        }
 
         // Non-boundary calls are transparent to suppression: errors from
         // nested evaluations keep bubbling up so a boundary function
@@ -1626,71 +1673,29 @@ impl<'a> Evaluator<'a> {
             return Ok(None);
         }
 
-        // A scalar cast is evaluated once, and its result (or error) applies
-        // to every row enabled by `validity`. It therefore runs on a one-row
-        // temporary block without the validity mask, and any error is expanded
-        // over the enabled rows when merging below. Passing `validity` through
-        // would size the temporary block to the full outer length, so a scalar
-        // error would be pinned to row 0 of a full-length bitmap — or dropped
-        // when row 0 is not enabled — and the scalar broadcast in
-        // `merge_eval_errors` would not recognize it.
-        let is_scalar = matches!(&value, Value::Scalar(_));
-        if is_scalar {
-            let has_enabled_rows = validity
-                .as_ref()
-                .map(|validity| validity.null_count() < validity.len())
-                .unwrap_or(true);
-            if !has_enabled_rows {
-                // No outer row selected this branch; skip the cast entirely.
-                return Ok(Some(Value::Scalar(Scalar::default_value(dest_type))));
-            }
-        }
-
-        let num_rows = if is_scalar {
-            1
-        } else {
-            validity
-                .as_ref()
-                .map(|validity| validity.len())
-                .unwrap_or_else(|| match &value {
-                    Value::Scalar(_) => unreachable!(),
-                    Value::Column(col) => col.len(),
-                })
-        };
+        let num_rows = validity
+            .as_ref()
+            .map(|validity| validity.len())
+            .unwrap_or_else(|| match &value {
+                Value::Scalar(_) => 1,
+                Value::Column(col) => col.len(),
+            });
 
         let entry = BlockEntry::new(value, || (src_type.clone(), num_rows));
         let block = DataBlock::new(vec![entry], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
         // The cast may run on a one-row temporary block for scalar values, so
         // its error bitmap is scoped to that block. Collect it in local
-        // options first, then merge into the shared options, expanding a
-        // scalar error over the rows enabled by `validity` (all rows when
-        // there is no partial selection).
+        // options first, then merge into the shared options with the outer
+        // row count so a scalar error broadcasts to every row.
         let mut local_options = options.with_suppress_error(options.suppress_error);
-        let block_validity = if is_scalar { None } else { validity.clone() };
         let result =
-            evaluator.eval_common_call(&call, block_validity, expr_display, &mut local_options)?;
-        if is_scalar {
-            if let Some((valids, msg)) = local_options.errors.take() {
-                if valids.null_count() > 0 {
-                    let expanded = match &validity {
-                        Some(validity) => validity.not().make_mut(),
-                        None => Bitmap::new_constant(false, self.data_block.num_rows()).make_mut(),
-                    };
-                    merge_eval_errors(
-                        &mut options.errors,
-                        Some((expanded, msg)),
-                        self.data_block.num_rows(),
-                    );
-                }
-            }
-        } else {
-            merge_eval_errors(
-                &mut options.errors,
-                local_options.errors.take(),
-                self.data_block.num_rows(),
-            );
-        }
+            evaluator.eval_common_call(&call, validity, expr_display, &mut local_options)?;
+        merge_eval_errors(
+            &mut options.errors,
+            local_options.errors.take(),
+            self.data_block.num_rows(),
+        );
         Ok(Some(result))
     }
 
@@ -2624,6 +2629,13 @@ impl<'a> Evaluator<'a> {
                 };
                 let (_, _, eval) = function.eval.as_scalar().unwrap();
                 let result = eval.eval(&args, &mut ctx);
+
+                // Same all-scalar rule as `eval_common_call`: an error from a
+                // scalar evaluation applies to every row. This path carries no
+                // branch validity mask, so expand over the whole block.
+                if args.iter().all(|arg| matches!(arg, Value::Scalar(_))) {
+                    expand_scalar_error(&mut ctx.errors, None, ctx.num_rows);
+                }
 
                 // Non-boundary calls are transparent to suppression: errors
                 // from nested evaluations keep bubbling up so a boundary

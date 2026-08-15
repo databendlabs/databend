@@ -33,16 +33,16 @@ select number from numbers(3) where is_error((1 / (number - 1)) > 0)
 query B
 select is_error((1 / 0) > 0)
 ----
-true
+1
 
 # error_or rewrites to if(is_not_error(a), a, ...): nested errors must not
 # raise midway and must skip the erroring argument.
 query ?
 select error_or(1 / (number - 1), 42) from numbers(3) order by number
 ----
--1
-42
-1
+-1.0
+42.0
+1.0
 
 # A scalar subexpression that errors invalidates every row: the constant
 # cast fails for the whole expression, so its (one-row) error bitmap must
@@ -91,3 +91,22 @@ select is_not_error(if(number > 100, cast('x' as int), 1)) from numbers(4) order
 1
 1
 1
+
+# Same for a scalar function call (not only casts): the modulo error must
+# invalidate exactly the branch rows.
+query B
+select is_not_error(if(number = 3, 1 % 0, 1)) from numbers(4) order by number
+----
+1
+1
+1
+0
+
+# Without partial selection, a scalar error invalidates every row when mixed
+# with per-row column errors, not only row 0.
+query B
+select is_not_error((1 / (number - 1)) + (1 % 0)) from numbers(3) order by number
+----
+0
+0
+0

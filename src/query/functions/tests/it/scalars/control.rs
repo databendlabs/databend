@@ -165,17 +165,40 @@ fn test_is_not_error(file: &mut impl Write) {
     // exactly the rows the branch runs on: the scalar error must be expanded
     // over the branch validity instead of being pinned to (or dropped at)
     // row 0.
-    run_ast(file, "is_not_error(if(denom = 4, cast('x' as int64), 1))", &[(
-        "denom",
-        Int64Type::from_data(vec![2i64, 0, -1, 4]),
-    )]);
-    run_ast(file, "is_not_error(if(denom > 0, cast('x' as int64), 1))", &[(
-        "denom",
-        Int64Type::from_data(vec![2i64, 0, -1, 4]),
-    )]);
+    run_ast(
+        file,
+        "is_not_error(if(denom = 4, cast('x' as int64), 1))",
+        &[("denom", Int64Type::from_data(vec![2i64, 0, -1, 4]))],
+    );
+    run_ast(
+        file,
+        "is_not_error(if(denom > 0, cast('x' as int64), 1))",
+        &[("denom", Int64Type::from_data(vec![2i64, 0, -1, 4]))],
+    );
     // No row selects the branch, so the failing scalar cast never runs and
     // its error must not leak into the result.
-    run_ast(file, "is_not_error(if(denom > 100, cast('x' as int64), 1))", &[(
+    run_ast(
+        file,
+        "is_not_error(if(denom > 100, cast('x' as int64), 1))",
+        &[("denom", Int64Type::from_data(vec![2i64, 0, -1, 4]))],
+    );
+    // Same for a scalar function call (not only casts): the all-scalar eval
+    // must expand its error over the branch validity as well.
+    run_ast(file, "is_not_error(if(denom = 4, 1 % 0, 1))", &[(
+        "denom",
+        Int64Type::from_data(vec![2i64, 0, -1, 4]),
+    )]);
+    // A scalar error invalidates every row when there is no partial
+    // selection, so the modulo error must poison all rows even though only
+    // the division has per-row errors.
+    run_ast(file, "is_not_error((1 / denom) + (1 % 0))", &[(
+        "denom",
+        Int64Type::from_data(vec![2i64, 0, -1, 4]),
+    )]);
+    // The raising path (no is_not_error) must also observe the scalar error:
+    // row 3 executes the branch, so the query must fail instead of silently
+    // returning a garbage value.
+    run_ast(file, "if(denom = 4, 1 % 0, 1)", &[(
         "denom",
         Int64Type::from_data(vec![2i64, 0, -1, 4]),
     )]);
@@ -186,10 +209,7 @@ fn test_is_not_error(file: &mut impl Write) {
         file,
         "is_not_error(if(denom > 100, cast('x' as int64), 1))",
         TestContext {
-            entries: &[(
-                "denom",
-                Int64Type::from_data(vec![2i64, 0, -1, 4]).into(),
-            )],
+            entries: &[("denom", Int64Type::from_data(vec![2i64, 0, -1, 4]).into())],
             input_domains: Some(&[(
                 "denom",
                 Domain::Number(NumberDomain::Int64(SimpleDomain { min: -1, max: 200 })),
