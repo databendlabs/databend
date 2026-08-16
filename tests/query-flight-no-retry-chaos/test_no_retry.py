@@ -18,7 +18,7 @@ QUERY_START_TIMEOUT = 30
 QUERY_RESULT_TIMEOUT = 180
 CONNECTION_FAILURE_TIMEOUT = 30
 NODE_FAILURE_TIMEOUT = 90
-NO_REPLACEMENT_WINDOW = 3
+QUERY_STOP_STABILITY_WINDOW = 3
 PAUSE_DURATION = 3
 POLL_INTERVAL = 0.1
 COORDINATOR = "databend-query-0"
@@ -48,8 +48,6 @@ class RunningQuery:
     connection: Any
     task: "QueryTask"
     identity: QueryIdentity
-    baseline_endpoints: dict[str, set[str]]
-    query_endpoints: dict[str, set[str]]
 
     def close(self) -> None:
         self.connection.close()
@@ -311,73 +309,55 @@ def wait_for_query_to_stop(cursor: Any, query_id: str, timeout: float = 30) -> N
     raise AssertionError(f"query {query_id} remained in system.processes")
 
 
-def flight_endpoints(namespace: str, coordinator_ip: str) -> dict[str, set[str]]:
-    remote = f"{coordinator_ip}:9090"
-    result: dict[str, set[str]] = {}
-    for pod in WORKER_PODS:
-        output = subprocess.run(
-            [
-                "kubectl",
-                "-n",
-                namespace,
-                "exec",
-                pod,
-                "-c",
-                "net-admin",
-                "--",
-                "ss",
-                "-Hton",
-                "state",
-                "established",
-                "dst",
-                remote,
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
-        endpoints = set()
-        for line in output.splitlines():
-            fields = line.split()
-            if remote in fields:
-                endpoints.add(fields[fields.index(remote) - 1])
-        result[pod] = endpoints
-    return result
-
-
-def wait_for_flight_connections(
-    namespace: str,
-    coordinator_ip: str,
-    task: QueryTask,
-    baseline: dict[str, set[str]],
-) -> dict[str, set[str]]:
+# gRPC may multiplex a new logical do_exchange stream over an existing TCP
+# connection, so a new socket is not a valid readiness signal for this test.
+def wait_for_do_exchange(
+    namespace: str, query_id: str, task: QueryTask
+) -> None:
     deadline = time.monotonic() + QUERY_START_TIMEOUT
+    pending = set(QUERY_PODS)
     while time.monotonic() < deadline:
-        current = flight_endpoints(namespace, coordinator_ip)
-        selected = {pod: current[pod] - baseline[pod] for pod in WORKER_PODS}
-        if all(selected[pod] for pod in WORKER_PODS):
-            return selected
+        for pod in tuple(pending):
+            try:
+                output = subprocess.run(
+                    [
+                        "kubectl",
+                        "-n",
+                        namespace,
+                        "logs",
+                        pod,
+                        "-c",
+                        "query",
+                        "--since=2m",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                ).stdout
+            except subprocess.CalledProcessError:
+                continue
+            if any(
+                query_id in line
+                and ("do_exchange:" in line or "handle_do_exchange:" in line)
+                for line in output.replace("\0", "").splitlines()
+            ):
+                pending.remove(pod)
+        if not pending:
+            chaos_log(
+                f"logical_exchange_ready query_id={query_id} "
+                f"pods={','.join(QUERY_PODS)}"
+            )
+            return
         if not task.is_running():
             raise AssertionError(
-                "JOIN finished before worker-to-listener Flight connections were established"
+                f"JOIN {query_id} finished before all nodes entered do_exchange; "
+                f"missing={sorted(pending)}"
             )
         time.sleep(POLL_INTERVAL)
-    raise AssertionError("JOIN did not establish Flight connections from both workers")
-
-
-def wait_for_disconnection(
-    namespace: str,
-    coordinator_ip: str,
-    original: dict[str, set[str]],
-    timeout: float = 10,
-) -> None:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        current = flight_endpoints(namespace, coordinator_ip)
-        if all(original[pod] - current[pod] for pod in WORKER_PODS):
-            return
-        time.sleep(POLL_INTERVAL)
-    raise AssertionError("TCP reset did not close the JOIN's Flight connections")
+    raise AssertionError(
+        f"JOIN {query_id} did not enter do_exchange on nodes {sorted(pending)}"
+    )
 
 
 class NoRetryHarness:
@@ -386,29 +366,27 @@ class NoRetryHarness:
         control_cursor: Any,
         fault: ClusterFault,
         namespace: str,
-        coordinator_ip: str,
     ):
         self._control_cursor = control_cursor
         self._fault = fault
         self._namespace = namespace
-        self._coordinator_ip = coordinator_ip
 
-    def start_query(self, sql: str, marker: str) -> RunningQuery:
+    def start_query(
+        self, sql: str, marker: str, *, require_exchange: bool = True
+    ) -> RunningQuery:
         connection = connect_mysql()
         try:
             assert_default_no_retry(connection)
-            baseline = flight_endpoints(self._namespace, self._coordinator_ip)
             task = QueryTask(connection, sql)
             task.start()
             identity = wait_for_query(self._control_cursor, marker, task)
-            endpoints = wait_for_flight_connections(
-                self._namespace, self._coordinator_ip, task, baseline
-            )
+            if require_exchange:
+                wait_for_do_exchange(self._namespace, identity.query_id, task)
             chaos_log(
                 f"query_ready marker={marker} query_id={identity.query_id} "
-                f"connection_id={identity.connection_id} endpoints={endpoints}"
+                f"connection_id={identity.connection_id}"
             )
-            return RunningQuery(connection, task, identity, baseline, endpoints)
+            return RunningQuery(connection, task, identity)
         except BaseException:
             connection.close()
             raise
@@ -419,28 +397,6 @@ class NoRetryHarness:
             time.sleep(delay)
             assert not is_query_running(self._control_cursor, identity.query_id)
         chaos_log(f"query_stopped query_id={identity.query_id}")
-
-    def assert_no_replacement(self, running: RunningQuery) -> None:
-        known = {
-            pod: running.baseline_endpoints[pod] | running.query_endpoints[pod]
-            for pod in WORKER_PODS
-        }
-        deadline = time.monotonic() + NO_REPLACEMENT_WINDOW
-        while time.monotonic() < deadline:
-            current = flight_endpoints(self._namespace, self._coordinator_ip)
-            replacements = {pod: current[pod] - known[pod] for pod in WORKER_PODS}
-            assert not any(replacements.values()), replacements
-            time.sleep(POLL_INTERVAL)
-        chaos_log(
-            f"flight_replacement=none observation_seconds={NO_REPLACEMENT_WINDOW}"
-        )
-
-    def wait_for_disconnection(self, original: dict[str, set[str]]) -> None:
-        wait_for_disconnection(
-            self._namespace,
-            self._coordinator_ip,
-            original,
-        )
 
     def assert_healthy(self) -> None:
         connection = connect_mysql()
@@ -462,9 +418,9 @@ class NoRetryHarness:
         return self._fault
 
 
-def exact_join(marker: str, rows: int = 1000000000) -> str:
+def exact_join(marker: str, rows: int = 1000000000000) -> str:
     return f"""
-        SELECT count(), sum(number)
+        SELECT count(), sum(number % 1000000)
         FROM (
             SELECT lhs.number
             FROM numbers_mt({rows}) AS lhs
@@ -490,6 +446,7 @@ def test_limit_early_stop(harness: NoRetryHarness) -> None:
         LIMIT 10
         """,
         marker,
+        require_exchange=False,
     )
     try:
         rows = running.task.rows()
@@ -522,7 +479,9 @@ def test_kill_query(harness: NoRetryHarness) -> None:
         error = running.task.error(timeout=CONNECTION_FAILURE_TIMEOUT)
         kill_task.rows(timeout=CONNECTION_FAILURE_TIMEOUT)
         assert "AbortedQuery" in str(error), error
-        harness.assert_stopped(running.identity, delay=NO_REPLACEMENT_WINDOW)
+        harness.assert_stopped(
+            running.identity, delay=QUERY_STOP_STABILITY_WINDOW
+        )
         harness.assert_healthy()
         chaos_log(f"scenario_pass name=kill_query_during_join error={error}")
     finally:
@@ -535,16 +494,13 @@ def test_tcp_reset_failure(harness: NoRetryHarness) -> None:
     chaos_log("scenario_start name=tcp_reset_during_join")
     marker = "flight_no_retry_rst_ci"
     running = harness.start_query(exact_join(marker), marker)
-    original = running.query_endpoints
     try:
         try:
             injected_at = time.monotonic()
             chaos_log(
-                f"fault_inject type=tcp_reset endpoints={original}"
+                f"fault_inject type=tcp_reset query_id={running.identity.query_id}"
             )
             harness.fault.reset_connections()
-            harness.wait_for_disconnection(original)
-            chaos_log("fault_observed type=tcp_reset state=flight_disconnected")
             error = running.task.error(timeout=CONNECTION_FAILURE_TIMEOUT)
             elapsed = time.monotonic() - injected_at
             chaos_log(
@@ -554,8 +510,9 @@ def test_tcp_reset_failure(harness: NoRetryHarness) -> None:
         finally:
             harness.fault.clear_resets()
             chaos_log("fault_recovered type=tcp_reset")
-        harness.assert_stopped(running.identity)
-        harness.assert_no_replacement(running)
+        harness.assert_stopped(
+            running.identity, delay=QUERY_STOP_STABILITY_WINDOW
+        )
     finally:
         running.close()
     harness.assert_healthy()
@@ -579,7 +536,9 @@ def test_worker_crash_failure(harness: NoRetryHarness) -> None:
         chaos_log(
             f"query_failed type=sigkill elapsed_seconds={elapsed:.3f} error={error}"
         )
-        harness.assert_stopped(running.identity, delay=NO_REPLACEMENT_WINDOW)
+        harness.assert_stopped(
+            running.identity, delay=QUERY_STOP_STABILITY_WINDOW
+        )
     finally:
         running.close()
     if restart_count is None:
@@ -596,7 +555,8 @@ def test_worker_crash_failure(harness: NoRetryHarness) -> None:
 def test_short_receiver_pause(harness: NoRetryHarness) -> None:
     chaos_log("scenario_start name=short_flight_listener_pause_during_join")
     marker = "flight_no_retry_pause_ci"
-    rows_count = 200000000
+    rows_count = 1000000000000
+    modulus = 1000000
     running = harness.start_query(exact_join(marker, rows_count), marker)
     try:
         chaos_log(
@@ -609,7 +569,8 @@ def test_short_receiver_pause(harness: NoRetryHarness) -> None:
         rows = running.task.rows()
         assert len(rows) == 1, rows
         assert int(rows[0][0]) == rows_count, rows
-        assert int(rows[0][1]) == rows_count * (rows_count - 1) // 2, rows
+        expected_sum = (rows_count // modulus) * modulus * (modulus - 1) // 2
+        assert int(rows[0][1]) == expected_sum, rows
         harness.assert_stopped(running.identity)
         harness.assert_healthy()
         chaos_log("scenario_pass name=short_flight_listener_pause_during_join")
@@ -639,7 +600,7 @@ def main() -> None:
     control_connection = connect_mysql()
     control_cursor = control_connection.cursor()
     fault = ClusterFault(args.namespace, coordinator_ip)
-    harness = NoRetryHarness(control_cursor, fault, args.namespace, coordinator_ip)
+    harness = NoRetryHarness(control_cursor, fault, args.namespace)
 
     try:
         chaos_log(

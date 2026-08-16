@@ -154,6 +154,16 @@ spec:
     spec:
       # The net-admin sidecar injects network faults and signals the query process.
       shareProcessNamespace: true
+      # Query exits if Meta is unavailable during startup. Preserve previous.log for
+      # injected crashes instead of filling it with an unrelated startup failure.
+      initContainers:
+        - name: wait-for-meta
+          image: nicolaka/netshoot:v0.14
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - until nc -z -w 1 meta.databend-flight-no-retry.svc.cluster.local 9191; do sleep 1; done
       containers:
         - name: query
           image: databend-query-flight-no-retry-chaos:ci
