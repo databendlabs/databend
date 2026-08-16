@@ -318,11 +318,13 @@ impl OutboundDriver {
 
     async fn drive(&mut self) -> OutboundTerminal {
         loop {
+            let ack_timeout = self.physical.ack_timeout();
             let deadline = self
                 .logical
                 .in_flight
                 .as_ref()
-                .and_then(|packet| packet.deadline(self.physical.ack_timeout()));
+                .zip(ack_timeout)
+                .and_then(|(packet, timeout)| packet.deadline(timeout));
 
             enum Event {
                 Cancelled,
@@ -373,9 +375,11 @@ impl OutboundDriver {
                     }
                 }
                 Event::AckTimeout => {
+                    let ack_timeout =
+                        ack_timeout.expect("ACK timeout event requires reconnect to be enabled");
                     let status = Status::deadline_exceeded(format!(
                         "do_exchange ACK exceeded its {:?} deadline",
-                        self.physical.ack_timeout()
+                        ack_timeout
                     ));
                     if let Err(cause) = self.reconnect_transport(status).await {
                         return OutboundTerminal::Failed(cause);
@@ -514,8 +518,10 @@ impl PhysicalConnection {
         Ok(connection)
     }
 
-    fn ack_timeout(&self) -> Duration {
-        self.reconnect.timeout
+    fn ack_timeout(&self) -> Option<Duration> {
+        // Without reconnect there is no recovery action for an ACK deadline. Preserve the original
+        // behavior and wait until the transport itself reports an error.
+        (self.reconnect.retry_times != 0).then_some(self.reconnect.timeout)
     }
 
     fn response_stream(&mut self) -> &mut FlightDataStream {
