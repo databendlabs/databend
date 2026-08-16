@@ -136,6 +136,42 @@ class ClusterFault:
         for pod in WORKER_PODS:
             self._exec_pod(pod, f"while {rule} 2>/dev/null; do :; done", check=False)
 
+    def reset_match_counts(self) -> dict[str, int]:
+        result = {}
+        for pod in WORKER_PODS:
+            output = subprocess.check_output(
+                [
+                    "kubectl",
+                    "-n",
+                    self._namespace,
+                    "exec",
+                    pod,
+                    "-c",
+                    "net-admin",
+                    "--",
+                    "iptables",
+                    "-L",
+                    "OUTPUT",
+                    "-v",
+                    "-n",
+                    "-x",
+                ],
+                text=True,
+            )
+            matched = 0
+            for line in output.splitlines():
+                fields = line.split()
+                if (
+                    len(fields) >= 9
+                    and fields[2:4] == ["REJECT", "tcp"]
+                    and fields[8].split("/")[0] == self._coordinator_ip
+                    and "dpt:9090" in fields
+                    and "tcp-reset" in fields
+                ):
+                    matched += int(fields[0])
+            result[pod] = matched
+        return result
+
     def signal_query(self, pod: str, signal: str, *, check: bool = True) -> None:
         if pod not in QUERY_PODS:
             raise AssertionError(f"cannot signal unknown query pod {pod}")
@@ -360,6 +396,27 @@ def wait_for_do_exchange(
     )
 
 
+def wait_for_reset_match(
+    fault: ClusterFault, task: QueryTask, timeout: float = 10
+) -> dict[str, int]:
+    deadline = time.monotonic() + timeout
+    last_counts = {pod: 0 for pod in WORKER_PODS}
+    while time.monotonic() < deadline:
+        last_counts = fault.reset_match_counts()
+        if any(last_counts.values()):
+            chaos_log(f"fault_observed type=tcp_reset packet_counts={last_counts}")
+            return last_counts
+        if not task.is_running():
+            raise AssertionError(
+                "JOIN finished before the TCP reset rule matched a Flight packet"
+            )
+        time.sleep(POLL_INTERVAL)
+    raise AssertionError(
+        f"TCP reset rules did not match a Flight packet within {timeout} seconds; "
+        f"packet_counts={last_counts}"
+    )
+
+
 class NoRetryHarness:
     def __init__(
         self,
@@ -418,13 +475,15 @@ class NoRetryHarness:
         return self._fault
 
 
+# Full joins cannot use the broadcast strategy, so the small build side stays
+# cheap while the large probe side continuously crosses the shuffle exchange.
 def exact_join(marker: str, rows: int = 1000000000000) -> str:
     return f"""
         SELECT count(), sum(number % 1000000)
         FROM (
             SELECT lhs.number
             FROM numbers_mt({rows}) AS lhs
-            INNER JOIN numbers_mt(100003) AS rhs
+            FULL OUTER JOIN numbers_mt(100003) AS rhs
                 ON lhs.number % 100003 = rhs.number
         ) AS {marker}
     """
@@ -496,13 +555,14 @@ def test_tcp_reset_failure(harness: NoRetryHarness) -> None:
     running = harness.start_query(exact_join(marker), marker)
     try:
         try:
-            injected_at = time.monotonic()
             chaos_log(
                 f"fault_inject type=tcp_reset query_id={running.identity.query_id}"
             )
             harness.fault.reset_connections()
+            wait_for_reset_match(harness.fault, running.task)
+            failed_at = time.monotonic()
             error = running.task.error(timeout=CONNECTION_FAILURE_TIMEOUT)
-            elapsed = time.monotonic() - injected_at
+            elapsed = time.monotonic() - failed_at
             chaos_log(
                 f"query_failed type=tcp_reset elapsed_seconds={elapsed:.3f} "
                 f"error={error}"
