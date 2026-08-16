@@ -43,8 +43,6 @@ use opendal::Operator;
 
 use crate::io::GranulePruningReadContext;
 use crate::statistics::ClusterStatsGenerator;
-use crate::statistics::ClusterStatsKey;
-use crate::statistics::ClusterStatsLayout;
 
 /// Materialize the scalar cluster-key columns used by the sparse granule-min index without
 /// changing the physical block written to storage. Expression keys may have been removed after
@@ -348,6 +346,8 @@ mod tests {
     use databend_common_sql::evaluator::BlockOperator;
 
     use super::*;
+    use crate::statistics::ClusterStatsKey;
+    use crate::statistics::ClusterStatsLayout;
 
     fn int64(value: i64) -> Expr {
         Expr::Constant(Constant {
