@@ -503,7 +503,7 @@ impl EquivalenceClasses {
     }
 }
 
-#[derive(Eq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 enum BoundValue {
     // column >= scalar value or column <= scalar value
     Closed(Scalar),
@@ -515,64 +515,64 @@ enum BoundValue {
     PositiveInfinite,
 }
 
-#[allow(clippy::non_canonical_partial_ord_impl)]
-impl PartialOrd for BoundValue {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        fn cmp_scalar(s1: &Scalar, s2: &Scalar) -> Ordering {
-            match (s1, s2) {
-                (Scalar::Number(n1), Scalar::Number(n2)) => {
-                    if n1.is_integer() && n2.is_integer() {
-                        let v1 = n1.integer_to_i128().unwrap();
-                        let v2 = n2.integer_to_i128().unwrap();
-                        v1.cmp(&v2)
-                    } else {
-                        let v1 = n1.to_f64();
-                        let v2 = n2.to_f64();
-                        v1.cmp(&v2)
-                    }
+impl BoundValue {
+    fn cmp_scalar(left: &Scalar, right: &Scalar) -> Ordering {
+        match (left, right) {
+            (Scalar::Number(left), Scalar::Number(right)) => {
+                if left.is_integer() && right.is_integer() {
+                    left.integer_to_i128()
+                        .unwrap()
+                        .cmp(&right.integer_to_i128().unwrap())
+                } else {
+                    left.to_f64().cmp(&right.to_f64())
                 }
-                (_, _) => s1.cmp(s2),
             }
+            (_, _) => left.cmp(right),
         }
+    }
 
+    fn cmp_position(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (BoundValue::NegativeInfinite, BoundValue::NegativeInfinite) => Some(Ordering::Equal),
-            (BoundValue::PositiveInfinite, BoundValue::PositiveInfinite) => Some(Ordering::Equal),
-            (BoundValue::NegativeInfinite, _) => Some(Ordering::Less),
-            (_, BoundValue::NegativeInfinite) => Some(Ordering::Greater),
-            (BoundValue::PositiveInfinite, _) => Some(Ordering::Greater),
-            (_, BoundValue::PositiveInfinite) => Some(Ordering::Less),
-            (BoundValue::Open(v1), BoundValue::Open(v2)) => Some(cmp_scalar(v1, v2)),
-            (BoundValue::Closed(v1), BoundValue::Closed(v2)) => Some(cmp_scalar(v1, v2)),
-            (BoundValue::Open(v1), BoundValue::Closed(v2)) => {
-                let res = cmp_scalar(v1, v2);
-                if res == Ordering::Equal {
-                    Some(Ordering::Less)
-                } else {
-                    Some(res)
-                }
-            }
-            (BoundValue::Closed(v1), BoundValue::Open(v2)) => {
-                let res = cmp_scalar(v1, v2);
-                if res == Ordering::Equal {
-                    Some(Ordering::Greater)
-                } else {
-                    Some(res)
-                }
+            (Self::NegativeInfinite, Self::NegativeInfinite)
+            | (Self::PositiveInfinite, Self::PositiveInfinite) => Ordering::Equal,
+            (Self::NegativeInfinite, _) | (_, Self::PositiveInfinite) => Ordering::Less,
+            (Self::PositiveInfinite, _) | (_, Self::NegativeInfinite) => Ordering::Greater,
+            (Self::Open(left) | Self::Closed(left), Self::Open(right) | Self::Closed(right)) => {
+                Self::cmp_scalar(left, right)
             }
         }
     }
-}
 
-impl Ord for BoundValue {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+    fn cmp_lower(&self, other: &Self) -> Ordering {
+        let ordering = self.cmp_position(other);
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+        match (self, other) {
+            (Self::Open(_), Self::Closed(_)) => Ordering::Greater,
+            (Self::Closed(_), Self::Open(_)) => Ordering::Less,
+            _ => Ordering::Equal,
+        }
     }
-}
 
-impl PartialEq for BoundValue {
-    fn eq(&self, other: &Self) -> bool {
-        self.partial_cmp(other) == Some(Ordering::Equal)
+    fn cmp_upper(&self, other: &Self) -> Ordering {
+        let ordering = self.cmp_position(other);
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+        match (self, other) {
+            (Self::Open(_), Self::Closed(_)) => Ordering::Less,
+            (Self::Closed(_), Self::Open(_)) => Ordering::Greater,
+            _ => Ordering::Equal,
+        }
+    }
+
+    fn lower_exceeds_upper(lower: &Self, upper: &Self) -> bool {
+        match lower.cmp_position(upper) {
+            Ordering::Less => false,
+            Ordering::Greater => true,
+            Ordering::Equal => !matches!((lower, upper), (Self::Closed(_), Self::Closed(_))),
+        }
     }
 }
 
@@ -619,41 +619,21 @@ impl RangeValues {
 
     fn insert(&mut self, lower_bound: BoundValue, upper_bound: BoundValue) {
         if let Some((orig_lower_bound, orig_upper_bound)) = &self.bounds {
-            // case 1 and case 2
-            if upper_bound.cmp(orig_lower_bound) == Ordering::Less
-                || lower_bound.cmp(orig_upper_bound) == Ordering::Greater
+            let intersected_lower = if lower_bound.cmp_lower(orig_lower_bound) == Ordering::Greater
             {
+                lower_bound
+            } else {
+                orig_lower_bound.clone()
+            };
+            let intersected_upper = if upper_bound.cmp_upper(orig_upper_bound) == Ordering::Less {
+                upper_bound
+            } else {
+                orig_upper_bound.clone()
+            };
+            if BoundValue::lower_exceeds_upper(&intersected_lower, &intersected_upper) {
                 self.bounds = None;
-                return;
-            }
-            match (
-                lower_bound.cmp(orig_lower_bound),
-                upper_bound.cmp(orig_upper_bound),
-            ) {
-                // case 3
-                (Ordering::Greater | Ordering::Equal, Ordering::Less | Ordering::Equal) => {
-                    self.bounds = Some((lower_bound, upper_bound))
-                }
-                // case 4
-                (Ordering::Less, Ordering::Greater) => {}
-                (Ordering::Less, Ordering::Less | Ordering::Equal) => {
-                    // case 5
-                    if matches!(
-                        upper_bound.cmp(orig_lower_bound),
-                        Ordering::Greater | Ordering::Equal
-                    ) {
-                        self.bounds = Some((orig_lower_bound.clone(), upper_bound));
-                    }
-                }
-                (Ordering::Greater | Ordering::Equal, Ordering::Greater) => {
-                    // case 6
-                    if matches!(
-                        lower_bound.cmp(orig_upper_bound),
-                        Ordering::Less | Ordering::Equal
-                    ) {
-                        self.bounds = Some((lower_bound, orig_upper_bound.clone()));
-                    }
-                }
+            } else {
+                self.bounds = Some((intersected_lower, intersected_upper));
             }
         }
     }
@@ -751,8 +731,8 @@ impl RangeClasses {
                         Some((query_lower_bound, query_upper_bound)),
                         Some((view_lower_bound, view_upper_bound)),
                     ) => {
-                        let lower_res = view_lower_bound.cmp(query_lower_bound);
-                        let upper_res = view_upper_bound.cmp(query_upper_bound);
+                        let lower_res = view_lower_bound.cmp_lower(query_lower_bound);
+                        let upper_res = view_upper_bound.cmp_upper(query_upper_bound);
 
                         match (lower_res, upper_res) {
                             (Ordering::Equal, Ordering::Equal) => {
@@ -1090,6 +1070,10 @@ impl ViewMatcher {
         //    i.e, the groups formed by the query can be computed by further aggregation of groups output by the view.
         // 4. All columns required to perform further grouping (if necessary) are available in the view output.
         // 5. All columns required to compute output expressions are available in the view output.
+
+        if self.query_info.aggregate.is_some() && view_info.query_info.aggregate.is_none() {
+            return false;
+        }
 
         let query_group_items = self
             .query_info

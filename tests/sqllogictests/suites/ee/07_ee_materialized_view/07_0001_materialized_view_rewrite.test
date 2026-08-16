@@ -272,5 +272,129 @@ group by a, b, c
 2 20 xxxxxxx 7 1
 3 30 xxxxxxx 8 1
 
+# Queries with hidden ORDER BY columns keep their TopN/source plan rather than
+# replacing the whole subtree and losing ordering. Aggregate queries are also
+# kept on the source until detail-to-aggregate rebuilding is supported.
+statement ok
+create table detail_source (
+    id int,
+    amount int,
+    active boolean
+)
+
+statement ok
+insert into detail_source values
+    (1, 10, true),
+    (1, 15, true),
+    (2, 20, true),
+    (3, 30, false)
+
+statement ok
+create materialized view mv_active_detail (id, amount) as
+select id, amount
+from detail_source
+where active
+
+statement ok
+refresh materialized view mv_active_detail
+
+query I
+select id
+from detail_source
+where active
+order by amount desc
+limit 1
+----
+2
+
+query I rowsort
+select distinct id
+from detail_source
+where active
+----
+1
+2
+
+# Open and closed endpoints at the same value have different containment rules.
+statement ok
+create table range_source (id int, amount int)
+
+statement ok
+insert into range_source values (1, 10), (2, 11), (3, 20), (4, 30)
+
+statement ok
+create materialized view mv_amount_gt_10 (id, amount) as
+select id, amount from range_source where amount > 10
+
+statement ok
+refresh materialized view mv_amount_gt_10
+
+query II rowsort
+select id, amount from range_source where amount >= 10
+----
+1 10
+2 11
+3 20
+4 30
+
+query II rowsort
+select id, amount from range_source where amount > 10
+----
+2 11
+3 20
+4 30
+
+statement ok
+drop materialized view mv_amount_gt_10
+
+statement ok
+create materialized view mv_amount_gte_10 (id, amount) as
+select id, amount from range_source where amount >= 10
+
+statement ok
+refresh materialized view mv_amount_gte_10
+
+query II rowsort
+select id, amount from range_source where amount > 10
+----
+2 11
+3 20
+4 30
+
+statement ok
+drop materialized view mv_amount_gte_10
+
+statement ok
+create materialized view mv_amount_lt_30 (id, amount) as
+select id, amount from range_source where amount < 30
+
+statement ok
+refresh materialized view mv_amount_lt_30
+
+query II rowsort
+select id, amount from range_source where amount <= 30
+----
+1 10
+2 11
+3 20
+4 30
+
+statement ok
+drop materialized view mv_amount_lt_30
+
+statement ok
+create materialized view mv_amount_lte_30 (id, amount) as
+select id, amount from range_source where amount <= 30
+
+statement ok
+refresh materialized view mv_amount_lte_30
+
+query II rowsort
+select id, amount from range_source where amount < 30
+----
+1 10
+2 11
+3 20
+
 statement ok
 drop database test_materialized_view_rewrite

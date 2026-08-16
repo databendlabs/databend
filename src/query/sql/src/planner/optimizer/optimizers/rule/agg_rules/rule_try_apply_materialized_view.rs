@@ -57,6 +57,13 @@ impl RuleTryApplyMaterializedView {
         }
     }
 
+    fn contains_ordering(s_expr: &SExpr) -> bool {
+        if matches!(s_expr.plan(), RelOperator::Sort(_) | RelOperator::TopN(_)) {
+            return true;
+        }
+        s_expr.arity() == 1 && s_expr.child(0).is_ok_and(Self::contains_ordering)
+    }
+
     pub fn new(ctx: std::sync::Arc<OptimizerContext>) -> Self {
         let metadata = ctx.get_metadata();
         Self {
@@ -94,6 +101,9 @@ impl Rule for RuleTryApplyMaterializedView {
         state: &mut crate::optimizer::optimizers::rule::TransformResult,
     ) -> Result<()> {
         if !Self::is_supported_query_subtree(s_expr) {
+            return Ok(());
+        }
+        if Self::contains_ordering(s_expr) {
             return Ok(());
         }
 

@@ -51,6 +51,21 @@ impl RecursiveRuleOptimizer {
             RelOperator::Limit(_) => {}
             RelOperator::Sort(sort) => child_output_columns.extend(sort.used_columns()),
             RelOperator::TopN(top_n) => child_output_columns.extend(top_n.used_columns()),
+            RelOperator::EvalScalar(eval)
+                if matches!(
+                    s_expr.child(0)?.plan(),
+                    RelOperator::Sort(_) | RelOperator::TopN(_)
+                ) =>
+            {
+                let child_columns = &s_expr.child(0)?.derive_relational_prop()?.output_columns;
+                child_output_columns.retain(|column| child_columns.contains(column));
+                for item in &eval.items {
+                    if output_columns.contains(&item.index) {
+                        child_output_columns.extend(item.scalar.used_columns());
+                    }
+                }
+                return Ok(Some(child_output_columns));
+            }
             _ => return Ok(None),
         }
         child_output_columns.extend(
