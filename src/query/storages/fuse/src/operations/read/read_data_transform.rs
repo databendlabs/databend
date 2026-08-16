@@ -14,13 +14,8 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 
-use databend_common_base::JoinHandle;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_catalog::table_context::TableContext;
@@ -45,32 +40,6 @@ use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
-
-struct AbortOnDrop<T> {
-    task: JoinHandle<T>,
-}
-
-impl<T> AbortOnDrop<T> {
-    fn new(task: JoinHandle<T>) -> Self {
-        Self { task }
-    }
-}
-
-impl<T> Unpin for AbortOnDrop<T> {}
-
-impl<T> Future for AbortOnDrop<T> {
-    type Output = std::result::Result<T, tokio::task::JoinError>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.task).poll(cx)
-    }
-}
-
-impl<T> Drop for AbortOnDrop<T> {
-    fn drop(&mut self) {
-        self.task.abort();
-    }
-}
 
 pub struct ReadDataTransform {
     input: Arc<InputPort>,
@@ -192,39 +161,34 @@ impl ReadDataTransform {
                 let read_block_context = self.read_block_context.clone();
 
                 full_reads.push(async move {
-                    let read_part = part.clone();
-                    let task = databend_common_base::runtime::spawn(async move {
-                        read_block_context.read_full_data(read_part).await
-                    });
-                    let mut read = AbortOnDrop::new(task);
-
-                    if filters.is_empty() {
-                        let source = read.await.map_err(|error| {
-                            ErrorCode::TokioError(format!("block read task failed: {error}"))
-                        })??;
-                        return Ok::<_, ErrorCode>((index, Some(source)));
-                    }
-
-                    loop {
-                        // Subscribe before checking to avoid missing an update.
-                        let rechecks = filters.recheck_notified();
-                        // `select_all` panics on empty input.
-                        debug_assert!(!rechecks.is_empty());
-                        let part_info = FuseBlockPartInfo::from_part(&part)?;
-                        if filters.should_prune(part_info.columns_stat.as_ref()) {
-                            return Ok::<_, ErrorCode>((index, None));
+                    databend_common_base::runtime::spawn(async move {
+                        if filters.is_empty() {
+                            let source = read_block_context.read_full_data(part.clone()).await?;
+                            return Ok::<_, ErrorCode>((index, Some(source)));
                         }
 
-                        tokio::select! {
-                            result = &mut read => {
-                                let source = result.map_err(|error| {
-                                    ErrorCode::TokioError(format!("block read task failed: {error}"))
-                                })??;
-                                return Ok::<_, ErrorCode>((index, Some(source)));
+                        let read = read_block_context.read_full_data(part.clone());
+                        tokio::pin!(read);
+                        loop {
+                            // Subscribe before checking so a boundary update cannot be missed.
+                            let rechecks = filters.recheck_notified();
+                            // `select_all` panics on empty input.
+                            debug_assert!(!rechecks.is_empty());
+                            let part_info = FuseBlockPartInfo::from_part(&part)?;
+                            if filters.should_prune(part_info.columns_stat.as_ref()) {
+                                return Ok::<_, ErrorCode>((index, None));
                             }
-                            _ = futures::future::select_all(rechecks) => {}
+
+                            tokio::select! {
+                                result = &mut read => {
+                                    let source = result?;
+                                    return Ok::<_, ErrorCode>((index, Some(source)));
+                                }
+                                _ = futures::future::select_all(rechecks) => {}
+                            }
                         }
-                    }
+                    })
+                    .await?
                 });
             }
         }
