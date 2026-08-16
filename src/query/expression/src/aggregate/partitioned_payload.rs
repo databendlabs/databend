@@ -90,6 +90,10 @@ impl PartitionedPayload {
         partition_start_bit: u64,
         arenas: Vec<Arc<Bump>>,
     ) -> Self {
+        assert!(
+            arenas.len() == 1 || arenas.len() == partition_count as usize,
+            "arenas must be shared or match the payload partition count"
+        );
         let states_layout = if !aggrs.is_empty() {
             Some(get_states_layout(&aggrs).unwrap())
         } else {
@@ -97,9 +101,14 @@ impl PartitionedPayload {
         };
 
         let payloads = (0..partition_count)
-            .map(|_| {
+            .map(|partition| {
                 Payload::new(
-                    arenas[0].clone(),
+                    arenas[if arenas.len() == 1 {
+                        0
+                    } else {
+                        partition as usize
+                    }]
+                    .clone(),
                     group_types.clone(),
                     aggrs.clone(),
                     states_layout.clone(),
@@ -206,6 +215,14 @@ impl PartitionedPayload {
             ..
         } = self;
 
+        // Repartition shallow-copies aggregate state addresses. Partition-local arenas would
+        // allow a source arena to be freed while a target partition still points into it.
+        assert_eq!(
+            arenas.len(),
+            1,
+            "partition-local aggregate arenas cannot be repartitioned"
+        );
+
         let mut new_partition_payload = PartitionedPayload::new_with_start_bit(
             group_types,
             aggrs,
@@ -298,6 +315,12 @@ impl PartitionedPayload {
     }
 
     pub fn scatter_into_buckets(self, buckets: usize) -> Vec<PartitionedPayload> {
+        // Scatter also shallow-copies aggregate state addresses, just like repartition.
+        assert_eq!(
+            self.arenas.len(),
+            1,
+            "partition-local aggregate arenas cannot be scattered"
+        );
         let group_types = self.group_types.clone();
         let aggrs = self.aggrs.clone();
         let partition_count = self.partition_count() as u64;
