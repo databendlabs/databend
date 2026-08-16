@@ -23,11 +23,12 @@ use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature::Vacuum;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
@@ -42,14 +43,18 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
+use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
+use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 use log::debug;
 use log::error;
 use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
@@ -66,6 +71,7 @@ use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextQueryInfo;
 use crate::sessions::TableContextQueryState;
 use crate::sessions::TableContextSettings;
@@ -140,13 +146,14 @@ impl Interpreter for ReclusterTableInterpreter {
         let start = SystemTime::now();
         let timeout = Duration::from_secs(recluster_timeout_secs);
         let is_final = self.plan.is_final;
-        loop {
+        let mut committed = false;
+        let result = loop {
             if let Err(err) = ctx.check_aborting() {
                 error!(
                     "recluster: statement aborted, server is shutting down or the query was killed, round={}",
                     times + 1
                 );
-                return Err(err.with_context("failed to execute"));
+                break Err(err.with_context("failed to execute"));
             }
 
             // A successful commit advances this phase. On retryable conflicts,
@@ -163,6 +170,11 @@ impl Interpreter for ReclusterTableInterpreter {
             let mut continue_vertical_phase = false;
             match res {
                 Ok(task_count) => {
+                    // A `Some` round has built and committed recluster tasks; remember it so
+                    // the deferred table-history vacuum runs after the loop finishes.
+                    if task_count.is_some() {
+                        committed = true;
+                    }
                     if is_vertical {
                         match vertical_round {
                             VerticalRound::MergeBlocks => {
@@ -193,7 +205,7 @@ impl Interpreter for ReclusterTableInterpreter {
                             times + 1,
                         );
                         if !is_final || !vertical_cycle_progress {
-                            break;
+                            break Ok(());
                         }
                     }
                 }
@@ -223,7 +235,7 @@ impl Interpreter for ReclusterTableInterpreter {
                             e.code(),
                             e,
                         );
-                        return Err(e);
+                        break Err(e);
                     }
                 }
             }
@@ -244,7 +256,7 @@ impl Interpreter for ReclusterTableInterpreter {
             }
 
             if !is_final {
-                break;
+                break Ok(());
             }
 
             if is_vertical && vertical_round == VerticalRound::MergeBlocks {
@@ -256,10 +268,15 @@ impl Interpreter for ReclusterTableInterpreter {
                     "recluster: final loop stop reason=timeout round={} timeout={:?}",
                     times, timeout,
                 );
-                break;
+                break Ok(());
             }
+        };
+
+        if committed {
+            self.vacuum_table_history().await;
         }
 
+        result?;
         Ok(PipelineBuildResult::create())
     }
 }
@@ -284,6 +301,47 @@ impl ReclusterTableInterpreter {
         } else {
             warn!("recluster: disable distributed vertical execution during mixed-version upgrade");
             Ok(1)
+        }
+    }
+
+    async fn vacuum_table_history(&self) {
+        if LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)
+            .is_err()
+        {
+            return;
+        }
+
+        let result = async {
+            // RECLUSTER resolves the table by name for every round. The deferred vacuum follows
+            // the same name-bound semantics and bypasses the query-level table cache instead of
+            // pinning the table ID for the statement.
+            let table = self
+                .ctx
+                .get_catalog(&self.plan.catalog)
+                .await?
+                .get_table(
+                    &self.ctx.get_tenant(),
+                    &self.plan.database,
+                    &self.plan.table,
+                )
+                .await?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            // Transient tables retain their existing per-commit PurgeAllHistory behavior.
+            if fuse_table.is_transient() {
+                return Ok::<_, ErrorCode>(());
+            }
+            if is_auto_vacuum_enabled(self.ctx.as_ref(), fuse_table)? {
+                fuse_table
+                    .vacuum_table(self.ctx.clone(), &get_vacuum_handler(), true)
+                    .await;
+            }
+            Ok::<_, ErrorCode>(())
+        }
+        .await;
+
+        if let Err(error) = result {
+            warn!("recluster: final table-history vacuum failed: {error}");
         }
     }
 
@@ -313,13 +371,18 @@ impl ReclusterTableInterpreter {
             .await?;
 
         let tbl = self.ctx.get_table(catalog, database, table).await?;
-        // check mutability
-        tbl.check_mutable()?;
+        check_maintenance_target(tbl.as_ref(), &self.plan.target)?;
         if tbl.cluster_key_meta().is_none() {
             return Err(ErrorCode::UnclusteredTable(format!(
                 "Unclustered table '{}.{}'",
                 database, table,
             )));
+        }
+
+        if FuseTable::try_from_table(tbl.as_ref())?.cluster_type() == Some(ClusterType::Hilbert) {
+            return Err(ErrorCode::Unimplemented(
+                "Hilbert reclustering is not supported yet",
+            ));
         }
 
         self.build_push_downs(push_downs, &tbl)?;

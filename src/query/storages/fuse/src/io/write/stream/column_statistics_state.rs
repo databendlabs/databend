@@ -203,7 +203,7 @@ mod tests {
         ]);
 
         let stats_0 =
-            gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
+            gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())?;
 
         let mut stats_columns = vec![];
         let leaf_fields = schema.leaf_fields();

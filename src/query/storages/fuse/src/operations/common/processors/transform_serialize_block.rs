@@ -461,16 +461,9 @@ impl Processor for TransformSerializeBlock {
                 let serialized =
                     self.block_builder
                         .build(block, |block, generator| match &stats_type {
-                            ClusterStatsGenType::Generally => {
-                                let keys = generator.granule_cluster_key_offsets();
-                                let (stats, block) = generator.gen_stats_for_append(block)?;
-                                Ok((stats, block, keys))
-                            }
+                            ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
                             ClusterStatsGenType::WithOrigin(origin_stats) => {
-                                let keys = generator.granule_cluster_key_offsets();
-                                let cluster_stats = generator
-                                    .gen_with_origin_stats(&block, origin_stats.clone())?;
-                                Ok((cluster_stats, block, keys))
+                                generator.gen_with_origin_stats(block, origin_stats.clone())
                             }
                         })?;
 

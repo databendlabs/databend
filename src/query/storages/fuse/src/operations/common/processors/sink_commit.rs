@@ -47,7 +47,7 @@ use databend_common_sql::plans::TruncateMode;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -84,7 +84,7 @@ enum State {
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
         table_stats_gen: TableStatsGenerator,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         table_info: TableInfo,
     },
     TryCommit {
@@ -208,7 +208,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
     ) -> Result<Option<PurgeMode>> {
         let mode = if Self::need_to_purge_all_history(table, snapshot_gen) {
             Some(PurgeMode::PurgeAllHistory)
-        } else if Self::is_auto_vacuum_enabled(ctx, table)? {
+        } else if snapshot_gen.skip_auto_vacuum() {
+            None
+        } else if is_auto_vacuum_enabled(ctx, table)? {
             Some(PurgeMode::PurgeAccordingToRetention)
         } else {
             None
@@ -246,23 +248,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         | MutationKind::Replace
                 )
             })
-    }
-
-    fn is_auto_vacuum_enabled(ctx: &dyn TableContext, table: &FuseTable) -> Result<bool> {
-        // Priority for auto vacuum:
-        // - If table-level option `FUSE_OPT_KEY_ENABLE_AUTO_VACUUM` is set, it takes precedence
-        // - If table-level option is not set, fall back to the setting
-        match table
-            .table_info
-            .options()
-            .get(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)
-        {
-            Some(v) => {
-                let enabled = v.parse::<u32>()? != 0;
-                Ok(enabled)
-            }
-            None => ctx.get_settings().get_enable_auto_vacuum(),
-        }
     }
 
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
@@ -502,7 +487,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             State::GenerateSnapshot {
                 previous,
                 mut table_stats_gen,
-                cluster_key_meta,
+                cluster_key_info,
                 table_info,
             } => {
                 let change_tracking_enabled_during_commit = {
@@ -536,7 +521,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 let mut table_statistics = table_stats_gen.take_table_statistics();
                 match self.snapshot_gen.generate_new_snapshot(
                     &table_info,
-                    cluster_key_meta,
+                    cluster_key_info,
                     previous,
                     self.ctx.txn_mgr(),
                     self.table_meta_timestamps,
@@ -650,7 +635,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     self.state = State::GenerateSnapshot {
                         previous,
                         table_stats_gen,
-                        cluster_key_meta: fuse_table.cluster_key_meta(),
+                        cluster_key_info: fuse_table.cluster_key_info(),
                         table_info,
                     };
                 }
@@ -854,12 +839,26 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 self.state = State::GenerateSnapshot {
                     previous,
                     table_stats_gen,
-                    cluster_key_meta: fuse_table.cluster_key_meta(),
+                    cluster_key_info: fuse_table.cluster_key_info(),
                     table_info,
                 };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
+    }
+}
+
+pub fn is_auto_vacuum_enabled(ctx: &dyn TableContext, table: &FuseTable) -> Result<bool> {
+    // Priority for auto vacuum:
+    // - If table-level option `FUSE_OPT_KEY_ENABLE_AUTO_VACUUM` is set, it takes precedence.
+    // - If table-level option is not set, fall back to the setting.
+    match table
+        .table_info
+        .options()
+        .get(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)
+    {
+        Some(value) => Ok(value.parse::<u32>()? != 0),
+        None => ctx.get_settings().get_enable_auto_vacuum(),
     }
 }

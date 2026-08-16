@@ -82,7 +82,7 @@ impl MutationInterpreter {
         })
     }
 
-    pub(crate) fn try_create_materialized_view_refresh(
+    pub fn try_create_materialized_view_refresh(
         ctx: Arc<QueryContext>,
         s_expr: SExpr,
         schema: DataSchemaRef,
@@ -112,6 +112,7 @@ impl Interpreter for MutationInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if check_deduplicate_label(self.ctx.clone()).await? {
+            self.ctx.attach_query_lineage(None);
             return Ok(PipelineBuildResult::create());
         }
 

@@ -644,6 +644,7 @@ mod tests {
             catalog_name: None,
             name_ident: table_name_ident(table_name),
             table_meta,
+            source_table_option: None,
             as_dropped,
             materialized_view: None,
             table_properties: None,

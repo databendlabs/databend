@@ -472,9 +472,8 @@ where A: super::TypeCheckAdapter
         }
     }
 
-    /// Collects the outer scope columns referenced by a lambda body.
-    /// They are passed to the lambda function as leading arguments and
-    /// exposed to the lambda expression as leading schema fields.
+    /// Collects the outer scope columns referenced by a lambda body; they
+    /// become the lambda function's leading arguments and schema fields.
     fn collect_lambda_capture_args(
         &self,
         lambda_expr: &ScalarExpr,
@@ -523,11 +522,9 @@ where A: super::TypeCheckAdapter
 
     /// Resolves `json_path_transform(<json>, <path>, <param> -> <expr>)`.
     ///
-    /// Unlike the other json lambda functions, the variant argument is not
-    /// cast to an array or map: the json path locates the values to be
-    /// transformed and the lambda is only applied to the matched values.
-    /// The lambda body is cast to `Nullable(Variant)` so that the
-    /// replacement values are always jsonb.
+    /// The variant argument is not cast to an array or map: the path locates
+    /// the values to transform and the lambda only runs on them. The lambda
+    /// body is cast to `Nullable(Variant)`; a NULL result writes a JSON null.
     fn resolve_json_path_transform(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -580,8 +577,6 @@ where A: super::TypeCheckAdapter
             lambda_expr,
         )?;
 
-        // Cast the lambda body to Nullable(Variant) so that replacement
-        // values are always jsonb. A NULL result writes a JSON null.
         let lambda_scalar = if lambda_type != param_type {
             ScalarExpr::CastExpr(CastExpr {
                 span: lambda_scalar.span(),
@@ -593,12 +588,11 @@ where A: super::TypeCheckAdapter
             lambda_scalar
         };
 
-        // Collect outer scope columns as arguments first, then the json
-        // and path arguments. The evaluator relies on this layout.
-        let (mut lambda_args, mut lambda_fields) =
-            self.collect_lambda_capture_args(&lambda_scalar)?;
-        lambda_args.push(json_arg);
-        lambda_args.push(path_arg);
+        // Argument layout is `[json, path, captures...]` so that EXPLAIN and
+        // profile output keep the signature order; the evaluator relies on it.
+        let (capture_args, mut lambda_fields) = self.collect_lambda_capture_args(&lambda_scalar)?;
+        let mut lambda_args = vec![json_arg, path_arg];
+        lambda_args.extend(capture_args);
 
         // Add the lambda parameter as the last schema field.
         for column in lambda_context.all_column_bindings().iter().rev() {
@@ -617,8 +611,8 @@ where A: super::TypeCheckAdapter
         let remote_lambda_expr = expr.as_remote_expr();
         let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
 
-        // Fold constant NULL arguments only after the lambda body has gone
-        // through normal semantic and type validation.
+        // Fold NULL constants only after the lambda body passed normal
+        // semantic and type validation.
         if fold_to_null {
             return Ok(Box::new((
                 ConstantExpr {

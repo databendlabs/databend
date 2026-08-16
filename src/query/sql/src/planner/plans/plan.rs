@@ -93,7 +93,6 @@ use crate::plans::DescProcedurePlan;
 use crate::plans::DescRowAccessPolicyPlan;
 use crate::plans::DescSequencePlan;
 use crate::plans::DescUserPlan;
-use crate::plans::DescribeMaterializedViewPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DescribeViewPlan;
@@ -176,6 +175,7 @@ use crate::plans::SetWorkloadGroupQuotasPlan;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
+use crate::plans::ShowCreateMaterializedViewPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
@@ -358,8 +358,8 @@ pub enum Plan {
 
     // Materialized Views
     CreateMaterializedView(Box<CreateMaterializedViewPlan>),
+    ShowCreateMaterializedView(Box<ShowCreateMaterializedViewPlan>),
     DropMaterializedView(Box<DropMaterializedViewPlan>),
-    DescribeMaterializedView(Box<DescribeMaterializedViewPlan>),
     RefreshMaterializedView(Box<RefreshMaterializedViewPlan>),
 
     // Streams
@@ -590,13 +590,13 @@ impl Plan {
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::ShowCreateDictionary(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
+            Plan::ShowCreateMaterializedView(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
             Plan::VacuumDropTable(plan) => plan.schema(),
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
-            Plan::DescribeMaterializedView(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),

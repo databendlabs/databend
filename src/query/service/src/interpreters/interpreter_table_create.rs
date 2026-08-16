@@ -229,6 +229,7 @@ impl CreateTableInterpreter {
         let temp_prefix = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned();
         let reply = catalog.create_table(req).await?;
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+            self.ctx.attach_query_lineage(None);
             return Ok(PipelineBuildResult::create());
         }
         let table_id = reply.table_id;
@@ -244,6 +245,12 @@ impl CreateTableInterpreter {
             return Err(e);
         }
 
+        self.ctx.update_query_lineage_target_id(
+            &self.plan.catalog,
+            &self.plan.database,
+            &self.plan.table,
+            table_id,
+        );
         let prev_table_id = reply.prev_table_id;
         let orphan_table_name = reply.orphan_table_name.clone();
         let table_id_seq = reply
@@ -281,6 +288,12 @@ impl CreateTableInterpreter {
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan),
             table_info: Some(table_info),
+            lineage_target_table_id: None,
+            lineage_target_catalog_type: if self.plan.engine == Engine::Iceberg {
+                databend_common_meta_app::schema::CatalogType::Iceberg
+            } else {
+                databend_common_meta_app::schema::CatalogType::Default
+            },
         };
 
         let pipeline_result = match InsertInterpreter::try_create(self.ctx.clone(), insert_plan) {
@@ -466,7 +479,10 @@ impl CreateTableInterpreter {
     ///
     /// - Rebuild `DataSchema` with default exprs.
     /// - Update cluster key of table meta.
-    fn build_request(&self, statistics: Option<TableStatistics>) -> Result<CreateTableReq> {
+    pub(crate) fn build_request(
+        &self,
+        statistics: Option<TableStatistics>,
+    ) -> Result<CreateTableReq> {
         let fields = self.plan.schema.fields().clone();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         for field in fields.iter() {
@@ -601,6 +617,7 @@ impl CreateTableInterpreter {
                 table_name: self.plan.table.to_string(),
             },
             table_meta,
+            source_table_option: None,
             as_dropped: false,
             materialized_view: None,
             table_properties: self.plan.table_properties.clone(),

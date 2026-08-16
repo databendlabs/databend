@@ -55,15 +55,20 @@ impl ClusterStatisticsBuilder {
             input_schema,
         )?;
         let vector_cluster_id_offset = cluster_stats_gen
-            .vector_operator
-            .as_ref()
+            .vector_operator()
             .map(|vector_operator| vector_operator.vector_cluster_id_offset);
-        let extra_key_num = cluster_stats_gen.operator_extra_key_num();
-        let cluster_key_index = cluster_stats_gen
-            .cluster_key_index
-            .into_iter()
-            .filter(|index| Some(*index) != vector_cluster_id_offset)
-            .collect::<Vec<_>>();
+        // Number of temporary key columns appended by the eval operators; unlike the
+        // generator's `extra_key_num`, this excludes the vector cluster-id column,
+        // which is never materialized on the stream write path.
+        let extra_key_num = cluster_stats_gen
+            .eval_operators
+            .iter()
+            .map(|op| match op {
+                BlockOperator::Map { exprs, .. } => exprs.len(),
+                BlockOperator::Project { .. } => 0,
+            })
+            .sum();
+        let cluster_key_index = cluster_stats_gen.scalar_cluster_key_offsets();
 
         if cluster_key_index.is_empty() && vector_cluster_id_offset.is_none() {
             return Ok(Default::default());
@@ -74,7 +79,7 @@ impl ClusterStatisticsBuilder {
             vector_cluster_id_offset,
             extra_key_num,
             func_ctx: cluster_stats_gen.func_ctx,
-            operators: cluster_stats_gen.operators,
+            operators: cluster_stats_gen.eval_operators,
         }))
     }
 }

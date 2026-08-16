@@ -1,0 +1,384 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+# Materialized view explicit refresh over Fuse CHANGE_TRACKING.
+
+statement ok
+drop database if exists test_materialized_view
+
+statement ok
+create database test_materialized_view
+
+statement ok
+use test_materialized_view
+
+statement ok
+create table source (
+    id int,
+    amount int,
+    category string,
+    active boolean
+)
+
+statement ok
+create materialized view mv_detail (item_id, doubled_amount) as
+select id, amount * 2 from source where active
+
+# Aggregating MVs persist states internally and expose finalized values.
+statement ok
+create materialized view mv_aggregate (category_name, total_amount, row_count, average_amount) as
+select category, sum(amount), count(*), avg(amount)
+from source
+where active
+group by category
+
+query I
+select count(*)
+from system.tables
+where database = 'test_materialized_view'
+  and table_type = 'MATERIALIZED VIEW'
+  and name in ('mv_detail', 'mv_aggregate')
+----
+2
+
+# CREATE leaves MV storage empty. The first explicit refresh consumes the full endpoint.
+statement ok
+insert into source values
+    (1, 10, 'a', true),
+    (2, 20, 'a', false),
+    (3, 30, 'b', true)
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+3 60
+
+query TIIR
+select category_name, total_amount, row_count, average_amount
+from mv_aggregate
+order by category_name
+----
+a 10 1 10.0
+b 30 1 30.0
+
+# An append-only source endpoint may advance without producing aggregate states when all changed
+# rows are rejected by the MV predicate. Refresh must still checkpoint the endpoint as a valid no-op.
+statement ok
+insert into source values (7, 70, 'ignored', false)
+
+statement ok
+refresh materialized view mv_aggregate
+
+# Repeating refresh also verifies that the no-op endpoint checkpoint was persisted.
+statement ok
+refresh materialized view mv_aggregate
+
+query TIIR
+select category_name, total_amount, row_count, average_amount
+from mv_aggregate
+order by category_name
+----
+a 10 1 10.0
+b 30 1 30.0
+
+# Stale append-only MVs combine storage with the live delta before explicit refresh.
+# Repeat the exact query text across another source append to cover result-cache invalidation.
+statement ok
+insert into source values (4, 40, 'a', true)
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+3 60
+4 80
+
+statement ok
+insert into source values
+    (5, 50, 'b', true),
+    (6, 60, 'c', false)
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+3 60
+4 80
+5 100
+
+query TIIR
+select category_name, total_amount, row_count, average_amount
+from mv_aggregate
+order by category_name
+----
+a 50 2 25.0
+b 80 2 40.0
+
+# INSERT-only changes use incremental refresh. Aggregate states are appended and merged on read.
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+3 60
+4 80
+5 100
+
+query TIIR
+select category_name, total_amount, row_count, average_amount
+from mv_aggregate
+order by category_name
+----
+a 50 2 25.0
+b 80 2 40.0
+
+# UPDATE uses the Standard changes path. Detail MV is maintained by MERGE;
+# aggregate MV is rebuilt from the current source endpoint.
+statement ok
+update source set amount = 25, active = true where id = 2
+
+statement ok
+update source set amount = 35, category = 'a' where id = 3
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+1 20
+2 50
+3 70
+4 80
+5 100
+
+query TIIR
+select category_name, total_amount, row_count, average_amount
+from mv_aggregate
+order by category_name
+----
+a 110 4 27.5
+b 50 1 50.0
+
+# DELETE also uses Standard changes. Aggregate refresh falls back to a full rebuild.
+statement ok
+delete from source where id in (1, 5)
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query II
+select item_id, doubled_amount from mv_detail order by item_id
+----
+2 50
+3 70
+4 80
+
+query TIIR
+select category_name, total_amount, row_count, round(average_amount, 2)
+from mv_aggregate
+order by category_name
+----
+a 100 3 33.33
+
+query III
+select count(*), sum(amount), count_if(active) from source
+----
+5 230 3
+
+# TRUNCATE produces an empty source endpoint. Refresh must remove all previously materialized rows.
+statement ok
+truncate table source
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+refresh materialized view mv_aggregate
+
+query I
+select count(*) from mv_detail
+----
+0
+
+query I
+select count(*) from mv_aggregate
+----
+0
+
+query I
+select count(*) from source
+----
+0
+
+# Aggregate semantic compaction is driven only by state blocks appended since the last rebuild or
+# successful compact. Disable ordinary FUSE compact-after-write so each incremental aggregate
+# refresh contributes one observable state block.
+statement ok
+set enable_compact_after_write = 0
+
+statement ok
+create table compact_source (category string, amount int) change_tracking = true
+
+statement ok
+create materialized view compact_mv as
+select category, sum(amount) as total_amount
+from compact_source
+group by category
+
+statement ok
+insert into compact_source values ('a', 1)
+
+statement ok
+refresh materialized view compact_mv
+
+# Accumulate some append debt, then force the aggregate Standard path to rebuild the MV. The
+# rebuild must reset that old debt because its INSERT OVERWRITE output is already globally merged.
+statement ok
+insert into compact_source values ('a', 1)
+
+statement ok
+refresh materialized view compact_mv
+
+statement ok
+update compact_source set amount = 2
+
+statement ok
+refresh materialized view compact_mv
+
+# Accumulate 31 append-only state blocks after the rebuild. Together with the rebuilt baseline this
+# leaves 32 physical blocks, but the semantic compaction debt is still below its fixed threshold.
+query I
+execute immediate $$
+begin
+    for i in 1 to 31 do
+        insert into compact_source values ('a', 1);
+        refresh materialized view compact_mv;
+    end for;
+    return 31;
+end;
+$$
+----
+31
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'compact_mv')
+order by timestamp desc
+limit 1
+----
+32
+
+query TI
+select category, total_amount from compact_mv
+----
+a 35
+
+# The 32nd appended state block reaches the debt threshold. Semantic compaction merges all equal
+# groups with *_merge_state and overwrites the MV, reducing this single-group MV to one block.
+statement ok
+insert into compact_source values ('a', 1)
+
+statement ok
+refresh materialized view compact_mv
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'compact_mv')
+order by timestamp desc
+limit 1
+----
+1
+
+query TI
+select category, total_amount from compact_mv
+----
+a 36
+
+query I
+select row_count from fuse_block('test_materialized_view', 'compact_mv')
+----
+1
+
+# A successful compact resets the debt. One subsequent incremental refresh appends one new state
+# block and must not immediately rewrite the whole MV again merely because it compacted before.
+statement ok
+insert into compact_source values ('a', 1)
+
+statement ok
+refresh materialized view compact_mv
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'compact_mv')
+order by timestamp desc
+limit 1
+----
+2
+
+query TI
+select category, total_amount from compact_mv
+----
+a 37
+
+statement ok
+drop materialized view compact_mv
+
+statement ok
+drop table compact_source
+
+statement ok
+unset enable_compact_after_write
+
+statement ok
+drop materialized view mv_detail
+
+statement ok
+drop materialized view if exists mv_detail
+
+statement ok
+drop materialized view mv_aggregate
+
+query I
+select count(*)
+from system.tables
+where database = 'test_materialized_view'
+  and table_type = 'MATERIALIZED VIEW'
+  and name in ('mv_detail', 'mv_aggregate')
+----
+0
+
+statement ok
+use default
+
+statement ok
+drop database test_materialized_view

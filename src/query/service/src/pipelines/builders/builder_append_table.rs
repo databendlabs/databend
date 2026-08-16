@@ -16,14 +16,18 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::group_hash_entries;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_pipeline::basic::Exchange;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
@@ -35,6 +39,25 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
+
+struct PartitionKeyExchange {
+    key_offsets: Vec<usize>,
+}
+
+impl Exchange for PartitionKeyExchange {
+    const NAME: &'static str = "PartitionKey";
+
+    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
+        let hash_columns = ProjectedBlock::project(&self.key_offsets, &data_block);
+        let mut hashes = vec![0; data_block.num_rows()];
+        group_hash_entries(hash_columns, &mut hashes);
+        let indices = hashes
+            .into_iter()
+            .map(|hash| hash % n as u64)
+            .collect::<Vec<_>>();
+        DataBlock::scatter(&data_block, &indices, n)
+    }
+}
 
 /// This file implements append to table pipeline builder.
 impl PipelineBuilder {
@@ -92,6 +115,10 @@ impl PipelineBuilder {
             CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns)
         });
 
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let key_offsets = (num_input_columns..fields.len()).collect();
+        pipeline.exchange(max_threads, Arc::new(PartitionKeyExchange { key_offsets }))?;
+
         let num_sort_columns = fields.len();
         let sort_schema = DataSchemaRefExt::create(fields);
         let enable_fixed_rows = ctx.get_settings().get_enable_fixed_rows_sort()?;
@@ -103,11 +130,7 @@ impl PipelineBuilder {
             enable_fixed_rows,
         )?
         .with_block_size_hit(table.get_block_thresholds().max_rows_per_block);
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        if pipeline.output_len() == 1 || max_threads == 1 {
-            pipeline.try_resize(max_threads)?;
-        }
-        sort_builder.build_full_sort_pipeline(pipeline, false)?;
+        sort_builder.build_local_full_sort_pipeline(pipeline, false)?;
 
         let projection = (0..num_input_columns).collect::<Vec<_>>();
         pipeline.add_transformer(|| {

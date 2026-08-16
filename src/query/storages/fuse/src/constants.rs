@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER as FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
+
 pub const FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD: &str = "block_size_threshold";
 pub const FUSE_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
 pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 pub const FUSE_OPT_KEY_ROW_PER_PAGE: &str = "row_per_page";
 pub const FUSE_OPT_KEY_RECLUSTER_DEPTH: &str = "recluster_depth";
-pub const FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
 pub const FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION: &str = "enable_recluster_block_reduction";
 pub const FUSE_OPT_KEY_FILE_SIZE: &str = "file_size";
 pub const FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS: &str = "data_retention_period_in_hours";

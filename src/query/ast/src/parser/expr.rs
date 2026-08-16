@@ -2637,14 +2637,11 @@ fn aggregate_filter(i: Input) -> IResult<Expr> {
 }
 
 /// Functions that accept a trailing lambda in their call body:
-/// `f([arg, ...,] params -> expr)`.
+/// `f([arg, ...,] params -> expr)`. `->` is also the json arrow operator,
+/// so this grammar is only enabled for these names.
 ///
-/// `->` is also the json arrow operator, so the trailing-lambda grammar is
-/// only enabled for these function names. Ordinary functions keep the
-/// general call grammar, where `a -> 'k'` stays a json expression argument.
-///
-/// Keep in sync with `GENERAL_LAMBDA_FUNCTIONS` in
-/// `databend-common-functions` (a test there asserts both lists match).
+/// This list is the single source of truth: `GENERAL_LAMBDA_FUNCTIONS` in
+/// `databend-common-functions` is derived from it.
 pub const LAMBDA_FUNCTION_NAMES: &[&str] = &[
     "array_transform",
     "array_apply",
@@ -2730,17 +2727,15 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
         }
     }
 
-    // Parse `function([arg, ... ,] params -> expr)` for lambda functions.
-    // `params -> expr` is ambiguous with the json arrow operator, so a
-    // `params -> expr` that does not close the call is re-parsed as an
-    // ordinary argument (e.g. the first argument of `f(a -> 'k', x -> y)`).
+    // Parses `function([arg, ...,] params -> expr)`. A `params -> expr` that
+    // does not close the call is re-parsed as an ordinary argument, e.g. the
+    // first argument of `f(a -> 'k', x -> y)`.
     fn lambda_last_call_body<'a>(input: Input<'a>) -> IResult<'a, FunctionCallSuffix> {
         let original = input;
         let (mut rest, _) = match_text("(").parse(input)?;
         let mut args = Vec::new();
 
         loop {
-            // Try `params -> expr )` at the current argument position.
             match followed_by_text(lambda_params, "->").parse(rest) {
                 Ok((after_params, params)) => {
                     let (after_arrow, _) = match_text("->").parse(after_params)?;
@@ -2971,10 +2966,8 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
 
     let (rest, name) = function_name.parse(i)?;
 
-    // Only known lambda functions try the trailing-lambda call body, and
-    // they must try it first: the general grammar would swallow a trailing
-    // `params -> expr` as a json arrow expression argument. Every other
-    // function is parsed with the general grammar in a single pass.
+    // Lambda functions must try the trailing-lambda body first: the general
+    // grammar would swallow `params -> expr` as a json arrow argument.
     let (rest, suffix) = if is_lambda_function_name(&name.name) {
         match lambda_last_call_body(rest) {
             Ok(result) => result,

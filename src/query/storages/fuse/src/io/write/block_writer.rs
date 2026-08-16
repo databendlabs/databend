@@ -50,7 +50,6 @@ use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
-use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -76,6 +75,7 @@ use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::operations::column_parquet_metas;
 use crate::statistics::ClusterStatsGenerator;
+use crate::statistics::ClusterStatsState;
 
 pub fn serialize_block(
     write_settings: &WriteSettings,
@@ -206,20 +206,22 @@ pub struct BlockBuilder {
 
 impl BlockBuilder {
     pub fn build<F>(&self, data_block: DataBlock, f: F) -> Result<BlockSerialization>
-    where F: Fn(
-            DataBlock,
-            &ClusterStatsGenerator,
-        ) -> Result<(Option<ClusterStatistics>, DataBlock, Option<Vec<usize>>)> {
+    where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<ClusterStatsState> {
         let partition_stats = self
             .cluster_stats_gen
             .extract_partition_stats(&data_block)?;
-        let (cluster_stats, data_block, granule_cluster_key_offsets) =
-            f(data_block, &self.cluster_stats_gen)?;
+        // `column_min_max` short-circuits the inline `gen_columns_statistics` pass; the
+        // streaming `ColumnStatisticsState` used by `FuseBlockWriter` does not consume it.
+        let ClusterStatsState {
+            cluster_stats,
+            data_block,
+            column_min_max: _,
+        } = f(data_block, &self.cluster_stats_gen)?;
         let granule_cluster_columns = if self.write_settings.index_granularity.is_some() {
             materialize_cluster_key_columns(
                 &data_block,
                 &self.cluster_stats_gen,
-                granule_cluster_key_offsets,
+                self.cluster_stats_gen.granule_cluster_key_offsets(),
             )?
         } else {
             None

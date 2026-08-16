@@ -32,11 +32,13 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_sql::ClusterKeys;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
@@ -191,9 +193,9 @@ impl ReclusterMutator {
         max_tasks_override: Option<usize>,
     ) -> Result<Self> {
         let schema = table.schema_with_stream();
-        let Some(cluster_key_id) = table.cluster_key_id() else {
-            return Err(ErrorCode::Internal("recluster requires cluster key id"));
-        };
+        let cluster_key_info = table
+            .cluster_key_info()
+            .expect("recluster requires cluster key metadata");
         let block_thresholds = table.get_block_thresholds();
 
         let depth_threshold = table
@@ -241,7 +243,14 @@ impl ReclusterMutator {
             ));
         };
         let cluster_key_exprs =
-            parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
+            match parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)? {
+                ClusterKeys::Linear(keys) | ClusterKeys::Vector { keys, .. } => keys,
+                ClusterKeys::Hilbert(_) => {
+                    return Err(ErrorCode::Unimplemented(
+                        "Hilbert reclustering is not supported yet",
+                    ));
+                }
+            };
         let (properties, strategy) = ReclusterProperties::try_create(
             table,
             &schema,
@@ -249,7 +258,7 @@ impl ReclusterMutator {
             mode,
             depth_threshold,
             block_thresholds,
-            cluster_key_id,
+            cluster_key_info,
             memory_threshold,
             vertical_kind,
         )?;
@@ -273,7 +282,7 @@ impl ReclusterMutator {
         cluster_key_exprs: Vec<Expr<usize>>,
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
-        cluster_key_id: u32,
+        cluster_key_info: ClusterKeyInfo,
         partition_key_count: usize,
         max_tasks: usize,
         mode: ReclusterMode,
@@ -290,7 +299,7 @@ impl ReclusterMutator {
             mode,
             depth_threshold,
             block_thresholds,
-            cluster_key_id,
+            cluster_key_info,
             partition_key_count,
             memory_threshold,
             vector_cluster_info,
@@ -376,7 +385,7 @@ impl ReclusterMutator {
                     sort_by_cluster_stats(
                         Some(window[0].stats()),
                         Some(window[1].stats()),
-                        self.properties.cluster_key_id,
+                        self.properties.cluster_key_info.cluster_key_id(),
                     ) == cmp::Ordering::Greater
                 })
             };
@@ -624,7 +633,7 @@ impl ReclusterMutator {
             sort_by_cluster_stats(
                 Some(blocks[*left].stats()),
                 Some(blocks[*right].stats()),
-                self.properties.cluster_key_id,
+                self.properties.cluster_key_info.cluster_key_id(),
             )
         });
 
@@ -784,14 +793,14 @@ impl ReclusterMutator {
         let mut removed_segment_indexes = removed_segment_infos.keys().copied().collect::<Vec<_>>();
         removed_segment_indexes.sort_unstable_by(|a, b| b.cmp(a));
 
-        let default_cluster_key_id = Some(self.properties.cluster_key_id);
+        let cluster_key_info = Some(&self.properties.cluster_key_info);
         let mut removed_segment_summary = Statistics::default();
         for segment_info in removed_segment_infos.values() {
             // Summary still comes from SegmentInfo, not normalized cached blocks.
             merge_statistics_mut(
                 &mut removed_segment_summary,
                 &segment_info.summary,
-                default_cluster_key_id,
+                cluster_key_info,
             );
         }
 

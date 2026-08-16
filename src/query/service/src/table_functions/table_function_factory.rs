@@ -32,6 +32,7 @@ use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropInvertedIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
+use databend_common_storages_fuse::table_functions::FuseVirtualColumnBuildFunc;
 use databend_common_storages_fuse::table_functions::FuseVirtualColumnFunc;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
@@ -66,6 +67,8 @@ use crate::table_functions::TableFunction;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::copy_history::CopyHistoryTable;
 use crate::table_functions::fuse_vacuum2::FuseVacuum2Table;
+use crate::table_functions::get_lineage::GetLineageNeighborsTable;
+use crate::table_functions::get_lineage::GetLineageTable;
 #[cfg(feature = "storage-stage")]
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
@@ -238,6 +241,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseVirtualColumnFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_virtual_column_build".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVirtualColumnBuildFunc>::create),
             ),
         );
 
@@ -452,6 +463,14 @@ impl TableFunctionFactory {
         creators.insert(
             "stream_backlog".to_string(),
             (next_id(), Arc::new(StreamBacklogTable::create)),
+        );
+        creators.insert(
+            "get_lineage".to_string(),
+            (next_id(), Arc::new(GetLineageTable::create)),
+        );
+        creators.insert(
+            "get_lineage_neighbors".to_string(),
+            (next_id(), Arc::new(GetLineageNeighborsTable::create)),
         );
 
         TableFunctionFactory {

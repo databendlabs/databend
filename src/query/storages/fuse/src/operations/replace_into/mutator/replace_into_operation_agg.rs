@@ -209,10 +209,7 @@ impl PreparedReplaceMutation {
                 logical_deleted_rows,
             } => {
                 let serialized = context.block_builder.build(block, |block, generator| {
-                    let granule_keys = generator.granule_cluster_key_offsets();
-                    let cluster_stats =
-                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    Ok((cluster_stats, block, granule_keys))
+                    generator.gen_with_origin_stats(block, origin_stats.clone())
                 })?;
                 let extended_block_meta = match serialized {
                     BlockSerialization::Pending(pending) => {

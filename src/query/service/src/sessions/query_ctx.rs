@@ -124,6 +124,7 @@ use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
+use databend_common_sql::QueryLineage;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
@@ -159,6 +160,7 @@ use jiff::Zoned;
 use jiff::tz::TimeZone;
 use log::debug;
 use log::info;
+use log::warn;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tokio::sync::Semaphore;
@@ -550,12 +552,67 @@ impl QueryContext {
         (finish_time - query_start_time) / 1_000
     }
 
+    pub fn attach_query_lineage(&self, lineage: Option<QueryLineage>) {
+        self.shared.attach_query_lineage(lineage);
+    }
+
+    pub fn get_query_lineage(&self) -> Option<QueryLineage> {
+        self.shared.get_query_lineage()
+    }
+
+    /// Reconcile captured lineage after execution resolves the actual target.
+    ///
+    /// A missing captured id belongs to paths such as CTAS whose target is created during
+    /// execution. If a captured id changed, however, its bind-time column ids belong to the old
+    /// object and cannot safely be attached to the replacement table, so that target is skipped.
+    /// This does not change which table the query writes to.
+    pub fn update_query_lineage_target_id(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        table_id: u64,
+    ) {
+        let Some(mut lineage) = self.get_query_lineage() else {
+            return;
+        };
+        lineage.targets.retain_mut(|target| {
+            if target.relation.catalog != catalog
+                || target.relation.database != database
+                || target.relation.name != table
+            {
+                return true;
+            }
+
+            if target
+                .relation
+                .id
+                .is_some_and(|captured_id| captured_id != table_id)
+            {
+                warn!(
+                    "Skipping lineage target after table identity changed between bind and execution: {}.{}.{}",
+                    catalog, database, table
+                );
+                return false;
+            }
+
+            target.relation.id = Some(table_id);
+            true
+        });
+        self.attach_query_lineage((!lineage.targets.is_empty()).then_some(lineage));
+    }
+
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
     }
 
     pub fn set_finish_time(&self, time: SystemTime) {
         *self.shared.finish_time.write() = Some(time)
+    }
+
+    /// Return the completion time captured by the query-finish logger.
+    pub fn get_query_finish_time(&self) -> Option<SystemTime> {
+        *self.shared.finish_time.read()
     }
 
     pub fn clear_tables_cache(&self) {
@@ -698,7 +755,6 @@ impl QueryContext {
         struct FilterLogEntry {
             filter_id: usize,
             probe_expr: String,
-            bloom_column: Option<String>,
             has_bloom: bool,
             has_inlist: bool,
             has_min_max: bool,
@@ -723,7 +779,6 @@ impl QueryContext {
                 .map(|entry| FilterLogEntry {
                     filter_id: entry.id,
                     probe_expr: entry.probe_expr.sql_display(),
-                    bloom_column: entry.bloom.as_ref().map(|bloom| bloom.column_name.clone()),
                     has_bloom: entry.bloom.is_some(),
                     has_inlist: entry.inlist.is_some(),
                     has_min_max: entry.min_max.is_some(),
@@ -755,7 +810,6 @@ impl QueryContext {
                 let FilterLogEntry {
                     filter_id,
                     probe_expr,
-                    bloom_column,
                     has_bloom,
                     has_inlist,
                     has_min_max,
@@ -793,10 +847,6 @@ impl QueryContext {
                             .unwrap_or_else(|| "unknown".to_string())
                     )),
                 ];
-
-                if let Some(column) = bloom_column {
-                    detail_children.push(FormatTreeNode::new(format!("bloom column: {}", column)));
-                }
 
                 if has_bloom {
                     detail_children.push(FormatTreeNode::new(format!(

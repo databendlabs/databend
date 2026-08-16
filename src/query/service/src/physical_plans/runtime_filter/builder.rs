@@ -16,14 +16,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::Domain;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::conversion::classify_conversion;
+use databend_common_expression::conversion::common_super_type_with_conversion;
+use databend_common_expression::type_check::check_cast;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::ColumnEntry;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
-use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Join;
@@ -34,11 +40,10 @@ use databend_common_sql::plans::ScalarExpr;
 
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
+use super::types::RuntimeFilterProbeKey;
+use super::types::canonical_equivalence_connector;
+use super::types::resolve_runtime_filter_probe_expr;
 use crate::sessions::TableContext;
-
-/// Type alias for probe keys with runtime filter information
-/// Contains: (RemoteExpr, scan_id, table_index, column_idx, is_null_equal)
-type ProbeKeysWithRuntimeFilter = Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>;
 
 /// Check if a data type is supported for bloom filter
 ///
@@ -72,8 +77,8 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
 
 /// Build runtime filters for a join operation
 ///
-/// This is the legacy method that creates one runtime filter per probe key.
-/// For equivalence class propagation, use the enhanced version in physical_hash_join.rs
+/// Creates one runtime filter per eligible probe key and propagates it to
+/// equality-safe connector columns and their attached expression leaves.
 ///
 /// # Arguments
 /// * `ctx` - Table context
@@ -81,7 +86,7 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
 /// * `join` - Join plan
 /// * `s_expr` - SExpr for the join
 /// * `build_keys` - Build side keys
-/// * `probe_keys` - Probe side keys with scan_id, table_index, and column_idx
+/// * `probe_keys` - Probe keys with their scan, source column, connector, and null-equality metadata
 ///
 /// # Returns
 /// Collection of runtime filters to be applied
@@ -91,7 +96,7 @@ pub async fn build_runtime_filter(
     join: &Join,
     s_expr: &SExpr,
     build_keys: &[RemoteExpr],
-    probe_keys: ProbeKeysWithRuntimeFilter,
+    probe_keys: Vec<Option<RuntimeFilterProbeKey<RemoteExpr<String>>>>,
     build_table_indexes: Vec<Option<IndexType>>,
 ) -> Result<PhysicalRuntimeFilters> {
     if !ctx.get_settings().get_enable_join_runtime_filter()? {
@@ -117,42 +122,39 @@ pub async fn build_runtime_filter(
     }
 
     let mut filters = Vec::new();
+    let func_ctx = ctx.get_function_context()?;
 
     let probe_side = s_expr.probe_side_child();
 
     // Process each probe key that has runtime filter information
-    for (
-        build_key,
-        probe_key,
-        scan_id,
-        _table_index,
-        column_idx,
-        is_null_equal,
-        build_table_index,
-    ) in build_keys
+    for (build_key, probe, build_table_index) in build_keys
         .iter()
         .zip(probe_keys.into_iter())
         .zip(build_table_indexes.into_iter())
-        .filter_map(|((b, p), table_idx)| {
-            p.map(|(p, scan_id, table_index, column_idx, is_null_equal)| {
-                (
-                    b,
-                    p,
-                    scan_id,
-                    table_index,
-                    column_idx,
-                    is_null_equal,
-                    table_idx,
-                )
-            })
+        .filter_map(|((build_key, probe), table_index)| {
+            probe.map(|probe| (build_key, probe, table_index))
         })
     {
-        if !supported_probe_key_for_runtime_filter(&probe_key) {
+        let RuntimeFilterProbeKey {
+            probe_key,
+            scan_id,
+            column_idx,
+            is_connector,
+            is_null_equal,
+        } = probe;
+        if !supported_probe_key_for_runtime_filter(&probe_key, &func_ctx) {
             continue;
         }
 
-        let probe_targets =
-            find_probe_targets(metadata, probe_side, &probe_key, scan_id, column_idx)?;
+        let probe_targets = find_probe_targets(
+            metadata,
+            probe_side,
+            probe_key,
+            scan_id,
+            column_idx,
+            is_connector,
+            &func_ctx,
+        )?;
 
         let build_table_rows =
             get_build_table_rows(ctx.clone(), metadata, build_table_index).await?;
@@ -208,26 +210,87 @@ async fn get_build_table_rows(
 fn find_probe_targets(
     metadata: &MetadataRef,
     s_expr: &SExpr,
-    probe_key: &RemoteExpr<String>,
+    probe_key: RemoteExpr<String>,
     probe_scan_id: usize,
     probe_key_col_idx: Symbol,
+    probe_key_is_connector: bool,
+    func_ctx: &FunctionContext,
+) -> Result<Vec<(RemoteExpr<String>, usize)>> {
+    // A value-changing expression is a leaf in the equivalence graph. Its
+    // underlying column is not equivalent to the expression result, so the
+    // root expression can only be installed on its own scan.
+    if !probe_key_is_connector {
+        return Ok(vec![(probe_key, probe_scan_id)]);
+    }
+
+    let mut relations = Vec::new();
+    for cond in collect_equi_conditions(s_expr)? {
+        if let (Some(left), Some(right)) = (
+            scalar_to_probe_target(metadata, &cond.left, func_ctx)?,
+            scalar_to_probe_target(metadata, &cond.right, func_ctx)?,
+        ) {
+            relations.push((left, right));
+        }
+    }
+
+    propagate_probe_targets(
+        probe_key,
+        probe_scan_id,
+        probe_key_col_idx,
+        relations,
+        func_ctx,
+    )
+}
+
+fn propagate_probe_targets(
+    probe_key: RemoteExpr<String>,
+    probe_scan_id: usize,
+    probe_key_col_idx: Symbol,
+    relations: Vec<(ProbeTarget, ProbeTarget)>,
+    func_ctx: &FunctionContext,
 ) -> Result<Vec<(RemoteExpr<String>, usize)>> {
     let mut uf = UnionFind::new();
     let mut column_to_remote: HashMap<Symbol, (RemoteExpr<String>, usize)> = HashMap::new();
-    column_to_remote.insert(probe_key_col_idx, (probe_key.clone(), probe_scan_id));
+    let mut leaf_targets: HashMap<Symbol, Vec<(RemoteExpr<String>, usize)>> = HashMap::new();
+    let target_type = probe_key.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
+    column_to_remote.insert(probe_key_col_idx, (probe_key, probe_scan_id));
 
-    let equi_conditions = collect_equi_conditions(s_expr)?;
-    for cond in equi_conditions {
-        if let (
-            Some((left_remote, left_scan_id, left_idx)),
-            Some((right_remote, right_scan_id, right_idx)),
-        ) = (
-            scalar_to_remote_expr(metadata, &cond.left)?,
-            scalar_to_remote_expr(metadata, &cond.right)?,
-        ) {
-            uf.union(left_idx, right_idx);
-            column_to_remote.insert(left_idx, (left_remote, left_scan_id));
-            column_to_remote.insert(right_idx, (right_remote, right_scan_id));
+    for (left, right) in relations {
+        let left_type = left
+            .remote_expr
+            .as_expr(&BUILTIN_FUNCTIONS)
+            .data_type()
+            .clone();
+        let right_type = right
+            .remote_expr
+            .as_expr(&BUILTIN_FUNCTIONS)
+            .data_type()
+            .clone();
+        if !common_super_type_with_conversion(left_type, right_type)
+            .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
+        {
+            continue;
+        }
+
+        match (left.is_connector, right.is_connector) {
+            (true, true) => {
+                uf.union(left.column_idx, right.column_idx);
+                column_to_remote
+                    .entry(left.column_idx)
+                    .or_insert((left.remote_expr, left.scan_id));
+                column_to_remote
+                    .entry(right.column_idx)
+                    .or_insert((right.remote_expr, right.scan_id));
+            }
+            (true, false) => leaf_targets
+                .entry(left.column_idx)
+                .or_default()
+                .push((right.remote_expr, right.scan_id)),
+            (false, true) => leaf_targets
+                .entry(right.column_idx)
+                .or_default()
+                .push((left.remote_expr, left.scan_id)),
+            (false, false) => {}
         }
     }
 
@@ -236,7 +299,19 @@ fn find_probe_targets(
     let mut result = Vec::new();
     for idx in equiv_class {
         if let Some((remote_expr, scan_id)) = column_to_remote.get(&idx) {
-            result.push((remote_expr.clone(), *scan_id));
+            if let Some(remote_expr) = normalize_probe_target(remote_expr, &target_type, func_ctx)?
+            {
+                push_unique_target(&mut result, remote_expr, *scan_id);
+            }
+        }
+        if let Some(targets) = leaf_targets.get(&idx) {
+            for (remote_expr, scan_id) in targets {
+                if let Some(remote_expr) =
+                    normalize_probe_target(remote_expr, &target_type, func_ctx)?
+                {
+                    push_unique_target(&mut result, remote_expr, *scan_id);
+                }
+            }
         }
     }
 
@@ -259,67 +334,107 @@ fn collect_equi_conditions(s_expr: &SExpr) -> Result<Vec<JoinEquiCondition>> {
     Ok(conditions)
 }
 
-fn scalar_to_remote_expr(
+struct ProbeTarget {
+    remote_expr: RemoteExpr<String>,
+    scan_id: usize,
+    column_idx: Symbol,
+    is_connector: bool,
+}
+
+fn scalar_to_probe_target(
     metadata: &MetadataRef,
     scalar: &ScalarExpr,
-) -> Result<Option<(RemoteExpr<String>, usize, Symbol)>> {
-    let used_columns = scalar.used_columns();
-    if used_columns.len() != 1 {
-        return Ok(None);
-    }
-
-    let column_idx = *used_columns.iter().next().unwrap();
-    if !matches!(
-        metadata.read().column(column_idx),
-        ColumnEntry::BaseTableColumn(_)
-    ) {
-        return Ok(None);
-    }
-
-    let Some(scan_id) = metadata.read().base_column_scan_id(column_idx) else {
+    func_ctx: &FunctionContext,
+) -> Result<Option<ProbeTarget>> {
+    let Some(probe) = resolve_runtime_filter_probe_expr(metadata, scalar)? else {
         return Ok(None);
     };
+    let remote_expr = probe.probe_key.as_remote_expr();
 
-    let remote_expr = {
-        let md = metadata.read();
-        scalar
-            .as_raw_expr()
-            .type_check(&*md)?
-            .project_column_ref(|col| {
-                let entry = md.column(col.index);
-                if let ColumnEntry::BaseTableColumn(base_col) = entry {
-                    if base_col.path_indices.is_none() {
-                        let table = md.table(base_col.table_index);
-                        let schema = table.table().schema_with_stream();
-                        if let Ok(field) = schema.field_of_column_id(base_col.column_id) {
-                            return Ok(field.name().clone());
-                        }
-                    }
-                    return Ok(base_col.column_name.clone());
-                }
-                Ok(col.column_name.clone())
-            })?
-            .as_remote_expr()
-    };
-
-    if supported_probe_key_for_runtime_filter(&remote_expr) {
-        return Ok(Some((remote_expr, scan_id, column_idx)));
+    if supported_probe_key_for_runtime_filter(&remote_expr, func_ctx) {
+        let (remote_expr, is_connector) = match canonical_equivalence_connector(remote_expr) {
+            Ok(connector) => (connector, true),
+            Err(leaf) => (leaf, false),
+        };
+        return Ok(Some(ProbeTarget {
+            remote_expr,
+            scan_id: probe.scan_id,
+            column_idx: probe.column_idx,
+            is_connector,
+        }));
     }
 
     Ok(None)
 }
 
-fn supported_probe_key_for_runtime_filter(probe_key: &RemoteExpr<String>) -> bool {
-    match probe_key {
-        RemoteExpr::ColumnRef { .. } => true,
-        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T)).
-        RemoteExpr::Cast {
-            expr, dest_type, ..
-        } => matches!(
-            expr.as_ref(),
-            RemoteExpr::ColumnRef { data_type, .. } if &dest_type.remove_nullable() == data_type
-        ),
-        _ => false,
+fn supported_probe_key_for_runtime_filter(
+    probe_key: &RemoteExpr<String>,
+    func_ctx: &FunctionContext,
+) -> bool {
+    let expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
+    expr.column_refs().len() == 1
+        && expr.is_deterministic(&BUILTIN_FUNCTIONS)
+        && safe_expression_domain(&expr, func_ctx).is_some()
+}
+
+fn safe_expression_domain(expr: &Expr<String>, func_ctx: &FunctionContext) -> Option<Domain> {
+    match expr {
+        Expr::Constant(constant) => Some(constant.scalar.as_ref().domain(&constant.data_type)),
+        Expr::ColumnRef(column) => Some(Domain::full(&column.data_type)),
+        Expr::Cast(cast) => {
+            safe_expression_domain(&cast.expr, func_ctx)?;
+            if !cast.is_try
+                && !classify_conversion(cast.expr.data_type(), &cast.dest_type)
+                    .is_lossless_injective()
+            {
+                return None;
+            }
+            Some(Domain::full(&cast.dest_type))
+        }
+        Expr::FunctionCall(call) => {
+            let domains = call
+                .args
+                .iter()
+                .map(|arg| safe_expression_domain(arg, func_ctx))
+                .collect::<Option<Vec<_>>>()?;
+            let FunctionEval::Scalar { calc_domain, .. } = &call.function.eval else {
+                return None;
+            };
+            match calc_domain.domain_eval(func_ctx, &domains) {
+                FunctionDomain::MayThrow => None,
+                FunctionDomain::Full => Some(Domain::full(&call.return_type)),
+                FunctionDomain::Domain(domain) => Some(domain),
+            }
+        }
+        Expr::LambdaFunctionCall(_) => None,
+    }
+}
+
+fn normalize_probe_target(
+    target: &RemoteExpr<String>,
+    target_type: &DataType,
+    func_ctx: &FunctionContext,
+) -> Result<Option<RemoteExpr<String>>> {
+    let expr = target.as_expr(&BUILTIN_FUNCTIONS);
+    if !classify_conversion(expr.data_type(), target_type).is_lossless_injective() {
+        return Ok(None);
+    }
+    let expr = check_cast(expr.span(), false, expr, target_type, &BUILTIN_FUNCTIONS)?;
+    let expr =
+        databend_common_expression::ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS).0;
+    Ok(Some(expr.as_remote_expr()))
+}
+
+fn push_unique_target(
+    targets: &mut Vec<(RemoteExpr<String>, usize)>,
+    expr: RemoteExpr<String>,
+    scan_id: usize,
+) {
+    if !targets
+        .iter()
+        .any(|(target, target_scan_id)| target == &expr && *target_scan_id == scan_id)
+    {
+        targets.push((expr, scan_id));
     }
 }
 
@@ -363,5 +478,277 @@ impl UnionFind {
             .into_iter()
             .filter(|&k| self.find(k) == root)
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::Constant;
+    use databend_common_expression::Expr;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::LambdaFunctionCall;
+    use databend_common_expression::RemoteExpr;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check_cast;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+    use databend_common_sql::Symbol;
+
+    use super::ProbeTarget;
+    use super::canonical_equivalence_connector;
+    use super::propagate_probe_targets;
+    use super::supported_probe_key_for_runtime_filter;
+
+    fn column(name: &str, data_type: DataType) -> Expr<String> {
+        Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: name.to_string(),
+            data_type,
+            display_name: name.to_string(),
+        })
+    }
+
+    fn int32(value: i32) -> Expr<String> {
+        Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int32(value)),
+            data_type: DataType::Number(NumberDataType::Int32),
+        })
+    }
+
+    fn string(value: &str) -> Expr<String> {
+        Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::String(value.to_string()),
+            data_type: DataType::String,
+        })
+    }
+
+    fn supported(expr: Expr<String>) -> bool {
+        supported_probe_key_for_runtime_filter(&expr.as_remote_expr(), &FunctionContext::default())
+    }
+
+    fn target(
+        remote_expr: databend_common_expression::RemoteExpr<String>,
+        scan_id: usize,
+        column_idx: usize,
+        is_connector: bool,
+    ) -> ProbeTarget {
+        ProbeTarget {
+            remote_expr,
+            scan_id,
+            column_idx: Symbol::new(column_idx),
+            is_connector,
+        }
+    }
+
+    #[test]
+    fn test_safe_single_column_probe_expressions() {
+        let int16 = DataType::Number(NumberDataType::Int16);
+        let int32_type = DataType::Number(NumberDataType::Int32);
+        let int64 = DataType::Number(NumberDataType::Int64);
+
+        let widened = check_cast(
+            None,
+            false,
+            column("a", int16),
+            &int32_type,
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let nested = check_cast(None, false, widened, &int64, &BUILTIN_FUNCTIONS).unwrap();
+        assert!(supported(nested));
+
+        let plus = check_function(
+            None,
+            "plus",
+            &[],
+            &[column("a", int32_type.clone()), int32(10)],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        assert!(supported(plus));
+
+        let repeated_column = check_function(
+            None,
+            "plus",
+            &[],
+            &[
+                column("a", int32_type.clone()),
+                column("a", int32_type.clone()),
+            ],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        assert!(supported(repeated_column));
+
+        let replace = check_function(
+            None,
+            "replace",
+            &[],
+            &[column("s", DataType::String), string("a"), string("b")],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        assert!(supported(replace));
+
+        let try_cast = check_cast(
+            None,
+            true,
+            column("s", DataType::String),
+            &int64,
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        assert!(supported(try_cast));
+    }
+
+    #[test]
+    fn test_unsafe_probe_expressions_are_rejected() {
+        let int32_type = DataType::Number(NumberDataType::Int32);
+        let int64 = DataType::Number(NumberDataType::Int64);
+
+        let value_dependent_cast = check_cast(
+            None,
+            false,
+            column("s", DataType::String),
+            &int64,
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        assert!(!supported(value_dependent_cast));
+
+        let multiple_columns = check_function(
+            None,
+            "plus",
+            &[],
+            &[
+                column("a", int32_type.clone()),
+                column("b", int32_type.clone()),
+            ],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        assert!(!supported(multiple_columns));
+
+        let may_throw = check_function(
+            None,
+            "divide",
+            &[],
+            &[column("a", int32_type), int32(1)],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        assert!(!supported(may_throw));
+
+        let nondeterministic = check_function(
+            None,
+            "rand",
+            &[],
+            &[column("a", DataType::Number(NumberDataType::UInt64))],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        assert!(!supported(nondeterministic));
+
+        let srf = check_function(
+            None,
+            "generate_series",
+            &[],
+            &[
+                column("a", DataType::Number(NumberDataType::Int64)),
+                int32(10),
+            ],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        assert!(!supported(srf));
+
+        let lambda = Expr::LambdaFunctionCall(LambdaFunctionCall {
+            span: None,
+            name: "test_lambda".to_string(),
+            args: vec![column("a", DataType::Number(NumberDataType::Int64))],
+            lambda_expr: Box::new(RemoteExpr::Constant {
+                span: None,
+                scalar: Scalar::Number(NumberScalar::Int32(1)),
+                data_type: DataType::Number(NumberDataType::Int32),
+            }),
+            lambda_display: "x -> 1".to_string(),
+            return_type: DataType::Number(NumberDataType::Int64),
+        });
+        assert!(!supported(lambda));
+    }
+
+    #[test]
+    fn test_nullable_wrapper_of_expression_is_leaf() {
+        let int32_type = DataType::Number(NumberDataType::Int32);
+        let int64 = DataType::Number(NumberDataType::Int64);
+        let nullable_int64 = DataType::Nullable(Box::new(int64.clone()));
+
+        let direct_column = column("connector", int64);
+        let direct_nullable_cast = check_cast(
+            None,
+            false,
+            direct_column,
+            &nullable_int64,
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        assert!(canonical_equivalence_connector(direct_nullable_cast.as_remote_expr()).is_ok());
+
+        let plus = check_function(
+            None,
+            "plus",
+            &[],
+            &[column("a", int32_type), int32(10)],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let wrapped = check_cast(None, false, plus, &nullable_int64, &BUILTIN_FUNCTIONS).unwrap();
+        assert!(canonical_equivalence_connector(wrapped.as_remote_expr()).is_err());
+    }
+
+    #[test]
+    fn test_connector_to_leaf_propagation_keeps_expression_as_leaf() {
+        let int32_type = DataType::Number(NumberDataType::Int32);
+        let int64 = DataType::Number(NumberDataType::Int64);
+        let root = column("root", int64.clone()).as_remote_expr();
+        let connector = column("connector", int64).as_remote_expr();
+        let leaf = check_function(
+            None,
+            "plus",
+            &[],
+            &[column("a", int32_type.clone()), int32(10)],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap()
+        .as_remote_expr();
+        let raw_leaf_column = column("a", int32_type).as_remote_expr();
+
+        let targets = propagate_probe_targets(
+            root.clone(),
+            0,
+            Symbol::new(0),
+            vec![
+                (
+                    target(root.clone(), 0, 0, true),
+                    target(connector.clone(), 1, 1, true),
+                ),
+                (
+                    target(connector, 1, 1, true),
+                    target(leaf.clone(), 2, 2, false),
+                ),
+            ],
+            &FunctionContext::default(),
+        )
+        .unwrap();
+
+        assert!(targets.contains(&(root, 0)));
+        assert!(targets.contains(&(leaf, 2)));
+        assert!(!targets.contains(&(raw_leaf_column, 2)));
     }
 }

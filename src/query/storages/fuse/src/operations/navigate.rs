@@ -351,7 +351,7 @@ impl FuseTable {
         match first_snapshot_after {
             Some(location) => {
                 let (snapshot, _format_version) =
-                    SnapshotsIO::read_snapshot(location, op.clone(), true).await?;
+                    Self::read_snapshot_for_no_check(location, op.clone()).await?;
 
                 match snapshot.prev_snapshot_id {
                     Some((prev_id, prev_ver)) => {
@@ -365,7 +365,7 @@ impl FuseTable {
                             .meta_location_generator()
                             .gen_snapshot_location(&prev_id, prev_ver)?;
                         let (prev_snapshot, prev_format_version) =
-                            SnapshotsIO::read_snapshot(prev_location, op, true).await?;
+                            Self::read_snapshot_for_no_check(prev_location, op).await?;
                         self.load_table_by_snapshot(
                             prev_snapshot.as_ref(),
                             prev_format_version,
@@ -385,9 +385,29 @@ impl FuseTable {
                     ));
                 };
                 let (snapshot, format_version) =
-                    SnapshotsIO::read_snapshot(location, op, true).await?;
+                    Self::read_snapshot_for_no_check(location, op).await?;
                 self.load_table_by_snapshot(snapshot.as_ref(), format_version, s3_storage_class)
             }
+        }
+    }
+
+    /// Read a snapshot for NO_CHECK navigation.
+    ///
+    /// Missing objects are mapped to `TableHistoricalDataNotFound` so vacuumed
+    /// predecessor snapshots do not surface as raw `StorageNotFound` errors.
+    async fn read_snapshot_for_no_check(
+        location: String,
+        op: opendal::Operator,
+    ) -> Result<(Arc<TableSnapshot>, u64)> {
+        match SnapshotsIO::read_snapshot(location, op, true).await {
+            Ok(v) => Ok(v),
+            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                Err(ErrorCode::TableHistoricalDataNotFound(
+                    "No historical data found at given point with NO_CHECK \
+                     (snapshot object is missing, possibly vacuumed)",
+                ))
+            }
+            Err(e) => Err(e),
         }
     }
 
@@ -757,15 +777,23 @@ impl FuseTable {
     ) -> Result<bool> {
         let snapshot_cluster_key_meta = snapshot.cluster_key_meta.clone();
         let cluster_key_meta = match snapshot.cluster_type {
-            Some(ClusterType::Linear) => snapshot_cluster_key_meta,
-            Some(ClusterType::Hilbert) => None,
+            Some(ClusterType::Linear | ClusterType::Hilbert) => snapshot_cluster_key_meta,
             None if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_meta() => {
                 snapshot_cluster_key_meta
             }
             None => None,
         };
 
-        table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+        match snapshot.cluster_type {
+            Some(cluster_type) if cluster_key_meta.is_some() => {
+                table_meta
+                    .options
+                    .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type.to_string());
+            }
+            _ => {
+                table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+            }
+        }
         table_meta.cluster_key = None;
         table_meta.cluster_key_v2 = cluster_key_meta;
 

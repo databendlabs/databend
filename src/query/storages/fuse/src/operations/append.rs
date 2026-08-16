@@ -27,17 +27,21 @@ use databend_common_expression::Expr;
 use databend_common_expression::LimitType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
+use databend_common_pipeline_transforms::BlockCompactBuilder;
+use databend_common_pipeline_transforms::TransformCompactBlock;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::create_dummy_item;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
+use databend_common_sql::ClusterKeys;
+use databend_common_sql::bind_normalized_key_exprs;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::FuseTable;
@@ -48,6 +52,8 @@ use crate::operations::TransformPartitionBy;
 use crate::operations::TransformSerializeBlock;
 use crate::operations::TransformVectorCluster;
 use crate::statistics::ClusterStatsGenerator;
+use crate::statistics::ClusterStatsKey;
+use crate::statistics::ClusterStatsLayout;
 use crate::statistics::VectorClusterOperator;
 use crate::statistics::vector_cluster_info_from_column;
 
@@ -79,7 +85,13 @@ impl FuseTable {
             });
         } else {
             let block_thresholds = self.get_block_thresholds();
-            build_compact_block_pipeline(pipeline, block_thresholds)?;
+            if self.use_hash_write_distribution() {
+                pipeline
+                    .add_accumulating_transformer(|| BlockCompactBuilder::new(block_thresholds));
+                pipeline.add_block_meta_transformer(|| TransformCompactBlock);
+            } else {
+                build_compact_block_pipeline(pipeline, block_thresholds)?;
+            }
 
             let schema = DataSchema::from(self.schema()).into();
             let cluster_stats_gen =
@@ -113,14 +125,14 @@ impl FuseTable {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, input_schema)?;
 
-        let operators = cluster_stats_gen.operators.clone();
-        if !operators.is_empty() {
+        if !cluster_stats_gen.eval_operators.is_empty() {
+            let eval_operators = cluster_stats_gen.eval_operators.clone();
             let num_input_columns = self.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
             let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 move || {
                     Ok(CompoundBlockOperator::new(
-                        operators.clone(),
+                        eval_operators.clone(),
                         func_ctx2.clone(),
                         num_input_columns,
                     ))
@@ -133,17 +145,38 @@ impl FuseTable {
             pipeline.add_pipe(builder.finalize());
         }
 
-        if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+        let partition_key_indices: Arc<[_]> = cluster_stats_gen.partition_key_index.clone().into();
+        if !partition_key_indices.is_empty() {
+            let mut builder = pipeline.add_transform_with_specified_len(
+                move |input, output| {
+                    Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                        input,
+                        output,
+                        TransformPartitionBy::new(partition_key_indices.clone()),
+                    )))
+                },
+                transform_len,
+            )?;
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
+            pipeline.add_pipe(builder.finalize());
+        }
+
+        if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
             let rows_per_block = block_thresholds.max_rows_per_block;
+            let vector_column_input_offset = vector_operator.vector_column_input_offset;
+            let dimension = vector_operator.info.dimension;
+            let distance_type = vector_operator.info.distance_type;
             let mut builder = pipeline.add_transform_with_specified_len(
                 move |input, output| {
                     Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                         input,
                         output,
                         TransformVectorCluster::new(
-                            vector_operator.vector_column_input_offset,
-                            vector_operator.info.dimension,
-                            vector_operator.info.distance_type,
+                            vector_column_input_offset,
+                            dimension,
+                            distance_type,
                             rows_per_block,
                         ),
                     )))
@@ -164,23 +197,6 @@ impl FuseTable {
                         LimitType::None,
                         sort_desc.clone(),
                     ))
-                },
-                transform_len,
-            )?;
-            if need_match {
-                builder.add_items_prepend(vec![create_dummy_item()]);
-            }
-            pipeline.add_pipe(builder.finalize());
-        }
-        let partition_key_indices: Arc<[_]> = cluster_stats_gen.partition_key_index.clone().into();
-        if !partition_key_indices.is_empty() {
-            let mut builder = pipeline.add_transform_with_specified_len(
-                move |input, output| {
-                    Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                        input,
-                        output,
-                        TransformPartitionBy::new(partition_key_indices.clone()),
-                    )))
                 },
                 transform_len,
             )?;
@@ -225,23 +241,38 @@ impl FuseTable {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, input_schema)?;
 
-        let operators = cluster_stats_gen.operators.clone();
-        if !operators.is_empty() {
+        if !cluster_stats_gen.eval_operators.is_empty() {
+            let eval_operators = cluster_stats_gen.eval_operators.clone();
             let num_input_columns = self.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
 
             pipeline.add_transformer(move || {
-                CompoundBlockOperator::new(operators.clone(), func_ctx2.clone(), num_input_columns)
+                CompoundBlockOperator::new(
+                    eval_operators.clone(),
+                    func_ctx2.clone(),
+                    num_input_columns,
+                )
             });
         }
 
-        if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+        let partition_key_indices: Arc<[_]> = cluster_stats_gen.partition_key_index.clone().into();
+        if !rewrite_replaced_block && !partition_key_indices.is_empty() {
+            pipeline.add_accumulating_transformer({
+                let partition_key_indices = partition_key_indices.clone();
+                move || TransformPartitionBy::new(partition_key_indices.clone())
+            });
+        }
+
+        if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
             let rows_per_block = block_thresholds.max_rows_per_block;
+            let vector_column_input_offset = vector_operator.vector_column_input_offset;
+            let dimension = vector_operator.info.dimension;
+            let distance_type = vector_operator.info.distance_type;
             pipeline.add_accumulating_transformer(move || {
                 TransformVectorCluster::new(
-                    vector_operator.vector_column_input_offset,
-                    vector_operator.info.dimension,
-                    vector_operator.info.distance_type,
+                    vector_column_input_offset,
+                    dimension,
+                    distance_type,
                     rows_per_block,
                 )
             });
@@ -254,21 +285,18 @@ impl FuseTable {
                 move || TransformSortPartial::new(LimitType::None, sort_desc.clone())
             });
         }
-        let partition_key_indices: Arc<[_]> = cluster_stats_gen.partition_key_index.clone().into();
-        if !partition_key_indices.is_empty() {
-            if rewrite_replaced_block {
-                pipeline.add_accumulating_transformer(move || {
-                    TransformPartitionBy::new_for_update(partition_key_indices.clone())
-                });
-            } else {
-                pipeline.add_accumulating_transformer(move || {
-                    TransformPartitionBy::new(partition_key_indices.clone())
-                });
-            }
+        if rewrite_replaced_block && !partition_key_indices.is_empty() {
+            pipeline.add_accumulating_transformer(move || {
+                TransformPartitionBy::new_for_update(partition_key_indices.clone())
+            });
         }
         Ok(cluster_stats_gen)
     }
 
+    /// Build the evaluated partition/cluster-key layout and its statistics generator.
+    ///
+    /// Pure Hilbert keys are evaluated for two-dimensional MBR statistics but are not used as
+    /// ordinary lexicographic sort keys.
     pub fn get_cluster_stats_gen(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -276,47 +304,66 @@ impl FuseTable {
         block_thresholds: BlockThresholds,
         input_schema: Arc<DataSchema>,
     ) -> Result<ClusterStatsGenerator> {
-        let partition_keys = self.linear_partition_keys(ctx.clone());
-        let cluster_keys = self.linear_cluster_keys(ctx.clone());
-        if partition_keys.is_empty() && cluster_keys.is_empty() {
+        let table_meta: Arc<dyn Table> = Arc::new(self.clone());
+        let partition_keys = self
+            .resolve_partition_keys()
+            .map(|keys| bind_normalized_key_exprs(ctx.clone(), table_meta.clone(), keys))
+            .transpose()?
+            .unwrap_or_default();
+        let parsed_cluster_keys = self
+            .resolve_cluster_keys()
+            .map(|keys| parse_cluster_keys(ctx.clone(), table_meta, keys))
+            .transpose()?;
+        if partition_keys.is_empty() && parsed_cluster_keys.is_none() {
             return Ok(ClusterStatsGenerator::default());
         }
 
+        let table_schema = self.schema();
+        let (is_hilbert, vector_key_index, cluster_key_exprs) = match parsed_cluster_keys {
+            Some(ClusterKeys::Linear(keys)) => (false, None, keys),
+            Some(ClusterKeys::Vector { keys, vector_index }) => (false, Some(vector_index), keys),
+            Some(ClusterKeys::Hilbert(dimensions)) => (true, None, dimensions),
+            None => (false, None, Vec::new()),
+        };
+        let input_offset = |id: &usize| input_schema.index_of(table_schema.field(*id).name());
         let mut merged = input_schema.fields().clone();
         let mut partition_key_index = Vec::with_capacity(partition_keys.len());
-        let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
+        let mut stats_keys = Vec::with_capacity(cluster_key_exprs.len());
         let mut extra_key_num = 0;
+        let mut exprs = Vec::with_capacity(partition_keys.len() + cluster_key_exprs.len());
 
-        let mut exprs = Vec::with_capacity(partition_keys.len() + cluster_keys.len());
+        for partition_key in partition_keys {
+            let expr = partition_key.project_column_ref(input_offset)?;
+            let index = match expr {
+                Expr::ColumnRef(ColumnRef { id, .. }) => id,
+                expr => {
+                    let name = format!("{}", expr);
+                    merged.push(DataField::new(name.as_str(), expr.data_type().clone()));
+                    exprs.push(expr);
+                    extra_key_num += 1;
+                    merged.len() - 1
+                }
+            };
+            partition_key_index.push(index);
+        }
+
         let mut vector_cluster_info = None;
-        let mut vector_column_input_offset = None;
-
-        let keys = partition_keys.iter().map(|expr| (None, expr)).chain(
-            cluster_keys
-                .iter()
-                .enumerate()
-                .map(|(index, expr)| (Some(index), expr)),
-        );
-        for (cluster_key_position, remote_expr) in keys {
-            let expr = remote_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| input_schema.index_of(name))?;
-            if let (Some(key_index), DataType::Vector(vector_ty)) =
-                (cluster_key_position, expr.data_type().remove_nullable())
-            {
+        for (key_index, cluster_key_expr) in cluster_key_exprs.iter().enumerate() {
+            let expr = cluster_key_expr.project_column_ref(input_offset)?;
+            let is_vector_key = Some(key_index) == vector_key_index;
+            if is_vector_key {
+                let DataType::Vector(vector_ty) = expr.data_type().remove_nullable() else {
+                    return Err(ErrorCode::InvalidClusterKeys(
+                        "Vector cluster key must be vector type",
+                    ));
+                };
                 let Expr::ColumnRef(ColumnRef { id, .. }) = &expr else {
                     return Err(ErrorCode::InvalidClusterKeys(
                         "Vector cluster key only supports direct column reference",
                     ));
                 };
-                if vector_cluster_info.is_some() {
-                    return Err(ErrorCode::InvalidClusterKeys(
-                        "Only one vector column is supported in cluster by",
-                    ));
-                }
                 let input_field = input_schema.field(*id);
-                let schema = self.schema();
-                let field = schema.field_with_name(input_field.name())?;
+                let field = table_schema.field_with_name(input_field.name())?;
                 let dimension: usize = vector_ty.dimension().try_into().map_err(|_| {
                     ErrorCode::InvalidClusterKeys(
                         "Vector cluster key dimension is too large for kmeans",
@@ -334,29 +381,32 @@ impl FuseTable {
                     field.name(),
                     dimension,
                 )?;
-                vector_column_input_offset = Some(*id);
-                vector_cluster_info = Some(vector_info);
+                vector_cluster_info = Some((vector_info, *id));
             }
-            let index = match &expr {
-                Expr::ColumnRef(ColumnRef { id, .. }) => *id,
-                _ => {
-                    let cname = format!("{}", expr);
-                    merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
+            let index = match expr {
+                Expr::ColumnRef(ColumnRef { id, .. }) => id,
+                expr => {
+                    let name = format!("{}", expr);
+                    merged.push(DataField::new(name.as_str(), expr.data_type().clone()));
                     exprs.push(expr);
-
-                    let offset = merged.len() - 1;
                     extra_key_num += 1;
-                    offset
+                    merged.len() - 1
                 }
             };
-            if cluster_key_position.is_some() {
-                cluster_key_index.push(index);
-            } else {
-                partition_key_index.push(index);
+            if !is_vector_key {
+                stats_keys.push(ClusterStatsKey {
+                    offset: index,
+                    source_column_id: match cluster_key_expr {
+                        Expr::ColumnRef(ColumnRef { id, .. }) => {
+                            Some(table_schema.field(*id).column_id())
+                        }
+                        _ => None,
+                    },
+                });
             }
         }
 
-        let operators = if exprs.is_empty() {
+        let eval_operators = if exprs.is_empty() {
             vec![]
         } else {
             vec![BlockOperator::Map {
@@ -364,37 +414,40 @@ impl FuseTable {
                 projections: None,
             }]
         };
-        let mut vector_operator = None;
-        if let Some(vector_info) = vector_cluster_info {
-            if vector_info.key_index < cluster_key_index.len() {
-                if let Some(vector_column_input_offset) = vector_column_input_offset {
-                    let cluster_id_offset = merged.len();
-                    merged.push(DataField::new(
-                        "_vector_cluster_sort_key",
-                        DataType::Number(NumberDataType::UInt64),
-                    ));
-                    extra_key_num += 1;
-                    // Keep the original CLUSTER BY order. For CLUSTER BY (a, embedding, b),
-                    // sorting should use (a, _vector_cluster_sort_key, b), not append the
-                    // vector sort key after all scalar keys.
-                    cluster_key_index[vector_info.key_index] = cluster_id_offset;
-                    vector_operator = Some(VectorClusterOperator {
-                        info: vector_info,
-                        vector_column_input_offset,
-                        vector_cluster_id_offset: cluster_id_offset,
-                    });
-                }
-            }
-        }
+        let vector_operator =
+            if let Some((vector_info, vector_column_input_offset)) = vector_cluster_info {
+                debug_assert!(vector_info.key_index <= stats_keys.len());
+                let cluster_id_offset = merged.len();
+                merged.push(DataField::new(
+                    "_vector_cluster_sort_key",
+                    DataType::Number(NumberDataType::UInt64),
+                ));
+                extra_key_num += 1;
+                Some(VectorClusterOperator {
+                    info: vector_info,
+                    vector_column_input_offset,
+                    vector_cluster_id_offset: cluster_id_offset,
+                })
+            } else {
+                None
+            };
+
+        let layout = if let Some(vector_operator) = vector_operator {
+            ClusterStatsLayout::Vector(vector_operator)
+        } else if is_hilbert {
+            ClusterStatsLayout::Hilbert
+        } else {
+            ClusterStatsLayout::Linear
+        };
 
         let mut generator = ClusterStatsGenerator::new(
             self.cluster_key_id().unwrap_or(0),
-            cluster_key_index,
+            stats_keys,
             extra_key_num,
             level,
             block_thresholds,
-            operators,
-            vector_operator,
+            eval_operators,
+            layout,
             merged,
             ctx.get_function_context()?,
         );

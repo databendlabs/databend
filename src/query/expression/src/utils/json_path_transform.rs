@@ -14,15 +14,9 @@
 
 //! Helpers for the `json_path_transform` lambda function.
 //!
-//! [`select_locations`] walks a JSONB document following a parsed
-//! [`JsonPath`] and returns the structural locations (and standalone
-//! JSONB binaries) of all matched values. The traversal rules mirror
-//! the lax-mode semantics of `jsonb::jsonpath::Selector` (which backs
-//! `json_path_query`), and filter expressions are delegated to the
-//! selector itself so that predicate semantics can never diverge.
-//!
-//! [`replace_at_locations`] rebuilds a document with the values at the
-//! given locations replaced, leaving everything else untouched.
+//! [`select_locations`] mirrors the lax-mode semantics of
+//! `jsonb::jsonpath::Selector` (which backs `json_path_query`) and delegates
+//! filter expressions to it, so predicate semantics cannot diverge.
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -36,27 +30,23 @@ use jsonb::jsonpath::RecursiveLevel;
 /// One structural step from a JSONB node to one of its children.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PathStep {
-    /// Enter the value of an object entry by key name.
     Key(String),
-    /// Enter an array element by 0-based index.
     Index(usize),
 }
 
-/// A value matched by [`select_locations`].
+/// A value matched by [`select_locations`]: its structural location relative
+/// to the root and the value re-encoded as a standalone JSONB binary.
 #[derive(Debug)]
 pub struct JsonPathMatch {
-    /// Structural location of the matched value, relative to the root.
     pub location: Vec<PathStep>,
-    /// The matched value encoded as a standalone JSONB binary.
     pub value: Vec<u8>,
 }
 
-/// Selects the locations of all values matched by `json_path` inside
-/// the JSONB binary `data`, in document order.
+/// Selects the locations of all values matched by `json_path` inside the
+/// JSONB binary `data`, in document order.
 ///
-/// Returns an error if the path selects the same value more than once,
-/// or selects both an ancestor and its descendant, because such matches
-/// cannot be replaced unambiguously.
+/// Errors if the path matches nested or duplicate values, which cannot be
+/// replaced unambiguously.
 pub fn select_locations(data: &[u8], json_path: &JsonPath<'_>) -> Result<Vec<JsonPathMatch>> {
     // Mirrors `Selector::select_by_paths`: a leading `@` is invalid.
     if let Some(Path::Current) = json_path.paths.first() {
@@ -68,8 +58,7 @@ pub fn select_locations(data: &[u8], json_path: &JsonPath<'_>) -> Result<Vec<Jso
     let root = from_slice(data)
         .map_err(|e| ErrorCode::BadArguments(format!("invalid jsonb value: {e:?}")))?;
 
-    // The worklist of candidate nodes after applying each path step,
-    // kept in document order like the selector's item queue.
+    // Candidate nodes after each applied path step, in document order.
     let mut items: Vec<(Vec<PathStep>, &JsonbValue<'_>)> = vec![(vec![], &root)];
 
     for path in json_path.paths.iter() {
@@ -78,7 +67,6 @@ pub fn select_locations(data: &[u8], json_path: &JsonPath<'_>) -> Result<Vec<Jso
                 continue;
             }
             Path::FilterExpr(expr) => {
-                // Build the delegated filter path once per step, not per node.
                 let filter_path = JsonPath {
                     paths: vec![Path::Root, Path::FilterExpr(expr.clone())],
                 };
@@ -139,7 +127,7 @@ pub fn select_locations(data: &[u8], json_path: &JsonPath<'_>) -> Result<Vec<Jso
                             next.push((child_loc, val));
                         }
                     } else {
-                        // In lax mode a bracket wildcard on a non-array
+                        // Lax mode: a bracket wildcard on a non-array
                         // auto-wraps the value, keeping the node itself.
                         next.push((loc, node));
                     }
@@ -171,7 +159,6 @@ pub fn select_locations(data: &[u8], json_path: &JsonPath<'_>) -> Result<Vec<Jso
         }
     }
 
-    // Nested or duplicate matches cannot be replaced unambiguously.
     check_no_overlap(&items)?;
 
     Ok(items
@@ -232,9 +219,8 @@ fn collect_recursive_locations<'data, 'node>(
     }
 }
 
-/// Evaluates a delegated filter path (`$ ? (expr)`) against a single
-/// candidate node using the jsonb selector, so predicate semantics stay
-/// identical to `json_path_query` / `json_path_exists`.
+/// Evaluates a filter path (`$ ? (expr)`) against a single node with the
+/// jsonb selector, keeping predicate semantics identical to `json_path_query`.
 fn eval_filter_on_node(node: &JsonbValue<'_>, filter_path: &JsonPath<'_>) -> Result<bool> {
     let bytes = node.to_vec();
     let raw = RawJsonb::new(&bytes);
@@ -332,8 +318,7 @@ mod tests {
             .collect()
     }
 
-    /// The walker must select exactly the same values as the jsonb
-    /// selector that backs `json_path_query`.
+    /// The walker must select the same values as the jsonb selector.
     fn assert_matches_selector(data: &[u8], path: &str) {
         let json_path = parse_json_path(path.as_bytes()).unwrap();
         let ours: Vec<String> = select_locations(data, &json_path)
@@ -409,13 +394,11 @@ mod tests {
             assert_matches_selector(&doc, path);
         }
 
-        // A computed expression returns a derived value rather than a
-        // location in the source document, so it cannot be transformed.
+        // A computed expression yields derived values, not document locations.
         let computed_path = parse_json_path(b"$.c == 2").unwrap();
         assert!(select_locations(&doc, &computed_path).is_err());
 
-        // An unrestricted recursive wildcard selects ancestors and descendants.
-        // The dialect is supported, but overlapping replacements are ambiguous.
+        // `$.**` selects ancestors and descendants: ambiguous for replacement.
         let json_path = parse_json_path(b"$.**").unwrap();
         assert!(select_locations(&doc, &json_path).is_err());
     }
@@ -477,7 +460,7 @@ mod tests {
         let json_path = parse_json_path(b"$.missing").unwrap();
         let matches = select_locations(&doc, &json_path).unwrap();
         assert!(matches.is_empty());
-        // Decode/encode roundtrip fidelity backs the passthrough fast path.
+        // Untouched parts of a rebuilt document rely on roundtrip fidelity.
         let root = from_slice(&doc).unwrap();
         assert_eq!(root.to_vec(), doc);
     }

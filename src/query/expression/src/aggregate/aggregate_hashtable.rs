@@ -179,7 +179,7 @@ impl AggregateHashTable {
         #[cfg(debug_assertions)]
         {
             for (i, group_column) in group_columns.iter().enumerate() {
-                if group_column.data_type() != self.payload.group_types[i] {
+                if !self.payload.group_types[i].matches_physical_type(&group_column.data_type()) {
                     return Err(databend_common_exception::ErrorCode::UnknownException(
                         format!(
                             "group_column type not match in index {}, expect: {:?}, actual: {:?}",

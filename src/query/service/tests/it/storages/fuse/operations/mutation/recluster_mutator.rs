@@ -57,6 +57,7 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -65,6 +66,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::VectorColumnStatistics;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::ClusterType;
 use futures::TryStreamExt;
 use rand::Rng;
 use rand::SeedableRng;
@@ -107,7 +109,7 @@ fn new_test_mutator(
         test_cluster_key_exprs(),
         1.0,
         thresholds,
-        cluster_key_id,
+        ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
         0,
         max_tasks,
         mode,
@@ -187,7 +189,9 @@ async fn write_recluster_segment(
         .iter()
         .map(|block| block.as_ref())
         .collect::<Vec<_>>();
-    let statistics = reduce_block_metas(&block_refs, thresholds, Some(cluster_key_id))?;
+    let cluster_key_info =
+        ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear);
+    let statistics = reduce_block_metas(&block_refs, thresholds, Some(&cluster_key_info))?;
     let segment = SegmentInfo::new(blocks, statistics);
     let segment_location = location_generator
         .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
@@ -1205,7 +1209,7 @@ async fn test_scalar_segment_selection_does_not_cross_partitions() -> anyhow::Re
         test_cluster_key_exprs(),
         1.0,
         thresholds,
-        cluster_key_id,
+        ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
         1,
         1,
         ReclusterMode::Aggressive,
@@ -1383,7 +1387,7 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
         vec![test_cluster_key_expr(), test_vector_cluster_key_expr()],
         1.0,
         thresholds,
-        cluster_key_id,
+        ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
         0,
         1,
         ReclusterMode::Conservative,
@@ -1463,7 +1467,7 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
         vec![test_vector_cluster_key_expr()],
         1.0,
         thresholds,
-        cluster_key_id,
+        ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
         0,
         1,
         ReclusterMode::Conservative,
@@ -1544,7 +1548,7 @@ async fn test_vector_segment_selection_does_not_cross_partitions() -> anyhow::Re
         vec![test_vector_cluster_key_expr()],
         1.0,
         thresholds,
-        cluster_key_id,
+        ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
         1,
         1,
         ReclusterMode::Aggressive,

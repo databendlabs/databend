@@ -841,6 +841,7 @@ fn build_mutation_row_fetch(
         cols_to_fetch,
         fetched_fields,
         need_wrap_nullable,
+        populate_cache: false,
         enable_block_id_repartition: true,
         stat_info: None,
         meta: PhysicalPlanMeta::new("RowFetch"),

@@ -13,23 +13,22 @@
 // limitations under the License.
 
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::TableSchemaRef;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
 
-use crate::plans::TableOptions;
+use crate::plans::CreateTablePlan;
+use crate::plans::Plan;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct CreateMaterializedViewPlan {
-    pub create_option: CreateOption,
-    pub tenant: Tenant,
-    pub catalog: String,
-    pub database: String,
-    pub view_name: String,
-    pub schema: TableSchemaRef,
-    pub options: TableOptions,
+    pub table_plan: CreateTablePlan,
     pub mv_definition: MVDefinition,
+    /// Source option update to commit atomically with MV publication, if needed.
+    pub source_table_option: Option<UpsertTableOptionReq>,
+    /// Fully bound for source authorization and auditing; never executed by CREATE.
+    pub query_plan: Box<Plan>,
+    pub expected_source_generation: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,14 +41,14 @@ pub struct DropMaterializedViewPlan {
 }
 
 #[derive(Clone, Debug)]
-pub struct DescribeMaterializedViewPlan {
+pub struct ShowCreateMaterializedViewPlan {
     pub catalog: String,
     pub database: String,
     pub view_name: String,
     pub schema: DataSchemaRef,
 }
 
-impl DescribeMaterializedViewPlan {
+impl ShowCreateMaterializedViewPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
     }

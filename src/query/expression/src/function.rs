@@ -34,6 +34,7 @@ use jiff::Zoned;
 use jiff::tz::TimeZone;
 use serde::Deserialize;
 use serde::Serialize;
+use smallvec::SmallVec;
 
 use self::function_factory::FunctionFactoryHelper;
 use crate::Column;
@@ -276,10 +277,10 @@ impl FunctionRegistry {
         name: &str,
         params: &[Scalar],
         args: &[Expr<Index>],
-    ) -> Vec<(FunctionID, Arc<Function>)> {
+    ) -> SmallVec<[(FunctionID, Arc<Function>); 1]> {
         let name = name.to_lowercase();
 
-        let mut candidates = Vec::new();
+        let mut candidates: SmallVec<[(FunctionID, Arc<Function>); 1]> = SmallVec::new();
 
         if let Some(funcs) = self.funcs.get(&name) {
             candidates.extend(funcs.iter().filter_map(|(func, id)| {
@@ -304,13 +305,27 @@ impl FunctionRegistry {
                 .cloned()
                 .collect::<Vec<_>>();
             candidates.extend(factories.iter().filter_map(|(factory, id)| {
-                factory.create(params, &args_type).map(|func| {
+                let mut factory_args_type = Cow::Borrowed(args_type.as_slice());
+                let mut func = factory.create(params, &factory_args_type);
+                if func.is_none() {
+                    let physical_args_type = args_type
+                        .iter()
+                        .map(|data_type| data_type.physical_type().into_owned())
+                        .collect::<Vec<_>>();
+                    if physical_args_type != args_type {
+                        factory_args_type = Cow::Owned(physical_args_type);
+                        func = factory.create(params, &factory_args_type);
+                    }
+                }
+
+                func.map(|func| {
+                    let factory_args_type = factory_args_type.into_owned();
                     (
                         FunctionID::Factory {
                             name: name.to_string(),
                             id: *id,
                             params: params.to_vec(),
-                            args_type: args_type.clone(),
+                            args_type: factory_args_type,
                         },
                         func,
                     )

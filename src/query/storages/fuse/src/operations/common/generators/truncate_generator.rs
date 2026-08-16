@@ -18,7 +18,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::plans::TruncateMode;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -58,7 +58,7 @@ impl SnapshotGenerator for TruncateGenerator {
     fn do_generate_new_snapshot(
         &self,
         table_info: &TableInfo,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         _table_stats_gen: TableStatsGenerator,
@@ -69,7 +69,7 @@ impl SnapshotGenerator for TruncateGenerator {
             table_info.schema().as_ref().clone(),
             Default::default(),
             vec![],
-            cluster_key_meta,
+            cluster_key_info,
             None,
             table_meta_timestamps,
         )

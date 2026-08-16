@@ -211,6 +211,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (179, "2026-07-06: Add: task.proto/TaskMessage.DeleteTask.task_id"),
     (180, "2026-07-10: Add: catalog.proto/PaimonCatalogOption"),
     (181, "2026-07-21: Add: materialized_view.proto/{MVDefinition,MVSourceBinding,MVSourceBindingVersion}"),
+    (182, "2026-08-05: Add: datatype.proto/AggregateState"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

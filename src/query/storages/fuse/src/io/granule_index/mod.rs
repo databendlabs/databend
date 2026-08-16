@@ -43,6 +43,8 @@ use opendal::Operator;
 
 use crate::io::GranulePruningReadContext;
 use crate::statistics::ClusterStatsGenerator;
+use crate::statistics::ClusterStatsKey;
+use crate::statistics::ClusterStatsLayout;
 
 /// Materialize the scalar cluster-key columns used by the sparse granule-min index without
 /// changing the physical block written to storage. Expression keys may have been removed after
@@ -61,7 +63,7 @@ pub fn materialize_cluster_key_columns(
         block
     } else {
         evaluated = generator
-            .operators
+            .eval_operators
             .iter()
             .try_fold(block.clone(), |input, operator| {
                 operator.execute(&generator.func_ctx, input)
@@ -367,7 +369,10 @@ mod tests {
             check_function(None, "modulo", &[], &[column, int64(3)], &BUILTIN_FUNCTIONS).unwrap();
         let generator = ClusterStatsGenerator::new(
             0,
-            vec![1],
+            vec![ClusterStatsKey {
+                offset: 1,
+                source_column_id: None,
+            }],
             1,
             0,
             BlockThresholds::default(),
@@ -375,7 +380,7 @@ mod tests {
                 exprs: vec![key],
                 projections: None,
             }],
-            None,
+            ClusterStatsLayout::Linear,
             vec![
                 DataField::new("a", DataType::Number(NumberDataType::Int64)),
                 DataField::new("a % 3", DataType::Number(NumberDataType::Int64)),

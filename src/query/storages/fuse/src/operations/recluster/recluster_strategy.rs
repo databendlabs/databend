@@ -25,6 +25,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -57,7 +58,7 @@ pub(crate) struct ReclusterProperties {
     pub(crate) mode: ReclusterMode,
     pub(crate) depth_threshold: f64,
     pub(crate) block_thresholds: BlockThresholds,
-    pub(crate) cluster_key_id: u32,
+    pub(crate) cluster_key_info: ClusterKeyInfo,
     pub(crate) partition_key_count: usize,
     pub(crate) memory_threshold: usize,
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
@@ -75,7 +76,7 @@ impl ReclusterProperties {
         mode: ReclusterMode,
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
-        cluster_key_id: u32,
+        cluster_key_info: ClusterKeyInfo,
         memory_threshold: usize,
         vertical_kind: Option<VerticalReclusterKind>,
     ) -> Result<(Self, Arc<dyn ReclusterStrategy>)> {
@@ -123,7 +124,7 @@ impl ReclusterProperties {
             mode,
             depth_threshold,
             block_thresholds,
-            cluster_key_id,
+            cluster_key_info,
             partition_key_count: table.partition_key_count(),
             memory_threshold,
             prepared_cluster_key_exprs,
@@ -141,7 +142,7 @@ impl ReclusterProperties {
         mode: ReclusterMode,
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
-        cluster_key_id: u32,
+        cluster_key_info: ClusterKeyInfo,
         partition_key_count: usize,
         memory_threshold: usize,
         vector_cluster_info: Option<VectorClusterInfo>,
@@ -170,7 +171,7 @@ impl ReclusterProperties {
             mode,
             depth_threshold,
             block_thresholds,
-            cluster_key_id,
+            cluster_key_info,
             partition_key_count,
             memory_threshold,
             prepared_cluster_key_exprs,
@@ -207,7 +208,7 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
         properties: &ReclusterProperties,
         stats: &ClusterStatistics,
     ) -> bool {
-        stats.cluster_key_id == properties.cluster_key_id
+        stats.cluster_key_id == properties.cluster_key_info.cluster_key_id()
     }
 
     fn build_cluster_stats(
@@ -226,9 +227,9 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
             &properties.prepared_cluster_key_exprs,
             col_stats,
             cluster_stats,
-            Some(properties.cluster_key_id),
+            Some(properties.cluster_key_info.cluster_key_id()),
         );
-        ClusterStatistics::new(properties.cluster_key_id, min, max, 0)
+        ClusterStatistics::new(properties.cluster_key_info.cluster_key_id(), min, max, 0)
     }
 }
 

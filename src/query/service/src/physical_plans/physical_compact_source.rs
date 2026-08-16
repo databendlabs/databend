@@ -35,6 +35,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactLazyPartInfo;
+use databend_common_storages_fuse::operations::CompactSource as FuseCompactSource;
 use databend_common_storages_fuse::operations::CompactTransform;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -97,7 +98,7 @@ impl IPhysicalPlan for CompactSource {
 
         let is_lazy = self.parts.partitions_type() == PartInfoType::LazyLevel;
         let thresholds = table.get_block_thresholds();
-        let cluster_key_id = table.cluster_key_id();
+        let cluster_key_info = table.cluster_key_info();
         let partition_key_count = table.partition_key_count();
         let mut max_threads = builder.settings.get_max_threads()? as usize;
 
@@ -125,7 +126,7 @@ impl IPhysicalPlan for CompactSource {
                             let partitions = BlockCompactMutator::build_compact_tasks(
                                 ctx.clone(),
                                 dal.clone(),
-                                cluster_key_id,
+                                cluster_key_info,
                                 partition_key_count,
                                 thresholds,
                                 lazy_parts,
@@ -163,11 +164,8 @@ impl IPhysicalPlan for CompactSource {
         // Add source pipe.
         builder.main_pipeline.add_source(
             |output| {
-                let source = databend_common_storages_fuse::operations::CompactSource::create(
-                    builder.ctx.clone(),
-                    block_reader.clone(),
-                    1,
-                );
+                let source =
+                    FuseCompactSource::create(builder.ctx.clone(), block_reader.clone(), 1);
                 PrefetchAsyncSourcer::create(builder.ctx.get_scan_progress(), output, source)
             },
             max_threads,
@@ -238,7 +236,6 @@ impl PhysicalPlanBuilder {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(catalog).await?;
         let tbl = catalog.get_table(&tenant, database, table).await?;
-        // check mutability
         tbl.check_mutable()?;
 
         let table_info = tbl.get_table_info().clone();

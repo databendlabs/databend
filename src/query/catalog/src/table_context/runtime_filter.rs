@@ -51,7 +51,10 @@ pub trait TableContextRuntimeFilter: Send + Sync {
 
     fn get_runtime_filters(&self, id: usize) -> Vec<RuntimeFilterEntry>;
 
-    fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, RuntimeBloomFilter)>;
+    fn get_bloom_runtime_filter_with_id(
+        &self,
+        id: usize,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)>;
 
     fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
 

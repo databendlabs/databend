@@ -44,7 +44,6 @@ impl FuseTable {
             .navigate_for_revert(&ctx, &navigation_descriptor.point)
             .await?;
         let table_reverting_to = FuseTable::try_from_table(table.as_ref())?;
-        let table_info = table_reverting_to.get_table_info();
 
         // shortcut. if reverting to the same point, just return ok
         if self.snapshot_loc() == table_reverting_to.snapshot_loc() {
@@ -57,7 +56,8 @@ impl FuseTable {
         // 3. prepare the request
         //  using the CURRENT version as the base table version
         let base_version = self.table_info.ident.seq;
-        let table_id = table_info.ident.table_id;
+        let table_id = self.table_info.ident.table_id;
+        let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
         let req = UpdateTableMetaReq {
             table_id,
@@ -68,7 +68,9 @@ impl FuseTable {
         };
 
         // 4. let's roll
-        let reply = catalog.update_single_table_meta(req, table_info).await;
+        let reply = catalog
+            .update_single_table_meta(&tenant, req, &self.table_info)
+            .await;
         if reply.is_ok() {
             // try keeping the snapshot hit
             let snapshot_location = table_reverting_to.snapshot_loc().ok_or_else(|| {

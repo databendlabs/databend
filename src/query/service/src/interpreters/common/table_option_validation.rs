@@ -58,6 +58,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -107,6 +108,9 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_COMMENT);
     r.insert(OPT_KEY_CHANGE_TRACKING);
     r.insert(OPT_KEY_WRITE_DISTRIBUTION_MODE);
+    // Added by the binder for CLUSTER BY LINEAR/HILBERT. User-specified
+    // reserved options are rejected before the CreateTablePlan is built.
+    r.insert(OPT_KEY_CLUSTER_TYPE);
 
     r.insert(OPT_KEY_ENGINE);
 
@@ -135,6 +139,7 @@ pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
         let mut r = HashSet::new();
         r.insert(OPT_KEY_DATABASE_ID);
         r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+        r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
         r
     });
 

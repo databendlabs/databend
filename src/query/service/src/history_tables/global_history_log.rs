@@ -297,8 +297,8 @@ impl GlobalHistoryLog {
             .get_u64_from_meta(&format!("{}/{}/batch_number", meta_key, table.name))
             .await?
             .unwrap_or(0);
-        let sql = if table.name == "log_history" {
-            table.assemble_log_history_transform(&self.stage_name, batch_number_begin)
+        let sqls = if table.name == "log_history" {
+            table.assemble_log_history_transforms(&self.stage_name, batch_number_begin)
         } else {
             batch_number_end = self
                 .meta_handle
@@ -308,9 +308,13 @@ impl GlobalHistoryLog {
             if batch_number_begin >= batch_number_end {
                 return Ok(());
             }
-            table.assemble_normal_transform(batch_number_begin, batch_number_end)
+            table.assemble_normal_transforms(batch_number_begin, batch_number_end)
         };
-        self.execute_sql(&sql).await?;
+        // Advance the batch checkpoint only after every phase succeeds. Tables that configure
+        // additional phases must keep them replay-safe so a partial failure can retry the batch.
+        for sql in sqls {
+            self.execute_sql(&sql).await?;
+        }
         if table.name == "log_history" {
             self.meta_handle
                 .set_u64_to_meta(
@@ -357,10 +361,11 @@ impl GlobalHistoryLog {
             .await?;
         if got_permit {
             let start = Instant::now();
-            let sql = &table.delete;
-            self.execute_sql(sql).await?;
-            let context = self.create_context().await?;
+            if let Some(delete) = &table.delete {
+                self.execute_sql(delete).await?;
+            }
             let delete_elapsed = start.elapsed().as_secs();
+            let context = self.create_context().await?;
             if LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
                 .is_ok()

@@ -42,6 +42,7 @@ use databend_common_expression::compare_columns;
 use databend_common_expression::is_stream_column_id;
 use databend_common_expression::types::DataType;
 use databend_common_pipeline::sources::SyncSource;
+use databend_common_sql::ClusterKeys;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::parse_cluster_keys;
@@ -264,6 +265,13 @@ impl VerticalReclusterSource {
         };
         let table_schema = self.table.schema();
         let parsed = parse_cluster_keys(self.ctx.clone(), Arc::new(self.table.clone()), ast)?;
+        // Vector and Hilbert layouts are rejected before a vertical task is built
+        // (see `ReclusterProperties::try_create` and the recluster interpreter).
+        let ClusterKeys::Linear(parsed) = parsed else {
+            return Err(ErrorCode::Unimplemented(
+                "vertical recluster supports linear cluster keys only",
+            ));
+        };
         let mut projected = Vec::with_capacity(parsed.len());
         for expr in parsed {
             let expr = expr.project_column_ref(|index| {

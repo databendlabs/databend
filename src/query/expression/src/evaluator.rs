@@ -138,6 +138,9 @@ impl<'a> Evaluator<'a> {
         let column_refs = expr.column_refs();
         for (index, data_type) in column_refs.iter() {
             let column = self.data_block.get_by_offset(*index);
+            if data_type.matches_physical_type(&column.data_type()) {
+                continue;
+            }
             if (column.data_type() == DataType::Null && data_type.is_nullable())
                 || (column.data_type().is_nullable() && data_type == &DataType::Null)
             {
@@ -253,7 +256,7 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
 
-                self.run_lambda(name, args, data_types, lambda_expr, return_type)?
+                self.run_lambda(name, args, data_types, lambda_expr, return_type, validity)?
             }
         };
 
@@ -266,7 +269,12 @@ impl<'a> Evaluator<'a> {
                     expr.data_type()
                 )
             }
-            Value::Column(col) => assert_eq!(&col.data_type(), expr.data_type()),
+            Value::Column(col) => assert!(
+                expr.data_type().matches_physical_type(&col.data_type()),
+                "column result type mismatch: physical {}, logical {}",
+                col.data_type(),
+                expr.data_type()
+            ),
         }
 
         if !expr.is_column_ref() && !expr.is_constant() && options.strict_eval {
@@ -403,6 +411,9 @@ impl<'a> Evaluator<'a> {
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
+            return Ok(value);
+        }
+        if src_type.matches_physical_type(dest_type) {
             return Ok(value);
         }
 
@@ -624,6 +635,15 @@ impl<'a> Evaluator<'a> {
                     Ok(Value::Column(NullableColumn::new_column(column, validity)))
                 }
             },
+            (DataType::AggregateState(state), _) => self.run_cast(
+                span,
+                state.physical_type(),
+                dest_type,
+                value,
+                validity,
+                expr_display,
+                options,
+            ),
 
             (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::EmptyArray) => {
@@ -1907,11 +1927,12 @@ impl<'a> Evaluator<'a> {
         data_types: Vec<DataType>,
         lambda_expr: &RemoteExpr,
         return_type: &DataType,
+        validity: Option<Bitmap>,
     ) -> Result<Value<AnyType>> {
         let expr = lambda_expr.as_expr(self.fn_registry);
 
         if func_name == "json_path_transform" {
-            return self.run_json_path_transform(args, data_types, &expr, return_type);
+            return self.run_json_path_transform(args, data_types, &expr, return_type, validity);
         }
 
         // array_reduce differs
@@ -2147,42 +2168,63 @@ impl<'a> Evaluator<'a> {
 
     /// Evaluates `json_path_transform(<json>, <path>, <lambda>)`.
     ///
-    /// The arguments are laid out as `[captures..., json, path]` and the
-    /// lambda body has been cast to `Nullable(Variant)` during type checking.
-    /// The evaluation runs in three phases so that the lambda body is executed
-    /// once over the matched values of the whole block:
-    ///
-    /// 1. locate the values matched by the json path in every row;
-    /// 2. evaluate the lambda over all matched values at once, with the
-    ///    captured outer columns repeated per match;
-    /// 3. rebuild each row with its matched values replaced, passing rows
-    ///    without matches through unchanged.
+    /// Arguments are laid out as `[json, path, captures...]` and the lambda
+    /// body was cast to `Nullable(Variant)` during type checking. Rows
+    /// outside `validity` (e.g. masked out of an IF/CASE branch) are passed
+    /// through unchanged: their paths are never parsed or selected and their
+    /// matches never reach the lambda, so they cannot fail the query.
     fn run_json_path_transform(
         &self,
         args: Vec<Value<AnyType>>,
         data_types: Vec<DataType>,
         expr: &Expr,
         return_type: &DataType,
+        validity: Option<Bitmap>,
     ) -> Result<Value<AnyType>> {
         debug_assert!(args.len() >= 2);
-        let json_idx = args.len() - 2;
-        let path_idx = args.len() - 1;
+        let json_idx = 0;
+        let path_idx = 1;
 
         let len = args.iter().find_map(|arg| match arg {
             Value::Column(col) => Some(col.len()),
             _ => None,
         });
         let num_rows = len.unwrap_or(1);
+        debug_assert!(len.is_none() || validity.as_ref().is_none_or(|v| v.len() == num_rows));
+
+        // The branch is fully masked out: the caller discards every row, so
+        // pass the json argument through without locating any match.
+        if let Some(v) = &validity {
+            if v.null_count() == v.len() {
+                let json = args.into_iter().next().unwrap();
+                return Ok(match json {
+                    Value::Column(col) if col.data_type() != *return_type => {
+                        debug_assert!(return_type.is_nullable());
+                        Value::Column(NullableColumn::new_column(
+                            col,
+                            Bitmap::new_constant(true, num_rows),
+                        ))
+                    }
+                    json => json,
+                });
+            }
+        }
+
+        // `None` means every row is active. A partially masked scalar row is
+        // a broadcast picked by at least one row, so it stays active.
+        let validity = match len {
+            Some(_) => validity.filter(|v| v.null_count() > 0),
+            None => None,
+        };
 
         fn parse_path(path_str: &str) -> Result<JsonPath<'_>> {
             parse_json_path(path_str.as_bytes())
                 .map_err(|_| ErrorCode::BadArguments(format!("Invalid JSON Path '{path_str}'")))
         }
 
-        // The path of a constant argument is parsed lazily on the first row
-        // that needs it, so an invalid constant path does not fail queries
-        // whose rows never evaluate it (all-NULL rows or empty blocks). This
-        // matches the per-row handling of a non-constant path.
+        // A constant path is parsed lazily on the first row that needs it, so
+        // an invalid constant path does not fail queries whose rows never
+        // evaluate it, matching the per-row handling of a non-constant path.
         let const_path_str = match &args[path_idx] {
             Value::Scalar(Scalar::String(path_str)) => Some(path_str.as_str()),
             _ => None,
@@ -2217,6 +2259,12 @@ impl<'a> Evaluator<'a> {
                     ));
                 }
             };
+            if let Some(validity) = &validity {
+                if !unsafe { validity.get_bit_unchecked(idx) } {
+                    rows.push(JsonTransformRow::Unchanged);
+                    continue;
+                }
+            }
             if let Some(path_str) = const_path_str
                 && const_path.is_none()
             {
@@ -2243,8 +2291,8 @@ impl<'a> Evaluator<'a> {
 
         // Phase 2: evaluate the lambda once over all matched values.
         let result_col = if total_matches > 0 {
-            let mut entries = Vec::with_capacity(json_idx + 1);
-            for i in 0..json_idx {
+            let mut entries = Vec::with_capacity(args.len() - 1);
+            for i in 2..args.len() {
                 let entry = match &args[i] {
                     Value::Scalar(scalar) => BlockEntry::new_const_column(
                         data_types[i].clone(),
@@ -2514,7 +2562,7 @@ impl<'a> Evaluator<'a> {
                 );
 
                 Ok((
-                    self.run_lambda(name, args, data_types, lambda_expr, return_type)?,
+                    self.run_lambda(name, args, data_types, lambda_expr, return_type, None)?,
                     return_type.clone(),
                 ))
             }

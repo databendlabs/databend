@@ -1,0 +1,111 @@
+# View traversal corresponds to setup/03_view_boundary.test.
+
+# The derived column z traces back through the view to both base columns. The view is a distinct
+# hop: distance 1 stops at the view, distance 2 reaches the base table.
+query ITTTTTT rowsort
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
+FROM get_lineage('lineage_history_views.view_dst.z', 'COLUMN', 'UPSTREAM', 2)
+----
+1 lineage_history_views src_view v lineage_history_views view_dst z
+2 lineage_history_views src a lineage_history_views src_view v
+2 lineage_history_views src b lineage_history_views src_view v
+
+# The passthrough column q keeps a single-source mapping across the same view boundary.
+query ITTTTTT rowsort
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
+FROM get_lineage('lineage_history_views.view_dst.q', 'COLUMN', 'UPSTREAM', 2)
+----
+1 lineage_history_views src_view p lineage_history_views view_dst q
+2 lineage_history_views src a lineage_history_views src_view p
+
+# Object traversal exposes both hops with their object domains. The middle object is a VIEW while
+# the endpoints are TABLE objects, so the view is not collapsed into a base-table edge.
+query ITTTTTTT rowsort
+SELECT distance, source_object_domain, source_object_database, source_object_name,
+       target_object_domain, target_object_database, target_object_name,
+       parse_json(process)['lineage_kind']::STRING
+FROM get_lineage('lineage_history_views.view_dst', 'TABLE', 'UPSTREAM', 2)
+----
+1 VIEW lineage_history_views src_view TABLE lineage_history_views view_dst CTAS
+2 TABLE lineage_history_views src VIEW lineage_history_views src_view CREATE_VIEW
+
+# Starting from the view object in the VIEW domain resolves the view itself and both directions.
+query ITTTT rowsort
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
+FROM get_lineage('lineage_history_views.src_view', 'VIEW', 'UPSTREAM', 1)
+----
+1 lineage_history_views src lineage_history_views src_view
+
+# CREATE VIEW has no execution pipeline data movement, so its latest process snapshot reports
+# zero query-level scan/write rows while still carrying a non-negative duration.
+query BBB
+WITH result AS (
+  SELECT parse_json(process) AS process
+  FROM get_lineage('lineage_history_views.src_view', 'VIEW', 'UPSTREAM', 1)
+)
+SELECT process['written_rows']::UInt64 = 0,
+       process['scan_rows']::UInt64 = 0,
+       process['query_duration_ms']::Int64 >= 0
+FROM result
+----
+1 1 1
+
+query ITTTT rowsort
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
+FROM get_lineage('lineage_history_views.src_view', 'VIEW', 'DOWNSTREAM', 1)
+----
+1 lineage_history_views src_view lineage_history_views view_dst
+
+# Direct neighbors preserve the VIEW domain and orient both column maps around src_view.
+query TTTTTT rowsort
+SELECT direction, object_domain, catalog, database, object_name,
+       to_string(column_neighbors)
+FROM get_lineage_neighbors('lineage_history_views.src_view', 'VIEW')
+----
+DOWNSTREAM TABLE default lineage_history_views view_dst {"p":["q"],"v":["z"]}
+UPSTREAM TABLE default lineage_history_views src {"p":["a"],"v":["a","b"]}
+
+# Column lineage always retains display names. View columns are explicitly NAME-addressed with no
+# schema id, while the CTAS target table column retains both its name and stable id.
+query BB
+SELECT
+  count_if(
+    lineage_kind = 'CREATE_VIEW'
+    AND target_name = 'src_view'
+    AND column_lineage['source_column_address_kind']::STRING = 'NAME'
+    AND column_lineage['target_column_address_kind']::STRING = 'NAME'
+    AND is_null_value(column_lineage['mappings'][0]['target']['id'])
+    AND is_null_value(column_lineage['mappings'][0]['sources'][0]['id'])
+  ) = 1,
+  count_if(
+    lineage_kind = 'CTAS'
+    AND target_name = 'view_dst'
+    AND column_lineage['source_column_address_kind']::STRING = 'NAME'
+    AND column_lineage['target_column_address_kind']::STRING = 'ID'
+    AND column_lineage['mappings'][0]['target']['name']::STRING IS NOT NULL
+    AND column_lineage['mappings'][0]['target']['id']::UInt64 IS NOT NULL
+    AND column_lineage['mappings'][0]['sources'][0]['name']::STRING IS NOT NULL
+    AND is_null_value(column_lineage['mappings'][0]['sources'][0]['id'])
+  ) = 1
+FROM system_history.lineage_history
+WHERE target_database = 'lineage_history_views'
+  AND target_name IN ('src_view', 'view_dst')
+----
+1 1
+
+# Downstream from a base column crosses the view and continues to the final table column, proving
+# the boundary is transparent in the forward direction too.
+query ITTTTTT rowsort
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
+FROM get_lineage('lineage_history_views.src.a', 'COLUMN', 'DOWNSTREAM', 2)
+----
+1 lineage_history_views src a lineage_history_views src_view p
+1 lineage_history_views src a lineage_history_views src_view v
+2 lineage_history_views src_view p lineage_history_views view_dst q
+2 lineage_history_views src_view v lineage_history_views view_dst z
+
+statement ok
+DROP DATABASE lineage_history_views

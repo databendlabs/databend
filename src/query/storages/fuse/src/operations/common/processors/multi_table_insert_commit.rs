@@ -98,6 +98,7 @@ impl AsyncSink for CommitMultiTableInsert {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
+        let tenant = self.ctx.get_tenant();
         let mut update_table_metas = Vec::with_capacity(self.commit_metas.len());
         let mut update_temp_tables = Vec::with_capacity(self.commit_metas.len());
         let mut snapshot_generators = HashMap::with_capacity(self.commit_metas.len());
@@ -106,10 +107,11 @@ impl AsyncSink for CommitMultiTableInsert {
         let mut imperfect_counts = HashMap::with_capacity(self.commit_metas.len());
         let insert_rows = std::mem::take(&mut self.insert_rows);
         for (table_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
+            let table = self.tables.get(&table_id).unwrap();
+
             // generate snapshot
             let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
-            let table = self.tables.get(&table_id).unwrap();
             if table.is_temp() {
                 let (req, imperfect_count) = build_update_temp_table_req(
                     table.as_ref(),
@@ -157,7 +159,7 @@ impl AsyncSink for CommitMultiTableInsert {
             } else {
                 match self
                     .catalog
-                    .retryable_update_multi_table_meta(update_multi_table_meta_req)
+                    .retryable_update_multi_table_meta(&tenant, update_multi_table_meta_req)
                     .await
                 {
                     Ok(ret) => ret,
@@ -176,9 +178,12 @@ impl AsyncSink for CommitMultiTableInsert {
             let Err(update_failed_tbls) = update_meta_result else {
                 if !update_temp_tables.is_empty() {
                     self.catalog
-                        .update_multi_table_meta(build_temp_update_multi_table_meta_req(
-                            std::mem::take(&mut update_temp_tables),
-                        ))
+                        .update_multi_table_meta(
+                            &tenant,
+                            build_temp_update_multi_table_meta_req(std::mem::take(
+                                &mut update_temp_tables,
+                            )),
+                        )
                         .await?;
                 }
 
@@ -302,11 +307,12 @@ impl AsyncSink for CommitMultiTableInsert {
         match self.commit_metas.get_mut(&meta.table_id) {
             Some(m) => {
                 let table = self.tables.get(&meta.table_id).unwrap();
-                let table = FuseTable::try_from_table(table.as_ref()).unwrap();
+                let table = FuseTable::try_from_table(table.as_ref())?;
+                let cluster_key_info = table.cluster_key_info();
                 *m = TransformMergeCommitMeta::merge_commit_meta(
                     m.clone(),
                     meta,
-                    table.cluster_key_id(),
+                    cluster_key_info.as_ref(),
                 )?;
             }
             None => {
@@ -324,10 +330,9 @@ fn build_non_temp_update_multi_table_meta_req(
 ) -> UpdateMultiTableMetaReq {
     UpdateMultiTableMetaReq {
         update_table_metas,
-        copied_files: vec![],
         update_stream_metas,
         deduplicated_labels: deduplicated_label.into_iter().collect(),
-        update_temp_tables: vec![],
+        ..Default::default()
     }
 }
 
@@ -432,7 +437,7 @@ async fn write_new_snapshot_and_build_table_meta(
     let table_info = table.get_table_info();
     let snapshot = snapshot_generator.generate_new_snapshot(
         table_info,
-        fuse_table.cluster_key_meta(),
+        fuse_table.cluster_key_info(),
         previous,
         txn_mgr,
         table_meta_timestamps,

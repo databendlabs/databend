@@ -380,6 +380,7 @@ fn need_manual_drop_state(data_type: &DataType) -> bool {
         | DataType::Geography
         | DataType::Vector(_) => true,
         DataType::Nullable(data_type) => need_manual_drop_state(data_type),
+        DataType::AggregateState(state) => need_manual_drop_state(state.physical_type()),
         DataType::Null
         | DataType::EmptyArray
         | DataType::EmptyMap
@@ -505,4 +506,24 @@ pub fn aggregate_any_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(
         try_create_aggregate_min_max_any_function::<TYPE_ANY>,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_aggregate_state_needs_manual_drop() {
+        let state_type = DataType::AggregateState(Box::new(AggregateStateDataType {
+            function_name: "sum".to_string(),
+            params: vec![],
+            argument_types: vec![DataType::Number(NumberDataType::UInt64)],
+            state_type: Box::new(DataType::Tuple(vec![
+                DataType::Number(NumberDataType::UInt64),
+                DataType::Boolean,
+            ])),
+        }));
+
+        assert!(need_manual_drop_state(&state_type));
+    }
 }

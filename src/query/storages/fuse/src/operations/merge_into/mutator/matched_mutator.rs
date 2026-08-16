@@ -237,14 +237,12 @@ impl PreparedMatchedMutation {
                 logical_deleted_rows,
             } => {
                 let serialized = context.block_builder.build(block, |block, generator| {
-                    let granule_keys = generator.granule_cluster_key_offsets();
-                    let cluster_stats =
-                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
+                    let state = generator.gen_with_origin_stats(block, origin_stats.clone())?;
                     info!(
                         "[MERGE-INTO] Serializing block with cluster stats: {:?}",
-                        cluster_stats
+                        state.cluster_stats
                     );
-                    Ok((cluster_stats, block, granule_keys))
+                    Ok(state)
                 })?;
                 let extended_block_meta = match serialized {
                     BlockSerialization::Pending(pending) => {

@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::Constant;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Expr;
-use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 pub use databend_common_expression::hash_util::hash_by_method;
 pub use databend_common_expression::hash_util::hash_by_method_for_bloom;
-use databend_common_expression::type_check;
+use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSchemaRef {
@@ -51,51 +51,30 @@ pub(crate) fn min_max_filter(
     max: Scalar,
     probe_key: &Expr<String>,
 ) -> Result<Expr<String>> {
-    let probe_key = match probe_key {
-        Expr::ColumnRef(col) => col,
-        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
-        Expr::Cast(cast) => match cast.expr.as_ref() {
-            Expr::ColumnRef(col) => col,
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
-    let raw_probe_key = RawExpr::ColumnRef {
-        span: probe_key.span,
-        id: probe_key.id.to_string(),
-        data_type: probe_key.data_type.clone(),
-        display_name: probe_key.display_name.clone(),
-    };
-    let min = RawExpr::Constant {
+    let bound_type = probe_key.data_type().remove_nullable();
+    let min = Expr::Constant(Constant {
         span: None,
         scalar: min,
-        data_type: None,
-    };
-    let max = RawExpr::Constant {
+        data_type: bound_type.clone(),
+    });
+    let max = Expr::Constant(Constant {
         span: None,
         scalar: max,
-        data_type: None,
-    };
-    // Make gte and lte function
-    let gte_func = RawExpr::FunctionCall {
-        span: None,
-        name: "gte".to_string(),
-        params: vec![],
-        args: vec![raw_probe_key.clone(), min],
-    };
-    let lte_func = RawExpr::FunctionCall {
-        span: None,
-        name: "lte".to_string(),
-        params: vec![],
-        args: vec![raw_probe_key, max],
-    };
-    // Make and_filters function
-    let and_filters_func = RawExpr::FunctionCall {
-        span: None,
-        name: "and_filters".to_string(),
-        params: vec![],
-        args: vec![gte_func, lte_func],
-    };
-    let expr = type_check::check(&and_filters_func, &BUILTIN_FUNCTIONS)?;
-    Ok(expr)
+        data_type: bound_type,
+    });
+    let gte = check_function(
+        probe_key.span(),
+        "gte",
+        &[],
+        &[probe_key.clone(), min],
+        &BUILTIN_FUNCTIONS,
+    )?;
+    let lte = check_function(
+        probe_key.span(),
+        "lte",
+        &[],
+        &[probe_key.clone(), max],
+        &BUILTIN_FUNCTIONS,
+    )?;
+    check_function(None, "and_filters", &[], &[gte, lte], &BUILTIN_FUNCTIONS)
 }

@@ -24,6 +24,7 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_meta_app::storage::StorageParams;
 use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
@@ -171,9 +172,13 @@ impl Binder {
         let mut cluster_key = None;
         if let Some(cluster_opt) = cluster_by {
             let keys = self
-                .analyze_cluster_keys(cluster_opt, schema.clone(), None)
+                .analyze_cluster_keys(cluster_opt, schema.clone(), None, true)
                 .await?;
             if !keys.is_empty() {
+                options.insert(
+                    OPT_KEY_CLUSTER_TYPE.to_owned(),
+                    cluster_opt.cluster_type.to_string().to_lowercase(),
+                );
                 cluster_key = Some(format!("({})", keys.join(", ")));
             }
         }

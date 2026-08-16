@@ -32,6 +32,7 @@ use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
@@ -39,6 +40,7 @@ use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::log_lineage_object_deletion;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextLicense;
@@ -106,6 +108,11 @@ impl VacuumDropTablesInterpreter {
                 drop_ids: c.to_vec(),
             };
             num_meta_keys_removed += catalog.gc_drop_tables(req).await?;
+            for drop_id in c {
+                if let DroppedId::Table { id, .. } = drop_id {
+                    log_lineage_object_deletion(&self.ctx, id.table_id);
+                }
+            }
         }
 
         // then gc drop db ids
@@ -209,11 +216,13 @@ impl Interpreter for VacuumDropTablesInterpreter {
             drop_ids
         );
 
-        // Filter out read-only tables and views.
+        // Attached read-only tables may share physical data that must not be purged. Materialized
+        // views are read-only only to user mutations and own their Fuse data, so they must remain
+        // eligible for physical GC.
         // Note: The drop_ids list still includes view IDs
         let (views, tables): (Vec<_>, Vec<_>) = tables
             .into_iter()
-            .filter(|tbl| !tbl.as_ref().is_read_only())
+            .filter(|tbl| !tbl.as_ref().is_read_only() || is_materialized_view_engine(tbl.engine()))
             .partition(|tbl| tbl.get_table_info().meta.engine == VIEW_ENGINE);
 
         {

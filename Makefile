@@ -91,7 +91,9 @@ metactl-test:
 	python ./tests/metactl/test-metactl-restore-new-cluster.py
 
 meta-bench: build-release
-	bash ./scripts/benchmark/run-meta-benchmark.sh 10 1000
+	python3 ./scripts/benchmark/meta/meta-cluster-bench.py \
+		--node-bin ./target/release --node-count 3 \
+		--workload-clients 10 --workload-ops 1000
 
 test: unit-test stateless-test sqllogic-test metactl-test
 

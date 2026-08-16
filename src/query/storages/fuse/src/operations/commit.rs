@@ -81,8 +81,11 @@ impl FuseTable {
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
+        let preserve_lanes = self.use_hash_write_distribution();
 
-        pipeline.try_resize(1)?;
+        if !preserve_lanes {
+            pipeline.try_resize(1)?;
+        }
 
         pipeline.add_transform(|input, output| {
             new_serialize_segment_processor(
@@ -93,6 +96,10 @@ impl FuseTable {
                 table_meta_timestamps,
             )
         })?;
+
+        if preserve_lanes {
+            pipeline.try_resize(1)?;
+        }
 
         pipeline.add_async_accumulating_transformer(|| {
             TableMutationAggregator::create(
@@ -272,7 +279,7 @@ impl FuseTable {
 
         // 3. let's roll
         catalog
-            .update_multi_table_meta(UpdateMultiTableMetaReq {
+            .update_multi_table_meta(&ctx.get_tenant(), UpdateMultiTableMetaReq {
                 update_table_metas,
                 update_stream_metas: update_stream_meta.to_vec(),
                 copied_files: copied_files_req,

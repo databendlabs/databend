@@ -29,6 +29,7 @@ use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -103,6 +104,8 @@ pub struct Binder {
     /// Only that CTE should treat self references as `RecursiveCteScan`.
     pub bind_recursive_cte: Option<String>,
     pub m_cte_table_name: HashMap<String, String>,
+    /// Binder-local table instances that take precedence over catalog resolution.
+    pub pre_resolved_tables: HashMap<(String, String, String), Arc<dyn Table>>,
 
     pub enable_result_cache: bool,
 
@@ -130,6 +133,7 @@ impl Binder {
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: None,
             m_cte_table_name: HashMap::new(),
+            pre_resolved_tables: HashMap::new(),
             enable_result_cache,
             subquery_executor: None,
         }
@@ -352,9 +356,16 @@ impl Binder {
             Statement::CreateMaterializedView(stmt) => {
                 self.bind_create_materialized_view(stmt).await?
             }
+            Statement::AlterMaterializedView(stmt) => {
+                self.bind_alter_materialized_view(stmt).await?
+            }
             Statement::DropMaterializedView(stmt) => self.bind_drop_materialized_view(stmt).await?,
             Statement::RefreshMaterializedView(stmt) => {
                 self.bind_refresh_materialized_view(stmt).await?
+            }
+            Statement::ShowCreateMaterializedView(stmt) => {
+                self.bind_show_create_materialized_view(bind_context, stmt)
+                    .await?
             }
             Statement::ShowMaterializedViews(stmt) => {
                 self.bind_show_materialized_views(bind_context, stmt)

@@ -33,6 +33,7 @@ databend-common-storages-basic = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
+databend-enterprise-materialized-view = { workspace = true }
 databend-enterprise-row-access-policy-feature = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-storages-common-cache = { workspace = true }
@@ -57,6 +58,7 @@ fastrace = { workspace = true }
 globiter = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 num-derive = { workspace = true }
