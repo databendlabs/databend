@@ -29,7 +29,7 @@ TableScan
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(t.number (#0) > 737)], limit: NONE]
-└── estimated rows: 0.00
+└── estimated rows: 147.60
 
 query T
 EXPLAIN SELECT * FROM t WHERE number > 700;

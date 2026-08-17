@@ -19,11 +19,11 @@ explain select 1 from  ctl.tpch.lineitem where l_orderkey < 1;
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 120114.40
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(lineitem.l_orderkey (#0) < 1)]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 120114.40
     └── TableScan
         ├── table: ctl.tpch.lineitem
         ├── scan id: 0
@@ -41,11 +41,11 @@ explain select 1 from  ctl.tpch.lineitem where l_orderkey < 1 or l_commitdate < 
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 120114.40
 └── Filter
     ├── output columns: []
     ├── filters: [lineitem.l_orderkey (#0) < 1 or lineitem.l_commitdate (#11) < '1992-01-31']
-    ├── estimated rows: 0.00
+    ├── estimated rows: 120114.40
     └── TableScan
         ├── table: ctl.tpch.lineitem
         ├── scan id: 0
@@ -63,11 +63,11 @@ explain select 1 from  ctl.tpch.lineitem where l_orderkey < 1 and l_commitdate >
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 120114.40
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(lineitem.l_orderkey (#0) < 1), is_true(lineitem.l_commitdate (#11) > '1992-01-31')]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 120114.40
     └── TableScan
         ├── table: ctl.tpch.lineitem
         ├── scan id: 0
@@ -85,11 +85,11 @@ explain select 1 from  ctl.tpch.lineitem where l_orderkey > 1 and l_commitdate =
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 120114.40
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(lineitem.l_orderkey (#0) > 1), is_true(lineitem.l_commitdate (#11) = '1992-01-22')]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 120114.40
     └── TableScan
         ├── table: ctl.tpch.lineitem
         ├── scan id: 0
@@ -108,11 +108,11 @@ explain select 1 from ctl.tpch.lineitem where l_orderkey < 1 and length(l_commen
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 120114.40
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(lineitem.l_orderkey (#0) < 1), is_true(length(lineitem.l_comment (#15)) > 0)]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 120114.40
     └── TableScan
         ├── table: ctl.tpch.lineitem
         ├── scan id: 0
