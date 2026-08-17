@@ -939,6 +939,8 @@ impl Join {
         left_stat_info: Arc<StatInfo>,
         right_stat_info: Arc<StatInfo>,
     ) -> Result<Arc<StatInfo>> {
+        let left_proven_empty = left_stat_info.statistics.precise_cardinality == Some(0);
+        let right_proven_empty = right_stat_info.statistics.precise_cardinality == Some(0);
         let left_cardinality = left_stat_info.cardinality;
         let right_cardinality = right_stat_info.cardinality;
         let mut left_column_stats = JoinSideColumnStats::split(
@@ -963,10 +965,36 @@ impl Join {
             &mut right_column_stats,
         )?;
         let cardinality = self.join_cardinality(left_cardinality, right_cardinality, &join_stats);
+        let proven_empty = match self.join_type {
+            JoinType::Inner | JoinType::InnerAny | JoinType::Asof | JoinType::Cross => {
+                left_proven_empty || right_proven_empty
+            }
+            JoinType::Left | JoinType::LeftAny => left_proven_empty,
+            JoinType::Right | JoinType::RightAny => right_proven_empty,
+            // ASOF plans swap their logical children: LeftAsof preserves the
+            // right child, while RightAsof preserves the left child.
+            JoinType::LeftAsof => right_proven_empty,
+            JoinType::RightAsof => left_proven_empty,
+            JoinType::Full | JoinType::FullAsof => left_proven_empty && right_proven_empty,
+            JoinType::LeftSemi | JoinType::RightSemi => left_proven_empty || right_proven_empty,
+            JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti => left_proven_empty,
+            JoinType::RightSingle | JoinType::LeftMark | JoinType::RightAnti => right_proven_empty,
+        };
 
         // Derive column statistics
-        let column_stats = if cardinality == 0.0 {
+        let column_stats = if proven_empty {
             HashMap::new()
+        } else if cardinality == 0.0 {
+            // A zero produced by potentially stale distributions is only an
+            // estimate. Keep the input distributions available to downstream
+            // rules instead of turning that estimate into an empty-set fact.
+            left_stat_info
+                .statistics
+                .column_stats
+                .clone()
+                .into_iter()
+                .chain(right_stat_info.statistics.column_stats.clone())
+                .collect()
         } else {
             left_column_stats
                 .into_output_column_stats(
@@ -987,7 +1015,7 @@ impl Join {
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
-                precise_cardinality: None,
+                precise_cardinality: proven_empty.then_some(0),
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
@@ -1696,6 +1724,100 @@ mod tests {
         let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
 
         assert_eq!(physical_prop.distribution, Distribution::Random);
+        Ok(())
+    }
+
+    fn zero_stat(precise: bool, column_index: usize) -> Arc<StatInfo> {
+        Arc::new(StatInfo {
+            cardinality: 0.0,
+            statistics: Statistics {
+                precise_cardinality: precise.then_some(0),
+                column_stats: HashMap::from([(Symbol::new(column_index), ColumnStat::Int {
+                    min: 1,
+                    max: 10,
+                    ndv: NdvEstimate::exact(10.0),
+                    null_count: StatCount::exact(0),
+                    histogram: None,
+                })]),
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
+            },
+        })
+    }
+
+    #[test]
+    fn test_join_type_proven_empty_propagation() -> Result<()> {
+        let cases = [
+            (JoinType::Cross, true, true),
+            (JoinType::Inner, true, true),
+            (JoinType::InnerAny, true, true),
+            (JoinType::Asof, true, true),
+            (JoinType::Left, true, false),
+            (JoinType::LeftAny, true, false),
+            (JoinType::LeftAsof, false, true),
+            (JoinType::Right, false, true),
+            (JoinType::RightAny, false, true),
+            (JoinType::RightAsof, true, false),
+            (JoinType::Full, false, false),
+            (JoinType::FullAsof, false, false),
+            (JoinType::LeftSemi, true, true),
+            (JoinType::RightSemi, true, true),
+            (JoinType::LeftSingle, true, false),
+            (JoinType::RightMark, true, false),
+            (JoinType::LeftAnti, true, false),
+            (JoinType::RightSingle, false, true),
+            (JoinType::LeftMark, false, true),
+            (JoinType::RightAnti, false, true),
+        ];
+
+        for (join_type, left_propagates, right_propagates) in cases {
+            let join = Join {
+                join_type,
+                ..Default::default()
+            };
+            let left_only = join.derive_join_stats(zero_stat(true, 0), zero_stat(false, 1))?;
+            assert_eq!(
+                left_only.statistics.precise_cardinality,
+                left_propagates.then_some(0),
+                "left proven-empty input for {join_type:?}"
+            );
+
+            let right_only = join.derive_join_stats(zero_stat(false, 0), zero_stat(true, 1))?;
+            assert_eq!(
+                right_only.statistics.precise_cardinality,
+                right_propagates.then_some(0),
+                "right proven-empty input for {join_type:?}"
+            );
+
+            let both = join.derive_join_stats(zero_stat(true, 0), zero_stat(true, 1))?;
+            assert_eq!(
+                both.statistics.precise_cardinality,
+                Some(0),
+                "both proven-empty inputs for {join_type:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_join_estimated_zero_keeps_column_distributions() -> Result<()> {
+        let join = Join {
+            join_type: JoinType::Inner,
+            ..Default::default()
+        };
+        let stat = join.derive_join_stats(zero_stat(false, 0), zero_stat(false, 1))?;
+
+        assert_eq!(stat.cardinality, 0.0);
+        assert_eq!(stat.statistics.precise_cardinality, None);
+        assert_eq!(stat.statistics.column_stats.len(), 2);
+        assert_eq!(
+            stat.statistics.column_stats[&Symbol::new(0)].ndv(),
+            NdvEstimate::exact(10.0)
+        );
+        assert_eq!(
+            stat.statistics.column_stats[&Symbol::new(1)].ndv(),
+            NdvEstimate::exact(10.0)
+        );
         Ok(())
     }
 }
