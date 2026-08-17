@@ -101,7 +101,8 @@ impl Binder {
                 from,
                 alias_name,
             } => {
-                let mut max_column_position = MaxColumnPosition::default();
+                let mut max_column_position =
+                    MaxColumnPosition::new(self.name_resolution_ctx.clone());
                 for target in select_list.iter() {
                     if let SelectTarget::AliasedExpr { expr, .. } = target {
                         expr.walk(&mut max_column_position)?;

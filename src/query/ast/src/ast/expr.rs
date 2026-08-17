@@ -1107,6 +1107,25 @@ impl Display for Literal {
     }
 }
 
+#[derive(Educe, Clone, PartialEq, Drive, DriveMut)]
+#[educe(Debug)]
+pub enum LambdaArgument {
+    /// A lambda that has no ordinary-expression interpretation.
+    Lambda(Lambda),
+    /// A trailing `param -> expr` that is also a valid JSON-arrow expression.
+    ///
+    /// The ordinary interpretation is kept as the last item in
+    /// [`FunctionCall::args`]. Semantic analysis selects this lambda
+    /// interpretation only when the function is a lambda function.
+    Ambiguous(#[educe(Debug(ignore))] Lambda),
+}
+
+impl FunctionCall {
+    pub fn has_explicit_lambda(&self) -> bool {
+        matches!(self.lambda, Some(LambdaArgument::Lambda(_)))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct FunctionCall {
     /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
@@ -1117,7 +1136,7 @@ pub struct FunctionCall {
     pub order_by: Vec<OrderByExpr>,
     pub filter: Option<Box<Expr>>,
     pub window: Option<WindowDesc>,
-    pub lambda: Option<Lambda>,
+    pub lambda: Option<LambdaArgument>,
 }
 
 impl Default for FunctionCall {
@@ -1158,7 +1177,7 @@ impl Display for FunctionCall {
             write!(f, "DISTINCT ")?;
         }
         write_comma_separated_list(f, args)?;
-        if let Some(lambda) = lambda {
+        if let Some(LambdaArgument::Lambda(lambda)) = lambda {
             if !args.is_empty() {
                 write!(f, ", ")?;
             }

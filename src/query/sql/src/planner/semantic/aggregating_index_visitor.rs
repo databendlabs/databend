@@ -20,6 +20,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
@@ -66,7 +67,7 @@ impl AggregatingIndexRewriter {
                 && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
                     .contains(&name.name.to_ascii_lowercase().to_lowercase().as_str())
                 && window.is_none()
-                && lambda.is_none() =>
+                && !matches!(lambda, Some(LambdaArgument::Lambda(_))) =>
             {
                 self.agg_func_positions
                     .insert(self.current_position.unwrap());
