@@ -57,7 +57,9 @@ pub struct TenantTableInfo {
 }
 
 async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
-    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
+    let catalog = CatalogManager::instance()
+        .get_default_catalog(Default::default())?
+        .disable_table_info_refresh()?;
 
     let databases = catalog.list_databases(tenant).await?;
 
