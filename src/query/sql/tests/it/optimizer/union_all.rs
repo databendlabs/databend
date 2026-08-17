@@ -24,6 +24,7 @@ use databend_common_sql::FormatOptions;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
+use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatInfo;
@@ -153,18 +154,38 @@ fn write_stat_info(file: &mut impl Write, metadata: &Metadata, stat_info: &StatI
     }
 
     for (column, stat) in column_stats {
+        let Some(bounds) = stat.bounds() else {
+            writeln!(
+                file,
+                "column_stat: {} all_null=true, null_count={:?}",
+                column_label(metadata, *column),
+                stat.null_count()
+            )?;
+            continue;
+        };
+        let (min, max) = bounds.display_parts();
         writeln!(
             file,
             "column_stat: {} min={}, max={}, ndv={:?}, null_count={:?}, histogram={}",
             column_label(metadata, *column),
-            stat.min,
-            stat.max,
-            stat.ndv,
-            stat.null_count,
-            if stat.histogram.is_some() {
-                "some"
-            } else {
-                "none"
+            min,
+            max,
+            stat.ndv(),
+            stat.null_count(),
+            match stat {
+                ColumnStat::Int {
+                    histogram: Some(_), ..
+                }
+                | ColumnStat::UInt {
+                    histogram: Some(_), ..
+                }
+                | ColumnStat::Float {
+                    histogram: Some(_), ..
+                }
+                | ColumnStat::Bytes {
+                    histogram: Some(_), ..
+                } => "some",
+                _ => "none",
             }
         )?;
     }
@@ -279,6 +300,22 @@ fn cases() -> Result<Vec<UnionCase>> {
                     )?),
                 ),
             ],
+            targets: vec![StatTarget {
+                path: vec![],
+                operator: RelOp::UnionAll,
+            }],
+        },
+        UnionCase {
+            name: "all_null_branch",
+            description: "An all-NULL branch contributes only its NULL count, preserving the other branch's value statistics.",
+            sql: "SELECT k FROM l UNION ALL SELECT NULL",
+            tables: vec![table(
+                "CREATE TABLE l(k BIGINT NULL)",
+                10,
+                Some(column_stat(
+                    r#"{"min": 1, "max": 3, "ndv": 3, "null_count": 1}"#,
+                )?),
+            )],
             targets: vec![StatTarget {
                 path: vec![],
                 operator: RelOp::UnionAll,

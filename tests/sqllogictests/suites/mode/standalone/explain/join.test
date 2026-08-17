@@ -66,7 +66,7 @@ HashJoin
 ├── build join filters:
 │   ├── filter id:0, build key:t.number (#0), probe targets:[t1.number (#1)@scan1], filter type:bloom,inlist,min_max
 │   └── filter id:1, build key:t.number (#0), probe targets:[t1.number (#1) + 1@scan1], filter type:bloom,inlist,min_max
-├── estimated rows: 1.00
+├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── scan id: 0
@@ -359,7 +359,7 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 Filter
 ├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
 ├── filters: [b.x (#1) > 44 or a.x (#0) < 43]
-├── estimated rows: 1.00
+├── estimated rows: 1.12
 └── HashJoin
     ├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
     ├── join type: LEFT OUTER
@@ -367,7 +367,7 @@ Filter
     ├── probe keys: [a.x (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── estimated rows: 4.00
+    ├── estimated rows: 4.38
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── scan id: 1

@@ -7,9 +7,9 @@ left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
 right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
 query         : right_semi_join
 sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k
-join          : LEFT SEMI cardinality=26.000
+join          : LEFT SEMI cardinality=19.000
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
-stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[1..1:5.000/1.000, 2..2:7.000/1.000, 3..3:6.000/1.000, 5..5:8.000/1.000]
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=19.000, ndv=3.000, buckets=[1..1:5.000/1.000, 3..3:6.000/1.000, 5..5:8.000/1.000]
 
 case          : left_semi_join_selective_overlap
 description   : A selective point histogram preserves the matched row mass of the points present on both sides.
@@ -17,7 +17,7 @@ left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
 right stats   : rows=1614, min=3, max=9, ndv=4, histogram_input=present
 query         : right_semi_join
 sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k
-join          : LEFT SEMI cardinality=48.000
+join          : LEFT SEMI cardinality=14.000
 stat          : l.k (#0) min=3, max=5, ndv=2.000, null=0.000, histogram=none
 stat          : r.k (#2) min=3, max=5, ndv=2.000, null=0.000, histogram=rows=14.000, ndv=2.000, buckets=[3..3:6.000/1.000, 5..5:8.000/1.000]
 
@@ -27,7 +27,7 @@ left stats    : rows=1000000, min=0, max=9999, ndv=10000, histogram_input=missin
 right stats   : rows=1000000, min=5000, max=14999, ndv=10000, histogram_input=missing
 query         : right_semi_join
 sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k
-join          : LEFT SEMI cardinality=1000000.000
+join          : LEFT SEMI cardinality=500000.000
 stat          : l.k (#0) min=5000, max=9999, ndv=5000.000, null=0.000, histogram=none
 stat          : r.k (#2) min=5000, max=9999, ndv=5000.000, null=0.000, histogram=rows=500000.000, ndv=5000.000, bucket_count=50, buckets=[5000..5099:10000.000/100.000, 5100..5199:10000.000/100.000, 5200..5299:10000.000/100.000, ..., 9700..9799:10000.000/100.000, 9800..9899:10000.000/100.000, 9900..9999:10000.000/100.000]
 
