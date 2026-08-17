@@ -615,7 +615,7 @@ def test_worker_crash_failure(harness: NoRetryHarness) -> None:
 def test_short_receiver_pause(harness: NoRetryHarness) -> None:
     chaos_log("scenario_start name=short_flight_listener_pause_during_join")
     marker = "flight_no_retry_pause_ci"
-    rows_count = 1000000000000
+    rows_count = 20000000000
     modulus = 1000000
     running = harness.start_query(exact_join(marker, rows_count), marker)
     try:
