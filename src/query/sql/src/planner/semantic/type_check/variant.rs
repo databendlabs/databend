@@ -157,12 +157,15 @@ where A: super::TypeCheckAdapter
         span: Span,
         func_name: &str,
         args: &[ScalarExpr],
-        arg_types: &[DataType],
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        if !self.should_try_rewrite_variant_function(func_name)
-            || arg_types.is_empty()
-            || arg_types[0].remove_nullable() != DataType::Variant
-        {
+        if !self.should_try_rewrite_variant_function(func_name) {
+            return None;
+        }
+        let first_arg_type = match args.first()?.data_type() {
+            Ok(data_type) => data_type,
+            Err(error) => return Some(Err(error)),
+        };
+        if first_arg_type.remove_nullable() != DataType::Variant {
             return None;
         }
         if args.len() != 2 {
@@ -275,7 +278,7 @@ where A: super::TypeCheckAdapter
         paths: Vec<(CoreExprId, OwnedKeyPath)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let last_index = paths.len().saturating_sub(1);
-        let mut data_type = scalar.data_type()?;
+        let mut data_type = scalar.data_type()?.into_owned();
         for (index, (path, _)) in paths.into_iter().enumerate() {
             let box (path_scalar, _) = self.resolve_core(arena, path)?;
             let func_name = if string_result && index == last_index {
@@ -415,7 +418,11 @@ where A: super::TypeCheckAdapter
                     params: vec![],
                     arguments: args,
                     func_name,
-                    return_type: Box::new(return_type.clone()),
+                    return_type: Box::new(if is_try {
+                        DataType::Variant.wrap_nullable()
+                    } else {
+                        DataType::Variant
+                    }),
                 }
                 .into()
             }
@@ -546,7 +553,7 @@ where A: super::TypeCheckAdapter
             }
             .into();
         }
-        let return_type = scalar.data_type()?;
+        let return_type = scalar.data_type()?.into_owned();
         Ok(Box::new((scalar, return_type)))
     }
 
@@ -684,7 +691,7 @@ where A: super::TypeCheckAdapter
                     .into();
                     scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
                 }
-                let return_type = scalar.data_type()?;
+                let return_type = scalar.data_type()?.into_owned();
                 Ok(Box::new((scalar, return_type)))
             }
         }

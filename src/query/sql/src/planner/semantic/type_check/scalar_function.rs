@@ -62,7 +62,6 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
-use crate::plans::SubqueryType;
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn cast(
@@ -310,19 +309,8 @@ where A: TypeCheckAdapter
         }
 
         if self.should_try_rewrite_variant_function(func_name) {
-            let mut arg_types = SmallVec::<[DataType; 4]>::with_capacity(scalars.len());
-            for scalar in &scalars {
-                let mut data_type = scalar.data_type()?;
-                if let ScalarExpr::SubqueryExpr(subquery) = scalar
-                    && subquery.typ == SubqueryType::Scalar
-                    && !data_type.is_nullable()
-                {
-                    data_type = data_type.wrap_nullable();
-                }
-                arg_types.push(data_type);
-            }
             if let Some(rewritten_variant_expr) =
-                self.try_rewrite_variant_function(span, func_name, &scalars, &arg_types)
+                self.try_rewrite_variant_function(span, func_name, &scalars)
             {
                 return rewritten_variant_expr;
             }
@@ -364,19 +352,8 @@ where A: TypeCheckAdapter
         }
 
         if self.should_try_rewrite_variant_function(func_name) {
-            let mut arg_types = Vec::with_capacity(scalars.len());
-            for scalar in &scalars {
-                let mut data_type = scalar.data_type()?;
-                if let ScalarExpr::SubqueryExpr(subquery) = scalar
-                    && subquery.typ == SubqueryType::Scalar
-                    && !data_type.is_nullable()
-                {
-                    data_type = data_type.wrap_nullable();
-                }
-                arg_types.push(data_type);
-            }
             if let Some(rewritten_variant_expr) =
-                self.try_rewrite_variant_function(span, func_name, &scalars, &arg_types)
+                self.try_rewrite_variant_function(span, func_name, &scalars)
             {
                 return rewritten_variant_expr;
             }
@@ -457,14 +434,14 @@ where A: TypeCheckAdapter
             (ScalarExpr::ConstantExpr(_), _)
                 if arg1.data_type()?.remove_nullable() == DataType::Variant
                     && !arg1.used_columns().is_empty()
-                    && arg0.data_type()? == DataType::String =>
+                    && arg0.data_type()?.as_ref() == &DataType::String =>
             {
                 (0, arg0)
             }
             (_, ScalarExpr::ConstantExpr(_))
                 if arg0.data_type()?.remove_nullable() == DataType::Variant
                     && !arg0.used_columns().is_empty()
-                    && arg1.data_type()? == DataType::String =>
+                    && arg1.data_type()?.as_ref() == &DataType::String =>
             {
                 (1, arg1)
             }

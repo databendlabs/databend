@@ -728,11 +728,12 @@ impl SubqueryDecorrelatorOptimizer {
                     .table_index(output_column.table_index)
                     .build(),
                 });
-                let left_condition = if left_condition_base.data_type()? == *subquery.data_type {
-                    left_condition_base
-                } else {
-                    wrap_cast(&left_condition_base, &subquery.data_type)
-                };
+                let left_condition =
+                    if left_condition_base.data_type()?.as_ref() == subquery.data_type.as_ref() {
+                        left_condition_base
+                    } else {
+                        wrap_cast(&left_condition_base, &subquery.data_type)
+                    };
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 let (right_condition, is_non_equi_condition) =

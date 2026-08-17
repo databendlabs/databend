@@ -466,7 +466,7 @@ impl<'a> WindowRewriter<'a> {
                     let column = ColumnBindingBuilder::new(
                         "group_item".to_string(),
                         group_expr.index,
-                        Box::new(group_expr.scalar.data_type()?),
+                        Box::new(group_expr.scalar.data_type()?.into_owned()),
                         Visibility::Visible,
                     )
                     .build();
@@ -479,7 +479,7 @@ impl<'a> WindowRewriter<'a> {
                 }
             }
 
-            let ty = arg.data_type()?;
+            let ty = arg.data_type()?.into_owned();
             let index = self
                 .metadata
                 .write()

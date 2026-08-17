@@ -144,8 +144,8 @@ impl PropertyEnforcer {
             if let Some((probe_keys, build_keys)) = keys {
                 let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
                 for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
-                    let probe_key_data_type = probe_key.data_type()?;
-                    let build_key_data_type = build_key.data_type()?;
+                    let probe_key_data_type = probe_key.data_type()?.into_owned();
+                    let build_key_data_type = build_key.data_type()?.into_owned();
                     let common_data_type = common_super_type(
                         probe_key_data_type.clone(),
                         build_key_data_type.clone(),

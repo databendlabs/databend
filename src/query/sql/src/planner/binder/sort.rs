@@ -222,7 +222,7 @@ impl Binder {
                         _ => match rewrite_scalar.data_type() {
                             Ok(data_type) => self.create_derived_column_binding(
                                 format!("{:#}", order.expr),
-                                data_type,
+                                data_type.into_owned(),
                             ),
                             Err(err) => return Some(Err(err)),
                         },

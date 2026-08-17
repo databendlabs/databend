@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
-use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use super::SExpr;
@@ -106,14 +106,14 @@ impl SExprVisitor for SExprTypeValidator<'_> {
                 {
                     let left_type = match left_cast {
                         Some(cast) => cast.data_type()?,
-                        None => self.metadata_type(*left)?,
+                        None => Cow::Owned(self.metadata_type(*left)?),
                     };
                     let right_type = match right_cast {
                         Some(cast) => cast.data_type()?,
-                        None => self.metadata_type(*right)?,
+                        None => Cow::Owned(self.metadata_type(*right)?),
                     };
-                    self.validate_symbol_type(*output, &left_type, "union left output")?;
-                    self.validate_symbol_type(*output, &right_type, "union right output")?;
+                    self.validate_symbol_type(*output, left_type.as_ref(), "union left output")?;
+                    self.validate_symbol_type(*output, right_type.as_ref(), "union right output")?;
                 }
             }
             _ => {}
@@ -126,7 +126,11 @@ impl SExprVisitor for SExprTypeValidator<'_> {
 impl SExprTypeValidator<'_> {
     fn validate_items(&self, items: &[ScalarItem]) -> Result<()> {
         for item in items {
-            self.validate_symbol_type(item.index, &item.scalar.data_type()?, "scalar producer")?;
+            self.validate_symbol_type(
+                item.index,
+                item.scalar.data_type()?.as_ref(),
+                "scalar producer",
+            )?;
         }
         Ok(())
     }
@@ -257,18 +261,7 @@ struct ScalarTypeValidator<'a> {
 
 impl ScalarTypeValidator<'_> {
     fn validate_function_call(&mut self, function: &FunctionCall) -> Result<()> {
-        let argument_types = function
-            .arguments
-            .iter()
-            .map(ScalarExpr::data_type)
-            .collect::<Result<Vec<_>>>()?;
-        let inferred = type_check::infer_function_return_type(
-            function.span,
-            &function.func_name,
-            &function.params,
-            argument_types.into_iter(),
-            &BUILTIN_FUNCTIONS,
-        )?;
+        let inferred = function.infer_return_type()?;
         if inferred != *function.return_type {
             return Err(ErrorCode::Internal(format!(
                 "SExpr function return type mismatch for {}: stored {:?}, inferred {inferred:?}",
@@ -282,7 +275,7 @@ impl ScalarTypeValidator<'_> {
         let argument_types = aggregate
             .args
             .iter()
-            .map(ScalarExpr::data_type)
+            .map(|argument| argument.data_type().map(|data_type| data_type.into_owned()))
             .collect::<Result<Vec<_>>>()?;
         let sort_descs = aggregate
             .sort_descs

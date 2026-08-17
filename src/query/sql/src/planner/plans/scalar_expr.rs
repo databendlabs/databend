@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -37,6 +38,7 @@ use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
 use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
+use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -159,21 +161,31 @@ impl ScalarExpr {
         )
     }
 
-    pub fn data_type(&self) -> Result<DataType> {
+    pub fn data_type(&self) -> Result<Cow<'_, DataType>> {
         match self {
-            ScalarExpr::BoundColumnRef(column) => Ok((*column.column.data_type).clone()),
-            ScalarExpr::ConstantExpr(constant) => Ok(constant.value.as_ref().infer_data_type()),
-            ScalarExpr::TypedConstantExpr(_, data_type) => Ok(data_type.clone()),
-            ScalarExpr::WindowFunction(window) => Ok(window.func.return_type()),
-            ScalarExpr::AggregateFunction(aggregate) => Ok((*aggregate.return_type).clone()),
-            ScalarExpr::LambdaFunction(function) => Ok((*function.return_type).clone()),
-            ScalarExpr::FunctionCall(function) => Ok((*function.return_type).clone()),
-            ScalarExpr::CastExpr(cast) => Ok((*cast.target_type).clone()),
-            ScalarExpr::SubqueryExpr(subquery) => Ok(subquery.output_data_type()),
-            ScalarExpr::UDFCall(udf) => Ok((*udf.return_type).clone()),
-            ScalarExpr::UDAFCall(udaf) => Ok((*udaf.return_type).clone()),
+            ScalarExpr::BoundColumnRef(column) => {
+                Ok(Cow::Borrowed(column.column.data_type.as_ref()))
+            }
+            ScalarExpr::ConstantExpr(constant) => {
+                Ok(Cow::Owned(constant.value.as_ref().infer_data_type()))
+            }
+            ScalarExpr::TypedConstantExpr(_, data_type) => Ok(Cow::Borrowed(data_type)),
+            ScalarExpr::WindowFunction(window) => Ok(Cow::Owned(window.func.return_type())),
+            ScalarExpr::AggregateFunction(aggregate) => {
+                Ok(Cow::Borrowed(aggregate.return_type.as_ref()))
+            }
+            ScalarExpr::LambdaFunction(function) => {
+                Ok(Cow::Borrowed(function.return_type.as_ref()))
+            }
+            ScalarExpr::FunctionCall(function) => Ok(Cow::Borrowed(function.return_type.as_ref())),
+            ScalarExpr::CastExpr(cast) => Ok(Cow::Borrowed(cast.target_type.as_ref())),
+            ScalarExpr::SubqueryExpr(subquery) => Ok(Cow::Owned(subquery.output_data_type())),
+            ScalarExpr::UDFCall(udf) => Ok(Cow::Borrowed(udf.return_type.as_ref())),
+            ScalarExpr::UDAFCall(udaf) => Ok(Cow::Borrowed(udaf.return_type.as_ref())),
             ScalarExpr::UDFLambdaCall(udf) => udf.scalar.data_type(),
-            ScalarExpr::AsyncFunctionCall(function) => Ok((*function.return_type).clone()),
+            ScalarExpr::AsyncFunctionCall(function) => {
+                Ok(Cow::Borrowed(function.return_type.as_ref()))
+            }
         }
     }
 
@@ -1071,7 +1083,7 @@ impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
         Ok(AggregateFunctionSortDesc {
             index: SymbolOrOffset::Symbol(col.column.index),
             is_reuse_index: self.is_reuse_index,
-            data_type: expr.data_type()?,
+            data_type: expr.data_type()?.into_owned(),
             nulls_first: self.nulls_first,
             asc: self.asc,
         })
@@ -1179,6 +1191,28 @@ pub struct FunctionCall {
     pub arguments: Vec<ScalarExpr>,
     #[educe(Debug(ignore))]
     pub return_type: Box<DataType>,
+}
+
+impl FunctionCall {
+    pub fn infer_return_type(&self) -> Result<DataType> {
+        let argument_types = self
+            .arguments
+            .iter()
+            .map(ScalarExpr::data_type)
+            .collect::<Result<Vec<_>>>()?;
+        type_check::infer_function_return_type(
+            self.span,
+            &self.func_name,
+            &self.params,
+            argument_types.into_iter(),
+            &BUILTIN_FUNCTIONS,
+        )
+    }
+
+    pub fn refresh_return_type(&mut self) -> Result<()> {
+        self.return_type = Box::new(self.infer_return_type()?);
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Educe)]
@@ -1804,8 +1838,8 @@ mod tests {
 
     fn assert_stored_type_matches_inferred(expr: &ScalarExpr) {
         assert_eq!(
-            expr.data_type().unwrap(),
-            expr.as_expr().unwrap().data_type().clone()
+            expr.data_type().unwrap().as_ref(),
+            expr.as_expr().unwrap().data_type()
         );
     }
 

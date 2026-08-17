@@ -118,7 +118,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 let column_binding = ColumnBindingBuilder::new(
                     agg.display_name.clone(),
                     agg_func.index,
-                    Box::new(agg_func.scalar.data_type()?),
+                    Box::new(agg_func.scalar.data_type()?.into_owned()),
                     Visibility::Visible,
                 )
                 .build();
@@ -140,7 +140,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 let column_binding = ColumnBindingBuilder::new(
                     udaf.display_name.clone(),
                     agg_func.index,
-                    Box::new(agg_func.scalar.data_type()?),
+                    Box::new(agg_func.scalar.data_type()?.into_owned()),
                     Visibility::Visible,
                 )
                 .build();
@@ -181,11 +181,10 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
     }
 
     fn visit_cast_expr(&mut self, cast: &'_ mut crate::plans::CastExpr) -> Result<()> {
-        let source_type = cast.argument.data_type()?;
+        let source_nullable = cast.argument.data_type()?.is_nullable();
         self.visit(&mut cast.argument)?;
-        let after_type = cast.argument.data_type()?;
 
-        if !source_type.is_nullable() && after_type.is_nullable() {
+        if !source_nullable && cast.argument.data_type()?.is_nullable() {
             cast.target_type = Box::new(cast.target_type.wrap_nullable());
         }
         Ok(())

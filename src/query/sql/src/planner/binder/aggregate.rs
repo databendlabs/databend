@@ -249,7 +249,7 @@ impl AggregateInfo {
             ColumnBindingBuilder::new(
                 new_name.to_string(),
                 column.index,
-                Box::new(column.scalar.data_type()?),
+                Box::new(column.scalar.data_type()?.into_owned()),
                 visibility,
             )
             .build()
@@ -302,7 +302,7 @@ impl AggregateInfo {
         self.lookup_aggregate_function(aggregate)
             .map(|scalar_item| {
                 debug_assert_eq!(
-                    &scalar_item.scalar.data_type().unwrap(),
+                    scalar_item.scalar.data_type().unwrap().as_ref(),
                     aggregate.return_type.as_ref()
                 );
                 build_replaced_aggregate_column(new_name, scalar_item.index, &aggregate.return_type)
@@ -316,7 +316,7 @@ impl AggregateInfo {
     ) -> Option<ColumnBinding> {
         self.lookup_udaf_call(udaf).map(|scalar_item| {
             debug_assert_eq!(
-                &scalar_item.scalar.data_type().unwrap(),
+                scalar_item.scalar.data_type().unwrap().as_ref(),
                 udaf.return_type.as_ref()
             );
             build_replaced_aggregate_column(new_name, scalar_item.index, &udaf.return_type)
@@ -514,7 +514,7 @@ impl AggregateInfo {
                     let column_binding = ColumnBindingBuilder::new(
                         name,
                         item.index,
-                        Box::new(expr.data_type()?),
+                        Box::new(expr.data_type()?.into_owned()),
                         Visibility::Visible,
                     )
                     .build();
@@ -524,7 +524,7 @@ impl AggregateInfo {
                         column: column_binding,
                     })
                 } else {
-                    let data_type = expr.data_type()?;
+                    let data_type = expr.data_type()?.into_owned();
                     let index = metadata
                         .write()
                         .add_derived_column(name.clone(), data_type.clone());
@@ -580,7 +580,7 @@ impl AggregateInfo {
                 let column_binding = ColumnBindingBuilder::new(
                     name,
                     item.index,
-                    Box::new(expr.data_type()?),
+                    Box::new(expr.data_type()?.into_owned()),
                     Visibility::Visible,
                 )
                 .build();
@@ -618,7 +618,7 @@ impl AggregateInfo {
             .enumerate()
             .map(|(i, arg)| {
                 let name = format!("{}_arg_{}", func_name, i);
-                let data_type = arg.data_type()?;
+                let data_type = arg.data_type()?.into_owned();
                 if let ScalarExpr::BoundColumnRef(column_ref) = arg {
                     self.aggregate_arguments.push(ScalarItem {
                         index: column_ref.column.index,
@@ -681,7 +681,7 @@ impl AggregateInfo {
         let mut replaced_args = Vec::with_capacity(args.len());
         for (i, arg) in args.iter().enumerate() {
             let name = format!("{}_arg_{}", func_name, i);
-            let data_type = arg.data_type()?;
+            let data_type = arg.data_type()?.into_owned();
             if let ScalarExpr::BoundColumnRef(column_ref) = arg {
                 replaced_args.push(column_ref.clone().into());
                 continue;
@@ -1191,7 +1191,7 @@ impl Binder {
             // We just generate a new bound index.
             let dummy = self.create_derived_column_binding(
                 format!("_dup_group_item_{i}"),
-                item.scalar.data_type()?,
+                item.scalar.data_type()?.into_owned(),
             );
             dup_group_items.push((dummy.index, *dummy.data_type));
         }
@@ -1279,7 +1279,7 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_derived_column_binding(alias, scalar.data_type()?)
+                        self.create_derived_column_binding(alias, scalar.data_type()?.into_owned())
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar: scalar.clone(),
@@ -1337,9 +1337,10 @@ impl Binder {
                 {
                     *index
                 } else {
-                    self.metadata
-                        .write()
-                        .add_derived_column(group_item_name.clone(), scalar_expr.data_type()?)
+                    self.metadata.write().add_derived_column(
+                        group_item_name.clone(),
+                        scalar_expr.data_type()?.into_owned(),
+                    )
                 };
 
                 bind_context.aggregate_info.group_items.push(ScalarItem {

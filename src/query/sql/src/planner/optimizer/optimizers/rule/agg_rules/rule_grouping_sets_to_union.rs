@@ -36,6 +36,7 @@ use crate::plans::AggregateMode;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
+use crate::plans::FunctionCall;
 use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
 use crate::plans::RelOp;
@@ -282,5 +283,12 @@ impl VisitorMut<'_> for ReplaceColumnForGroupingSetsVisitor {
             return Ok(());
         }
         walk_expr_mut(self, expr)
+    }
+
+    fn visit_function_call(&mut self, function: &mut FunctionCall) -> Result<()> {
+        for argument in &mut function.arguments {
+            self.visit(argument)?;
+        }
+        function.refresh_return_type()
     }
 }

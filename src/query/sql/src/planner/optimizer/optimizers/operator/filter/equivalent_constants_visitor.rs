@@ -165,7 +165,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                         if expr.used_columns().is_empty()
                             && common_super_type_with_conversion(
                                 column.column.data_type.as_ref(),
-                                expr.data_type()?,
+                                expr.data_type()?.as_ref(),
                             )
                             .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
                         {

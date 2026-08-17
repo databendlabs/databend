@@ -1229,15 +1229,13 @@ impl EagerAnalysis {
             unreachable!()
         };
 
+        let new_scalar_type = new_scalar.data_type()?;
+        let count_type = DataType::Number(NumberDataType::UInt64);
         let return_type = infer_function_return_type(
             None,
             "multiply",
             &[],
-            [
-                new_scalar.data_type()?,
-                DataType::Number(NumberDataType::UInt64),
-            ]
-            .into_iter(),
+            [new_scalar_type.as_ref(), &count_type].into_iter(),
             &BUILTIN_FUNCTIONS,
         )?;
         let multiplied_scalar = ScalarExpr::FunctionCall(FunctionCall {
@@ -1272,7 +1270,7 @@ impl EagerAnalysis {
         } else {
             multiplied_scalar
         };
-        let multiplied_type = multiplied_scalar.data_type()?;
+        let multiplied_type = multiplied_scalar.data_type()?.into_owned();
         let new_index = metadata.write().add_derived_column(
             format!("{} * _eager_count", aggregate_function.display_name),
             multiplied_type.clone(),

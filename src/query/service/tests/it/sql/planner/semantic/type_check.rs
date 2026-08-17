@@ -203,6 +203,66 @@ async fn test_grouping_sets_to_union_keeps_grouping_id_for_qualify_windows() -> 
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_grouping_sets_rewrites_refresh_function_return_types() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    fixture
+        .execute_command("CREATE TABLE grouping_type_t(a UInt64)")
+        .await?;
+
+    for grouping_sets_to_union in ["0", "1"] {
+        ctx.get_settings().set_setting(
+            "grouping_sets_to_union".to_string(),
+            grouping_sets_to_union.to_string(),
+        )?;
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _) = planner
+            .plan_sql("SELECT a + 1 FROM grouping_type_t GROUP BY GROUPING SETS ((a), ())")
+            .await?;
+        let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } = plan
+        else {
+            panic!("expected query plan");
+        };
+        let mut builder = PhysicalPlanBuilder::new(metadata, ctx.clone(), false);
+        builder.build(&s_expr, bind_context.column_set()).await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_nullable_tuple_cast_to_variant_keeps_function_signature() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    fixture
+        .execute_command("CREATE TABLE tuple_variant_t(a Nullable(Tuple(x Int64, y String)))")
+        .await?;
+
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner
+        .plan_sql("SELECT CAST(a AS VARIANT) FROM tuple_variant_t")
+        .await?;
+    let Plan::Query {
+        s_expr,
+        metadata,
+        bind_context,
+        ..
+    } = plan
+    else {
+        panic!("expected query plan");
+    };
+    let mut builder = PhysicalPlanBuilder::new(metadata, ctx, false);
+    builder.build(&s_expr, bind_context.column_set()).await?;
+
+    Ok(())
+}
+
 fn max_or_depth<I: ColumnIndex>(expr: &Expr<I>) -> usize {
     match expr {
         Expr::Cast(cast) => max_or_depth(&cast.expr),

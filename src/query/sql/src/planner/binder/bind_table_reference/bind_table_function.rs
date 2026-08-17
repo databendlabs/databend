@@ -552,7 +552,7 @@ impl Binder {
                                 column_ref.column.clone()
                             } else {
                                 // Add result column to metadata
-                                let data_type = srf_result.data_type()?;
+                                let data_type = srf_result.data_type()?.into_owned();
                                 let index = self
                                     .metadata
                                     .write()

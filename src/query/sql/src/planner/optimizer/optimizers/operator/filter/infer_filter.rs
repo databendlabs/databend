@@ -116,7 +116,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         {
                             let (is_adjusted, constant) = adjust_scalar(
                                 constant.value.clone(),
-                                func.arguments[0].data_type()?,
+                                func.arguments[0].data_type()?.as_ref(),
                             );
                             if is_adjusted {
                                 self.add_expr_predicate(&func.arguments[0], Predicate {
@@ -132,7 +132,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         {
                             let (is_adjusted, constant) = adjust_scalar(
                                 constant.value.clone(),
-                                func.arguments[1].data_type()?,
+                                func.arguments[1].data_type()?.as_ref(),
                             );
                             if is_adjusted {
                                 self.add_expr_predicate(&func.arguments[1], Predicate {
@@ -195,7 +195,7 @@ impl<'a> InferFilterOptimizer<'a> {
         let Ok(right_ty) = right.data_type() else {
             return false;
         };
-        if !common_super_type_with_conversion(left_ty, right_ty)
+        if !common_super_type_with_conversion(left_ty.as_ref(), right_ty.as_ref())
             .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
         {
             return false;
@@ -256,16 +256,16 @@ impl<'a> InferFilterOptimizer<'a> {
         mut right: Predicate,
     ) -> Result<(MergeResult, Predicate)> {
         // Handle data type compatibility
-        let left_data_type = ScalarExpr::ConstantExpr(left.constant.clone()).data_type()?;
-        let right_data_type = ScalarExpr::ConstantExpr(right.constant.clone()).data_type()?;
+        let left_data_type = left.constant.value.as_ref().infer_data_type();
+        let right_data_type = right.constant.value.as_ref().infer_data_type();
         if left_data_type != right_data_type {
             let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
             let common_data_type = common_super_type(left_data_type, right_data_type, cast_rules);
             if let Some(data_type) = common_data_type {
                 let (left_is_adjusted, left_constant) =
-                    adjust_scalar(left.constant.value.clone(), data_type.clone());
+                    adjust_scalar(left.constant.value.clone(), &data_type);
                 let (right_is_adjusted, right_constant) =
-                    adjust_scalar(right.constant.value.clone(), data_type.clone());
+                    adjust_scalar(right.constant.value.clone(), &data_type);
                 if left_is_adjusted && right_is_adjusted {
                     left.constant = left_constant;
                     right.constant = right_constant;
@@ -875,7 +875,7 @@ impl<'a> JoinProperty<'a> {
     }
 }
 
-pub fn adjust_scalar(scalar: Scalar, data_type: DataType) -> (bool, ConstantExpr) {
+pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExpr) {
     match data_type {
         DataType::Number(NumberDataType::UInt8)
         | DataType::Nullable(box DataType::Number(NumberDataType::UInt8)) => {

@@ -783,7 +783,7 @@ impl SubqueryDecorrelatorOptimizer {
                                 value: Scalar::Array(builder.build()),
                             });
 
-                            let expr_type = child_expr.data_type()?;
+                            let expr_type = child_expr.data_type()?.into_owned();
                             let common_type = common_super_type(
                                 value_type.clone(),
                                 expr_type.clone(),
