@@ -1,0 +1,53 @@
+name: "02_outer_join_stale_statistics"
+description: "Stale range statistics must not hide a more selective preserved input"
+
+sql: |
+  SELECT p.join_key
+  FROM (
+      SELECT join_key
+      FROM outer_join_preserved
+      WHERE range_value > 10 AND selective_value = 42
+  ) AS p
+  LEFT OUTER JOIN (
+      SELECT join_key
+      FROM outer_join_other
+      WHERE range_value > 10
+  ) AS o
+  ON p.join_key = o.join_key;
+
+table_statistics:
+  outer_join_preserved:
+    num_rows: 100
+  outer_join_other:
+    num_rows: 100
+
+column_statistics:
+  outer_join_preserved.join_key:
+    min: 0
+    max: 99
+    ndv: 100
+    null_count: 0
+  outer_join_preserved.range_value:
+    min: 0
+    max: 5
+    ndv: 6
+    null_count: 0
+  outer_join_preserved.selective_value:
+    min: 0
+    max: 99
+    ndv: 100
+    null_count: 0
+  outer_join_other.join_key:
+    min: 0
+    max: 99
+    ndv: 100
+    null_count: 0
+  outer_join_other.range_value:
+    min: 0
+    max: 5
+    ndv: 6
+    null_count: 0
+
+tables:
+  outer_join_preserved: basic/02_outer_join_preserved.sql
+  outer_join_other: basic/02_outer_join_other.sql

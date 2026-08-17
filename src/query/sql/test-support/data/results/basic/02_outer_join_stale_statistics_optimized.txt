@@ -1,0 +1,26 @@
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [outer_join_preserved.join_key (#0) AS (#0), range_value (#5) AS (#8), selective_value (#6) AS (#9)]
+    └── Join(Right)
+        ├── build keys: [outer_join_preserved.join_key (#0)]
+        ├── probe keys: [outer_join_other.join_key (#3)]
+        ├── other filters: []
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [outer_join_preserved.join_key (#0)]
+        │   └── EvalScalar
+        │       ├── scalars: [outer_join_preserved.join_key (#0) AS (#0), outer_join_preserved.range_value (#1) AS (#5), outer_join_preserved.selective_value (#2) AS (#6)]
+        │       └── Scan
+        │           ├── table: default.outer_join_preserved (#0)
+        │           ├── filters: [gt(outer_join_preserved.range_value (#1), 10), eq(outer_join_preserved.selective_value (#2), 42)]
+        │           ├── order by: []
+        │           └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [outer_join_other.join_key (#3)]
+            └── EvalScalar
+                ├── scalars: [outer_join_other.join_key (#3) AS (#3), outer_join_other.range_value (#4) AS (#7)]
+                └── Scan
+                    ├── table: default.outer_join_other (#1)
+                    ├── filters: [gt(outer_join_other.range_value (#4), 10)]
+                    ├── order by: []
+                    └── limit: NONE
+

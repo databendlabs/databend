@@ -22,4 +22,6 @@ left stats    : rows=9, min=1.25, max=4.75, ndv=3, histogram_input=present
 right stats   : rows=13, min=20, max=23, ndv=2, histogram_input=present
 sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
 join          : INNER cardinality=0.000
+stat          : l.k (#0) min=1.25, max=4.75, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1.25..1.25:2.000/1.000, 2.5..2.5:4.000/1.000, 4.75..4.75:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=2.000, null=0.000, histogram=rows=13.000, ndv=2.000, buckets=[20..20:5.000/1.000, 23..23:8.000/1.000]
 

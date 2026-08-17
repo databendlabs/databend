@@ -38,16 +38,16 @@ Aggregate(Final)
     ├── group items: []
     ├── aggregate functions: [count() AS (#5)]
     └── Join(Inner)
-        ├── build keys: [customers.segment_id (#3)]
-        ├── probe keys: [segments.segment_id (#4)]
+        ├── build keys: [customers.customer_id (#2)]
+        ├── probe keys: [fact_events.customer_id (#0)]
         ├── other filters: []
         ├── Join(Inner)
-        │   ├── build keys: [fact_events.customer_id (#0)]
-        │   ├── probe keys: [customers.customer_id (#2)]
+        │   ├── build keys: [segments.segment_id (#4)]
+        │   ├── probe keys: [customers.segment_id (#3)]
         │   ├── other filters: []
         │   ├── Scan
-        │   │   ├── table: current_time_selectivity.fact_events (#0)
-        │   │   ├── filters: [gte(fact_events.event_time (#1), subtract_hours(now(), 24))]
+        │   │   ├── table: current_time_selectivity.segments (#2)
+        │   │   ├── filters: []
         │   │   ├── order by: []
         │   │   └── limit: NONE
         │   └── Scan
@@ -56,8 +56,8 @@ Aggregate(Final)
         │       ├── order by: []
         │       └── limit: NONE
         └── Scan
-            ├── table: current_time_selectivity.segments (#2)
-            ├── filters: []
+            ├── table: current_time_selectivity.fact_events (#0)
+            ├── filters: [gte(fact_events.event_time (#1), subtract_hours(now(), 24))]
             ├── order by: []
             └── limit: NONE
 

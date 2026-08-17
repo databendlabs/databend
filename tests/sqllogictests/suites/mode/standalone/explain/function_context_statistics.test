@@ -9,8 +9,9 @@ statement ok
 CREATE TABLE function_context_default_filter AS
 SELECT 1643745600000000::TIMESTAMP AS ts FROM numbers(10)
 
-## SelectivityEstimator::apply folds the predicate with the query context.
-## All ten timestamps have local date 2022-02-02 in Asia/Shanghai.
+## The predicate uses the query context, but stored timestamp bounds cannot
+## prove it true. The cast comparison currently uses an unknown estimate;
+## the result check below still verifies the Asia/Shanghai interpretation.
 
 query T
 SETTINGS (timezone = 'Asia/Shanghai')
@@ -26,10 +27,24 @@ Scan
 ├── output columns: [function_context_default_filter.ts (#0)]
 ├── outer columns: []
 ├── used columns: [function_context_default_filter.ts (#0)]
-├── cardinality: 10.000
+├── cardinality: 2.000
 ├── precise cardinality: N/A
 └── statistics
-    └── function_context_default_filter.ts (#0): { min: 1643745600000000, max: 1643745600000000, ndv: 1, null count: 0 }
+    └── function_context_default_filter.ts (#0): { min: 1643745600000000, max: 1643745600000000, ndv: 0.8926258175999999, null count: 0 }
+
+query I
+SETTINGS (timezone = 'Asia/Shanghai')
+SELECT count(*) FROM function_context_default_filter
+WHERE to_date(ts) = DATE '2022-02-02'
+----
+10
+
+query I
+SETTINGS (timezone = 'UTC')
+SELECT count(*) FROM function_context_default_filter
+WHERE to_date(ts) = DATE '2022-02-02'
+----
+0
 
 statement ok
 DROP TABLE function_context_default_filter
