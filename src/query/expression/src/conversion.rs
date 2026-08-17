@@ -247,7 +247,7 @@ fn classify_decimal_conversion(src: DecimalSize, dest: DecimalSize) -> Conversio
     }
 }
 
-fn number_common_type(left: NumberDataType, right: NumberDataType) -> DataType {
+pub fn number_common_type(left: NumberDataType, right: NumberDataType) -> DataType {
     if left == right {
         return DataType::Number(left);
     }

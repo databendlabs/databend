@@ -138,7 +138,7 @@ impl ToReadDataSourcePlan for dyn Table {
                     schema.add_internal_field(
                         &field.name,
                         *field.data_type.clone(),
-                        field.column_id,
+                        field.query_column_id,
                     );
                 }
                 output_schema = Arc::new(schema);

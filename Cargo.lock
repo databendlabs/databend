@@ -6923,6 +6923,7 @@ dependencies = [
 name = "databend-storages-common-pruner"
 version = "0.1.0"
 dependencies = [
+ "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
@@ -11261,7 +11262,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.6"
-source = "git+https://github.com/databendlabs/jsonb.git?rev=a16344417d1fec6df4a62d8e77679211e909f86e#a16344417d1fec6df4a62d8e77679211e909f86e"
+source = "git+https://github.com/b41sh/jsonb.git?rev=ec1130a0f6a5e63c6a741e06bc4733e1a27c47d3#ec1130a0f6a5e63c6a741e06bc4733e1a27c47d3"
 dependencies = [
  "byteorder",
  "ethnum",

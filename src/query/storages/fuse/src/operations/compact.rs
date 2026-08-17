@@ -31,7 +31,6 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
-use crate::operations::VirtualSchemaMode;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
@@ -118,8 +117,6 @@ impl FuseTable {
             self.get_id(),
             0,
             0,
-            None,
-            VirtualSchemaMode::Merge,
             HashMap::new(),
             HashMap::new(),
         );
@@ -168,6 +165,7 @@ impl FuseTable {
             self.cluster_key_info(),
         );
         mutator.partition_key_count = self.partition_key_count();
+        mutator.virtual_column_layout_policy = self.virtual_column_layout_policy();
 
         let partitions = mutator.target_select().await?;
         if partitions.is_empty() {

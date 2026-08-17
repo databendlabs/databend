@@ -18,12 +18,14 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
-use databend_common_expression::VariantDataType;
+use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
@@ -76,6 +78,100 @@ const VIRTUAL_COLUMN_UINT64_TYPE: u8 = 2;
 const VIRTUAL_COLUMN_INT64_TYPE: u8 = 3;
 const VIRTUAL_COLUMN_FLOAT64_TYPE: u8 = 4;
 const VIRTUAL_COLUMN_STRING_TYPE: u8 = 5;
+const VIRTUAL_COLUMN_BINARY_TYPE: u8 = 6;
+const VIRTUAL_COLUMN_DATE_TYPE: u8 = 7;
+const VIRTUAL_COLUMN_TIMESTAMP_TYPE: u8 = 8;
+const VIRTUAL_COLUMN_TIMESTAMP_TZ_TYPE: u8 = 9;
+const VIRTUAL_COLUMN_INTERVAL_TYPE: u8 = 10;
+const VIRTUAL_COLUMN_UINT8_TYPE: u8 = 11;
+const VIRTUAL_COLUMN_UINT16_TYPE: u8 = 12;
+const VIRTUAL_COLUMN_UINT32_TYPE: u8 = 13;
+const VIRTUAL_COLUMN_INT8_TYPE: u8 = 14;
+const VIRTUAL_COLUMN_INT16_TYPE: u8 = 15;
+const VIRTUAL_COLUMN_INT32_TYPE: u8 = 16;
+const VIRTUAL_COLUMN_FLOAT32_TYPE: u8 = 17;
+const VIRTUAL_COLUMN_EXTENDED_TYPE: u8 = u8::MAX;
+
+/// Physical data type of a materialized virtual column.
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, FrozenAPI)]
+pub enum VirtualColumnPhysicalType {
+    Jsonb,
+    Boolean,
+    Number(NumberDataType),
+    Decimal(DecimalDataType),
+    String,
+    Binary,
+    Date,
+    Timestamp,
+    TimestampTz,
+    Interval,
+    Array(Box<VirtualColumnPhysicalType>),
+}
+
+impl VirtualColumnPhysicalType {
+    pub fn try_from_data_type(
+        data_type: &databend_common_expression::types::DataType,
+    ) -> Result<Self> {
+        use databend_common_expression::types::DataType;
+
+        match data_type.remove_nullable() {
+            DataType::Variant => Ok(Self::Jsonb),
+            DataType::Boolean => Ok(Self::Boolean),
+            DataType::Number(number) => Ok(Self::Number(number)),
+            DataType::Decimal(size) => Ok(Self::Decimal(size.into())),
+            DataType::String => Ok(Self::String),
+            DataType::Binary => Ok(Self::Binary),
+            DataType::Date => Ok(Self::Date),
+            DataType::Timestamp => Ok(Self::Timestamp),
+            DataType::TimestampTz => Ok(Self::TimestampTz),
+            DataType::Interval => Ok(Self::Interval),
+            DataType::Array(inner) => Ok(Self::Array(Box::new(Self::try_from_data_type(&inner)?))),
+            unsupported => Err(ErrorCode::Internal(format!(
+                "unsupported virtual column physical type: {unsupported:?}"
+            ))),
+        }
+    }
+
+    pub fn table_data_type(&self) -> TableDataType {
+        match self {
+            Self::Jsonb => TableDataType::Variant,
+            Self::Boolean => TableDataType::Boolean,
+            Self::Number(number) => TableDataType::Number(*number),
+            Self::Decimal(decimal) => TableDataType::Decimal(*decimal),
+            Self::String => TableDataType::String,
+            Self::Binary => TableDataType::Binary,
+            Self::Date => TableDataType::Date,
+            Self::Timestamp => TableDataType::Timestamp,
+            Self::TimestampTz => TableDataType::TimestampTz,
+            Self::Interval => TableDataType::Interval,
+            Self::Array(inner) => TableDataType::Array(Box::new(inner.table_data_type())),
+        }
+    }
+
+    pub fn encode(&self) -> (u8, Option<Self>) {
+        match self {
+            Self::Jsonb => (VIRTUAL_COLUMN_JSONB_TYPE, None),
+            Self::Boolean => (VIRTUAL_COLUMN_BOOL_TYPE, None),
+            Self::Number(NumberDataType::UInt64) => (VIRTUAL_COLUMN_UINT64_TYPE, None),
+            Self::Number(NumberDataType::UInt8) => (VIRTUAL_COLUMN_UINT8_TYPE, None),
+            Self::Number(NumberDataType::UInt16) => (VIRTUAL_COLUMN_UINT16_TYPE, None),
+            Self::Number(NumberDataType::UInt32) => (VIRTUAL_COLUMN_UINT32_TYPE, None),
+            Self::Number(NumberDataType::Int64) => (VIRTUAL_COLUMN_INT64_TYPE, None),
+            Self::Number(NumberDataType::Int8) => (VIRTUAL_COLUMN_INT8_TYPE, None),
+            Self::Number(NumberDataType::Int16) => (VIRTUAL_COLUMN_INT16_TYPE, None),
+            Self::Number(NumberDataType::Int32) => (VIRTUAL_COLUMN_INT32_TYPE, None),
+            Self::Number(NumberDataType::Float64) => (VIRTUAL_COLUMN_FLOAT64_TYPE, None),
+            Self::Number(NumberDataType::Float32) => (VIRTUAL_COLUMN_FLOAT32_TYPE, None),
+            Self::String => (VIRTUAL_COLUMN_STRING_TYPE, None),
+            Self::Binary => (VIRTUAL_COLUMN_BINARY_TYPE, None),
+            Self::Date => (VIRTUAL_COLUMN_DATE_TYPE, None),
+            Self::Timestamp => (VIRTUAL_COLUMN_TIMESTAMP_TYPE, None),
+            Self::TimestampTz => (VIRTUAL_COLUMN_TIMESTAMP_TZ_TYPE, None),
+            Self::Interval => (VIRTUAL_COLUMN_INTERVAL_TYPE, None),
+            physical_type => (VIRTUAL_COLUMN_EXTENDED_TYPE, Some(physical_type.clone())),
+        }
+    }
+}
 
 /// The column meta of virtual columns.
 /// Virtual column is the internal field values extracted from variant type values,
@@ -96,7 +192,25 @@ pub struct VirtualColumnMeta {
     // 3 => int64
     // 4 => float64
     // 5 => string
+    // 6 => binary
+    // 7 => date
+    // 8 => timestamp
+    // 9 => timestamp_tz
+    // 10 => interval
+    // 11 => uint8
+    // 12 => uint16
+    // 13 => uint32
+    // 14 => int8
+    // 15 => int16
+    // 16 => int32
+    // 17 => float32
+    // 255 => extended types(decimal, array)
     pub data_type: u8,
+    /// Full type information for types that cannot be represented by
+    /// the `data_type` code, such as Decimal with precision and scale.
+    /// Simple types continue to use `data_type` and leave this field as `None`.
+    #[serde(default)]
+    pub extended_physical_type: Option<VirtualColumnPhysicalType>,
     /// virtual column statistics.
     pub column_stat: Option<ColumnStatistics>,
 }
@@ -111,65 +225,112 @@ impl VirtualColumnMeta {
     }
 
     pub fn data_type(&self) -> TableDataType {
-        match self.data_type {
-            VIRTUAL_COLUMN_JSONB_TYPE => TableDataType::Nullable(Box::new(TableDataType::Variant)),
-            VIRTUAL_COLUMN_BOOL_TYPE => TableDataType::Nullable(Box::new(TableDataType::Boolean)),
-            VIRTUAL_COLUMN_UINT64_TYPE => {
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64)))
-            }
-            VIRTUAL_COLUMN_INT64_TYPE => {
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64)))
-            }
-            VIRTUAL_COLUMN_FLOAT64_TYPE => {
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Float64)))
-            }
-            VIRTUAL_COLUMN_STRING_TYPE => TableDataType::Nullable(Box::new(TableDataType::String)),
-            _ => unreachable!(),
-        }
+        let data_type = self.physical_type().table_data_type();
+        TableDataType::Nullable(Box::new(data_type))
     }
 
-    pub fn data_type_code(variant_type: &VariantDataType) -> u8 {
-        match variant_type {
-            VariantDataType::Jsonb => VIRTUAL_COLUMN_JSONB_TYPE,
-            VariantDataType::Boolean => VIRTUAL_COLUMN_BOOL_TYPE,
-            VariantDataType::UInt64 => VIRTUAL_COLUMN_UINT64_TYPE,
-            VariantDataType::Int64 => VIRTUAL_COLUMN_INT64_TYPE,
-            VariantDataType::Float64 => VIRTUAL_COLUMN_FLOAT64_TYPE,
-            VariantDataType::String => VIRTUAL_COLUMN_STRING_TYPE,
+    pub fn physical_type(&self) -> VirtualColumnPhysicalType {
+        match self.data_type {
+            VIRTUAL_COLUMN_JSONB_TYPE => VirtualColumnPhysicalType::Jsonb,
+            VIRTUAL_COLUMN_BOOL_TYPE => VirtualColumnPhysicalType::Boolean,
+            VIRTUAL_COLUMN_UINT64_TYPE => VirtualColumnPhysicalType::Number(NumberDataType::UInt64),
+            VIRTUAL_COLUMN_UINT8_TYPE => VirtualColumnPhysicalType::Number(NumberDataType::UInt8),
+            VIRTUAL_COLUMN_UINT16_TYPE => VirtualColumnPhysicalType::Number(NumberDataType::UInt16),
+            VIRTUAL_COLUMN_UINT32_TYPE => VirtualColumnPhysicalType::Number(NumberDataType::UInt32),
+            VIRTUAL_COLUMN_INT64_TYPE => VirtualColumnPhysicalType::Number(NumberDataType::Int64),
+            VIRTUAL_COLUMN_INT8_TYPE => VirtualColumnPhysicalType::Number(NumberDataType::Int8),
+            VIRTUAL_COLUMN_INT16_TYPE => VirtualColumnPhysicalType::Number(NumberDataType::Int16),
+            VIRTUAL_COLUMN_INT32_TYPE => VirtualColumnPhysicalType::Number(NumberDataType::Int32),
+            VIRTUAL_COLUMN_FLOAT64_TYPE => {
+                VirtualColumnPhysicalType::Number(NumberDataType::Float64)
+            }
+            VIRTUAL_COLUMN_FLOAT32_TYPE => {
+                VirtualColumnPhysicalType::Number(NumberDataType::Float32)
+            }
+            VIRTUAL_COLUMN_STRING_TYPE => VirtualColumnPhysicalType::String,
+            VIRTUAL_COLUMN_BINARY_TYPE => VirtualColumnPhysicalType::Binary,
+            VIRTUAL_COLUMN_DATE_TYPE => VirtualColumnPhysicalType::Date,
+            VIRTUAL_COLUMN_TIMESTAMP_TYPE => VirtualColumnPhysicalType::Timestamp,
+            VIRTUAL_COLUMN_TIMESTAMP_TZ_TYPE => VirtualColumnPhysicalType::TimestampTz,
+            VIRTUAL_COLUMN_INTERVAL_TYPE => VirtualColumnPhysicalType::Interval,
+            VIRTUAL_COLUMN_EXTENDED_TYPE => self
+                .extended_physical_type
+                .clone()
+                .expect("extended virtual column type is missing"),
             _ => unreachable!(),
         }
     }
+}
+
+/// Retained path frequencies for one source variant column in a block.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct VirtualColumnPathStatistics {
+    /// `(segment-local virtual path id, saturated value_count)` pairs.
+    pub path_counts: Vec<(ColumnId, u32)>,
+    /// Whether every observed non-direct path for this source is represented in
+    /// `path_counts`. Direct paths are intentionally represented only by
+    /// `VirtualBlockMeta.virtual_column_metas`; false means producer-side
+    /// truncation omitted some non-direct paths.
+    pub path_statistics_complete: bool,
+}
+
+/// Path frequencies for one source variant column before segment-local path ids
+/// are assigned. Each pair is `(canonical_path, saturated value_count)`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DraftVirtualColumnPathStatistics {
+    pub path_counts: Vec<(String, u32)>,
+    /// Whether every observed non-direct path for this source is represented in
+    /// `path_counts`. Direct paths are intentionally represented only by draft
+    /// virtual column metadata.
+    pub path_statistics_complete: bool,
 }
 
 /// The block meta of virtual columns.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
 pub struct VirtualBlockMeta {
-    /// key is virtual columnId, value is VirtualColumnMeta
+    /// Segment-local direct virtual column metadata. Simple physical types use
+    /// the legacy `VirtualColumnMeta.data_type` code; extended types are stored
+    /// in `VirtualColumnMeta.extended_physical_type`.
     pub virtual_column_metas: HashMap<ColumnId, VirtualColumnMeta>,
     /// The file size of virtual columns.
     pub virtual_column_size: u64,
     /// The file location of virtual columns.
     pub virtual_location: Location,
+    /// Whether BlockMeta completely describes every path physically present in
+    /// the sidecar. If false, readers must inspect the sidecar footer for shared
+    /// paths before concluding that an unlisted path is missing.
+    #[serde(default)]
+    pub virtual_columns_complete: bool,
 }
 
 /// The draft column meta of virtual columns, virtual ColumnId is not set.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DraftVirtualColumnMeta {
     pub source_column_id: ColumnId,
     pub name: String,
-    pub data_type: VariantDataType,
+    pub data_type: VirtualColumnPhysicalType,
     pub column_meta: VirtualColumnMeta,
 }
 
-/// The draft block meta of virtual columns.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
-pub struct DraftVirtualBlockMeta {
-    /// The draft virtual oclumn metas, virtual ColumnId needs to be set.
+/// Draft metadata for a generated virtual-column sidecar.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DraftVirtualColumnBlockMeta {
+    /// The draft virtual column metas; segment-local virtual ColumnIds are not assigned yet.
     pub virtual_column_metas: Vec<DraftVirtualColumnMeta>,
+    /// Whether every path physically present in the sidecar is represented by
+    /// `virtual_column_metas`; false means the sidecar also contains shared paths.
+    pub virtual_columns_complete: bool,
     /// The file size of virtual columns.
     pub virtual_column_size: u64,
     /// The file location of virtual columns.
     pub virtual_location: Location,
+}
+
+/// Independent optional payloads produced while writing a block.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DraftVirtualBlockMeta {
+    pub virtual_columns: Option<DraftVirtualColumnBlockMeta>,
+    pub path_statistics: Option<HashMap<ColumnId, DraftVirtualColumnPathStatistics>>,
 }
 
 /// Meta information of a block
@@ -202,6 +363,9 @@ pub struct BlockMeta {
     pub vector_stats: Option<StatisticsOfVectorColumns>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
+    /// Block-local JSON path statistics keyed by source Variant column id.
+    #[serde(default)]
+    pub virtual_path_statistics: Option<HashMap<ColumnId, VirtualColumnPathStatistics>>,
     pub compression: Compression,
 
     // block create_on
@@ -250,6 +414,7 @@ impl BlockMeta {
             spatial_index_location,
             spatial_stats,
             vector_stats: None,
+            virtual_path_statistics: None,
             virtual_block_meta,
             compression,
             create_on,
@@ -385,6 +550,7 @@ impl BlockMeta {
             spatial_index_location: None,
             spatial_stats: None,
             vector_stats: None,
+            virtual_path_statistics: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,
@@ -418,6 +584,7 @@ impl BlockMeta {
             spatial_index_location: None,
             spatial_stats: None,
             vector_stats: None,
+            virtual_path_statistics: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,

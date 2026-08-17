@@ -267,6 +267,99 @@ impl VectorColumnStatistics {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, FrozenAPI)]
+pub struct VirtualSegmentPath {
+    /// Canonical JSON path, e.g. `user.name`, `users[0].id`, `user.'a.b'`.
+    pub path: String,
+    /// Segment-local identity assigned to every retained path, regardless of
+    /// whether a particular block stores it directly, in shared data, or only
+    /// contributes path statistics.
+    pub column_id: ColumnId,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, FrozenAPI)]
+pub struct VirtualSegmentColumnPath {
+    pub source_column_id: ColumnId,
+    pub paths: Vec<VirtualSegmentPath>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, FrozenAPI)]
+pub struct VirtualSegmentSchema {
+    /// Grouped by `source_column_id` and sorted by canonical path.
+    pub column_paths: Vec<VirtualSegmentColumnPath>,
+}
+
+impl VirtualSegmentSchema {
+    pub fn is_empty(&self) -> bool {
+        self.column_paths
+            .iter()
+            .all(|column| column.paths.is_empty())
+    }
+
+    pub fn path_count(&self) -> usize {
+        self.column_paths
+            .iter()
+            .map(|column| column.paths.len())
+            .sum()
+    }
+
+    pub fn find_path_ref(
+        &self,
+        source_column_id: ColumnId,
+        path: &str,
+    ) -> Option<&VirtualSegmentPath> {
+        let paths = &self
+            .column_paths
+            .iter()
+            .find(|column| column.source_column_id == source_column_id)?
+            .paths;
+        let index = paths
+            .binary_search_by(|item| item.path.as_str().cmp(path))
+            .ok()?;
+        paths.get(index)
+    }
+
+    /// Returns whether `prefix` has a canonical descendant path for the source.
+    /// Descendants continue with `.` or `[`, so a sibling such as `geox` does
+    /// not match the prefix `geo`.
+    pub fn has_descendant_paths(&self, source_column_id: ColumnId, prefix: &str) -> bool {
+        let Some(column) = self
+            .column_paths
+            .iter()
+            .find(|column| column.source_column_id == source_column_id)
+        else {
+            return false;
+        };
+        column.paths.iter().any(|item| {
+            item.path
+                .strip_prefix(prefix)
+                .is_some_and(|suffix| suffix.starts_with('.') || suffix.starts_with('['))
+        })
+    }
+
+    pub fn field_of_column_id(
+        &self,
+        column_id: ColumnId,
+    ) -> Option<(ColumnId, &VirtualSegmentPath)> {
+        for column in &self.column_paths {
+            let (Some(first), Some(last)) = (column.paths.first(), column.paths.last()) else {
+                continue;
+            };
+            // Schema builders assign ids while iterating canonical-path-sorted
+            // sources and paths, so each source owns one contiguous id range.
+            if column_id < first.column_id || column_id > last.column_id {
+                continue;
+            }
+            let index = column
+                .paths
+                .binary_search_by_key(&column_id, |path| path.column_id)
+                .ok()?;
+            return Some((column.source_column_id, &column.paths[index]));
+        }
+        None
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default, FrozenAPI)]
 pub struct AdditionalStatsMeta {
     /// The size of the stats data in bytes.
@@ -312,6 +405,11 @@ pub struct Statistics {
     #[serde(default)]
     pub partition_stats: Option<PartitionStatistics>,
     pub virtual_block_count: Option<u64>,
+
+    /// Segment-local virtual column schema. This field must be cleared when
+    /// segment statistics are merged into a snapshot summary.
+    #[serde(default)]
+    pub virtual_segment_schema: Option<VirtualSegmentSchema>,
 
     pub additional_stats_meta: Option<AdditionalStatsMeta>,
 }
@@ -477,6 +575,7 @@ impl Statistics {
             cluster_stats: None,
             partition_stats: None,
             virtual_block_count: None,
+            virtual_segment_schema: None,
             additional_stats_meta: None,
         }
     }

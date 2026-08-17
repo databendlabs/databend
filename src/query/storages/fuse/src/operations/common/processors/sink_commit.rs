@@ -30,7 +30,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::VirtualDataSchema;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
@@ -69,9 +68,7 @@ use crate::operations::CommitMeta;
 use crate::operations::ConflictResolveContext;
 use crate::operations::MutationGenerator;
 use crate::operations::SnapshotGenerator;
-use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
-use crate::operations::VirtualSchemaMode;
 use crate::operations::set_backoff;
 use crate::operations::set_compaction_num_block_hint;
 use crate::statistics::TableStatsGenerator;
@@ -116,8 +113,6 @@ pub struct CommitSink<F: SnapshotGenerator> {
     backoff: ExponentialBackoff,
 
     new_segment_locs: Vec<Location>,
-    new_virtual_schema: Option<VirtualDataSchema>,
-    new_virtual_schema_mode: VirtualSchemaMode,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
     statistics_hll: BlockHLL,
@@ -184,8 +179,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
             max_retry_elapsed,
             input,
             new_segment_locs: vec![],
-            new_virtual_schema: None,
-            new_virtual_schema_mode: VirtualSchemaMode::Merge,
             statistics_hll: HashMap::new(),
             insert_top_n: HashMap::new(),
             statistics_rows: 0,
@@ -290,8 +283,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let CommitMeta {
             conflict_resolve_context,
             new_segment_locs,
-            virtual_schema,
-            virtual_schema_mode,
             logical_updated_rows,
             logical_deleted_rows,
             hll,
@@ -300,8 +291,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
         } = meta;
 
         let has_new_segments = !new_segment_locs.is_empty();
-        let has_virtual_schema =
-            virtual_schema.is_some() || matches!(virtual_schema_mode, VirtualSchemaMode::Replace);
         let statistics_rows = conflict_resolve_context.logical_insert_rows(logical_deleted_rows)
             + logical_updated_rows;
         let has_hll = statistics_rows > 0 && !hll.is_empty();
@@ -311,9 +300,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
             has_hll || has_top_n || (has_new_segments && is_append_only_txn);
 
         self.new_segment_locs = new_segment_locs;
-
-        self.new_virtual_schema = virtual_schema;
-        self.new_virtual_schema_mode = virtual_schema_mode;
 
         if should_preserve_statistics_rows {
             self.statistics_rows = statistics_rows;
@@ -329,7 +315,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
         self.pending_noop_commit = Self::should_skip_commit(
             &conflict_resolve_context,
             has_new_segments,
-            has_virtual_schema,
             has_hll,
             has_top_n,
             self.allow_append_only_skip(),
@@ -359,12 +344,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
     fn should_skip_commit(
         ctx: &ConflictResolveContext,
         has_new_segments: bool,
-        has_virtual_schema: bool,
         has_new_hll: bool,
         has_new_top_n: bool,
         allow_append_only_skip: bool,
     ) -> bool {
-        if has_new_segments || has_virtual_schema || has_new_hll || has_new_top_n {
+        if has_new_segments || has_new_hll || has_new_top_n {
             return false;
         }
 
@@ -598,15 +582,14 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
-                let mut table_info = fuse_table.table_info.clone();
-                // merge virtual schema
-                let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
-                let merged_virtual_schema = TransformMergeCommitMeta::apply_virtual_schema(
-                    old_virtual_schema,
-                    self.new_virtual_schema.clone(),
-                    self.new_virtual_schema_mode,
-                );
-                table_info.meta.virtual_schema = merged_virtual_schema;
+                let table_info = if fuse_table.table_info.meta.virtual_schema.is_some() {
+                    let mut table_info = fuse_table.table_info.clone();
+                    // The virtual schema in table meta has been deprecated
+                    table_info.meta.virtual_schema = None;
+                    table_info
+                } else {
+                    fuse_table.table_info.clone()
+                };
 
                 // check if snapshot has been changed
                 let snapshot_has_changed = self.prev_snapshot_id.is_some_and(|prev_snapshot_id| {
@@ -826,16 +809,14 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
-                let mut table_info = fuse_table.table_info.clone();
-                // merge virtual schema
-                let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
-                let merged_virtual_schema = TransformMergeCommitMeta::apply_virtual_schema(
-                    old_virtual_schema,
-                    self.new_virtual_schema.clone(),
-                    self.new_virtual_schema_mode,
-                );
-                table_info.meta.virtual_schema = merged_virtual_schema;
-
+                let table_info = if fuse_table.table_info.meta.virtual_schema.is_some() {
+                    let mut table_info = fuse_table.table_info.clone();
+                    // The virtual schema in table meta has been deprecated
+                    table_info.meta.virtual_schema = None;
+                    table_info
+                } else {
+                    fuse_table.table_info.clone()
+                };
                 self.state = State::GenerateSnapshot {
                     previous,
                     table_stats_gen,

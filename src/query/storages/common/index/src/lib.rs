@@ -90,6 +90,8 @@ pub use virtual_column::VirtualColumnSharedColumnIds;
 pub use virtual_column::VirtualColumnSharedColumnMetaMap;
 pub use virtual_column::VirtualColumnSharedColumnMetas;
 pub use virtual_column::VirtualColumnSharedDataType;
+pub use virtual_column::VirtualColumnStat;
+pub use virtual_column::VirtualColumnStatsOfNames;
 pub use virtual_column::encode_compact_virtual_column_nodes;
 pub use virtual_column::encode_compact_virtual_column_shared_ids;
 pub use virtual_column::encode_compact_virtual_column_string_table;

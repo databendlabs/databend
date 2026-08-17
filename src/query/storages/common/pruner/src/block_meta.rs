@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
 
@@ -24,6 +25,7 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::ColumnId;
 use databend_common_expression::types::number::F32;
 use databend_storages_common_index::VirtualColumnSharedDataType;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -51,6 +53,8 @@ pub struct BlockMetaIndex {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct VirtualBlockMetaIndex {
     pub virtual_block_location: String,
+    // Block-local direct virtual column statistics keyed by query column id.
+    pub virtual_column_stats: HashMap<ColumnId, ColumnStatistics>,
     // Key is parquet column id used for reading, value is the column meta.
     pub virtual_column_metas: BTreeMap<ColumnId, VirtualColumnMeta>,
     // Key is (source column id, shared data type), value is the base column id for shared map data.
@@ -69,8 +73,12 @@ pub enum VirtualColumnReadPlan {
     /// The requested path is known to be absent from this virtual column file.
     /// Materialize it as NULL without reading the source column.
     Missing,
-    /// Directly read the materialized virtual column by name.
+    /// Directly read a sidecar column whose read schema is keyed by its Parquet
+    /// physical column name.
     Direct { name: String },
+    /// Directly read a column described by BlockMeta and keyed by its
+    /// segment-local virtual column id.
+    BlockMetaDirect { column_id: ColumnId },
     /// Read from a parent plan (usually a variant column) and extract by keypath suffix.
     FromParent {
         parent: Box<VirtualColumnReadPlan>,

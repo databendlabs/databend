@@ -67,6 +67,7 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::ClusterType;
@@ -291,6 +292,7 @@ fn test_generate_virtual_column_statistics_in_memory_size() -> anyhow::Result<()
                 len: 100,
                 num_values: 10,
                 data_type: data_type_code,
+                extended_physical_type: None,
                 column_stat: Some(col_stats),
             };
             Some((idx, virtual_col_meta))
@@ -660,7 +662,9 @@ async fn test_accumulator() -> anyhow::Result<()> {
         let (block_meta, _index_meta, _) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
-        stats_acc.add_block(block_meta).unwrap();
+        stats_acc
+            .add_block(block_meta, VirtualBlockInput::None)
+            .unwrap();
     }
 
     assert_eq!(10, stats_acc.blocks_metas.len());
