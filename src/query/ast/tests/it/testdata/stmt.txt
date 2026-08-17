@@ -2844,6 +2844,7 @@ CreateTable(
         uri_location: None,
         cluster_by: Some(
             ClusterOption {
+                cluster_type: Linear,
                 cluster_exprs: [
                     ColumnRef {
                         span: Some(
@@ -16915,6 +16916,7 @@ AlterTable(
         },
         action: AlterTableClusterKey {
             cluster_by: ClusterOption {
+                cluster_type: Linear,
                 cluster_exprs: [
                     ColumnRef {
                         span: Some(
@@ -28749,6 +28751,7 @@ CreateDynamicTable(
         ),
         cluster_by: Some(
             ClusterOption {
+                cluster_type: Linear,
                 cluster_exprs: [
                     ColumnRef {
                         span: Some(
@@ -28949,6 +28952,7 @@ CreateDynamicTable(
         ),
         cluster_by: Some(
             ClusterOption {
+                cluster_type: Linear,
                 cluster_exprs: [
                     ColumnRef {
                         span: Some(
@@ -29194,6 +29198,7 @@ CreateDynamicTable(
         ),
         cluster_by: Some(
             ClusterOption {
+                cluster_type: Linear,
                 cluster_exprs: [
                     ColumnRef {
                         span: Some(

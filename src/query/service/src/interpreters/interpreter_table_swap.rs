@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::SwapTableReq;
@@ -60,6 +61,8 @@ impl Interpreter for SwapTableInterpreter {
         if origin_table.is_temp() || target_table.is_temp() {
             return Err(ErrorCode::AlterTableError("Can not swap temp table"));
         }
+        origin_table.check_mutable()?;
+        target_table.check_mutable()?;
         let _resp = catalog
             .swap_table(SwapTableReq {
                 if_exists: self.plan.if_exists,

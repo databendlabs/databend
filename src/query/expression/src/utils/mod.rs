@@ -21,6 +21,7 @@ pub mod block_thresholds;
 mod column_from;
 pub mod display;
 pub mod filter_helper;
+pub(crate) mod json_path_transform;
 pub mod serialize;
 pub mod udf_client;
 pub mod variant_transform;

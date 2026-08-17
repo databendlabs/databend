@@ -69,13 +69,12 @@ impl FuseTable {
 
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(self, Some(compact_options.base_snapshot.clone()))?;
-
         let mut segment_compactor = SegmentCompactMutator::try_create(
             ctx.clone(),
             compact_options,
             self.meta_location_generator().clone(),
             self.operator.clone(),
-            self.cluster_key_id(),
+            self.cluster_key_info(),
             table_meta_timestamps,
         )?;
         segment_compactor.partition_key_count = self.partition_key_count();
@@ -134,7 +133,7 @@ impl FuseTable {
                 self,
                 ctx.clone(),
                 None,
-                vec![],
+                Default::default(),
                 snapshot_gen.clone(),
                 input,
                 None,
@@ -166,7 +165,7 @@ impl FuseTable {
             thresholds,
             compact_options,
             self.operator.clone(),
-            self.cluster_key_id(),
+            self.cluster_key_info(),
         );
         mutator.partition_key_count = self.partition_key_count();
 

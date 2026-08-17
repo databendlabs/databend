@@ -19,6 +19,8 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
@@ -29,6 +31,7 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
@@ -64,6 +67,7 @@ pub enum TxnState {
 
 #[derive(Debug, Clone, Default)]
 pub struct TxnBuffer {
+    tenant: Option<Tenant>,
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
     base_snapshot_location: HashMap<u64, Option<String>>,
@@ -103,7 +107,25 @@ impl TxnBuffer {
         std::mem::take(self);
     }
 
-    fn update_multi_table_meta(&mut self, mut req: UpdateMultiTableMetaReq) {
+    fn update_multi_table_meta(
+        &mut self,
+        tenant: &Tenant,
+        mut req: UpdateMultiTableMetaReq,
+    ) -> Result<()> {
+        // Bind the transaction to the first non-conflicting tenant that updates meta.
+        // Later updates must stay on the same tenant; commit uses this bound value.
+        match &self.tenant {
+            None => self.tenant = Some(tenant.clone()),
+            Some(txn_tenant) if txn_tenant == tenant => {}
+            Some(txn_tenant) => {
+                return Err(ErrorCode::InvalidOperation(format!(
+                    "Cannot update metadata for tenant '{}' in a transaction bound to tenant '{}'",
+                    tenant.tenant_name(),
+                    txn_tenant.tenant_name()
+                )));
+            }
+        }
+
         for (req, table_info) in req.update_table_metas {
             let table_id = req.table_id;
             self.table_desc_to_id
@@ -140,6 +162,8 @@ impl TxnBuffer {
                 copied_files: req.copied_files.clone(),
             });
         }
+
+        Ok(())
     }
 
     fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
@@ -213,8 +237,16 @@ impl TxnManager {
         self.state.clone()
     }
 
-    pub fn update_multi_table_meta(&mut self, req: UpdateMultiTableMetaReq) {
-        self.txn_buffer.update_multi_table_meta(req);
+    pub fn update_multi_table_meta(
+        &mut self,
+        tenant: &Tenant,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<()> {
+        self.txn_buffer.update_multi_table_meta(tenant, req)
+    }
+
+    pub fn tenant(&self) -> Option<Tenant> {
+        self.txn_buffer.tenant.clone()
     }
 
     pub fn update_table_options(

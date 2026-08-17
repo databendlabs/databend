@@ -154,6 +154,13 @@ select virtual_block_size, row_count, column_name, column_type, column_id, block
 839 3 val['b'] UInt64 NULL 1 44 40
 839 3 val['c'] String NULL 2 84 40
 
+query ITTI
+select source_column_id, source_column_name, storage_kind, num_values from fuse_virtual_column('test_virtual_column', 't2')
+----
+1 val direct 3
+1 val direct 3
+1 val direct 3
+
 query IIIIII
 select block_count, row_count, bytes_uncompressed, bytes_compressed, index_size, virtual_block_count from fuse_segment('test_virtual_column', 't2')
 ----

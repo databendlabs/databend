@@ -21,6 +21,7 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 
 use crate::meta::ColumnCountMinSketch;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
@@ -32,6 +33,8 @@ pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION: &str =
     "materialized_view_source_snapshot_location";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID: &str = "materialized_view_source_table_id";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ: &str = "materialized_view_source_table_seq";
+pub const OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS: &str =
+    "materialized_view_aggregate_compaction_delta_blocks";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
 pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
@@ -82,9 +85,11 @@ pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
 /// PARTITION BY and is not a user-settable table option.
 pub const OPT_KEY_PARTITION_BY: &str = "partition_by";
 pub const OPT_KEY_WRITE_DISTRIBUTION_MODE: &str = "write_distribution_mode";
+pub const OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
 pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
+pub const HILBERT_CLUSTER_DIMENSIONS: usize = 2;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum WriteDistributionMode {
@@ -106,6 +111,16 @@ impl FromStr for WriteDistributionMode {
     }
 }
 
+pub const FUSE_ENGINE: &str = "FUSE";
+
+pub fn is_fuse_engine(engine: &str) -> bool {
+    engine.eq_ignore_ascii_case(FUSE_ENGINE)
+}
+
+pub fn is_fuse_backed_engine(engine: &str) -> bool {
+    is_fuse_engine(engine) || is_materialized_view_engine(engine)
+}
+
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specify this option keys in DDL
 /// - Should not be shown in `show create table` statement
@@ -119,6 +134,7 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
     r
 });
 
@@ -136,6 +152,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
     r
 });
 
@@ -199,6 +216,13 @@ impl Display for ClusterType {
     }
 }
 
+pub fn cluster_type_from_options(options: &BTreeMap<String, String>) -> ClusterType {
+    match options.get(OPT_KEY_CLUSTER_TYPE) {
+        Some(value) if value.eq_ignore_ascii_case(HILBERT_CLUSTER_TYPE) => ClusterType::Hilbert,
+        _ => ClusterType::Linear,
+    }
+}
+
 impl std::str::FromStr for ClusterType {
     type Err = databend_common_exception::ErrorCode;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -234,6 +258,12 @@ mod tests {
         ));
         assert!(is_internal_opt_key(
             OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ
+        ));
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS
         ));
     }
 

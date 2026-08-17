@@ -49,6 +49,9 @@ use tokio::sync::Barrier;
 
 use super::PhysicalPlanCast;
 use super::runtime_filter::PhysicalRuntimeFilters;
+use super::runtime_filter::RuntimeFilterProbeKey;
+use super::runtime_filter::canonical_equivalence_connector;
+use super::runtime_filter::resolve_runtime_filter_probe_expr;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -77,7 +80,7 @@ type JoinConditionsResult = (
     Vec<RemoteExpr>,
     Vec<RemoteExpr>,
     Vec<bool>,
-    Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>,
+    Vec<Option<RuntimeFilterProbeKey<RemoteExpr<String>>>>,
     Vec<((usize, bool), usize)>,
     Vec<Option<IndexType>>,
 );
@@ -88,14 +91,7 @@ type ProjectionsResult = (
     Option<(usize, HashMap<Symbol, usize>)>,
 );
 
-/// Type alias for runtime filter expression result
-/// Contains: (Expr, scan_id, table_index, column_idx)
-type RuntimeFilterExpr = Option<(
-    databend_common_expression::Expr<String>,
-    usize,
-    usize,
-    Symbol,
-)>;
+type RuntimeFilterExpr = Option<RuntimeFilterProbeKey<databend_common_expression::Expr<String>>>;
 
 type MergedFieldsResult = (
     Vec<DataField>,
@@ -713,66 +709,24 @@ impl PhysicalPlanBuilder {
     /// * `left_condition` - The left side condition
     ///
     /// # Returns
-    /// * `Result<Option<(databend_common_expression::Expr<String>, usize, usize)>>` - Runtime filter expression, scan ID, and table index
+    /// The typed probe key and its scan/column metadata, if the expression
+    /// references exactly one physical base column.
     fn prepare_runtime_filter_expr(
         &self,
         left_condition: &ScalarExpr,
     ) -> Result<RuntimeFilterExpr> {
-        // Runtime filter only supports columns in base tables
-        if left_condition.used_columns().iter().all(|idx| {
-            matches!(
-                self.metadata.read().column(*idx),
-                ColumnEntry::BaseTableColumn(_)
-            )
-        }) {
-            if let Some(column_idx) = left_condition.used_columns().iter().next() {
-                // Safe to unwrap because we have checked the column is a base table column
-                let table_index = self
-                    .metadata
-                    .read()
-                    .column(*column_idx)
-                    .table_index()
-                    .unwrap();
-                let scan_id = self
-                    .metadata
-                    .read()
-                    .base_column_scan_id(*column_idx)
-                    .unwrap();
-
-                let metadata = self.metadata.read();
-                return Ok(Some((
-                    left_condition
-                        .as_raw_expr()
-                        .type_check(&*metadata)?
-                        .project_column_ref(|col| {
-                            // Use the physical column name from the table schema
-                            // (looked up by column_id) rather than the binding's
-                            // context name, which can be an alias that collides
-                            // with another column in the same table.
-                            let entry = metadata.column(col.index);
-                            if let ColumnEntry::BaseTableColumn(base_col) = entry {
-                                if base_col.path_indices.is_none() {
-                                    let table = metadata.table(base_col.table_index);
-                                    let schema = table.table().schema_with_stream();
-                                    if let Ok(field) = schema.field_of_column_id(base_col.column_id)
-                                    {
-                                        return Ok(field.name().clone());
-                                    }
-                                }
-                                // For nested/path columns, or when schema lookup
-                                // fails, use the stable metadata-level column name.
-                                return Ok(base_col.column_name.clone());
-                            }
-                            Ok(col.column_name.clone())
-                        })?,
-                    scan_id,
-                    table_index,
-                    *column_idx,
-                )));
-            }
-        }
-
-        Ok(None)
+        let Some(probe) = resolve_runtime_filter_probe_expr(&self.metadata, left_condition)? else {
+            return Ok(None);
+        };
+        let is_connector =
+            canonical_equivalence_connector(probe.probe_key.as_remote_expr()).is_ok();
+        Ok(Some(RuntimeFilterProbeKey {
+            probe_key: probe.probe_key,
+            scan_id: probe.scan_id,
+            column_idx: probe.column_idx,
+            is_connector,
+            is_null_equal: false,
+        }))
     }
 
     /// Handles inner join column optimization
@@ -925,20 +879,22 @@ impl PhysicalPlanBuilder {
 
             // Process runtime filter expressions
             let left_expr_for_runtime_filter = left_expr_for_runtime_filter
-                .map(|(expr, scan_id, table_index, column_idx)| {
-                    check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS).map(
-                        |casted_expr| {
-                            (
-                                casted_expr,
-                                scan_id,
-                                table_index,
-                                column_idx,
-                                condition.is_null_equal,
-                            )
-                        },
-                    )
+                .map(|probe| {
+                    probe.try_map_probe_key(|probe_key| {
+                        check_cast(
+                            probe_key.span(),
+                            false,
+                            probe_key,
+                            &common_ty,
+                            &BUILTIN_FUNCTIONS,
+                        )
+                    })
                 })
                 .transpose()?;
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(|mut probe| {
+                probe.is_null_equal = condition.is_null_equal;
+                probe
+            });
 
             // Fold constants
             let (left_expr, _) =
@@ -946,33 +902,20 @@ impl PhysicalPlanBuilder {
             let (right_expr, _) =
                 ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(
-                |(expr, scan_id, table_index, column_idx, is_null_equal)| {
-                    (
-                        ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
-                        scan_id,
-                        table_index,
-                        column_idx,
-                        is_null_equal,
-                    )
-                },
-            );
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(|probe| {
+                probe.map_probe_key(|probe_key| {
+                    ConstantFolder::fold(&probe_key, &self.func_ctx, &BUILTIN_FUNCTIONS).0
+                })
+            });
 
             // Add to result collections
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
             is_null_equal.push(condition.is_null_equal);
-            left_join_conditions_rt.push(left_expr_for_runtime_filter.map(
-                |(expr, scan_id, table_index, column_idx, is_null_equal)| {
-                    (
-                        expr.as_remote_expr(),
-                        scan_id,
-                        table_index,
-                        column_idx,
-                        is_null_equal,
-                    )
-                },
-            ));
+            left_join_conditions_rt.push(
+                left_expr_for_runtime_filter
+                    .map(|probe| probe.map_probe_key(|probe_key| probe_key.as_remote_expr())),
+            );
             build_table_indexes.push(build_table_index);
         }
 

@@ -141,8 +141,13 @@ impl Binder {
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
-        // Resolve table with catalog
-        let table_meta = {
+        // Resolve table with catalog, allowing internal rewrites to bind an exact table instance.
+        let table_meta = if let Some(table) =
+            self.pre_resolved_tables
+                .get(&(catalog.clone(), database.clone(), table_name.clone()))
+        {
+            table.clone()
+        } else {
             let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
                 format!("{}${}", &table_name, cte_suffix_name)
             } else {

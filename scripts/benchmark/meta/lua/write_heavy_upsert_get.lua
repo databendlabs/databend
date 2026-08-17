@@ -1,4 +1,9 @@
-local GRPC_ADDR = "127.0.0.1:9191"
+-- Concurrent load benchmark for databend-meta: many writers and a few readers
+-- work the kv API at the same time, and the run reports live and final rates.
+
+-- The runner injects GRPC_ADDR with `metactl lua --script`; the fallback keeps
+-- this script runnable on its own against a default local meta service.
+local GRPC_ADDR = GRPC_ADDR or "127.0.0.1:9191"
 local UPSERT_WORKERS = 64
 local GET_WORKERS = 4
 local OPERATIONS_PER_WORKER = 10000
@@ -15,18 +20,26 @@ local stats = {
     end_time = nil
 }
 
+-- Name a key purely from its writer and operation number, so a reader can
+-- reconstruct a key another worker wrote without any coordination.
 local function generate_key(worker_id, op_id)
     return KEY_PREFIX .. worker_id .. "_" .. op_id
 end
 
+-- Build a value of a fixed size, so payload size stays constant across
+-- operations and does not skew the measured rates.
 local function generate_value(worker_id, op_id)
     return VALUE_PREFIX .. worker_id .. "_" .. op_id .. "_data_" .. string.rep("x", 32)
 end
 
+-- Bump one of the counters that every worker reports into and that the
+-- progress and result output read from.
 local function atomic_inc(field)
     stats[field] = stats[field] + 1
 end
 
+-- One writer: fill this worker's own slice of the keyspace and tally how many
+-- writes succeeded and how many failed.
 local function upsert_worker(worker_id)
     local client = metactl.new_grpc_client(GRPC_ADDR)
 
@@ -47,6 +60,8 @@ local function upsert_worker(worker_id)
     print("Upsert worker " .. worker_id .. " completed")
 end
 
+-- One reader: read keys that *other* workers are writing, so reads contend
+-- with live writes instead of running against a quiet keyspace.
 local function get_worker(worker_id)
     local client = metactl.new_grpc_client(GRPC_ADDR)
 
@@ -109,6 +124,8 @@ local function print_results()
     print("========================")
 end
 
+-- Keep printing the rate achieved over the most recent interval, so a long run
+-- shows progress instead of going silent. Runs until the benchmark ends.
 local function progress_reporter()
     local last_upsert_ops = 0
     local last_get_ops = 0
@@ -132,6 +149,8 @@ local function progress_reporter()
     end
 end
 
+-- Drive one full run: start every worker, wait for all of them to finish, and
+-- report what the run achieved.
 local function run_benchmark()
     print_config()
 

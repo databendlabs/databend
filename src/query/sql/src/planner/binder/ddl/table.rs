@@ -23,6 +23,7 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
 use databend_common_ast::ast::ClusterOption;
+use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CompactTarget;
@@ -100,6 +101,8 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
+use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
@@ -156,6 +159,7 @@ use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTableTagPlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::MaintenanceTarget;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
@@ -620,6 +624,14 @@ impl Binder {
 
         // FUSE tables can inherit database connection defaults for external storage
         let engine = engine.unwrap_or(catalog.default_table_engine());
+        // CREATE TABLE ... ENGINE = MATERIALIZED_VIEW is still parseable via Engine::MaterializedView,
+        // but it would bypass CREATE MATERIALIZED VIEW (definition, source binding, generation).
+        // Reject here so MV can only be published through bind_create_materialized_view.
+        if engine == Engine::MaterializedView {
+            return Err(ErrorCode::TableEngineNotSupported(
+                "MATERIALIZED_VIEW engine can only be created with CREATE MATERIALIZED VIEW",
+            ));
+        }
         let stage_resolver = StageResolver::from_table_context(
             self.ctx.clone(),
             UserApiProvider::instance(),
@@ -1031,8 +1043,12 @@ impl Binder {
                 )
                 .await?;
             if !keys.is_empty() {
+                options.insert(
+                    OPT_KEY_CLUSTER_TYPE.to_owned(),
+                    cluster_opt.cluster_type.to_string().to_lowercase(),
+                );
                 options
-                    .entry("aggressive_recluster".to_owned())
+                    .entry(OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
                     .or_insert_with(|| "1".to_owned());
                 cluster_key = Some(format!("({})", keys.join(", ")));
             }
@@ -1484,8 +1500,10 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        target: MaintenanceTarget::Table,
                         branch,
                         cluster_keys,
+                        cluster_type: cluster_by.cluster_type.to_string().parse()?,
                     },
                 )))
             }
@@ -1554,6 +1572,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                     branch,
                 },
             ))),
@@ -1565,6 +1584,7 @@ impl Binder {
                 catalog,
                 database,
                 table,
+                target: MaintenanceTarget::Table,
                 limit: limit.map(|v| v as usize),
                 selection: selection.clone(),
                 is_final: *is_final,
@@ -2124,17 +2144,16 @@ impl Binder {
             if let Some(len) = column.stats_truncate_len {
                 let inner_type = schema_data_type.remove_nullable();
                 if inner_type != databend_common_expression::TableDataType::String {
-                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!(
-                            "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
-                            name, inner_type
-                        ),
-                    ));
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
+                        name, inner_type
+                    )));
                 }
                 if len == 0 || len > 4096 {
-                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!("STATS_TRUNCATE_LEN must be in range [1, 4096], got {}", len),
-                    ));
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "STATS_TRUNCATE_LEN must be in range [1, 4096], got {}",
+                        len
+                    )));
                 }
             }
             fields_stats_truncate_len.push(column.stats_truncate_len);
@@ -2478,6 +2497,14 @@ impl Binder {
         table_indexes: Option<&BTreeMap<String, TableIndex>>,
         allow_vector: bool,
     ) -> Result<Vec<String>> {
+        if cluster_opt.cluster_type == AstClusterType::Hilbert
+            && cluster_opt.cluster_exprs.len() != 2
+        {
+            return Err(ErrorCode::InvalidClusterKeys(
+                "Hilbert clustering requires exactly two dimensions",
+            ));
+        }
+        let allow_vector = allow_vector && cluster_opt.cluster_type == AstClusterType::Linear;
         self.analyze_table_keys(
             &cluster_opt.cluster_exprs,
             schema,

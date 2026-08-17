@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod edge_reader;
+mod neighbors;
 mod resolver;
 mod traversal;
 
@@ -49,6 +50,7 @@ use databend_common_pipeline::core::processor::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_meta_client::types::MetaId;
+pub use neighbors::GetLineageNeighborsTable;
 
 use crate::sessions::TableContext;
 
@@ -146,14 +148,19 @@ impl GetLineageArgs {
 
 #[derive(Clone, Debug)]
 struct LineageResultRow {
-    distance: i32,
-    source_object_domain: Option<String>,
+    source_object_catalog: Option<String>,
+    source_object_database: Option<String>,
     source_object_name: Option<String>,
+    source_object_domain: Option<String>,
     source_column_name: Option<String>,
-    target_object_domain: Option<String>,
+    source_status: String,
+    target_object_catalog: Option<String>,
+    target_object_database: Option<String>,
     target_object_name: Option<String>,
+    target_object_domain: Option<String>,
     target_column_name: Option<String>,
     target_status: String,
+    distance: i32,
     process: Option<String>,
 }
 
@@ -192,17 +199,22 @@ impl GetLineageTable {
     fn schema() -> Arc<TableSchema> {
         let nullable_string = || TableDataType::Nullable(Box::new(TableDataType::String));
         TableSchemaRefExt::create(vec![
+            TableField::new("source_object_catalog", nullable_string()),
+            TableField::new("source_object_database", nullable_string()),
+            TableField::new("source_object_name", nullable_string()),
+            TableField::new("source_object_domain", nullable_string()),
+            TableField::new("source_column_name", nullable_string()),
+            TableField::new("source_status", TableDataType::String),
+            TableField::new("target_object_catalog", nullable_string()),
+            TableField::new("target_object_database", nullable_string()),
+            TableField::new("target_object_name", nullable_string()),
+            TableField::new("target_object_domain", nullable_string()),
+            TableField::new("target_column_name", nullable_string()),
+            TableField::new("target_status", TableDataType::String),
             TableField::new(
                 "distance",
                 TableDataType::Number(databend_common_expression::types::NumberDataType::Int32),
             ),
-            TableField::new("source_object_domain", nullable_string()),
-            TableField::new("source_object_name", nullable_string()),
-            TableField::new("source_column_name", nullable_string()),
-            TableField::new("target_object_domain", nullable_string()),
-            TableField::new("target_object_name", nullable_string()),
-            TableField::new("target_column_name", nullable_string()),
-            TableField::new("target_status", TableDataType::String),
             TableField::new("process", nullable_string()),
         ])
     }
@@ -291,37 +303,52 @@ impl GetLineageSource {
             return DataBlock::empty_with_schema(&self.schema);
         }
 
-        let mut distances = Vec::with_capacity(rows.len());
-        let mut source_domains = Vec::with_capacity(rows.len());
+        let mut source_catalogs = Vec::with_capacity(rows.len());
+        let mut source_databases = Vec::with_capacity(rows.len());
         let mut source_names = Vec::with_capacity(rows.len());
+        let mut source_domains = Vec::with_capacity(rows.len());
         let mut source_columns = Vec::with_capacity(rows.len());
-        let mut target_domains = Vec::with_capacity(rows.len());
+        let mut source_statuses = Vec::with_capacity(rows.len());
+        let mut target_catalogs = Vec::with_capacity(rows.len());
+        let mut target_databases = Vec::with_capacity(rows.len());
         let mut target_names = Vec::with_capacity(rows.len());
+        let mut target_domains = Vec::with_capacity(rows.len());
         let mut target_columns = Vec::with_capacity(rows.len());
         let mut target_statuses = Vec::with_capacity(rows.len());
+        let mut distances = Vec::with_capacity(rows.len());
         let mut processes = Vec::with_capacity(rows.len());
 
         for row in rows {
-            distances.push(row.distance);
-            source_domains.push(row.source_object_domain);
+            source_catalogs.push(row.source_object_catalog);
+            source_databases.push(row.source_object_database);
             source_names.push(row.source_object_name);
+            source_domains.push(row.source_object_domain);
             source_columns.push(row.source_column_name);
-            target_domains.push(row.target_object_domain);
+            source_statuses.push(row.source_status);
+            target_catalogs.push(row.target_object_catalog);
+            target_databases.push(row.target_object_database);
             target_names.push(row.target_object_name);
+            target_domains.push(row.target_object_domain);
             target_columns.push(row.target_column_name);
             target_statuses.push(row.target_status);
+            distances.push(row.distance);
             processes.push(row.process);
         }
 
         DataBlock::new_from_columns(vec![
-            Int32Type::from_data(distances),
-            StringType::from_opt_data(source_domains),
+            StringType::from_opt_data(source_catalogs),
+            StringType::from_opt_data(source_databases),
             StringType::from_opt_data(source_names),
+            StringType::from_opt_data(source_domains),
             StringType::from_opt_data(source_columns),
-            StringType::from_opt_data(target_domains),
+            StringType::from_data(source_statuses),
+            StringType::from_opt_data(target_catalogs),
+            StringType::from_opt_data(target_databases),
             StringType::from_opt_data(target_names),
+            StringType::from_opt_data(target_domains),
             StringType::from_opt_data(target_columns),
             StringType::from_data(target_statuses),
+            Int32Type::from_data(distances),
             StringType::from_opt_data(processes),
         ])
     }

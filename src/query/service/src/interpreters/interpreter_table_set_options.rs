@@ -55,6 +55,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 use databend_storages_common_table_meta::table::WriteDistributionMode;
+use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use log::error;
 
 use crate::interpreters::Interpreter;
@@ -164,6 +165,15 @@ impl Interpreter for SetOptionsInterpreter {
                 "can't change {} for alter table statement",
                 OPT_KEY_PARTITION_BY
             )));
+        }
+
+        for key in self.plan.set_options.keys() {
+            if is_reserved_opt_key(key) {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "table option '{}' is reserved and cannot be modified",
+                    key
+                )));
+            }
         }
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
@@ -309,10 +319,11 @@ async fn set_segment_format(
                         segment_builder.add_block(block.as_ref().clone())?;
                     }
                     let additional_stats_meta = segment.summary.additional_stats_meta;
+                    let cluster_key_info = fuse_table.cluster_key_info();
                     let segment = segment_builder
                         .build(
                             fuse_table.get_block_thresholds(),
-                            fuse_table.cluster_key_id(),
+                            cluster_key_info.as_ref(),
                             additional_stats_meta,
                         )?
                         .serialize()?;
@@ -331,7 +342,7 @@ async fn set_segment_format(
         table.schema().as_ref().clone(),
         table_snapshot.summary.clone(),
         new_segment_locations,
-        fuse_table.cluster_key_meta(),
+        fuse_table.cluster_key_info(),
         table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;

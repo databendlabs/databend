@@ -41,8 +41,6 @@
 //! entries concurrently; table metadata commit OCC still rejects conflicting
 //! commits.
 
-use std::io;
-
 use chrono::Utc;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
@@ -61,7 +59,6 @@ use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::kvapi::StructKey;
-use databend_meta_client::types::InvalidReply;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::TxnOp;
 use databend_meta_client::types::TxnRequest;
@@ -69,6 +66,7 @@ use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
 
+use crate::error_util::invalid_reply;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::encode_pb;
@@ -132,13 +130,11 @@ where
         let txn_req = TxnRequest::new(vec![], vec![op]);
         let (success, responses) = send_txn(self, txn_req).await?;
         if !success {
-            return Err(invalid_reply(
-                "PutSequential transaction unexpectedly failed",
-            ));
+            return Err(invalid_reply("PutSequential transaction unexpectedly failed").into());
         }
 
         let Some(put) = responses.first().and_then(|resp| resp.try_as_put()) else {
-            return Err(invalid_reply("PutSequential did not return a put response"));
+            return Err(invalid_reply("PutSequential did not return a put response").into());
         };
 
         let key = TableLockIdentV2::from_str_key(&put.key).map_err(|e| {
@@ -220,12 +216,6 @@ where
         }
         Ok(reply)
     }
-}
-
-fn invalid_reply(msg: impl ToString) -> KVAppError {
-    let msg = msg.to_string();
-    let source = io::Error::new(io::ErrorKind::InvalidData, msg.clone());
-    InvalidReply::new(msg, &source).into()
 }
 
 #[async_trait::async_trait]

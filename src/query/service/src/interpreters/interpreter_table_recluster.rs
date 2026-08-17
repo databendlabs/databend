@@ -22,7 +22,6 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
@@ -47,12 +46,14 @@ use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 use log::debug;
 use log::error;
 use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
@@ -271,13 +272,18 @@ impl ReclusterTableInterpreter {
             .await?;
 
         let tbl = self.ctx.get_table(catalog, database, table).await?;
-        // check mutability
-        tbl.check_mutable()?;
+        check_maintenance_target(tbl.as_ref(), &self.plan.target)?;
         if tbl.cluster_key_meta().is_none() {
             return Err(ErrorCode::UnclusteredTable(format!(
                 "Unclustered table '{}.{}'",
                 database, table,
             )));
+        }
+
+        if FuseTable::try_from_table(tbl.as_ref())?.cluster_type() == Some(ClusterType::Hilbert) {
+            return Err(ErrorCode::Unimplemented(
+                "Hilbert reclustering is not supported yet",
+            ));
         }
 
         self.build_push_downs(push_downs, &tbl)?;

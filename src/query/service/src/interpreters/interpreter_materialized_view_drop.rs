@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_sql::plans::DropMaterializedViewPlan;
@@ -26,6 +28,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextTableAccess;
 
 pub struct DropMaterializedViewInterpreter {
@@ -51,6 +54,9 @@ impl Interpreter for DropMaterializedViewInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
+
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();
         let view_name = self.plan.view_name.clone();

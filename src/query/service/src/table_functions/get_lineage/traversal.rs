@@ -59,6 +59,7 @@ struct TraversedColumnEdge {
     edge: RawLineageEdge,
     source: ResolvedObject,
     source_column: String,
+    source_masked: bool,
     target: ResolvedObject,
     target_column: String,
     target_masked: bool,
@@ -155,16 +156,27 @@ async fn traverse_objects(
 
     let mut rows = results
         .into_values()
-        .map(|result| LineageResultRow {
-            distance: i32::from(result.distance),
-            source_object_domain: Some(result.source.object_type.as_str().to_string()),
-            source_object_name: Some(result.source.qualified_name()),
-            source_column_name: None,
-            target_object_domain: Some(result.target.object_type.as_str().to_string()),
-            target_object_name: Some(result.target.qualified_name()),
-            target_column_name: None,
-            target_status: "ACTIVE".to_string(),
-            process: Some(process_json(&result.edge)),
+        .map(|result| {
+            let (source_object_catalog, source_object_database, source_object_name) =
+                result.source.output_address();
+            let (target_object_catalog, target_object_database, target_object_name) =
+                result.target.output_address();
+            LineageResultRow {
+                source_object_catalog,
+                source_object_database,
+                source_object_name,
+                source_object_domain: Some(result.source.object_type.as_str().to_string()),
+                source_column_name: None,
+                source_status: "ACTIVE".to_string(),
+                target_object_catalog,
+                target_object_database,
+                target_object_name,
+                target_object_domain: Some(result.target.object_type.as_str().to_string()),
+                target_column_name: None,
+                target_status: "ACTIVE".to_string(),
+                distance: i32::from(result.distance),
+                process: Some(process_json(&result.edge)),
+            }
         })
         .collect::<Vec<_>>();
     sort_rows(&mut rows);
@@ -222,23 +234,39 @@ async fn traverse_columns(
                 continue;
             }
 
-            let (current_captured, current_object, next_captured, next_object, column_map) =
-                match args.direction {
-                    QueryDirection::Upstream => (
-                        &edge.target,
-                        &target,
-                        &edge.source,
-                        &source,
-                        &edge.target_to_source_columns,
-                    ),
-                    QueryDirection::Downstream => (
-                        &edge.source,
-                        &source,
-                        &edge.target,
-                        &target,
-                        &edge.source_to_target_columns,
-                    ),
-                };
+            let (
+                current_captured,
+                current_object,
+                current_column_address_kind,
+                next_captured,
+                next_object,
+                next_column_address_kind,
+                column_map,
+            ) = match args.direction {
+                QueryDirection::Upstream => (
+                    &edge.target,
+                    &target,
+                    edge.target_column_address_kind,
+                    &edge.source,
+                    &source,
+                    edge.source_column_address_kind,
+                    &edge.target_to_source_columns,
+                ),
+                QueryDirection::Downstream => (
+                    &edge.source,
+                    &source,
+                    edge.source_column_address_kind,
+                    &edge.target,
+                    &target,
+                    edge.target_column_address_kind,
+                    &edge.source_to_target_columns,
+                ),
+            };
+            let (Some(current_column_address_kind), Some(next_column_address_kind)) =
+                (current_column_address_kind, next_column_address_kind)
+            else {
+                continue;
+            };
 
             for current_column in frontier.iter().filter(|column| {
                 column
@@ -246,7 +274,7 @@ async fn traverse_columns(
                     .lookup_keys
                     .contains(&current_captured.lineage_key)
             }) {
-                let current_ref = match column_address_kind(current_captured) {
+                let current_ref = match current_column_address_kind {
                     AddressKind::Id => &current_column.column_id,
                     AddressKind::Name => &current_column.column_name,
                 };
@@ -254,9 +282,12 @@ async fn traverse_columns(
                     continue;
                 };
                 for mapped_ref in mapped_refs {
-                    let Some((next_id, next_name)) =
-                        resolve_column_ref(next_captured, next_object, mapped_ref)
-                    else {
+                    let Some((next_id, next_name)) = resolve_column_ref(
+                        next_captured,
+                        next_object,
+                        next_column_address_kind,
+                        mapped_ref,
+                    ) else {
                         continue;
                     };
                     let (source_column, target_column) = match args.direction {
@@ -267,11 +298,15 @@ async fn traverse_columns(
                             (current_column.column_name.clone(), next_name.clone())
                         }
                     };
-                    let target_masked = match args.direction {
-                        QueryDirection::Upstream => {
-                            target.is_column_masked(&current_column.column_id)
-                        }
-                        QueryDirection::Downstream => target.is_column_masked(&next_id),
+                    let (source_masked, target_masked) = match args.direction {
+                        QueryDirection::Upstream => (
+                            source.is_column_masked(&next_id),
+                            target.is_column_masked(&current_column.column_id),
+                        ),
+                        QueryDirection::Downstream => (
+                            source.is_column_masked(&current_column.column_id),
+                            target.is_column_masked(&next_id),
+                        ),
                     };
                     let key = (
                         source.object_key.clone(),
@@ -286,6 +321,7 @@ async fn traverse_columns(
                         source_column,
                         target: target.clone(),
                         target_column,
+                        source_masked,
                         target_masked,
                     };
                     match level_edges.get_mut(&key) {
@@ -344,33 +380,37 @@ async fn traverse_columns(
 
     let mut rows = results
         .into_values()
-        .map(|result| LineageResultRow {
-            distance: i32::from(result.distance),
-            source_object_domain: Some(result.source.object_type.as_str().to_string()),
-            source_object_name: Some(result.source.qualified_name()),
-            source_column_name: Some(result.source_column),
-            target_object_domain: Some(result.target.object_type.as_str().to_string()),
-            target_object_name: Some(result.target.qualified_name()),
-            target_column_name: Some(result.target_column),
-            target_status: target_status(result.target_masked).to_string(),
-            process: Some(process_json(&result.edge)),
+        .map(|result| {
+            let (source_object_catalog, source_object_database, source_object_name) =
+                result.source.output_address();
+            let (target_object_catalog, target_object_database, target_object_name) =
+                result.target.output_address();
+            LineageResultRow {
+                source_object_catalog,
+                source_object_database,
+                source_object_name,
+                source_object_domain: Some(result.source.object_type.as_str().to_string()),
+                source_column_name: Some(result.source_column),
+                source_status: target_status(result.source_masked).to_string(),
+                target_object_catalog,
+                target_object_database,
+                target_object_name,
+                target_object_domain: Some(result.target.object_type.as_str().to_string()),
+                target_column_name: Some(result.target_column),
+                target_status: target_status(result.target_masked).to_string(),
+                distance: i32::from(result.distance),
+                process: Some(process_json(&result.edge)),
+            }
         })
         .collect::<Vec<_>>();
     sort_rows(&mut rows);
     Ok(rows)
 }
 
-fn column_address_kind(object: &CapturedObject) -> AddressKind {
-    if object.object_type == LineageObjectType::View {
-        AddressKind::Name
-    } else {
-        object.address_kind
-    }
-}
-
-fn resolve_column_ref(
+pub(super) fn resolve_column_ref(
     captured: &CapturedObject,
     object: &ResolvedObject,
+    address_kind: AddressKind,
     column_ref: &str,
 ) -> Option<(String, String)> {
     if !captured.is_default_catalog() {
@@ -379,13 +419,13 @@ fn resolve_column_ref(
         // reference as a display value until per-catalog column validation is available.
         return Some((column_ref.to_string(), column_ref.to_string()));
     }
-    match column_address_kind(captured) {
+    match address_kind {
         AddressKind::Id => object.column_by_id(column_ref),
         AddressKind::Name => object.column_by_name(column_ref),
     }
 }
 
-fn same_object(source: &ResolvedObject, target: &ResolvedObject) -> bool {
+pub(super) fn same_object(source: &ResolvedObject, target: &ResolvedObject) -> bool {
     match (source.id, target.id) {
         (Some(source_id), Some(target_id))
             if source.catalog_type.eq_ignore_ascii_case("DEFAULT")
@@ -420,9 +460,9 @@ fn column_frontier_key(column: &ColumnFrontier) -> (String, String) {
     )
 }
 
-fn process_json(edge: &RawLineageEdge) -> String {
+pub(super) fn process_json(edge: &RawLineageEdge) -> String {
     // Keep embedded JSON timestamps stable across session timezones and self-describing.
-    let event_time = edge.event_time.map(|timestamp| {
+    let updated_on = edge.updated_on.map(|timestamp| {
         strtime::format(
             "%Y-%m-%dT%H:%M:%S%.6fZ",
             &timestamp_from_micros(timestamp, &TimeZone::UTC),
@@ -431,15 +471,15 @@ fn process_json(edge: &RawLineageEdge) -> String {
         .to_string()
     });
     serde_json::json!({
-        "query_id": edge.query_id,
-        "query_kind": edge.query_kind,
-        "lineage_kind": edge.lineage_kind,
-        "event_time": event_time,
-        "query_text": edge.query_text,
+        "query_id": edge.query_info.query_id,
+        "updated_on": updated_on,
+        "user_name": edge.user_name,
         "query_parameterized_hash": edge.query_parameterized_hash,
-        "query_duration_ms": edge.query_duration_ms,
-        "written_rows": edge.written_rows,
-        "scan_rows": edge.scan_rows,
+        "lineage_kind": edge.lineage_kind,
+        "query_text": edge.query_info.query_text,
+        "query_duration_ms": edge.query_info.query_duration_ms,
+        "written_rows": edge.query_info.written_rows,
+        "scan_rows": edge.query_info.scan_rows,
     })
     .to_string()
 }
@@ -452,22 +492,30 @@ fn sort_rows(rows: &mut [LineageResultRow]) {
     rows.sort_by(|left, right| {
         (
             left.distance,
+            left.source_object_catalog.as_deref().unwrap_or_default(),
+            left.source_object_database.as_deref().unwrap_or_default(),
             left.source_object_name.as_deref().unwrap_or_default(),
             left.source_column_name.as_deref().unwrap_or_default(),
+            left.target_object_catalog.as_deref().unwrap_or_default(),
+            left.target_object_database.as_deref().unwrap_or_default(),
             left.target_object_name.as_deref().unwrap_or_default(),
             left.target_column_name.as_deref().unwrap_or_default(),
         )
             .cmp(&(
                 right.distance,
+                right.source_object_catalog.as_deref().unwrap_or_default(),
+                right.source_object_database.as_deref().unwrap_or_default(),
                 right.source_object_name.as_deref().unwrap_or_default(),
                 right.source_column_name.as_deref().unwrap_or_default(),
+                right.target_object_catalog.as_deref().unwrap_or_default(),
+                right.target_object_database.as_deref().unwrap_or_default(),
                 right.target_object_name.as_deref().unwrap_or_default(),
                 right.target_column_name.as_deref().unwrap_or_default(),
             ))
     });
 }
 
-fn split_column_name(input: &str) -> Result<(String, String)> {
+pub(super) fn split_column_name(input: &str) -> Result<(String, String)> {
     let input = input.trim();
     let Some(index) = last_unquoted_dot(input) else {
         return Err(ErrorCode::BadArguments(
@@ -484,7 +532,7 @@ fn split_column_name(input: &str) -> Result<(String, String)> {
     Ok((table.to_string(), column.to_string()))
 }
 
-fn normalize_column_name(ctx: &Arc<dyn TableContext>, value: &str) -> Result<String> {
+pub(super) fn normalize_column_name(ctx: &Arc<dyn TableContext>, value: &str) -> Result<String> {
     let settings = ctx.get_settings();
     let resolution = NameResolutionContext::try_from(settings.as_ref())?;
     let dialect = settings.get_sql_dialect().unwrap_or_default();
@@ -525,8 +573,7 @@ mod tests {
 
     fn test_edge(
         query_id: Option<&str>,
-        event_time: Option<i64>,
-        query_kind: Option<&str>,
+        updated_on: Option<i64>,
         lineage_kind: Option<&str>,
     ) -> RawLineageEdge {
         let endpoint = CapturedObject {
@@ -540,18 +587,19 @@ mod tests {
             id: Some(1),
         };
         RawLineageEdge {
-            query_id: query_id.map(str::to_string),
-            event_time,
-            query_kind: query_kind.map(str::to_string),
-            query_text: None,
+            updated_on,
+            user_name: None,
             query_parameterized_hash: None,
-            query_duration_ms: None,
-            written_rows: None,
-            scan_rows: None,
+            query_info: super::super::edge_reader::LineageQueryInfo {
+                query_id: query_id.map(str::to_string),
+                ..Default::default()
+            },
             lineage_kind: lineage_kind.map(str::to_string),
             column_lineage_hash: String::new(),
             source: endpoint.clone(),
             target: endpoint,
+            source_column_address_kind: None,
+            target_column_address_kind: None,
             source_to_target_columns: Default::default(),
             target_to_source_columns: Default::default(),
         }
@@ -559,23 +607,24 @@ mod tests {
 
     #[test]
     fn test_process_json() {
-        let mut edge = test_edge(Some("query-1"), Some(0), Some("Insert"), Some("DML"));
-        edge.query_text = Some("INSERT INTO dst SELECT 'quoted'\nFROM src".to_string());
+        let mut edge = test_edge(Some("query-1"), Some(0), Some("DML"));
+        edge.user_name = Some("test-user".to_string());
         edge.query_parameterized_hash = Some("parameterized-hash".to_string());
-        edge.query_duration_ms = Some(123);
-        edge.written_rows = Some(10);
-        edge.scan_rows = Some(20);
+        edge.query_info.query_text = Some("INSERT INTO dst SELECT 'quoted'\nFROM src".to_string());
+        edge.query_info.query_duration_ms = Some(123);
+        edge.query_info.written_rows = Some(10);
+        edge.query_info.scan_rows = Some(20);
         let process: serde_json::Value =
             serde_json::from_str(&process_json(&edge)).expect("valid process JSON");
         assert_eq!(
             process,
             serde_json::json!({
                 "query_id": "query-1",
-                "query_kind": "Insert",
-                "lineage_kind": "DML",
-                "event_time": "1970-01-01T00:00:00.000000Z",
-                "query_text": "INSERT INTO dst SELECT 'quoted'\nFROM src",
+                "updated_on": "1970-01-01T00:00:00.000000Z",
+                "user_name": "test-user",
                 "query_parameterized_hash": "parameterized-hash",
+                "lineage_kind": "DML",
+                "query_text": "INSERT INTO dst SELECT 'quoted'\nFROM src",
                 "query_duration_ms": 123,
                 "written_rows": 10,
                 "scan_rows": 20,
@@ -583,17 +632,17 @@ mod tests {
         );
 
         let null_process: serde_json::Value =
-            serde_json::from_str(&process_json(&test_edge(None, None, None, None)))
+            serde_json::from_str(&process_json(&test_edge(None, None, None)))
                 .expect("valid process JSON");
         assert_eq!(
             null_process,
             serde_json::json!({
                 "query_id": null,
-                "query_kind": null,
-                "lineage_kind": null,
-                "event_time": null,
-                "query_text": null,
+                "updated_on": null,
+                "user_name": null,
                 "query_parameterized_hash": null,
+                "lineage_kind": null,
+                "query_text": null,
                 "query_duration_ms": null,
                 "written_rows": null,
                 "scan_rows": null,

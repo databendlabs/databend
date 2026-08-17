@@ -35,7 +35,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::Constraint;
-use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 #[cfg(feature = "storage-stage")]
@@ -60,6 +59,7 @@ use databend_common_storages_paimon::PaimonTable;
 #[cfg(feature = "storage-stage")]
 use databend_query_storage_stage_support::build_streaming_load_pipeline;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use log::info;
 
 use crate::clusters::ClusterHelper;
@@ -291,7 +291,7 @@ impl InsertInterpreter {
         }))
     }
 
-    pub(crate) fn try_create_materialized_view_refresh(
+    pub fn try_create_materialized_view_refresh(
         ctx: Arc<QueryContext>,
         plan: Insert,
         target_table_id: u64,
@@ -435,8 +435,7 @@ impl Interpreter for InsertInterpreter {
             table.check_mutable()?;
         }
 
-        let is_fuse_backed = table.engine() == "FUSE" || table.engine() == MATERIALIZED_VIEW_ENGINE;
-        let table_meta_timestamps = if is_fuse_backed {
+        let table_meta_timestamps = if is_fuse_backed_engine(table.engine()) {
             let fuse_table =
                 databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
 

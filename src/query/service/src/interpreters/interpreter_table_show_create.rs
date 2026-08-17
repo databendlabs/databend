@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
@@ -26,7 +27,10 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::types::StringType;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::ClusterKeyNormalizer;
 use databend_common_sql::plans::ShowCreateTablePlan;
 use databend_common_storages_basic::view_table::QUERY;
@@ -34,6 +38,9 @@ use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
+use databend_enterprise_materialized_view::get_materialized_view_handler;
+use databend_storages_common_table_meta::table::LINEAR_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
@@ -87,11 +94,39 @@ impl Interpreter for ShowCreateTableInterpreter {
             .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
 
-        let settings = self.ctx.get_settings();
+        if is_materialized_view_engine(table.engine()) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} is a MATERIALIZED VIEW, use `SHOW CREATE MATERIALIZED VIEW {}.{}` instead",
+                &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+            )));
+        }
+
+        Self::build_result(
+            self.ctx.as_ref(),
+            catalog.as_ref(),
+            &tenant,
+            &self.plan.database,
+            table.as_ref(),
+            self.plan.with_quoted_ident,
+        )
+        .await
+    }
+}
+
+impl ShowCreateTableInterpreter {
+    pub(crate) async fn build_result(
+        ctx: &QueryContext,
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+        database: &str,
+        table: &dyn Table,
+        force_quoted_ident: bool,
+    ) -> Result<PipelineBuildResult> {
+        let settings = ctx.get_settings();
 
         let settings = ShowCreateQuerySettings {
             sql_dialect: settings.get_sql_dialect()?,
-            force_quoted_ident: self.plan.with_quoted_ident,
+            force_quoted_ident,
             unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
             hide_options_in_show_create_table: settings
@@ -99,13 +134,8 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .unwrap_or(false),
         };
 
-        let create_query = Self::show_create_query(
-            catalog.as_ref(),
-            &self.plan.database,
-            table.as_ref(),
-            &settings,
-        )
-        .await?;
+        let create_query =
+            Self::show_create_query(catalog, tenant, database, table, &settings).await?;
 
         let block = DataBlock::new(
             vec![
@@ -122,6 +152,7 @@ impl Interpreter for ShowCreateTableInterpreter {
 impl ShowCreateTableInterpreter {
     pub async fn show_create_query(
         catalog: &dyn Catalog,
+        tenant: &Tenant,
         database: &str,
         table: &dyn Table,
         settings: &ShowCreateQuerySettings,
@@ -129,6 +160,9 @@ impl ShowCreateTableInterpreter {
         match table.engine() {
             STREAM_ENGINE => Self::show_create_stream_query(catalog, table).await,
             VIEW_ENGINE => Self::show_create_view_query(table, database),
+            MATERIALIZED_VIEW_ENGINE => {
+                Self::show_create_materialized_view_query(catalog, tenant, table, database).await
+            }
             _ => match table.options().get(OPT_KEY_STORAGE_PREFIX) {
                 Some(_) => Ok(Self::show_attach_table_query(table, database)),
                 None => Self::show_create_table_query(table.get_table_info(), settings),
@@ -317,7 +351,22 @@ impl ShowCreateTableInterpreter {
                 "({})",
                 exprs.into_iter().map(|e| format!("{:#}", e)).join(", ")
             );
-            table_create_sql.push_str(format!(" CLUSTER BY {}", cluster_keys_str).as_str());
+            let cluster_type = table_info
+                .options()
+                .get(OPT_KEY_CLUSTER_TYPE)
+                .map(String::as_str)
+                .unwrap_or(LINEAR_CLUSTER_TYPE);
+            if cluster_type.eq_ignore_ascii_case(LINEAR_CLUSTER_TYPE) {
+                table_create_sql.push_str(format!(" CLUSTER BY {cluster_keys_str}").as_str());
+            } else {
+                table_create_sql.push_str(
+                    format!(
+                        " CLUSTER BY {}{cluster_keys_str}",
+                        cluster_type.to_uppercase()
+                    )
+                    .as_str(),
+                );
+            }
         }
 
         if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
@@ -363,6 +412,47 @@ impl ShowCreateTableInterpreter {
             ))
         }?;
         Ok(view_create_sql)
+    }
+
+    async fn show_create_materialized_view_query(
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+        table: &dyn Table,
+        database: &str,
+    ) -> Result<String> {
+        let name = table.name();
+        let definition = get_materialized_view_handler()
+            .get_mv_definition(catalog, tenant, table.get_id())
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::Internal(
+                    "Logical error, Materialized View must have a query definition.",
+                )
+            })?
+            .data;
+
+        let table_info = table.get_table_info();
+        let mut create_sql = format!(
+            "CREATE MATERIALIZED VIEW {}.{}",
+            QuotedIdent(database, '`'),
+            QuotedIdent(name, '`')
+        );
+
+        let columns = definition
+            .logical_schema
+            .fields()
+            .iter()
+            .map(|field| QuotedIdent(field.name(), '`').to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        create_sql.push_str(&format!(" ({columns})"));
+
+        if let Some(cluster_key) = table_info.meta.cluster_key_str() {
+            create_sql.push_str(&format!(" CLUSTER BY {}", cluster_key));
+        }
+
+        create_sql.push_str(&format!(" AS {}", definition.original_query));
+        Ok(create_sql)
     }
 
     async fn show_create_stream_query(catalog: &dyn Catalog, table: &dyn Table) -> Result<String> {

@@ -1210,17 +1210,6 @@ SELECT * from s;"#,
 }
 
 #[test]
-fn test_hilbert_cluster_type_is_rejected() {
-    for sql in [
-        "create table t(a int, b int) cluster by hilbert(a, b)",
-        "alter table t cluster by hilbert(a, b)",
-    ] {
-        let tokens = tokenize_sql(sql).unwrap();
-        assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
-    }
-}
-
-#[test]
 fn test_statement_error() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("stmt-error.txt").unwrap();
@@ -1758,6 +1747,14 @@ fn test_expr() {
         r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(col, '$[*].name', v -> upper(v))"#,
+        r#"ARRAY_MAP(v -> v + 1)"#,
+        r#"ARRAY_FILTER(a, v -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(a, b, v -> v + 1)"#,
+        r#"MAP_FILTER(a, b, c, (k, v) -> k + v)"#,
+        r#"JSON_ARRAY_MAP(doc -> 'items', v -> upper(v))"#,
+        r#"TO_STRING(col -> 'name')"#,
+        r#"CONCAT(a -> 'k', b)"#,
         r#"INTERVAL '1 YEAR'"#,
         r#"(?, ?)"#,
         r#"@test_stage/input/34"#,

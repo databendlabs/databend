@@ -179,7 +179,7 @@ impl IPhysicalPlan for Recluster {
                     block_thresholds,
                     input_schema,
                 )?;
-                let operators = cluster_stats_gen.operators.clone();
+                let operators = cluster_stats_gen.eval_operators.clone();
                 if !operators.is_empty() {
                     let func_ctx2 = cluster_stats_gen.func_ctx.clone();
                     builder.main_pipeline.add_transformer(move || {
@@ -200,13 +200,16 @@ impl IPhysicalPlan for Recluster {
                     task.total_compressed,
                 );
 
-                if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+                if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
+                    let vector_column_input_offset = vector_operator.vector_column_input_offset;
+                    let dimension = vector_operator.info.dimension;
+                    let distance_type = vector_operator.info.distance_type;
                     builder.main_pipeline.try_resize(1)?;
                     builder.main_pipeline.add_accumulating_transformer(move || {
                         TransformVectorCluster::new(
-                            vector_operator.vector_column_input_offset,
-                            vector_operator.info.dimension,
-                            vector_operator.info.distance_type,
+                            vector_column_input_offset,
+                            dimension,
+                            distance_type,
                             rows_per_block,
                         )
                     });
@@ -218,7 +221,7 @@ impl IPhysicalPlan for Recluster {
                 let schema = DataSchemaRefExt::create(output_fields);
                 let sort_descs = cluster_stats_gen.sort_descs();
                 let skip_partial_sort =
-                    task.all_ordered && cluster_stats_gen.vector_operator.is_none();
+                    task.all_ordered && cluster_stats_gen.vector_operator().is_none();
 
                 // merge sort
                 let sort_pipeline_builder = SortPipelineBuilder::create(

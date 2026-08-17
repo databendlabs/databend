@@ -36,7 +36,9 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::SharedLockGuard;
+use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::plans::MaintenanceTarget;
 use crate::plans::Plan;
 
 pub type TableOptions = BTreeMap<String, String>;
@@ -534,8 +536,10 @@ pub struct AlterTableClusterKeyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
     pub branch: Option<String>,
     pub cluster_keys: Vec<String>,
+    pub cluster_type: ClusterType,
 }
 
 impl AlterTableClusterKeyPlan {
@@ -567,6 +571,7 @@ pub struct DropTableClusterKeyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
     pub branch: Option<String>,
 }
 

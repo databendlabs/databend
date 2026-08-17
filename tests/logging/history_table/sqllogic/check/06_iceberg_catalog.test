@@ -1,26 +1,51 @@
 # Iceberg lineage corresponds to setup/06_iceberg_catalog.test.
 
-query ITT
-SELECT distance, source_object_name, target_object_name
+query ITTTTTT
+SELECT distance, source_object_catalog, source_object_database, source_object_name,
+       target_object_catalog, target_object_database, target_object_name
 FROM get_lineage('lineage_history_iceberg.dst', 'TABLE', 'UPSTREAM', 1)
 ----
-1 lineage_history_iceberg_catalog.lineage_db.src default.lineage_history_iceberg.dst
+1 lineage_history_iceberg_catalog lineage_db src default lineage_history_iceberg dst
 
-query ITTTT
-SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+query ITTTTTTTT
+SELECT distance, source_object_catalog, source_object_database, source_object_name, source_column_name,
+       target_object_catalog, target_object_database, target_object_name, target_column_name
 FROM get_lineage('lineage_history_iceberg.dst.a', 'COLUMN', 'UPSTREAM', 1)
 ----
-1 lineage_history_iceberg_catalog.lineage_db.src a default.lineage_history_iceberg.dst a
+1 lineage_history_iceberg_catalog lineage_db src a default lineage_history_iceberg dst a
 
-# External catalog ids are not stable across catalog reloads. Both the object and its column map
+# An external-catalog table can be both the lookup object and the returned neighbor. Its public
+# shape matches a regular TABLE while preserving the external catalog address.
+query TTTTTT
+SELECT direction, object_domain, catalog, database, object_name,
+       to_string(column_neighbors)
+FROM get_lineage_neighbors(
+    'lineage_history_iceberg_catalog.lineage_db.src',
+    'TABLE'
+)
+----
+DOWNSTREAM TABLE default lineage_history_iceberg dst {"a":["a"]}
+
+query TTTTTT
+SELECT direction, object_domain, catalog, database, object_name,
+       to_string(column_neighbors)
+FROM get_lineage_neighbors('lineage_history_iceberg.dst', 'TABLE')
+----
+UPSTREAM TABLE lineage_history_iceberg_catalog lineage_db src {"a":["a"]}
+
+# External catalog ids are not stable across catalog reloads. Both the object and its column data
 # must therefore be name-addressed in the aggregated physical record.
 query IIII
 SELECT
     count_if(source_catalog_type = 'ICEBERG'),
     count_if(source_address_kind = 'NAME'),
     count_if(source_id IS NULL),
-    count_if(source_to_target_columns['a'] IS NOT NULL)
-FROM system_history.lineage_unresolved
+    count_if(
+      column_lineage['source_column_address_kind']::STRING = 'NAME'
+      AND column_lineage['mappings'][0]['sources'][0]['name']::STRING = 'a'
+      AND is_null_value(column_lineage['mappings'][0]['sources'][0]['id'])
+    )
+FROM system_history.lineage_history
 WHERE source_catalog = 'lineage_history_iceberg_catalog'
   AND source_database = 'lineage_db'
   AND source_name = 'src'
