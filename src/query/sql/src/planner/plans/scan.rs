@@ -364,12 +364,20 @@ impl Operator for Scan {
                 continue;
             }
             if let Some(col_stat) = v {
-                let null_count = StatCount::exact(col_stat.null_count);
-                if num_rows.is_some_and(|num_rows| num_rows > 0 && col_stat.null_count == num_rows)
+                // Catalog column statistics can lag behind the current table
+                // snapshot. Keep the count for numeric estimation, but never
+                // turn `null_count == num_rows` into `ColumnStat::AllNull`:
+                // that variant is reserved for locally proven facts.
+                let null_count = if col_stat.null_count == 0
+                    || num_rows.is_none_or(|rows| col_stat.null_count < rows)
                 {
-                    column_stats.insert(*k, ColumnStat::AllNull { null_count });
-                    continue;
-                }
+                    StatCount::exact(col_stat.null_count)
+                } else {
+                    // Equality with the catalog row count is the only value
+                    // that could masquerade as an all-NULL proof. Preserve the
+                    // estimate while removing that exactness marker.
+                    StatCount::estimate(col_stat.null_count as f64, col_stat.null_count as f64)
+                };
                 let (Some(min), Some(max)) = (col_stat.min.clone(), col_stat.max.clone()) else {
                     continue;
                 };
@@ -413,6 +421,7 @@ impl Operator for Scan {
             .as_ref()
             .and_then(|stat| stat.num_rows);
 
+        let mut proven_empty = false;
         let cardinality = match (precise_cardinality, &self.prewhere) {
             (Some(precise_cardinality), Some(prewhere)) => {
                 // Derive cardinality
@@ -423,6 +432,7 @@ impl Operator for Scan {
                 .with_top_n(std::mem::take(&mut output_top_n))
                 .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch));
                 let cardinality = sb.apply(&prewhere.predicates)?;
+                proven_empty = sb.is_proven_empty();
                 column_stats = sb.into_column_stats();
                 cardinality
             }
@@ -431,7 +441,9 @@ impl Operator for Scan {
         };
 
         // If prewhere is not none, we can't get precise cardinality
-        let precise_cardinality = if self.prewhere.is_none() && self.sample.is_none() {
+        let precise_cardinality = if proven_empty {
+            Some(0)
+        } else if self.prewhere.is_none() && self.sample.is_none() {
             precise_cardinality
         } else {
             None
@@ -446,22 +458,25 @@ impl Operator for Scan {
         // join ordering), then suppress column statistics to prevent data
         // leakage through statistical inference.
         if self.secure_predicates.is_some() {
+            let mut proven_empty = precise_cardinality == Some(0);
             let cardinality = match &self.secure_predicates {
                 Some(preds) if !preds.is_empty() => {
                     let input_cardinality = precise_cardinality
                         .map(StatCardinality::exact)
                         .unwrap_or_else(|| StatCardinality::estimate(cardinality));
-                    SelectivityEstimator::new(column_stats, input_cardinality)
+                    let mut estimator = SelectivityEstimator::new(column_stats, input_cardinality)
                         .with_top_n(output_top_n)
-                        .with_count_min_sketch(output_count_min_sketch)
-                        .apply(preds)?
+                        .with_count_min_sketch(output_count_min_sketch);
+                    let cardinality = estimator.apply(preds)?;
+                    proven_empty |= estimator.is_proven_empty();
+                    cardinality
                 }
                 _ => cardinality,
             };
             return Ok(Arc::new(StatInfo {
                 cardinality,
                 statistics: OpStatistics {
-                    precise_cardinality: None,
+                    precise_cardinality: proven_empty.then_some(0),
                     column_stats: Default::default(),
                     top_n: Default::default(),
                     count_min_sketch: Default::default(),
@@ -497,13 +512,40 @@ impl Operator for Scan {
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Scalar;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 
     use super::*;
+    use crate::ColumnBindingBuilder;
+    use crate::Visibility;
     use crate::optimizer::ir::RelExpr;
     use crate::optimizer::ir::SExpr;
+    use crate::plans::BoundColumnRef;
+    use crate::plans::FunctionCall;
     use crate::plans::RelOperator;
+
+    fn is_not_null(column: Symbol) -> ScalarExpr {
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "is_not_null".to_string(),
+            params: vec![],
+            arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: ColumnBindingBuilder::new(
+                    "nullable_column".to_string(),
+                    column,
+                    Box::new(DataType::Nullable(Box::new(DataType::Number(
+                        NumberDataType::UInt64,
+                    )))),
+                    Visibility::Visible,
+                )
+                .build(),
+            })],
+            return_type: Box::new(DataType::Boolean),
+        })
+    }
 
     #[test]
     fn test_derive_scan_preserves_bind_time_metadata() {
@@ -559,6 +601,50 @@ mod tests {
         assert!(derived.order_by.is_none());
         assert!(derived.prewhere.is_none());
         assert!(derived.agg_index.is_none());
+    }
+
+    #[test]
+    fn test_catalog_all_null_statistics_are_not_a_proof() -> Result<()> {
+        let column = Symbol::new(1);
+        let rows = 8;
+        let scan = Scan {
+            columns: [column].into_iter().collect(),
+            prewhere: Some(Prewhere {
+                output_columns: [column].into_iter().collect(),
+                prewhere_columns: [column].into_iter().collect(),
+                predicates: vec![is_not_null(column)],
+            }),
+            statistics: Arc::new(Statistics {
+                table_stats: Some(TableStatistics {
+                    num_rows: Some(rows),
+                    ..Default::default()
+                }),
+                column_stats: HashMap::from([(
+                    column,
+                    Some(BasicColumnStatistics {
+                        // Stale value bounds can coexist with an all-NULL count
+                        // after independent statistics updates. Neither fact is
+                        // trusted as a proof at the Scan boundary.
+                        min: Some(databend_common_statistics::Datum::UInt(0)),
+                        max: Some(databend_common_statistics::Datum::UInt(5)),
+                        ndv: Some(0),
+                        null_count: rows,
+                        in_memory_size: 0,
+                    }),
+                )]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
+        let stat = scan.derive_stats(&RelExpr::with_s_expr(&s_expr))?;
+
+        assert_eq!(stat.cardinality, rows as f64 / 5.0);
+        assert_eq!(stat.statistics.precise_cardinality, None);
+        let column_stat = &stat.statistics.column_stats[&column];
+        assert!(!matches!(column_stat, ColumnStat::AllNull { .. }));
+        assert_eq!(column_stat.null_count(), StatCount::exact(0));
+        Ok(())
     }
 
     #[test]
