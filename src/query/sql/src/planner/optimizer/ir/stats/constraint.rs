@@ -66,12 +66,10 @@ impl ValueConstraint {
                 column_stat.null_count = StatCount::exact(0);
             }
             ValueConstraint::Eq(datum) => {
-                let bounds = HistogramBounds::new(column_stat.min.clone(), column_stat.max.clone());
-                if contains_bounds_datum(&bounds, datum)? {
-                    *column_stat = ColumnStat::from_const(datum.clone());
-                } else {
-                    clear_for_empty_result(column_stat);
-                }
+                // The stored range may be stale. Every surviving row still
+                // equals the predicate value, so record that exact output fact
+                // without treating an old disjoint range as proof of emptiness.
+                *column_stat = ColumnStat::from_const(datum.clone());
             }
             ValueConstraint::NotEq => {}
             ValueConstraint::Range { lower, upper } => {
@@ -89,14 +87,37 @@ impl ValueConstraint {
                             bounds.upper_bound().clone(),
                         )?;
                     }
-                    HistogramRangeBounds::Empty => {
-                        clear_for_empty_result(column_stat);
-                    }
+                    // A disjoint stored range may be stale. There is no safe
+                    // non-empty range refinement, so retain the coarse input
+                    // statistics instead of manufacturing an empty result.
+                    HistogramRangeBounds::Empty => {}
                     HistogramRangeBounds::Imprecise => {}
                 }
             }
         }
         Ok(())
+    }
+
+    pub(super) fn is_disjoint_from(&self, column_stat: &ColumnStat) -> Result<bool> {
+        match self {
+            ValueConstraint::Eq(datum) => {
+                let bounds = HistogramBounds::new(column_stat.min.clone(), column_stat.max.clone());
+                Ok(
+                    bounds.lower_bound().compare(datum)? == std::cmp::Ordering::Greater
+                        || bounds.upper_bound().compare(datum)? == std::cmp::Ordering::Less,
+                )
+            }
+            ValueConstraint::Range { lower, upper } => Ok(matches!(
+                HistogramBounds::from_range_constraint(
+                    &column_stat.min,
+                    &column_stat.max,
+                    lower,
+                    upper,
+                )?,
+                HistogramRangeBounds::Empty
+            )),
+            ValueConstraint::NotEq | ValueConstraint::NotNull => Ok(false),
+        }
     }
 
     pub(super) fn apply_all(
@@ -111,13 +132,6 @@ impl ValueConstraint {
 
         Ok(column_stat)
     }
-}
-
-fn contains_bounds_datum(bounds: &HistogramBounds, datum: &Datum) -> Result<bool> {
-    Ok(
-        bounds.lower_bound().compare(datum)? != std::cmp::Ordering::Greater
-            && bounds.upper_bound().compare(datum)? != std::cmp::Ordering::Less,
-    )
 }
 
 fn apply_range_bounds(column_stat: &mut ColumnStat, new_min: Datum, new_max: Datum) -> Result<()> {

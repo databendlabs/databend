@@ -1438,8 +1438,8 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
 
     write_case_title(
         &mut file,
-        "domain_folded_logical_predicates",
-        "Domain-folded constants should still compose with remaining predicate selectivity.",
+        "stale_range_logical_predicates",
+        "Potentially stale range statistics should remain estimates when composing logical predicates.",
     )?;
     let domain_folded_stats = ColumnStatSet::from_iter([
         (Symbol::new(0), ColumnStat {

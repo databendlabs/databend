@@ -1,0 +1,25 @@
+EvalScalar
+├── scalars: [outer_join_preserved.join_key (#0) AS (#0)]
+└── Join(Left)
+    ├── build keys: [outer_join_other.join_key (#3)]
+    ├── probe keys: [outer_join_preserved.join_key (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [outer_join_other.join_key (#3) AS (#3)]
+    │   └── Filter
+    │       ├── filters: [gt(outer_join_other.range_value (#4), 10)]
+    │       └── Scan
+    │           ├── table: default.outer_join_other (#1)
+    │           ├── filters: []
+    │           ├── order by: []
+    │           └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [outer_join_preserved.join_key (#0) AS (#0)]
+        └── Filter
+            ├── filters: [gt(outer_join_preserved.range_value (#1), 10), eq(outer_join_preserved.selective_value (#2), 42)]
+            └── Scan
+                ├── table: default.outer_join_preserved (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
