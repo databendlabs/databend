@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
@@ -23,14 +24,17 @@ use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt32Type;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_common_storages_fuse::io::SegmentsIO;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::VirtualColumnPhysicalType;
 use itertools::Itertools;
+use jsonb::keypath::OwnedKeyPaths;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -61,7 +65,6 @@ impl AsyncSystemTable for VirtualColumnsTable {
         let mut database_names = Vec::new();
         let mut table_names = Vec::new();
         let mut source_column_names = Vec::new();
-        let mut virtual_column_ids = Vec::new();
         let mut virtual_column_names = Vec::new();
         let mut virtual_column_types = Vec::new();
 
@@ -72,29 +75,80 @@ impl AsyncSystemTable for VirtualColumnsTable {
                 if !table.storage_format_as_parquet() {
                     continue;
                 }
-                let table_info = table.get_table_info();
-                let Some(ref virtual_schema) = table_info.meta.virtual_schema else {
+                let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) else {
                     continue;
                 };
-                let table_schema = table.schema();
-                for virtual_field in &virtual_schema.fields {
-                    let Ok(source_field) =
-                        table_schema.field_of_column_id(virtual_field.source_column_id)
-                    else {
+                if !fuse_table.enable_virtual_column() {
+                    continue;
+                }
+                let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
+                    continue;
+                };
+
+                // Merge the segment-local virtual schemas into one summary schema.
+                // Key is (source_column_id, canonical path), value is the union of
+                // observed data types across segments.
+                let segments_io =
+                    SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
+                let segments = segments_io
+                    .read_segments::<SegmentInfo>(&snapshot.segments, true)
+                    .await?;
+                let mut merged: BTreeMap<(u32, String), Vec<VirtualColumnPhysicalType>> =
+                    BTreeMap::new();
+                for segment in segments {
+                    let Ok(segment) = segment else {
                         continue;
                     };
+                    let Some(schema) = &segment.summary.virtual_segment_schema else {
+                        continue;
+                    };
+                    for column in &schema.column_paths {
+                        for path in &column.paths {
+                            let column_id = path.column_id;
+                            let entry = merged
+                                .entry((column.source_column_id, path.path.clone()))
+                                .or_default();
+                            for block in &segment.blocks {
+                                let Some(column_meta) = block
+                                    .virtual_block_meta
+                                    .as_ref()
+                                    .and_then(|meta| meta.virtual_column_metas.get(&column_id))
+                                else {
+                                    continue;
+                                };
+                                let physical_type = column_meta.physical_type();
+                                if !entry.contains(&physical_type) {
+                                    entry.push(physical_type);
+                                }
+                            }
+                        }
+                    }
+                }
+                if merged.is_empty() {
+                    continue;
+                }
+
+                let table_schema = table.schema();
+                for ((source_column_id, path), mut data_types) in merged {
+                    let Ok(source_field) = table_schema.field_of_column_id(source_column_id) else {
+                        continue;
+                    };
+                    let name = OwnedKeyPaths::from_canonical_path(&path)
+                        .map(|path| path.to_canonical_path())
+                        .unwrap_or(path);
+                    data_types.sort_by_key(|data_type| format!("{data_type:?}"));
+                    data_types.dedup();
+
                     database_names.push(db.name().to_owned());
                     table_names.push(table.name().to_owned());
                     source_column_names.push(source_field.name().clone());
-                    virtual_column_ids.push(virtual_field.column_id);
-                    virtual_column_names.push(virtual_field.name.clone());
-
-                    let data_types_str = virtual_field
-                        .data_types
-                        .iter()
-                        .map(|ty| format!("{}", ty))
-                        .join(", ");
-                    virtual_column_types.push(data_types_str);
+                    virtual_column_names.push(name);
+                    virtual_column_types.push(
+                        data_types
+                            .iter()
+                            .map(|data_type| data_type.table_data_type().to_string())
+                            .join(", "),
+                    );
                 }
             }
         }
@@ -103,7 +157,6 @@ impl AsyncSystemTable for VirtualColumnsTable {
             StringType::from_data(database_names),
             StringType::from_data(table_names),
             StringType::from_data(source_column_names),
-            UInt32Type::from_data(virtual_column_ids),
             StringType::from_data(virtual_column_names),
             StringType::from_data(virtual_column_types),
         ]))
@@ -116,10 +169,6 @@ impl VirtualColumnsTable {
             TableField::new("database", TableDataType::String),
             TableField::new("table", TableDataType::String),
             TableField::new("source_column", TableDataType::String),
-            TableField::new(
-                "virtual_column_id",
-                TableDataType::Number(NumberDataType::UInt32),
-            ),
             TableField::new("virtual_column_name", TableDataType::String),
             TableField::new("virtual_column_type", TableDataType::String),
         ]);

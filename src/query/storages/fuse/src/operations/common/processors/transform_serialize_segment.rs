@@ -39,7 +39,6 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use log::info;
@@ -48,12 +47,10 @@ use opendal::Operator;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::VirtualSchemaMode;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::statistics::ColumnHLLAccumulator;
 use crate::statistics::RowOrientedSegmentBuilder;
-use crate::statistics::VirtualColumnAccumulator;
 use crate::statistics::partition_values;
 
 enum State<B: SegmentBuilder> {
@@ -80,7 +77,6 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     data_accessor: Operator,
     meta_locations: TableMetaLocationGenerator,
     segment_builder: B,
-    virtual_column_accumulator: Option<VirtualColumnAccumulator>,
     hll_accumulator: ColumnHLLAccumulator,
     block_top_n_template: Option<BlockTopN>,
     block_top_ns: Vec<BlockTopN>,
@@ -109,10 +105,6 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
         segment_builder: B,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
-        let table_meta = &table.table_info.meta;
-        let virtual_column_accumulator =
-            VirtualColumnAccumulator::try_create(&table_meta.schema, &table_meta.virtual_schema);
-
         let cluster_key_info = table.cluster_key_info();
 
         let block_top_n_template =
@@ -135,7 +127,6 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             meta_locations: table.meta_location_generator().clone(),
             state: State::None,
             segment_builder,
-            virtual_column_accumulator,
             hll_accumulator: ColumnHLLAccumulator::default(),
             block_top_n_template,
             block_top_ns: Vec::new(),
@@ -223,26 +214,6 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 return Ok(Event::Sync);
             }
 
-            let virtual_column_accumulator = std::mem::take(&mut self.virtual_column_accumulator);
-            if let Some(virtual_column_accumulator) = virtual_column_accumulator {
-                if let Some(virtual_schema) =
-                    virtual_column_accumulator.build_virtual_schema_with_block_number()
-                {
-                    // emit log entry.
-                    // for newly created virtual schema.
-                    let meta = MutationLogs {
-                        entries: vec![MutationLogEntry::AppendVirtualSchema {
-                            virtual_schema: Some(virtual_schema),
-                            mode: VirtualSchemaMode::Merge,
-                        }],
-                        ..Default::default()
-                    };
-                    let data_block = DataBlock::empty_with_meta(Box::new(meta));
-                    self.output.push_data(Ok(data_block));
-                    return Ok(Event::NeedConsume);
-                }
-            }
-
             self.output.finish();
             self.state = State::Finished;
             return Ok(Event::Finished);
@@ -285,26 +256,12 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 self.current_partition = next_partition.map(<[Scalar]>::to_vec);
             }
 
-            if let Some(draft_virtual_block_meta) = extended_block_meta.draft_virtual_block_meta {
-                let mut block_meta = extended_block_meta.block_meta.clone();
-                if let Some(ref mut virtual_column_accumulator) = self.virtual_column_accumulator {
-                    // generate ColumnId for virtual columns.
-                    let virtual_column_metas = virtual_column_accumulator
-                        .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
-
-                    let virtual_block_meta = VirtualBlockMeta {
-                        virtual_column_metas,
-                        virtual_column_size: draft_virtual_block_meta.virtual_column_size,
-                        virtual_location: draft_virtual_block_meta.virtual_location.clone(),
-                    };
-                    block_meta.virtual_block_meta = Some(virtual_block_meta);
-                }
-
-                self.segment_builder.add_block(block_meta)?;
-            } else {
-                self.segment_builder
-                    .add_block(extended_block_meta.block_meta)?;
-            }
+            let virtual_input = extended_block_meta
+                .draft_virtual_block_meta
+                .map(VirtualBlockInput::Draft)
+                .unwrap_or(VirtualBlockInput::None);
+            self.segment_builder
+                .add_block(extended_block_meta.block_meta, virtual_input)?;
 
             if let Some(hll) = extended_block_meta.column_hlls {
                 self.hll_accumulator.add_hll(hll)?;
