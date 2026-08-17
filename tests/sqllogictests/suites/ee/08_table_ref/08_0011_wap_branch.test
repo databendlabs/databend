@@ -216,6 +216,52 @@ INSERT INTO t_no_branch/dev VALUES (4, 'branch_only', 40)
 statement ok
 SET wap_branch = 'dev'
 
+## DESCRIBE and SHOW FIELDS follow the session WAP branch.
+query TTTTT
+DESCRIBE t_no_branch
+----
+a INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d INT YES NULL (empty)
+
+query TTTTT
+SHOW FIELDS FROM t_no_branch
+----
+a INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d INT YES NULL (empty)
+
+## DESCRIBE applies the session branch to branch-capable tables without fallback.
+statement ok
+SET wap_branch = 'nonexistent'
+
+statement error .*Unknown branch 'nonexistent'.*
+DESCRIBE t_no_branch
+
+## Engines without branch support ignore the session branch.
+query TTTTT
+DESCRIBE t_memory
+----
+a INT YES NULL (empty)
+
+## An explicit branch takes precedence over the session WAP branch.
+query TTTTT
+DESCRIBE t_no_branch/dev
+----
+a INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d INT YES NULL (empty)
+
+query TTTTT
+SHOW FIELDS FROM t_no_branch/dev
+----
+a INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d INT YES NULL (empty)
+
+statement ok
+SET wap_branch = 'dev'
+
 ## CREATE/ALTER VIEW are allowed under a branch session; the body resolves to base.
 statement ok
 CREATE VIEW v_wap(a, c) AS SELECT a, c FROM t_no_branch

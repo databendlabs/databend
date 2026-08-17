@@ -126,6 +126,8 @@ use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::util::TableIdentifier;
+use crate::binder::wap_branch::applicable_wap_branch_for_table;
+use crate::binder::wap_branch::table_supports_wap_branch;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
@@ -382,12 +384,32 @@ impl Binder {
         let DescribeTableStmt { table } = stmt;
 
         let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
-        let (catalog, database, table, branch) = (
+        let (catalog, database, table, explicit_branch) = (
             table_identifier.catalog_name(),
             table_identifier.database_name(),
             table_identifier.table_name(),
             table_identifier.branch_name(),
         );
+        let branch = if explicit_branch.is_some() {
+            explicit_branch
+        } else {
+            let wap_branch = applicable_wap_branch_for_table(
+                self.ctx.as_ref(),
+                self.ctx.get_settings().get_wap_branch()?,
+                &catalog,
+                &database,
+                &table,
+            );
+            if let Some(wap_branch) = wap_branch {
+                let table = self
+                    .ctx
+                    .resolve_data_source(&catalog, &database, &table, None, None)
+                    .await?;
+                table_supports_wap_branch(table.as_ref()).then_some(wap_branch)
+            } else {
+                None
+            }
+        };
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Field", DataType::String),
             DataField::new("Type", DataType::String),

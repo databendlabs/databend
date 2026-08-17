@@ -64,6 +64,13 @@ pub(crate) fn warn_wap_branch_ignored(ctx: &dyn TableContext, operation: &str) -
     Ok(())
 }
 
+pub(crate) fn table_supports_wap_branch(table: &dyn Table) -> bool {
+    table.engine() == "FUSE"
+        && !table.is_temp()
+        && !table.is_read_only()
+        && !table.options().contains_key("TRANSIENT")
+}
+
 impl Binder {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn resolve_read_table_with_wap_branch(
