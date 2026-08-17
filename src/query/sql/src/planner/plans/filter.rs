@@ -99,8 +99,14 @@ impl Operator for Filter {
         } else {
             sb.into_column_stats()
         };
+        let max_cardinality = if stat_info.max_cardinality.is_finite() {
+            cardinality
+        } else {
+            stat_info.max_cardinality
+        };
         Ok(Arc::new(StatInfo {
             cardinality,
+            max_cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,

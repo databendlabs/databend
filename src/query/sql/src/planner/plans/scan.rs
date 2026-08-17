@@ -428,6 +428,11 @@ impl Operator for Scan {
             (Some(precise_cardinality), None) => precise_cardinality as f64,
             (_, _) => 0.0,
         };
+        let max_cardinality = if num_rows.is_some() {
+            cardinality
+        } else {
+            f64::INFINITY
+        };
 
         // If prewhere is not none, we can't get precise cardinality
         let precise_cardinality = if self.prewhere.is_none() && self.sample.is_none() {
@@ -459,6 +464,7 @@ impl Operator for Scan {
             };
             return Ok(Arc::new(StatInfo {
                 cardinality,
+                max_cardinality,
                 statistics: OpStatistics {
                     precise_cardinality: None,
                     column_stats: Default::default(),
@@ -470,6 +476,7 @@ impl Operator for Scan {
 
         Ok(Arc::new(StatInfo {
             cardinality,
+            max_cardinality,
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
@@ -604,6 +611,20 @@ mod tests {
         assert!(sampled_stats.statistics.top_n.is_empty());
         assert_eq!(sampled_stats.statistics.precise_cardinality, None);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_scan_without_row_count_keeps_unknown_risk_bound() -> Result<()> {
+        let scan = Scan::default();
+        let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
+        let rel_expr = RelExpr::with_s_expr(&s_expr);
+
+        let stats = scan.derive_stats(&rel_expr)?;
+
+        assert_eq!(stats.cardinality, 0.0);
+        assert_eq!(stats.statistics.precise_cardinality, None);
+        assert_eq!(stats.max_cardinality, f64::INFINITY);
         Ok(())
     }
 }

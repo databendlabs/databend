@@ -180,6 +180,9 @@ impl UnionAll {
 
         Ok(Arc::new(StatInfo {
             cardinality,
+            max_cardinality: cardinality
+                .max(left_stat_info.max_cardinality)
+                .max(right_stat_info.max_cardinality),
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
@@ -193,10 +196,23 @@ impl UnionAll {
         let ndv_upper = left.ndv.upper + right.ndv.upper;
         let ranges_disjoint = left.max.compare(&right.min)? == Ordering::Less
             || right.max.compare(&left.min)? == Ordering::Less;
+        // UNION ALL contains every value from both inputs. Even when their
+        // ranges overlap, its NDV is at least the larger trusted input lower
+        // bound. Disjoint ranges make the two lower bounds additive.
+        let ndv_lower = if ranges_disjoint {
+            left.ndv.lower + right.ndv.lower
+        } else {
+            left.ndv.lower.max(right.ndv.lower)
+        };
         if ranges_disjoint
-            && let (Some(left), Some(right)) = (left.ndv.expected, right.ndv.expected)
+            && let (Some(left_expected), Some(right_expected)) =
+                (left.ndv.expected, right.ndv.expected)
         {
-            return Ok(NdvEstimate::new(left + right, ndv_upper));
+            return Ok(NdvEstimate {
+                lower: ndv_lower,
+                expected: Some(left_expected + right_expected),
+                upper: ndv_upper,
+            });
         }
 
         if left.min.is_numeric()
@@ -207,18 +223,26 @@ impl UnionAll {
         {
             let lower = left_ndv.max(right_ndv);
             let expected = (left_ndv + right_ndv - intersection_ndv).clamp(lower, ndv_upper);
-            return Ok(NdvEstimate::new(expected, ndv_upper));
+            return Ok(NdvEstimate {
+                lower: ndv_lower,
+                expected: Some(expected),
+                upper: ndv_upper,
+            });
         }
 
-        Ok(match (left.ndv.expected, right.ndv.expected) {
+        let expected = match (left.ndv.expected, right.ndv.expected) {
             // Match join estimation's NDV fallback: use the larger expected
             // NDV when both sides have one, preserve the known side when only
             // one does, and become upper-only only when neither side has one.
-            (Some(left), Some(right)) => NdvEstimate::new(left.max(right), ndv_upper),
-            (Some(expected), None) | (None, Some(expected)) => {
-                NdvEstimate::new(expected, ndv_upper)
-            }
-            (None, None) => NdvEstimate::upper_bound(ndv_upper),
+            (Some(left), Some(right)) => Some(left.max(right)),
+            (Some(expected), None) | (None, Some(expected)) => Some(expected),
+            (None, None) => None,
+        }
+        .map(|expected| expected.clamp(ndv_lower, ndv_upper));
+        Ok(NdvEstimate {
+            lower: ndv_lower,
+            expected,
+            upper: ndv_upper,
         })
     }
 }
@@ -333,5 +357,40 @@ impl Operator for UnionAll {
         ]);
 
         Ok(children_required)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_statistics::Datum;
+
+    use super::*;
+
+    fn column_stat(min: i64, max: i64, ndv: NdvEstimate) -> ColumnStat {
+        ColumnStat {
+            min: Datum::Int(min),
+            max: Datum::Int(max),
+            ndv,
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }
+    }
+
+    #[test]
+    fn test_merge_ndv_preserves_trusted_union_lower_bound() -> Result<()> {
+        let left = column_stat(1, 10, NdvEstimate::exact(10.0));
+        let overlapping = column_stat(5, 9, NdvEstimate::exact(5.0));
+        let disjoint = column_stat(20, 24, NdvEstimate::exact(5.0));
+
+        assert_eq!(UnionAll::merge_ndv(&left, &overlapping)?, NdvEstimate {
+            lower: 10.0,
+            expected: Some(10.0),
+            upper: 15.0,
+        });
+        assert_eq!(
+            UnionAll::merge_ndv(&left, &disjoint)?,
+            NdvEstimate::exact(15.0)
+        );
+        Ok(())
     }
 }

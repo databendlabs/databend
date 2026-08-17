@@ -149,6 +149,12 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
         optimizer_skip_list: &[],
         default_node_num: 1,
     },
+    LiteReplayCaseSpec {
+        name: "broadcast_guard_underestimated_build",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 3,
+    },
 ];
 
 impl TestCaseRunner for LiteRunner {

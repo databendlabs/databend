@@ -232,6 +232,7 @@ impl Operator for ConstantTableScan {
         }
         Ok(Arc::new(StatInfo {
             cardinality: self.num_rows as f64,
+            max_cardinality: self.num_rows as f64,
             statistics: Statistics {
                 precise_cardinality: Some(self.num_rows as u64),
                 column_stats,

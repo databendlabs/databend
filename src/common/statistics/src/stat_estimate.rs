@@ -150,6 +150,8 @@ impl StatEstimate {
 #[must_use]
 #[derive(Clone, Copy, PartialEq)]
 pub struct NdvEstimate {
+    /// A trusted lower bound used for proofs such as join-key uniqueness.
+    pub lower: f64,
     pub expected: Option<f64>,
     pub upper: f64,
 }
@@ -166,13 +168,23 @@ impl fmt::Debug for NdvEstimate {
 
 impl NdvEstimate {
     pub fn check_consistency(&self) -> Result<(), String> {
-        if self.expected.is_some_and(|expected| !expected.is_finite()) || !self.upper.is_finite() {
+        if !self.lower.is_finite()
+            || self.expected.is_some_and(|expected| !expected.is_finite())
+            || !self.upper.is_finite()
+        {
             return Err(format!("NDV estimate must be finite: {:?}", self));
         }
-        if self.expected.is_some_and(|expected| expected < 0.0) || self.upper < 0.0 {
+        if self.lower < 0.0
+            || self.expected.is_some_and(|expected| expected < 0.0)
+            || self.upper < 0.0
+        {
             return Err(format!("NDV estimate must be non-negative: {:?}", self));
         }
-        if self.expected.is_some_and(|expected| expected > self.upper) {
+        if self.lower > self.upper
+            || self
+                .expected
+                .is_some_and(|expected| self.lower > expected || expected > self.upper)
+        {
             return Err(format!("NDV estimate bounds are inconsistent: {:?}", self));
         }
         Ok(())
@@ -180,6 +192,7 @@ impl NdvEstimate {
 
     pub fn new(expected: f64, upper: f64) -> Self {
         let estimate = Self {
+            lower: 0.0,
             expected: Some(expected),
             upper,
         };
@@ -192,11 +205,22 @@ impl NdvEstimate {
     }
 
     pub fn exact(value: f64) -> Self {
-        Self::new(value, value)
+        let estimate = Self {
+            lower: value,
+            expected: Some(value),
+            upper: value,
+        };
+        debug_assert!(
+            estimate.check_consistency().is_ok(),
+            "invalid exact NDV estimate: {:?}",
+            estimate
+        );
+        estimate
     }
 
     pub fn upper_bound(upper: f64) -> Self {
         let estimate = Self {
+            lower: 0.0,
             expected: None,
             upper,
         };
@@ -218,10 +242,13 @@ impl NdvEstimate {
             "invalid NDV reduction upper bound: {upper:?}"
         );
         let upper = self.upper.min(upper);
-        match self.expected {
-            Some(expected) => Self::new(expected.min(upper), upper),
-            None => Self::upper_bound(upper),
-        }
+        let estimate = Self {
+            lower: self.lower.min(upper),
+            expected: self.expected.map(|expected| expected.min(upper)),
+            upper,
+        };
+        debug_assert!(estimate.check_consistency().is_ok());
+        estimate
     }
 
     pub fn reduce_by_selectivity(self, num_values: f64, selectivity: f64) -> Self {
@@ -234,29 +261,49 @@ impl NdvEstimate {
             "invalid NDV scaling row count: {num_values:?}"
         );
         let upper = self.upper.min(num_values * selectivity);
-        if let Some(expected) = self.expected {
-            let expected =
-                estimate_distinct_count_after_row_scale(num_values, expected, selectivity);
-            Self::new(expected.min(upper), upper)
-        } else {
-            Self::upper_bound(upper)
-        }
+        let lower = (self.lower * selectivity).min(upper);
+        let expected = self.expected.map(|expected| {
+            estimate_distinct_count_after_row_scale(num_values, expected, selectivity)
+                .clamp(lower, upper)
+        });
+        let estimate = Self {
+            lower,
+            expected,
+            upper,
+        };
+        debug_assert!(
+            estimate.check_consistency().is_ok(),
+            "invalid NDV estimate after selectivity reduction: input={self:?}, num_values={num_values:?}, selectivity={selectivity:?}, output={estimate:?}"
+        );
+        estimate
     }
 
     pub fn min(self, other: Self) -> Self {
         let upper = self.upper.min(other.upper);
-        match (self.expected, other.expected) {
-            (Some(left), Some(right)) => Self::new(left.min(right).min(upper), upper),
-            _ => Self::upper_bound(upper),
-        }
+        let estimate = Self {
+            lower: self.lower.min(other.lower).min(upper),
+            expected: match (self.expected, other.expected) {
+                (Some(left), Some(right)) => Some(left.min(right).min(upper)),
+                _ => None,
+            },
+            upper,
+        };
+        debug_assert!(estimate.check_consistency().is_ok());
+        estimate
     }
 
     pub(crate) fn add(self, other: Self) -> Self {
         let upper = self.upper + other.upper;
-        match (self.expected, other.expected) {
-            (Some(left), Some(right)) => Self::new(left + right, upper),
-            _ => Self::upper_bound(upper),
-        }
+        let estimate = Self {
+            lower: self.lower + other.lower,
+            expected: match (self.expected, other.expected) {
+                (Some(left), Some(right)) => Some(left + right),
+                _ => None,
+            },
+            upper,
+        };
+        debug_assert!(estimate.check_consistency().is_ok());
+        estimate
     }
 }
 
@@ -465,17 +512,41 @@ mod tests {
     fn test_ndv_selectivity_uses_row_scale_estimate() {
         let ndv = NdvEstimate::exact(10.0).reduce_by_selectivity(100.0, 0.25);
 
+        assert_eq!(ndv.lower, 2.5);
         assert_eq!(ndv.upper, 10.0);
         assert!((ndv.expected.unwrap() - 9.436864852905273).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_ndv_selectivity_clamps_rounding_below_trusted_lower() {
+        let ndv = NdvEstimate::exact(1.0).reduce_by_selectivity(1.0, 0.2);
+
+        assert_eq!(ndv.lower, 0.2);
+        assert_eq!(ndv.expected, Some(0.2));
+        assert_eq!(ndv.upper, 0.2);
     }
 
     #[test]
     fn test_upper_only_ndv_does_not_gain_expected_by_reduction() {
         let ndv = NdvEstimate::upper_bound(100.0).reduce(10.0);
 
+        assert_eq!(ndv.lower, 0.0);
         assert_eq!(ndv.upper, 10.0);
         assert!(ndv.is_upper_only());
         assert_eq!(ndv.expected, None);
+    }
+
+    #[test]
+    fn test_ndv_confidence_survives_bounded_reduction() {
+        let exact = NdvEstimate::exact(100.0).reduce(40.0);
+        assert_eq!(exact.lower, 40.0);
+        assert_eq!(exact.expected, Some(40.0));
+        assert_eq!(exact.upper, 40.0);
+
+        let estimated = NdvEstimate::new(100.0, 100.0).reduce(40.0);
+        assert_eq!(estimated.lower, 0.0);
+        assert_eq!(estimated.expected, Some(40.0));
+        assert_eq!(estimated.upper, 40.0);
     }
 
     #[test]

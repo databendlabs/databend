@@ -474,6 +474,10 @@ impl Settings {
         Ok(self.try_get_u64("prefer_broadcast_join")? != 0)
     }
 
+    pub fn get_max_broadcast_join_build_rows(&self) -> Result<u64> {
+        self.try_get_u64("max_broadcast_join_build_rows")
+    }
+
     pub fn get_enforce_broadcast_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
     }

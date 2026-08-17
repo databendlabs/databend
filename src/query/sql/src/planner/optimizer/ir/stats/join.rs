@@ -157,9 +157,7 @@ impl JoinStatsEstimator {
 }
 
 fn join_key_null_count_for_cardinality(stat: &ColumnStat, cardinality: f64) -> f64 {
-    let known_non_null_count = stat.ndv.expected.unwrap_or(0.0);
-    let max_null_count = (cardinality - known_non_null_count).max(0.0);
-    stat.null_count.expected().min(max_null_count)
+    stat.join_key_null_count_for_cardinality(cardinality)
 }
 
 #[derive(Clone, Copy)]
@@ -281,11 +279,18 @@ struct JoinColumnInput<'a> {
 
 impl<'a> JoinColumnInput<'a> {
     fn from_column_stat(stat: &'a ColumnStat) -> Self {
+        let (ndv, ndv_exceeded_domain) = stat.ndv_bounded_by_discrete_domain();
         Self {
             min: stat.min.clone(),
             max: stat.max.clone(),
-            ndv: stat.ndv,
-            histogram: stat.histogram.as_ref(),
+            ndv,
+            // A histogram built from an impossible NDV is not reliable enough
+            // to override the corrected estimate.
+            histogram: if ndv_exceeded_domain {
+                None
+            } else {
+                stat.histogram.as_ref()
+            },
         }
     }
 
