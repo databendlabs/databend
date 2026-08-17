@@ -28,6 +28,7 @@ use databend_meta_client::types::NodeInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VirtualColumnLayout;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
@@ -441,6 +442,7 @@ pub struct ReclusterTask {
     // All input blocks in this task are already ordered by the current cluster key.
     #[serde(default)]
     pub all_ordered: bool,
+    pub virtual_column_layout: Option<VirtualColumnLayout>,
 }
 
 pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);

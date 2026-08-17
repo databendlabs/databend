@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
+use std::sync::Arc;
 
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
@@ -55,10 +56,16 @@ use databend_storages_common_index::VirtualColumnNode;
 use databend_storages_common_index::VirtualColumnSharedColumnIdMap;
 use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualColumnBlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualColumnPathStatistics;
+use databend_storages_common_table_meta::meta::DraftVirtualPathCount;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::VirtualColumnLayout;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+use databend_storages_common_table_meta::meta::VirtualPathSegment;
+use databend_storages_common_table_meta::meta::encode_virtual_path;
 use jsonb::Date as JsonbDate;
 use jsonb::Decimal64 as JsonbDecimal64;
 use jsonb::Decimal128 as JsonbDecimal128;
@@ -89,8 +96,7 @@ use crate::statistics::gen_columns_statistics;
 const DEFAULT_VIRTUAL_COLUMN_NUMBER: usize = 32;
 const DYNAMIC_PRESENCE_THRESHOLD: f64 = 0.3;
 const TYPED_PRESENCE_THRESHOLD: f64 = 0.03;
-const MIN_TYPED_VALUES_FOR_DIRECT_COLUMN: usize = 64;
-const MAX_DIRECT_VIRTUAL_COLUMNS_PER_SOURCE: usize = 512;
+const MAX_DIRECT_VIRTUAL_COLUMNS_HARD_LIMIT: usize = 10000;
 const MAX_SHARED_COLUMN_ESTIMATED_BYTES: usize = 1024 * 1024;
 const MIN_PROMOTED_SHARED_PATH_VALUES: usize = 64;
 
@@ -98,6 +104,30 @@ const MIN_PROMOTED_SHARED_PATH_VALUES: usize = 64;
 pub struct VirtualColumnState {
     pub data: opendal::Buffer,
     pub draft_virtual_block_meta: DraftVirtualBlockMeta,
+}
+
+#[derive(Clone, Default)]
+pub enum VirtualColumnBuildMode {
+    /// Classify paths from the data collected for each output block.
+    #[default]
+    Auto,
+    /// Reproduce a prescribed layout, for example during repair/refresh.
+    Exact(Arc<VirtualColumnLayout>),
+    /// Use a layout selected from multiple input blocks during compaction/recluster.
+    Adaptive(Arc<VirtualColumnLayout>),
+}
+
+impl VirtualColumnBuildMode {
+    fn layout(&self) -> Option<&VirtualColumnLayout> {
+        match self {
+            Self::Auto => None,
+            Self::Exact(layout) | Self::Adaptive(layout) => Some(layout),
+        }
+    }
+
+    fn is_planned(&self) -> bool {
+        !matches!(self, Self::Auto)
+    }
 }
 
 #[derive(Clone)]
@@ -112,10 +142,18 @@ pub struct VirtualColumnBuilder {
     virtual_values: Vec<Vec<JsonbScalarValue>>,
     // Total number of rows processed
     total_rows: usize,
+    // Explicit Auto/Exact/Adaptive build semantics.
+    mode: VirtualColumnBuildMode,
+    max_path_statistics_per_source: usize,
+    // User-configured per-source direct path budget, capped by the hard limit.
+    max_direct_paths_per_source: usize,
 }
 
 impl VirtualColumnBuilder {
-    pub fn try_create(schema: TableSchemaRef) -> Result<VirtualColumnBuilder> {
+    pub fn try_create(
+        schema: TableSchemaRef,
+        policy: crate::io::VirtualColumnLayoutPolicy,
+    ) -> Result<VirtualColumnBuilder> {
         let mut variant_fields = Vec::new();
         let mut variant_offsets = Vec::new();
         for (i, field) in schema.fields.iter().enumerate() {
@@ -140,7 +178,30 @@ impl VirtualColumnBuilder {
             virtual_paths,
             virtual_values,
             total_rows: 0,
+            mode: VirtualColumnBuildMode::Auto,
+            max_path_statistics_per_source: if policy.max_path_statistics_per_source == 0 {
+                50000
+            } else {
+                policy.max_path_statistics_per_source.min(50000)
+            },
+            max_direct_paths_per_source: if policy.max_direct_paths_per_source == 0 {
+                MAX_DIRECT_VIRTUAL_COLUMNS_HARD_LIMIT
+            } else {
+                policy
+                    .max_direct_paths_per_source
+                    .min(MAX_DIRECT_VIRTUAL_COLUMNS_HARD_LIMIT)
+            },
         })
+    }
+
+    pub fn with_exact_layout(mut self, layout: Arc<VirtualColumnLayout>) -> Self {
+        self.mode = VirtualColumnBuildMode::Exact(layout);
+        self
+    }
+
+    pub fn with_adaptive_layout(mut self, layout: Arc<VirtualColumnLayout>) -> Self {
+        self.mode = VirtualColumnBuildMode::Adaptive(layout);
+        self
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
@@ -175,7 +236,7 @@ impl VirtualColumnBuilder {
             hash_to_index.push(field_hash_to_index);
         }
 
-        self.extract_virtual_values(block, 0, num_rows, &mut hash_to_index);
+        self.extract_virtual_values(block, 0, num_rows, &mut hash_to_index)?;
 
         self.total_rows += num_rows;
 
@@ -188,7 +249,7 @@ impl VirtualColumnBuilder {
         start_row: usize,
         end_row: usize,
         hash_to_index: &mut [StackHashMap<u128, usize, 16>],
-    ) {
+    ) -> Result<()> {
         for (i, offset) in self.variant_offsets.iter().enumerate() {
             let column = block.get_by_offset(*offset);
             for row in start_row..end_row {
@@ -198,48 +259,56 @@ impl VirtualColumnBuilder {
                 };
                 let raw_jsonb = RawJsonb::new(jsonb_bytes);
 
-                let key_values = raw_jsonb.extract_scalar_key_values(true).unwrap();
-                for (key_paths, jsonb_value) in key_values {
-                    let scalar = Self::jsonb_value_to_scalar(jsonb_value);
-                    // Blocks are added repeatedly, so the actual rows need to add the rows of the previous blocks
-                    let scalar_value = JsonbScalarValue {
-                        row: self.total_rows + row,
-                        scalar,
-                    };
+                raw_jsonb
+                    .visit_scalar_key_values(true, |key_paths, jsonb_value| {
+                        let scalar = Self::jsonb_value_to_scalar(jsonb_value);
+                        // Blocks are added repeatedly, so the actual rows need to add the rows of the previous blocks
+                        let scalar_value = JsonbScalarValue {
+                            row: self.total_rows + row,
+                            scalar,
+                        };
 
-                    // Calculate the hash value and use the hash value as the key
-                    let mut hasher = SipHasher24::new();
-                    key_paths.hash(&mut hasher);
-                    let hash128 = hasher.finish128();
-                    let hash_value = hash128.into();
+                        // Calculate the hash value and use the hash value as the key
+                        let mut hasher = SipHasher24::new();
+                        key_paths.hash(&mut hasher);
+                        let hash128 = hasher.finish128();
+                        let hash_value = hash128.into();
 
-                    // Use hash value to lookup instead of key paths
-                    if let Some(index) = hash_to_index[i].get(&hash_value) {
-                        self.virtual_values[*index].push(scalar_value);
-                    } else {
-                        // The index was not found. Create a new key path
-                        let index = self.virtual_values.len();
-                        let owned_key_paths = OwnedKeyPaths::from_borrowed_key_paths(&key_paths);
+                        // Use hash value to lookup instead of key paths
+                        if let Some(index) = hash_to_index[i].get(&hash_value) {
+                            self.virtual_values[*index].push(scalar_value);
+                        } else {
+                            // The index was not found. Create a new key path
+                            let index = self.virtual_values.len();
+                            let owned_key_paths =
+                                OwnedKeyPaths::from_borrowed_key_path_slice(key_paths);
 
-                        unsafe {
-                            match hash_to_index[i].insert_and_entry(hash_value) {
-                                Ok(e) => {
-                                    let v = e.get_mut();
-                                    *v = index;
-                                }
-                                Err(e) => {
-                                    let v = e.get_mut();
-                                    *v = index;
+                            unsafe {
+                                match hash_to_index[i].insert_and_entry(hash_value) {
+                                    Ok(e) => {
+                                        let v = e.get_mut();
+                                        *v = index;
+                                    }
+                                    Err(e) => {
+                                        let v = e.get_mut();
+                                        *v = index;
+                                    }
                                 }
                             }
-                        }
 
-                        self.virtual_paths[i].insert(owned_key_paths, index);
-                        self.virtual_values.push(vec![scalar_value]);
-                    }
-                }
+                            self.virtual_paths[i].insert(owned_key_paths, index);
+                            self.virtual_values.push(vec![scalar_value]);
+                        }
+                        Ok(())
+                    })
+                    .map_err(|error| {
+                        ErrorCode::VirtualColumnError(format!(
+                            "failed to extract virtual column values: {error}"
+                        ))
+                    })?;
             }
         }
+        Ok(())
     }
 
     fn jsonb_value_to_scalar(value: JsonbValue<'_>) -> Scalar {
@@ -355,6 +424,56 @@ impl VirtualColumnBuilder {
         }
     }
 
+    fn build_path_statistics(
+        variant_fields: &[TableField],
+        virtual_paths: &[HashMap<OwnedKeyPaths, usize>],
+        virtual_values: &[Vec<JsonbScalarValue>],
+        max_path_statistics_per_source: usize,
+    ) -> Vec<DraftVirtualColumnPathStatistics> {
+        let mut statistics = Vec::new();
+        for (source_field, field_virtual_paths) in variant_fields.iter().zip(virtual_paths.iter()) {
+            let mut path_counts = Vec::new();
+            for (path, index) in field_virtual_paths {
+                let value_count = virtual_values
+                    .get(*index)
+                    .map(|values| values.len() as u64)
+                    .unwrap_or(0);
+                if value_count == 0 {
+                    continue;
+                }
+                path_counts.push(DraftVirtualPathCount {
+                    path: encode_virtual_path(
+                        &path
+                            .paths
+                            .iter()
+                            .map(owned_virtual_path_segment)
+                            .collect::<Vec<_>>(),
+                    ),
+                    value_count,
+                });
+            }
+            if path_counts.is_empty() {
+                continue;
+            }
+            let complete = path_counts.len() <= max_path_statistics_per_source;
+            path_counts.sort_by(|left, right| {
+                right
+                    .value_count
+                    .cmp(&left.value_count)
+                    .then_with(|| left.path.cmp(&right.path))
+            });
+            path_counts.truncate(max_path_statistics_per_source);
+            path_counts.sort_by(|left, right| left.path.cmp(&right.path));
+            statistics.push(DraftVirtualColumnPathStatistics {
+                source_column_id: source_field.column_id,
+                path_statistics_complete: complete,
+                paths: path_counts,
+            });
+        }
+        statistics.sort_by_key(|stat| stat.source_column_id);
+        statistics
+    }
+
     fn get_string_table_id(
         name: &str,
         string_table: &mut Vec<String>,
@@ -399,8 +518,9 @@ impl VirtualColumnBuilder {
         value_len: usize,
         value_type: VariantDataType,
         direct_column_count: usize,
+        max_direct_paths_per_source: usize,
     ) -> PathClass {
-        if direct_column_count >= MAX_DIRECT_VIRTUAL_COLUMNS_PER_SOURCE {
+        if direct_column_count >= max_direct_paths_per_source {
             return PathClass::Shared;
         }
 
@@ -412,7 +532,6 @@ impl VirtualColumnBuilder {
                 PathClass::Typed(value_type)
             }
         } else if !matches!(value_type, VariantDataType::Jsonb)
-            && value_len >= MIN_TYPED_VALUES_FOR_DIRECT_COLUMN
             && presence >= TYPED_PRESENCE_THRESHOLD
         {
             PathClass::Typed(value_type)
@@ -597,13 +716,14 @@ impl VirtualColumnBuilder {
         shared_values: &mut Vec<(OwnedKeyPaths, usize)>,
         virtual_values: &[Vec<JsonbScalarValue>],
         direct_column_count: usize,
+        max_direct_paths_per_source: usize,
     ) -> Vec<(OwnedKeyPaths, usize, VariantDataType)> {
         let mut shared_size = shared_values
             .iter()
             .map(|(_, index)| Self::estimate_shared_path_bytes(data_type, &virtual_values[*index]))
             .sum::<usize>();
         if shared_size <= MAX_SHARED_COLUMN_ESTIMATED_BYTES
-            || direct_column_count >= MAX_DIRECT_VIRTUAL_COLUMNS_PER_SOURCE
+            || direct_column_count >= max_direct_paths_per_source
         {
             return Vec::new();
         }
@@ -629,7 +749,7 @@ impl VirtualColumnBuilder {
         let mut selected = HashSet::new();
         for (pos, estimated_bytes, value_type) in candidates {
             if shared_size <= MAX_SHARED_COLUMN_ESTIMATED_BYTES
-                || direct_column_count + promoted.len() >= MAX_DIRECT_VIRTUAL_COLUMNS_PER_SOURCE
+                || direct_column_count + promoted.len() >= max_direct_paths_per_source
             {
                 break;
             }
@@ -683,6 +803,12 @@ impl VirtualColumnBuilder {
         self.total_rows = 0;
         let extracted_path_count = virtual_paths.iter().map(HashMap::len).sum::<usize>();
         let extracted_value_count = virtual_values.iter().map(Vec::len).sum::<usize>();
+        let path_statistics = Self::build_path_statistics(
+            &self.variant_fields,
+            &virtual_paths,
+            &virtual_values,
+            self.max_path_statistics_per_source,
+        );
 
         if total_rows == 0 || extracted_value_count == 0 {
             info!(
@@ -693,9 +819,8 @@ impl VirtualColumnBuilder {
                 extracted_path_count
             );
             let draft_virtual_block_meta = DraftVirtualBlockMeta {
-                virtual_column_metas: vec![],
-                virtual_column_size: 0,
-                virtual_location: ("".to_string(), 0),
+                virtual_columns: None,
+                path_statistics: (!path_statistics.is_empty()).then_some(path_statistics),
             };
 
             return Ok(VirtualColumnState {
@@ -738,7 +863,34 @@ impl VirtualColumnBuilder {
                 let key_name = Self::format_key_name(&field_virtual_path);
                 let val_type = Self::inference_data_type(values);
                 let shared_data_type = Self::shared_data_type_from_variant_type(&val_type);
-                match Self::classify_path(total_rows, values.len(), val_type, direct_column_count) {
+                let encoded_path = encode_virtual_path(
+                    &field_virtual_path
+                        .paths
+                        .iter()
+                        .map(owned_virtual_path_segment)
+                        .collect::<Vec<_>>(),
+                );
+                let planned_layout = self.mode.layout();
+                let path_class = if planned_layout
+                    .is_some_and(|layout| layout.contains(source_field.column_id, &encoded_path))
+                {
+                    if matches!(val_type, VariantDataType::Jsonb) {
+                        PathClass::Dynamic
+                    } else {
+                        PathClass::Typed(val_type.clone())
+                    }
+                } else if planned_layout.is_some() {
+                    PathClass::Shared
+                } else {
+                    Self::classify_path(
+                        total_rows,
+                        values.len(),
+                        val_type,
+                        direct_column_count,
+                        self.max_direct_paths_per_source,
+                    )
+                };
+                match path_class {
                     PathClass::Typed(value_type) => {
                         let (column, table_type) =
                             Self::build_typed_column(total_rows, values, value_type.clone());
@@ -797,12 +949,17 @@ impl VirtualColumnBuilder {
             }
 
             for (shared_data_type, mut shared_values) in shared_values_by_type {
-                let promoted_values = Self::promote_large_shared_paths(
-                    shared_data_type,
-                    &mut shared_values,
-                    &virtual_values,
-                    direct_column_count,
-                );
+                let promoted_values = if self.mode.is_planned() {
+                    Vec::new()
+                } else {
+                    Self::promote_large_shared_paths(
+                        shared_data_type,
+                        &mut shared_values,
+                        &virtual_values,
+                        direct_column_count,
+                        self.max_direct_paths_per_source,
+                    )
+                };
                 for (field_virtual_path, index, value_type) in promoted_values {
                     let values = &virtual_values[index];
                     let key_name = Self::format_key_name(&field_virtual_path);
@@ -976,9 +1133,12 @@ impl VirtualColumnBuilder {
             data_size
         );
         let draft_virtual_block_meta = DraftVirtualBlockMeta {
-            virtual_column_metas: draft_virtual_column_metas,
-            virtual_column_size: data_size,
-            virtual_location: (virtual_column_location, 0),
+            virtual_columns: Some(DraftVirtualColumnBlockMeta {
+                virtual_column_metas: draft_virtual_column_metas,
+                virtual_column_size: data_size,
+                virtual_location: (virtual_column_location, 0),
+            }),
+            path_statistics: (!path_statistics.is_empty()).then_some(path_statistics),
         };
 
         Ok(VirtualColumnState {
@@ -1096,6 +1256,13 @@ impl VirtualColumnBuilder {
     }
 }
 
+fn owned_virtual_path_segment(path: &OwnedKeyPath) -> VirtualPathSegment {
+    match path {
+        OwnedKeyPath::Index(idx) => VirtualPathSegment::Index(*idx),
+        OwnedKeyPath::Name(name) => VirtualPathSegment::Name(name.clone()),
+    }
+}
+
 /// Represents a set of key path chains.
 #[derive(Debug, Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct OwnedKeyPaths {
@@ -1137,12 +1304,11 @@ impl OwnedKeyPaths {
         JsonbKeyPaths { paths }
     }
 
-    fn from_borrowed_key_paths(key_paths: &JsonbKeyPaths) -> OwnedKeyPaths {
+    fn from_borrowed_key_path_slice(key_paths: &[JsonbKeyPath<'_>]) -> OwnedKeyPaths {
         let paths = key_paths
-            .paths
             .iter()
-            .map(|path| OwnedKeyPath::from_borrowed_key_path(path))
-            .collect::<Vec<_>>();
+            .map(OwnedKeyPath::from_borrowed_key_path)
+            .collect();
         OwnedKeyPaths { paths }
     }
 }

@@ -1016,9 +1016,10 @@ impl BindContext {
                         let max_column_id = metadata
                             .virtual_columns_by_table_index(table_index)
                             .filter_map(|column| match column {
-                                ColumnEntry::VirtualColumn(VirtualColumn { column_id, .. }) => {
-                                    Some(*column_id)
-                                }
+                                ColumnEntry::VirtualColumn(VirtualColumn {
+                                    query_column_id,
+                                    ..
+                                }) => Some(*query_column_id),
                                 _ => None,
                             })
                             .max()
@@ -1031,7 +1032,12 @@ impl BindContext {
                     });
 
                 let source_column_id = virtual_column_name.source_column_id;
-                let column_name = virtual_column_name.key_name.clone();
+                let path_name = &virtual_column_name.key_name;
+                let column_name = if path_name.starts_with('[') {
+                    format!("{source_column_name}{path_name}")
+                } else {
+                    format!("{source_column_name}.{path_name}")
+                };
                 // todo
                 let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
                 let is_try = true;

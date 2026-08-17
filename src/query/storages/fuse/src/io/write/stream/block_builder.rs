@@ -55,6 +55,7 @@ use crate::io::BlockSerialization;
 use crate::io::BloomIndexState;
 use crate::io::InvertedIndexBuilder;
 use crate::io::InvertedIndexWriter;
+use crate::io::JsonPathStatisticsBuilder;
 use crate::io::SpatialIndexBuilder;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VectorIndexBuilder;
@@ -173,6 +174,7 @@ pub struct StreamBlockBuilder {
     inverted_index_writers: Vec<InvertedIndexWriter>,
     bloom_index_builder: BloomIndexBuilder,
     virtual_column_builder: Option<VirtualColumnBuilder>,
+    json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
     vector_index_builder: Option<VectorIndexBuilder>,
     spatial_index_builder: Option<SpatialIndexBuilder>,
     block_stats_builder: BlockStatsBuilder,
@@ -211,6 +213,7 @@ impl StreamBlockBuilder {
         )?;
 
         let virtual_column_builder = properties.virtual_column_builder.clone();
+        let json_path_statistics_builder = properties.json_path_statistics_builder.clone();
         let vector_index_builder = VectorIndexBuilder::try_create(
             &properties.table_indexes,
             properties.source_schema.clone(),
@@ -237,6 +240,7 @@ impl StreamBlockBuilder {
             inverted_index_writers,
             bloom_index_builder,
             virtual_column_builder,
+            json_path_statistics_builder,
             vector_index_builder,
             spatial_index_builder,
             block_stats_builder,
@@ -274,6 +278,8 @@ impl StreamBlockBuilder {
         }
         if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
             virtual_column_builder.add_block(&block)?;
+        } else if let Some(ref mut statistics_builder) = self.json_path_statistics_builder {
+            statistics_builder.add_block(&block)?;
         }
         if let Some(ref mut vector_index_builder) = self.vector_index_builder {
             vector_index_builder.add_block(&block)?;
@@ -358,6 +364,15 @@ impl StreamBlockBuilder {
             } else {
                 None
             };
+        let path_statistics = self
+            .json_path_statistics_builder
+            .as_mut()
+            .map(JsonPathStatisticsBuilder::finalize)
+            .or_else(|| {
+                virtual_column_state
+                    .as_ref()
+                    .and_then(|state| state.draft_virtual_block_meta.path_statistics.clone())
+            });
         let (vector_index_state, vector_stats) = if let Some(ref mut vector_index_builder) =
             self.vector_index_builder
         {
@@ -434,6 +449,7 @@ impl StreamBlockBuilder {
             bloom_index_state,
             inverted_index_states,
             virtual_column_state,
+            path_statistics,
             vector_index_state,
             spatial_index_state,
             column_hlls: column_hlls.map(BlockHLLState::Deserialized),
@@ -459,6 +475,7 @@ pub struct StreamBlockProperties {
     ngram_args: Vec<NgramArgs>,
     inverted_index_builders: Vec<InvertedIndexBuilder>,
     virtual_column_builder: Option<VirtualColumnBuilder>,
+    json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
     table_meta_timestamps: TableMetaTimestamps,
     table_indexes: BTreeMap<String, TableIndex>,
 }
@@ -513,11 +530,32 @@ impl StreamBlockProperties {
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 
-        let virtual_column_builder = if table.enable_virtual_column() {
-            VirtualColumnBuilder::try_create(source_schema.clone()).ok()
-        } else {
-            None
-        };
+        // Recluster/compact/refresh materialize virtual columns and reuse the
+        // path frequencies collected by VirtualColumnBuilder. Other mutations
+        // only collect JSON path statistics.
+        let (virtual_column_builder, json_path_statistics_builder) =
+            if table.enable_virtual_column() {
+                match kind {
+                    MutationKind::Recluster | MutationKind::Compact | MutationKind::Refresh => (
+                        VirtualColumnBuilder::try_create(
+                            source_schema.clone(),
+                            table.virtual_column_layout_policy(),
+                        )
+                        .ok(),
+                        None,
+                    ),
+                    _ => (
+                        None,
+                        JsonPathStatisticsBuilder::try_create(
+                            source_schema.clone(),
+                            table.virtual_column_layout_policy(),
+                        )
+                        .ok(),
+                    ),
+                }
+            } else {
+                (None, None)
+            };
 
         let mut stats_columns = vec![];
         let mut distinct_columns = vec![];
@@ -540,6 +578,7 @@ impl StreamBlockProperties {
             source_schema,
             write_settings,
             virtual_column_builder,
+            json_path_statistics_builder,
             stats_columns,
             distinct_columns,
             bloom_columns_map,

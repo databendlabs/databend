@@ -33,6 +33,9 @@ use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_pruner::VirtualColumnReadPlan;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+use databend_storages_common_table_meta::meta::VirtualPathSegment;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
+use databend_storages_common_table_meta::meta::encode_virtual_path;
 use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use opendal::Operator;
@@ -50,6 +53,7 @@ pub struct VirtualColumnPruner {
 struct VirtualColumnFieldMatch {
     field: VirtualColumnField,
     match_info: KeyPathMatchInfo,
+    encoded_path: String,
 }
 
 impl VirtualColumnPruner {
@@ -66,6 +70,7 @@ impl VirtualColumnPruner {
                 virtual_column_fields.push(VirtualColumnFieldMatch {
                     field: field.clone(),
                     match_info,
+                    encoded_path: encode_owned_key_paths(&field.key_paths),
                 });
             }
             return Ok(Some(Arc::new(VirtualColumnPruner {
@@ -81,6 +86,7 @@ impl VirtualColumnPruner {
     pub async fn prune_virtual_columns(
         &self,
         virtual_block_meta: &Option<VirtualBlockMeta>,
+        virtual_segment_schema: Option<&VirtualSegmentSchema>,
     ) -> Result<Option<VirtualBlockMetaIndex>> {
         let Some(virtual_block_meta) = virtual_block_meta else {
             return Ok(None);
@@ -92,6 +98,12 @@ impl VirtualColumnPruner {
             &virtual_block_meta.virtual_location.0,
         ) {
             return Ok(None);
+        }
+
+        if let Some(index) =
+            self.try_prune_from_block_meta(virtual_block_meta, virtual_segment_schema)
+        {
+            return Ok(Some(index));
         }
 
         let Ok(virtual_meta) =
@@ -209,7 +221,7 @@ impl VirtualColumnPruner {
 
             if !plans.is_empty() {
                 let entry = virtual_column_read_plan
-                    .entry(field.column_id)
+                    .entry(field.query_column_id)
                     .or_insert_with(Vec::new);
                 for plan in plans {
                     if !entry.contains(&plan) {
@@ -229,7 +241,7 @@ impl VirtualColumnPruner {
                 // If a requested path is absent from the trie/shared metadata, the path is absent
                 // for this block and can be materialized as NULL without reading the source column.
                 virtual_column_read_plan
-                    .entry(field.column_id)
+                    .entry(field.query_column_id)
                     .or_insert_with(Vec::new)
                     .push(VirtualColumnReadPlan::Missing);
             }
@@ -254,6 +266,66 @@ impl VirtualColumnPruner {
             return Ok(Some(virtual_block_meta));
         }
         Ok(None)
+    }
+
+    fn try_prune_from_block_meta(
+        &self,
+        virtual_block_meta: &VirtualBlockMeta,
+        virtual_segment_schema: Option<&VirtualSegmentSchema>,
+    ) -> Option<VirtualBlockMetaIndex> {
+        let Some(schema) = virtual_segment_schema else {
+            return None;
+        };
+
+        let mut virtual_column_metas = BTreeMap::new();
+        let mut virtual_column_read_plan = BTreeMap::new();
+        for virtual_column_field in &self.virtual_column_fields {
+            let field = &virtual_column_field.field;
+            // Array indexes and unextracted/shared paths still need sidecar parquet meta.
+            if virtual_column_field.match_info.has_index {
+                return None;
+            }
+            if let Some(path_index) =
+                schema.find_path(field.source_column_id, &virtual_column_field.encoded_path)
+            {
+                let Some(path) = schema.path(field.source_column_id, path_index) else {
+                    return None;
+                };
+                let Some(real_column_id) = path.column_id else {
+                    return None;
+                };
+                match virtual_block_meta.virtual_column_metas.get(&real_column_id) {
+                    Some(column_meta) => {
+                        virtual_column_metas.insert(real_column_id, column_meta.clone());
+                        virtual_column_read_plan.insert(field.query_column_id, vec![
+                            VirtualColumnReadPlan::Direct {
+                                name: real_column_id.to_string(),
+                            },
+                        ]);
+                    }
+                    None if virtual_block_meta.virtual_columns_complete => {
+                        virtual_column_read_plan
+                            .insert(field.query_column_id, vec![VirtualColumnReadPlan::Missing]);
+                    }
+                    None => return None,
+                }
+                continue;
+            }
+            if virtual_block_meta.virtual_columns_complete {
+                virtual_column_read_plan
+                    .insert(field.query_column_id, vec![VirtualColumnReadPlan::Missing]);
+                continue;
+            }
+            return None;
+        }
+
+        Some(VirtualBlockMetaIndex {
+            virtual_block_location: virtual_block_meta.virtual_location.0.clone(),
+            virtual_column_metas,
+            shared_virtual_column_ids: BTreeMap::new(),
+            ignored_source_column_ids: self.source_column_ids.clone(),
+            virtual_column_read_plan,
+        })
     }
 }
 
@@ -459,6 +531,21 @@ struct KeyPathMatchInfo {
     has_index: bool,
     // starts_with_index: root-array paths currently need source fallback when unresolved.
     starts_with_index: bool,
+}
+
+fn encode_owned_key_paths(key_paths: &OwnedKeyPaths) -> String {
+    encode_virtual_path(
+        &key_paths
+            .paths
+            .iter()
+            .map(|path| match path {
+                OwnedKeyPath::Index(idx) => VirtualPathSegment::Index(*idx),
+                OwnedKeyPath::Name(name) | OwnedKeyPath::QuotedName(name) => {
+                    VirtualPathSegment::Name(name.to_string())
+                }
+            })
+            .collect::<Vec<_>>(),
+    )
 }
 
 fn key_paths_match_info(key_paths: &OwnedKeyPaths) -> KeyPathMatchInfo {

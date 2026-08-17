@@ -433,7 +433,11 @@ impl FusePruner {
                             )?;
                             res.extend(
                                 block_pruner
-                                    .pruning(segment_location.clone(), block_metas)
+                                    .pruning(
+                                        segment_location.clone(),
+                                        block_metas,
+                                        compact_segment_info.summary.virtual_segment_schema.clone(),
+                                    )
                                     .await?,
                             );
                         }
@@ -481,7 +485,15 @@ impl FusePruner {
                                     block_metas = Arc::new(sample_block_metas);
                                 }
                             }
-                            res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
+                            res.extend(
+                                block_pruner
+                                    .pruning(
+                                        location.clone(),
+                                        block_metas,
+                                        info.summary.virtual_segment_schema.clone(),
+                                    )
+                                    .await?,
+                            );
                         }
                     }
                     Result::<_>::Ok((res, deleted_segments))
@@ -564,6 +576,7 @@ impl FusePruner {
                                 snapshot_loc: None,
                             },
                             Arc::new(batch),
+                            None,
                         )
                         .await?;
 

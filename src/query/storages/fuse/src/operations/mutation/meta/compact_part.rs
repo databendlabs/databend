@@ -27,6 +27,7 @@ use databend_common_exception::Result;
 use databend_storages_common_cache::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VirtualColumnLayout;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
@@ -145,11 +146,20 @@ impl CompactExtraInfo {
 pub struct CompactTaskInfo {
     pub blocks: Vec<Arc<BlockMeta>>,
     pub index: BlockMetaIndex,
+    pub virtual_column_layout: Option<VirtualColumnLayout>,
 }
 
 impl CompactTaskInfo {
-    pub fn create(blocks: Vec<Arc<BlockMeta>>, index: BlockMetaIndex) -> Self {
-        CompactTaskInfo { blocks, index }
+    pub fn create(
+        blocks: Vec<Arc<BlockMeta>>,
+        index: BlockMetaIndex,
+        virtual_column_layout: Option<VirtualColumnLayout>,
+    ) -> Self {
+        CompactTaskInfo {
+            blocks,
+            index,
+            virtual_column_layout,
+        }
     }
 
     fn hash(&self) -> u64 {

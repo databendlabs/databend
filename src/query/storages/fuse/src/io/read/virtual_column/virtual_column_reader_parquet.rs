@@ -188,7 +188,8 @@ impl VirtualColumnReader {
         // otherwise extract it from the source column
         let func_ctx = self.ctx.get_function_context()?;
         for virtual_column_field in self.virtual_column_info.virtual_column_fields.iter() {
-            if let Some(plans) = virtual_column_read_plan.get(&virtual_column_field.column_id) {
+            if let Some(plans) = virtual_column_read_plan.get(&virtual_column_field.query_column_id)
+            {
                 let target_type: DataType = virtual_column_field.data_type.as_ref().into();
                 let cast_func_name = format!(
                     "to_{}",
@@ -277,7 +278,7 @@ impl VirtualColumnReader {
                 }
             }
 
-            let name = format!("{}", virtual_column_field.column_id);
+            let name = format!("{}", virtual_column_field.query_column_id);
             if let Some(arrow_array) = record_batch
                 .as_ref()
                 .and_then(|r| r.column_by_name(&name).cloned())

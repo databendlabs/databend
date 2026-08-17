@@ -298,6 +298,7 @@ pub fn merge_statistics_mut(
     r: &Statistics,
     cluster_key_info: Option<&ClusterKeyInfo>,
 ) {
+    l.virtual_segment_schema = None;
     l.additional_stats_meta = None;
     if l.row_count == 0 {
         l.col_stats = r.col_stats.clone();
@@ -354,6 +355,8 @@ pub fn deduct_statistics(l: &Statistics, r: &Statistics) -> Statistics {
 
 // Deduct statistics, only be used for calculate snapshot summary.
 pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
+    // Segment-local virtual metadata cannot be reconstructed by subtraction.
+    l.virtual_segment_schema = None;
     // Exact partition identity cannot be reconstructed after subtraction.
     l.partition_stats = None;
     l.row_count -= r.row_count;
@@ -513,6 +516,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         cluster_stats: merged_cluster_stats,
         partition_stats: merged_partition_stats,
         virtual_block_count: merged_virtual_block_count,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     })
 }

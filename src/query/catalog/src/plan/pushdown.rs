@@ -57,9 +57,11 @@ pub struct VirtualColumnField {
     pub source_column_id: u32,
     /// The source column name.
     pub source_name: String,
-    /// The virtual column id
-    pub column_id: u32,
-    /// The virtual column name.
+    /// Query-time temporary column id. This is not a persisted segment-local
+    /// virtual column id; each segment may assign a different real column id
+    /// for the same path, so readers must map this id through the segment schema.
+    pub query_column_id: u32,
+    /// Canonical JSON path, e.g. `user.name`, `users[0].id`.
     pub name: String,
     /// Paths to generate virtual column from source column.
     pub key_paths: OwnedKeyPaths,

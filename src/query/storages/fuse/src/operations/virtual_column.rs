@@ -135,7 +135,8 @@ pub async fn prepare_refresh_virtual_column(
             "Virtual column write is disabled for table, set table option enable_virtual_column=true first",
         ));
     }
-    let virtual_column_builder = VirtualColumnBuilder::try_create(source_schema)?;
+    let virtual_column_builder =
+        VirtualColumnBuilder::try_create(source_schema, fuse_table.virtual_column_layout_policy())?;
     info!(
         "Preparing virtual column refresh for table_id={} with {} variant source fields",
         fuse_table.get_id(),
@@ -747,20 +748,15 @@ async fn build_virtual_columns(
                 let virtual_column_state =
                     virtual_column_builder.finalize(&write_settings, &task.block_meta.location)?;
 
-                if virtual_column_state
+                if let Some(virtual_columns) = &virtual_column_state
                     .draft_virtual_block_meta
-                    .virtual_column_size
-                    > 0
+                    .virtual_columns
+                    && virtual_columns.virtual_column_size > 0
                 {
                     let start = Instant::now();
 
-                    let virtual_column_size = virtual_column_state
-                        .draft_virtual_block_meta
-                        .virtual_column_size;
-                    let location = &virtual_column_state
-                        .draft_virtual_block_meta
-                        .virtual_location
-                        .0;
+                    let virtual_column_size = virtual_columns.virtual_column_size;
+                    let location = &virtual_columns.virtual_location.0;
 
                     write_data(virtual_column_state.data, &operator, location).await?;
 

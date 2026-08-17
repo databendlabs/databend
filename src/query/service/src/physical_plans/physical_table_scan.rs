@@ -911,7 +911,7 @@ impl PhysicalPlanBuilder {
         for index in indices.iter() {
             if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
             {
-                virtual_column_ids.push(virtual_column.column_id);
+                virtual_column_ids.push(virtual_column.query_column_id);
             }
         }
         if !virtual_column_ids.is_empty() {
@@ -943,7 +943,7 @@ impl PhysicalPlanBuilder {
             let virtual_column_field = VirtualColumnField {
                 source_column_id: virtual_column.source_column_id,
                 source_name: virtual_column.source_column_name.clone(),
-                column_id: virtual_column.column_id,
+                query_column_id: virtual_column.query_column_id,
                 name: virtual_column.column_name.clone(),
                 key_paths: virtual_column.key_paths.clone(),
                 cast_func_name,

@@ -84,6 +84,7 @@ use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
+use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -234,6 +235,7 @@ impl Interpreter for SetOptionsInterpreter {
 
         // check enable_virtual_column
         is_valid_fuse_virtual_column_opt(&self.plan.set_options)?;
+        is_valid_virtual_column_layout_options(&self.plan.set_options)?;
 
         let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
 

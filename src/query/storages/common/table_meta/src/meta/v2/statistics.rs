@@ -35,6 +35,7 @@ use serde::de::Error;
 
 use crate::meta::Location;
 use crate::meta::RawBlockHLL;
+use crate::meta::VirtualSegmentSchema;
 use crate::meta::supported_stat_type;
 use crate::meta::v0;
 
@@ -313,6 +314,11 @@ pub struct Statistics {
     pub partition_stats: Option<PartitionStatistics>,
     pub virtual_block_count: Option<u64>,
 
+    /// Segment-local virtual column schema. This field must be cleared when
+    /// segment statistics are merged into a snapshot summary.
+    #[serde(default)]
+    pub virtual_segment_schema: Option<VirtualSegmentSchema>,
+
     pub additional_stats_meta: Option<AdditionalStatsMeta>,
 }
 
@@ -477,6 +483,7 @@ impl Statistics {
             cluster_stats: None,
             partition_stats: None,
             virtual_block_count: None,
+            virtual_segment_schema: None,
             additional_stats_meta: None,
         }
     }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
@@ -32,12 +33,16 @@ use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VirtualColumnLayout;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use log::info;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
 use crate::TableContext;
 use crate::io::SegmentsIO;
+use crate::io::VirtualColumnLayoutPlanner;
+use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::read::read_segment_stats;
 use crate::operations::CompactOptions;
 use crate::operations::acquire_task_permit;
@@ -62,6 +67,7 @@ pub struct BlockCompactMutator {
     pub compact_params: CompactOptions,
     pub cluster_key_info: Option<ClusterKeyInfo>,
     pub partition_key_count: usize,
+    pub virtual_column_layout_policy: VirtualColumnLayoutPolicy,
 }
 
 impl BlockCompactMutator {
@@ -79,6 +85,7 @@ impl BlockCompactMutator {
             compact_params,
             cluster_key_info,
             partition_key_count: 0,
+            virtual_column_layout_policy: Default::default(),
         }
     }
 
@@ -227,6 +234,7 @@ impl BlockCompactMutator {
                     self.cluster_key_info.clone(),
                     self.partition_key_count,
                     self.thresholds,
+                    self.virtual_column_layout_policy,
                     lazy_parts,
                 )
                 .await?,
@@ -252,6 +260,7 @@ impl BlockCompactMutator {
         cluster_key_info: Option<ClusterKeyInfo>,
         partition_key_count: usize,
         thresholds: BlockThresholds,
+        virtual_column_layout_policy: VirtualColumnLayoutPolicy,
         lazy_parts: Vec<CompactLazyPartInfo>,
     ) -> Result<Vec<PartInfoPtr>> {
         let start = Instant::now();
@@ -288,6 +297,7 @@ impl BlockCompactMutator {
                         cluster_key_info.clone(),
                         partition_key_count,
                         thresholds,
+                        virtual_column_layout_policy,
                     );
                     let parts = builder
                         .build_tasks(
@@ -487,11 +497,13 @@ struct CompactTaskBuilder {
     cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
     thresholds: BlockThresholds,
+    virtual_column_layout_policy: VirtualColumnLayoutPolicy,
 
     blocks: Vec<BlockMetaWithHLL>,
     total_rows: usize,
     total_size: usize,
     total_compressed: usize,
+    virtual_schemas: HashMap<String, Option<VirtualSegmentSchema>>,
 }
 
 enum TailMergeSource {
@@ -506,16 +518,19 @@ impl CompactTaskBuilder {
         cluster_key_info: Option<ClusterKeyInfo>,
         partition_key_count: usize,
         thresholds: BlockThresholds,
+        virtual_column_layout_policy: VirtualColumnLayoutPolicy,
     ) -> Self {
         Self {
             dal,
             cluster_key_info,
             partition_key_count,
             thresholds,
+            virtual_column_layout_policy,
             blocks: vec![],
             total_rows: 0,
             total_size: 0,
             total_compressed: 0,
+            virtual_schemas: HashMap::new(),
         }
     }
 
@@ -573,7 +588,7 @@ impl CompactTaskBuilder {
 
     fn build_task(
         &self,
-        tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>)>,
+        tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>, Option<VirtualColumnLayout>)>,
         unchanged_blocks: &mut Vec<(BlockIndex, BlockMetaWithHLL)>,
         block_idx: &mut BlockIndex,
         blocks: Vec<BlockMetaWithHLL>,
@@ -585,8 +600,33 @@ impl CompactTaskBuilder {
             unchanged_blocks.push((index, blocks[0].clone()));
             TailMergeSource::UnchangedBlock
         } else {
-            let blocks = blocks.into_iter().map(|v| v.0).collect();
-            tasks.push_back((index, blocks));
+            let blocks = blocks.into_iter().map(|v| v.0).collect::<Vec<_>>();
+            let mut planner = VirtualColumnLayoutPlanner::create(self.virtual_column_layout_policy);
+            let mut grouped = HashMap::<usize, Vec<&BlockMeta>>::new();
+            let mut schemas = Vec::<Option<VirtualSegmentSchema>>::new();
+            for block in &blocks {
+                let schema = self
+                    .virtual_schemas
+                    .get(&block.location.0)
+                    .cloned()
+                    .flatten();
+                let schema_index = schemas
+                    .iter()
+                    .position(|item| item == &schema)
+                    .unwrap_or_else(|| {
+                        schemas.push(schema);
+                        schemas.len() - 1
+                    });
+                grouped
+                    .entry(schema_index)
+                    .or_default()
+                    .push(block.as_ref());
+            }
+            for (schema_index, blocks) in grouped {
+                planner.add_blocks(schemas[schema_index].as_ref(), blocks);
+            }
+            let layout = planner.build();
+            tasks.push_back((index, blocks, layout));
             TailMergeSource::CompactTask
         }
     }
@@ -605,7 +645,7 @@ impl CompactTaskBuilder {
 
     fn flush_pending(
         &mut self,
-        tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>)>,
+        tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>, Option<VirtualColumnLayout>)>,
         unchanged_blocks: &mut Vec<(BlockIndex, BlockMetaWithHLL)>,
         block_idx: &mut BlockIndex,
     ) -> TailMergeSource {
@@ -644,7 +684,12 @@ impl CompactTaskBuilder {
                 };
                 let blocks = segment.block_metas()?;
                 drop(permit);
-                Ok::<_, ErrorCode>((blocks, segment.summary.clone(), stats))
+                Ok::<_, ErrorCode>((
+                    blocks,
+                    segment.summary.clone(),
+                    stats,
+                    segment.summary.virtual_segment_schema.clone(),
+                ))
             });
             handlers.push(handler);
         }
@@ -656,11 +701,11 @@ impl CompactTaskBuilder {
             ))
         })?;
 
-        let mut blocks = joint
+        let blocks = joint
             .into_iter()
             .collect::<Result<Vec<_>>>()?
             .into_iter()
-            .flat_map(|(blocks, summary, hlls)| {
+            .flat_map(|(blocks, summary, hlls, virtual_schema)| {
                 merge_statistics_mut(
                     &mut removed_segment_summary,
                     &summary,
@@ -669,9 +714,18 @@ impl CompactTaskBuilder {
 
                 blocks.into_iter().enumerate().map(move |(idx, v)| {
                     let column_hlls = hlls.as_ref().and_then(|v| v.block_hlls.get(idx)).cloned();
-                    (v, column_hlls)
+                    (v, column_hlls, virtual_schema.clone())
                 })
             })
+            .collect::<Vec<_>>();
+
+        for (block_meta, _, virtual_schema) in &blocks {
+            self.virtual_schemas
+                .insert(block_meta.location.0.clone(), virtual_schema.clone());
+        }
+        let mut blocks = blocks
+            .into_iter()
+            .map(|(block, hll, _)| (block, hll))
             .collect::<Vec<_>>();
 
         if let Some(cluster_key_info) = self.cluster_key_info.as_ref() {
@@ -736,9 +790,11 @@ impl CompactTaskBuilder {
                 TailMergeSource::UnchangedBlock => unchanged_blocks
                     .pop()
                     .map_or_else(Vec::new, |(_, v)| vec![v]),
-                TailMergeSource::CompactTask => tasks.pop_back().map_or_else(Vec::new, |(_, v)| {
-                    v.into_iter().map(|v| (v, None)).collect()
-                }),
+                TailMergeSource::CompactTask => {
+                    tasks.pop_back().map_or_else(Vec::new, |(_, v, _)| {
+                        v.into_iter().map(|v| (v, None)).collect()
+                    })
+                }
             };
 
             let (total_rows, total_size, total_compressed) =
@@ -766,12 +822,16 @@ impl CompactTaskBuilder {
         let mut removed_segment_indexes = segment_indices;
         let segment_idx = removed_segment_indexes.pop().unwrap();
         let mut partitions: Vec<PartInfoPtr> = Vec::with_capacity(tasks.len() + 1);
-        for (block_idx, blocks) in tasks.into_iter() {
+        for (block_idx, blocks, virtual_column_layout) in tasks.into_iter() {
             partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactTaskInfo(
-                CompactTaskInfo::create(blocks, BlockMetaIndex {
-                    segment_idx,
-                    block_idx,
-                }),
+                CompactTaskInfo::create(
+                    blocks,
+                    BlockMetaIndex {
+                        segment_idx,
+                        block_idx,
+                    },
+                    virtual_column_layout,
+                ),
             ))));
         }
 

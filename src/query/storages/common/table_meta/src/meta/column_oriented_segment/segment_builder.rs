@@ -48,6 +48,8 @@ use crate::meta::MetaEncoding;
 use crate::meta::PartitionStatistics;
 use crate::meta::Statistics;
 use crate::meta::VirtualBlockMeta;
+use crate::meta::VirtualColumnPath;
+use crate::meta::VirtualSegmentSchema;
 use crate::meta::format::encode;
 use crate::meta::reduce_cluster_statistics;
 use crate::meta::supported_stat_type;
@@ -57,6 +59,12 @@ pub trait SegmentBuilder: Send + Sync + 'static {
     type Segment: AbstractSegment;
     fn block_count(&self) -> usize;
     fn add_block(&mut self, block_meta: BlockMeta) -> Result<()>;
+    fn set_virtual_metadata(
+        &mut self,
+        _virtual_segment_schema: Option<VirtualSegmentSchema>,
+        _virtual_paths: Vec<VirtualColumnPath>,
+    ) {
+    }
     fn build(
         &mut self,
         thresholds: BlockThresholds,
@@ -377,6 +385,7 @@ impl ColumnOrientedSegmentBuilder {
             cluster_stats,
             partition_stats,
             virtual_block_count: Some(virtual_block_count),
+            virtual_segment_schema: None,
             additional_stats_meta,
         })
     }

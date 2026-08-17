@@ -58,6 +58,8 @@ use crate::MAX_RECLUSTER_DEPTH;
 use crate::MIN_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
 use crate::io::MetaReaders;
+use crate::io::VirtualColumnLayoutPlanner;
+use crate::io::VirtualColumnLayoutPolicy;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
@@ -147,6 +149,7 @@ pub struct ReclusterMutator {
     pub(crate) max_tasks: usize,
     pub(crate) properties: ReclusterProperties,
     strategy: Arc<dyn ReclusterStrategy>,
+    virtual_column_layout_policy: VirtualColumnLayoutPolicy,
 }
 
 impl ReclusterMutator {
@@ -231,6 +234,7 @@ impl ReclusterMutator {
             max_tasks,
             properties,
             strategy,
+            virtual_column_layout_policy: table.virtual_column_layout_policy(),
         })
     }
 
@@ -272,6 +276,7 @@ impl ReclusterMutator {
             max_tasks,
             properties,
             strategy,
+            virtual_column_layout_policy: Default::default(),
         }
     }
 
@@ -538,6 +543,18 @@ impl ReclusterMutator {
                     None,
                     None,
                 );
+                let mut planner =
+                    VirtualColumnLayoutPlanner::create(self.virtual_column_layout_policy);
+                for (window_pos, block_indices) in &candidate.selected_blocks {
+                    let segment_info = window.segments[*window_pos].1.as_ref().unwrap();
+                    planner.add_blocks(
+                        segment_info.summary.virtual_segment_schema.as_ref(),
+                        block_indices
+                            .iter()
+                            .map(|block_idx| segment_info.blocks[*block_idx].as_ref()),
+                    );
+                }
+                let virtual_column_layout = planner.build();
                 tasks.push(ReclusterTask {
                     parts,
                     stats,
@@ -546,6 +563,7 @@ impl ReclusterMutator {
                     total_compressed,
                     level: candidate.output_level,
                     all_ordered: candidate.all_ordered,
+                    virtual_column_layout,
                 });
                 selected_block_count += block_metas.len() as u64;
             }

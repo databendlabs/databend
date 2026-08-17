@@ -43,6 +43,8 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
+use databend_common_storages_fuse::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_PATHS;
+use databend_common_storages_fuse::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use databend_common_storages_fuse::MAX_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::MIN_RECLUSTER_DEPTH;
 use databend_storages_common_index::BloomIndex;
@@ -94,6 +96,8 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
     r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
+    r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_PATHS);
+    r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS);
     r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
@@ -219,6 +223,8 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
     r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
+    r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_PATHS);
+    r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
@@ -229,6 +235,28 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE);
     r
 });
+
+pub fn is_valid_virtual_column_layout_options(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_PATHS) {
+        let value = value.parse::<usize>()?;
+        if value > 10000 {
+            return Err(ErrorCode::TableOptionInvalid(
+                "virtual_column_max_direct_paths_per_source must be between 0 and 10000",
+            ));
+        }
+    }
+    if let Some(value) = options.get(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS) {
+        let value = value.parse::<usize>()?;
+        if value > 50000 {
+            return Err(ErrorCode::TableOptionInvalid(
+                "virtual_column_max_path_statistics_per_source must be between 0 and 50000",
+            ));
+        }
+    }
+    Ok(())
+}
 
 pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
     let opt_key = opt_key.as_ref().to_lowercase();

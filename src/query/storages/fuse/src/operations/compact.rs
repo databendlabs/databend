@@ -168,6 +168,7 @@ impl FuseTable {
             self.cluster_key_info(),
         );
         mutator.partition_key_count = self.partition_key_count();
+        mutator.virtual_column_layout_policy = self.virtual_column_layout_policy();
 
         let partitions = mutator.target_select().await?;
         if partitions.is_empty() {

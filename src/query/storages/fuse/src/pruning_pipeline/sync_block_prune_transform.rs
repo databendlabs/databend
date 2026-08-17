@@ -55,6 +55,7 @@ impl BlockMetaAccumulatingTransform<BlockMetasMeta> for SyncBlockPruneTransform 
             data.block_metas,
             block_meta_indexes,
             None,
+            data.virtual_segment_schema,
         )?;
         if result.is_empty() {
             return Ok(None);
