@@ -29,6 +29,7 @@ use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::LikePattern;
+use databend_common_expression::PartialEvalPolicy;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
@@ -1908,12 +1909,9 @@ fn register_like(registry: &mut FunctionRegistry) {
             FunctionDomain::Full
         },
         |arg1, arg2, ctx| {
-            vectorize_like(|str, pattern_type| pattern_type.compare(str))(
-                arg1,
-                arg2,
-                Value::Scalar("".to_string()),
-                ctx,
-            )
+            vectorize_like(PartialEvalPolicy::SkipInactiveRows, |str, pattern_type| {
+                pattern_type.compare(str)
+            })(arg1, arg2, Value::Scalar("".to_string()), ctx)
         },
     );
 
@@ -1934,7 +1932,10 @@ fn register_like(registry: &mut FunctionRegistry) {
             FunctionDomain::Full
         },
         |arg1, arg2, arg3, ctx| {
-            vectorize_like(|str, pattern_type| pattern_type.compare(str))(
+            vectorize_like(
+                PartialEvalPolicy::SkipInactiveRows,
+                |str, pattern_type| pattern_type.compare(str),
+            )(
                 arg1,
                 arg2,
                 arg3,
@@ -2073,6 +2074,7 @@ fn variant_like_requires_traversal(pattern: &[u8], pattern_type: &LikePattern) -
 }
 
 fn vectorize_like(
+    policy: PartialEvalPolicy,
     func: impl Fn(&[u8], &LikePattern) -> bool + Copy,
 ) -> impl Fn(
     Value<StringType>,
@@ -2085,8 +2087,15 @@ fn vectorize_like(
         let Value::Scalar(escape) = arg3 else {
             unreachable!()
         };
+        let active_rows = policy.active_rows(ctx);
         match (arg1, arg2) {
             (Value::Scalar(arg1), Value::Scalar(arg2)) => {
+                if active_rows
+                    .as_ref()
+                    .is_some_and(|validity| validity.null_count() == validity.len())
+                {
+                    return Value::Scalar(false);
+                }
                 let pattern = convert_escape_pattern(&escape, arg2);
                 let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
                 Value::Scalar(func(arg1.as_bytes(), &pattern_type))
@@ -2097,11 +2106,7 @@ fn vectorize_like(
                 let pattern = convert_escape_pattern(&escape, arg2);
                 let pattern_type =
                     generate_like_pattern(pattern.as_bytes(), arg1.total_bytes_len());
-                let sparse_validity = ctx
-                    .validity
-                    .as_ref()
-                    .filter(|validity| validity.null_count() > 0);
-                if let Some(validity) = sparse_validity {
+                if let Some(validity) = active_rows.as_ref() {
                     if let LikePattern::SurroundByPercent(searcher) = pattern_type {
                         for (index, arg1) in arg1_iter.enumerate() {
                             builder.push(
@@ -2131,12 +2136,9 @@ fn vectorize_like(
             (Value::Scalar(arg1), Value::Column(arg2)) => {
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
-                let sparse_validity = ctx
-                    .validity
-                    .as_ref()
-                    .filter(|validity| validity.null_count() > 0);
                 for (index, arg2) in arg2_iter.enumerate() {
-                    if sparse_validity
+                    if active_rows
+                        .as_ref()
                         .map(|validity| !validity.get_bit(index))
                         .unwrap_or(false)
                     {
@@ -2153,12 +2155,9 @@ fn vectorize_like(
                 let arg1_iter = StringType::iter_column(&arg1);
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
-                let sparse_validity = ctx
-                    .validity
-                    .as_ref()
-                    .filter(|validity| validity.null_count() > 0);
                 for (index, (arg1, arg2)) in arg1_iter.zip(arg2_iter).enumerate() {
-                    if sparse_validity
+                    if active_rows
+                        .as_ref()
                         .map(|validity| !validity.get_bit(index))
                         .unwrap_or(false)
                     {
@@ -2265,7 +2264,9 @@ fn like_any_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType>
         .unwrap_or(Value::Scalar("".to_string()));
 
     let result = if let Ok(value) = arg.try_downcast::<StringType>() {
-        let like = vectorize_like(|str, pattern_type| pattern_type.compare(str));
+        let like = vectorize_like(PartialEvalPolicy::SkipInactiveRows, |str, pattern_type| {
+            pattern_type.compare(str)
+        });
         patterns
             .iter()
             .map(|pattern| {
@@ -2592,7 +2593,7 @@ mod tests {
     #[test]
     fn test_vectorized_like_skips_rows_excluded_by_validity() {
         let calls = AtomicUsize::new(0);
-        let like = vectorize_like(|value, pattern| {
+        let like = vectorize_like(PartialEvalPolicy::SkipInactiveRows, |value, pattern| {
             calls.fetch_add(1, AtomicOrdering::Relaxed);
             pattern.compare(value)
         });
@@ -2651,7 +2652,7 @@ mod tests {
     #[test]
     fn test_vectorized_like_keeps_dense_and_surround_paths() {
         let calls = AtomicUsize::new(0);
-        let like = vectorize_like(|value, pattern| {
+        let like = vectorize_like(PartialEvalPolicy::SkipInactiveRows, |value, pattern| {
             calls.fetch_add(1, AtomicOrdering::Relaxed);
             pattern.compare(value)
         });
@@ -2698,7 +2699,7 @@ mod tests {
         ) {
             let values = rows.iter().map(|(value, _)| value.as_str()).collect::<Vec<_>>();
             let validity = rows.iter().map(|(_, valid)| *valid).collect::<Vec<_>>();
-            let like = vectorize_like(|value, pattern| pattern.compare(value));
+            let like = vectorize_like(PartialEvalPolicy::SkipInactiveRows, |value, pattern| pattern.compare(value));
             let func_ctx = FunctionContext::default();
             let mut dense_ctx = EvalContext {
                 generics: &[],
