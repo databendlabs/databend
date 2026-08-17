@@ -231,12 +231,22 @@ a INT YES NULL (empty)
 c VARCHAR YES NULL (empty)
 d INT YES NULL (empty)
 
-## DESCRIBE applies the session branch to branch-capable tables without fallback.
+query TTTT??
+SHOW COLUMNS FROM t_no_branch
+----
+a int YES (empty) NULL NULL
+c varchar(16382) YES (empty) NULL NULL
+d int YES (empty) NULL NULL
+
+## DESCRIBE and SHOW COLUMNS apply the session branch to branch-capable tables without fallback.
 statement ok
 SET wap_branch = 'nonexistent'
 
 statement error .*Unknown branch 'nonexistent'.*
 DESCRIBE t_no_branch
+
+statement error .*Unknown branch 'nonexistent'.*
+SHOW COLUMNS FROM t_no_branch
 
 ## Engines without branch support ignore the session branch.
 query TTTTT
@@ -258,6 +268,13 @@ SHOW FIELDS FROM t_no_branch/dev
 a INT YES NULL (empty)
 c VARCHAR YES NULL (empty)
 d INT YES NULL (empty)
+
+query TTTT??
+SHOW COLUMNS FROM t_no_branch/dev
+----
+a int YES (empty) NULL NULL
+c varchar(16382) YES (empty) NULL NULL
+d int YES (empty) NULL NULL
 
 statement ok
 SET wap_branch = 'dev'

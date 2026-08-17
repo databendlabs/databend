@@ -35,12 +35,15 @@ impl Binder {
         let ShowColumnsStmt { table, full, limit } = stmt;
 
         let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
-        let (catalog_name, database, table, branch) = (
+        let (catalog_name, database, table, explicit_branch) = (
             table_identifier.catalog_name(),
             table_identifier.database_name(),
             table_identifier.table_name(),
             table_identifier.branch_name(),
         );
+        let branch = self
+            .resolve_schema_branch(&catalog_name, &database, &table, explicit_branch)
+            .await?;
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         if branch.is_some() {
             check_table_ref_access(self.ctx.as_ref())?;

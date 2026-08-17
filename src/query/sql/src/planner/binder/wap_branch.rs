@@ -72,6 +72,35 @@ pub(crate) fn table_supports_wap_branch(table: &dyn Table) -> bool {
 }
 
 impl Binder {
+    pub(crate) async fn resolve_schema_branch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table_name: &str,
+        explicit_branch: Option<String>,
+    ) -> Result<Option<String>> {
+        if explicit_branch.is_some() {
+            return Ok(explicit_branch);
+        }
+
+        let wap_branch = applicable_wap_branch_for_table(
+            self.ctx.as_ref(),
+            self.ctx.get_settings().get_wap_branch()?,
+            catalog,
+            database,
+            table_name,
+        );
+        let Some(wap_branch) = wap_branch else {
+            return Ok(None);
+        };
+
+        let table = self
+            .ctx
+            .resolve_data_source(catalog, database, table_name, None, None)
+            .await?;
+        Ok(table_supports_wap_branch(table.as_ref()).then_some(wap_branch))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn resolve_read_table_with_wap_branch(
         &self,

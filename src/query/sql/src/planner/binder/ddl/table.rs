@@ -126,8 +126,6 @@ use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::util::TableIdentifier;
-use crate::binder::wap_branch::applicable_wap_branch_for_table;
-use crate::binder::wap_branch::table_supports_wap_branch;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
@@ -390,26 +388,9 @@ impl Binder {
             table_identifier.table_name(),
             table_identifier.branch_name(),
         );
-        let branch = if explicit_branch.is_some() {
-            explicit_branch
-        } else {
-            let wap_branch = applicable_wap_branch_for_table(
-                self.ctx.as_ref(),
-                self.ctx.get_settings().get_wap_branch()?,
-                &catalog,
-                &database,
-                &table,
-            );
-            if let Some(wap_branch) = wap_branch {
-                let table = self
-                    .ctx
-                    .resolve_data_source(&catalog, &database, &table, None, None)
-                    .await?;
-                table_supports_wap_branch(table.as_ref()).then_some(wap_branch)
-            } else {
-                None
-            }
-        };
+        let branch = self
+            .resolve_schema_branch(&catalog, &database, &table, explicit_branch)
+            .await?;
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Field", DataType::String),
             DataField::new("Type", DataType::String),
