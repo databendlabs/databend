@@ -55,11 +55,10 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_io::ChunkedRangeReader;
 use databend_storages_common_io::OperatorRangeReader;
-use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
-use opendal::Buffer;
 use opendal::Operator;
 use parking_lot::Mutex;
 use parquet::arrow::ArrayReader;
@@ -1274,104 +1273,8 @@ fn ensure_matching_nulls(field: &str, nulls: &[Option<&arrow::buffer::NullBuffer
     Ok(())
 }
 
-struct WindowRead {
-    ranges: OperatorRangeReader,
-    expected_lengths: Vec<usize>,
-    next_range: usize,
-    current: Option<Buffer>,
-}
-
-impl WindowRead {
-    fn try_create(
-        operator: Operator,
-        path: String,
-        range: Range<u64>,
-        window_size: usize,
-        max_prefetch: usize,
-    ) -> Result<Self> {
-        let windows = split_range(range, window_size)?;
-        let mut expected_lengths = Vec::with_capacity(windows.len());
-        for window in &windows {
-            expected_lengths.push((window.end - window.start) as usize);
-        }
-        let settings = ReadSettings {
-            max_gap_size: 0,
-            max_range_size: window_size as u64,
-            parquet_fast_read_bytes: 0,
-        };
-        let ranges =
-            OperatorRangeReader::create(&settings, operator, path, &windows, max_prefetch)?;
-        Ok(Self {
-            ranges,
-            expected_lengths,
-            next_range: 0,
-            current: None,
-        })
-    }
-
-    fn load_next(&mut self) -> io::Result<bool> {
-        if self.next_range == self.expected_lengths.len() {
-            return Ok(false);
-        }
-        let data = self
-            .ranges
-            .read()
-            .map_err(|error| io::Error::other(format!("failed to read Parquet window: {error}")))?;
-        let expected = self.expected_lengths[self.next_range];
-        if data.len() != expected {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                format!(
-                    "Parquet window {} has {} bytes, expected {expected}",
-                    self.next_range,
-                    data.len()
-                ),
-            ));
-        }
-        self.next_range += 1;
-        self.current = Some(data);
-        Ok(true)
-    }
-}
-
-impl Read for WindowRead {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if buf.is_empty() {
-            return Ok(0);
-        }
-        loop {
-            if let Some(current) = self.current.as_mut() {
-                let read = current.read(buf)?;
-                if read != 0 {
-                    return Ok(read);
-                }
-                self.current = None;
-            }
-            if !self.load_next()? {
-                return Ok(0);
-            }
-        }
-    }
-}
-
-fn split_range(range: Range<u64>, window_size: usize) -> Result<Vec<Range<u64>>> {
-    let Ok(window_size) = u64::try_from(window_size) else {
-        return Err(ErrorCode::BadArguments(
-            "Parquet window size does not fit u64",
-        ));
-    };
-    let mut windows = Vec::new();
-    let mut start = range.start;
-    while start < range.end {
-        let end = start.saturating_add(window_size).min(range.end);
-        windows.push(start..end);
-        start = end;
-    }
-    Ok(windows)
-}
-
 struct ForwardState {
-    input: WindowRead,
+    input: ChunkedRangeReader<OperatorRangeReader>,
     position: u64,
     len: u64,
 }
@@ -1381,7 +1284,7 @@ struct ForwardChunkReader {
 }
 
 impl ForwardChunkReader {
-    fn new(input: WindowRead, len: u64) -> Self {
+    fn new(input: ChunkedRangeReader<OperatorRangeReader>, len: u64) -> Self {
         Self {
             state: Arc::new(Mutex::new(ForwardState {
                 input,
@@ -1466,13 +1369,15 @@ impl ParquetLeafRowGroupAdapter {
         num_values: u64,
     ) -> Result<Self> {
         let len = range.end - range.start;
-        let input = WindowRead::try_create(
+        let chain = OperatorRangeReader::new(
             reader.operator.clone(),
             reader.path.clone(),
-            range,
-            reader.window_size,
-            reader.max_prefetch,
-        )?;
+            // `+ 1` keeps the pipeline depth comparable with the previous
+            // window reader, whose bounded channel held `max_prefetch`
+            // completed windows while the worker produced the next one.
+            reader.max_prefetch.saturating_add(1),
+        );
+        let input = ChunkedRangeReader::with_range(chain, range, reader.window_size as u64)?;
         let Ok(num_values) = i64::try_from(num_values) else {
             return Err(ErrorCode::BadArguments(format!(
                 "Parquet leaf {column_id} num_values does not fit i64"
@@ -2509,17 +2414,6 @@ mod tests {
     }
 
     #[test]
-    fn test_split_range_uses_fixed_windows() {
-        assert_eq!(split_range(10..21, 4).unwrap(), vec![
-            10..14,
-            14..18,
-            18..21
-        ]);
-        assert_eq!(split_range(10..13, 4).unwrap(), vec![10..13]);
-        assert_eq!(split_range(10..10, 4).unwrap(), Vec::<Range<u64>>::new());
-    }
-
-    #[test]
     fn test_low_level_reader_reports_row_count_mismatch() {
         crate::test_utils::init_test_globals().unwrap();
         let operator = Operator::new(Memory::default()).unwrap().finish();
@@ -2575,13 +2469,6 @@ mod tests {
             .unwrap();
         assert!(column.read().unwrap().is_some());
         assert!(column.finish().is_err());
-    }
-
-    #[test]
-    fn test_read_settings_do_not_merge_adjacent_windows() {
-        let windows = split_range(0..17, 4).unwrap();
-        let merger = databend_common_base::rangemap::RangeMerger::from_iter(windows.clone(), 0, 4);
-        assert_eq!(merger.ranges(), windows);
     }
 
     #[test]
