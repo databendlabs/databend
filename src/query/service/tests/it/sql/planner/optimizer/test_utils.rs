@@ -492,7 +492,7 @@ impl ExprBuilder {
         then_expr: ScalarExpr,
         else_expr: ScalarExpr,
     ) -> ScalarExpr {
-        let return_type = then_expr.data_type().unwrap();
+        let return_type = then_expr.data_type().unwrap().into_owned();
         ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "if".to_string(),

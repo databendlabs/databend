@@ -850,7 +850,7 @@ pub fn generate_update_list(
                 // The condition is always true.
                 // Replace column to the result of the following expression:
                 // CAST(expression, type)
-                if data_type != *target_type {
+                if data_type.as_ref() != target_type {
                     wrap_cast(scalar, target_type)
                 } else {
                     scalar.clone()
@@ -887,7 +887,7 @@ pub fn generate_update_list(
                 } else {
                     target_type.clone()
                 };
-                let left = if data_type != target_type {
+                let left = if data_type.as_ref() != &target_type {
                     wrap_cast(scalar, &target_type)
                 } else {
                     scalar.clone()
@@ -979,7 +979,7 @@ pub fn mutation_update_expr(
             } else {
                 target_type.clone()
             };
-            let left = if data_type != target_type {
+            let left = if data_type.as_ref() != &target_type {
                 wrap_cast(scalar, &target_type)
             } else {
                 scalar.clone()

@@ -232,7 +232,7 @@ impl Interpreter for RefreshIndexInterpreter {
                         .iter()
                         .map(|item| {
                             let ty = item.scalar.data_type()?;
-                            Ok(DataField::new(&item.index.to_string(), ty))
+                            Ok(DataField::new(&item.index.to_string(), ty.into_owned()))
                         })
                         .collect::<Result<Vec<_>>>()?;
                     DataSchemaRefExt::create(fields)
