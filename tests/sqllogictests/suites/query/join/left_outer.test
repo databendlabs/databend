@@ -389,3 +389,15 @@ DROP TABLE IF EXISTS t2;
 
 statement ok
 DROP TABLE IF EXISTS t3;
+
+# Regression for https://github.com/databendlabs/databend/issues/20290.
+query I
+SELECT l.id
+FROM (SELECT 1 AS id UNION ALL SELECT 2 AS id) AS l
+LEFT JOIN (SELECT 1 AS id) AS r ON l.id = r.id
+WHERE r.id = 1
+   OR now() > TIMESTAMP '2020-01-01 00:00:00'
+ORDER BY l.id;
+----
+1
+2

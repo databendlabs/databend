@@ -364,6 +364,62 @@ fn check_ambiguity() {
 }
 
 #[test]
+fn context_independent_folding_respects_function_overloads() -> anyhow::Result<()> {
+    fn fold(text: &str) -> databend_common_expression::Expr<usize> {
+        let raw_expr = parser::parse_raw_expr(text, &[], &BUILTIN_FUNCTIONS);
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let expr = type_check::rewrite_function_to_cast(expr);
+        ConstantFolder::fold_context_independent(&expr, &BUILTIN_FUNCTIONS).0
+    }
+
+    assert!(fold("1 + 2").as_constant().is_some());
+    assert!(fold("to_string(42)").as_constant().is_some());
+    assert!(fold("to_int64(to_uint8(1))").as_constant().is_some());
+    // Integer-to-Decimal conversion does not read the session rounding mode. In particular, a
+    // typed NULL introduced by outer-join analysis must still propagate through this cast.
+    assert!(
+        fold("cast(cast(null as int64 null) as decimal(19, 0) null)")
+            .as_constant()
+            .is_some()
+    );
+    assert!(fold("cast(2.00 as decimal(10, 2))").as_constant().is_some());
+    assert!(
+        fold("cast(null as decimal(10, 2) null)")
+            .as_constant()
+            .is_some()
+    );
+    // Decimal arithmetic accepts Decimal and integer operands. This exercises the Decimal
+    // arithmetic factory directly: aligning the integer operand to scale 1 is exact, so the
+    // comparison is safe to fold without consulting the session rounding mode.
+    assert!(matches!(
+        fold(
+            "cast(1.5 as decimal(10, 1)) + cast(0 as decimal(10, 0)) = \
+             cast(2 as decimal(10, 0))"
+        )
+        .as_constant()
+        .map(|constant| &constant.scalar),
+        Some(databend_common_expression::Scalar::Boolean(false))
+    ));
+
+    // `now()` is non-deterministic and reads the statement time from `FunctionContext`; folding it
+    // without that context would freeze an unrelated placeholder value into the expression.
+    assert!(fold("now()").as_constant().is_none());
+    // Formatting a timestamp reads the session time zone, so there is no context-independent
+    // string constant for this expression.
+    assert!(fold("to_string(to_timestamp(0))").as_constant().is_none());
+    // Numeric and Decimal scale-reducing casts read the session rounding mode. Their constants
+    // cannot be chosen until that session context is available.
+    assert!(fold("to_int64(1.5)").as_constant().is_none());
+    assert!(
+        fold("cast(cast(2.25 as decimal(10, 2)) as decimal(10, 1))")
+            .as_constant()
+            .is_none()
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_if_function() -> anyhow::Result<()> {
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;

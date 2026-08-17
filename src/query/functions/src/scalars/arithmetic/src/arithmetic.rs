@@ -61,7 +61,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("pow", &["power"]);
 
     register_unary_minus(registry);
-    register_string_to_number(registry);
+    registry.register_context_dependent(register_string_to_number);
     register_number_to_string(registry);
     register_number_to_number(registry);
 }
@@ -461,7 +461,9 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         if src_type.can_lossless_cast_to(*dest_type) {
                             register_lossless_cast::<SRC_TYPE, DEST_TYPE>(registry, &name);
                         } else if src_type.need_round_cast_to(*dest_type) {
-                            register_round_cast::<SRC_TYPE, DEST_TYPE>(registry, &name);
+                            registry.register_context_dependent(|registry| {
+                                register_round_cast::<SRC_TYPE, DEST_TYPE>(registry, &name)
+                            });
                         } else {
                             register_lossy_cast::<SRC_TYPE, DEST_TYPE>(registry, &name);
                         }
@@ -470,7 +472,9 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         if src_type.can_lossless_cast_to(*dest_type) {
                             register_try_lossless_cast::<SRC_TYPE, DEST_TYPE>(registry, &name);
                         } else if src_type.need_round_cast_to(*dest_type) {
-                            register_try_round_cast::<SRC_TYPE, DEST_TYPE>(registry, &name);
+                            registry.register_context_dependent(|registry| {
+                                register_try_round_cast::<SRC_TYPE, DEST_TYPE>(registry, &name)
+                            });
                         } else {
                             register_try_lossy_cast::<SRC_TYPE, DEST_TYPE>(registry, &name);
                         }
@@ -486,7 +490,8 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                     }
 
                     with_number_mapped_type!(|DEST_TYPE| match dest_type {
-                        NumberDataType::DEST_TYPE => register_decimal_to_int::<DEST_TYPE>(registry),
+                        NumberDataType::DEST_TYPE => registry
+                            .register_context_dependent(register_decimal_to_int::<DEST_TYPE>,),
                     })
                 }
                 NumberClass::Decimal256 => {
