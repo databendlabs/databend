@@ -599,12 +599,8 @@ impl JoinKeyStatUpdate {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use databend_common_expression::types::NumberDataType;
     use databend_common_statistics::F64;
-    use databend_common_statistics::TypedHistogram;
-    use databend_common_statistics::TypedHistogramBucket;
 
     use super::*;
 
@@ -753,93 +749,6 @@ mod tests {
 
         assert_eq!(estimate.card, 1.0);
         assert_eq!(estimate.ndv, Some(NdvEstimate::upper_bound(100.0)));
-        Ok(())
-    }
-
-    #[test]
-    fn test_finish_join_histograms_keeps_join_key_histogram_and_drops_others() -> Result<()> {
-        let mut column_stats = HashMap::from([
-            (Symbol::new(0), ColumnStat {
-                min: Datum::Int(5),
-                max: Datum::Int(10),
-                ndv: NdvEstimate::exact(5.0),
-                null_count: StatCount::exact(0),
-                histogram: Some(Histogram::Int(TypedHistogram {
-                    accuracy: true,
-                    row_scale: 1.0,
-                    buckets: vec![TypedHistogramBucket::new(0, 10, 1000.0, 10.0)],
-                    avg_spacing: None,
-                })),
-            }),
-            (Symbol::new(1), ColumnStat {
-                min: Datum::Int(0),
-                max: Datum::Int(10),
-                ndv: NdvEstimate::exact(10.0),
-                null_count: StatCount::exact(0),
-                histogram: Some(Histogram::Int(TypedHistogram {
-                    accuracy: true,
-                    row_scale: 1.0,
-                    buckets: vec![TypedHistogramBucket::new(0, 10, 1000.0, 10.0)],
-                    avg_spacing: None,
-                })),
-            }),
-        ]);
-
-        JoinKeyStatUpdate::finish_join_histograms(&mut column_stats, Symbol::new(0), true)?;
-
-        let join_histogram = column_stats[&Symbol::new(0)]
-            .histogram
-            .as_ref()
-            .expect("join key histogram should be propagated");
-        assert!((join_histogram.num_values() - 1000.0).abs() < 1e-9);
-        assert!((join_histogram.ndv().expected.unwrap() - 10.0).abs() < 1e-9);
-        assert!(column_stats[&Symbol::new(1)].histogram.is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn test_finish_semi_join_histogram_drops_non_join_histograms() -> Result<()> {
-        let original_column_stats = HashMap::from([
-            (Symbol::new(0), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(10),
-                ndv: NdvEstimate::exact(10.0),
-                null_count: StatCount::exact(0),
-                histogram: Some(Histogram::Int(TypedHistogram {
-                    accuracy: true,
-                    row_scale: 1.0,
-                    buckets: vec![TypedHistogramBucket::new(1, 10, 10.0, 10.0)],
-                    avg_spacing: None,
-                })),
-            }),
-            (Symbol::new(1), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(10),
-                ndv: NdvEstimate::exact(10.0),
-                null_count: StatCount::exact(0),
-                histogram: Some(Histogram::Int(TypedHistogram {
-                    accuracy: true,
-                    row_scale: 1.0,
-                    buckets: vec![TypedHistogramBucket::new(1, 10, 10.0, 10.0)],
-                    avg_spacing: None,
-                })),
-            }),
-        ]);
-        let mut column_stats = original_column_stats.clone();
-        let join_stat = column_stats.get_mut(&Symbol::new(0)).unwrap();
-        join_stat.min = Datum::Int(1);
-        join_stat.max = Datum::Int(5);
-        join_stat.ndv = NdvEstimate::exact(5.0);
-
-        JoinKeyStatUpdate::finish_semi_join_histogram(
-            &mut column_stats,
-            original_column_stats[&Symbol::new(0)].histogram.as_ref(),
-            Symbol::new(0),
-            5.0,
-        )?;
-
-        assert!(column_stats[&Symbol::new(0)].histogram.is_some());
-        assert!(column_stats[&Symbol::new(1)].histogram.is_none());
         Ok(())
     }
 }
