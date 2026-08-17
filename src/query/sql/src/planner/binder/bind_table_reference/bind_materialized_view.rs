@@ -67,6 +67,18 @@ use crate::plans::EvalScalar;
 use crate::plans::ScalarItem;
 use crate::validate_materialized_view_source;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum MaterializedViewReadMode {
+    Fresh,
+    Hybrid,
+    LiveFallback,
+}
+
+enum MaterializedViewHybridBindResult {
+    Hybrid(SExpr, Box<BindContext>),
+    EmptyDelta,
+}
+
 #[derive(Default)]
 struct MaterializedViewChangeScanFinder {
     change_types: Vec<ChangeType>,
@@ -399,7 +411,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         sample: &Option<SampleConfig>,
         cte_suffix_name: Option<String>,
-    ) -> Result<Option<(SExpr, BindContext)>> {
+    ) -> Result<Option<MaterializedViewHybridBindResult>> {
         let internal_source_name = format!(
             "_mv_read_changes_{}_{}",
             table_meta.get_id(),
@@ -492,6 +504,27 @@ impl Binder {
             return Ok(None);
         }
 
+        let changes_statistics = match databend_common_base::runtime::block_on(
+            changes_table.table_statistics(self.ctx.clone(), true, Some(ChangeType::Append)),
+        ) {
+            Ok(statistics) => statistics,
+            Err(error) if Self::is_materialized_view_hybrid_history_unavailable(&error) => {
+                info!(
+                    "materialized view {} cannot inspect its source changes because checkpoint history is unavailable: {}; fallback to live compute",
+                    table_meta.name(),
+                    error
+                );
+                return Ok(None);
+            }
+            Err(error) => return Err(error),
+        };
+        // Append mode is selected only when the logical update/delete counters are both zero.
+        // Its row count is therefore the exact number of inserted endpoint rows, so zero safely
+        // means the source branch can be omitted rather than merely estimated as empty.
+        if changes_statistics.is_some_and(|statistics| statistics.num_rows == Some(0)) {
+            return Ok(Some(MaterializedViewHybridBindResult::EmptyDelta));
+        }
+
         self.pre_resolved_tables.insert(
             (
                 catalog_name.to_string(),
@@ -557,11 +590,14 @@ impl Binder {
                 column.table_name = Some(table_name.to_string());
             }
         }
-        Ok(Some((union_expr, logical_context)))
+        Ok(Some(MaterializedViewHybridBindResult::Hybrid(
+            union_expr,
+            Box::new(logical_context),
+        )))
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn bind_materialized_view(
+    pub(crate) fn bind_materialized_view_with_mode(
         &mut self,
         bind_context: &mut BindContext,
         catalog_name: &str,
@@ -572,7 +608,9 @@ impl Binder {
         alias: &Option<TableAlias>,
         sample: &Option<SampleConfig>,
         cte_suffix_name: Option<String>,
-    ) -> Result<(SExpr, BindContext)> {
+        source_override: Option<(Arc<dyn Table>, String)>,
+        record_cache_dependency: bool,
+    ) -> Result<(SExpr, BindContext, MaterializedViewReadMode)> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
 
@@ -623,7 +661,32 @@ impl Binder {
         )?;
         let is_aggregating = find_materialized_view_aggregate(&definition_expr).is_some();
 
-        let (source_table, source_database, source_seq, source_snapshot_location) =
+        let (source_table, source_database, source_seq, source_snapshot_location) = if let Some((
+            source_table,
+            source_database,
+        )) =
+            source_override
+        {
+            if source_table.get_id() != source_table_id {
+                return Err(ErrorCode::InvalidMaterializedView(format!(
+                    "materialized view {} source table changed: expected table id {}, got {}",
+                    table_meta.name(),
+                    source_table_id,
+                    source_table.get_id()
+                )));
+            }
+            let source_info = source_table.get_table_info();
+            (
+                source_table.clone(),
+                source_database,
+                source_info.ident.seq,
+                source_info
+                    .meta
+                    .options
+                    .get(OPT_KEY_SNAPSHOT_LOCATION)
+                    .cloned(),
+            )
+        } else {
             databend_common_base::runtime::block_on(async {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
                 let source_meta = catalog
@@ -670,20 +733,23 @@ impl Binder {
                     source_meta.seq,
                     source_snapshot_location,
                 ))
-            })?;
+            })?
+        };
         // MV results depend on both persisted storage and the live source endpoint. Include both
         // identities in the result-cache key so a source append cannot reuse a previously fresh
         // storage-only result. Sequence values distinguish no-snapshot endpoints and metadata
         // revisions; snapshot locations identify data endpoints when present.
-        self.ctx.result_cache_state().add_cache_key_extra(format!(
-            "mv:{}:{}:{:?}|source:{}:{}:{:?}",
-            table_meta.get_id(),
-            table_meta.get_table_info().ident.seq,
-            table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION),
-            source_table_id,
-            source_seq,
-            source_snapshot_location
-        ));
+        if record_cache_dependency {
+            self.ctx.result_cache_state().add_cache_key_extra(format!(
+                "mv:{}:{}:{:?}|source:{}:{}:{:?}",
+                table_meta.get_id(),
+                table_meta.get_table_info().ident.seq,
+                table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION),
+                source_table_id,
+                source_seq,
+                source_snapshot_location
+            ));
+        }
         if !Self::is_materialized_view_fresh(table_meta.as_ref(), source_snapshot_location.as_ref())
         {
             let checkpoint_seq = match table_meta
@@ -700,13 +766,14 @@ impl Binder {
                         "materialized view {} has no source checkpoint; fallback to live compute",
                         table_meta.name()
                     );
-                    return self.bind_materialized_view_fallback(
+                    let (s_expr, context) = self.bind_materialized_view_fallback(
                         bind_context,
                         &mv_definition.data,
                         database,
                         table_name,
                         alias,
-                    );
+                    )?;
+                    return Ok((s_expr, context, MaterializedViewReadMode::LiveFallback));
                 }
             };
             if checkpoint_seq > source_seq {
@@ -721,7 +788,7 @@ impl Binder {
                 .options()
                 .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION)
                 .cloned();
-            if let Some(result) = self.bind_materialized_view_hybrid(
+            match self.bind_materialized_view_hybrid(
                 bind_context,
                 catalog_name,
                 database,
@@ -738,27 +805,38 @@ impl Binder {
                 sample,
                 cte_suffix_name.clone(),
             )? {
-                info!(
-                    "materialized view {} uses append-only hybrid read",
-                    table_meta.name()
-                );
-                return Ok(result);
+                Some(MaterializedViewHybridBindResult::Hybrid(s_expr, context)) => {
+                    info!(
+                        "materialized view {} uses append-only hybrid read",
+                        table_meta.name()
+                    );
+                    return Ok((s_expr, *context, MaterializedViewReadMode::Hybrid));
+                }
+                Some(MaterializedViewHybridBindResult::EmptyDelta) => {
+                    info!(
+                        "materialized view {} source snapshot changed without append delta; use persisted storage only",
+                        table_meta.name()
+                    );
+                }
+                None => {
+                    info!(
+                        "materialized view {} is stale (source_snapshot={:?}, base_snapshot={:?}); fallback to live compute",
+                        table_meta.name(),
+                        table_meta
+                            .options()
+                            .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION),
+                        source_snapshot_location
+                    );
+                    let (s_expr, context) = self.bind_materialized_view_fallback(
+                        bind_context,
+                        &mv_definition.data,
+                        database,
+                        table_name,
+                        alias,
+                    )?;
+                    return Ok((s_expr, context, MaterializedViewReadMode::LiveFallback));
+                }
             }
-            info!(
-                "materialized view {} is stale (source_snapshot={:?}, base_snapshot={:?}); fallback to live compute",
-                table_meta.name(),
-                table_meta
-                    .options()
-                    .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION),
-                source_snapshot_location
-            );
-            return self.bind_materialized_view_fallback(
-                bind_context,
-                &mv_definition.data,
-                database,
-                table_name,
-                alias,
-            );
         }
 
         let table_index = self.metadata.write().add_table(
@@ -793,6 +871,35 @@ impl Binder {
                 column.table_name = Some(table_name.to_string());
             }
         }
-        Ok((s_expr, logical_context))
+        Ok((s_expr, logical_context, MaterializedViewReadMode::Fresh))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn bind_materialized_view(
+        &mut self,
+        bind_context: &mut BindContext,
+        catalog_name: &str,
+        database: &str,
+        table_name: &str,
+        table_name_alias: Option<String>,
+        table_meta: Arc<dyn Table>,
+        alias: &Option<TableAlias>,
+        sample: &Option<SampleConfig>,
+        cte_suffix_name: Option<String>,
+    ) -> Result<(SExpr, BindContext)> {
+        let (s_expr, context, _) = self.bind_materialized_view_with_mode(
+            bind_context,
+            catalog_name,
+            database,
+            table_name,
+            table_name_alias,
+            table_meta,
+            alias,
+            sample,
+            cte_suffix_name,
+            None,
+            true,
+        )?;
+        Ok((s_expr, context))
     }
 }

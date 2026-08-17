@@ -54,7 +54,7 @@ stmt "REFRESH AGGREGATING INDEX index_2;"
 SNAPSHOT_LOCATION_1=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_drop_aggregating_index','agg_1') limit 1" | bendsql_connect_root)
 PREFIX_1=$(echo "$SNAPSHOT_LOCATION_1" | cut -d'/' -f1-2)
 
-echo "before vacuum, should be 2 index dir"
+echo "before vacuum, should be 4 index files"
 
 find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_1"/_i_a/ -type f | wc -l
 
@@ -76,7 +76,7 @@ stmt "drop aggregating index index_1"
 stmt "drop aggregating index index_2"
 stmt "drop aggregating index index_3"
 
-echo "before vacuum, should be 1 index dir"
+echo "before vacuum, should be 2 index files"
 
 find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_2"/_i_a/ -type f | wc -l
 

@@ -352,6 +352,20 @@ impl TableRefVisitor {
                         self.cache_miss = true;
                         return;
                     }
+                    if let Ok(catalog) = self.ctx.get_catalog(&catalog_name).await {
+                        let tenant = self.ctx.get_tenant();
+                        let source_table_id = table.get_id();
+                        if let Ok(snapshot) = catalog
+                            .get_mv_source_binding_snapshot(&tenant, source_table_id)
+                            .await
+                            && !snapshot.materialized_views.is_empty()
+                        {
+                            // Automatic MV rewrite depends on an MV collection and endpoint that
+                            // are not represented by the source-only planner-cache snapshot.
+                            self.cache_miss = true;
+                            return;
+                        }
+                    }
                     if let Some(snapshot) = TableSnapshot::from_resolved_table(table.as_ref()) {
                         self.has_security_policy |= snapshot.has_security_policy();
                         self.table_snapshots.push(snapshot);
