@@ -16,6 +16,59 @@ fn main() {
     divan::main();
 }
 
+#[divan::bench_group(sample_count = 30)]
+mod numeric_if {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::FromData;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::type_check;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::number::Int64Type;
+    use databend_common_expression_test_support as parser;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+    use divan::counter::ItemsCount;
+
+    fn bench_expr(bencher: divan::Bencher, sql: &str, rows: usize) {
+        let raw_expr = parser::parse_raw_expr(
+            sql,
+            &[("x", DataType::Number(NumberDataType::Int64))],
+            &BUILTIN_FUNCTIONS,
+        );
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let values = (0..rows).map(|value| value as i64).collect::<Vec<_>>();
+        let block = DataBlock::new(vec![BlockEntry::Column(Int64Type::from_data(values))], rows);
+        let func_ctx = FunctionContext::default();
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        bencher
+            .counter(ItemsCount::new(rows))
+            .bench(|| evaluator.run(&expr).unwrap());
+    }
+
+    // 65,536 is the default max_block_size; 1,048,576 is a stress size.
+    #[divan::bench(args = [65_536, 1_048_576])]
+    fn if_contains(bencher: divan::Bencher, rows: usize) {
+        bench_expr(
+            bencher,
+            "if(contains([1, 3, 5, 7, 11, 13, 17, 19], x), 0, x % 1000003)",
+            rows,
+        );
+    }
+
+    #[divan::bench(args = [65_536, 1_048_576])]
+    fn if_modulo(bencher: divan::Bencher, rows: usize) {
+        bench_expr(bencher, "if(x % 1000003 = 0, 0, x % 1000003)", rows);
+    }
+
+    #[divan::bench(args = [65_536, 1_048_576])]
+    fn if_boolean(bencher: divan::Bencher, rows: usize) {
+        bench_expr(bencher, "if(x % 2 = 0, x > 10, x < 10)", rows);
+    }
+}
+
 // bench            fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ╰─ dummy                       │               │               │               │         │
 //    ├─ check                    │               │               │               │         │
