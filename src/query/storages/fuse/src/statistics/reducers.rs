@@ -298,17 +298,18 @@ pub fn merge_statistics_mut(
     r: &Statistics,
     cluster_key_info: Option<&ClusterKeyInfo>,
 ) {
+    // Segment-local virtual ids have meaning only together with the schema of a
+    // single segment. Cross-segment summaries cannot merge them by column id.
+    l.virtual_segment_schema = None;
+    l.virtual_col_stats = None;
     l.additional_stats_meta = None;
     if l.row_count == 0 {
         l.col_stats = r.col_stats.clone();
-        l.virtual_col_stats = r.virtual_col_stats.clone();
         l.spatial_stats = r.spatial_stats.clone();
         l.cluster_stats = r.cluster_stats.clone();
         l.partition_stats = r.partition_stats.clone();
     } else {
         l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
-        l.virtual_col_stats =
-            reduce_virtual_column_statistics(&[&l.virtual_col_stats, &r.virtual_col_stats]);
         l.spatial_stats = reduce_spatial_statistics(&[&l.spatial_stats, &r.spatial_stats]);
         l.cluster_stats =
             reduce_cluster_statistics(&[&l.cluster_stats, &r.cluster_stats], cluster_key_info);
@@ -354,6 +355,10 @@ pub fn deduct_statistics(l: &Statistics, r: &Statistics) -> Statistics {
 
 // Deduct statistics, only be used for calculate snapshot summary.
 pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
+    // Segment-local virtual ids and statistics cannot be reconstructed by
+    // subtracting one cross-segment summary from another.
+    l.virtual_segment_schema = None;
+    l.virtual_col_stats = None;
     // Exact partition identity cannot be reconstructed after subtraction.
     l.partition_stats = None;
     l.row_count -= r.row_count;
@@ -513,6 +518,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         cluster_stats: merged_cluster_stats,
         partition_stats: merged_partition_stats,
         virtual_block_count: merged_virtual_block_count,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     })
 }

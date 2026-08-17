@@ -23,7 +23,6 @@ mod traverse;
 
 pub use accumulator::ColumnHLLAccumulator;
 pub use accumulator::RowOrientedSegmentBuilder;
-pub use accumulator::VirtualColumnAccumulator;
 pub(crate) use cluster_statistics::BlockOverlapDepth;
 pub use cluster_statistics::ClusterStatsGenerator;
 pub use cluster_statistics::ClusterStatsKey;

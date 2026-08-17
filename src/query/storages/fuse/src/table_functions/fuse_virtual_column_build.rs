@@ -17,13 +17,16 @@ use std::sync::Arc;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::VirtualColumnLayout;
+use databend_common_catalog::plan::VirtualColumnPath;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::i64_value;
 use databend_common_catalog::table_args::string_value;
+use databend_common_catalog::table_args::u64_literal;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Column;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -34,28 +37,32 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::VariantType;
 use databend_common_storage::read_metadata_async;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use parquet::file::metadata::ParquetMetaDataReader;
 
 use crate::FuseTable;
+use crate::io::MetaReaders;
 use crate::io::VirtualColumnBuilder;
+use crate::io::VirtualColumnLayoutPolicy;
 use crate::operations::column_parquet_metas;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
-use crate::table_functions::fuse_virtual_column::build_source_column_name_map;
-use crate::table_functions::fuse_virtual_column::collect_virtual_column_entries;
+use crate::table_functions::fuse_virtual_column_parquet_meta::build_source_column_name_map;
+use crate::table_functions::fuse_virtual_column_parquet_meta::virtual_column_file_variants;
 use crate::table_functions::string_literal;
 
 pub struct FuseVirtualColumnBuildArgs {
     database_name: String,
     table_name: String,
-    block_location: String,
+    location: String,
+    max_direct_columns: Option<usize>,
 }
 
 impl TryFrom<(&str, TableArgs)> for FuseVirtualColumnBuildArgs {
@@ -64,22 +71,44 @@ impl TryFrom<(&str, TableArgs)> for FuseVirtualColumnBuildArgs {
     fn try_from(
         (func_name, table_args): (&str, TableArgs),
     ) -> std::result::Result<Self, Self::Error> {
-        let args = table_args.expect_all_positioned(func_name, Some(3))?;
+        let args = table_args.expect_all_positioned(func_name, None)?;
+        if !matches!(args.len(), 3 | 4) {
+            return Err(ErrorCode::BadArguments(format!(
+                "expecting <database_name>, <table_name>, (<segment_location> or <block_location>) and optional <max_direct_columns>, but got {:?}",
+                args
+            )));
+        }
+        let max_direct_columns = if let Some(value) = args.get(3) {
+            let value = i64_value(value)?;
+            if value < 0 {
+                return Err(ErrorCode::BadArguments(
+                    "max_direct_columns must be non-negative".to_string(),
+                ));
+            }
+            Some(value as usize)
+        } else {
+            None
+        };
         Ok(Self {
             database_name: string_value(&args[0])?,
             table_name: string_value(&args[1])?,
-            block_location: string_value(&args[2])?,
+            location: string_value(&args[2])?,
+            max_direct_columns,
         })
     }
 }
 
 impl From<&FuseVirtualColumnBuildArgs> for TableArgs {
     fn from(args: &FuseVirtualColumnBuildArgs) -> Self {
-        TableArgs::new_positioned(vec![
+        let mut values = vec![
             string_literal(&args.database_name),
             string_literal(&args.table_name),
-            string_literal(&args.block_location),
-        ])
+            string_literal(&args.location),
+        ];
+        if let Some(max_direct_columns) = args.max_direct_columns {
+            values.push(u64_literal(max_direct_columns as u64));
+        }
+        TableArgs::new_positioned(values)
     }
 }
 
@@ -93,28 +122,13 @@ impl SimpleArgFunc for FuseVirtualColumnBuild {
     fn schema() -> TableSchemaRef {
         TableSchemaRefExt::create(vec![
             TableField::new("block_location", TableDataType::String),
+            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new(
-                "source_column_id",
-                TableDataType::Number(NumberDataType::UInt32),
+                "virtual_column_size",
+                TableDataType::Number(NumberDataType::UInt64),
             ),
-            TableField::new("source_column_name", TableDataType::String),
-            TableField::new("storage_kind", TableDataType::String),
-            TableField::new("shared_paths", TableDataType::String.wrap_nullable()),
-            TableField::new("column_name", TableDataType::String),
-            TableField::new("column_type", TableDataType::String),
-            TableField::new(
-                "column_id",
-                TableDataType::Number(NumberDataType::UInt32).wrap_nullable(),
-            ),
-            TableField::new("num_values", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new(
-                "block_offset",
-                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
-            ),
-            TableField::new(
-                "bytes_compressed",
-                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
-            ),
+            TableField::new("direct_columns", TableDataType::Variant),
+            TableField::new("shared_columns", TableDataType::Variant),
         ])
     }
 
@@ -130,25 +144,148 @@ impl SimpleArgFunc for FuseVirtualColumnBuild {
             .await?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let (source_schema, projection) = variant_projection(table)?;
-        let block = read_block_location(ctx, table, &args.block_location, projection).await?;
-
-        let mut builder = VirtualColumnBuilder::try_create(source_schema)?;
-        builder.add_block(&block)?;
-        let state = builder.finalize(
-            &table.get_write_settings(),
-            &(args.block_location.clone(), 0),
-        )?;
-        if state.data.is_empty() {
-            return Ok(DataBlock::empty_with_schema(&Self::schema().into()));
+        let policy = args.max_direct_columns.map_or_else(
+            || table.virtual_column_layout_policy(),
+            |max_direct_columns| VirtualColumnLayoutPolicy {
+                max_direct_columns,
+                ..table.virtual_column_layout_policy()
+            },
+        );
+        if args.location.ends_with(".mpk") {
+            return build_segment_virtual_columns(
+                ctx,
+                table,
+                &args.location,
+                source_schema,
+                projection,
+                policy,
+            )
+            .await;
         }
-
-        let bytes = state.data.to_bytes();
-        let parquet_meta = ParquetMetaDataReader::new().parse_and_finish(&bytes)?;
-        let virtual_meta = VirtualColumnFileMeta::try_from(parquet_meta)?;
-        let source_names = build_source_column_name_map(table.schema().as_ref());
-        let entries = collect_virtual_column_entries(&virtual_meta, &source_names);
-        Ok(entries_to_block(&args.block_location, entries))
+        if !args.location.ends_with(".parquet") {
+            return Err(ErrorCode::BadArguments(format!(
+                "location must end with .parquet or .mpk: {}",
+                args.location
+            )));
+        }
+        let block = read_block_location(ctx, table, &args.location, projection).await?;
+        let builder = VirtualColumnBuilder::try_create(source_schema, policy)?;
+        build_block_virtual_columns(ctx, table, &args.location, builder, block)
     }
+}
+
+async fn build_segment_virtual_columns(
+    ctx: &Arc<dyn TableContext>,
+    table: &FuseTable,
+    segment_location: &str,
+    source_schema: TableSchemaRef,
+    projection: Projection,
+    policy: VirtualColumnLayoutPolicy,
+) -> Result<DataBlock> {
+    let reader = MetaReaders::segment_info_reader(table.get_operator(), table.schema());
+    let segment = SegmentInfo::try_from(
+        reader
+            .read(&databend_storages_common_cache::LoadParams {
+                location: segment_location.to_string(),
+                len_hint: None,
+                ver: SegmentInfo::VERSION,
+                put_cache: false,
+            })
+            .await?
+            .as_ref(),
+    )?;
+    let block_reader = table.create_block_reader(ctx.clone(), projection, false)?;
+    let settings = ReadSettings::from_ctx(ctx)?;
+    let storage_format = table.get_write_settings().storage_format;
+    let mut blocks = Vec::with_capacity(segment.blocks.len());
+    let mut path_counts =
+        std::collections::HashMap::<u32, std::collections::HashMap<String, u64>>::new();
+    for block_meta in &segment.blocks {
+        let block = block_reader
+            .read_by_meta(&settings, block_meta, &storage_format)
+            .await?;
+        let mut statistics =
+            crate::io::JsonPathStatisticsBuilder::try_create(source_schema.clone(), policy)?;
+        statistics.add_block(&block)?;
+        for (source_id, source) in statistics.finalize() {
+            for (path, count) in source.path_counts {
+                *path_counts
+                    .entry(source_id)
+                    .or_default()
+                    .entry(path)
+                    .or_default() += count as u64;
+            }
+        }
+        blocks.push((block_meta.location.0.clone(), block));
+    }
+    let mut direct_paths = Vec::new();
+    let max_direct_columns = policy.max_direct_columns;
+    for (source_column_id, counts) in path_counts {
+        let mut counts = counts.into_iter().collect::<Vec<_>>();
+        counts.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+        direct_paths.extend(
+            counts
+                .into_iter()
+                .take(max_direct_columns)
+                .map(|(path, _)| VirtualColumnPath {
+                    source_column_id,
+                    path,
+                }),
+        );
+    }
+    direct_paths.sort();
+    let layout = Arc::new(VirtualColumnLayout { direct_paths });
+    let mut output = Vec::with_capacity(blocks.len());
+    for (block_location, block) in blocks {
+        let builder = VirtualColumnBuilder::try_create(source_schema.clone(), policy)?
+            .with_adaptive_layout(layout.clone());
+        output.push(build_block_virtual_columns(
+            ctx,
+            table,
+            &block_location,
+            builder,
+            block,
+        )?);
+    }
+    DataBlock::concat(&output)
+}
+
+fn build_block_virtual_columns(
+    ctx: &Arc<dyn TableContext>,
+    table: &FuseTable,
+    block_location: &str,
+    mut builder: VirtualColumnBuilder,
+    block: DataBlock,
+) -> Result<DataBlock> {
+    builder.add_block(&block)?;
+    let state = builder.finalize(
+        &table.get_write_settings(),
+        &(block_location.to_string(), 0),
+    )?;
+    if state.data.is_empty() {
+        return Ok(DataBlock::empty_with_schema(
+            &FuseVirtualColumnBuild::schema().into(),
+        ));
+    }
+    let virtual_column_size = state
+        .draft_virtual_block_meta
+        .virtual_columns
+        .as_ref()
+        .map(|columns| columns.virtual_column_size)
+        .unwrap_or_default();
+    let parquet_meta = ParquetMetaDataReader::new().parse_and_finish(&state.data.to_bytes())?;
+    let virtual_meta = VirtualColumnFileMeta::try_from(parquet_meta)?;
+    let source_names = build_source_column_name_map(table.schema().as_ref());
+    let func_ctx = ctx.get_function_context()?;
+    let (direct_columns, shared_columns) =
+        virtual_column_file_variants(&virtual_meta, &source_names, &func_ctx);
+    Ok(DataBlock::new_from_columns(vec![
+        StringType::from_data(vec![block_location.to_string()]),
+        UInt64Type::from_data(vec![block.num_rows() as u64]),
+        UInt64Type::from_data(vec![virtual_column_size]),
+        VariantType::from_data(vec![direct_columns]),
+        VariantType::from_data(vec![shared_columns]),
+    ]))
 }
 
 fn variant_projection(table: &FuseTable) -> Result<(TableSchemaRef, Projection)> {
@@ -219,53 +356,4 @@ async fn read_block_location(
         block_size: 0,
     };
     reader.deserialize_chunks_with_meta(&meta, &table.storage_format, data)
-}
-
-fn entries_to_block(
-    block_location_value: &str,
-    entries: Vec<super::fuse_virtual_column::VirtualColumnEntry>,
-) -> DataBlock {
-    let len = entries.len();
-    let mut block_location = StringColumnBuilder::with_capacity(len);
-    let mut source_column_ids = Vec::with_capacity(len);
-    let mut source_column_names = StringColumnBuilder::with_capacity(len);
-    let mut storage_kinds = StringColumnBuilder::with_capacity(len);
-    let mut shared_paths = Vec::with_capacity(len);
-    let mut column_names = StringColumnBuilder::with_capacity(len);
-    let mut column_types = StringColumnBuilder::with_capacity(len);
-    let mut column_ids = Vec::with_capacity(len);
-    let mut num_values = Vec::with_capacity(len);
-    let mut offsets = Vec::with_capacity(len);
-    let mut compressed_bytes = Vec::with_capacity(len);
-
-    for entry in entries {
-        block_location.put_and_commit(block_location_value);
-        source_column_ids.push(entry.source_column_id);
-        source_column_names.put_and_commit(&entry.source_column_name);
-        storage_kinds.put_and_commit(entry.storage_kind);
-        shared_paths.push(entry.shared_paths);
-        column_names.put_and_commit(&entry.column_name);
-        column_types.put_and_commit(&entry.column_type);
-        column_ids.push(entry.column_id);
-        num_values.push(entry.num_values);
-        offsets.push(entry.offset);
-        compressed_bytes.push(entry.len);
-    }
-
-    DataBlock::new(
-        vec![
-            Column::String(block_location.build()).into(),
-            UInt32Type::from_data(source_column_ids).into(),
-            Column::String(source_column_names.build()).into(),
-            Column::String(storage_kinds.build()).into(),
-            StringType::from_opt_data(shared_paths).into(),
-            Column::String(column_names.build()).into(),
-            Column::String(column_types.build()).into(),
-            UInt32Type::from_opt_data(column_ids).into(),
-            UInt64Type::from_data(num_values).into(),
-            UInt64Type::from_opt_data(offsets).into(),
-            UInt64Type::from_opt_data(compressed_bytes).into(),
-        ],
-        len,
-    )
 }

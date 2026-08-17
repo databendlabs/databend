@@ -29,6 +29,7 @@ use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
+use crate::io::JsonPathStatisticsBuilder;
 use crate::io::SpatialIndexBuilder;
 use crate::io::VectorIndexBuilder;
 use crate::io::create_inverted_index_builders;
@@ -112,6 +113,16 @@ impl FuseTable {
             true,
         );
 
+        let json_path_statistics_builder = if self.enable_virtual_column() {
+            JsonPathStatisticsBuilder::try_create(
+                new_schema.clone(),
+                self.virtual_column_layout_policy(),
+            )
+            .ok()
+        } else {
+            None
+        };
+
         let block_builder = BlockBuilder {
             ctx: ctx.clone(),
             meta_locations: self.meta_location_generator().clone(),
@@ -125,8 +136,8 @@ impl FuseTable {
             inverted_index_builders,
             vector_index_builder,
             spatial_index_builder,
-            // todo
             virtual_column_builder: None,
+            json_path_statistics_builder,
             table_meta_timestamps,
             serialize_hll: true,
         };
