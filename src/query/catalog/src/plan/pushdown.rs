@@ -21,6 +21,7 @@ use databend_common_ast::ast::SampleConfig;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
@@ -57,9 +58,11 @@ pub struct VirtualColumnField {
     pub source_column_id: u32,
     /// The source column name.
     pub source_name: String,
-    /// The virtual column id
-    pub column_id: u32,
-    /// The virtual column name.
+    /// Query-time temporary column id. This is not a persisted segment-local
+    /// virtual column id; each segment may assign a different real column id
+    /// for the same path, so readers must map this id through the segment schema.
+    pub query_column_id: u32,
+    /// Full query field name, including the source column, e.g. `v.user.name` or `v[0].id`.
     pub name: String,
     /// Paths to generate virtual column from source column.
     pub key_paths: OwnedKeyPaths,
@@ -67,6 +70,21 @@ pub struct VirtualColumnField {
     pub cast_func_name: Option<String>,
     /// Virtual column data type.
     pub data_type: Box<TableDataType>,
+}
+
+/// Query-time identity of a virtual column referenced by a pushed-down filter
+/// or ordering expression. It bridges the query column id to the persisted
+/// source-column/canonical-path identity used to locate segment-local stats.
+#[derive(Clone, Debug)]
+pub struct VirtualPredicateRef {
+    /// Full query/pipeline field name used by expression column references.
+    pub name: String,
+    /// Id of the authoritative source Variant column.
+    pub source_column_id: u32,
+    /// Query-time temporary column id used by runtime filters and readers.
+    pub query_column_id: u32,
+    /// Compact canonical JSON path relative to the source column.
+    pub encoded_path: String,
 }
 
 /// Information about prewhere optimization.
@@ -207,6 +225,30 @@ pub struct PushDownInfo {
 }
 
 impl PushDownInfo {
+    pub fn virtual_predicate_refs(
+        &self,
+        filter_expr: Option<&Expr<String>>,
+    ) -> Vec<VirtualPredicateRef> {
+        let Some(virtual_column) = &self.virtual_column else {
+            return Vec::new();
+        };
+        let mut referenced_columns = filter_expr.map(Expr::column_refs).unwrap_or_default();
+        for (expr, _, _) in &self.order_by {
+            referenced_columns.extend(expr.column_refs());
+        }
+        virtual_column
+            .virtual_column_fields
+            .iter()
+            .filter(|field| referenced_columns.contains_key(&field.name))
+            .map(|field| VirtualPredicateRef {
+                name: field.name.clone(),
+                source_column_id: field.source_column_id,
+                query_column_id: field.query_column_id,
+                encoded_path: field.key_paths.to_canonical_path(),
+            })
+            .collect()
+    }
+
     pub fn add_internal_column_dependencies<'a>(
         &mut self,
         schema: &TableSchema,

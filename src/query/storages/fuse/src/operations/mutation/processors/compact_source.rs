@@ -114,6 +114,7 @@ impl PrefetchAsyncSource for CompactSource {
                     read_res,
                     metas: task.blocks.clone(),
                     index: task.index.clone(),
+                    virtual_column_layout: task.virtual_column_layout.clone(),
                 })
             }
             CompactBlockPartInfo::CompactExtraInfo(extra) => {
@@ -158,6 +159,7 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                 read_res,
                 metas,
                 index,
+                virtual_column_layout,
             } => {
                 let blocks = read_res
                     .into_iter()
@@ -184,12 +186,15 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                 // concat blocks.
                 let block = DataBlock::concat(&blocks)?;
 
-                let meta = Box::new(SerializeDataMeta::SerializeBlock(SerializeBlock::create(
-                    index,
-                    ClusterStatsGenType::Generally,
-                    0,
-                    0,
-                )));
+                let meta = Box::new(SerializeDataMeta::SerializeBlock(
+                    SerializeBlock::create_with_virtual_layout(
+                        index,
+                        ClusterStatsGenType::Generally,
+                        0,
+                        0,
+                        virtual_column_layout,
+                    ),
+                ));
                 let new_block = block.add_meta(Some(meta))?;
                 Ok(vec![new_block])
             }

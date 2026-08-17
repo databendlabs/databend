@@ -74,6 +74,7 @@ impl BlockMetaAccumulatingTransform<PrunedCompactSegmentMeta> for ExtractSegment
         Ok(Some(DataBlock::empty_with_meta(BlockMetasMeta::create(
             block_metas,
             segment_location,
+            info.summary.virtual_segment_schema.clone(),
         ))))
     }
 }

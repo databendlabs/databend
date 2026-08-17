@@ -313,7 +313,7 @@ where A: super::TypeCheckAdapter
 
     fn get_function_keypath(value: &Scalar) -> Option<OwnedKeyPath> {
         let path = match value {
-            Scalar::String(path) => OwnedKeyPath::QuotedName(path.clone()),
+            Scalar::String(path) => OwnedKeyPath::Name(path.clone()),
             Scalar::Number(number) => {
                 let index = number.integer_to_i128()?;
                 if index < 0 {
@@ -709,7 +709,7 @@ where A: super::TypeCheckAdapter
         {
             return None;
         }
-        let key_name = Self::owned_keypaths_to_name(column_name, &owned_keypaths);
+        let key_name = owned_keypaths.to_canonical_path();
         let virtual_column_name = VirtualColumnName {
             table_index,
             source_column_id: column_id,
@@ -729,25 +729,6 @@ where A: super::TypeCheckAdapter
             BoundColumnRef { span, column }.into(),
             data_type,
         )))
-    }
-
-    fn owned_keypaths_to_name(column_name: &str, keypaths: &OwnedKeyPaths) -> String {
-        let mut name = column_name.to_string();
-        for path in &keypaths.paths {
-            name.push('[');
-            match path {
-                OwnedKeyPath::Index(idx) => {
-                    name.push_str(&idx.to_string());
-                }
-                OwnedKeyPath::QuotedName(field) | OwnedKeyPath::Name(field) => {
-                    name.push('\'');
-                    name.push_str(field.as_ref());
-                    name.push('\'');
-                }
-            }
-            name.push(']');
-        }
-        name
     }
 
     // Rewrite variant map access as `get_by_keypath` function

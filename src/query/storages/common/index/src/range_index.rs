@@ -55,6 +55,7 @@ use super::eliminate_cast::*;
 use crate::Index;
 use crate::SpatialPredicate;
 use crate::SpatialPredicateOp;
+use crate::VirtualColumnStatsOfNames;
 use crate::collect_spatial_predicates;
 use crate::rect_contains;
 use crate::rects_distance_intersect;
@@ -180,11 +181,13 @@ impl RangeIndex {
         &self,
         stats: &StatisticsOfColumns,
         spatial_stats: Option<&StatisticsOfSpatialColumns>,
+        virtual_col_stats: Option<&VirtualColumnStatsOfNames>,
         column_is_default: F,
     ) -> Result<bool>
     where
         F: Fn(&ColumnId) -> bool,
     {
+<<<<<<< HEAD
         let mut input_domains: HashMap<String, Domain> =
             HashMap::with_capacity(self.column_slots.len());
         for slot in &self.column_slots {
@@ -205,18 +208,72 @@ impl RangeIndex {
                 }
             };
             input_domains.insert(slot.name.clone(), domain);
+=======
+        let mut input_domains = HashMap::new();
+        let mut virtual_column_types = HashMap::new();
+        for (name, ty) in self.expr.column_refs() {
+            // internal column and stream column are not actual stored columns
+            if is_internal_column(&name) || is_stream_column(&name) {
+                input_domains.insert(name, Domain::full(&ty));
+                continue;
+            }
+
+            let column_ids = self.schema.leaf_columns_of(&name);
+            if column_ids.is_empty() {
+                // The name may refer to a virtual column (e.g. `v['a']`). Use the
+                // block-local virtual column statistics to build the domain.
+                // Only typed statistics are injected; everything else falls back
+                // to a full domain to avoid wrong pruning.
+                if let Some(stat) = virtual_col_stats.and_then(|stats| stats.get(&name)) {
+                    let column_stat = stat.to_column_statistics();
+                    let data_type = DataType::from(&stat.data_type);
+                    let domain = statistics_to_domain(vec![&column_stat], &data_type);
+                    virtual_column_types.insert(name.clone(), data_type);
+                    input_domains.insert(name, domain);
+                } else {
+                    input_domains.insert(name, Domain::full(&ty));
+                }
+                continue;
+            }
+
+            let stats = column_ids
+                .iter()
+                .filter_map(|column_id| match stats.get(column_id) {
+                    None => {
+                        if column_is_default(column_id)
+                            && self.default_stats.contains_key(column_id)
+                        {
+                            Some(&self.default_stats[column_id])
+                        } else {
+                            None
+                        }
+                    }
+                    other => other,
+                })
+                .collect();
+            input_domains.insert(name, statistics_to_domain(stats, &ty));
+>>>>>>> 7103cb5322 (chore: Improve Virtual Column Block Meta Generation)
         }
 
         for (name, domain) in self.spatial_predicate_domains(spatial_stats) {
             input_domains.insert(name, domain);
         }
 
+<<<<<<< HEAD
         let (expr, input_domains) = if self.has_rewrite_candidates {
             let mut visitor = RewriteVisitor {
                 input_domains,
                 func_ctx: &self.func_ctx,
                 fn_registry: &BUILTIN_FUNCTIONS,
             };
+=======
+        let mut visitor = RewriteVisitor {
+            input_domains,
+            column_types: (!virtual_column_types.is_empty()).then_some(&virtual_column_types),
+            func_ctx: &self.func_ctx,
+            fn_registry: &BUILTIN_FUNCTIONS,
+        };
+>>>>>>> 7103cb5322 (chore: Improve Virtual Column Block Meta Generation)
 
             let expr = match visit_expr(&self.expr, &mut visitor).unwrap() {
                 Some(expr) => Cow::Owned(expr),
@@ -253,12 +310,21 @@ impl RangeIndex {
         let expr = self.expr.fill_const_column(partition_columns);
         Self::create_from_parts(
             expr,
+<<<<<<< HEAD
             self.func_ctx.clone(),
             self.schema.clone(),
             self.default_stats.clone(),
             self.predicates.clone(),
         )
         .apply(stats, None, |_| false)
+=======
+            func_ctx: self.func_ctx.clone(),
+            schema: self.schema.clone(),
+            default_stats: self.default_stats.clone(),
+            predicates: self.predicates.clone(),
+        }
+        .apply(stats, None, None, |_| false)
+>>>>>>> 7103cb5322 (chore: Improve Virtual Column Block Meta Generation)
     }
 
     pub fn supported_table_type(data_type: &TableDataType) -> bool {
