@@ -526,6 +526,7 @@ impl SubqueryDecorrelatorOptimizer {
                         func_name: "is_not_null".to_string(),
                         params: vec![],
                         arguments: vec![column_ref.clone()],
+                        return_type: Box::new(DataType::Boolean),
                     });
                     let cast_column_ref_to_uint64 = ScalarExpr::CastExpr(CastExpr {
                         span: subquery.span,
@@ -547,6 +548,9 @@ impl SubqueryDecorrelatorOptimizer {
                             func_name: "if".to_string(),
                             params: vec![],
                             arguments: vec![is_not_null, cast_column_ref_to_uint64, zero],
+                            return_type: Box::new(
+                                DataType::Number(NumberDataType::UInt64).wrap_nullable(),
+                            ),
                         })),
                         target_type: Box::new(
                             DataType::Number(NumberDataType::UInt64).wrap_nullable(),
@@ -564,7 +568,9 @@ impl SubqueryDecorrelatorOptimizer {
                             func_name: "is_true".to_string(),
                             params: vec![],
                             arguments: vec![column_ref],
+                            return_type: Box::new(DataType::Boolean),
                         })],
+                        return_type: Box::new(DataType::Boolean),
                     })
                 } else if subquery.typ == SubqueryType::Exists {
                     // null value will consider as false
@@ -573,6 +579,7 @@ impl SubqueryDecorrelatorOptimizer {
                         func_name: "is_true".to_string(),
                         params: vec![],
                         arguments: vec![column_ref],
+                        return_type: Box::new(DataType::Boolean),
                     })
                 } else {
                     column_ref
@@ -665,6 +672,7 @@ impl SubqueryDecorrelatorOptimizer {
                             value: Scalar::Number(NumberScalar::UInt64(1)),
                         }),
                     ],
+                    return_type: Box::new(DataType::Boolean),
                 };
 
                 let agg_s_expr = Arc::new(subquery_expr.build_unary(agg));

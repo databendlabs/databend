@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
 use crate::binder::JoinPredicate;
@@ -226,11 +227,14 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
         for equi_condition in join.equi_conditions.iter() {
             let left = equi_condition.left.clone();
             let right = equi_condition.right.clone();
+            let return_type =
+                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
             push_down_predicates.push(ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                 params: vec![],
                 arguments: vec![left, right],
+                return_type: Box::new(return_type),
             }));
         }
         join.equi_conditions.clear();

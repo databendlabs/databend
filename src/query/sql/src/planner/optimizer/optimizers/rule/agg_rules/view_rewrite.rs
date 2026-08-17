@@ -20,6 +20,7 @@ use std::collections::HashSet;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 use itertools::Itertools;
 
 use crate::ColumnBinding;
@@ -969,11 +970,17 @@ impl ViewMatcher {
                                 span: None,
                                 value: lower_val.clone(),
                             });
+                            let return_type =
+                                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                                    new_scalar,
+                                    &lower_val_scalar,
+                                ]);
                             let pred = ScalarExpr::FunctionCall(FunctionCall {
                                 span: None,
                                 func_name: "eq".to_string(),
                                 params: vec![],
                                 arguments: vec![new_scalar.clone(), lower_val_scalar],
+                                return_type: Box::new(return_type),
                             });
                             new_predicates.push(pred);
                             continue;
@@ -985,11 +992,17 @@ impl ViewMatcher {
                             span: None,
                             value: lower_val,
                         });
+                        let return_type =
+                            ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                                new_scalar,
+                                &lower_val_scalar,
+                            ]);
                         let pred = ScalarExpr::FunctionCall(FunctionCall {
                             span: None,
                             func_name: func_name.to_string(),
                             params: vec![],
                             arguments: vec![new_scalar.clone(), lower_val_scalar],
+                            return_type: Box::new(return_type),
                         });
                         new_predicates.push(pred);
                     }
@@ -998,11 +1011,17 @@ impl ViewMatcher {
                             span: None,
                             value: upper_val,
                         });
+                        let return_type =
+                            ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                                new_scalar,
+                                &upper_val_scalar,
+                            ]);
                         let pred = ScalarExpr::FunctionCall(FunctionCall {
                             span: None,
                             func_name: func_name.to_string(),
                             params: vec![],
                             arguments: vec![new_scalar.clone(), upper_val_scalar],
+                            return_type: Box::new(return_type),
                         });
                         new_predicates.push(pred);
                     }

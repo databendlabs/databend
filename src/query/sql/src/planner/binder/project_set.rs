@@ -149,6 +149,7 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                     func_name: func.func_name.clone(),
                     params: func.params.clone(),
                     arguments: replaced_args,
+                    return_type: func.return_type.clone(),
                 }
                 .into();
 

@@ -758,6 +758,7 @@ impl AggregateInfo {
                 span: function.span,
                 column: grouping_id_column,
             })],
+            return_type: function.return_type.clone(),
         })
     }
 }
@@ -1534,6 +1535,7 @@ mod tests {
                 }
                 .into(),
             ],
+            return_type: Box::new(DataType::Number(NumberDataType::Int64)),
         }
         .into()
     }

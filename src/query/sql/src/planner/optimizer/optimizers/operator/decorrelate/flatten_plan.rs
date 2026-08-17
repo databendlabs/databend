@@ -848,6 +848,7 @@ impl SubqueryDecorrelatorOptimizer {
                         )),
                     }),
                 ],
+                return_type: Box::new(DataType::Boolean),
             }));
         }
 
@@ -863,6 +864,7 @@ impl SubqueryDecorrelatorOptimizer {
                         value: Scalar::Number(NumberScalar::UInt64(limit.offset as u64)),
                     }),
                 ],
+                return_type: Box::new(DataType::Boolean),
             }));
         }
 

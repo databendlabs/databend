@@ -796,34 +796,39 @@ impl SubqueryDecorrelatorOptimizer {
                                 ))
                             })?;
 
-                            let mut arguments = Vec::with_capacity(2);
-                            if value_type != common_type {
-                                arguments.push(ScalarExpr::CastExpr(CastExpr {
+                            let array_argument = if value_type != common_type {
+                                ScalarExpr::CastExpr(CastExpr {
                                     span: subquery.span,
                                     is_try: false,
                                     argument: Box::new(array_value),
                                     target_type: Box::new(DataType::Array(Box::new(
                                         common_type.clone(),
                                     ))),
-                                }));
+                                })
                             } else {
-                                arguments.push(array_value);
-                            }
-                            if expr_type != common_type {
-                                arguments.push(ScalarExpr::CastExpr(CastExpr {
+                                array_value
+                            };
+                            let value_argument = if expr_type != common_type {
+                                ScalarExpr::CastExpr(CastExpr {
                                     span: subquery.span,
                                     is_try: false,
                                     argument: Box::new(*child_expr.clone()),
                                     target_type: Box::new(common_type.clone()),
-                                }));
+                                })
                             } else {
-                                arguments.push(*child_expr.clone());
-                            }
+                                *child_expr.clone()
+                            };
+                            let return_type =
+                                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                                    &array_argument,
+                                    &value_argument,
+                                ]);
                             let func = ScalarExpr::FunctionCall(FunctionCall {
                                 span: subquery.span,
                                 func_name: "contains".to_string(),
                                 params: vec![],
-                                arguments,
+                                arguments: vec![array_argument, value_argument],
+                                return_type: Box::new(return_type),
                             });
                             return Ok(Some(func));
                         }
@@ -834,11 +839,17 @@ impl SubqueryDecorrelatorOptimizer {
                                 span: subquery.span,
                                 value,
                             });
+                            let return_type =
+                                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                                    child_expr.as_ref(),
+                                    &scalar_value,
+                                ]);
                             let func = ScalarExpr::FunctionCall(FunctionCall {
                                 span: subquery.span,
                                 func_name: "eq".to_string(),
                                 params: vec![],
                                 arguments: vec![*child_expr.clone(), scalar_value],
+                                return_type: Box::new(return_type),
                             });
                             funcs.push(func);
                         }
@@ -848,11 +859,16 @@ impl SubqueryDecorrelatorOptimizer {
                                 match acc.as_mut() {
                                     None => acc = Some(func),
                                     Some(acc) => {
+                                        let return_type = ScalarExpr::passthrough_nullable_type(
+                                            DataType::Boolean,
+                                            [&*acc, &func],
+                                        );
                                         *acc = ScalarExpr::FunctionCall(FunctionCall {
                                             span: subquery.span,
                                             func_name: "or".to_string(),
                                             params: vec![],
                                             arguments: vec![acc.clone(), func],
+                                            return_type: Box::new(return_type),
                                         });
                                     }
                                 }

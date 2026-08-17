@@ -15,7 +15,9 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
+use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use super::SExpr;
@@ -25,6 +27,7 @@ use crate::MetadataRef;
 use crate::Symbol;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
+use crate::plans::FunctionCall;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
@@ -253,6 +256,28 @@ struct ScalarTypeValidator<'a> {
 }
 
 impl ScalarTypeValidator<'_> {
+    fn validate_function_call(&mut self, function: &FunctionCall) -> Result<()> {
+        let argument_types = function
+            .arguments
+            .iter()
+            .map(ScalarExpr::data_type)
+            .collect::<Result<Vec<_>>>()?;
+        let inferred = type_check::infer_function_return_type(
+            function.span,
+            &function.func_name,
+            &function.params,
+            argument_types.into_iter(),
+            &BUILTIN_FUNCTIONS,
+        )?;
+        if inferred != *function.return_type {
+            return Err(ErrorCode::Internal(format!(
+                "SExpr function return type mismatch for {}: stored {:?}, inferred {inferred:?}",
+                function.func_name, function.return_type
+            )));
+        }
+        Ok(())
+    }
+
     fn validate_aggregate_function(&mut self, aggregate: &AggregateFunction) -> Result<()> {
         let argument_types = aggregate
             .args
@@ -293,6 +318,15 @@ impl ScalarExprVisitor<'_> for ScalarTypeValidator<'_> {
 
         for expr in aggregate.exprs() {
             self.visit(expr)?;
+        }
+        Ok(())
+    }
+
+    fn visit_function_call(&mut self, function: &FunctionCall) -> Result<()> {
+        self.validate_function_call(function)?;
+
+        for argument in &function.arguments {
+            self.visit(argument)?;
         }
         Ok(())
     }

@@ -469,8 +469,9 @@ mod tests {
                     params: vec![],
                     arguments: vec![
                         column_with_type(0, nullable_int.clone()),
-                        typed_int_constant(10, nullable_int),
+                        typed_int_constant(10, nullable_int.clone()),
                     ],
+                    return_type: Box::new(nullable_int),
                 }),
                 index: Symbol::new(1),
             }],

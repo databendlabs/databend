@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
+use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -119,30 +120,37 @@ where A: super::TypeCheckAdapter
             .replace_expr_context(ExprContext::InSetReturningFunction);
         let arguments_result = self.resolve_expr_args(arena, args);
         self.bind_context.expr_context = original_context;
-        let (arguments, _) = arguments_result?;
-
+        let (arguments, argument_types) = arguments_result?;
+        let srf_return_type = type_check::infer_function_return_type(
+            span,
+            func_name,
+            &[],
+            argument_types.into_iter(),
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let srf_tuple_types = srf_return_type.as_tuple().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "The return type of srf should be tuple, but got {}",
+                srf_return_type
+            ))
+        })?;
         let srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
             span,
             func_name: func_name.to_string(),
             params: vec![],
             arguments,
+            return_type: Box::new(srf_return_type.clone()),
         });
-        let srf_expr = srf_scalar.as_expr()?;
-        let srf_tuple_types = srf_expr.data_type().as_tuple().ok_or_else(|| {
-            ErrorCode::Internal(format!(
-                "The return type of srf should be tuple, but got {}",
-                srf_expr.data_type()
-            ))
-        })?;
 
         let (return_scalar, return_type) = if srf_tuple_types.len() > 1 {
-            (srf_scalar, srf_expr.data_type().clone())
+            (srf_scalar, srf_return_type)
         } else {
             let child_scalar = ScalarExpr::FunctionCall(FunctionCall {
                 span,
                 func_name: "get".to_string(),
                 params: vec![Scalar::Number(NumberScalar::Int64(1))],
                 arguments: vec![srf_scalar],
+                return_type: Box::new(srf_tuple_types[0].clone()),
             });
             (child_scalar, srf_tuple_types[0].clone())
         };

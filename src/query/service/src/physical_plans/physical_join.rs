@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::binder::is_range_join_condition;
@@ -222,11 +223,16 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .cloned()
                 .chain(join.equi_conditions.iter().cloned().map(|condition| {
+                    let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                        &condition.left,
+                        &condition.right,
+                    ]);
                     FunctionCall {
                         span: condition.left.span(),
                         func_name: "eq".to_string(),
                         params: vec![],
                         arguments: vec![condition.left, condition.right],
+                        return_type: Box::new(return_type),
                     }
                     .into()
                 }))

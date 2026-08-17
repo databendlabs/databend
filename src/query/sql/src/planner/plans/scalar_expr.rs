@@ -167,15 +167,29 @@ impl ScalarExpr {
             ScalarExpr::WindowFunction(window) => Ok(window.func.return_type()),
             ScalarExpr::AggregateFunction(aggregate) => Ok((*aggregate.return_type).clone()),
             ScalarExpr::LambdaFunction(function) => Ok((*function.return_type).clone()),
-            // TODO: Cache the return type once expression rewrites reliably invalidate it when
-            // function arguments change.
-            ScalarExpr::FunctionCall(_) => Ok(self.as_expr()?.data_type().clone()),
+            ScalarExpr::FunctionCall(function) => Ok((*function.return_type).clone()),
             ScalarExpr::CastExpr(cast) => Ok((*cast.target_type).clone()),
             ScalarExpr::SubqueryExpr(subquery) => Ok(subquery.output_data_type()),
             ScalarExpr::UDFCall(udf) => Ok((*udf.return_type).clone()),
             ScalarExpr::UDAFCall(udaf) => Ok((*udaf.return_type).clone()),
             ScalarExpr::UDFLambdaCall(udf) => udf.scalar.data_type(),
             ScalarExpr::AsyncFunctionCall(function) => Ok((*function.return_type).clone()),
+        }
+    }
+
+    pub fn passthrough_nullable_type<'a>(
+        data_type: DataType,
+        arguments: impl IntoIterator<Item = &'a ScalarExpr>,
+    ) -> DataType {
+        if arguments.into_iter().any(|argument| {
+            argument
+                .data_type()
+                .expect("ScalarExpr always carries a resolved data type")
+                .is_nullable_or_null()
+        }) {
+            data_type.wrap_nullable()
+        } else {
+            data_type
         }
     }
 
@@ -989,6 +1003,7 @@ impl SubqueryComparisonOp {
     }
 
     pub fn to_func_call(&self, span: Span, left: ScalarExpr, right: ScalarExpr) -> FunctionCall {
+        let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
         if let SubqueryComparisonOp::Like(escape) = self {
             let mut arguments = vec![left, right];
             if let Some(escape) = escape {
@@ -1002,6 +1017,7 @@ impl SubqueryComparisonOp {
                 func_name: "like".to_string(),
                 params: vec![],
                 arguments,
+                return_type: Box::new(return_type),
             };
         }
         FunctionCall {
@@ -1009,6 +1025,7 @@ impl SubqueryComparisonOp {
             func_name: self.to_func_name().to_string(),
             params: vec![],
             arguments: vec![left, right],
+            return_type: Box::new(return_type),
         }
     }
 }
@@ -1152,14 +1169,16 @@ pub struct LambdaFunc {
     pub return_type: Box<DataType>,
 }
 
-#[derive(Clone, Debug, Educe)]
-#[educe(PartialEq, Eq, Hash)]
+#[derive(Clone, Educe)]
+#[educe(Debug, PartialEq, Eq, Hash)]
 pub struct FunctionCall {
     #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub func_name: String,
     pub params: Vec<Scalar>,
     pub arguments: Vec<ScalarExpr>,
+    #[educe(Debug(ignore))]
+    pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, Debug, Educe)]
@@ -1763,6 +1782,33 @@ mod tests {
         })
     }
 
+    fn tuple_expr(number: NumberScalar) -> ScalarExpr {
+        let number_type = DataType::Number(number.data_type());
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "tuple".to_string(),
+            params: vec![],
+            arguments: vec![
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Number(number),
+                }),
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::String("value".to_string()),
+                }),
+            ],
+            return_type: Box::new(DataType::Tuple(vec![number_type, DataType::String])),
+        })
+    }
+
+    fn assert_stored_type_matches_inferred(expr: &ScalarExpr) {
+        assert_eq!(
+            expr.data_type().unwrap(),
+            expr.as_expr().unwrap().data_type().clone()
+        );
+    }
+
     #[test]
     fn test_scalar_expr_is_deterministic_handles_async_function_call() {
         let expr = casted_nextval_expr();
@@ -1773,5 +1819,48 @@ mod tests {
             !expr.is_deterministic(),
             "AsyncFunctionCall wrapped in CastExpr should stay non-deterministic at the ScalarExpr layer"
         );
+    }
+
+    #[test]
+    fn test_function_call_return_type_survives_type_preserving_rewrite() {
+        let mut expr = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "get".to_string(),
+            params: vec![Scalar::Number(NumberScalar::Int64(2))],
+            arguments: vec![tuple_expr(NumberScalar::Int64(1))],
+            return_type: Box::new(DataType::String),
+        });
+        assert_stored_type_matches_inferred(&expr);
+
+        let ScalarExpr::FunctionCall(function) = &mut expr else {
+            unreachable!()
+        };
+        function.arguments[0] = tuple_expr(NumberScalar::UInt64(1));
+
+        assert_stored_type_matches_inferred(&expr);
+    }
+
+    #[test]
+    fn test_tuple_get_return_type_inherits_nullability() {
+        let nullable_tuple = ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try: false,
+            argument: Box::new(tuple_expr(NumberScalar::Int64(1))),
+            target_type: Box::new(DataType::Nullable(Box::new(DataType::Tuple(vec![
+                DataType::Number(NumberDataType::Int64),
+                DataType::String,
+            ])))),
+        });
+        let return_type =
+            ScalarExpr::passthrough_nullable_type(DataType::String, [&nullable_tuple]);
+        let expr = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "get".to_string(),
+            params: vec![Scalar::Number(NumberScalar::Int64(2))],
+            arguments: vec![nullable_tuple],
+            return_type: Box::new(return_type),
+        });
+
+        assert_stored_type_matches_inferred(&expr);
     }
 }

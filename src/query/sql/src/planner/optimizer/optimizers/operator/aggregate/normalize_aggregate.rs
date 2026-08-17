@@ -16,6 +16,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 
 use crate::ColumnBinding;
 use crate::Visibility;
@@ -132,6 +134,7 @@ impl RuleNormalizeAggregateOptimizer {
                             func_name: "is_not_null".to_string(),
                             params: vec![],
                             arguments: vec![function.args[0].clone()],
+                            return_type: Box::new(DataType::Boolean),
                         });
 
                         ScalarExpr::FunctionCall(FunctionCall {
@@ -149,6 +152,7 @@ impl RuleNormalizeAggregateOptimizer {
                                     value: 0u64.into(),
                                 }),
                             ],
+                            return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
                         })
                     } else {
                         ScalarExpr::ConstantExpr(ConstantExpr {

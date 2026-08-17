@@ -902,6 +902,7 @@ pub fn generate_update_list(
                     func_name: "if".to_string(),
                     params: vec![],
                     arguments: vec![predicate.clone(), left, right],
+                    return_type: Box::new(target_type),
                 })
             };
             let expr = scalar
@@ -989,6 +990,7 @@ pub fn mutation_update_expr(
                 func_name: "if".to_string(),
                 params: vec![],
                 arguments: vec![predicate.clone(), left, right],
+                return_type: Box::new(target_type),
             });
             let expr = scalar
                 .type_check(input_schema.as_ref())?
