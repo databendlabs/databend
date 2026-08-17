@@ -265,7 +265,7 @@ impl<'a> CowStat<'a> {
                 distribution: match distribution {
                     BorrowedDistribution::Unknown => OwnedDistribution::Unknown,
                     BorrowedDistribution::Histogram(histogram) => {
-                        OwnedDistribution::Histogram(histogram.clone())
+                        OwnedDistribution::Histogram(histogram.to_owned())
                     }
                     BorrowedDistribution::Boolean(distribution) => {
                         OwnedDistribution::Boolean(distribution)

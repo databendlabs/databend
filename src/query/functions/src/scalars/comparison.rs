@@ -84,7 +84,7 @@ use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::deserialize_bitmap;
-use databend_common_statistics::Histogram;
+use databend_common_statistics::BorrowedHistogram;
 use databend_common_statistics::TypedHistogram;
 use databend_common_statistics::TypedHistogramBucket;
 use databend_functions_scalar_decimal::register_decimal_compare;
@@ -439,7 +439,7 @@ impl_simple_domain_stat_type!(
 );
 
 struct HistogramComparison<'a, T, Op> {
-    histogram: &'a Histogram,
+    histogram: BorrowedHistogram<'a>,
     constant: &'a T,
     non_null_cardinality: f64,
     _op: PhantomData<fn(Op)>,
@@ -459,7 +459,7 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
 
     fn selected_count(&self) -> Result<StatEstimate, String> {
         match self.histogram {
-            Histogram::Int(histogram) => {
+            BorrowedHistogram::Int(histogram) => {
                 let constant = self
                     .constant
                     .histogram_i64()
@@ -473,7 +473,7 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
                 }
                 .selected_count(HistogramBucketComparison::number_selected_count))
             }
-            Histogram::UInt(histogram) => {
+            BorrowedHistogram::UInt(histogram) => {
                 let constant = self
                     .constant
                     .histogram_u64()
@@ -487,7 +487,7 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
                 }
                 .selected_count(HistogramBucketComparison::number_selected_count))
             }
-            Histogram::Float(histogram) => {
+            BorrowedHistogram::Float(histogram) => {
                 let constant = self
                     .constant
                     .histogram_f64()
@@ -501,7 +501,7 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
                 }
                 .selected_count(HistogramBucketComparison::number_selected_count))
             }
-            Histogram::Bytes(histogram) => {
+            BorrowedHistogram::Bytes(histogram) => {
                 let Some(constant) = self.constant.histogram_bytes() else {
                     return Err(unexpected_histogram_constant("Bytes", self.constant));
                 };

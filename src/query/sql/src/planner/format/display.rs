@@ -253,16 +253,27 @@ where
             .statistics
             .column_stats
             .iter()
-            .map(|(column, hist)| {
+            .map(|(column, stat)| {
                 let column = self.id_humanizer.humanize_column_id(*column);
-                let hist = format!(
-                    "{{ min: {}, max: {}, ndv: {}, null count: {} }}",
-                    hist.min,
-                    hist.max,
-                    hist.ndv.expected.unwrap_or(hist.ndv.upper),
-                    hist.null_count.expected()
-                );
-                FormatTreeNode::new(format!("{}: {}", column, hist))
+                let stat = match stat.bounds() {
+                    Some(bounds) => {
+                        let (min, max) = bounds.display_parts();
+                        format!(
+                            "{{ min: {}, max: {}, ndv: {}, null count: {} }}",
+                            min,
+                            max,
+                            stat.ndv().expected.unwrap_or(stat.ndv().upper),
+                            stat.null_count().expected()
+                        )
+                    }
+                    None => {
+                        format!(
+                            "{{ all null, null count: {} }}",
+                            stat.null_count().expected()
+                        )
+                    }
+                };
+                FormatTreeNode::new(format!("{}: {}", column, stat))
             })
             .sorted_by(|a, b| a.payload.cmp(&b.payload))
             .collect::<Vec<_>>();
