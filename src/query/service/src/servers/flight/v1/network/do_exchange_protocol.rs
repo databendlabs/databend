@@ -42,19 +42,23 @@ use databend_common_exception::Result;
 //      |<-------- RECEIVER_CLOSED ------------|
 //      |                                     |
 //
-// Physical EOF or transport failure is never logical completion. Until ACK or RECEIVER_CLOSED is
-// received, the sender retains the encoded DATA or FINISH so it can be replayed after reconnect.
+// Either endpoint may also terminate the logical stream with an error. The outbound client sends
+// SENDER_FAIL when its producer fails; the inbound service returns FAIL when its consumer fails.
+// Physical EOF or transport failure is never logical completion. Until a response is received,
+// the sender retains the encoded request so it can be replayed after reconnect.
 
 const DATA_KIND: u8 = 1;
 const ACK_KIND: u8 = 2;
 const FINISH_KIND: u8 = 3;
 const RECEIVER_CLOSED_KIND: u8 = 4;
 const FAIL_KIND: u8 = 5;
+const SENDER_FAIL_KIND: u8 = 6;
 const HEADER_LEN: usize = 1 + size_of::<u64>();
 
 pub(crate) enum DoExchangeRequest {
     Data { sequence: u64, payload: FlightData },
     Finish,
+    SenderFail(ErrorCode),
 }
 
 impl DoExchangeRequest {
@@ -64,6 +68,10 @@ impl DoExchangeRequest {
 
     pub(crate) fn finish() -> Self {
         Self::Finish
+    }
+
+    pub(crate) fn sender_fail(cause: ErrorCode) -> Self {
+        Self::SenderFail(cause)
     }
 
     pub(crate) fn encode(&self) -> FlightData {
@@ -77,6 +85,7 @@ impl DoExchangeRequest {
                 payload
             }
             Self::Finish => encode_control_packet(FINISH_KIND, 0),
+            Self::SenderFail(cause) => encode_error_packet(SENDER_FAIL_KIND, cause.clone()),
         }
     }
 
@@ -93,6 +102,10 @@ impl DoExchangeRequest {
             FINISH_KIND => {
                 validate_control_packet(&data)?;
                 Ok(Self::Finish)
+            }
+            SENDER_FAIL_KIND => {
+                data.app_metadata = data.app_metadata.slice(HEADER_LEN..);
+                Ok(Self::SenderFail(ErrorCode::try_from(data)?))
             }
             ACK_KIND | RECEIVER_CLOSED_KIND | FAIL_KIND => Err(ErrorCode::BadArguments(
                 "received a do_exchange response packet on the request stream",
@@ -125,14 +138,7 @@ impl DoExchangeResponse {
         match self {
             Self::Ack { sequence } => encode_control_packet(ACK_KIND, sequence),
             Self::ReceiverClosed => encode_control_packet(RECEIVER_CLOSED_KIND, 0),
-            Self::Fail(cause) => {
-                let mut data = FlightData::from(cause);
-                let mut metadata = BytesMut::with_capacity(HEADER_LEN + data.app_metadata.len());
-                encode_header(&mut metadata, FAIL_KIND, 0);
-                metadata.extend_from_slice(&data.app_metadata);
-                data.app_metadata = metadata.freeze();
-                data
-            }
+            Self::Fail(cause) => encode_error_packet(FAIL_KIND, cause),
         }
     }
 
@@ -151,7 +157,7 @@ impl DoExchangeResponse {
                 data.app_metadata = data.app_metadata.slice(HEADER_LEN..);
                 Ok(Self::Fail(ErrorCode::try_from(data)?))
             }
-            DATA_KIND | FINISH_KIND => Err(ErrorCode::BadArguments(
+            DATA_KIND | FINISH_KIND | SENDER_FAIL_KIND => Err(ErrorCode::BadArguments(
                 "received a do_exchange request packet on the response stream",
             )),
             _ => Err(unknown_packet_kind(kind)),
@@ -171,6 +177,15 @@ fn encode_control_packet(kind: u8, sequence: u64) -> FlightData {
         app_metadata: metadata.freeze(),
         ..Default::default()
     }
+}
+
+fn encode_error_packet(kind: u8, cause: ErrorCode) -> FlightData {
+    let mut data = FlightData::from(cause);
+    let mut metadata = BytesMut::with_capacity(HEADER_LEN + data.app_metadata.len());
+    encode_header(&mut metadata, kind, 0);
+    metadata.extend_from_slice(&data.app_metadata);
+    data.app_metadata = metadata.freeze();
+    data
 }
 
 fn decode_header(data: &FlightData) -> Result<(u8, u64)> {

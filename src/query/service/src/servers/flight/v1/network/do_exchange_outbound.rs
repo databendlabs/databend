@@ -63,38 +63,26 @@ struct PendingPacket {
 }
 
 /// The sole request awaiting a response, retained for timeout tracking and reconnect replay.
-enum InFlightPacket {
-    Data {
-        encoded: FlightData,
-        sequence: u64,
-        sent_at: Instant,
-    },
-    Finish {
-        encoded: FlightData,
-        sent_at: Instant,
-    },
+struct InFlightPacket {
+    encoded: FlightData,
+    expected: ExpectedResponse,
+    sent_at: Instant,
+    // A replacement transport consumes this budget; only logical progress installs a fresh one.
+    reconnect_attempts_remaining: u64,
+}
+
+enum ExpectedResponse {
+    Ack(u64),
+    ReceiverClosed,
 }
 
 impl InFlightPacket {
-    fn encoded(&self) -> &FlightData {
-        match self {
-            Self::Data { encoded, .. } | Self::Finish { encoded, .. } => encoded,
-        }
-    }
-
     fn reset_timer(&mut self) {
-        match self {
-            Self::Data { sent_at, .. } | Self::Finish { sent_at, .. } => {
-                *sent_at = Instant::now();
-            }
-        }
+        self.sent_at = Instant::now();
     }
 
     fn deadline(&self, timeout: Duration) -> Option<tokio::time::Instant> {
-        let sent_at = match self {
-            Self::Data { sent_at, .. } | Self::Finish { sent_at, .. } => *sent_at,
-        };
-        sent_at
+        self.sent_at
             .checked_add(timeout)
             .map(tokio::time::Instant::from_std)
     }
@@ -168,6 +156,7 @@ enum OutboundCommand {
         permit: OwnedSemaphorePermit,
     },
     Finish,
+    SenderFail(ErrorCode),
 }
 
 struct OutboundDriver {
@@ -186,12 +175,18 @@ struct PhysicalConnection {
 }
 
 struct LogicalConnection {
-    /// Producer input has ended; drain in-flight and pending DATA before sending FINISH.
-    finishing: bool,
+    close: Option<CloseIntent>,
     in_flight: Option<InFlightPacket>,
     next_sequence: u64,
     pending: Vec<VecDeque<PendingPacket>>,
     max_batch_bytes: Option<usize>,
+}
+
+enum CloseIntent {
+    /// Producer input ended normally; drain accepted DATA before FINISH.
+    Finish,
+    /// Producer failed; discard unsent DATA and preserve this error during terminal cleanup.
+    SenderFail(ErrorCode),
 }
 
 pub struct NetworkOutbound {
@@ -235,7 +230,7 @@ impl PendingNetworkOutbound {
             commands: commands_rx,
             cancellation: cancellation.clone(),
             logical: LogicalConnection {
-                finishing: false,
+                close: None,
                 in_flight: None,
                 next_sequence: 0,
                 pending: (0..self.num_threads).map(|_| VecDeque::new()).collect(),
@@ -289,9 +284,17 @@ impl NetworkOutbound {
     pub async fn finish(&self) -> Result<()> {
         if self.completion.current().is_none() {
             let _ = self.commands.send(OutboundCommand::Finish).await;
-            self.commands.close();
         }
         self.completion.wait().await.map(|_| ())
+    }
+
+    /// Keeps the transport alive for the bounded failure handshake. This is cleanup and must not
+    /// delay returning the producer's original error to the query.
+    pub async fn fail(&self, cause: ErrorCode) {
+        if self.completion.current().is_none() {
+            let _ = self.commands.send(OutboundCommand::SenderFail(cause)).await;
+        }
+        let _ = self.completion.wait().await;
     }
 
     pub fn abort(&self) {
@@ -313,35 +316,38 @@ impl OutboundDriver {
     async fn run(mut self) -> OutboundTerminal {
         let terminal = self.drive().await;
         self.commands.close();
-        terminal
+        match &self.logical.close {
+            Some(CloseIntent::SenderFail(cause)) => OutboundTerminal::Failed(cause.clone()),
+            _ => terminal,
+        }
     }
 
     async fn drive(&mut self) -> OutboundTerminal {
         loop {
-            let ack_timeout = self.physical.ack_timeout();
+            let response_timeout = self.physical.response_timeout(self.logical.close.is_some());
             let deadline = self
                 .logical
                 .in_flight
                 .as_ref()
-                .zip(ack_timeout)
+                .zip(response_timeout)
                 .and_then(|(packet, timeout)| packet.deadline(timeout));
 
             enum Event {
                 Cancelled,
                 Command(std::result::Result<OutboundCommand, async_channel::RecvError>),
                 Response(std::result::Result<FlightData, Status>),
-                AckTimeout,
+                ResponseTimeout,
             }
 
             let event = tokio::select! {
                 _ = self.cancellation.cancelled() => Event::Cancelled,
-                command = receive_command(&self.commands, self.logical.finishing) => Event::Command(command),
+                command = self.commands.recv() => Event::Command(command),
                 response = self.physical.response_stream().next() => Event::Response(
                     response.unwrap_or_else(|| Err(Status::unavailable(
                         "do_exchange response stream ended before a terminal packet",
                     )))
                 ),
-                _ = wait_for_deadline(deadline) => Event::AckTimeout,
+                _ = wait_for_deadline(deadline) => Event::ResponseTimeout,
             };
 
             match event {
@@ -374,12 +380,12 @@ impl OutboundDriver {
                         return OutboundTerminal::Failed(cause);
                     }
                 }
-                Event::AckTimeout => {
-                    let ack_timeout =
-                        ack_timeout.expect("ACK timeout event requires reconnect to be enabled");
+                Event::ResponseTimeout => {
+                    let response_timeout = response_timeout
+                        .expect("response timeout event requires an in-flight deadline");
                     let status = Status::deadline_exceeded(format!(
-                        "do_exchange ACK exceeded its {:?} deadline",
-                        ack_timeout
+                        "do_exchange response exceeded its {:?} deadline",
+                        response_timeout
                     ));
                     if let Err(cause) = self.reconnect_transport(status).await {
                         return OutboundTerminal::Failed(cause);
@@ -396,10 +402,14 @@ impl OutboundDriver {
                 data,
                 permit,
             } => {
-                if self.logical.finishing {
-                    return Err(ErrorCode::Internal(
-                        "cannot send data after do_exchange producer completion",
-                    ));
+                match &self.logical.close {
+                    Some(CloseIntent::SenderFail(_)) => return Ok(()),
+                    Some(CloseIntent::Finish) => {
+                        return Err(ErrorCode::Internal(
+                            "cannot send data after do_exchange producer completion",
+                        ));
+                    }
+                    None => {}
                 }
                 if self.logical.in_flight.is_none() {
                     self.install_data(data);
@@ -411,7 +421,18 @@ impl OutboundDriver {
                 }
             }
             OutboundCommand::Finish => {
-                self.logical.finishing = true;
+                if self.logical.close.is_none() {
+                    self.logical.close = Some(CloseIntent::Finish);
+                }
+                self.send_next();
+            }
+            OutboundCommand::SenderFail(cause) => {
+                if !matches!(&self.logical.close, Some(CloseIntent::SenderFail(_))) {
+                    self.logical.close = Some(CloseIntent::SenderFail(cause));
+                }
+                for channel in &mut self.logical.pending {
+                    channel.clear();
+                }
                 self.send_next();
             }
         }
@@ -420,19 +441,24 @@ impl OutboundDriver {
 
     fn acknowledge(&mut self, sequence: u64) -> Result<()> {
         match self.logical.in_flight.take() {
-            Some(InFlightPacket::Data {
-                sequence: expected, ..
+            Some(InFlightPacket {
+                expected: ExpectedResponse::Ack(expected),
+                ..
             }) if sequence == expected => {
                 self.send_next();
                 Ok(())
             }
-            Some(InFlightPacket::Data {
-                sequence: expected, ..
+            Some(InFlightPacket {
+                expected: ExpectedResponse::Ack(expected),
+                ..
             }) => Err(ErrorCode::Internal(format!(
                 "received do_exchange ACK for sequence {}, expected {}",
                 sequence, expected
             ))),
-            Some(InFlightPacket::Finish { .. }) => Err(ErrorCode::Internal(
+            Some(InFlightPacket {
+                expected: ExpectedResponse::ReceiverClosed,
+                ..
+            }) => Err(ErrorCode::Internal(
                 "received do_exchange ACK while waiting for ReceiverClosed",
             )),
             None => Err(ErrorCode::Internal(
@@ -445,11 +471,15 @@ impl OutboundDriver {
         if self.logical.in_flight.is_some() {
             return;
         }
+        if let Some(CloseIntent::SenderFail(cause)) = &self.logical.close {
+            self.install_sender_fail(cause.clone());
+            return;
+        }
         if let Some(data) = pop_pending(&mut self.logical.pending, self.logical.max_batch_bytes) {
             self.install_data(data);
             return;
         }
-        if self.logical.finishing {
+        if matches!(&self.logical.close, Some(CloseIntent::Finish)) {
             self.install_finish();
         }
     }
@@ -460,32 +490,50 @@ impl OutboundDriver {
         let encoded = DoExchangeRequest::data(sequence, data).encode();
         self.physical.send(&encoded, "sending DATA");
         self.logical.next_sequence = next_sequence;
-        self.logical.in_flight = Some(InFlightPacket::Data {
+        self.logical.in_flight = Some(InFlightPacket {
             encoded,
-            sequence,
+            expected: ExpectedResponse::Ack(sequence),
             sent_at: Instant::now(),
+            reconnect_attempts_remaining: self.physical.reconnect.retry_times,
         });
     }
 
     fn install_finish(&mut self) {
         let encoded = DoExchangeRequest::finish().encode();
         self.physical.send(&encoded, "sending FINISH");
-        self.logical.in_flight = Some(InFlightPacket::Finish {
+        self.logical.in_flight = Some(InFlightPacket {
             encoded,
+            expected: ExpectedResponse::ReceiverClosed,
             sent_at: Instant::now(),
+            reconnect_attempts_remaining: self.physical.reconnect.retry_times,
+        });
+    }
+
+    fn install_sender_fail(&mut self, cause: ErrorCode) {
+        let encoded = DoExchangeRequest::sender_fail(cause).encode();
+        self.physical.send(&encoded, "sending SENDER_FAIL");
+        self.logical.in_flight = Some(InFlightPacket {
+            encoded,
+            expected: ExpectedResponse::ReceiverClosed,
+            sent_at: Instant::now(),
+            reconnect_attempts_remaining: self.physical.reconnect.retry_times,
         });
     }
 
     async fn reconnect_transport(&mut self, status: Status) -> Result<()> {
-        let replay = self
-            .logical
-            .in_flight
-            .as_ref()
-            .map(|packet| packet.encoded().clone());
-        self.physical
-            .reconnect(status, replay, &self.cancellation)
+        let (replay, attempts) = match &self.logical.in_flight {
+            Some(packet) => (
+                Some(packet.encoded.clone()),
+                packet.reconnect_attempts_remaining,
+            ),
+            None => (None, self.physical.reconnect.retry_times),
+        };
+        let attempts_used = self
+            .physical
+            .reconnect(status, replay, attempts, &self.cancellation)
             .await?;
         if let Some(packet) = &mut self.logical.in_flight {
+            packet.reconnect_attempts_remaining -= attempts_used;
             packet.reset_timer();
         }
         Ok(())
@@ -518,10 +566,10 @@ impl PhysicalConnection {
         Ok(connection)
     }
 
-    fn ack_timeout(&self) -> Option<Duration> {
-        // Without reconnect there is no recovery action for an ACK deadline. Preserve the original
-        // behavior and wait until the transport itself reports an error.
-        (self.reconnect.retry_times != 0).then_some(self.reconnect.timeout)
+    fn response_timeout(&self, closing: bool) -> Option<Duration> {
+        // DATA preserves the original no-retry behavior while the stream is open. Once logical
+        // closure begins, every outstanding response is bounded even when reconnect is disabled.
+        (closing || self.reconnect.retry_times != 0).then_some(self.reconnect.timeout)
     }
 
     fn response_stream(&mut self) -> &mut FlightDataStream {
@@ -550,17 +598,18 @@ impl PhysicalConnection {
         &mut self,
         status: Status,
         replay: Option<FlightData>,
+        attempts: u64,
         cancellation: &CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         self.transport = None;
-        if !is_retryable_status(&status) || self.reconnect.retry_times == 0 {
+        if !is_retryable_status(&status) || attempts == 0 {
             let cause = self.status_error(status);
             self.warn_failure(&cause);
             return Err(cause);
         }
 
         let cancelled = self.contextualize(ErrorCode::AbortedQuery("do_exchange was cancelled"));
-        let establish = self.establish(replay, self.reconnect.retry_times);
+        let establish = self.establish(replay, attempts);
         let (transport, attempts_used) = tokio::select! {
             _ = cancellation.cancelled() => {
                 self.warn_failure(&cancelled);
@@ -573,7 +622,7 @@ impl PhysicalConnection {
             self.local_node_id, self.remote_node_id, attempts_used, status
         );
         self.transport = Some(transport);
-        Ok(())
+        Ok(attempts_used)
     }
 
     fn establish(
@@ -760,17 +809,6 @@ fn is_retryable_status(status: &Status) -> bool {
                 | tonic::Code::Internal
                 | tonic::Code::Unavailable
         )
-}
-
-async fn receive_command(
-    commands: &Receiver<OutboundCommand>,
-    finishing: bool,
-) -> std::result::Result<OutboundCommand, async_channel::RecvError> {
-    if finishing {
-        std::future::pending().await
-    } else {
-        commands.recv().await
-    }
 }
 
 async fn wait_for_deadline(deadline: Option<tokio::time::Instant>) {

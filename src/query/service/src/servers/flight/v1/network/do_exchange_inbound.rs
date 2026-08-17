@@ -52,7 +52,8 @@ struct InboundDestination {
 #[derive(Clone)]
 enum InboundTerminal {
     Completed,
-    Failed(ErrorCode),
+    SenderFailed(ErrorCode),
+    ReceiverFailed(ErrorCode),
 }
 
 struct InboundLifecycle {
@@ -214,6 +215,12 @@ impl NetworkInboundSource {
         Ok(self.terminate(InboundTerminal::Completed).response())
     }
 
+    async fn sender_fail(&self, cause: ErrorCode) -> DoExchangeResponse {
+        let _next_sequence = self.next_sequence.lock().await;
+        self.terminate(InboundTerminal::SenderFailed(cause))
+            .response()
+    }
+
     fn all_receivers_closed(&self) -> bool {
         self.destinations
             .iter()
@@ -221,7 +228,7 @@ impl NetworkInboundSource {
     }
 
     pub(crate) fn fail(&self, cause: ErrorCode) {
-        self.terminate(InboundTerminal::Failed(cause));
+        self.terminate(InboundTerminal::ReceiverFailed(cause));
     }
 
     fn terminate(&self, requested: InboundTerminal) -> InboundTerminal {
@@ -255,7 +262,7 @@ impl NetworkInboundSource {
             lifecycle.generation += 1;
             let generation = lifecycle.generation;
             if self.reconnect_lease.is_zero() {
-                lifecycle.terminal = Some(InboundTerminal::Failed(cause.clone()));
+                lifecycle.terminal = Some(InboundTerminal::ReceiverFailed(cause.clone()));
                 None
             } else {
                 Some((generation, self.reconnect_lease))
@@ -263,7 +270,7 @@ impl NetworkInboundSource {
         };
 
         let Some((generation, reconnect_lease)) = lease else {
-            self.release(&InboundTerminal::Failed(cause));
+            self.release(&InboundTerminal::ReceiverFailed(cause));
             return;
         };
 
@@ -285,19 +292,19 @@ impl NetworkInboundSource {
             {
                 false
             } else {
-                lifecycle.terminal = Some(InboundTerminal::Failed(cause.clone()));
+                lifecycle.terminal = Some(InboundTerminal::ReceiverFailed(cause.clone()));
                 true
             }
         };
         if failed {
-            self.release(&InboundTerminal::Failed(cause));
+            self.release(&InboundTerminal::ReceiverFailed(cause));
         }
     }
 
     fn release(&self, terminal: &InboundTerminal) {
-        if let InboundTerminal::Failed(cause) = terminal {
+        if let Some(cause) = terminal.cause() {
             warn!(
-                "do_exchange receiver failed: {}, error={}",
+                "do_exchange logical source failed: {}, error={}",
                 self.source_label, cause
             );
         }
@@ -319,14 +326,22 @@ impl InboundTerminal {
     fn response(&self) -> DoExchangeResponse {
         match self {
             Self::Completed => DoExchangeResponse::receiver_closed(),
-            Self::Failed(cause) => DoExchangeResponse::fail(cause.clone()),
+            Self::SenderFailed(_) => DoExchangeResponse::receiver_closed(),
+            Self::ReceiverFailed(cause) => DoExchangeResponse::fail(cause.clone()),
+        }
+    }
+
+    fn cause(&self) -> Option<&ErrorCode> {
+        match self {
+            Self::Completed => None,
+            Self::SenderFailed(cause) | Self::ReceiverFailed(cause) => Some(cause),
         }
     }
 }
 
 impl InboundDestination {
     fn release(&self, terminal: &InboundTerminal) {
-        if let InboundTerminal::Failed(cause) = terminal {
+        if let Some(cause) = terminal.cause() {
             let mut failure = self.failure.lock();
             if failure.is_none() {
                 *failure = Some(cause.clone());
@@ -358,12 +373,13 @@ impl NetworkInboundConnection {
                 self.source.add_data(sequence, payload).await
             }
             DoExchangeRequest::Finish => self.source.finish().await,
+            DoExchangeRequest::SenderFail(cause) => Ok(self.source.sender_fail(cause).await),
         }
     }
 
     fn fail(&self, cause: ErrorCode) -> DoExchangeResponse {
         self.source
-            .terminate(InboundTerminal::Failed(cause))
+            .terminate(InboundTerminal::ReceiverFailed(cause))
             .response()
     }
 
@@ -412,7 +428,7 @@ impl Drop for NetworkInboundConnection {
 
 impl Drop for NetworkInboundSource {
     fn drop(&mut self) {
-        self.terminate(InboundTerminal::Failed(ErrorCode::AbortedQuery(
+        self.terminate(InboundTerminal::ReceiverFailed(ErrorCode::AbortedQuery(
             "do_exchange logical source dropped before reaching a terminal state",
         )));
     }

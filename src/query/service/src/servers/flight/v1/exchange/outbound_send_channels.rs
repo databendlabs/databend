@@ -15,7 +15,11 @@
 use std::sync::Arc;
 use std::task::Poll;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::Result;
+use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::basic_callback;
 use petgraph::prelude::NodeIndex;
 
 use crate::servers::flight::v1::network::BlockOutboundSet;
@@ -49,6 +53,21 @@ impl SharedOutboundChannels {
 
     pub(super) fn len(&self) -> usize {
         self.channels.len()
+    }
+
+    pub(super) fn install_failure_handler(&self, pipeline: &mut Pipeline) {
+        let outbounds = self.outbounds.clone();
+        pipeline.lift_on_finished(basic_callback(move |info: &ExecutionInfo| {
+            if let Err(cause) = &info.res {
+                let cause = cause.clone();
+                // Failure delivery is bounded protocol cleanup; the pipeline keeps its original
+                // result instead of waiting for the peer to confirm closure.
+                GlobalIORuntime::instance().spawn(async move {
+                    outbounds.fail(cause).await;
+                });
+            }
+            Ok(())
+        }));
     }
 }
 
@@ -158,13 +177,5 @@ impl OutboundSendChannels {
         }
 
         Ok(())
-    }
-}
-
-impl Drop for OutboundSendChannels {
-    fn drop(&mut self) {
-        if !self.finished {
-            self.outbounds.abort();
-        }
     }
 }

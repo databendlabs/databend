@@ -18,6 +18,7 @@ use std::sync::atomic::Ordering;
 
 use arrow_flight::FlightData;
 use databend_common_base::runtime::Runtime;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use tokio::sync::Semaphore;
 
@@ -81,10 +82,13 @@ impl BlockOutboundSet {
         Ok(())
     }
 
-    pub fn abort(&self) {
-        for outbound in &self.outbounds {
-            outbound.abort();
-        }
+    pub async fn fail(&self, cause: ErrorCode) {
+        futures::future::join_all(
+            self.outbounds
+                .iter()
+                .map(|outbound| outbound.fail(cause.clone())),
+        )
+        .await;
     }
 
     pub async fn send(&self, tid: usize, dest_idx: usize, data: FlightData) -> Result<SendOutcome> {

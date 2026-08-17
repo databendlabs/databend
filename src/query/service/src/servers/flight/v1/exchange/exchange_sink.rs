@@ -163,6 +163,7 @@ impl ExchangeSink {
 
         let local_outbound = create_local_channels(&channel_set);
         let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
+        remote_outbound.install_failure_handler(pipeline);
 
         let scatter = Arc::new(HashFlightScatter::try_create(
             ctx.get_function_context()?,
