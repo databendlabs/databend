@@ -111,12 +111,23 @@ impl Fragmenter {
             fragment_id: self.ctx.fragment_id().next_fragment_id(),
             exchange: None,
             query_id: self.query_id.clone(),
+            has_merge_input: false,
             source_fragments: self.fragments,
         });
 
         let edges = Self::collect_fragments_edge(fragments.values());
 
         for (source, target) in edges {
+            let has_merge_input = fragments
+                .get(&source)
+                .is_some_and(|fragment| matches!(fragment.exchange, Some(DataExchange::Merge(_))));
+
+            if has_merge_input {
+                if let Some(fragment) = fragments.get_mut(&target) {
+                    fragment.has_merge_input = true;
+                }
+            }
+
             let Some(fragment) = fragments.get_mut(&source) else {
                 continue;
             };
@@ -320,6 +331,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 source_fragments: vec![],
                 fragment_id: source_fragment_id,
                 query_id: self.query_id.clone(),
+                has_merge_input: false,
             };
 
             self.fragments.insert(source_fragment_id, source_fragment);
@@ -354,6 +366,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 fragment_id,
                 exchange: None,
                 query_id: self.query_id.clone(),
+                has_merge_input: false,
                 source_fragments: vec![],
             };
 

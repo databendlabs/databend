@@ -619,6 +619,10 @@ impl Settings {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
     }
 
+    pub fn get_enable_cascading_grouping_sets(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_cascading_grouping_sets")? == 1)
+    }
+
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {
         self.try_get_u64("lazy_read_threshold")
     }
