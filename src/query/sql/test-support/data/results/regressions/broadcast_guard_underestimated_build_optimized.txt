@@ -1,0 +1,38 @@
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [count() AS (#3)]
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#3)]
+    └── Exchange(Merge)
+        └── Join(Inner)
+            ├── build keys: [guard_large.k (#1), k (#4)]
+            ├── probe keys: [guard_probe.k (#0), guard_probe.k (#0)]
+            ├── other filters: []
+            ├── Exchange(Hash)
+            │   ├── Exchange(Hash): keys: [guard_large.k (#1), k (#4)]
+            │   └── EvalScalar
+            │       ├── scalars: [guard_large.k (#1) AS (#1), guard_tiny.k (#2) AS (#4)]
+            │       └── Join(Inner)
+            │           ├── build keys: [guard_tiny.k (#2)]
+            │           ├── probe keys: [guard_large.k (#1)]
+            │           ├── other filters: []
+            │           ├── Exchange(Broadcast)
+            │           │   └── Scan
+            │           │       ├── table: default.guard_tiny (#2)
+            │           │       ├── filters: []
+            │           │       ├── order by: []
+            │           │       └── limit: NONE
+            │           └── Scan
+            │               ├── table: default.guard_large (#1)
+            │               ├── filters: []
+            │               ├── order by: []
+            │               └── limit: NONE
+            └── Exchange(Hash)
+                ├── Exchange(Hash): keys: [guard_probe.k (#0), guard_probe.k (#0)]
+                └── Scan
+                    ├── table: default.guard_probe (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+

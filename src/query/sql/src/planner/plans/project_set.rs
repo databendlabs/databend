@@ -40,6 +40,13 @@ impl ProjectSet {
         input_stat.statistics.precise_cardinality = None;
         // We assume that the SRF function will expand by at least x3 per row.
         input_stat.cardinality *= 3.0;
+        // SRFs have no general per-input-row output cap. Keep an empty input
+        // empty, otherwise mark the automatic-broadcast risk as unknown.
+        input_stat.max_cardinality = if input_stat.max_cardinality == 0.0 {
+            0.0
+        } else {
+            f64::INFINITY
+        };
         Ok(Arc::new(input_stat.clone()))
     }
 }

@@ -20,6 +20,7 @@ use crate::optimizer::ir::StatInfo;
 pub(crate) fn cap_stat_info_by_rows(mut stat_info: StatInfo, limit: usize) -> StatInfo {
     let input_cardinality = stat_info.cardinality;
     let limit = limit as f64;
+    stat_info.max_cardinality = stat_info.max_cardinality.max(input_cardinality).min(limit);
     if limit == 0.0 {
         stat_info.cardinality = 0.0;
         stat_info.statistics.precise_cardinality =
@@ -76,6 +77,7 @@ mod tests {
     fn stat_info(cardinality: f64, precise_cardinality: Option<u64>) -> StatInfo {
         StatInfo {
             cardinality,
+            max_cardinality: cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {

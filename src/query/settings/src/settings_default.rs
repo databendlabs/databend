@@ -631,6 +631,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("max_broadcast_join_build_rows", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(100_000_000),
+                    desc: "Sets the maximum risk-bound rows for an automatically selected broadcast join build. Setting it to 0 disables the limit. This limit does not apply when enforce_broadcast_join is enabled.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enforce_local", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enforce local plan.",

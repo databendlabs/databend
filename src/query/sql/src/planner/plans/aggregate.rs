@@ -153,6 +153,7 @@ impl Aggregate {
         if self.group_items.is_empty() {
             return Ok(Arc::new(StatInfo {
                 cardinality: 1.0,
+                max_cardinality: 1.0,
                 statistics: Statistics {
                     precise_cardinality: Some(1),
                     column_stats: column_stats.clone(),
@@ -170,8 +171,11 @@ impl Aggregate {
                 None => true,
             })
         {
+            let cardinality = (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0);
             return Ok(Arc::new(StatInfo {
-                cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0),
+                cardinality,
+                // A grouped aggregate emits at most one row per input row.
+                max_cardinality: stat_info.max_cardinality.max(cardinality),
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
@@ -228,6 +232,9 @@ impl Aggregate {
 
         Ok(Arc::new(StatInfo {
             cardinality,
+            // Expected group NDVs are not a proof of the maximum number of
+            // groups, so retain the input risk for broadcast decisions.
+            max_cardinality: stat_info.max_cardinality.max(cardinality),
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,

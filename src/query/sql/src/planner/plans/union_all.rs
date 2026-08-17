@@ -180,6 +180,12 @@ impl UnionAll {
 
         Ok(Arc::new(StatInfo {
             cardinality,
+            // UNION ALL retains rows from both branches. Keep every input risk
+            // visible to the automatic broadcast guard.
+            max_cardinality: left_stat_info
+                .max_cardinality
+                .max(right_stat_info.max_cardinality)
+                .max(cardinality),
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,

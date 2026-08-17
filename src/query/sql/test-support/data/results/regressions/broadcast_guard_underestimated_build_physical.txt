@@ -1,0 +1,79 @@
+AggregateFinal
+├── output columns: [COUNT(*) (#3)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── Exchange
+    ├── output columns: [COUNT(*) (#3)]
+    ├── exchange type: Merge
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── HashJoin
+            ├── output columns: []
+            ├── join type: INNER
+            ├── build keys: [l.k (#1), t.k (#4)]
+            ├── probe keys: [p.k (#0), p.k (#0)]
+            ├── keys is null equal: [false, false]
+            ├── filters: []
+            ├── build join filters(distributed):
+            │   ├── filter id:1, build key:l.k (#1), probe targets:[p.k (#0)@scan0], filter type:bloom,inlist,min_max
+            │   └── filter id:2, build key:t.k (#4), probe targets:[p.k (#0)@scan0], filter type:bloom,inlist,min_max
+            ├── estimated rows: 199600.04
+            ├── Exchange(Build)
+            │   ├── output columns: [l.k (#1), k (#4)]
+            │   ├── exchange type: Hash(l.k (#1), t.k (#4))
+            │   └── EvalScalar
+            │       ├── output columns: [l.k (#1), k (#4)]
+            │       ├── expressions: [t.k (#2)]
+            │       ├── estimated rows: 99800.10
+            │       └── HashJoin
+            │           ├── output columns: [l.k (#1), t.k (#2)]
+            │           ├── join type: INNER
+            │           ├── build keys: [t.k (#2)]
+            │           ├── probe keys: [l.k (#1)]
+            │           ├── keys is null equal: [false]
+            │           ├── filters: []
+            │           ├── build join filters:
+            │           │   └── filter id:0, build key:t.k (#2), probe targets:[l.k (#1)@scan1], filter type:bloom,inlist,min_max
+            │           ├── estimated rows: 99800.10
+            │           ├── Exchange(Build)
+            │           │   ├── output columns: [t.k (#2)]
+            │           │   ├── exchange type: Broadcast
+            │           │   └── TableScan
+            │           │       ├── table: default.default.guard_tiny
+            │           │       ├── scan id: 2
+            │           │       ├── output columns: [k (#2)]
+            │           │       ├── read rows: 0
+            │           │       ├── read size: 0
+            │           │       ├── partitions total: 0
+            │           │       ├── partitions scanned: 0
+            │           │       ├── push downs: [filters: [], limit: NONE]
+            │           │       └── estimated rows: 50000.00
+            │           └── TableScan(Probe)
+            │               ├── table: default.default.guard_large
+            │               ├── scan id: 1
+            │               ├── output columns: [k (#1)]
+            │               ├── read rows: 0
+            │               ├── read size: 0
+            │               ├── partitions total: 0
+            │               ├── partitions scanned: 0
+            │               ├── push downs: [filters: [], limit: NONE]
+            │               ├── apply join filters: [#0]
+            │               └── estimated rows: 200000000.00
+            └── Exchange(Probe)
+                ├── output columns: [p.k (#0)]
+                ├── exchange type: Hash(p.k (#0), p.k (#0))
+                └── TableScan
+                    ├── table: default.default.guard_probe
+                    ├── scan id: 0
+                    ├── output columns: [k (#0)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: NONE]
+                    ├── apply join filters: [#1, #2]
+                    └── estimated rows: 1000000000.00
+
