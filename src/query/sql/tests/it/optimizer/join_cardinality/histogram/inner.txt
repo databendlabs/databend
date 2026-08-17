@@ -1,0 +1,122 @@
+=== inner_join_cardinality_and_join_key_stats ===
+description: CROSS, INNER, and INNER ANY expose Cartesian, overlapping, and disjoint histogram behavior through optimized SQL plans.
+
+case          : cross_join
+description   : A CROSS join has no equality condition, so its output is the Cartesian product and retains input join-key statistics.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
+query         : cross_join
+sql           : SELECT * FROM l CROSS JOIN r
+join          : CROSS cardinality=234.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[1..1:5.000/1.000, 2..2:7.000/1.000, 3..3:6.000/1.000, 5..5:8.000/1.000]
+
+case          : inner_join_overlap
+description   : Join-key histograms overlap, so the inner estimate has non-zero matches when this join type uses it.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
+query         : inner_join
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+join          : INNER cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=58.000, ndv=3.000, buckets=[1..1:10.000/1.000, 3..3:24.000/1.000, 5..5:24.000/1.000]
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=58.000, ndv=3.000, buckets=[1..1:10.000/1.000, 3..3:24.000/1.000, 5..5:24.000/1.000]
+
+case          : inner_join_missing_left_histogram_input
+description   : The left persisted histogram is absent, so Scan follows its existing synthetic-histogram fallback from min/max/NDV before join estimation.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=missing
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
+query         : inner_join
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+join          : INNER cardinality=72.000
+stat          : l.k (#0) min=1, max=5, ndv=4.000, null=0.000, histogram=rows=72.000, ndv=4.000, buckets=[1..1:9.000/1.000, 2..2:21.000/1.000, 3..3:18.000/1.000, 5..5:24.000/1.000]
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=rows=72.000, ndv=4.000, buckets=[1..1:9.000/1.000, 2..2:21.000/1.000, 3..3:18.000/1.000, 5..5:24.000/1.000]
+
+case          : inner_join_missing_right_histogram_input
+description   : The right persisted histogram is absent, so Scan follows its existing synthetic-histogram fallback from min/max/NDV before join estimation.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=missing
+query         : inner_join
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+join          : INNER cardinality=50.700
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=50.700, ndv=3.000, buckets=[1..1:10.400/1.000, 3..3:20.800/1.000, 5..5:19.500/1.000]
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=50.700, ndv=3.000, buckets=[1..1:10.400/1.000, 3..3:20.800/1.000, 5..5:19.500/1.000]
+
+case          : inner_join_missing_both_histogram_inputs
+description   : Both persisted histograms are absent, so each Scan independently follows the existing min/max/NDV synthetic-histogram fallback.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=missing
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=missing
+query         : inner_join
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+join          : INNER cardinality=63.960
+stat          : l.k (#0) min=1, max=5, ndv=3.800 (upper=4.200), null=0.000, histogram=rows=63.960, ndv=3.800, buckets=[1..1:9.360/1.000, 2..2:15.600/0.800, 3..3:15.600/0.800, 4..5:23.400/1.200]
+stat          : r.k (#2) min=1, max=5, ndv=3.800 (upper=4.200), null=0.000, histogram=rows=63.960, ndv=3.800, buckets=[1..1:9.360/1.000, 2..2:15.600/0.800, 3..3:15.600/0.800, 4..5:23.400/1.200]
+
+case          : inner_join_large_synthetic_partial_overlap
+description   : Both Scans synthesize 100 buckets from one million rows and 10,000 dense values; only half of each value range overlaps.
+left stats    : rows=1000000, min=0, max=9999, ndv=10000, histogram_input=missing
+right stats   : rows=1000000, min=5000, max=14999, ndv=10000, histogram_input=missing
+query         : inner_join
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+join          : INNER cardinality=50000000.000
+stat          : l.k (#0) min=5000, max=9999, ndv=5000.000, null=0.000, histogram=rows=50000000.000, ndv=5000.000, bucket_count=50, buckets=[5000..5099:1000000.000/100.000, 5100..5199:1000000.000/100.000, 5200..5299:1000000.000/100.000, ..., 9700..9799:1000000.000/100.000, 9800..9899:1000000.000/100.000, 9900..9999:1000000.000/100.000]
+stat          : r.k (#2) min=5000, max=9999, ndv=5000.000, null=0.000, histogram=rows=50000000.000, ndv=5000.000, bucket_count=50, buckets=[5000..5099:1000000.000/100.000, 5100..5199:1000000.000/100.000, 5200..5299:1000000.000/100.000, ..., 9700..9799:1000000.000/100.000, 9800..9899:1000000.000/100.000, 9900..9999:1000000.000/100.000]
+
+case          : inner_join_large_ndv_fallback_partial_overlap
+description   : The same large dense inputs use derived join keys, naturally dropping both synthetic histograms and exposing the NDV fallback for comparison.
+left stats    : rows=1000000, min=0, max=9999, ndv=10000, histogram_input=missing
+right stats   : rows=1000000, min=5000, max=14999, ndv=10000, histogram_input=missing
+query         : inner_join_with_both_derived_keys
+sql           : SELECT * FROM l INNER JOIN r ON l.k + 0 = r.k + 0
+join          : INNER cardinality=1000000000000.000
+stat          : l.k (#0) min=0, max=9999, ndv=10000.000, null=0.000, histogram=none
+stat          : r.k (#2) min=5000, max=14999, ndv=10000.000, null=0.000, histogram=none
+
+case          : inner_join_derived_left_key_without_histogram
+description   : A derived left join key keeps bounds and NDV but has no typed histogram, so join estimation naturally falls back to NDV.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
+query         : inner_join_with_derived_left_key
+sql           : SELECT * FROM l INNER JOIN r ON l.k + 0 = r.k
+join          : INNER cardinality=234.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : inner_join_derived_right_key_without_histogram
+description   : A derived right join key keeps bounds and NDV but has no typed histogram, so join estimation naturally falls back to NDV.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
+query         : inner_join_with_derived_right_key
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k + 0
+join          : INNER cardinality=234.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : inner_join_both_derived_keys_without_histograms
+description   : Both derived join keys keep bounds and NDV but lose typed histograms, exercising the two-sided NDV fallback through SQL.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
+query         : inner_join_with_both_derived_keys
+sql           : SELECT * FROM l INNER JOIN r ON l.k + 0 = r.k + 0
+join          : INNER cardinality=234.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : inner_join_no_overlap
+description   : Join-key histograms do not overlap, so the inner estimate is zero before join-type rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=20, max=23, ndv=4, histogram_input=present
+query         : inner_join
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+join          : INNER cardinality=0.000
+
+case          : inner_any_join_overlap
+description   : Join-key histograms overlap, so the inner estimate has non-zero matches when this join type uses it.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
+query         : inner_any_join
+sql           : SELECT * FROM l INNER ANY JOIN r ON l.k = r.k
+join          : INNER ANY cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+
+
