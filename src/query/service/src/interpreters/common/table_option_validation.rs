@@ -160,6 +160,7 @@ pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
         r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
         r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
         r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+        r.insert(FUSE_OPT_KEY_INDEX_GRANULARITY);
         r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
         r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
         r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
@@ -564,4 +565,18 @@ fn is_valid_bool_opt(
         value.parse::<bool>()?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_materialized_view_accepts_index_granularity() {
+        assert!(is_valid_create_opt(
+            FUSE_OPT_KEY_INDEX_GRANULARITY,
+            &Engine::MaterializedView
+        ));
+        assert!(UNSET_TABLE_OPTIONS_WHITE_LIST.contains(FUSE_OPT_KEY_INDEX_GRANULARITY));
+    }
 }
