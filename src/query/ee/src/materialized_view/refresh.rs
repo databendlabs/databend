@@ -356,7 +356,7 @@ impl<'a> MaterializedViewRefresh<'a> {
             ))),
         );
         let plan = planner
-            .plan_stmt(&Statement::Query(Box::new(query)), false)
+            .plan_stmt_without_materialized_view_rewrite(&Statement::Query(Box::new(query)), false)
             .await
             .map_err(|error| {
                 ErrorCode::InvalidMaterializedView(format!(

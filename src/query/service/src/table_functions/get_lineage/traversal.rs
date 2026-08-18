@@ -19,7 +19,7 @@ use std::sync::Arc;
 use databend_common_ast::parser::parse_table_ref;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::utils::date_helper::DateConverter;
+use databend_common_expression::types::timestamp::timestamp_from_micros;
 use databend_common_sql::planner::NameResolutionContext;
 use databend_common_sql::planner::normalize_identifier;
 use jiff::fmt::strtime;
@@ -465,7 +465,7 @@ pub(super) fn process_json(edge: &RawLineageEdge) -> String {
     let updated_on = edge.updated_on.map(|timestamp| {
         strtime::format(
             "%Y-%m-%dT%H:%M:%S%.6fZ",
-            &timestamp.to_timestamp(&TimeZone::UTC),
+            &timestamp_from_micros(timestamp, &TimeZone::UTC),
         )
         .expect("valid lineage process timestamp format")
         .to_string()

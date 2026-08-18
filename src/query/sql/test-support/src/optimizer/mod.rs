@@ -449,6 +449,7 @@ fn to_datum(value: &Option<serde_json::Value>) -> Option<Datum> {
                     .and_then(|f| Scalar::Number(NumberScalar::Float64(f.into())).to_datum())
             }),
         serde_json::Value::String(s) => Scalar::String(s.clone()).to_datum(),
+        serde_json::Value::Object(_) => serde_json::from_value(v.clone()).ok(),
         _ => None,
     })
 }

@@ -18,14 +18,17 @@ use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
+use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::is_builtin_function;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
+use unicase::Ascii;
 
 use crate::plans::UDFLanguage;
 
@@ -62,7 +65,7 @@ impl Default for UdfValidationConfig {
 }
 
 #[derive(Default, Visitor)]
-#[visitor(ColumnRef(enter), FunctionCall(enter), Lambda(enter))]
+#[visitor(ColumnRef(enter), FunctionCall(enter))]
 pub struct UDFValidator {
     pub name: String,
     pub parameters: Vec<String>,
@@ -78,6 +81,19 @@ impl UDFValidator {
     }
 
     fn enter_function_call(&mut self, func: &FunctionCall) {
+        let lambda = match &func.lambda {
+            Some(LambdaArgument::Lambda(lambda)) => Some(lambda),
+            Some(LambdaArgument::Ambiguous(lambda))
+                if GENERAL_LAMBDA_FUNCTIONS.contains(&Ascii::new(func.name.name.as_str())) =>
+            {
+                Some(lambda)
+            }
+            Some(LambdaArgument::Ambiguous(_)) | None => None,
+        };
+        if let Some(lambda) = lambda {
+            self.enter_lambda(lambda);
+        }
+
         let name = &func.name.name;
         if !is_builtin_function(name) && self.name.eq_ignore_ascii_case(name) {
             self.has_recursive = true;
@@ -216,5 +232,38 @@ impl UDFValidator {
             )));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_expr;
+    use databend_common_ast::parser::tokenize_sql;
+
+    use super::*;
+
+    fn parse(sql: &str) -> Expr {
+        let tokens = tokenize_sql(sql).unwrap();
+        parse_expr(&tokens, Dialect::PostgreSQL).unwrap()
+    }
+
+    #[test]
+    fn ambiguous_json_arrow_does_not_declare_udf_parameter() {
+        let expr = parse("concat('', doc -> 'key')");
+        let error = UDFValidator::default()
+            .verify_definition_expr(&expr)
+            .unwrap_err();
+        assert!(error.message().contains("doc"));
+    }
+
+    #[test]
+    fn ambiguous_arrow_in_lambda_function_keeps_lambda_scope() {
+        let expr = parse("array_filter(list, x -> x > 2)");
+        let mut validator = UDFValidator {
+            parameters: vec!["list".to_string()],
+            ..Default::default()
+        };
+        validator.verify_definition_expr(&expr).unwrap();
     }
 }

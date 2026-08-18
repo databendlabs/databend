@@ -1269,6 +1269,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                 })))
             }
             AlterTableAction::ModifyConnection { new_connection } => Ok(
@@ -1605,6 +1606,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                 })))
             }
             AlterTableAction::UnsetOptions { targets } => {
@@ -1613,6 +1615,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                 })))
             }
             AlterTableAction::RefreshTableCache => {

@@ -54,6 +54,13 @@ status: ok
 scalar: sum(number) FILTER ( WHERE flag )
 type: Int64 NULL
 
+=== aggregate_filter_preserves_json_arrow_argument ===
+description: A JSON-arrow argument before FILTER should remain an ordinary aggregate argument.
+sql: json_object_agg(text, parse_json(text) -> 'v') FILTER (WHERE flag)
+status: ok
+scalar: json_object_agg(text, parse_json(text) -> 'v') FILTER ( WHERE flag )
+type: Variant NULL
+
 === count_star_filter_lowers_to_count_if ===
 description: COUNT(*) FILTER should add a constant count argument before the filter predicate.
 sql: count(*) FILTER (WHERE flag)

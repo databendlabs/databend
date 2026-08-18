@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
@@ -47,18 +48,22 @@ use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMN
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
+use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::WriteDistributionMode;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use log::error;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::common::table_option_validation::analyze_count_min_sketch_error_rate_from_options;
 use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_count_min_sketch_error_rate;
@@ -130,6 +135,9 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
         is_valid_analyze_top_n_size(&self.plan.set_options)?;
         is_valid_analyze_count_min_sketch_error_rate(&self.plan.set_options)?;
+        if let Some(compression) = self.plan.set_options.get(OPT_KEY_TABLE_COMPRESSION) {
+            let _: TableCompression = compression.as_str().try_into()?;
+        }
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
@@ -193,6 +201,7 @@ impl Interpreter for SetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
+        check_maintenance_target(table.as_ref(), &self.plan.target)?;
         let mut effective_options = table.get_table_info().meta.options.clone();
         effective_options.extend(self.plan.set_options.clone());
         is_valid_index_granularity(&effective_options)?;
@@ -211,6 +220,15 @@ impl Interpreter for SetOptionsInterpreter {
         let engine = Engine::from(table.engine());
         for table_option in self.plan.set_options.iter() {
             let key = table_option.0.to_lowercase();
+            if matches!(
+                &self.plan.target,
+                MaintenanceTarget::MaterializedView { .. }
+            ) && key == OPT_KEY_COMMENT
+            {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "table option {key} is invalid for alter materialized view statement; use COMMENT = ... instead",
+                )));
+            }
             if !is_valid_create_opt(&key, &engine) {
                 error!("{}", &error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
@@ -237,9 +255,6 @@ impl Interpreter for SetOptionsInterpreter {
                 options_map.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(), begin_version);
             }
         }
-
-        // check mutability
-        table.check_mutable()?;
 
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;

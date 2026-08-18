@@ -244,14 +244,44 @@ impl Planner {
         stmt: &Statement,
         force_disable_distributed_optimization: bool,
     ) -> Result<Plan> {
+        self.plan_stmt_with_materialized_view_rewrite(
+            stmt,
+            force_disable_distributed_optimization,
+            true,
+        )
+        .await
+    }
+
+    pub async fn plan_stmt_without_materialized_view_rewrite(
+        &mut self,
+        stmt: &Statement,
+        force_disable_distributed_optimization: bool,
+    ) -> Result<Plan> {
+        self.plan_stmt_with_materialized_view_rewrite(
+            stmt,
+            force_disable_distributed_optimization,
+            false,
+        )
+        .await
+    }
+
+    async fn plan_stmt_with_materialized_view_rewrite(
+        &mut self,
+        stmt: &Statement,
+        force_disable_distributed_optimization: bool,
+        enable_materialized_view_rewrite: bool,
+    ) -> Result<Plan> {
         let start = Instant::now();
         let query_kind = get_query_kind(stmt);
         let settings = self.ctx.get_settings();
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
-        let plan_cache_context =
-            self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?;
+        let plan_cache_context = if enable_materialized_view_rewrite {
+            self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?
+        } else {
+            None
+        };
 
         if let Some(cache_ctx) = &plan_cache_context {
             if let Some(plan) = self.get_cache(cache_ctx) {
@@ -272,6 +302,7 @@ impl Planner {
             name_resolution_ctx,
             metadata.clone(),
         )
+        .with_materialized_view_rewrite(enable_materialized_view_rewrite)
         .with_subquery_executor(self.query_executor.clone());
 
         // must attach before bind, because ParquetRSTable::create used it.

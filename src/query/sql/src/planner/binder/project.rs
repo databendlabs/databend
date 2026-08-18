@@ -24,6 +24,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::parser::parse_expr;
@@ -665,7 +666,7 @@ impl Binder {
                 func: FunctionCall {
                     name: Identifier::from_name(span, "array_apply"),
                     args: vec![input_array],
-                    lambda: lambda.cloned(),
+                    lambda: lambda.cloned().map(LambdaArgument::Lambda),
                     distinct: false,
                     params: vec![],
                     order_by: vec![],

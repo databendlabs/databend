@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -440,6 +442,9 @@ SELECT * from s;"#,
         r#"REFRESH AGGREGATING INDEX idx1 LIMIT 10;"#,
         r#"REFRESH INVERTED INDEX idx2 ON db.t LIMIT 5;"#,
         r#"REFRESH VIRTUAL COLUMN FOR db.t WHERE c1 > 0 LIMIT 5 OVERWRITE;"#,
+        r#"REFRESH LINEAGE FOR ALL VIEWS;"#,
+        r#"refresh lineage for all views dry run;"#,
+        r#"SELECT lineage FROM lineage;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';"#,
         r#"COMMENT IF EXISTS ON TABLE t IS 'test'"#,
         r#"COMMENT ON COLUMN t.C1 IS 'test'"#,
@@ -1751,9 +1756,12 @@ fn test_expr() {
         r#"ARRAY_MAP(v -> v + 1)"#,
         r#"ARRAY_FILTER(a, v -> v + 1)"#,
         r#"JSON_PATH_TRANSFORM(a, b, v -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(a, b, v -> v -> 'name')"#,
+        r#"ARRAY_TRANSFORM(a, (v -> v) + 1)"#,
         r#"MAP_FILTER(a, b, c, (k, v) -> k + v)"#,
         r#"JSON_ARRAY_MAP(doc -> 'items', v -> upper(v))"#,
         r#"TO_STRING(col -> 'name')"#,
+        r#"CONCAT(a, b, doc -> 'key')"#,
         r#"CONCAT(a -> 'k', b)"#,
         r#"INTERVAL '1 YEAR'"#,
         r#"(?, ?)"#,
@@ -1763,6 +1771,47 @@ fn test_expr() {
     for case in cases {
         run_parser(file, expr, case);
     }
+}
+
+#[test]
+fn test_ambiguous_trailing_lambda_argument() {
+    let tokens = tokenize_sql("concat(a, b, doc -> 'key')").unwrap();
+    let input = Input {
+        tokens: &tokens,
+        dialect: Dialect::PostgreSQL,
+        mode: ParseMode::Default,
+    };
+    let (_, expr) = expr(input).unwrap();
+    let Expr::FunctionCall { func, .. } = expr else {
+        panic!("expected a function call");
+    };
+
+    assert_eq!(func.args.len(), 3);
+    assert!(matches!(func.args[2], Expr::JsonOp { .. }));
+    let Some(LambdaArgument::Ambiguous(lambda)) = func.lambda else {
+        panic!("expected an ambiguous trailing lambda argument");
+    };
+    assert_eq!(lambda.params[0].name, "doc");
+    assert!(matches!(*lambda.expr, Expr::Literal { .. }));
+}
+
+#[test]
+fn test_json_arrow_argument_before_aggregate_filter() {
+    let tokens = tokenize_sql("json_object_agg('k', doc -> 'v') FILTER (WHERE ok)").unwrap();
+    let input = Input {
+        tokens: &tokens,
+        dialect: Dialect::PostgreSQL,
+        mode: ParseMode::Default,
+    };
+    let (_, expr) = expr(input).unwrap();
+    let Expr::FunctionCall { func, .. } = expr else {
+        panic!("expected a function call");
+    };
+
+    assert_eq!(func.args.len(), 2);
+    assert!(matches!(func.args[1], Expr::JsonOp { .. }));
+    assert!(func.lambda.is_none());
+    assert!(func.filter.is_some());
 }
 
 // FIXME: this test cause stack overflow

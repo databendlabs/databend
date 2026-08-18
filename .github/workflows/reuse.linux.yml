@@ -236,6 +236,23 @@ jobs:
       - uses: ./.github/actions/test_logs
         timeout-minutes: 20
 
+  test_lineage:
+    needs: [build, check]
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 2c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
+      - uses: ./.github/actions/test_lineage
+        timeout-minutes: 20
+
   test_private_tasks:
     needs: [build, check]
     runs-on:

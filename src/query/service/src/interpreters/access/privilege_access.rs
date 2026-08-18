@@ -1794,10 +1794,22 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::SetOptions(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+                match &plan.target {
+                    MaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,
+                    MaintenanceTarget::MaterializedView { .. } => {
+                        let table = self.ctx.get_table(&plan.catalog, &plan.database, &plan.table).await?;
+                        self.validate_mv_source_access(table.as_ref()).await?
+                    }
+                }
             }
             Plan::UnsetOptions(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+                match &plan.target {
+                    MaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,
+                    MaintenanceTarget::MaterializedView { .. } => {
+                        let table = self.ctx.get_table(&plan.catalog, &plan.database, &plan.table).await?;
+                        self.validate_mv_source_access(table.as_ref()).await?
+                    }
+                }
             }
             Plan::AddTableColumn(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
@@ -1843,7 +1855,13 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::ModifyTableComment(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+                match &plan.target {
+                    MaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,
+                    MaintenanceTarget::MaterializedView { .. } => {
+                        let table = self.ctx.get_table(&plan.catalog, &plan.database, &plan.table).await?;
+                        self.validate_mv_source_access(table.as_ref()).await?
+                    }
+                }
             }
             Plan::ModifyTableConnection(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
@@ -2064,6 +2082,10 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::DescribeView(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, UserPrivilegeType::Select, false, false).await?
+            }
+            Plan::RefreshLineage(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?
             }
             Plan::ShowCreateMaterializedView(plan) => {
                 let table = self.ctx.get_table(&plan.catalog, &plan.database, &plan.view_name).await?;

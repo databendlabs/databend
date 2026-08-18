@@ -206,6 +206,7 @@ impl Binder {
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
+            planning_materialized_view_rewrite: false,
             window_definitions: DashMap::new(),
         };
 
