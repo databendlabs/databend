@@ -16,7 +16,6 @@ use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::conversion::common_super_type_with_conversion;
-use databend_common_expression::types::DataType;
 
 use crate::ScalarExpr;
 use crate::optimizer::optimizers::operator::filter::remove_trivial_type_cast;
@@ -108,7 +107,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                     visitor.visit(expr)?;
                 }
                 let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) else {
-                    return Ok(());
+                    return func.refresh_return_type();
                 };
 
                 let (left, right) =
@@ -119,12 +118,8 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                 if right != func.arguments[1] {
                     func.arguments[1] = right;
                 }
-                *func.return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
-                    &func.arguments[0],
-                    &func.arguments[1],
-                ]);
                 if !matches!(op, ComparisonOp::Equal) {
-                    return Ok(());
+                    return func.refresh_return_type();
                 }
 
                 match (func.arguments[0].clone(), func.arguments[1].clone()) {
@@ -176,6 +171,6 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                 }
             }
         }
-        Ok(())
+        func.refresh_return_type()
     }
 }

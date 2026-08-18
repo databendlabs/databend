@@ -818,17 +818,12 @@ impl SubqueryDecorrelatorOptimizer {
                             } else {
                                 *child_expr.clone()
                             };
-                            let return_type =
-                                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
-                                    &array_argument,
-                                    &value_argument,
-                                ]);
                             let func = ScalarExpr::FunctionCall(FunctionCall {
                                 span: subquery.span,
                                 func_name: "contains".to_string(),
                                 params: vec![],
                                 arguments: vec![array_argument, value_argument],
-                                return_type: Box::new(return_type),
+                                return_type: Box::new(DataType::Boolean),
                             });
                             return Ok(Some(func));
                         }

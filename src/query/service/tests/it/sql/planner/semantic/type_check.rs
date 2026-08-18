@@ -208,7 +208,13 @@ async fn test_grouping_sets_rewrites_refresh_function_return_types() -> anyhow::
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     fixture
-        .execute_command("CREATE TABLE grouping_type_t(a UInt64)")
+        .execute_command("CREATE TABLE rewrite_type_t1(a Int64, b Int64)")
+        .await?;
+    fixture
+        .execute_command("CREATE TABLE rewrite_type_t2(a Int64, b Int64)")
+        .await?;
+    fixture
+        .execute_command("CREATE TABLE rewrite_type_t3(a Int64, b Int64)")
         .await?;
 
     for grouping_sets_to_union in ["0", "1"] {
@@ -216,10 +222,34 @@ async fn test_grouping_sets_rewrites_refresh_function_return_types() -> anyhow::
             "grouping_sets_to_union".to_string(),
             grouping_sets_to_union.to_string(),
         )?;
+        let sql = "SELECT number a, number % 3 AS b, number % 5 AS c, a + 8, b + c \
+                   FROM numbers(1) GROUP BY ROLLUP(a, b, c)";
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _) = planner
-            .plan_sql("SELECT a + 1 FROM grouping_type_t GROUP BY GROUPING SETS ((a), ())")
-            .await?;
+        let (plan, _) = planner.plan_sql(sql).await?;
+        let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } = plan
+        else {
+            panic!("expected query plan");
+        };
+        let mut builder = PhysicalPlanBuilder::new(metadata, ctx.clone(), false);
+        builder.build(&s_expr, bind_context.column_set()).await?;
+    }
+
+    for sql in [
+        "SELECT * FROM rewrite_type_t1 t1 JOIN rewrite_type_t2 t2 \
+         ON t1.a = t2.a AND t1.b BETWEEN t2.b AND t2.b + 2 WHERE t2.b = 3",
+        "SELECT * FROM rewrite_type_t3 \
+         WHERE a IN (SELECT * FROM unnest([1, 2, 3, 4, 5, 6]))",
+        "SELECT e1.name, e2.name, e1.value, e2.value FROM system.settings e1 \
+         LEFT JOIN system.settings e2 ON e1.name = e2.name \
+         WHERE e1.name = 'max_threads'",
+    ] {
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _) = planner.plan_sql(sql).await?;
         let Plan::Query {
             s_expr,
             metadata,

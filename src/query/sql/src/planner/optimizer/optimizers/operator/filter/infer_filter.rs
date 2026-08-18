@@ -794,6 +794,13 @@ impl<'a> InferFilterOptimizer<'a> {
                     }
                 }
             }
+
+            fn visit_function_call(&mut self, function: &mut FunctionCall) -> Result<()> {
+                for argument in &mut function.arguments {
+                    self.visit(argument)?;
+                }
+                function.refresh_return_type()
+            }
         }
 
         let mut replace = ReplaceScalarExpr {
