@@ -1639,6 +1639,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ ( CLUSTER ~ ^BY ~ ^#cluster_option )?
+            ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+            ~ (#table_option)?
             ~ AS ~ #query
         },
         |(
@@ -1650,6 +1652,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             (catalog, database, view),
             opt_columns,
             opt_cluster_by,
+            opt_comment,
+            opt_table_options,
             _,
             query,
         )| {
@@ -1665,6 +1669,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         .map(|(_, columns, _)| columns)
                         .unwrap_or_default(),
                     cluster_by: opt_cluster_by.map(|(_, _, cluster_by)| cluster_by),
+                    comment: opt_comment.map(|(_, _, comment)| comment),
+                    table_options: opt_table_options.unwrap_or_default(),
                     query: Box::new(query),
                 },
             ))
@@ -3188,7 +3194,7 @@ AS
                 | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
                 | #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
                 | #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
-                | #create_materialized_view : "`CREATE [OR REPLACE] MATERIALIZED VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] [CLUSTER BY [LINEAR] (...)] AS SELECT ...`"
+                | #create_materialized_view : "`CREATE [OR REPLACE] MATERIALIZED VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] [CLUSTER BY [LINEAR] (...)] [COMMENT = '<string_literal>'] AS SELECT ...`"
                 | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
                 | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             )
@@ -3276,7 +3282,7 @@ AS
             | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | (
-                #alter_materialized_view : "`ALTER MATERIALIZED VIEW [<database>.]<view> {CLUSTER BY (...) | DROP CLUSTER KEY | RECLUSTER [FINAL] [LIMIT <limit>]}`"
+                #alter_materialized_view : "`ALTER MATERIALIZED VIEW [<database>.]<view> {CLUSTER BY (...) | DROP CLUSTER KEY | RECLUSTER [FINAL] [LIMIT <limit>] | SET OPTIONS (...) | UNSET OPTIONS ... | COMMENT = '<string_literal>'}`"
                 | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
             )
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
