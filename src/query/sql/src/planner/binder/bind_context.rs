@@ -285,6 +285,11 @@ impl BindContext {
         }
     }
 
+    /// Returns whether table refs in this context should ignore the session `wap_branch`.
+    pub(super) fn should_suppress_wap_branch(&self) -> bool {
+        self.suppress_wap_branch || !self.binding_views.is_empty() || self.planning_agg_index
+    }
+
     pub fn depth(&self) -> usize {
         if let Some(ref p) = self.parent {
             return p.depth() + 1;

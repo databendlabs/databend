@@ -169,10 +169,7 @@ impl Binder {
                 table_name.clone()
             };
             // Persisted definitions ignore session `wap_branch`; explicit branches win.
-            // `suppress_wap_branch` covers top-level definition replay.
-            let suppress_wap_branch = !bind_context.binding_views.is_empty()
-                || bind_context.planning_agg_index
-                || bind_context.suppress_wap_branch;
+            let suppress_wap_branch = bind_context.should_suppress_wap_branch();
             match self.resolve_read_table_with_wap_branch(
                 &catalog,
                 &database,

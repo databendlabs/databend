@@ -308,6 +308,50 @@ SELECT * FROM v_wap ORDER BY a
 ----
 3 base_only
 
+## A directly invoked SQL UDTF inherits the session WAP branch.
+statement ok
+CREATE OR REPLACE FUNCTION wap_direct_udtf() RETURNS TABLE (a INT, c STRING) AS $$ SELECT a, c FROM t_no_branch $$
+
+statement ok
+SET wap_branch = 'dev'
+
+query IT
+SELECT * FROM wap_direct_udtf() ORDER BY a
+----
+3 base_only
+4 branch_only
+
+## A SQL UDTF invoked from a persisted view inherits the view's effective WAP
+## suppression. SELECT * deliberately distinguishes the base schema (a, c) from
+## the dev schema (a, c, d), so lost suppression also causes a schema mismatch.
+statement ok
+CREATE OR REPLACE FUNCTION wap_view_udtf() RETURNS TABLE (a INT, c STRING) AS $$ SELECT * FROM t_no_branch $$
+
+statement ok
+SET wap_branch = 'dev'
+
+statement ok
+CREATE VIEW v_wap_udtf AS SELECT * FROM wap_view_udtf()
+
+query IT
+SELECT * FROM v_wap_udtf ORDER BY a
+----
+3 base_only
+
+query I
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_wap_udtf' AND branch = ''
+----
+2
+
+statement ok
+DROP VIEW v_wap_udtf
+
+statement ok
+DROP FUNCTION wap_view_udtf
+
+statement ok
+DROP FUNCTION wap_direct_udtf
+
 statement ok
 UNSET wap_branch
 
