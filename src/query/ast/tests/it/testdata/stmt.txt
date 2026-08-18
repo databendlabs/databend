@@ -20471,6 +20471,114 @@ RefreshVirtualColumn(
 
 
 ---------- Input ----------
+REFRESH LINEAGE FOR ALL VIEWS;
+---------- Output ---------
+REFRESH LINEAGE FOR ALL VIEWS
+---------- AST ------------
+RefreshLineage(
+    RefreshLineageStmt {
+        dry_run: false,
+    },
+)
+
+
+---------- Input ----------
+refresh lineage for all views dry run;
+---------- Output ---------
+REFRESH LINEAGE FOR ALL VIEWS DRY RUN
+---------- AST ------------
+RefreshLineage(
+    RefreshLineageStmt {
+        dry_run: true,
+    },
+)
+
+
+---------- Input ----------
+SELECT lineage FROM lineage;
+---------- Output ---------
+SELECT lineage FROM lineage
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..27,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..27,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..14,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            7..14,
+                                        ),
+                                        name: "lineage",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            20..27,
+                        ),
+                        table: TableRef {
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    20..27,
+                                ),
+                                name: "lineage",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            branch: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';
 ---------- Output ---------
 CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'Comment types type speedily \' \\\\ \'\' Fun!'

@@ -218,6 +218,7 @@ pub enum Statement {
     DropView(DropViewStmt),
     ShowViews(ShowViewsStmt),
     DescribeView(DescribeViewStmt),
+    RefreshLineage(RefreshLineageStmt),
 
     // Materialized Views
     CreateMaterializedView(CreateMaterializedViewStmt),
@@ -563,6 +564,7 @@ impl Statement {
             | Statement::ShowColumns(..)
             | Statement::ShowViews(..)
             | Statement::DescribeView(..)
+            | Statement::RefreshLineage(..)
             | Statement::ShowMaterializedViews(..)
             | Statement::ShowStreams(..)
             | Statement::DescribeStream(..)
@@ -946,6 +948,7 @@ impl Display for Statement {
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
             Statement::ShowViews(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeView(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshLineage(stmt) => write!(f, "{stmt}")?,
             Statement::CreateMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::DropMaterializedView(stmt) => write!(f, "{stmt}")?,

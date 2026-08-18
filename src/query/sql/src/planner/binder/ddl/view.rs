@@ -16,6 +16,7 @@ use databend_common_ast::ast::AlterViewStmt;
 use databend_common_ast::ast::CreateViewStmt;
 use databend_common_ast::ast::DescribeViewStmt;
 use databend_common_ast::ast::DropViewStmt;
+use databend_common_ast::ast::RefreshLineageStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowViewsStmt;
 use databend_common_ast::ast::Statement;
@@ -39,9 +40,21 @@ use crate::plans::CreateViewPlan;
 use crate::plans::DescribeViewPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::Plan;
+use crate::plans::RefreshLineagePlan;
+use crate::plans::RefreshLineageSelector;
 use crate::plans::RewriteKind;
 
 impl Binder {
+    pub(in crate::planner::binder) fn bind_refresh_lineage(
+        &self,
+        stmt: &RefreshLineageStmt,
+    ) -> Plan {
+        Plan::RefreshLineage(Box::new(RefreshLineagePlan {
+            selector: RefreshLineageSelector::AllViews,
+            dry_run: stmt.dry_run,
+        }))
+    }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_view(
         &mut self,

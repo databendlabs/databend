@@ -44,6 +44,8 @@ mod udf_table;
 pub use billing_usage_daily::BillingUsageDailyTable;
 pub use copy_history::CopyHistoryTable;
 pub use get_lineage::GetLineageTable;
+pub(crate) use get_lineage::LineageEdgeReader;
+pub(crate) use get_lineage::RawLineageEdge;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
 pub use numbers::generate_numbers_parts;
