@@ -93,11 +93,21 @@ enum SequentialOutput {
     Slice { task: Range<u64>, sub: Range<usize> },
 }
 
+/// One prefetched range: `data` is `None` while the fetch is in flight;
+/// `pending_reads` counts accepted hints — each `read` consumes one and the
+/// entry is removed at zero, so hinting a range twice serves two reads from
+/// one fetch.
+struct PrefetchSlot {
+    data: Option<Buffer>,
+    pending_reads: usize,
+}
+
 /// The chain tail over an OpenDAL [`Operator`].
 ///
 /// State machine per range key in `prefetch_map`: absent = never dispatched,
-/// `None` = in flight, `Some` = arrived and not yet consumed. Pressure is the
-/// number of unconsumed entries.
+/// data `None` = in flight, data `Some` = arrived and not yet fully read.
+/// Pressure is the number of unconsumed entries; repeated hints of one range
+/// add no pressure.
 ///
 /// It also ships a sequential compatibility shell ([`Self::create`] plus the
 /// no-argument [`Self::read`]) that preserves the historical batch API: ranges
@@ -106,7 +116,7 @@ enum SequentialOutput {
 pub struct OperatorRangeReader {
     req_tx: async_channel::Sender<Range<u64>>,
     data_rx: async_channel::Receiver<Result<FetchedData>>,
-    prefetch_map: HashMap<Range<u64>, Option<Buffer>>,
+    prefetch_map: HashMap<Range<u64>, PrefetchSlot>,
     max_unconsumed: usize,
     poisoned: Option<ErrorCode>,
 
@@ -251,7 +261,10 @@ impl OperatorRangeReader {
         if self.req_tx.try_send(range.clone()).is_err() {
             return false;
         }
-        self.prefetch_map.insert(range.clone(), None);
+        self.prefetch_map.insert(range.clone(), PrefetchSlot {
+            data: None,
+            pending_reads: 1,
+        });
         true
     }
 
@@ -262,7 +275,7 @@ impl OperatorRangeReader {
             Ok(Ok(fetched)) => {
                 metrics_inc_remote_io_read_milliseconds(fetched.io_time.as_millis() as u64);
                 if let Some(slot) = self.prefetch_map.get_mut(&fetched.range) {
-                    *slot = Some(fetched.data);
+                    slot.data = Some(fetched.data);
                 }
                 Ok(())
             }
@@ -291,7 +304,13 @@ impl RangeReader for OperatorRangeReader {
             return false;
         }
         for range in ranges {
-            if range.is_empty() || self.prefetch_map.contains_key(range) {
+            if range.is_empty() {
+                continue;
+            }
+            if let Some(slot) = self.prefetch_map.get_mut(range) {
+                // A repeated hint announces one more read of the same
+                // fetch; it consumes no extra capacity and is never dropped.
+                slot.pending_reads += 1;
                 continue;
             }
             if self.prefetch_map.len() >= self.max_unconsumed || !self.dispatch(range) {
@@ -318,16 +337,32 @@ impl RangeReader for OperatorRangeReader {
             }
         }
         loop {
-            match self.prefetch_map.get(&range) {
-                Some(Some(_)) => {
-                    let Some(Some(data)) = self.prefetch_map.remove(&range) else {
-                        unreachable!("checked above")
-                    };
-                    return Ok(data);
-                }
-                Some(None) => self.drain_one()?,
+            let arrived = match self.prefetch_map.get(&range) {
+                Some(slot) => slot.data.is_some(),
                 None => unreachable!("dispatched above"),
+            };
+            if !arrived {
+                self.drain_one()?;
+                continue;
             }
+
+            let Some(slot) = self.prefetch_map.get_mut(&range) else {
+                unreachable!("checked above")
+            };
+            slot.pending_reads -= 1;
+            if slot.pending_reads > 0 {
+                let Some(data) = slot.data.clone() else {
+                    unreachable!("checked above")
+                };
+                return Ok(data);
+            }
+            let Some(PrefetchSlot {
+                data: Some(data), ..
+            }) = self.prefetch_map.remove(&range)
+            else {
+                unreachable!("checked above")
+            };
+            return Ok(data);
         }
     }
 }
@@ -470,9 +505,9 @@ mod tests {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(b"0123456789", false);
         let op = recording_operator(accessor.clone());
-        let mut reader = OperatorRangeReader::new(op, "demand".to_string(), 4);
+        let mut reader = OperatorRangeReader::new(op, "spot".to_string(), 4);
 
-        // Demand read penetrates without any hint.
+        // An unhinted read penetrates on the spot.
         assert_eq!(
             RangeReader::read(&mut reader, 2..6)
                 .unwrap()
@@ -480,7 +515,7 @@ mod tests {
                 .as_ref(),
             b"2345"
         );
-        // Out-of-order demand reads against earlier hints.
+        // Out-of-order reads against earlier hints.
         assert!(reader.prefetch(&[6..8, 0..2]));
         assert_eq!(
             RangeReader::read(&mut reader, 0..2)
@@ -501,22 +536,26 @@ mod tests {
 
     #[test]
     #[allow(clippy::single_range_in_vec_init)]
-    fn test_duplicate_hints_fetch_once() {
+    fn test_double_hint_serves_double_read() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(b"0123456789", false);
         let op = recording_operator(accessor.clone());
-        let mut reader = OperatorRangeReader::new(op, "dedup".to_string(), 4);
+        let mut reader = OperatorRangeReader::new(op, "twice".to_string(), 4);
 
         assert!(reader.prefetch(&[0..4]));
         assert!(reader.prefetch(&[0..4]));
-        assert_eq!(
-            RangeReader::read(&mut reader, 0..4)
-                .unwrap()
-                .to_bytes()
-                .as_ref(),
-            b"0123"
-        );
+        for _ in 0..2 {
+            assert_eq!(
+                RangeReader::read(&mut reader, 0..4)
+                    .unwrap()
+                    .to_bytes()
+                    .as_ref(),
+                b"0123"
+            );
+        }
+        // One fetch served both hinted reads; the slot is gone afterwards.
         assert_eq!(accessor.read_ranges(), vec![0..4]);
+        assert_eq!(reader.unconsumed(), 0);
     }
 
     #[test]

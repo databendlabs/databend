@@ -335,6 +335,8 @@ fn fetch_granule_marks(
         return Ok(HashMap::new());
     }
     let held_budget = usize::try_from(layout.size).unwrap_or(usize::MAX);
+    // Index marks are always admitted: `put_cache` gates table data
+    // population only, never index caches.
     let mut reader = create_file_range_reader(
         dal.clone(),
         layout.location.0.clone(),
@@ -342,6 +344,7 @@ fn fetch_granule_marks(
         byte_ranges.len(),
         settings.max_range_size,
         held_budget,
+        true,
     )?;
     let _ = reader.prefetch(&byte_ranges);
     let mut per_mark: HashMap<String, Vec<u8>> = HashMap::new();

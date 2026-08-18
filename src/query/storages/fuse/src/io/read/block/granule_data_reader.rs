@@ -205,8 +205,14 @@ impl GranuleColumnReader {
         let (outputs, ranges) = merge_column_ranges(column_id, input_ranges, max_gap_size)?;
         let fetch_part_num = fetch_part_num.max(1);
 
+        // One batched hint for the initial window: the cache layer probes
+        // the disk cache once for all of it.
+        let mut initial = Vec::with_capacity(fetch_part_num);
         for range in ranges.iter().take(fetch_part_num) {
-            let _ = reader.prefetch(std::slice::from_ref(range));
+            initial.push(range.clone());
+        }
+        if !initial.is_empty() {
+            let _ = reader.prefetch(&initial);
         }
 
         Ok(Self {
@@ -278,9 +284,13 @@ impl GranuleColumnReader {
             )));
         }
 
+        // Hint the window replenishment before blocking on this read: with a
+        // lookahead of one, the next range must be announced downstream before
+        // this read consumes their shared boundary chunk, and the downstream
+        // worker can work ahead while this read blocks.
+        self.prefetch_next();
         let buffer = self.reader.read(expected.clone())?;
         self.current = Some((expected, buffer));
-        self.prefetch_next();
         Ok(())
     }
 
@@ -353,6 +363,7 @@ impl GranuleDataReader {
                 fetch_part_num,
                 GRANULE_IO_RANGE_SIZE,
                 held_budget,
+                read_context.put_cache(),
             )?;
             let reader = GranuleColumnReader::try_create(
                 *column_id,

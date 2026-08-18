@@ -13,8 +13,8 @@
 // limitations under the License.
 
 //! `io::Read` adapter over a ranged-read chain: splits one contiguous file
-//! range into fixed-size windows, prefetches them, and exposes a continuous
-//! byte stream.
+//! range into fixed-size windows and streams them with a bounded lookahead
+//! of prefetch hints running ahead of consumption.
 
 use std::collections::VecDeque;
 use std::io;
@@ -27,25 +27,30 @@ use opendal::Buffer;
 use crate::range_read::RangeReader;
 
 /// Adapts one contiguous file range into [`io::Read`] over a [`RangeReader`]
-/// chain. Prefetch hints run ahead of consumption; correctness never depends
-/// on a hint being accepted.
+/// chain, keeping at most `lookahead` windows hinted ahead of consumption.
+///
+/// Hints are fire-and-forget: each window is hinted once and a rejected hint
+/// is not retried — `read` pays one on-demand I/O for that window instead.
+/// Correctness never depends on a hint being accepted, and the memory the
+/// chain parks on this reader's behalf is bounded by the lookahead.
 pub struct ChunkedRangeReader {
     chain: Box<dyn RangeReader>,
-    /// Chunks not yet consumed, in consumption order.
+    /// Windows not yet consumed, in consumption order.
     pending: VecDeque<Range<u64>>,
-    /// Chunks not yet hinted; always a suffix of `pending`.
-    backlog: VecDeque<Range<u64>>,
-    /// Remainder of the chunk currently drained through `io::Read`.
+    /// Number of windows kept hinted ahead of consumption.
+    lookahead: usize,
+    /// Remainder of the window currently drained through `io::Read`.
     current: Option<Buffer>,
 }
 
 impl ChunkedRangeReader {
     /// Split `range` into `chunk_size`d windows and expose them as one
-    /// continuous byte stream.
+    /// continuous byte stream, hinting up to `lookahead` windows ahead.
     pub fn with_range(
         chain: Box<dyn RangeReader>,
         range: Range<u64>,
         chunk_size: u64,
+        lookahead: usize,
     ) -> Result<Self> {
         if chunk_size == 0 {
             return Err(ErrorCode::BadArguments(
@@ -53,55 +58,47 @@ impl ChunkedRangeReader {
             ));
         }
 
-        let mut chunks = Vec::new();
+        let mut pending = VecDeque::new();
         let mut start = range.start;
         while start < range.end {
             let end = start.saturating_add(chunk_size).min(range.end);
-            chunks.push(start..end);
+            pending.push_back(start..end);
             start = end;
         }
 
         let mut reader = Self {
             chain,
-            pending: chunks.iter().cloned().collect(),
-            backlog: chunks.into_iter().collect(),
+            pending,
+            lookahead: lookahead.max(1),
             current: None,
         };
-        reader.pump();
+
+        // One batched hint for the initial window: a cache layer can probe
+        // its store once for all of it and coalesce adjacent misses.
+        let mut initial = Vec::with_capacity(reader.lookahead);
+        for window in reader.pending.iter().take(reader.lookahead) {
+            initial.push(window.clone());
+        }
+        if !initial.is_empty() {
+            let _ = reader.chain.prefetch(&initial);
+        }
         Ok(reader)
-    }
-
-    /// Feed the current backlog as one batch. Cache layers can therefore do
-    /// one `mget` and coalesce adjacent misses across all prefetched ranges.
-    ///
-    /// When `prefetch` returns false, some or all ranges may already have been
-    /// accepted; the backlog is retained and retried after the next read. The
-    /// chain deduplicates accepted hints, while dropped hints are fetched on
-    /// demand by `read`.
-    fn pump(&mut self) {
-        if self.backlog.is_empty() {
-            return;
-        }
-
-        let batch = self.backlog.iter().cloned().collect::<Vec<_>>();
-        if self.chain.prefetch(&batch) {
-            self.backlog.clear();
-        }
     }
 
     /// Load the next window in file order, or `None` at EOF.
     fn load_next(&mut self) -> Result<Option<Buffer>> {
-        let Some(chunk) = self.pending.pop_front() else {
+        let Some(window) = self.pending.pop_front() else {
             return Ok(None);
         };
-        // Consumption caught up with the hints: take the chunk out of the
-        // backlog so a later pump cannot re-dispatch a consumed range; `read`
-        // fetches it on the spot instead.
-        if self.backlog.front() == Some(&chunk) {
-            self.backlog.pop_front();
+        // Replenish the lookahead before blocking on this read: the next
+        // window must be announced downstream before this read consumes
+        // their shared boundary chunk, and the worker can run
+        // ahead while this read blocks. After the pop, the window that
+        // extends the maintained lookahead is always at this fixed index.
+        if let Some(next) = self.pending.get(self.lookahead - 1) {
+            let _ = self.chain.prefetch(std::slice::from_ref(next));
         }
-        let data = self.chain.read(chunk)?;
-        self.pump();
+        let data = self.chain.read(window)?;
         Ok(Some(data))
     }
 }
@@ -144,7 +141,7 @@ mod tests {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
         let chain = OperatorRangeReader::new(recording_operator(accessor.clone()), "s".into(), 2);
-        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 3..23, 8).unwrap();
+        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 3..23, 8, 2).unwrap();
 
         let mut out = Vec::new();
         reader.read_to_end(&mut out).unwrap();
@@ -153,13 +150,14 @@ mod tests {
     }
 
     #[test]
-    fn test_no_duplicate_dispatch_when_consumption_catches_up() {
+    fn test_no_duplicate_dispatch_when_hints_are_dropped() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
-        // Capacity 1: hints lag behind consumption, so most chunks are read on
-        // the spot; none may be dispatched twice.
+        // Capacity 1: replenish hints are frequently rejected, so windows
+        // alternate between hinted and on-the-spot reads; none may be dispatched
+        // twice and none may be retried.
         let chain = OperatorRangeReader::new(recording_operator(accessor.clone()), "d".into(), 1);
-        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 0..25, 5).unwrap();
+        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 0..25, 5, 1).unwrap();
 
         let mut out = Vec::new();
         reader.read_to_end(&mut out).unwrap();
@@ -176,7 +174,7 @@ mod tests {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, true);
         let chain = OperatorRangeReader::new(recording_operator(accessor), "err".into(), 2);
-        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 0..16, 8).unwrap();
+        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 0..16, 8, 2).unwrap();
 
         let mut out = Vec::new();
         assert!(reader.read_to_end(&mut out).is_err());
@@ -187,7 +185,7 @@ mod tests {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
         let chain = OperatorRangeReader::new(recording_operator(accessor.clone()), "e".into(), 1);
-        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 5..5, 8).unwrap();
+        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 5..5, 8, 1).unwrap();
 
         let mut out = Vec::new();
         reader.read_to_end(&mut out).unwrap();
@@ -199,6 +197,6 @@ mod tests {
     fn test_zero_chunk_size_is_rejected() {
         init_test_runtime();
         let chain = OperatorRangeReader::new(memory_operator(), "z".into(), 1);
-        assert!(ChunkedRangeReader::with_range(Box::new(chain), 0..8, 0).is_err());
+        assert!(ChunkedRangeReader::with_range(Box::new(chain), 0..8, 0, 1).is_err());
     }
 }

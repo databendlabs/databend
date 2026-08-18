@@ -210,41 +210,63 @@ impl LruDiskCacheHolder {
         }
     }
 
-    /// Batched `get`: the whole batch — LRU touches, file reads and crc
-    /// checks — is served under a single lock acquisition, and corrupted
-    /// entries are evicted on the spot. Results align with `keys` one to one.
+    /// Batched `get`, mirroring the locking discipline of `get`: one short
+    /// lock acquisition touches the LRU and resolves file paths for the whole
+    /// batch, file reads and crc checks then run without the lock, and
+    /// corrupted entries are evicted under one more lock acquisition at the
+    /// end. Results align with `keys` one to one.
     pub fn mget<Q: AsRef<str>>(&self, keys: &[Q]) -> Vec<Option<Arc<Bytes>>> {
-        let mut cache = self.write();
-        keys.iter()
-            .map(|k| {
-                let k = k.as_ref();
-                let (cache_file_path, file_size) = cache.get_cache_item_path_and_size(k)?;
-                match read_cache_content(cache_file_path, file_size as usize) {
-                    Ok(mut bytes) => {
-                        if let Err(e) = validate_checksum(bytes.as_slice()) {
-                            error!("disk cache item of key {k}, crc validation failure: {e}");
-                            // remove the invalid cache, error of removal ignored
-                            if let Err(e) = cache.remove(k) {
-                                warn!("failed to remove invalid cache item of key {k}: {e}");
-                            }
-                            None
-                        } else {
-                            // trim the checksum bytes and return
-                            let total_len = bytes.len();
-                            let body_len = total_len - 4;
-                            bytes.truncate(body_len);
-                            Some(Arc::new(bytes.into()))
-                        }
-                    }
-                    Err(e) => {
-                        // Failure of reading cache item is ignored,
-                        // maybe it should be ignored by the caller?
-                        error!("failed to read disk cache item of key {k}: {e}");
-                        None
-                    }
+        // Phase 1: LRU touches and path resolution only; no file I/O may
+        // enter this critical section.
+        let mut located = Vec::with_capacity(keys.len());
+        {
+            let mut cache = self.write();
+            for key in keys {
+                located.push(cache.get_cache_item_path_and_size(key.as_ref()));
+            }
+        }
+
+        // Phase 2: read and validate the files without holding the lock. An
+        // entry evicted concurrently since phase 1 fails to read here and
+        // degrades into a plain miss.
+        let mut results = Vec::with_capacity(keys.len());
+        let mut corrupted = Vec::new();
+        for (key, location) in keys.iter().zip(located) {
+            let k = key.as_ref();
+            let Some((cache_file_path, file_size)) = location else {
+                results.push(None);
+                continue;
+            };
+            let mut bytes = match read_cache_content(cache_file_path, file_size as usize) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    error!("failed to read disk cache item of key {k}: {e}");
+                    results.push(None);
+                    continue;
                 }
-            })
-            .collect()
+            };
+            if let Err(e) = validate_checksum(bytes.as_slice()) {
+                error!("disk cache item of key {k}, crc validation failure: {e}");
+                corrupted.push(k);
+                results.push(None);
+                continue;
+            }
+            // trim the checksum bytes and return
+            let body_len = bytes.len() - 4;
+            bytes.truncate(body_len);
+            results.push(Some(Arc::new(bytes.into())));
+        }
+
+        // Phase 3: evict corrupted entries, errors of removal ignored.
+        if !corrupted.is_empty() {
+            let mut cache = self.write();
+            for k in corrupted {
+                if let Err(e) = cache.remove(k) {
+                    warn!("failed to remove invalid cache item of key {k}: {e}");
+                }
+            }
+        }
+        results
     }
 }
 
@@ -639,6 +661,25 @@ mod tests_mget {
         assert!(cache.contains_key("a"));
         assert!(!cache.contains_key("b"));
         assert!(cache.contains_key("c"));
+    }
+
+    #[test]
+    fn test_mget_missing_backing_file_degrades_to_miss() {
+        let (_dir, cache) = new_cache(1 << 20);
+        cache.insert("gone".to_string(), Bytes::from_static(b"payload"));
+        cache.insert("kept".to_string(), Bytes::from_static(b"payload"));
+
+        // Delete the backing file while keeping the LRU entry, simulating an
+        // eviction that lands between path resolution and the file read.
+        let (path, _) = {
+            let mut inner = cache.write();
+            inner.get_cache_item_path_and_size("gone").unwrap()
+        };
+        std::fs::remove_file(&path).unwrap();
+
+        let results = cache.mget(&["gone", "kept"]);
+        assert!(results[0].is_none());
+        assert_eq!(results[1].as_deref(), Some(&Bytes::from_static(b"payload")));
     }
 
     #[test]

@@ -28,6 +28,7 @@ pub(crate) fn create_file_range_reader(
     max_prefetch: usize,
     max_segment_size: u64,
     held_budget: usize,
+    populate_cache: bool,
 ) -> Result<Box<dyn RangeReader>> {
     let tail = OperatorRangeReader::new(operator, path.clone(), max_prefetch.saturating_add(1));
     let cache_manager = CacheManager::instance();
@@ -47,6 +48,7 @@ pub(crate) fn create_file_range_reader(
             DISK_CACHE_CHUNK_SIZE,
             max_segment_size,
             held_budget,
+            populate_cache,
         )?)),
         None => Ok(Box::new(tail)),
     }

@@ -14,7 +14,8 @@
 
 //! A chain-of-responsibility for ranged reads: layers implement [`RangeReader`]
 //! and decorate the next layer. `prefetch` is a side-effectful hint flowing down
-//! the chain, `read` is the demand path that carries the correctness contract.
+//! the chain, `read` is the on-demand path that carries the correctness
+//! contract.
 
 mod chunk_grid;
 mod chunked;
@@ -39,15 +40,19 @@ pub use self::operator::OperatorRangeReader;
 pub trait RangeReader: Send {
     /// Side-effectful hint: try to load `ranges` ahead of time.
     ///
-    /// A saturated layer may silently drop hints; correctness is preserved
-    /// because `read` falls through on demand. Returns `false` when the chain
-    /// is saturated and the caller should pause feeding until some `read`s
-    /// complete. I/O errors raised while hinting are attached to the affected
-    /// range and reported by the corresponding `read`. An empty slice is a
-    /// legal capacity probe.
+    /// Each accepted hint announces one future `read` of its range: hint a
+    /// range twice and both reads are served from the same prefetched data.
+    /// Every announced read must eventually happen (or the reader be
+    /// dropped); data for reads that never come stays held. A saturated
+    /// layer may silently drop hints; correctness is preserved because
+    /// `read` falls through on demand. Returns `false` when the chain is
+    /// saturated and the caller should pause feeding until some `read`s
+    /// complete. I/O errors raised
+    /// while hinting are attached to the affected range and reported by the
+    /// corresponding `read`. An empty slice is a legal capacity probe.
     fn prefetch(&mut self, ranges: &[Range<u64>]) -> bool;
 
-    /// Demand read: the only correctness contract.
+    /// On-demand read: the only correctness contract.
     ///
     /// Returns immediately when the range is ready, blocks while it is in
     /// flight, and fetches on the spot when it was never hinted (or the hint

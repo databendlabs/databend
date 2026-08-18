@@ -97,6 +97,7 @@ pub struct FuseLowLevelBlockReadOptions {
     cluster_key_func_ctx: Option<FunctionContext>,
     window_size: usize,
     max_prefetch: usize,
+    populate_cache: bool,
 }
 
 impl FuseLowLevelBlockReadOptions {
@@ -112,6 +113,7 @@ impl FuseLowLevelBlockReadOptions {
             cluster_key_func_ctx: None,
             window_size: DEFAULT_WINDOW_SIZE,
             max_prefetch: DEFAULT_MAX_PREFETCH,
+            populate_cache: true,
         }
     }
 
@@ -142,6 +144,13 @@ impl FuseLowLevelBlockReadOptions {
 
     pub fn with_max_prefetch(mut self, max_prefetch: usize) -> Self {
         self.max_prefetch = max_prefetch;
+        self
+    }
+
+    /// Whether fetched chunks are admitted into the shared disk cache; reads
+    /// still serve existing entries when disabled.
+    pub fn with_populate_cache(mut self, populate_cache: bool) -> Self {
+        self.populate_cache = populate_cache;
         self
     }
 
@@ -210,6 +219,7 @@ pub struct FuseLowLevelBlockReader {
     compression: ParquetCompression,
     window_size: usize,
     max_prefetch: usize,
+    populate_cache: bool,
 }
 
 impl FuseLowLevelBlockReader {
@@ -302,6 +312,7 @@ impl FuseLowLevelBlockReader {
             compression,
             window_size: options.window_size,
             max_prefetch: options.max_prefetch,
+            populate_cache: options.populate_cache,
         })
     }
 
@@ -1379,8 +1390,14 @@ impl ParquetLeafRowGroupAdapter {
             reader
                 .window_size
                 .saturating_mul(reader.max_prefetch.saturating_add(2)),
+            reader.populate_cache,
         )?;
-        let input = ChunkedRangeReader::with_range(chain, range, reader.window_size as u64)?;
+        let input = ChunkedRangeReader::with_range(
+            chain,
+            range,
+            reader.window_size as u64,
+            reader.max_prefetch,
+        )?;
         let Ok(num_values) = i64::try_from(num_values) else {
             return Err(ErrorCode::BadArguments(format!(
                 "Parquet leaf {column_id} num_values does not fit i64"
