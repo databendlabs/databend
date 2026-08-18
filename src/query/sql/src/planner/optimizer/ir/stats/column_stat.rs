@@ -72,7 +72,12 @@ impl ColumnStat {
             expected: self.ndv.expected.map(|expected| expected.min(domain_ndv)),
             upper: self.ndv.upper.min(domain_ndv),
         };
-        (bounded, self.ndv.upper > domain_ndv)
+        let estimate_exceeded_domain = self.ndv.lower > domain_ndv
+            || self
+                .ndv
+                .expected
+                .is_some_and(|expected| expected > domain_ndv);
+        (bounded, estimate_exceeded_domain)
     }
 
     pub(crate) fn join_key_null_count_for_cardinality(&self, cardinality: f64) -> f64 {
@@ -104,9 +109,12 @@ impl ColumnStat {
             self.max.clone(),
             self.null_count.upper() > 0.0,
         )?;
+        let ndv = domain
+            .finite_cardinality_upper()
+            .map_or(self.ndv, |upper| self.ndv.reduce(upper as f64));
         Ok(ArgStat {
             domain,
-            ndv: self.ndv,
+            ndv,
             null_count: self.null_count,
             distribution: self
                 .histogram
@@ -124,5 +132,63 @@ impl ColumnStat {
             null_count: StatCount::exact(0),
             histogram: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::stat_distribution::StatCount;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+
+    #[test]
+    fn test_loose_ndv_upper_is_bounded_without_rejecting_estimate() {
+        let stat = ColumnStat {
+            min: Datum::UInt(1),
+            max: Datum::UInt(5),
+            ndv: NdvEstimate::new(3.0, 9.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        };
+
+        let (bounded, estimate_exceeded_domain) = stat.ndv_bounded_by_discrete_domain();
+
+        assert_eq!(bounded, NdvEstimate::new(3.0, 5.0));
+        assert!(!estimate_exceeded_domain);
+    }
+
+    #[test]
+    fn test_impossible_ndv_estimate_is_rejected_after_bounding() {
+        let stat = ColumnStat {
+            min: Datum::UInt(1),
+            max: Datum::UInt(5),
+            ndv: NdvEstimate::new(6.0, 9.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        };
+
+        let (bounded, estimate_exceeded_domain) = stat.ndv_bounded_by_discrete_domain();
+
+        assert_eq!(bounded, NdvEstimate::new(5.0, 5.0));
+        assert!(estimate_exceeded_domain);
+    }
+
+    #[test]
+    fn test_arg_stat_bounds_loose_ndv_upper_by_finite_domain() {
+        let stat = ColumnStat {
+            min: Datum::Int(1),
+            max: Datum::Int(3),
+            ndv: NdvEstimate::new(3.0, 9.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        };
+
+        let arg_stat = stat
+            .to_arg_stat(&DataType::Number(NumberDataType::Int64))
+            .unwrap();
+
+        assert_eq!(arg_stat.ndv, NdvEstimate::new(3.0, 3.0));
+        arg_stat.check_consistency().unwrap();
     }
 }

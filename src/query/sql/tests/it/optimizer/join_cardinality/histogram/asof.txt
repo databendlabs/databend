@@ -8,8 +8,8 @@ right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
 query         : asof_join
 sql           : SELECT * FROM l ASOF JOIN r ON l.k = r.k AND l.t >= r.t
 join          : ASOF cardinality=26.000
-stat          : l.k (#0) min=1, max=5, ndv=3.000 (upper=5.000), null=0.000, histogram=none
-stat          : r.k (#2) min=1, max=5, ndv=3.000 (upper=5.000), null=0.000, histogram=none
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 
 case          : left_asof_join_partial_overlap
 description   : Join-key histograms partially overlap, so estimated join-key stats should narrow bounds when this join type keeps them.
@@ -18,7 +18,7 @@ right stats   : rows=30, min=3, max=9, ndv=4, histogram_input=present
 query         : asof_left_join
 sql           : SELECT * FROM l ASOF LEFT JOIN r ON l.k = r.k AND l.t >= r.t
 join          : LEFT ASOF cardinality=30.000
-stat          : l.k (#0) min=3, max=5, ndv=3.000 (upper=5.000), null=0.000, histogram=none
+stat          : l.k (#0) min=3, max=5, ndv=2.000, null=0.000, histogram=none
 stat          : r.k (#2) min=3, max=9, ndv=4.000 (upper=30.000), null=0.000, histogram=none
 
 case          : left_asof_join_no_overlap
@@ -39,7 +39,7 @@ query         : asof_right_join
 sql           : SELECT * FROM l ASOF RIGHT JOIN r ON l.k = r.k AND l.t >= r.t
 join          : RIGHT ASOF cardinality=9.000
 stat          : l.k (#0) min=1, max=5, ndv=3.000 (upper=9.000), null=0.000, histogram=none
-stat          : r.k (#2) min=3, max=5, ndv=3.000 (upper=5.000), null=0.000, histogram=none
+stat          : r.k (#2) min=3, max=5, ndv=2.000, null=0.000, histogram=none
 
 case          : right_asof_join_no_overlap
 description   : Join-key histograms do not overlap, so the inner estimate is zero before join-type rules apply.

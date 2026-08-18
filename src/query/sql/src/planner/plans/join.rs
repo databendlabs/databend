@@ -1216,6 +1216,31 @@ impl Operator for Join {
             && self.equi_conditions.len() == 1
             && self.has_null_equi_condition()
         {
+            let settings = ctx.get_settings();
+            let broadcast_child = if matches!(self.join_type, JoinType::LeftMark) {
+                0
+            } else {
+                1
+            };
+            let broadcast_stat_info = rel_expr.stat_info_child_group(broadcast_child)?;
+            if !broadcast_build_allowed(
+                settings.get_enforce_broadcast_join()?,
+                ctx.get_cluster().nodes.len(),
+                self.join_type,
+                broadcast_stat_info.as_ref(),
+                settings.get_max_broadcast_join_build_rows()?,
+            ) {
+                // Hash shuffling cannot preserve the subquery's global NULL state.
+                return Ok(vec![vec![
+                    RequiredProperty {
+                        distribution: Distribution::Serial,
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Serial,
+                    },
+                ]]);
+            }
+
             // subquery as left probe side
             if matches!(self.join_type, JoinType::LeftMark) {
                 let conditions = self
