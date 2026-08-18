@@ -535,7 +535,19 @@ fn bitmap_logic_operate(
         builder.commit_row();
         return;
     }
-    let Some(mut rb1) = deserialize_bitmap(arg1)
+
+    // Choose which side to materialize:
+    // - And: materialize the smaller side; so the larger side can be skipped if unmatched
+    // - Or/Xor: materialize the larger side; so the small side lead to lower read cost
+    // - Not is asymmetric and never swapped.
+    let (n1, n2) = (arg1.len(), arg2.len());
+    let (mat, raw) = match op {
+        LogicOp::And if n1 > n2 => (arg2, arg1),
+        LogicOp::Or | LogicOp::Xor if n1 < n2 => (arg2, arg1),
+        _ => (arg1, arg2),
+    };
+
+    let Some(mut mat) = deserialize_bitmap(mat)
         .map_err(|e| {
             ctx.set_error(builder.len(), e.to_string());
             builder.commit_row();
@@ -546,10 +558,10 @@ fn bitmap_logic_operate(
     };
 
     let res = match op {
-        LogicOp::Or => rb1.bitor_assign_rhs(Serialized(arg2)),
-        LogicOp::And => rb1.bitand_assign_rhs(Serialized(arg2)),
-        LogicOp::Xor => rb1.bitxor_assign_rhs(Serialized(arg2)),
-        LogicOp::Not => rb1.sub_assign_rhs(Serialized(arg2)),
+        LogicOp::Or => mat.bitor_assign_rhs(Serialized(raw)),
+        LogicOp::And => mat.bitand_assign_rhs(Serialized(raw)),
+        LogicOp::Xor => mat.bitxor_assign_rhs(Serialized(raw)),
+        LogicOp::Not => mat.sub_assign_rhs(Serialized(raw)),
     };
 
     if let Err(e) = res {
@@ -558,6 +570,6 @@ fn bitmap_logic_operate(
         return;
     }
 
-    rb1.serialize_into(&mut builder.data).unwrap();
+    mat.serialize_into(&mut builder.data).unwrap();
     builder.commit_row();
 }
