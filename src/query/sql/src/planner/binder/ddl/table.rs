@@ -2411,8 +2411,7 @@ impl Binder {
                 if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
                         // Replay stored view SQL against base tables.
-                        let mut planner =
-                            Planner::new(self.ctx.clone()).with_suppress_wap_branch(true);
+                        let mut planner = Planner::new_without_wap_branch(self.ctx.clone());
                         let (plan, _) = planner.plan_sql(query).await?;
                         Ok(AnalyzeCreateTableResult {
                             schema: infer_table_schema(&plan.schema())?,

@@ -1801,7 +1801,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateView(plan) => {
                 // Check stored view SQL against base tables.
                 let mut planner =
-                    Planner::new(self.ctx.clone()).with_suppress_wap_branch(true);
+                    Planner::new_without_wap_branch(self.ctx.clone());
                 let (plan, _) = planner.plan_sql(&plan.subquery).await?;
                 self.check(ctx, &plan).await?
             }
@@ -1809,7 +1809,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Alter, false).await?;
                 // Check stored view SQL against base tables.
                 let mut planner =
-                    Planner::new(self.ctx.clone()).with_suppress_wap_branch(true);
+                    Planner::new_without_wap_branch(self.ctx.clone());
                 let (plan, _) = planner.plan_sql(&plan.subquery).await?;
                 self.check(ctx, &plan).await?
             }

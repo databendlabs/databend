@@ -79,6 +79,14 @@ impl Planner {
         }
     }
 
+    /// Create a planner that ignores the session `wap_branch` for unqualified tables.
+    /// Explicit `table/branch` references are still honored.
+    pub fn new_without_wap_branch(ctx: Arc<dyn TableContext>) -> Self {
+        let mut planner = Self::new(ctx);
+        planner.suppress_wap_branch = true;
+        planner
+    }
+
     pub fn new_with_query_executor(
         ctx: Arc<dyn TableContext>,
         query_executor: Arc<dyn QueryExecutor>,
@@ -88,13 +96,6 @@ impl Planner {
             query_executor: Some(query_executor),
             suppress_wap_branch: false,
         }
-    }
-
-    /// Suppress session `wap_branch` while planning stored/generated SQL.
-    /// Explicit `table/branch` references still win.
-    pub fn with_suppress_wap_branch(mut self, suppress: bool) -> Self {
-        self.suppress_wap_branch = suppress;
-        self
     }
 
     #[async_backtrace::framed]
