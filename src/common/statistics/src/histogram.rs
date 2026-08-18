@@ -30,8 +30,9 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 /// A column histogram used by optimizer statistics.
 ///
 /// `accuracy == true` means bucket `num_distinct` values still come directly
-/// from `ANALYZE TABLE` and may be used as exact NDV facts for the remaining
-/// bucket set. ANALYZE buckets are observed row-order tiles: for each supported
+/// from `ANALYZE TABLE`. They may be combined into an exact global NDV only
+/// after shared bucket boundaries are deduplicated. ANALYZE buckets are
+/// observed row-order tiles: for each supported
 /// non-null column, ANALYZE runs a query equivalent to sorting rows by the
 /// column, assigning `NTILE(DEFAULT_HISTOGRAM_BUCKETS)`, then grouping by tile
 /// and collecting `MIN(col)`, `MAX(col)`, `COUNT()`, and `COUNT(DISTINCT col)`.
@@ -45,10 +46,10 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 /// histogram by an independent selectivity also marks it inaccurate: scaling
 /// only aligns row mass after a filter whose surviving values are unknown, so
 /// the original bucket distinct counts are no longer exact facts. Range
-/// clipping and join overlap estimation keep the input accuracy because they do
-/// not by themselves perform that unknown-value alignment. Numeric synthetic
-/// histograms keep `avg_spacing` separately so consumers can detect distorted
-/// ranges.
+/// clipping and join overlap estimation also clear accuracy because their
+/// bucket counts are estimates; retaining only whole buckets preserves it.
+/// Numeric synthetic histograms keep `avg_spacing` separately so consumers can
+/// detect distorted ranges.
 ///
 /// Consumers should preserve this distinction when deriving column NDV from
 /// bucket distinct counts. The type variants preserve the bucket value type for
@@ -237,23 +238,28 @@ impl Histogram {
     }
 
     pub fn restrict_to_bounds(&self, min: &Datum, max: &Datum) -> ExceptionResult<Option<Self>> {
-        let buckets = self.restricted_buckets(min, max)?;
+        let (buckets, keeps_exact_counts) = self.restricted_buckets(min, max)?;
 
         if buckets.is_empty() {
             return Ok(None);
         }
 
-        Self::try_from_buckets(self.accuracy(), buckets, self.avg_spacing())
-            .map(Some)
-            .map_err(|err| ErrorCode::Internal(err.to_string()))
+        Self::try_from_buckets(
+            self.accuracy() && keeps_exact_counts,
+            buckets,
+            self.avg_spacing(),
+        )
+        .map(Some)
+        .map_err(|err| ErrorCode::Internal(err.to_string()))
     }
 
     fn restricted_buckets(
         &self,
         min: &Datum,
         max: &Datum,
-    ) -> ExceptionResult<Vec<HistogramBucket>> {
+    ) -> ExceptionResult<(Vec<HistogramBucket>, bool)> {
         let mut buckets = Vec::new();
+        let mut keeps_exact_counts = true;
 
         for bucket in self.bucket_iter() {
             let bucket_min = bucket.lower_bound();
@@ -274,6 +280,9 @@ impl Histogram {
                 continue;
             }
 
+            keeps_exact_counts &= lower_bound.compare(&bucket_min)? == std::cmp::Ordering::Equal
+                && upper_bound.compare(&bucket_max)? == std::cmp::Ordering::Equal;
+
             let (num_values, num_distinct) = bucket_overlap_counts(
                 &bucket_min,
                 &bucket_max,
@@ -293,7 +302,7 @@ impl Histogram {
             );
         }
 
-        Ok(buckets)
+        Ok((buckets, keeps_exact_counts))
     }
 
     pub fn is_range_distorted(&self) -> bool {
@@ -814,7 +823,7 @@ mod tests {
             .expect("histogram should keep intersecting buckets");
         let buckets = restricted.bucket_iter().collect::<Vec<_>>();
 
-        assert!(restricted.accuracy());
+        assert!(!restricted.accuracy());
         assert_eq!(buckets.len(), 2);
         assert_eq!(buckets[0].lower_bound(), Datum::UInt(2));
         assert_eq!(buckets[0].upper_bound(), Datum::UInt(4));
@@ -824,6 +833,28 @@ mod tests {
         assert_eq!(buckets[1].upper_bound(), Datum::UInt(6));
         assert_eq!(buckets[1].num_values(), 2.0);
         assert_eq!(buckets[1].num_distinct(), 2.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_restrict_to_bounds_keeps_accuracy_for_whole_buckets() -> ExceptionResult<()> {
+        let histogram = Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![
+                TypedHistogramBucket::new(0, 4, 5.0, 5.0),
+                TypedHistogramBucket::new(5, 9, 5.0, 5.0),
+                TypedHistogramBucket::new(10, 14, 5.0, 5.0),
+            ],
+            avg_spacing: None,
+        });
+
+        let restricted = histogram
+            .restrict_to_bounds(&Datum::UInt(5), &Datum::UInt(9))?
+            .expect("histogram should retain the middle bucket");
+
+        assert!(restricted.accuracy());
+        assert_eq!(restricted.ndv(), NdvEstimate::proven_exact(5.0));
         Ok(())
     }
 

@@ -253,8 +253,33 @@ impl NdvEstimate {
         );
         let upper = self.upper.min(upper);
         let estimate = Self {
-            lower: self.lower.min(upper),
+            // `reduce` is used by filters and many-to-one scalar functions as
+            // well as by simple cardinality caps. A smaller output domain does
+            // not prove which input values survive, so the generic operation
+            // must not retain a proof-grade lower bound.
+            lower: 0.0,
             expected: self.expected.map(|expected| expected.min(upper)),
+            upper,
+        };
+        debug_assert!(estimate.check_consistency().is_ok());
+        estimate
+    }
+
+    /// Cap an NDV upper bound while keeping a compatible proof-grade lower.
+    ///
+    /// This is only valid when the value set is unchanged (or transformed
+    /// injectively). If the cap contradicts the proof, discard the proof
+    /// instead of turning the cap itself into a new lower bound.
+    pub fn reduce_preserving_lower(self, upper: f64) -> Self {
+        debug_assert!(
+            !upper.is_nan() && upper >= 0.0,
+            "invalid NDV reduction upper bound: {upper:?}"
+        );
+        let upper = self.upper.min(upper);
+        let lower = if self.lower <= upper { self.lower } else { 0.0 };
+        let estimate = Self {
+            lower,
+            expected: self.expected.map(|expected| expected.min(upper).max(lower)),
             upper,
         };
         debug_assert!(estimate.check_consistency().is_ok());
@@ -272,13 +297,9 @@ impl NdvEstimate {
         );
         let upper = self.upper.min(num_values * selectivity);
         // A selectivity is an expected row fraction, not a proof about which
-        // values survive. Unless no rows are filtered, it cannot preserve a
-        // trusted NDV lower bound.
-        let lower = if selectivity == 1.0 {
-            self.lower.min(upper)
-        } else {
-            0.0
-        };
+        // values survive. Even an estimated selectivity of one does not prove
+        // that every distinct value survives.
+        let lower = 0.0;
         let expected = self.expected.map(|expected| {
             estimate_distinct_count_after_row_scale(num_values, expected, selectivity)
                 .clamp(lower, upper)
@@ -544,10 +565,10 @@ mod tests {
     }
 
     #[test]
-    fn test_ndv_full_selectivity_preserves_proof() {
+    fn test_ndv_full_selectivity_drops_proof() {
         let ndv = NdvEstimate::proven_exact(10.0).reduce_by_selectivity(10.0, 1.0);
 
-        assert_eq!(ndv, NdvEstimate::proven_exact(10.0));
+        assert_eq!(ndv, NdvEstimate::exact(10.0));
     }
 
     #[test]
@@ -561,9 +582,9 @@ mod tests {
     }
 
     #[test]
-    fn test_ndv_confidence_survives_bounded_reduction() {
+    fn test_ndv_generic_reduction_drops_proof() {
         let exact = NdvEstimate::proven_exact(100.0).reduce(40.0);
-        assert_eq!(exact.lower, 40.0);
+        assert_eq!(exact.lower, 0.0);
         assert_eq!(exact.expected, Some(40.0));
         assert_eq!(exact.upper, 40.0);
 
@@ -571,6 +592,15 @@ mod tests {
         assert_eq!(estimated.lower, 0.0);
         assert_eq!(estimated.expected, Some(40.0));
         assert_eq!(estimated.upper, 40.0);
+    }
+
+    #[test]
+    fn test_ndv_injective_reduction_preserves_compatible_proof() {
+        let compatible = NdvEstimate::proven_exact(10.0).reduce_preserving_lower(20.0);
+        assert_eq!(compatible, NdvEstimate::proven_exact(10.0));
+
+        let contradictory = NdvEstimate::proven_exact(10.0).reduce_preserving_lower(5.0);
+        assert_eq!(contradictory, NdvEstimate::exact(5.0));
     }
 
     #[test]

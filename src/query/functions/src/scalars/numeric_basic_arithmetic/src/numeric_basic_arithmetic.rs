@@ -603,3 +603,30 @@ pub fn register_numeric_basic_arithmetic(registry: &mut FunctionRegistry) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::stat_distribution::BorrowedDistribution;
+    use databend_common_expression::stat_distribution::StatCount;
+
+    use super::*;
+
+    #[test]
+    fn test_modulo_stat_drops_input_ndv_proof() {
+        let lhs = ArgStat {
+            domain: NumberType::<u64>::upcast_domain(SimpleDomain { min: 0, max: 2 }),
+            ndv: NdvEstimate::proven_exact(2.0),
+            null_count: StatCount::exact(0),
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let divisor = Scalar::Number(NumberScalar::UInt64(2));
+
+        let output = derive_modulo_with_const::<u64, u64, u64, u64>(&divisor, &lhs)
+            .unwrap()
+            .expect("integer modulo by a non-zero constant should derive statistics");
+
+        assert_eq!(output.ndv.lower, 0.0);
+        assert_eq!(output.ndv.expected, Some(2.0));
+        assert_eq!(output.ndv.upper, 2.0);
+    }
+}

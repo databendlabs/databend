@@ -214,7 +214,8 @@ impl Aggregate {
         for item in self.group_items.iter() {
             let item_stat = column_stats.get_mut(&item.index).unwrap();
             if self.group_items.len() == 1 {
-                item_stat.ndv = item_stat.ndv.reduce(cardinality);
+                // A single grouping key retains every distinct input value.
+                item_stat.ndv = item_stat.ndv.reduce_preserving_lower(cardinality);
             }
 
             let Some(histogram) = &mut item_stat.histogram else {

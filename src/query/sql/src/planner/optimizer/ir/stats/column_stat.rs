@@ -111,7 +111,12 @@ impl ColumnStat {
         )?;
         let ndv = domain
             .finite_cardinality_upper()
-            .map_or(self.ndv, |upper| self.ndv.reduce(upper as f64));
+            // Domain conversion does not change the value set. Preserve a
+            // compatible proof lower bound so audited injective scalar paths
+            // can propagate it.
+            .map_or(self.ndv, |upper| {
+                self.ndv.reduce_preserving_lower(upper as f64)
+            });
         Ok(ArgStat {
             domain,
             ndv,

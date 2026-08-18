@@ -160,7 +160,9 @@ impl UnionAll {
                     };
 
                     if let Some(upper) = finite_range_ndv_upper(&min, &max) {
-                        ndv = ndv.reduce(upper);
+                        // UNION ALL retains every input value; this cap only
+                        // validates the unchanged value set against its domain.
+                        ndv = ndv.reduce_preserving_lower(upper);
                     }
                     let null_count = StatCount::sum(left.null_count, right.null_count);
                     Ok(Some((output, ColumnStat {
