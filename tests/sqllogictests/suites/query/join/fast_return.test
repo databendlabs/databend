@@ -29,6 +29,16 @@ query IIII
 select * from t2 left join t1 on t1.a = t2.a order by t1.a, t2.a
 ----
 
+# The right/build side is preserved, so an empty build makes the result empty.
+query IIII
+select * from t1 right join t2 on t1.a = t2.a order by t1.a, t2.a
+----
+
+# Stopping the probe pipeline also avoids evaluating its join key.
+query I
+select t1.a from t1 right join t2 on to_int64(concat('invalid-', to_string(t1.a))) = t2.a
+----
+
 statement ok
 set force_join_data_spill = 1;
 

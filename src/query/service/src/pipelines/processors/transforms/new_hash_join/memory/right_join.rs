@@ -41,6 +41,7 @@ use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
+use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::wrap_nullable_block;
@@ -125,7 +126,15 @@ impl Join for OuterRightHashJoin {
         )
     }
 
+    fn can_skip_probe(&self) -> bool {
+        *self.basic_state.build_rows == 0
+    }
+
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
+        if data.is_empty() || *self.basic_state.build_rows == 0 {
+            return Ok(Box::new(EmptyJoinStream));
+        }
+
         self.basic_hash_join.finalize_chunks();
 
         let mut probe_keys = {

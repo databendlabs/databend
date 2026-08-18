@@ -233,6 +233,13 @@ impl Join for HybridHashJoin {
         self.state.has_spilled_once()
     }
 
+    fn can_skip_probe(&self) -> bool {
+        match &self.mode {
+            HybridJoinMode::Memory(join) => join.can_skip_probe(),
+            HybridJoinMode::Grace(join) => join.can_skip_probe(),
+        }
+    }
+
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
         match &mut self.mode {
             HybridJoinMode::Memory(join) => join.probe_block(data),
