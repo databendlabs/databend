@@ -1,0 +1,23 @@
+name: "Test data lineage"
+description: "Test lineage capture, traversal, and refresh"
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_test
+      with:
+        artifacts: sqllogictests,meta,query
+
+    - uses: ./.github/actions/setup_minio
+
+    - name: Run lineage tests
+      env:
+        LOG_HISTORY_STORAGE_S3_ACCESS_KEY_ID: 'minioadmin'
+        LOG_HISTORY_STORAGE_S3_SECRET_ACCESS_KEY: 'minioadmin'
+      shell: bash
+      run: bash ./tests/lineage/test-lineage.sh
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: test-lineage

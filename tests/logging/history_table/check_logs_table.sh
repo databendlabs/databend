@@ -74,9 +74,6 @@ check_query_log "basic-10" "$CREATE_VIEW_QUERY_ID" "select query_text from syste
 
 check_query_log "basic-11" null "SELECT count(*) FROM system_history.login_history WHERE session_id = '$SELECT_SESSION_ID' " "1"
 
-# Lineage assertions mirror the grouped setup suite and clean up its dedicated database.
-run_lineage_suite check
-
 check_log_history_integrity
 
 # Timezone tests - regression test for https://github.com/databendlabs/databend/pull/18059

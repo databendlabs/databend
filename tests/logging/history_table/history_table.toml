@@ -13,6 +13,3 @@ table_name = "login_history"
 
 [[log.history.tables]]
 table_name = "access_history"
-
-[[log.history.tables]]
-table_name = "lineage_history"

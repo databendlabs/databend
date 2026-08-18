@@ -1,0 +1,30 @@
+# The legacy suite creates one View through the lineage-disabled node. Regular setup Views already
+# have their original CREATE_VIEW edges and are omitted from incremental refresh output.
+query I
+SELECT count(*)
+FROM system_history.lineage_history
+WHERE target_database = 'lineage_history_legacy'
+  AND target_name = 'legacy_view'
+  AND lineage_kind = 'CREATE_VIEW'
+----
+0
+
+query TTTTTIIIT rowsort
+REFRESH LINEAGE FOR ALL VIEWS DRY RUN
+----
+VIEW default lineage_history_legacy legacy_view DRY_RUN 1 1 0 NULL
+
+query TTTTTIIIT rowsort
+REFRESH LINEAGE FOR ALL VIEWS
+----
+VIEW default lineage_history_legacy legacy_view REFRESHED 1 1 0 NULL
+
+query BB
+SELECT query_info['query_text']::STRING LIKE 'CREATE VIEW lineage_history_views.src_view%',
+       query_info['backfilled_at'] IS NULL
+FROM system_history.lineage_history
+WHERE target_database = 'lineage_history_views'
+  AND target_name = 'src_view'
+  AND lineage_kind = 'CREATE_VIEW'
+----
+1 1

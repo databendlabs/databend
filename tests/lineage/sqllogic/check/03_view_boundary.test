@@ -38,6 +38,31 @@ FROM get_lineage('lineage_history_views.src_view', 'VIEW', 'UPSTREAM', 1)
 ----
 1 lineage_history_views src lineage_history_views src_view
 
+# Incremental REFRESH leaves an unchanged CREATE_VIEW pattern's original process untouched.
+query B
+SELECT query_info['query_text']::STRING LIKE 'CREATE VIEW lineage_history_views.src_view%'
+FROM system_history.lineage_history
+WHERE target_database = 'lineage_history_views'
+  AND target_name = 'src_view'
+  AND lineage_kind = 'CREATE_VIEW'
+----
+1
+
+# Enumeration spans tenant databases, stored explicit aliases become target column names, and a
+# constant View succeeds with zero edges instead of being reported as an error.
+query ITTTTTT
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
+FROM get_lineage('lineage_history_views_other.other_view.renamed', 'COLUMN', 'UPSTREAM', 1)
+----
+1 lineage_history_views_other src a lineage_history_views_other other_view renamed
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_history_views.constant_view', 'VIEW', 'UPSTREAM', 1)
+----
+0
+
 # CREATE VIEW has no execution pipeline data movement, so its latest process snapshot reports
 # zero query-level scan/write rows while still carrying a non-negative duration.
 query BBB
@@ -109,3 +134,6 @@ FROM get_lineage('lineage_history_views.src.a', 'COLUMN', 'DOWNSTREAM', 2)
 
 statement ok
 DROP DATABASE lineage_history_views
+
+statement ok
+DROP DATABASE lineage_history_views_other

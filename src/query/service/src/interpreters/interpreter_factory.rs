@@ -530,6 +530,9 @@ impl InterpreterFactory {
                 ctx,
                 *describe_view.clone(),
             )?)),
+            Plan::RefreshLineage(refresh_lineage) => Ok(Arc::new(
+                RefreshLineageInterpreter::try_create(ctx, *refresh_lineage.clone())?,
+            )),
 
             // Streams
             Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(
