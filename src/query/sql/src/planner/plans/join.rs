@@ -531,6 +531,20 @@ impl JoinSideColumnStats {
     }
 }
 
+fn add_cardinality_bounds(left: f64, right: f64) -> f64 {
+    left + right
+}
+
+fn multiply_cardinality_bounds(left: f64, right: f64) -> f64 {
+    // IEEE multiplication produces NaN for 0 * infinity, but an empty input
+    // proves an empty pairwise join result even when the other side is unknown.
+    if left == 0.0 || right == 0.0 {
+        0.0
+    } else {
+        left * right
+    }
+}
+
 impl Join {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
@@ -642,13 +656,19 @@ impl Join {
             &right_stat_info.statistics,
             is_unique_join_key,
         );
-        let risk_cardinality_upper_bound = self.cardinality_upper_bound(
-            left_stat_info.max_cardinality.max(left_cardinality),
-            right_stat_info.max_cardinality.max(right_cardinality),
-            &left_stat_info.statistics,
-            &right_stat_info.statistics,
-            is_confident_unique_join_key,
-        );
+        let left_max_cardinality = left_stat_info.cardinality_upper_bound();
+        let right_max_cardinality = right_stat_info.cardinality_upper_bound();
+        let risk_cardinality_upper_bound = self
+            .cardinality_upper_bound(
+                left_max_cardinality,
+                right_max_cardinality,
+                &left_stat_info.statistics,
+                &right_stat_info.statistics,
+                is_confident_unique_join_key,
+            )
+            .unwrap_or_else(|| {
+                self.fallback_cardinality_upper_bound(left_max_cardinality, right_max_cardinality)
+            });
         let mut left_column_stats = JoinSideColumnStats::split(
             Side::Left,
             left_stat_info.statistics.column_stats.clone(),
@@ -697,15 +717,7 @@ impl Join {
         };
         Ok(Arc::new(StatInfo {
             cardinality,
-            max_cardinality: risk_cardinality_upper_bound
-                .map(|bound| bound.max(cardinality))
-                .unwrap_or_else(|| {
-                    cardinality
-                        .max(left_stat_info.max_cardinality)
-                        .max(right_stat_info.max_cardinality)
-                        .max(left_cardinality)
-                        .max(right_cardinality)
-                }),
+            max_cardinality: risk_cardinality_upper_bound.max(cardinality),
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
@@ -757,9 +769,10 @@ impl Join {
                     JoinType::Right | JoinType::RightAny if left_unique => {
                         Some(right_max_cardinality)
                     }
-                    JoinType::Full if left_unique || right_unique => {
-                        Some(left_max_cardinality + right_max_cardinality)
-                    }
+                    JoinType::Full if left_unique || right_unique => Some(add_cardinality_bounds(
+                        left_max_cardinality,
+                        right_max_cardinality,
+                    )),
                     JoinType::Cross
                     | JoinType::LeftSemi
                     | JoinType::RightSemi
@@ -802,7 +815,10 @@ impl Join {
             | JoinType::RightSingle
             | JoinType::LeftMark
             | JoinType::RightAsof => Some(right_max_cardinality),
-            JoinType::FullAsof => Some(left_max_cardinality + right_max_cardinality),
+            JoinType::FullAsof => Some(add_cardinality_bounds(
+                left_max_cardinality,
+                right_max_cardinality,
+            )),
             JoinType::Cross
             | JoinType::Inner
             | JoinType::InnerAny
@@ -811,6 +827,46 @@ impl Join {
             | JoinType::Right
             | JoinType::RightAny
             | JoinType::Full => None,
+        }
+    }
+
+    fn fallback_cardinality_upper_bound(
+        &self,
+        left_max_cardinality: f64,
+        right_max_cardinality: f64,
+    ) -> f64 {
+        match self.join_type {
+            JoinType::Inner | JoinType::InnerAny | JoinType::Cross => {
+                multiply_cardinality_bounds(left_max_cardinality, right_max_cardinality)
+            }
+            JoinType::Left | JoinType::LeftAny => {
+                multiply_cardinality_bounds(left_max_cardinality, right_max_cardinality.max(1.0))
+            }
+            JoinType::Right | JoinType::RightAny => {
+                multiply_cardinality_bounds(right_max_cardinality, left_max_cardinality.max(1.0))
+            }
+            JoinType::Full => {
+                // matched pairs plus all potentially unmatched rows is loose
+                // but remains a true upper bound for every full-join shape.
+                add_cardinality_bounds(
+                    multiply_cardinality_bounds(left_max_cardinality, right_max_cardinality),
+                    add_cardinality_bounds(left_max_cardinality, right_max_cardinality),
+                )
+            }
+            JoinType::LeftSemi
+            | JoinType::LeftAnti
+            | JoinType::LeftSingle
+            | JoinType::RightMark
+            | JoinType::Asof
+            | JoinType::LeftAsof => left_max_cardinality,
+            JoinType::RightSemi
+            | JoinType::RightAnti
+            | JoinType::RightSingle
+            | JoinType::LeftMark
+            | JoinType::RightAsof => right_max_cardinality,
+            JoinType::FullAsof => {
+                add_cardinality_bounds(left_max_cardinality, right_max_cardinality)
+            }
         }
     }
 
@@ -2241,5 +2297,44 @@ mod tests {
         ] {
             assert_eq!(bound(join_type), None, "{join_type:?}");
         }
+    }
+
+    #[test]
+    fn test_non_unique_join_uses_pairwise_risk_bound() -> Result<()> {
+        let left = stat_with_key(
+            10.0,
+            10.0,
+            0,
+            1,
+            10,
+            NdvEstimate::new(10.0, 10.0),
+            StatCount::exact(0),
+        );
+        let right = stat_with_key(
+            20.0,
+            20.0,
+            1,
+            1,
+            20,
+            NdvEstimate::new(20.0, 20.0),
+            StatCount::exact(0),
+        );
+        let join = Join {
+            equi_conditions: vec![JoinEquiCondition::new(
+                column(0, DataType::Number(NumberDataType::UInt64)),
+                column(1, DataType::Number(NumberDataType::UInt64)),
+                false,
+            )],
+            join_type: JoinType::Inner,
+            ..Default::default()
+        };
+
+        let stat = join.derive_join_stats(left, right)?;
+
+        assert_eq!(stat.cardinality, 10.0);
+        assert_eq!(stat.max_cardinality, 200.0);
+        assert!(!is_safe_broadcast_build(&stat, 100));
+        assert_eq!(multiply_cardinality_bounds(0.0, f64::INFINITY), 0.0);
+        Ok(())
     }
 }

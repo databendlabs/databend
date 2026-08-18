@@ -261,7 +261,14 @@ impl NdvEstimate {
             "invalid NDV scaling row count: {num_values:?}"
         );
         let upper = self.upper.min(num_values * selectivity);
-        let lower = (self.lower * selectivity).min(upper);
+        // A selectivity is an expected row fraction, not a proof about which
+        // values survive. Unless no rows are filtered, it cannot preserve a
+        // trusted NDV lower bound.
+        let lower = if selectivity == 1.0 {
+            self.lower.min(upper)
+        } else {
+            0.0
+        };
         let expected = self.expected.map(|expected| {
             estimate_distinct_count_after_row_scale(num_values, expected, selectivity)
                 .clamp(lower, upper)
@@ -512,18 +519,25 @@ mod tests {
     fn test_ndv_selectivity_uses_row_scale_estimate() {
         let ndv = NdvEstimate::exact(10.0).reduce_by_selectivity(100.0, 0.25);
 
-        assert_eq!(ndv.lower, 2.5);
+        assert_eq!(ndv.lower, 0.0);
         assert_eq!(ndv.upper, 10.0);
         assert!((ndv.expected.unwrap() - 9.436864852905273).abs() < 1e-9);
     }
 
     #[test]
-    fn test_ndv_selectivity_clamps_rounding_below_trusted_lower() {
+    fn test_ndv_selectivity_drops_proof_even_for_exact_input() {
         let ndv = NdvEstimate::exact(1.0).reduce_by_selectivity(1.0, 0.2);
 
-        assert_eq!(ndv.lower, 0.2);
-        assert_eq!(ndv.expected, Some(0.2));
+        assert_eq!(ndv.lower, 0.0);
+        assert!((ndv.expected.unwrap() - 0.19999999999999996).abs() < f64::EPSILON);
         assert_eq!(ndv.upper, 0.2);
+    }
+
+    #[test]
+    fn test_ndv_full_selectivity_preserves_proof() {
+        let ndv = NdvEstimate::exact(10.0).reduce_by_selectivity(10.0, 1.0);
+
+        assert_eq!(ndv, NdvEstimate::exact(10.0));
     }
 
     #[test]

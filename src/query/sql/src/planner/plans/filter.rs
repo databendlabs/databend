@@ -99,14 +99,11 @@ impl Operator for Filter {
         } else {
             sb.into_column_stats()
         };
-        let max_cardinality = if stat_info.max_cardinality.is_finite() {
-            cardinality
-        } else {
-            stat_info.max_cardinality
-        };
         Ok(Arc::new(StatInfo {
             cardinality,
-            max_cardinality,
+            // A selectivity estimate is not an output upper bound. A filter
+            // can emit every input row unless its predicate proves otherwise.
+            max_cardinality: stat_info.cardinality_upper_bound(),
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
@@ -114,5 +111,40 @@ impl Operator for Filter {
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::DataSchema;
+    use databend_common_expression::Scalar;
+
+    use super::*;
+    use crate::optimizer::ir::SExpr;
+    use crate::plans::ConstantExpr;
+    use crate::plans::ConstantTableScan;
+    use crate::plans::RelOperator;
+
+    #[test]
+    fn test_filter_estimate_does_not_tighten_risk_bound() -> Result<()> {
+        let input = SExpr::create_leaf(RelOperator::ConstantTableScan(ConstantTableScan {
+            values: vec![],
+            num_rows: 200_000_000,
+            schema: Arc::new(DataSchema::empty()),
+            columns: ColumnSet::new(),
+        }));
+        let filter = Filter {
+            predicates: vec![ScalarExpr::ConstantExpr(ConstantExpr {
+                span: None,
+                value: Scalar::Boolean(false),
+            })],
+        };
+        let expr = SExpr::create_unary(filter.clone(), input);
+
+        let stat = filter.derive_stats(&RelExpr::with_s_expr(&expr))?;
+
+        assert_eq!(stat.cardinality, 0.0);
+        assert_eq!(stat.max_cardinality, 200_000_000.0);
+        Ok(())
     }
 }

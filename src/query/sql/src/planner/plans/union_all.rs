@@ -178,11 +178,13 @@ impl UnionAll {
             .filter_map(Result::transpose)
             .collect::<Result<ColumnStatSet>>()?;
 
+        let left_max_cardinality = left_stat_info.cardinality_upper_bound();
+        let right_max_cardinality = right_stat_info.cardinality_upper_bound();
+        let max_cardinality = left_max_cardinality + right_max_cardinality;
         Ok(Arc::new(StatInfo {
             cardinality,
-            max_cardinality: cardinality
-                .max(left_stat_info.max_cardinality)
-                .max(right_stat_info.max_cardinality),
+            // UNION ALL retains every row from both inputs.
+            max_cardinality: max_cardinality.max(cardinality),
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
@@ -391,6 +393,30 @@ mod tests {
             UnionAll::merge_ndv(&left, &disjoint)?,
             NdvEstimate::exact(15.0)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_union_all_sums_input_risk_bounds() -> Result<()> {
+        let union = UnionAll {
+            left_outputs: vec![],
+            right_outputs: vec![],
+            cte_scan_names: vec![],
+            logical_recursive_cte_id: None,
+            output_indexes: vec![],
+        };
+        let input = |cardinality, max_cardinality| {
+            Arc::new(StatInfo {
+                cardinality,
+                max_cardinality,
+                statistics: Statistics::default(),
+            })
+        };
+
+        let stat = union.derive_union_stats(input(10.0, 100.0), input(20.0, 200.0))?;
+
+        assert_eq!(stat.cardinality, 30.0);
+        assert_eq!(stat.max_cardinality, 300.0);
         Ok(())
     }
 }

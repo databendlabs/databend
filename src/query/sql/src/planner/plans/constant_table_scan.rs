@@ -221,10 +221,14 @@ impl Operator for ConstantTableScan {
                 DEFAULT_HISTOGRAM_BUCKETS,
             )
             .ok();
+            let max_non_null_count = (self.num_rows as u64).saturating_sub(null_count) as f64;
             let column_stat = ColumnStat {
                 min,
                 max,
-                ndv: NdvEstimate::exact(ndv as f64),
+                // The current VALUES implementation uses
+                // approx_count_distinct, so retain its expected value without
+                // treating it as proof of uniqueness.
+                ndv: NdvEstimate::new((ndv as f64).min(max_non_null_count), max_non_null_count),
                 null_count: StatCount::exact(null_count),
                 histogram,
             };

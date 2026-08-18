@@ -76,9 +76,22 @@ impl Default for StatInfo {
 }
 
 impl StatInfo {
+    /// Returns the usable risk upper bound, keeping it no smaller than the
+    /// expected cardinality and treating invalid values as unknown.
+    pub(crate) fn cardinality_upper_bound(&self) -> f64 {
+        if !self.cardinality.is_finite()
+            || self.cardinality < 0.0
+            || self.max_cardinality.is_nan()
+            || self.max_cardinality < 0.0
+        {
+            return f64::INFINITY;
+        }
+        self.max_cardinality.max(self.cardinality)
+    }
+
     pub(crate) fn cardinality_is_severely_underestimated(&self) -> bool {
         let cardinality = self.cardinality;
-        let max_cardinality = self.max_cardinality.max(cardinality);
+        let max_cardinality = self.cardinality_upper_bound();
 
         cardinality.is_finite()
             && cardinality >= 0.0
