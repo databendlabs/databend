@@ -1063,12 +1063,34 @@ impl Operator for Join {
                 return Ok(required);
             }
 
-            let left_cardinality = rel_expr.derive_cardinality_child(0)?.cardinality;
-            let right_cardinality = rel_expr.derive_cardinality_child(1)?.cardinality;
-            let broadcast_child = if left_cardinality <= right_cardinality {
-                0
-            } else {
-                1
+            let settings = ctx.get_settings();
+            let left_stat_info = rel_expr.derive_cardinality_child(0)?;
+            let right_stat_info = rel_expr.derive_cardinality_child(1)?;
+            let enforce_broadcast = settings.get_enforce_broadcast_join()?;
+            let cluster_nodes = ctx.get_cluster().nodes.len();
+            let max_build_rows = settings.get_max_broadcast_join_build_rows()?;
+            let left_allowed = broadcast_build_allowed(
+                enforce_broadcast,
+                cluster_nodes,
+                self.join_type,
+                left_stat_info.as_ref(),
+                max_build_rows,
+            );
+            let right_allowed = broadcast_build_allowed(
+                enforce_broadcast,
+                cluster_nodes,
+                self.join_type,
+                right_stat_info.as_ref(),
+                max_build_rows,
+            );
+            let broadcast_child = match (left_allowed, right_allowed) {
+                (true, true) if left_stat_info.cardinality <= right_stat_info.cardinality => 0,
+                (true, true) | (false, true) => 1,
+                (true, false) => 0,
+                (false, false) => {
+                    required.distribution = Distribution::Serial;
+                    return Ok(required);
+                }
             };
             required.distribution = if child_index == broadcast_child {
                 Distribution::Broadcast
@@ -1183,32 +1205,41 @@ impl Operator for Join {
             && !ctx.get_cluster().is_empty()
             && is_spatial_join_shape(self)
         {
-            return Ok(vec![
-                vec![
+            let settings = ctx.get_settings();
+            let enforce_broadcast = settings.get_enforce_broadcast_join()?;
+            let cluster_nodes = ctx.get_cluster().nodes.len();
+            let max_build_rows = settings.get_max_broadcast_join_build_rows()?;
+            for broadcast_child in 0..=1 {
+                let stat_info = rel_expr.stat_info_child_group(broadcast_child)?;
+                if !broadcast_build_allowed(
+                    enforce_broadcast,
+                    cluster_nodes,
+                    self.join_type,
+                    stat_info.as_ref(),
+                    max_build_rows,
+                ) {
+                    continue;
+                }
+                let mut alternative = vec![
                     RequiredProperty {
-                        distribution: Distribution::Broadcast,
+                        distribution: Distribution::Any,
                     },
                     RequiredProperty {
                         distribution: Distribution::Any,
                     },
-                ],
-                vec![
-                    RequiredProperty {
-                        distribution: Distribution::Any,
-                    },
-                    RequiredProperty {
-                        distribution: Distribution::Broadcast,
-                    },
-                ],
-                vec![
-                    RequiredProperty {
-                        distribution: Distribution::Serial,
-                    },
-                    RequiredProperty {
-                        distribution: Distribution::Serial,
-                    },
-                ],
+                ];
+                alternative[broadcast_child].distribution = Distribution::Broadcast;
+                children_required.push(alternative);
+            }
+            children_required.push(vec![
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
             ]);
+            return Ok(children_required);
         }
 
         // For mark join with nullable eq comparison, ensure to use broadcast for subquery side

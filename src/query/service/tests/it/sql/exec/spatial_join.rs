@@ -129,6 +129,32 @@ async fn test_spatial_join_matches_main_path_and_explain() -> anyhow::Result<()>
         "expected BroadcastSpatialJoin build child to contain broadcast exchange, got:\n{cluster_explain}"
     );
 
+    let guarded_cluster_ctx = fixture
+        .new_query_ctx_with_cluster(
+            ClusterDescriptor::new()
+                .with_node_info("node-a", "127.0.0.1:9090", "node-a", "node-a")
+                .with_node_info("node-b", "127.0.0.1:9091", "node-b", "node-b")
+                .with_local_id("node-a"),
+        )
+        .await?;
+    guarded_cluster_ctx
+        .get_settings()
+        .set_setting("enable_spatial_join".to_string(), "1".to_string())?;
+    guarded_cluster_ctx
+        .get_settings()
+        .set_setting("max_broadcast_join_build_rows".to_string(), "2".to_string())?;
+    let guarded_cluster_explain =
+        run_query_pretty(guarded_cluster_ctx, &format!("EXPLAIN {join_sql}")).await?;
+    assert!(
+        guarded_cluster_explain.contains("SpatialJoin"),
+        "expected guarded cluster plan to retain serial SpatialJoin fallback, got:\n{guarded_cluster_explain}"
+    );
+    assert!(
+        !guarded_cluster_explain.contains("BroadcastSpatialJoin")
+            && !guarded_cluster_explain.contains("exchange type: Broadcast"),
+        "expected broadcast cap to reject unsafe spatial alternatives, got:\n{guarded_cluster_explain}"
+    );
+
     let cluster_ctx = fixture
         .new_query_ctx_with_cluster(
             ClusterDescriptor::new()

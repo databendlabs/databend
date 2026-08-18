@@ -20,6 +20,7 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
 use databend_common_expression::arithmetics_type::ResultTypeOfBinary;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::OwnedDistribution;
@@ -29,6 +30,7 @@ use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::F64;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::Number;
@@ -307,6 +309,21 @@ where
     let cnst = NumberType::<C>::try_downcast_scalar(&cnst.as_ref())
         .map_err(|e| e.to_string())?
         .as_();
+    // Integer addition is injective when the checked output domain does not
+    // overflow, but only if the input conversion is itself injective. Floating
+    // addition can merge adjacent values through rounding even after a
+    // lossless promotion, so it is not proof-grade here.
+    let preserves_ndv_proof = !R::FLOATING
+        && classify_conversion(
+            &DataType::Number(O::data_type()),
+            &DataType::Number(R::data_type()),
+        )
+        .is_lossless_injective();
+    let output_ndv = if preserves_ndv_proof {
+        stat.ndv
+    } else {
+        stat.ndv.reduce(stat.ndv.upper)
+    };
 
     if let Ok(NullableDomain { has_null, value }) =
         NullableType::<NumberType<O>>::try_downcast_domain(&stat.domain)
@@ -325,7 +342,7 @@ where
                         }
                     },
                 }),
-                ndv: stat.ndv,
+                ndv: output_ndv,
                 null_count: stat.null_count,
                 distribution: OwnedDistribution::Unknown,
             }
@@ -339,7 +356,7 @@ where
                 min: domain.min.as_().checked_add(cnst)?,
                 max: domain.max.as_().checked_add(cnst)?,
             }),
-            ndv: stat.ndv,
+            ndv: output_ndv,
             null_count: stat.null_count,
             distribution: OwnedDistribution::Unknown,
         }
@@ -628,5 +645,44 @@ mod tests {
         assert_eq!(output.ndv.lower, 0.0);
         assert_eq!(output.ndv.expected, Some(2.0));
         assert_eq!(output.ndv.upper, 2.0);
+    }
+
+    #[test]
+    fn test_plus_stat_drops_proof_across_lossy_numeric_promotion() {
+        let input = ArgStat {
+            domain: NumberType::<u64>::upcast_domain(SimpleDomain {
+                min: 9_007_199_254_740_992,
+                max: 9_007_199_254_740_993,
+            }),
+            ndv: NdvEstimate::proven_exact(2.0),
+            null_count: StatCount::exact(0),
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let zero = Scalar::Number(NumberScalar::Float64(0.0.into()));
+
+        let output = derive_plus_with_const::<F64, u64, F64>(&zero, &input)
+            .unwrap()
+            .expect("addition by a floating constant should derive statistics");
+
+        assert_eq!(output.ndv.lower, 0.0);
+        assert_eq!(output.ndv.expected, Some(2.0));
+        assert_eq!(output.ndv.upper, 2.0);
+    }
+
+    #[test]
+    fn test_plus_stat_preserves_proof_for_lossless_integer_promotion() {
+        let input = ArgStat {
+            domain: NumberType::<u8>::upcast_domain(SimpleDomain { min: 1, max: 3 }),
+            ndv: NdvEstimate::proven_exact(3.0),
+            null_count: StatCount::exact(0),
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let one = Scalar::Number(NumberScalar::UInt8(1));
+
+        let output = derive_plus_with_const::<u8, u8, u16>(&one, &input)
+            .unwrap()
+            .expect("lossless integer addition should derive statistics");
+
+        assert_eq!(output.ndv, NdvEstimate::proven_exact(3.0));
     }
 }
