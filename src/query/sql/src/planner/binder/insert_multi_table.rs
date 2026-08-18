@@ -187,12 +187,12 @@ impl Binder {
             let table_name = table_identifier.table_name();
             let branch_name = table_identifier.branch_name();
 
-            let branch_name = self.resolve_write_branch_with_wap_branch(
+            let branch_name = self.resolve_write_branch_with_session_branch(
                 &catalog_name,
                 &database_name,
                 &table_name,
                 branch_name,
-                source_bind_context.suppress_wap_branch,
+                source_bind_context.suppress_session_branch,
             )?;
             let target_table = self
                 .ctx

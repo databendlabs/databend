@@ -202,14 +202,14 @@ impl Binder {
             }
             prev_cte_map.insert(name.clone(), cte_info.clone());
         }
-        // Fresh CTE context: preserve view WAP suppression, but not agg-index state
+        // Fresh CTE context: preserve view session branch suppression, but not agg-index state
         // because agg-index queries reject WITH.
         let mut cte_bind_context = BindContext {
             cte_context: CteContext {
                 cte_name: Some(cte_name.to_string()),
                 cte_map: prev_cte_map,
             },
-            suppress_wap_branch: parent.suppress_wap_branch,
+            suppress_session_branch: parent.suppress_session_branch,
             binding_views: parent.binding_views.clone(),
             ..Default::default()
         };

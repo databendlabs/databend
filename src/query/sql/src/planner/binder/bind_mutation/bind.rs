@@ -145,12 +145,12 @@ impl Binder {
             target_table_identifier.table_name_alias(),
         );
 
-        let branch_name = self.resolve_write_branch_with_wap_branch(
+        let branch_name = self.resolve_write_branch_with_session_branch(
             &catalog_name,
             &database_name,
             &table_name,
             branch_name,
-            bind_context.suppress_wap_branch,
+            bind_context.suppress_session_branch,
         )?;
 
         // Add table lock before execution.

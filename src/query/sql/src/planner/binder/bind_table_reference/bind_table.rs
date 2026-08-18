@@ -168,16 +168,16 @@ impl Binder {
             } else {
                 table_name.clone()
             };
-            // Persisted definitions ignore session `wap_branch`; explicit branches win.
-            let suppress_wap_branch = bind_context.should_suppress_wap_branch();
-            match self.resolve_read_table_with_wap_branch(
+            // Persisted definitions ignore `session_branch`; explicit branches win.
+            let suppress_session_branch = bind_context.should_suppress_session_branch();
+            match self.resolve_read_table_with_session_branch(
                 &catalog,
                 &database,
                 &table_name,
                 branch_name.clone(),
                 navigation.as_ref(),
                 max_batch_size,
-                suppress_wap_branch,
+                suppress_session_branch,
             ) {
                 Ok(resolved) => (resolved.table, resolved.branch),
                 Err(e) => {

@@ -33,7 +33,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TARGET_LAG;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ddl::table::AnalyzeCreateTableResult;
-use crate::binder::wap_branch::reject_wap_branch;
+use crate::binder::session_branch::reject_session_branch;
 use crate::plans::CreateDynamicTablePlan;
 use crate::plans::Plan;
 
@@ -58,7 +58,7 @@ impl Binder {
             as_query,
         } = stmt;
 
-        reject_wap_branch(self.ctx.as_ref(), "CREATE DYNAMIC TABLE")?;
+        reject_session_branch(self.ctx.as_ref(), "CREATE DYNAMIC TABLE")?;
         let (catalog_name, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 

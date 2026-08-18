@@ -1675,9 +1675,9 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("wap_branch", DefaultSettingValue {
+                ("session_branch", DefaultSettingValue {
                     value: UserSettingValue::String("".to_string()),
-                    desc: "WAP branch for table reads and writes. Empty string disables.",
+                    desc: "Branch used for eligible unqualified table reads and writes in this session. Missing branches cause an error. Empty string disables.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Session,
                     range: None,

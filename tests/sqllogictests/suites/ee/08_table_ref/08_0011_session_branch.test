@@ -16,13 +16,13 @@ statement ok
 set enable_experimental_table_ref=1;
 
 statement ok
-DROP DATABASE IF EXISTS test_wap_branch
+DROP DATABASE IF EXISTS test_session_branch
 
 statement ok
-CREATE DATABASE test_wap_branch
+CREATE DATABASE test_session_branch
 
 statement ok
-USE test_wap_branch
+USE test_session_branch
 
 statement ok
 CREATE TABLE t1(a INT, b STRING)
@@ -60,7 +60,7 @@ CREATE TEMP TABLE t_temp(a INT)
 statement ok
 INSERT INTO t_temp VALUES (8)
 
-## wap_branch empty: normal behavior.
+## Empty `session_branch`: normal behavior.
 query IT
 SELECT * FROM t1 ORDER BY a
 ----
@@ -68,9 +68,9 @@ SELECT * FROM t1 ORDER BY a
 2 b
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
-## Reads use an existing WAP branch.
+## Reads use an existing session branch.
 query IT
 SELECT * FROM t1 ORDER BY a
 ----
@@ -78,17 +78,15 @@ SELECT * FROM t1 ORDER BY a
 2 b
 3 c
 
-## WAP branch reads are resolved per table; missing branches fall back to base.
-query IT
+## Every eligible table must have the session branch; queries never mix branch and base tables.
+statement error .*Unknown branch 'dev'.*
 SELECT t1.a, t_no_branch.c FROM t1 JOIN t_no_branch ON t1.a = t_no_branch.a ORDER BY t1.a
-----
-3 base_only
 
-## FUSE writes use an existing WAP branch.
+## FUSE writes use an existing session branch.
 statement ok
 INSERT INTO t1 VALUES (4, 'd')
 
-## Unqualified reads continue to use the WAP branch.
+## Unqualified reads continue to use the session branch.
 query IT
 SELECT * FROM t1 ORDER BY a
 ----
@@ -97,7 +95,7 @@ SELECT * FROM t1 ORDER BY a
 3 c
 4 d
 
-## Mutations use the existing WAP branch.
+## Mutations use the existing session branch.
 statement ok
 UPDATE t1 SET b = 'branch_updated' WHERE a = 1
 
@@ -108,7 +106,7 @@ SELECT * FROM t1/dev WHERE a = 1
 
 ## Base table is unchanged.
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 query IT
 SELECT * FROM t1 ORDER BY a
@@ -116,9 +114,9 @@ SELECT * FROM t1 ORDER BY a
 1 a
 2 b
 
-## Explicit branch targets take precedence over wap_branch.
+## Explicit branch targets take precedence over `session_branch`.
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 query IT
 SELECT * FROM t1/other ORDER BY a
@@ -138,7 +136,7 @@ SELECT * FROM t1/other ORDER BY a
 5 e
 6 explicit
 
-## Explicit branch destructive writes take precedence over wap_branch.
+## Explicit branch destructive writes take precedence over `session_branch`.
 statement ok
 TRUNCATE TABLE t1/other
 
@@ -155,31 +153,25 @@ SELECT * FROM t1/dev ORDER BY a
 3 c
 4 d
 
-## Missing WAP branch does not affect reads and errors for writes.
+## Missing session branches fail for reads and writes.
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 statement ok
-SET wap_branch = 'nonexistent'
+SET session_branch = 'nonexistent'
 
 statement error .*Unknown branch 'nonexistent'.*
 INSERT INTO t1 VALUES (99, 'fail')
 
 statement error .*Unknown branch 'nonexistent'.*
-TRUNCATE TABLE t1
+SHOW STATISTICS FROM TABLE t1
 
-query IT
-SELECT * FROM t1 ORDER BY a
-----
-1 a
-2 b
-
-## Memory reads fall back to base, but writes fail because the WAP branch is missing.
+## Engines without branch support ignore `session_branch` for reads; writes remain fail-closed.
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 statement error .*Unknown branch 'dev'.*
 INSERT INTO t_memory VALUES (8)
@@ -199,7 +191,7 @@ SELECT * FROM t_temp ORDER BY a
 8
 9
 
-## Persisted definitions ignore the session wap_branch and resolve base tables; an
+## Persisted definitions ignore `session_branch` and resolve base tables; an
 ## explicit `table/branch` inside a body still wins.
 statement ok
 ALTER TABLE t_no_branch CREATE BRANCH dev
@@ -214,9 +206,9 @@ statement ok
 INSERT INTO t_no_branch/dev VALUES (4, 'branch_only', 40)
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
-## DESCRIBE and SHOW FIELDS follow the session WAP branch.
+## DESCRIBE and SHOW FIELDS follow `session_branch`.
 query TTTTT
 DESCRIBE t_no_branch
 ----
@@ -240,7 +232,7 @@ d int YES (empty) NULL NULL
 
 ## DESCRIBE and SHOW COLUMNS apply the session branch to branch-capable tables without fallback.
 statement ok
-SET wap_branch = 'nonexistent'
+SET session_branch = 'nonexistent'
 
 statement error .*Unknown branch 'nonexistent'.*
 DESCRIBE t_no_branch
@@ -254,7 +246,7 @@ DESCRIBE t_memory
 ----
 a INT YES NULL (empty)
 
-## An explicit branch takes precedence over the session WAP branch.
+## An explicit branch takes precedence over `session_branch`.
 query TTTTT
 DESCRIBE t_no_branch/dev
 ----
@@ -277,96 +269,96 @@ c varchar(16382) YES (empty) NULL NULL
 d int YES (empty) NULL NULL
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 ## CREATE/ALTER VIEW are allowed under a branch session; the body resolves to base.
 statement ok
-CREATE VIEW v_wap(a, c) AS SELECT a, c FROM t_no_branch
+CREATE VIEW v_session(a, c) AS SELECT a, c FROM t_no_branch
 
 statement ok
-ALTER VIEW v_wap(a, c) AS SELECT a, c FROM t_no_branch
+ALTER VIEW v_session(a, c) AS SELECT a, c FROM t_no_branch
 
 ## CREATE/REFRESH AGGREGATING INDEX are allowed under a branch session; the index
 ## query resolves base, anchoring materialized data to the base table.
 statement ok
-DROP AGGREGATING INDEX IF EXISTS idx_wap_base
+DROP AGGREGATING INDEX IF EXISTS idx_session_base
 
 statement ok
-CREATE AGGREGATING INDEX idx_wap_base AS SELECT SUM(a) FROM t_no_branch
+CREATE AGGREGATING INDEX idx_session_base AS SELECT SUM(a) FROM t_no_branch
 
 statement ok
-REFRESH AGGREGATING INDEX idx_wap_base
+REFRESH AGGREGATING INDEX idx_session_base
 
 ## Dynamic tables stay rejected under a branch session: branch refresh semantics are
 ## not defined yet.
-statement error .*wap_branch.*
-CREATE DYNAMIC TABLE dt_wap TARGET_LAG = DOWNSTREAM WAREHOUSE = 'wh' AS SELECT * FROM t_no_branch
+statement error .*session_branch.*
+CREATE DYNAMIC TABLE dt_session TARGET_LAG = DOWNSTREAM WAREHOUSE = 'wh' AS SELECT * FROM t_no_branch
 
 ## The view body ignores the session branch and returns base data.
 query IT
-SELECT * FROM v_wap ORDER BY a
+SELECT * FROM v_session ORDER BY a
 ----
 3 base_only
 
-## A directly invoked SQL UDTF inherits the session WAP branch.
+## A directly invoked SQL UDTF inherits `session_branch`.
 statement ok
-CREATE OR REPLACE FUNCTION wap_direct_udtf() RETURNS TABLE (a INT, c STRING) AS $$ SELECT a, c FROM t_no_branch $$
+CREATE OR REPLACE FUNCTION session_direct_udtf() RETURNS TABLE (a INT, c STRING) AS $$ SELECT a, c FROM t_no_branch $$
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 query IT
-SELECT * FROM wap_direct_udtf() ORDER BY a
+SELECT * FROM session_direct_udtf() ORDER BY a
 ----
 3 base_only
 4 branch_only
 
-## A SQL UDTF invoked from a persisted view inherits the view's effective WAP
+## A SQL UDTF invoked from a persisted view inherits the view's effective session branch
 ## suppression. SELECT * deliberately distinguishes the base schema (a, c) from
 ## the dev schema (a, c, d), so lost suppression also causes a schema mismatch.
 statement ok
-CREATE OR REPLACE FUNCTION wap_view_udtf() RETURNS TABLE (a INT, c STRING) AS $$ SELECT * FROM t_no_branch $$
+CREATE OR REPLACE FUNCTION session_view_udtf() RETURNS TABLE (a INT, c STRING) AS $$ SELECT * FROM t_no_branch $$
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 statement ok
-CREATE VIEW v_wap_udtf AS SELECT * FROM wap_view_udtf()
+CREATE VIEW v_session_udtf AS SELECT * FROM session_view_udtf()
 
 query IT
-SELECT * FROM v_wap_udtf ORDER BY a
+SELECT * FROM v_session_udtf ORDER BY a
 ----
 3 base_only
 
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_wap_udtf' AND branch = ''
+SELECT count(*) FROM system.columns WHERE database = 'test_session_branch' AND `table` = 'v_session_udtf' AND branch = ''
 ----
 2
 
 statement ok
-DROP VIEW v_wap_udtf
+DROP VIEW v_session_udtf
 
 statement ok
-DROP FUNCTION wap_view_udtf
+DROP FUNCTION session_view_udtf
 
 statement ok
-DROP FUNCTION wap_direct_udtf
+DROP FUNCTION session_direct_udtf
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 statement ok
-DROP AGGREGATING INDEX IF EXISTS idx_wap_base
+DROP AGGREGATING INDEX IF EXISTS idx_session_base
 
-## A base-table aggregating index must not satisfy a WAP branch query.
+## A base-table aggregating index must not satisfy a session branch query.
 statement ok
 SET enable_aggregating_index_scan = 1
 
 statement ok
-CREATE AGGREGATING INDEX idx_wap_scan AS SELECT SUM(a) FROM t_no_branch
+CREATE AGGREGATING INDEX idx_session_scan AS SELECT SUM(a) FROM t_no_branch
 
 statement ok
-REFRESH AGGREGATING INDEX idx_wap_scan
+REFRESH AGGREGATING INDEX idx_session_scan
 
 ## No branch: base SUM(a) over base rows.
 query I
@@ -375,7 +367,7 @@ SELECT SUM(a) FROM t_no_branch
 3
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 ## Branch read must reflect branch data (3 + 4 = 7), not the base index (3).
 query I
@@ -384,21 +376,21 @@ SELECT SUM(a) FROM t_no_branch
 7
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 statement ok
-DROP AGGREGATING INDEX idx_wap_scan
+DROP AGGREGATING INDEX idx_session_scan
 
 statement ok
 SET enable_aggregating_index_scan = 0
 
 ## An explicit `table/branch` inside a view body is always honored, independent of
-## the session wap_branch.
+## `session_branch`.
 statement ok
 CREATE VIEW v_branch(a, c) AS SELECT a, c FROM t_no_branch/dev
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 query IT
 SELECT * FROM v_branch ORDER BY a
@@ -407,12 +399,12 @@ SELECT * FROM v_branch ORDER BY a
 4 branch_only
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 statement ok
 DROP VIEW v_branch
 
-## Schema inference for a `SELECT *` view must ignore the session wap_branch and
+## Schema inference for a `SELECT *` view must ignore `session_branch` and
 ## resolve base (a, c), not the dev branch's extra `d`. All suppressed-planning entry
 ## points must agree: system.columns, DESCRIBE VIEW, DESCRIBE <view>,
 ## system.statistics, and CREATE TABLE ... LIKE view.
@@ -420,16 +412,16 @@ statement ok
 CREATE VIEW v_star AS SELECT * FROM t_no_branch
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
-## Under wap_branch=dev the body still resolves base: 2 columns, base data.
+## Under `session_branch=dev` the body still resolves base: 2 columns, base data.
 query IT
 SELECT * FROM v_star ORDER BY a
 ----
 3 base_only
 
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_star' AND branch = ''
+SELECT count(*) FROM system.columns WHERE database = 'test_session_branch' AND `table` = 'v_star' AND branch = ''
 ----
 2
 
@@ -446,7 +438,7 @@ a INT YES NULL (empty)
 c VARCHAR YES NULL (empty)
 
 query I
-SELECT count(*) FROM system.statistics WHERE database = 'test_wap_branch' AND `table` = 'v_star' AND branch = ''
+SELECT count(*) FROM system.statistics WHERE database = 'test_session_branch' AND `table` = 'v_star' AND branch = ''
 ----
 2
 
@@ -455,7 +447,7 @@ statement ok
 CREATE TABLE t_like_v_star LIKE v_star
 
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 't_like_v_star' AND branch = ''
+SELECT count(*) FROM system.columns WHERE database = 'test_session_branch' AND `table` = 't_like_v_star' AND branch = ''
 ----
 2
 
@@ -463,7 +455,7 @@ statement ok
 DROP TABLE t_like_v_star
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 statement ok
 DROP VIEW v_star
@@ -471,7 +463,7 @@ DROP VIEW v_star
 ## CREATE/ALTER VIEW validation resolves base tables, not the session branch.
 ## (1) A body referencing a branch-only column is rejected: it does not exist on base.
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 statement error
 CREATE VIEW v_reject AS SELECT a, d FROM t_no_branch
@@ -488,7 +480,7 @@ x INT YES NULL (empty)
 y VARCHAR YES NULL (empty)
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 statement ok
 DROP VIEW v_alias
@@ -527,9 +519,9 @@ SELECT a, b, change$action, change$is_update FROM t_changes/other CHANGES(INFORM
 21 other_after_stream INSERT 0
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
-## CTAS reads through the WAP branch; metadata DDL still targets the base table.
+## CTAS reads through the session branch; metadata DDL still targets the base table.
 statement ok
 CREATE TABLE t_ctas AS SELECT * FROM t1
 
@@ -542,9 +534,9 @@ SELECT * FROM t_ctas ORDER BY a
 4 d
 
 statement ok
-ALTER TABLE t1 COMMENT='wap ddl keeps base semantics'
+ALTER TABLE t1 COMMENT='session ddl keeps base semantics'
 
-## Branch management keeps its base-table semantics under wap_branch.
+## Branch management keeps its base-table semantics under `session_branch`.
 statement ok
 ALTER TABLE t1 CREATE BRANCH another
 
@@ -554,7 +546,7 @@ ALTER TABLE t1 DROP BRANCH another
 statement ok
 DROP TABLE t_ctas
 
-## TRUNCATE is a destructive write and uses the WAP branch.
+## TRUNCATE is a destructive write and uses the session branch.
 statement ok
 TRUNCATE TABLE t1
 
@@ -564,7 +556,7 @@ SELECT count() FROM t1/dev
 0
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 query IT
 SELECT * FROM t1 ORDER BY a
@@ -573,12 +565,12 @@ SELECT * FROM t1 ORDER BY a
 2 b
 
 query T
-SELECT comment FROM system.tables WHERE database = 'test_wap_branch' AND name = 't1'
+SELECT comment FROM system.tables WHERE database = 'test_session_branch' AND name = 't1'
 ----
-wap ddl keeps base semantics
+session ddl keeps base semantics
 
-## Planner cache must distinguish the same SQL text across wap_branch values. The
-## cache validates session setting changes, and wap_branch is a session setting, so a
+## Planner cache must distinguish the same SQL text across `session_branch` values. The
+## cache validates session setting changes, and `session_branch` is a session setting, so a
 ## base-resolved plan is never reused for a branch-routed read (or vice versa).
 statement ok
 SET enable_planner_cache = 1
@@ -601,15 +593,21 @@ SELECT * FROM t_cache ORDER BY a
 ----
 1
 
-## Same SQL text under wap_branch=dev must route to the branch, not reuse the base plan.
+## Same SQL text under `session_branch=dev` must route to the branch, not reuse the base plan.
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 query I
 SELECT * FROM t_cache ORDER BY a
 ----
 1
 2
+
+## Metadata reads use the same session branch.
+query TTTIIIITTIT
+SHOW STATISTICS FROM TABLE t_cache
+----
+test_session_branch t_cache/dev a 2 2 2 0 1 2 4 (empty)
 
 statement ok
 SET enable_planner_cache = 0
@@ -626,23 +624,23 @@ statement ok
 CREATE VIEW v_cache_star AS SELECT * FROM t_no_branch
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 ## This exact text matches the stored view body, priming the branch-routed plan
 ## under the same cache key.
 query ITI rowsort
-SELECT * FROM test_wap_branch.t_no_branch
+SELECT * FROM test_session_branch.t_no_branch
 ----
 3 base_only 30
 4 branch_only 40
 
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_cache_star' AND branch = ''
+SELECT count(*) FROM system.columns WHERE database = 'test_session_branch' AND `table` = 'v_cache_star' AND branch = ''
 ----
 2
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 statement ok
 SET enable_planner_cache = 0
@@ -653,7 +651,7 @@ DROP VIEW v_cache_star
 ## Regression: an auto-materialized CTE inside a persisted definition must inherit the
 ## suppression context. A CTE referenced more than once is auto-materialized; its
 ## producer is bound in a fresh context that previously dropped
-## binding_views/suppress_wap_branch and read the session branch. Must resolve base.
+## binding_views/suppress_session_branch and read the session branch. Must resolve base.
 statement ok
 SET enable_auto_materialize_cte = 1
 
@@ -666,9 +664,9 @@ SELECT * FROM v_mcte ORDER BY a
 3 base_only
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
-## Under wap_branch=dev the materialized CTE producer must still resolve base, so the
+## Under `session_branch=dev` the materialized CTE producer must still resolve base, so the
 ## view returns base data (single row), not the dev branch.
 query IT
 SELECT * FROM v_mcte ORDER BY a
@@ -677,23 +675,23 @@ SELECT * FROM v_mcte ORDER BY a
 
 ## Suppressed schema inference (system.columns) must report the base schema (2).
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_mcte' AND branch = ''
+SELECT count(*) FROM system.columns WHERE database = 'test_session_branch' AND `table` = 'v_mcte' AND branch = ''
 ----
 2
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 statement ok
 DROP VIEW v_mcte
 
-## A view body with JOIN/WHERE subqueries must keep WAP suppression after
+## A view body with JOIN/WHERE subqueries must keep session branch suppression after
 ## BindContext::replace(). The dev branch has a=4; the base table does not.
 statement ok
 CREATE VIEW v_join AS SELECT l.a, l.c FROM t_no_branch l JOIN t_no_branch r ON l.a = r.a WHERE EXISTS (SELECT 1 FROM t_no_branch s WHERE s.a = 4)
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 query I
 SELECT count(*) FROM v_join
@@ -701,18 +699,18 @@ SELECT count(*) FROM v_join
 0
 
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_join' AND branch = ''
+SELECT count(*) FROM system.columns WHERE database = 'test_session_branch' AND `table` = 'v_join' AND branch = ''
 ----
 2
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 statement ok
 DROP VIEW v_join
 
 ## Internal ALTER TABLE maintenance replans must target the ALTER plan table, not
-## the session wap_branch.
+## `session_branch`.
 statement ok
 CREATE TABLE t_ddl_replan(a INT)
 
@@ -723,14 +721,14 @@ statement ok
 ALTER TABLE t_ddl_replan CREATE BRANCH dev
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 ## The generated UPDATE for uuid() must update base, not t_ddl_replan/dev.
 statement ok
 ALTER TABLE t_ddl_replan ADD COLUMN b STRING DEFAULT uuid()
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 query IB
 SELECT a, b IS NOT NULL FROM t_ddl_replan
@@ -747,13 +745,13 @@ statement ok
 ALTER TABLE t_ddl_replan CREATE BRANCH other
 
 statement ok
-SET wap_branch = 'other'
+SET session_branch = 'other'
 
 statement ok
 ALTER TABLE t_ddl_replan/dev ADD COLUMN c STRING DEFAULT uuid()
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 query IB
 SELECT a, c IS NOT NULL FROM t_ddl_replan/dev
@@ -768,7 +766,7 @@ SELECT a, b IS NOT NULL FROM t_ddl_replan/other
 statement ok
 DROP TABLE t_ddl_replan
 
-## The generated SELECT->INSERT rewrite must also suppress session wap_branch.
+## The generated SELECT->INSERT rewrite must also suppress `session_branch`.
 statement ok
 CREATE TABLE t_ddl_rewrite(a INT, c STRING)
 
@@ -782,13 +780,13 @@ statement ok
 INSERT INTO t_ddl_rewrite/dev VALUES (2, 'branch')
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 statement ok
 ALTER TABLE t_ddl_rewrite ADD COLUMN s STRING AS (concat(c, '-stored')) STORED
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 query ITT
 SELECT a, c, s FROM t_ddl_rewrite ORDER BY a
@@ -812,16 +810,16 @@ statement ok
 SET enable_table_snapshot_stats = 1
 
 statement ok
-SET wap_branch = 'dev'
+SET session_branch = 'dev'
 
 statement ok
 ANALYZE TABLE t_no_branch
 
 statement ok
-UNSET wap_branch
+UNSET session_branch
 
 query B
-SELECT histogram LIKE '%min: "3"%' AND histogram NOT LIKE '%min: "4"%' FROM system.statistics WHERE database = 'test_wap_branch' AND `table` = 't_no_branch' AND branch = '' AND column_name = 'a'
+SELECT histogram LIKE '%min: "3"%' AND histogram NOT LIKE '%min: "4"%' FROM system.statistics WHERE database = 'test_session_branch' AND `table` = 't_no_branch' AND branch = '' AND column_name = 'a'
 ----
 1
 
@@ -833,10 +831,10 @@ SET enable_table_snapshot_stats = 0
 
 ## Guard: an explicit MATERIALIZED CTE cannot live in a persisted view body
 ## (CREATE/ALTER VIEW validate with a Planner that has no subquery executor, so the
-## CTAS errors first). This is why `m_cte_to_temp_table` need not forward WAP
+## CTAS errors first). This is why `m_cte_to_temp_table` need not forward session branch
 ## suppression. If this ever passes, restore that forwarding (see NOTE in bind.rs).
 statement error
 CREATE VIEW v_mat_cte_in_view_rejected AS WITH c AS MATERIALIZED (SELECT a, c FROM t_no_branch) SELECT a FROM c
 
 statement ok
-DROP DATABASE test_wap_branch
+DROP DATABASE test_session_branch

@@ -445,9 +445,17 @@ impl Binder {
 
         if let ShowStatsTarget::Table { table, branch } = target {
             let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
-            let branch_name = branch
+            let explicit_branch = branch
                 .as_ref()
                 .map(|branch| normalize_identifier(branch, &self.name_resolution_ctx).name);
+            let branch_name = self
+                .resolve_schema_branch(
+                    &catalog_name,
+                    database.as_str(),
+                    &table_name,
+                    explicit_branch,
+                )
+                .await?;
             self.ctx
                 .get_table_with_branch(
                     &catalog_name,
@@ -1758,12 +1766,12 @@ impl Binder {
         let catalog = table_identifier.catalog_name();
         let database = table_identifier.database_name();
         let table = table_identifier.table_name();
-        let branch = self.resolve_write_branch_with_wap_branch(
+        let branch = self.resolve_write_branch_with_session_branch(
             &catalog,
             &database,
             &table,
             table_identifier.branch_name(),
-            bind_context.suppress_wap_branch,
+            bind_context.suppress_session_branch,
         )?;
 
         Ok(Plan::TruncateTable(Box::new(TruncateTablePlan {
@@ -2411,7 +2419,7 @@ impl Binder {
                 if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
                         // Replay stored view SQL against base tables.
-                        let mut planner = Planner::new_without_wap_branch(self.ctx.clone());
+                        let mut planner = Planner::new_without_session_branch(self.ctx.clone());
                         let (plan, _) = planner.plan_sql(query).await?;
                         Ok(AnalyzeCreateTableResult {
                             schema: infer_table_schema(&plan.schema())?,

@@ -48,6 +48,7 @@ mod report;
 mod scalar;
 mod scalar_common;
 mod select;
+pub(crate) mod session_branch;
 mod set;
 mod set_priority;
 mod show;
@@ -60,7 +61,6 @@ mod table_args;
 mod udf;
 mod util;
 mod virtual_column;
-pub(crate) mod wap_branch;
 mod window;
 
 pub use aggregate::AggregateInfo;

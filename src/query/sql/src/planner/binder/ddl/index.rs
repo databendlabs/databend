@@ -63,8 +63,8 @@ use crate::NameResolutionContext;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 use crate::binder::Binder;
+use crate::binder::session_branch::warn_session_branch_ignored;
 use crate::binder::util::TableIdentifier;
-use crate::binder::wap_branch::warn_wap_branch_ignored;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimize;
@@ -225,7 +225,7 @@ impl Binder {
             sync_creation,
         } = stmt;
 
-        warn_wap_branch_ignored(self.ctx.as_ref(), "CREATE AGGREGATING INDEX")?;
+        warn_session_branch_ignored(self.ctx.as_ref(), "CREATE AGGREGATING INDEX")?;
 
         // check if query support index
         {
@@ -367,7 +367,7 @@ impl Binder {
         limit: Option<u64>,
         segment_locs: Option<Vec<Location>>,
     ) -> Result<RefreshIndexPlan> {
-        warn_wap_branch_ignored(self.ctx.as_ref(), "REFRESH AGGREGATING INDEX")?;
+        warn_session_branch_ignored(self.ctx.as_ref(), "REFRESH AGGREGATING INDEX")?;
         let tokens = tokenize_sql(&index_meta.query)?;
         let (mut stmt, _) = parse_sql(&tokens, self.dialect)?;
 
