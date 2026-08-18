@@ -34,10 +34,18 @@ query IIII
 select * from t1 right join t2 on t1.a = t2.a order by t1.a, t2.a
 ----
 
-# Stopping the probe pipeline also avoids evaluating its join key.
+# A distributed hash shuffle may evaluate the probe key before the receiving
+# join observes its empty build. Keep this canary local so it tests the join's
+# probe pipeline rather than upstream distributed work already in flight.
+statement ok
+set enforce_local = 1;
+
 query I
 select t1.a from t1 right join t2 on to_int64(concat('invalid-', to_string(t1.a))) = t2.a
 ----
+
+statement ok
+unset enforce_local;
 
 statement ok
 set force_join_data_spill = 1;
