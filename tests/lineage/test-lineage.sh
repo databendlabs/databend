@@ -93,10 +93,10 @@ done
 
 cp ./scripts/ci/deploy/config/databend-query-node-1.toml \
     ./.databend/config/databend-query-node-1.toml
-cat ./tests/lineage/config/lineage_history.toml \
+cat ./tests/lineage/config/lineage.toml \
     >> ./.databend/config/databend-query-node-1.toml
 
-# Node 2 intentionally has no lineage_history configuration. Views created through its HTTP port
+# Node 2 intentionally has no lineage configuration. Views created through its HTTP port
 # model objects that predate lineage capture while both nodes continue to share the same Meta.
 cp ./scripts/ci/deploy/config/databend-query-node-2.toml \
     ./.databend/config/databend-query-node-2.toml

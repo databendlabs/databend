@@ -141,6 +141,9 @@ pub struct Config {
     pub query: QueryConfig,
 
     #[clap(flatten)]
+    pub lineage: LineageConfig,
+
+    #[clap(flatten)]
     pub log: LogConfig,
 
     #[clap(flatten)]
@@ -2246,6 +2249,28 @@ pub struct TaskConfig {
     pub on: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct LineageConfig {
+    /// Enables query lineage capture and persistence.
+    #[clap(
+        long = "lineage-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub lineage_on: bool,
+
+    /// Retention period in hours for DML lineage. When omitted, lineage is retained permanently.
+    #[clap(long = "lineage-retention", value_name = "HOURS")]
+    #[serde(rename = "retention")]
+    pub lineage_retention: Option<usize>,
+}
+
+impl LineageConfig {
+    pub fn enabled(&self) -> bool {
+        self.lineage_on
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FileLogConfig {
@@ -3618,6 +3643,7 @@ mod config_converters {
         fn from(inner: InnerConfig) -> Self {
             Self {
                 query: inner.query.into(),
+                lineage: inner.lineage,
                 log: inner.log.into(),
                 task: inner.task,
                 meta: inner.meta,
@@ -3638,6 +3664,7 @@ mod config_converters {
         fn try_into(self) -> Result<InnerConfig> {
             let Config {
                 query,
+                mut lineage,
                 log,
                 task,
                 meta,
@@ -3669,10 +3696,43 @@ mod config_converters {
             }
 
             let spill = convert_local_spill_config(spill)?;
+            let mut log: InnerLogConfig = log.try_into()?;
+
+            const LINEAGE_HISTORY_TABLE: &str = "lineage_history";
+            if lineage.lineage_on {
+                log.history.on = true;
+                if let Some(table) = log
+                    .history
+                    .tables
+                    .iter_mut()
+                    .find(|table| table.table_name.eq_ignore_ascii_case(LINEAGE_HISTORY_TABLE))
+                {
+                    if lineage.lineage_retention.is_some() {
+                        table.retention = lineage.lineage_retention;
+                    }
+                } else {
+                    log.history.tables.push(InnerHistoryTableConfig {
+                        table_name: LINEAGE_HISTORY_TABLE.to_string(),
+                        retention: lineage.lineage_retention,
+                        invisible: false,
+                    });
+                }
+            } else if log.history.is_table_enabled(LINEAGE_HISTORY_TABLE) {
+                // Keep the original history-table configuration working while feature-level
+                // configuration replaces it in deployments that need old-node compatibility.
+                lineage.lineage_on = true;
+                lineage.lineage_retention = log
+                    .history
+                    .tables
+                    .iter()
+                    .find(|table| table.table_name.eq_ignore_ascii_case(LINEAGE_HISTORY_TABLE))
+                    .and_then(|table| table.retention);
+            }
 
             Ok(InnerConfig {
                 query: query.try_into()?,
-                log: log.try_into()?,
+                lineage,
+                log,
                 task,
                 meta,
                 storage: storage.try_into()?,
@@ -3741,6 +3801,7 @@ mod test {
     use std::ffi::OsString;
 
     use clap::Parser;
+    use serfig::Parser as _;
     use temp_env::with_vars;
 
     use super::*;
@@ -3781,6 +3842,62 @@ mod test {
 
         let inner: InnerHistoryTableConfig = explicit.try_into().unwrap();
         assert_eq!(inner.retention, Some(0));
+    }
+
+    #[test]
+    fn test_lineage_config_enables_history_backend() {
+        let config: Config = toml::from_str("[lineage]\non = true").unwrap();
+        let inner: InnerConfig = config.try_into().unwrap();
+
+        assert!(inner.lineage.enabled());
+        assert!(inner.log.history.on);
+        assert_eq!(inner.log.history.tables.len(), 1);
+        let lineage = &inner.log.history.tables[0];
+        assert_eq!(lineage.table_name, "lineage_history");
+        assert_eq!(lineage.retention, None);
+    }
+
+    #[test]
+    fn test_legacy_config_parser_ignores_lineage_section() {
+        #[derive(Default, Deserialize)]
+        #[serde(default)]
+        struct ConfigWithoutLineage {}
+
+        let mut parser = crate::toml::TomlIgnored::new(Box::new(|_| {}));
+        let _: ConfigWithoutLineage = parser.parse(b"[lineage]\non = true").unwrap();
+    }
+
+    #[test]
+    fn test_lineage_config_applies_explicit_retention_without_duplicates() {
+        let config: Config = toml::from_str(
+            "[lineage]\non = true\nretention = 24\n\
+             [log.history]\non = true\n\
+             [[log.history.tables]]\ntable_name = 'lineage_history'\nretention = 12",
+        )
+        .unwrap();
+        let inner: InnerConfig = config.try_into().unwrap();
+
+        let mut lineage_tables = inner
+            .log
+            .history
+            .tables
+            .iter()
+            .filter(|table| table.table_name == "lineage_history");
+        assert_eq!(lineage_tables.next().unwrap().retention, Some(24));
+        assert!(lineage_tables.next().is_none());
+    }
+
+    #[test]
+    fn test_legacy_history_config_enables_lineage() {
+        let config: Config = toml::from_str(
+            "[log.history]\non = true\n\
+             [[log.history.tables]]\ntable_name = 'lineage_history'\nretention = 24",
+        )
+        .unwrap();
+        let inner: InnerConfig = config.try_into().unwrap();
+
+        assert!(inner.lineage.enabled());
+        assert_eq!(inner.lineage.lineage_retention, Some(24));
     }
 
     #[test]
