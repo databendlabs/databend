@@ -1606,7 +1606,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
-                ndv: NdvEstimate::exact(3.0),
+                ndv: NdvEstimate::proven_exact(3.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -1618,7 +1618,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
-                ndv: NdvEstimate::exact(3.0),
+                ndv: NdvEstimate::proven_exact(3.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -2148,7 +2148,7 @@ mod tests {
             0,
             1,
             1_000_000,
-            NdvEstimate::exact(1_000_000.0),
+            NdvEstimate::proven_exact(1_000_000.0),
             StatCount::exact(0),
         );
         let right = estimated_stat(5_000.0, 100_000.0);
@@ -2177,7 +2177,7 @@ mod tests {
             0,
             1,
             1_000_000,
-            NdvEstimate::exact(1_000_000.0),
+            NdvEstimate::proven_exact(1_000_000.0),
             StatCount::exact(0),
         );
         let right = stat_with_key(
@@ -2186,7 +2186,7 @@ mod tests {
             1,
             1,
             5_000,
-            NdvEstimate::exact(5_000.0),
+            NdvEstimate::proven_exact(5_000.0),
             StatCount::exact(0),
         );
         let join = Join {
@@ -2211,7 +2211,7 @@ mod tests {
         let estimated = ColumnStat {
             min: Datum::UInt(1),
             max: Datum::UInt(1_000),
-            ndv: NdvEstimate::new(1_000.0, 1_000.0),
+            ndv: NdvEstimate::exact(1_000.0),
             null_count: StatCount::exact(0),
             histogram: None,
         };
@@ -2220,7 +2220,7 @@ mod tests {
         let impossible = ColumnStat {
             min: Datum::UInt(1),
             max: Datum::UInt(1_000),
-            ndv: NdvEstimate::exact(200_000_000.0),
+            ndv: NdvEstimate::proven_exact(200_000_000.0),
             null_count: StatCount::exact(0),
             histogram: None,
         };
@@ -2236,7 +2236,7 @@ mod tests {
             0,
             1,
             10,
-            NdvEstimate::exact(10.0),
+            NdvEstimate::proven_exact(10.0),
             StatCount::exact(0),
         );
         let right = stat_with_key(
@@ -2245,7 +2245,7 @@ mod tests {
             1,
             1,
             1_000,
-            NdvEstimate::exact(200_000_000.0),
+            NdvEstimate::proven_exact(200_000_000.0),
             StatCount::exact(0),
         );
         let join = Join {
@@ -2271,7 +2271,7 @@ mod tests {
         let stat = ColumnStat {
             min: Datum::UInt(1),
             max: Datum::UInt(1_000),
-            ndv: NdvEstimate::exact(1_000.0),
+            ndv: NdvEstimate::proven_exact(1_000.0),
             null_count: StatCount::exact(2),
             histogram: None,
         };

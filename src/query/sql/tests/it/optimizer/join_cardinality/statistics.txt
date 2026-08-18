@@ -34,10 +34,10 @@ input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
-join          : INNER cardinality=4.000
-stat          : l.k (#0) min=1, max=3, ndv=3.000, null=1.000, histogram=none
+join          : INNER cardinality=12.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=3.000, histogram=none
 stat          : b (#1) min=false, max=true, ndv=2.000, null=0.000, histogram=none
-stat          : r.k (#2) min=1, max=2, ndv=2.000, null=1.333, histogram=none
+stat          : r.k (#2) min=1, max=2, ndv=2.000, null=4.000, histogram=none
 stat          : b (#3) min=false, max=true, ndv=2.000, null=0.000, histogram=none
 
 === inner_derived_boolean_lossless_cast ===
@@ -49,10 +49,10 @@ input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
-join          : INNER cardinality=4.000
-stat          : l.k (#0) min=1, max=3, ndv=3.000, null=1.000, histogram=none
+join          : INNER cardinality=12.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=3.000, histogram=none
 stat          : b (#1) min=false, max=true, ndv=2.000, null=0.000, histogram=none
-stat          : r.k (#2) min=1, max=2, ndv=2.000, null=1.333, histogram=none
+stat          : r.k (#2) min=1, max=2, ndv=2.000, null=4.000, histogram=none
 stat          : b (#3) min=false, max=true, ndv=2.000, null=0.000, histogram=none
 
 === inner_disjoint_bounds ===

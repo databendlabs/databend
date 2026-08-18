@@ -457,7 +457,7 @@ mod tests {
             (constant.min.clone(), constant.max.clone()),
             (Datum::Int(7), Datum::Int(7))
         );
-        assert_eq!(constant.ndv, NdvEstimate::exact(1.0));
+        assert_eq!(constant.ndv, NdvEstimate::proven_exact(1.0));
         assert_eq!(constant.null_count, StatCount::exact(0));
     }
 

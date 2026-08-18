@@ -91,7 +91,7 @@ impl<T> TypedHistogram<T> {
             .map(|bucket| bucket.num_distinct)
             .sum::<f64>();
         if self.accuracy {
-            return NdvEstimate::exact(possible_distinct);
+            return NdvEstimate::proven_exact(possible_distinct);
         }
 
         let expected_distinct = self

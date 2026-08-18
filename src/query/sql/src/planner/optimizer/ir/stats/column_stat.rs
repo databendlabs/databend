@@ -128,7 +128,7 @@ impl ColumnStat {
         Self {
             min: datum.clone(),
             max: datum,
-            ndv: NdvEstimate::exact(1.0),
+            ndv: NdvEstimate::proven_exact(1.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }

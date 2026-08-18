@@ -204,7 +204,17 @@ impl NdvEstimate {
         estimate
     }
 
+    /// Construct a point estimate without a proof-grade lower bound.
+    ///
+    /// This constructor predates `lower`. Existing callers may describe a
+    /// possible or estimated NDV even when `expected == upper`, so they must
+    /// remain untrusted unless their provenance is audited explicitly.
     pub fn exact(value: f64) -> Self {
+        Self::new(value, value)
+    }
+
+    /// Construct an observed exact NDV that is safe to use as a lower bound.
+    pub fn proven_exact(value: f64) -> Self {
         let estimate = Self {
             lower: value,
             expected: Some(value),
@@ -526,7 +536,7 @@ mod tests {
 
     #[test]
     fn test_ndv_selectivity_drops_proof_even_for_exact_input() {
-        let ndv = NdvEstimate::exact(1.0).reduce_by_selectivity(1.0, 0.2);
+        let ndv = NdvEstimate::proven_exact(1.0).reduce_by_selectivity(1.0, 0.2);
 
         assert_eq!(ndv.lower, 0.0);
         assert!((ndv.expected.unwrap() - 0.19999999999999996).abs() < f64::EPSILON);
@@ -535,9 +545,9 @@ mod tests {
 
     #[test]
     fn test_ndv_full_selectivity_preserves_proof() {
-        let ndv = NdvEstimate::exact(10.0).reduce_by_selectivity(10.0, 1.0);
+        let ndv = NdvEstimate::proven_exact(10.0).reduce_by_selectivity(10.0, 1.0);
 
-        assert_eq!(ndv, NdvEstimate::exact(10.0));
+        assert_eq!(ndv, NdvEstimate::proven_exact(10.0));
     }
 
     #[test]
@@ -552,7 +562,7 @@ mod tests {
 
     #[test]
     fn test_ndv_confidence_survives_bounded_reduction() {
-        let exact = NdvEstimate::exact(100.0).reduce(40.0);
+        let exact = NdvEstimate::proven_exact(100.0).reduce(40.0);
         assert_eq!(exact.lower, 40.0);
         assert_eq!(exact.expected, Some(40.0));
         assert_eq!(exact.upper, 40.0);
@@ -561,6 +571,19 @@ mod tests {
         assert_eq!(estimated.lower, 0.0);
         assert_eq!(estimated.expected, Some(40.0));
         assert_eq!(estimated.upper, 40.0);
+    }
+
+    #[test]
+    fn test_legacy_exact_point_estimate_is_not_proof() {
+        let estimated = NdvEstimate::exact(2.0);
+        assert_eq!(estimated.lower, 0.0);
+        assert_eq!(estimated.expected, Some(2.0));
+        assert_eq!(estimated.upper, 2.0);
+
+        let proven = NdvEstimate::proven_exact(2.0);
+        assert_eq!(proven.lower, 2.0);
+        assert_eq!(proven.expected, Some(2.0));
+        assert_eq!(proven.upper, 2.0);
     }
 
     #[test]

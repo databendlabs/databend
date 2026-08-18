@@ -380,9 +380,9 @@ mod tests {
 
     #[test]
     fn test_merge_ndv_preserves_trusted_union_lower_bound() -> Result<()> {
-        let left = column_stat(1, 10, NdvEstimate::exact(10.0));
-        let overlapping = column_stat(5, 9, NdvEstimate::exact(5.0));
-        let disjoint = column_stat(20, 24, NdvEstimate::exact(5.0));
+        let left = column_stat(1, 10, NdvEstimate::proven_exact(10.0));
+        let overlapping = column_stat(5, 9, NdvEstimate::proven_exact(5.0));
+        let disjoint = column_stat(20, 24, NdvEstimate::proven_exact(5.0));
 
         assert_eq!(UnionAll::merge_ndv(&left, &overlapping)?, NdvEstimate {
             lower: 10.0,
@@ -391,7 +391,7 @@ mod tests {
         });
         assert_eq!(
             UnionAll::merge_ndv(&left, &disjoint)?,
-            NdvEstimate::exact(15.0)
+            NdvEstimate::proven_exact(15.0)
         );
         Ok(())
     }
