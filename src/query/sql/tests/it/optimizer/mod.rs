@@ -24,6 +24,7 @@ mod collect_statistics;
 mod decorrelate_correlated_aliases;
 mod eager_aggregation;
 mod join_cardinality;
+mod join_distribution;
 mod normalize_scalar;
 mod outer_join_to_anti;
 mod push_down_filter_project_set;
