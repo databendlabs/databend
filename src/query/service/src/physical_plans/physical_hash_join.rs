@@ -100,6 +100,67 @@ type MergedFieldsResult = (
     Vec<(usize, (bool, bool))>,
 );
 
+/// Remove an integer-to-string round trip from an equality key when the other key is an integer.
+///
+/// Mixed string/integer equality normally uses `Decimal(38, 5)` as the hash key. That coercion is
+/// needed for arbitrary strings such as `"1.2"`, but it is unnecessary when the string is produced
+/// directly from another integer. Keep the rewrite deliberately narrow: both integers must fit
+/// losslessly in their normal common numeric type. In that case formatting and parsing the value
+/// cannot change equality.
+fn unwrap_integer_to_string_cast<'a>(
+    integer_expr: &ScalarExpr,
+    string_expr: &'a ScalarExpr,
+) -> Result<Option<&'a ScalarExpr>> {
+    let ScalarExpr::CastExpr(cast) = string_expr else {
+        return Ok(None);
+    };
+    if cast.is_try || !matches!(cast.target_type.remove_nullable(), DataType::String) {
+        return Ok(None);
+    }
+
+    let integer_type = integer_expr.data_type()?;
+    let DataType::Number(integer_type) = integer_type.remove_nullable() else {
+        return Ok(None);
+    };
+    if !integer_type.is_integer() {
+        return Ok(None);
+    }
+
+    let source_type = cast.argument.data_type()?;
+    let DataType::Number(source_type) = source_type.remove_nullable() else {
+        return Ok(None);
+    };
+    if !source_type.is_integer() {
+        return Ok(None);
+    }
+
+    let common_type = common_super_type(
+        DataType::Number(integer_type),
+        DataType::Number(source_type),
+        &BUILTIN_FUNCTIONS.default_cast_rules,
+    );
+    let preserves_equality = matches!(
+        common_type,
+        Some(DataType::Number(common_type))
+            if integer_type.can_lossless_cast_to(common_type)
+                && source_type.can_lossless_cast_to(common_type)
+    );
+    Ok(preserves_equality.then_some(cast.argument.as_ref()))
+}
+
+fn simplify_integer_string_join_keys<'a>(
+    left: &'a ScalarExpr,
+    right: &'a ScalarExpr,
+) -> Result<(&'a ScalarExpr, &'a ScalarExpr)> {
+    if let Some(right) = unwrap_integer_to_string_cast(left, right)? {
+        return Ok((left, right));
+    }
+    if let Some(left) = unwrap_integer_to_string_cast(right, left)? {
+        return Ok((left, right));
+    }
+    Ok((left, right))
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct NestedLoopFilterInfo {
     pub predicates: Vec<RemoteExpr>,
@@ -809,8 +870,12 @@ impl PhysicalPlanBuilder {
 
         let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
         for condition in join.equi_conditions.iter() {
-            let left_condition = &condition.left;
-            let right_condition = &condition.right;
+            let original_left_condition = &condition.left;
+            let original_right_condition = &condition.right;
+            let (left_condition, right_condition) = simplify_integer_string_join_keys(
+                original_left_condition,
+                original_right_condition,
+            )?;
 
             // Type check expressions
             let right_expr = right_condition
@@ -841,8 +906,8 @@ impl PhysicalPlanBuilder {
             // Handle inner join column optimization
             if matches!(join.join_type, JoinType::Inner | JoinType::InnerAny) {
                 self.handle_inner_join_column_optimization(
-                    left_condition,
-                    right_condition,
+                    original_left_condition,
+                    original_right_condition,
                     probe_schema,
                     build_schema,
                     column_projections,
@@ -1404,10 +1469,12 @@ impl PhysicalPlanBuilder {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
     use databend_common_sql::ColumnBindingBuilder;
     use databend_common_sql::Visibility;
     use databend_common_sql::plans::BoundColumnRef;
+    use databend_common_sql::plans::CastExpr;
     use databend_common_sql::plans::FunctionCall;
     use databend_common_sql::plans::JoinEquiCondition;
 
@@ -1417,16 +1484,33 @@ mod tests {
         DataType::Number(NumberDataType::Int64)
     }
 
-    fn column(index: usize) -> ScalarExpr {
+    fn typed_column(index: usize, data_type: DataType) -> ScalarExpr {
         let column = ColumnBindingBuilder::new(
             index.to_string(),
             Symbol::from_field_index(index),
-            Box::new(int64_type()),
+            Box::new(data_type),
             Visibility::Visible,
         )
         .build();
 
         ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
+    }
+
+    fn column(index: usize) -> ScalarExpr {
+        typed_column(index, int64_type())
+    }
+
+    fn cast(expr: ScalarExpr, target_type: DataType, is_try: bool) -> ScalarExpr {
+        ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try,
+            argument: Box::new(expr),
+            target_type: Box::new(target_type),
+        })
+    }
+
+    fn cast_to_string(expr: ScalarExpr) -> ScalarExpr {
+        cast(expr, DataType::String, false)
     }
 
     fn schemas() -> (DataSchema, DataSchema, DataSchema) {
@@ -1473,6 +1557,100 @@ mod tests {
 
         assert!(info.is_some());
         assert_eq!(info.unwrap().projection, vec![0, 1]);
+        Ok(())
+    }
+
+    #[test]
+    fn removes_safe_integer_string_round_trip_from_join_key() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let string_source = typed_column(1, DataType::Number(NumberDataType::Int32));
+        let string = cast_to_string(string_source.clone());
+
+        let (left, right) = simplify_integer_string_join_keys(&integer, &string)?;
+
+        assert_eq!(left, &integer);
+        assert_eq!(right, &string_source);
+        Ok(())
+    }
+
+    #[test]
+    fn removes_safe_round_trip_when_cast_is_on_left() -> Result<()> {
+        let string_source = typed_column(0, DataType::Number(NumberDataType::UInt32));
+        let string = cast_to_string(string_source.clone());
+        let integer = typed_column(1, DataType::Number(NumberDataType::Int64));
+
+        let (left, right) = simplify_integer_string_join_keys(&string, &integer)?;
+
+        assert_eq!(left, &string_source);
+        assert_eq!(right, &integer);
+        Ok(())
+    }
+
+    #[test]
+    fn removes_nullable_integer_string_round_trip() -> Result<()> {
+        let nullable_int64 = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)));
+        let nullable_int32 = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32)));
+        let integer = typed_column(0, nullable_int64);
+        let string_source = typed_column(1, nullable_int32);
+        let string = cast(
+            string_source.clone(),
+            DataType::Nullable(Box::new(DataType::String)),
+            false,
+        );
+
+        let (left, right) = simplify_integer_string_join_keys(&integer, &string)?;
+
+        assert_eq!(left, &integer);
+        assert_eq!(right, &string_source);
+        Ok(())
+    }
+
+    #[test]
+    fn keeps_try_cast_and_arbitrary_string_join_keys() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let source = typed_column(1, DataType::Number(NumberDataType::Int32));
+        let try_cast = cast(source, DataType::String, true);
+
+        let simplified = simplify_integer_string_join_keys(&integer, &try_cast)?;
+        assert_eq!(simplified, (&integer, &try_cast));
+
+        let string_column = typed_column(1, DataType::String);
+        let simplified = simplify_integer_string_join_keys(&integer, &string_column)?;
+        assert_eq!(simplified, (&integer, &string_column));
+        Ok(())
+    }
+
+    #[test]
+    fn keeps_non_integer_cast_sources_and_operands() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let source_types = [
+            DataType::Number(NumberDataType::Float64),
+            DataType::Decimal(DecimalSize::new(10, 2)?),
+            DataType::Boolean,
+            DataType::Date,
+        ];
+
+        for (index, source_type) in source_types.into_iter().enumerate() {
+            let string = cast_to_string(typed_column(index + 1, source_type));
+            let simplified = simplify_integer_string_join_keys(&integer, &string)?;
+            assert_eq!(simplified, (&integer, &string));
+        }
+
+        let float = typed_column(1, DataType::Number(NumberDataType::Float64));
+        let string = cast_to_string(typed_column(2, DataType::Number(NumberDataType::Int32)));
+        let simplified = simplify_integer_string_join_keys(&float, &string)?;
+        assert_eq!(simplified, (&float, &string));
+        Ok(())
+    }
+
+    #[test]
+    fn keeps_potentially_lossy_mixed_sign_string_join_key() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let string = cast_to_string(typed_column(1, DataType::Number(NumberDataType::UInt64)));
+
+        let simplified = simplify_integer_string_join_keys(&integer, &string)?;
+
+        assert_eq!(simplified, (&integer, &string));
         Ok(())
     }
 }
