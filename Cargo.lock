@@ -6911,15 +6911,18 @@ dependencies = [
  "bytes",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-metrics",
  "databend-storages-common-blocks",
+ "databend-storages-common-cache",
  "fastrace",
  "futures",
  "log",
  "opendal 0.54.1",
  "parquet 58.1.0",
+ "tempfile",
 ]
 
 [[package]]

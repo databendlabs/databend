@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Chunk-cache link of the ranged-read chain.
+//! Chunk-cache link of the ranged-read chain, directly over the shared disk
+//! LRU ([`LruDiskCacheHolder`]): chunk entries live in the same LRU and the
+//! same storage budget as the column-oriented entries of the column data
+//! cache — no dedicated cache slot, no cache abstraction in between.
+//!
+//! Key spaces cannot collide: chunk keys are `{path}-{offset}-{len}` while
+//! column keys are `{path}-{column_id}-{offset}-{len}`, and storage paths
+//! never end in `-<digits>`.
 //!
 //! Split/merge duality of this layer:
 //! - Splitting is deterministic ([`ChunkGrid`]) and therefore never recorded:
@@ -21,9 +28,6 @@
 //!   identities are recorded in `dispatched` ("whoever merges keeps the
 //!   books"). They cannot be recomputed later: a re-merge across prefetch
 //!   batches could produce a segment that was never dispatched downstream.
-//!
-//! The cache backend is injected through [`ChunkCache`] so this layer stays
-//! self-contained: production wires a disk LRU behind it, tests use a map.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -32,30 +36,11 @@ use std::ops::Range;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::LruDiskCacheHolder;
 use opendal::Buffer;
 
 use crate::range_read::ChunkGrid;
 use crate::range_read::RangeReader;
-
-/// Minimal cache contract required by [`DiskCacheRangeReader`].
-///
-/// `mget`/`mset` default to per-key loops; lock-batching backends (for example
-/// a disk LRU that wants one lock round-trip per batch) override them.
-pub trait ChunkCache: Send {
-    fn get(&self, key: &str) -> Option<Bytes>;
-    /// Best effort: an admission may be dropped under pressure.
-    fn put(&self, key: String, value: Bytes);
-
-    fn mget(&self, keys: &[String]) -> Vec<Option<Bytes>> {
-        keys.iter().map(|key| self.get(key)).collect()
-    }
-
-    fn mset(&self, items: Vec<(String, Bytes)>) {
-        for (key, value) in items {
-            self.put(key, value);
-        }
-    }
-}
 
 /// Read-through chunk cache over the next chain link.
 ///
@@ -65,8 +50,8 @@ pub trait ChunkCache: Send {
 /// - `dispatched`: identities of miss segments forwarded downstream. `read`
 ///   must reuse these exact identities (identity rule R1), chunk membership
 ///   is recovered arithmetically via the grid.
-pub struct DiskCacheRangeReader<R: RangeReader, C: ChunkCache> {
-    cache: C,
+pub struct DiskCacheRangeReader<R: RangeReader> {
+    cache: LruDiskCacheHolder,
     next: R,
     grid: ChunkGrid,
     path: String,
@@ -77,13 +62,13 @@ pub struct DiskCacheRangeReader<R: RangeReader, C: ChunkCache> {
     held_bytes: usize,
 }
 
-impl<R: RangeReader, C: ChunkCache> DiskCacheRangeReader<R, C> {
+impl<R: RangeReader> DiskCacheRangeReader<R> {
     /// `file_len` pins the tail chunk of the grid; `max_segment_size` caps how
     /// many adjacent miss chunks merge into one downstream request;
     /// `held_budget` bounds the bytes parked in this layer before it reports
     /// saturation.
     pub fn new(
-        cache: C,
+        cache: LruDiskCacheHolder,
         next: R,
         path: String,
         file_len: u64,
@@ -149,21 +134,22 @@ impl<R: RangeReader, C: ChunkCache> DiskCacheRangeReader<R, C> {
         segments
     }
 
-    /// Split an arrived segment back into grid chunks, admit them into the
-    /// cache (one batched `mset`) and park them for pending reads.
+    /// Split an arrived segment back into grid chunks, asynchronously admit
+    /// them into the shared disk LRU and park them for pending reads.
     fn file_segment(&mut self, segment: Range<u64>, data: Buffer) {
-        let mut admits = Vec::new();
+        let mut batch = Vec::new();
         for chunk in self.grid.chunks_of(&segment) {
             let start = (chunk.start - segment.start) as usize;
             let end = (chunk.end - segment.start) as usize;
             let piece = data.slice(start..end);
-            admits.push((self.key(&chunk), piece.to_bytes()));
+            batch.push((self.key(&chunk), piece.to_bytes()));
             self.hold(chunk, piece);
         }
-        self.cache.mset(admits);
+        // One queue slot per fetched file segment, not per 1 MiB chunk.
+        self.cache.populate(batch);
     }
 
-    /// Chunks of `range` that are neither parked, nor in flight, nor in the
+    /// Chunks of `ranges` that are neither parked, nor in flight, nor in the
     /// cache (cache hits are parked as a side effect), offset-ordered and
     /// deduplicated.
     fn collect_misses(&mut self, ranges: &[Range<u64>]) -> Vec<Range<u64>> {
@@ -188,7 +174,10 @@ impl<R: RangeReader, C: ChunkCache> DiskCacheRangeReader<R, C> {
         let mut misses = Vec::new();
         for (chunk, hit) in wanted.into_iter().zip(self.cache.mget(&keys)) {
             match hit {
-                Some(bytes) => self.hold(chunk, Buffer::from(bytes)),
+                Some(bytes) => {
+                    let bytes = bytes.as_ref().clone();
+                    self.hold(chunk, Buffer::from(bytes));
+                }
                 None => misses.push(chunk),
             }
         }
@@ -196,7 +185,7 @@ impl<R: RangeReader, C: ChunkCache> DiskCacheRangeReader<R, C> {
     }
 }
 
-impl<R: RangeReader, C: ChunkCache> RangeReader for DiskCacheRangeReader<R, C> {
+impl<R: RangeReader> RangeReader for DiskCacheRangeReader<R> {
     fn prefetch(&mut self, ranges: &[Range<u64>]) -> bool {
         let misses = self.collect_misses(ranges);
         let segments = self.coalesce(misses);
@@ -214,6 +203,7 @@ impl<R: RangeReader, C: ChunkCache> RangeReader for DiskCacheRangeReader<R, C> {
         if range.is_empty() {
             return Ok(Buffer::new());
         }
+
         if range.end > self.grid.file_len() {
             return Err(ErrorCode::BadArguments(format!(
                 "range {range:?} exceeds file length {} of {}",
@@ -257,9 +247,13 @@ impl<R: RangeReader, C: ChunkCache> RangeReader for DiskCacheRangeReader<R, C> {
 #[cfg(test)]
 #[allow(clippy::single_range_in_vec_init)]
 mod tests {
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use std::sync::Mutex;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    use databend_common_config::DiskCacheKeyReloadPolicy;
+    use databend_storages_common_cache::CacheAccessor;
+    use databend_storages_common_cache::DiskCacheBuilder;
+    use tempfile::TempDir;
 
     use super::*;
     use crate::init_test_runtime;
@@ -268,39 +262,48 @@ mod tests {
 
     const CONTENT: &[u8] = b"abcdefghijklmnop";
 
-    #[derive(Default)]
-    struct MemoryChunkCache {
-        entries: Mutex<HashMap<String, Bytes>>,
+    fn new_cache() -> (TempDir, LruDiskCacheHolder) {
+        let dir = TempDir::new().unwrap();
+        let accessor = DiskCacheBuilder::try_build_disk_cache(
+            "range_reader_test".to_string(),
+            &dir.path().to_path_buf(),
+            64,
+            1 << 20,
+            DiskCacheKeyReloadPolicy::Reset,
+            false,
+        )
+        .unwrap();
+        let holder = accessor.lru_disk_cache().clone();
+        (dir, holder)
     }
 
-    impl ChunkCache for Arc<MemoryChunkCache> {
-        fn get(&self, key: &str) -> Option<Bytes> {
-            self.entries.lock().unwrap().get(key).cloned()
-        }
-
-        fn put(&self, key: String, value: Bytes) {
-            self.entries.lock().unwrap().insert(key, value);
-        }
-    }
-
-    impl MemoryChunkCache {
-        fn len(&self) -> usize {
-            self.entries.lock().unwrap().len()
-        }
-
-        fn seed(&self, path: &str, chunk: Range<u64>, value: &[u8]) {
-            self.entries.lock().unwrap().insert(
-                format!("{path}-{}-{}", chunk.start, chunk.end - chunk.start),
-                Bytes::copy_from_slice(value),
+    fn wait_admitted(cache: &LruDiskCacheHolder, path: &str, chunks: &[Range<u64>]) {
+        let keys = chunks
+            .iter()
+            .map(|chunk| format!("{path}-{}-{}", chunk.start, chunk.end - chunk.start))
+            .collect::<Vec<_>>();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while keys.iter().any(|key| !cache.contains_key(key)) {
+            assert!(
+                Instant::now() < deadline,
+                "chunks were not admitted in time"
             );
+            std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    fn seed(cache: &LruDiskCacheHolder, path: &str, chunk: Range<u64>, value: &[u8]) {
+        cache.insert(
+            format!("{path}-{}-{}", chunk.start, chunk.end - chunk.start),
+            Bytes::copy_from_slice(value),
+        );
     }
 
     fn reader_over(
-        accessor: Arc<RecordingReadAccessor>,
-        cache: Arc<MemoryChunkCache>,
+        accessor: std::sync::Arc<RecordingReadAccessor>,
+        cache: LruDiskCacheHolder,
         held_budget: usize,
-    ) -> DiskCacheRangeReader<OperatorRangeReader, Arc<MemoryChunkCache>> {
+    ) -> DiskCacheRangeReader<OperatorRangeReader> {
         let path = "cached".to_string();
         let next = OperatorRangeReader::new(recording_operator(accessor), path.clone(), 8);
         DiskCacheRangeReader::new(cache, next, path, CONTENT.len() as u64, 4, 16, held_budget)
@@ -311,7 +314,7 @@ mod tests {
     fn test_cold_read_merges_misses_and_admits_chunks() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
-        let cache = Arc::new(MemoryChunkCache::default());
+        let (_dir, cache) = new_cache();
         let mut reader = reader_over(accessor.clone(), cache.clone(), usize::MAX);
 
         assert!(reader.prefetch(&[0..8, 8..12]));
@@ -321,19 +324,21 @@ mod tests {
         );
         // Adjacent miss chunks merged into one segment.
         assert_eq!(accessor.read_ranges(), vec![0..12]);
-        // Every fetched chunk was admitted.
+        // Every fetched chunk was queued and admitted into the shared LRU.
+        wait_admitted(&cache, "cached", &[0..4, 4..8, 8..12]);
         assert_eq!(cache.len(), 3);
     }
 
     #[test]
     fn test_warm_read_does_no_io() {
         init_test_runtime();
-        let cache = Arc::new(MemoryChunkCache::default());
+        let (_dir, cache) = new_cache();
         {
             let accessor = RecordingReadAccessor::new(CONTENT, false);
             let mut reader = reader_over(accessor, cache.clone(), usize::MAX);
             reader.read(0..16).unwrap();
         }
+        wait_admitted(&cache, "cached", &[0..4, 4..8, 8..12, 12..16]);
         let accessor = RecordingReadAccessor::new(CONTENT, false);
         let mut reader = reader_over(accessor.clone(), cache, usize::MAX);
         assert!(reader.prefetch(&[0..16]));
@@ -345,8 +350,8 @@ mod tests {
     fn test_cache_hit_splits_miss_segments() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
-        let cache = Arc::new(MemoryChunkCache::default());
-        cache.seed("cached", 4..8, &CONTENT[4..8]);
+        let (_dir, cache) = new_cache();
+        seed(&cache, "cached", 4..8, &CONTENT[4..8]);
         let mut reader = reader_over(accessor.clone(), cache, usize::MAX);
 
         assert!(reader.prefetch(&[0..12]));
@@ -362,7 +367,7 @@ mod tests {
     fn test_segment_identity_is_stable_across_batches() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
-        let cache = Arc::new(MemoryChunkCache::default());
+        let (_dir, cache) = new_cache();
         let mut reader = reader_over(accessor.clone(), cache, usize::MAX);
 
         // Two prefetch batches produce two adjacent segments; a read spanning
@@ -381,7 +386,7 @@ mod tests {
     fn test_demand_read_without_prefetch_admits_chunks() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
-        let cache = Arc::new(MemoryChunkCache::default());
+        let (_dir, cache) = new_cache();
         let mut reader = reader_over(accessor.clone(), cache.clone(), usize::MAX);
 
         assert_eq!(
@@ -390,6 +395,7 @@ mod tests {
         );
         // One merged demand segment over the three touched chunks.
         assert_eq!(accessor.read_ranges(), vec![0..12]);
+        wait_admitted(&cache, "cached", &[0..4, 4..8, 8..12]);
         assert_eq!(cache.len(), 3);
         assert!(reader.dispatched.is_empty());
     }
@@ -398,14 +404,15 @@ mod tests {
     fn test_overlapping_ranges_share_chunks_through_the_cache() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
-        let cache = Arc::new(MemoryChunkCache::default());
-        let mut reader = reader_over(accessor.clone(), cache, usize::MAX);
+        let (_dir, cache) = new_cache();
+        let mut reader = reader_over(accessor.clone(), cache.clone(), usize::MAX);
 
         assert!(reader.prefetch(&[0..6, 4..10]));
         assert_eq!(
             reader.read(0..6).unwrap().to_bytes().as_ref(),
             &CONTENT[0..6]
         );
+        wait_admitted(&cache, "cached", &[0..4, 4..8, 8..12]);
         assert_eq!(
             reader.read(4..10).unwrap().to_bytes().as_ref(),
             &CONTENT[4..10]
@@ -419,7 +426,7 @@ mod tests {
     fn test_unaligned_tail_read() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(&CONTENT[0..10], false);
-        let cache = Arc::new(MemoryChunkCache::default());
+        let (_dir, cache) = new_cache();
         let path = "tail".to_string();
         let next = OperatorRangeReader::new(recording_operator(accessor.clone()), path.clone(), 8);
         let mut reader =
@@ -438,9 +445,9 @@ mod tests {
     fn test_held_budget_reports_saturation() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
-        let cache = Arc::new(MemoryChunkCache::default());
-        cache.seed("cached", 0..4, &CONTENT[0..4]);
-        cache.seed("cached", 4..8, &CONTENT[4..8]);
+        let (_dir, cache) = new_cache();
+        seed(&cache, "cached", 0..4, &CONTENT[0..4]);
+        seed(&cache, "cached", 4..8, &CONTENT[4..8]);
         let mut reader = reader_over(accessor, cache, 5);
 
         // Two hits (8 bytes) exceed the 5-byte budget.
@@ -457,7 +464,7 @@ mod tests {
     fn test_max_segment_size_caps_merging() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
-        let cache = Arc::new(MemoryChunkCache::default());
+        let (_dir, cache) = new_cache();
         let path = "capped".to_string();
         let next = OperatorRangeReader::new(recording_operator(accessor.clone()), path.clone(), 8);
         let mut reader =
@@ -473,7 +480,7 @@ mod tests {
     fn test_error_from_next_layer_propagates() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, true);
-        let cache = Arc::new(MemoryChunkCache::default());
+        let (_dir, cache) = new_cache();
         let mut reader = reader_over(accessor, cache, usize::MAX);
 
         assert!(reader.prefetch(&[0..8]));
@@ -489,7 +496,7 @@ mod tests {
         use crate::range_read::ChunkedRangeReader;
 
         init_test_runtime();
-        let cache = Arc::new(MemoryChunkCache::default());
+        let (_dir, cache) = new_cache();
 
         // Cold pass: facade streams through the cache layer down to the tail.
         let cold_accessor = RecordingReadAccessor::new(CONTENT, false);
@@ -503,6 +510,7 @@ mod tests {
         cold.read_to_end(&mut out).unwrap();
         assert_eq!(out, &CONTENT[2..15]);
         assert!(!cold_accessor.read_ranges().is_empty());
+        wait_admitted(&cache, "cached", &[0..4, 4..8, 8..12, 12..16]);
 
         // Warm pass over a fresh chain sharing the cache: zero remote I/O.
         let warm_accessor = RecordingReadAccessor::new(CONTENT, false);

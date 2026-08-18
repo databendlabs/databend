@@ -16,11 +16,16 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
+databend-storages-common-cache = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
+
+[dev-dependencies]
+databend-common-config = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

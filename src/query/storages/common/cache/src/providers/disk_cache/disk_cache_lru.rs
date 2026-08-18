@@ -160,7 +160,93 @@ fn validate_checksum(bytes: &[u8]) -> Result<()> {
 }
 
 pub type LruDiskCache = DiskCache;
-pub type LruDiskCacheHolder = Arc<RwLock<LruDiskCache>>;
+
+/// One pending admission for the population worker.
+pub(crate) struct CacheItem {
+    pub(crate) key: String,
+    pub(crate) value: Bytes,
+    /// Whether `DiskCacheAccessor::insert` incremented the pending metric for
+    /// this item before enqueueing it. Direct holder batches do not.
+    pub(crate) track_pending_metric: bool,
+}
+
+/// Shared handle of the disk LRU cache, carrying a clone of the population
+/// queue sender so that holders admit asynchronously without taking the lock.
+#[derive(Clone)]
+pub struct LruDiskCacheHolder {
+    cache: Arc<RwLock<LruDiskCache>>,
+    population_tx: crossbeam_channel::Sender<Vec<CacheItem>>,
+}
+
+impl std::ops::Deref for LruDiskCacheHolder {
+    type Target = RwLock<LruDiskCache>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.cache
+    }
+}
+
+impl LruDiskCacheHolder {
+    /// Best-effort asynchronous batch admission. One call — normally all
+    /// chunks split from one fetched file segment — consumes one queue slot,
+    /// regardless of the number of chunks. Existing keys are filtered under
+    /// one read lock; the whole batch is silently dropped when the queue is
+    /// full or the worker is gone.
+    pub fn populate(&self, items: Vec<(String, Bytes)>) {
+        let cache = self.cache.read();
+        let batch = items
+            .into_iter()
+            .filter(|(key, _)| !cache.contains_key(key))
+            .map(|(key, value)| CacheItem {
+                key,
+                value,
+                track_pending_metric: false,
+            })
+            .collect::<Vec<_>>();
+        drop(cache);
+
+        if !batch.is_empty() {
+            let _ = self.population_tx.try_send(batch);
+        }
+    }
+
+    /// Batched `get`: the whole batch — LRU touches, file reads and crc
+    /// checks — is served under a single lock acquisition, and corrupted
+    /// entries are evicted on the spot. Results align with `keys` one to one.
+    pub fn mget<Q: AsRef<str>>(&self, keys: &[Q]) -> Vec<Option<Arc<Bytes>>> {
+        let mut cache = self.write();
+        keys.iter()
+            .map(|k| {
+                let k = k.as_ref();
+                let (cache_file_path, file_size) = cache.get_cache_item_path_and_size(k)?;
+                match read_cache_content(cache_file_path, file_size as usize) {
+                    Ok(mut bytes) => {
+                        if let Err(e) = validate_checksum(bytes.as_slice()) {
+                            error!("disk cache item of key {k}, crc validation failure: {e}");
+                            // remove the invalid cache, error of removal ignored
+                            if let Err(e) = cache.remove(k) {
+                                warn!("failed to remove invalid cache item of key {k}: {e}");
+                            }
+                            None
+                        } else {
+                            // trim the checksum bytes and return
+                            let total_len = bytes.len();
+                            let body_len = total_len - 4;
+                            bytes.truncate(body_len);
+                            Some(Arc::new(bytes.into()))
+                        }
+                    }
+                    Err(e) => {
+                        // Failure of reading cache item is ignored,
+                        // maybe it should be ignored by the caller?
+                        error!("failed to read disk cache item of key {k}: {e}");
+                        None
+                    }
+                }
+            })
+            .collect()
+    }
+}
 
 pub struct LruDiskCacheBuilder;
 
@@ -170,6 +256,7 @@ impl LruDiskCacheBuilder {
         disk_cache_bytes_size: usize,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
+        population_tx: crossbeam_channel::Sender<Vec<CacheItem>>,
     ) -> Result<LruDiskCacheHolder> {
         let lru_disk_cache = DiskCache::new(
             path,
@@ -178,7 +265,10 @@ impl LruDiskCacheBuilder {
             sync_data,
         )
         .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
-        Ok(Arc::new(RwLock::new(lru_disk_cache)))
+        Ok(LruDiskCacheHolder {
+            cache: Arc::new(RwLock::new(lru_disk_cache)),
+            population_tx,
+        })
     }
 }
 
@@ -452,5 +542,82 @@ mod linux_read {
             assert!(result.is_err());
             assert_eq!(result.unwrap_err().raw_os_error(), Some(libc::EIO));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests_mget {
+    use databend_common_config::DiskCacheKeyReloadPolicy;
+    use tempfile::TempDir;
+
+    use super::*;
+    use crate::CacheAccessor;
+
+    fn new_cache(bytes_capacity: usize) -> (TempDir, LruDiskCacheHolder) {
+        let dir = TempDir::new().unwrap();
+        // The population worker is irrelevant for holder-level tests; the
+        // queue endpoint is dropped so `populate` becomes a silent no-op.
+        let (population_tx, _population_rx) = crossbeam_channel::bounded(1);
+        let holder = LruDiskCacheBuilder::new_disk_cache(
+            &dir.path().to_path_buf(),
+            bytes_capacity,
+            DiskCacheKeyReloadPolicy::Reset,
+            false,
+            population_tx,
+        )
+        .unwrap();
+        (dir, holder)
+    }
+
+    #[test]
+    fn test_mget_results_align_with_keys() {
+        let (_dir, cache) = new_cache(1 << 20);
+        cache.insert("a".to_string(), Bytes::from_static(b"alpha"));
+        cache.insert("c".to_string(), Bytes::from_static(b"charlie"));
+
+        let results = cache.mget(&["a", "b", "c"]);
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0].as_deref(), Some(&Bytes::from_static(b"alpha")));
+        assert!(results[1].is_none());
+        assert_eq!(results[2].as_deref(), Some(&Bytes::from_static(b"charlie")));
+    }
+
+    #[test]
+    fn test_mget_touches_the_lru_order() {
+        // Each 8-byte value is stored as 12 bytes (value + crc32); the
+        // capacity holds exactly two entries.
+        let (_dir, cache) = new_cache(24);
+        cache.insert("a".to_string(), Bytes::from_static(b"aaaaaaaa"));
+        cache.insert("b".to_string(), Bytes::from_static(b"bbbbbbbb"));
+
+        // Touch `a`, making `b` the eviction candidate.
+        assert!(cache.mget(&["a"])[0].is_some());
+        cache.insert("c".to_string(), Bytes::from_static(b"cccccccc"));
+
+        assert!(cache.contains_key("a"));
+        assert!(!cache.contains_key("b"));
+        assert!(cache.contains_key("c"));
+    }
+
+    #[test]
+    fn test_mget_evicts_corrupted_entries() {
+        let (_dir, cache) = new_cache(1 << 20);
+        cache.insert("good".to_string(), Bytes::from_static(b"payload"));
+        cache.insert("bad".to_string(), Bytes::from_static(b"payload"));
+
+        // Corrupt the stored file in place, keeping its length intact so the
+        // read succeeds and only the crc validation fails.
+        let (path, size) = {
+            let mut inner = cache.write();
+            inner.get_cache_item_path_and_size("bad").unwrap()
+        };
+        std::fs::write(&path, vec![0xAB_u8; size as usize]).unwrap();
+
+        let results = cache.mget(&["good", "bad"]);
+        assert_eq!(results[0].as_deref(), Some(&Bytes::from_static(b"payload")));
+        assert!(results[1].is_none());
+        // The corrupted entry was evicted on the spot.
+        assert!(!cache.contains_key("bad"));
+        assert!(cache.contains_key("good"));
     }
 }

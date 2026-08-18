@@ -31,7 +31,6 @@ pub use files::dedup_file_locations;
 pub use merge_io_reader::MergeIOReader;
 pub use merge_io_result::MergeIOReadResult;
 pub use merge_io_result::OwnerMemory;
-pub use range_read::ChunkCache;
 pub use range_read::ChunkGrid;
 pub use range_read::ChunkedRangeReader;
 pub use range_read::DiskCacheRangeReader;

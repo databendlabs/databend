@@ -28,7 +28,6 @@ use opendal::Buffer;
 
 pub use self::chunk_grid::ChunkGrid;
 pub use self::chunked::ChunkedRangeReader;
-pub use self::disk_cache::ChunkCache;
 pub use self::disk_cache::DiskCacheRangeReader;
 pub use self::operator::OperatorRangeReader;
 

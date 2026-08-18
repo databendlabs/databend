@@ -30,11 +30,7 @@ use log::info;
 use crate::CacheAccessor;
 use crate::LruDiskCacheBuilder;
 use crate::providers::LruDiskCacheHolder;
-
-struct CacheItem {
-    key: String,
-    value: Bytes,
-}
+use crate::providers::disk_cache::disk_cache_lru::CacheItem;
 
 #[derive(Clone)]
 pub struct TableDataCacheKey {
@@ -65,7 +61,7 @@ impl AsRef<str> for TableDataCacheKey {
 pub struct DiskCacheAccessor<T = LruDiskCacheHolder> {
     name: String,
     lru_disk_cache: T,
-    population_queue: crossbeam_channel::Sender<CacheItem>,
+    population_queue: crossbeam_channel::Sender<Vec<CacheItem>>,
     _cache_populator: DiskCachePopulator,
 }
 
@@ -81,6 +77,13 @@ impl DiskCacheAccessor {
 
 pub struct DiskCacheBuilder;
 
+impl<T> DiskCacheAccessor<T> {
+    /// The underlying disk LRU, shared by every accessor clone.
+    pub fn lru_disk_cache(&self) -> &T {
+        &self.lru_disk_cache
+    }
+}
+
 impl DiskCacheBuilder {
     pub fn try_build_disk_cache(
         name: String,
@@ -90,13 +93,19 @@ impl DiskCacheBuilder {
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
     ) -> Result<DiskCacheAccessor<LruDiskCacheHolder>> {
+        // The queue is created first so its sender can be embedded into the
+        // holder: holders admit through `populate` without taking the lock,
+        // sharing the same queue and population worker as the accessor. Note
+        // that the worker owns a holder (which carries a sender clone), so
+        // the population thread lives for the rest of the process.
+        let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let disk_cache = LruDiskCacheBuilder::new_disk_cache(
             path,
             disk_cache_bytes_size,
             disk_cache_reload_policy,
             sync_data,
+            tx.clone(),
         )?;
-        let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
         Ok(DiskCacheAccessor {
             name,
@@ -144,8 +153,9 @@ impl CacheAccessor for DiskCacheAccessor {
             let msg = CacheItem {
                 key: k,
                 value: v.clone(),
+                track_pending_metric: true,
             };
-            match self.population_queue.try_send(msg) {
+            match self.population_queue.try_send(vec![msg]) {
                 Ok(_) => {
                     metrics_inc_cache_population_pending_count(1, &self.name);
                 }
@@ -192,21 +202,27 @@ impl CacheAccessor for DiskCacheAccessor {
 
 struct CachePopulationWorker<T> {
     cache: T,
-    population_queue: crossbeam_channel::Receiver<CacheItem>,
+    population_queue: crossbeam_channel::Receiver<Vec<CacheItem>>,
 }
 
 impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<T> {
     fn populate(&self) {
         loop {
             match self.population_queue.recv() {
-                Ok(CacheItem { key, value }) => {
+                Ok(batch) => {
+                    for CacheItem {
+                        key,
+                        value,
+                        track_pending_metric,
+                    } in batch
                     {
-                        if self.cache.contains_key(&key) {
-                            continue;
+                        if !self.cache.contains_key(&key) {
+                            self.cache.insert(key, value);
+                        }
+                        if track_pending_metric {
+                            metrics_inc_cache_population_pending_count(-1, self.cache.name());
                         }
                     }
-                    self.cache.insert(key, value);
-                    metrics_inc_cache_population_pending_count(-1, self.cache.name());
                 }
                 Err(e) => {
                     info!("table data cache worker shutdown, due to error: {:?}", e);
@@ -227,13 +243,13 @@ impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<
 #[derive(Clone)]
 struct DiskCachePopulator {
     #[cfg(test)]
-    receiver: crossbeam_channel::Receiver<CacheItem>,
+    receiver: crossbeam_channel::Receiver<Vec<CacheItem>>,
 }
 
 impl DiskCachePopulator {
     #[cfg(test)]
     fn new<T>(
-        incoming: crossbeam_channel::Receiver<CacheItem>,
+        incoming: crossbeam_channel::Receiver<Vec<CacheItem>>,
         cache: T,
         _num_worker_thread: usize,
     ) -> Result<Self>
@@ -247,7 +263,7 @@ impl DiskCachePopulator {
 
     #[cfg(not(test))]
     fn new<T>(
-        incoming: crossbeam_channel::Receiver<CacheItem>,
+        incoming: crossbeam_channel::Receiver<Vec<CacheItem>>,
         cache: T,
         _num_worker_thread: usize,
     ) -> Result<Self>
@@ -259,7 +275,7 @@ impl DiskCachePopulator {
     }
 
     fn kick_off<T>(
-        incoming: crossbeam_channel::Receiver<CacheItem>,
+        incoming: crossbeam_channel::Receiver<Vec<CacheItem>>,
         cache: T,
         _num_worker_thread: usize,
     ) -> Result<()>
