@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::BitAnd;
-use std::ops::BitOr;
-use std::ops::BitXor;
-use std::ops::Sub;
-
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
@@ -37,6 +32,7 @@ use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_signed_integer_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_io::HybridBitmap;
+use databend_common_io::bitmap::BitmapRhs::Serialized;
 use databend_common_io::bitmap::bitmap_contains;
 use databend_common_io::bitmap::bitmap_has_all;
 use databend_common_io::bitmap::bitmap_has_any;
@@ -539,7 +535,7 @@ fn bitmap_logic_operate(
         builder.commit_row();
         return;
     }
-    let Some(rb1) = deserialize_bitmap(arg1)
+    let Some(mut rb1) = deserialize_bitmap(arg1)
         .map_err(|e| {
             ctx.set_error(builder.len(), e.to_string());
             builder.commit_row();
@@ -549,23 +545,19 @@ fn bitmap_logic_operate(
         return;
     };
 
-    let Some(rb2) = deserialize_bitmap(arg2)
-        .map_err(|e| {
-            ctx.set_error(builder.len(), e.to_string());
-            builder.commit_row();
-        })
-        .ok()
-    else {
+    let res = match op {
+        LogicOp::Or => rb1.bitor_assign_rhs(Serialized(arg2)),
+        LogicOp::And => rb1.bitand_assign_rhs(Serialized(arg2)),
+        LogicOp::Xor => rb1.bitxor_assign_rhs(Serialized(arg2)),
+        LogicOp::Not => rb1.sub_assign_rhs(Serialized(arg2)),
+    };
+
+    if let Err(e) = res {
+        ctx.set_error(builder.len(), e.to_string());
+        builder.commit_row();
         return;
-    };
+    }
 
-    let rb = match op {
-        LogicOp::Or => rb1.bitor(rb2),
-        LogicOp::And => rb1.bitand(rb2),
-        LogicOp::Xor => rb1.bitxor(rb2),
-        LogicOp::Not => rb1.sub(rb2),
-    };
-
-    rb.serialize_into(&mut builder.data).unwrap();
+    rb1.serialize_into(&mut builder.data).unwrap();
     builder.commit_row();
 }
