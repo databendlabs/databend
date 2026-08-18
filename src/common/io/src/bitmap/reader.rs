@@ -21,7 +21,9 @@ use std::ops::ControlFlow;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use roaring::RoaringBitmap;
 use roaring::RoaringTreemap;
+use roaring::treemap::BitmapEntry;
 
 // Sizes of header structures
 const DESCRIPTION_BYTES: usize = 4;
@@ -942,38 +944,97 @@ pub(crate) fn bitmap_has_all(lhs: &[u8], rhs: &[u8]) -> io::Result<bool> {
     ContainerVisitor::new(lhs, rhs, HasAllHandler).visit()
 }
 
-pub fn intersection_with_serialized(tree: &mut RoaringTreemap, buf: &[u8]) -> io::Result<()> {
-    use std::cmp::Ordering::*;
+pub fn intersection_assign_with_serialized(
+    tree: &mut RoaringTreemap,
+    buf: &[u8],
+) -> io::Result<()> {
     let rhs = TreemapReader::new(buf)?;
-    let mut bitmaps = Vec::new();
-    let mut lhs_iter = tree.bitmaps();
-    let mut rhs_iter = rhs.iter();
+    let mut rhs_prefixes: Vec<u32> = Vec::new();
 
-    let mut lhs_curr = lhs_iter.next();
-    let mut rhs_curr = rhs_iter.next().transpose()?;
-
-    while let (Some((lhs_prefix, lhs_bitmap)), Some(rhs_bitmap)) = (lhs_curr, rhs_curr.as_ref()) {
-        match lhs_prefix.cmp(&rhs_bitmap.prefix()) {
-            Less => {
-                lhs_curr = lhs_iter.next();
-            }
-            Greater => {
-                rhs_curr = rhs_iter.next().transpose()?;
-            }
-            Equal => {
-                let intersection = lhs_bitmap
-                    .intersection_with_serialized_unchecked(Cursor::new(rhs_bitmap.bitmap_buf()))?;
-                if !intersection.is_empty() {
-                    bitmaps.push((lhs_prefix, intersection));
-                }
-                lhs_curr = lhs_iter.next();
-                rhs_curr = rhs_iter.next().transpose()?;
+    for item in rhs.iter() {
+        let rb = item?;
+        let prefix = rb.prefix();
+        rhs_prefixes.push(prefix);
+        if let BitmapEntry::Occupied(mut entry) = tree.bitmap_entry(prefix) {
+            let bitmap = entry.get_mut();
+            bitmap.intersection_assign_with_serialized_unchecked(Cursor::new(rb.bitmap_buf()))?;
+            if bitmap.is_empty() {
+                entry.remove();
             }
         }
     }
 
-    *tree = RoaringTreemap::from_bitmaps(bitmaps);
+    let to_remove: Vec<u32> = tree
+        .bitmaps()
+        .filter(|(p, _)| rhs_prefixes.binary_search(p).is_err())
+        .map(|(p, _)| p)
+        .collect();
+    for p in to_remove {
+        if let BitmapEntry::Occupied(entry) = tree.bitmap_entry(p) {
+            entry.remove();
+        }
+    }
 
+    Ok(())
+}
+
+pub fn union_assign_with_serialized(tree: &mut RoaringTreemap, buf: &[u8]) -> io::Result<()> {
+    let rhs = TreemapReader::new(buf)?;
+    for item in rhs.iter() {
+        let rb = item?;
+        match tree.bitmap_entry(rb.prefix()) {
+            BitmapEntry::Occupied(mut entry) => {
+                entry
+                    .get_mut()
+                    .union_assign_with_serialized_unchecked(Cursor::new(rb.bitmap_buf()))?;
+            }
+            BitmapEntry::Vacant(entry) => {
+                let bitmap = RoaringBitmap::deserialize_unchecked_from(rb.bitmap_buf())?;
+                entry.insert(bitmap);
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn difference_assign_with_serialized(tree: &mut RoaringTreemap, buf: &[u8]) -> io::Result<()> {
+    let rhs = TreemapReader::new(buf)?;
+    for item in rhs.iter() {
+        let rb = item?;
+        if let BitmapEntry::Occupied(mut entry) = tree.bitmap_entry(rb.prefix()) {
+            let bitmap = entry.get_mut();
+            bitmap.difference_assign_with_serialized_unchecked(Cursor::new(rb.bitmap_buf()))?;
+            if bitmap.is_empty() {
+                entry.remove();
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn symmetric_difference_assign_with_serialized(
+    tree: &mut RoaringTreemap,
+    buf: &[u8],
+) -> io::Result<()> {
+    let rhs = TreemapReader::new(buf)?;
+    for item in rhs.iter() {
+        let rb = item?;
+        match tree.bitmap_entry(rb.prefix()) {
+            BitmapEntry::Occupied(mut entry) => {
+                let bitmap = entry.get_mut();
+                bitmap.symmetric_difference_assign_with_serialized_unchecked(Cursor::new(
+                    rb.bitmap_buf(),
+                ))?;
+                if bitmap.is_empty() {
+                    entry.remove();
+                }
+            }
+            BitmapEntry::Vacant(entry) => {
+                let bitmap = RoaringBitmap::deserialize_unchecked_from(rb.bitmap_buf())?;
+                entry.insert(bitmap);
+            }
+        }
+    }
     Ok(())
 }
 
@@ -1145,9 +1206,114 @@ mod tests {
         v23.serialize_into(&mut buf)?;
 
         let mut v = v12;
-        intersection_with_serialized(&mut v, &buf)?;
+        intersection_assign_with_serialized(&mut v, &buf)?;
 
         assert_eq!(v, v2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_union() -> io::Result<()> {
+        let v1 = create_bitmap(123);
+        let v2 = create_bitmap(456);
+        let v3 = create_bitmap(789);
+
+        let v12 = &v1 | &v2;
+        let v23 = &v2 | &v3;
+        let expected = &v12 | &v23;
+
+        let mut buf = Vec::new();
+        v23.serialize_into(&mut buf)?;
+
+        let mut v = v12.clone();
+        union_assign_with_serialized(&mut v, &buf)?;
+        assert_eq!(v, expected);
+
+        // Edge cases
+        let empty = RoaringTreemap::new();
+        let empty_buf = {
+            let mut b = Vec::new();
+            empty.serialize_into(&mut b)?;
+            b
+        };
+        let mut v = empty;
+        union_assign_with_serialized(&mut v, &buf)?;
+        assert_eq!(v, v23);
+
+        let mut v = v12.clone();
+        union_assign_with_serialized(&mut v, &empty_buf)?;
+        assert_eq!(v, v12);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_difference() -> io::Result<()> {
+        let v1 = create_bitmap(123);
+        let v2 = create_bitmap(456);
+        let v3 = create_bitmap(789);
+
+        let v12 = &v1 | &v2;
+        let v23 = &v2 | &v3;
+        let expected = &v12 - &v23;
+
+        let mut buf = Vec::new();
+        v23.serialize_into(&mut buf)?;
+
+        let mut v = v12.clone();
+        difference_assign_with_serialized(&mut v, &buf)?;
+        assert_eq!(v, expected);
+
+        // Edge cases
+        let empty = RoaringTreemap::new();
+        let empty_buf = {
+            let mut b = Vec::new();
+            empty.serialize_into(&mut b)?;
+            b
+        };
+        let mut v = v12.clone();
+        difference_assign_with_serialized(&mut v, &empty_buf)?;
+        assert_eq!(v, v12);
+
+        let mut v = empty;
+        difference_assign_with_serialized(&mut v, &buf)?;
+        assert!(v.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_symmetric_difference() -> io::Result<()> {
+        let v1 = create_bitmap(123);
+        let v2 = create_bitmap(456);
+        let v3 = create_bitmap(789);
+
+        let v12 = &v1 | &v2;
+        let v23 = &v2 | &v3;
+        let expected = &v12 ^ &v23;
+
+        let mut buf = Vec::new();
+        v23.serialize_into(&mut buf)?;
+
+        let mut v = v12.clone();
+        symmetric_difference_assign_with_serialized(&mut v, &buf)?;
+        assert_eq!(v, expected);
+
+        // Edge cases
+        let empty = RoaringTreemap::new();
+        let empty_buf = {
+            let mut b = Vec::new();
+            empty.serialize_into(&mut b)?;
+            b
+        };
+        let mut v = v12.clone();
+        symmetric_difference_assign_with_serialized(&mut v, &empty_buf)?;
+        assert_eq!(v, v12);
+
+        let mut v = empty;
+        symmetric_difference_assign_with_serialized(&mut v, &buf)?;
+        assert_eq!(v, v23);
 
         Ok(())
     }

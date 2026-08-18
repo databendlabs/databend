@@ -314,13 +314,14 @@ impl HybridBitmap {
             (BitmapOp::And, BitmapRhsView::SerializedLarge(rhs)) => {
                 self.bitand_assign_serialized_large(rhs)?
             }
-            (op, BitmapRhsView::SerializedLarge(rhs)) => {
-                let rhs = RoaringTreemap::deserialize_unchecked_from(rhs).map_err(|e| {
-                    let len = rhs.len();
-                    let msg = format!("fail to decode roaring bitmap payload of size {len}: {e}");
-                    ErrorCode::BadBytes(msg)
-                })?;
-                self.apply_rhs(op, BitmapRhsView::Large(rhs))?;
+            (BitmapOp::Or, BitmapRhsView::SerializedLarge(rhs)) => {
+                self.bitor_assign_serialized_large(rhs)?
+            }
+            (BitmapOp::Xor, BitmapRhsView::SerializedLarge(rhs)) => {
+                self.bitxor_assign_serialized_large(rhs)?
+            }
+            (BitmapOp::Sub, BitmapRhsView::SerializedLarge(rhs)) => {
+                self.sub_assign_serialized_large(rhs)?
             }
             (BitmapOp::And, BitmapRhsView::Large(rhs)) => self.bitand_assign_large(rhs),
             (BitmapOp::Or, BitmapRhsView::Large(rhs)) => self.bitor_assign_large(rhs),
@@ -406,7 +407,8 @@ impl HybridBitmap {
     fn bitand_assign_serialized_large(&mut self, rhs: &[u8]) -> Result<()> {
         match self {
             HybridBitmap::Large(lhs_tree) => {
-                reader::intersection_with_serialized(lhs_tree, rhs)?;
+                reader::intersection_assign_with_serialized(lhs_tree, rhs)?;
+                self.try_demote();
             }
             HybridBitmap::Small(lhs_set) => {
                 let rhs = RoaringTreemap::deserialize_unchecked_from(rhs).map_err(|e| {
@@ -415,6 +417,65 @@ impl HybridBitmap {
                     ErrorCode::BadBytes(msg)
                 })?;
                 lhs_set.retain(|value| rhs.contains(*value));
+            }
+        }
+        Ok(())
+    }
+
+    fn bitor_assign_serialized_large(&mut self, rhs: &[u8]) -> Result<()> {
+        match self {
+            HybridBitmap::Large(lhs_tree) => {
+                reader::union_assign_with_serialized(lhs_tree, rhs)?;
+            }
+            HybridBitmap::Small(lhs_set) => {
+                let mut rhs = RoaringTreemap::deserialize_unchecked_from(rhs).map_err(|e| {
+                    let len = rhs.len();
+                    let msg = format!("fail to decode roaring bitmap payload of size {len}: {e}");
+                    ErrorCode::BadBytes(msg)
+                })?;
+                rhs.extend(lhs_set.iter().copied());
+                *self = HybridBitmap::from(rhs);
+            }
+        }
+        Ok(())
+    }
+
+    fn bitxor_assign_serialized_large(&mut self, rhs: &[u8]) -> Result<()> {
+        match self {
+            HybridBitmap::Large(lhs_tree) => {
+                reader::symmetric_difference_assign_with_serialized(lhs_tree, rhs)?;
+                self.try_demote();
+            }
+            HybridBitmap::Small(lhs_set) => {
+                let mut rhs = RoaringTreemap::deserialize_unchecked_from(rhs).map_err(|e| {
+                    let len = rhs.len();
+                    let msg = format!("fail to decode roaring bitmap payload of size {len}: {e}");
+                    ErrorCode::BadBytes(msg)
+                })?;
+                for value in lhs_set.iter().copied() {
+                    if !rhs.remove(value) {
+                        rhs.insert(value);
+                    }
+                }
+                *self = HybridBitmap::from(rhs);
+            }
+        }
+        Ok(())
+    }
+
+    fn sub_assign_serialized_large(&mut self, rhs: &[u8]) -> Result<()> {
+        match self {
+            HybridBitmap::Large(lhs_tree) => {
+                reader::difference_assign_with_serialized(lhs_tree, rhs)?;
+                self.try_demote();
+            }
+            HybridBitmap::Small(lhs_set) => {
+                let rhs = RoaringTreemap::deserialize_unchecked_from(rhs).map_err(|e| {
+                    let len = rhs.len();
+                    let msg = format!("fail to decode roaring bitmap payload of size {len}: {e}");
+                    ErrorCode::BadBytes(msg)
+                })?;
+                lhs_set.retain(|value| !rhs.contains(*value));
             }
         }
         Ok(())
