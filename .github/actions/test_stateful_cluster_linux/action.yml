@@ -18,3 +18,11 @@ runs:
     - name: Run nox test
       shell: bash
       run: nox -f tests/nox/noxfile.py -s test_suites -- suites/
+
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.9"
+
+    - name: Run PyArrow compatibility tests
+      shell: bash
+      run: nox -f tests/nox/noxfile.py -s pyarrow_compat

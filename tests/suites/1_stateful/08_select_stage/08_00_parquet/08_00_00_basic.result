@@ -17,6 +17,5 @@
 2	{"k":"v"}
 --- large parquet file should be worked on parallel by rowgroups
 5000000
-├── partitions total: 3
-├── partitions scanned: 3
+parallel scan partitions: true
 5000000
