@@ -40,6 +40,7 @@ use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -60,6 +61,7 @@ use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -233,10 +235,18 @@ async fn prefetch_ownerships_with_api(
         for (object, ownership) in objects.iter().cloned().zip(ownerships) {
             let owner_role = match ownership {
                 Some(owner) => {
-                    if owner.object != object {
+                    // Compare encoded keys rather than full objects. Table ownership keys
+                    // intentionally omit db_id, so OwnershipInfo may retain the old db_id after
+                    // a legacy or lower-level cross-database rename while still belonging to the
+                    // requested key.
+                    let requested_key =
+                        TenantOwnershipObjectIdent::new(tenant, object.clone()).to_string_key();
+                    let returned_key =
+                        TenantOwnershipObjectIdent::new(tenant, owner.object.clone())
+                            .to_string_key();
+                    if returned_key != requested_key {
                         return Err(ErrorCode::Internal(format!(
-                            "ownership MGet returned {} for requested object {}",
-                            owner.object, object
+                            "ownership MGet returned key {returned_key} for requested key {requested_key}"
                         )));
                     }
                     let exists = match role_exists.get(&owner.role) {
@@ -3385,6 +3395,31 @@ mod tests {
                 .unwrap_err();
         assert_eq!(error.code(), ErrorCode::INTERNAL);
         assert_eq!(cache.ownership_check(&object, false), None);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_ownership_prefetch_accepts_stale_table_database_id() -> Result<()> {
+        let tenant = Tenant::new_literal("tenant");
+        let object = table(2, 4);
+        let stored_object = table(1, 4);
+        let cache = QueryAccessCache::default();
+        let api = FakeOwnershipApi {
+            ownerships: HashMap::from([(object.clone(), owned_by(&stored_object, "owner"))]),
+            existing_roles: HashMap::from([("owner".to_string(), true)]),
+            ..Default::default()
+        };
+        prefetch_ownerships_with_api(
+            &cache,
+            &tenant,
+            &[object.clone()],
+            &role_names(&["owner"]),
+            &api,
+        )
+        .await?;
+        assert_eq!(cache.ownership_check(&object, false), Some(true));
+        assert_eq!(*api.mget_batch_sizes.lock(), vec![1]);
+        assert_eq!(*api.exists_role_calls.lock(), vec!["owner".to_string()]);
         Ok(())
     }
 }
