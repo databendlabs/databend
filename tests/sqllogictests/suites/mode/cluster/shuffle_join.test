@@ -507,3 +507,78 @@ drop table t2
 
 statement ok
 set prefer_broadcast_join = 1
+
+statement ok
+set enforce_shuffle_join = 1
+
+statement ok
+create or replace table multi_key_scatter_probe(
+    address string not null,
+    user_id uint64 not null,
+    chain_id uint64 not null,
+    wallet_id uint64 not null,
+    payload string not null
+)
+
+statement ok
+create or replace table multi_key_scatter_build(
+    address_lower string not null,
+    address_raw string not null,
+    user_id uint64 not null,
+    chain_id uint64 not null,
+    wallet_id uint64 not null
+)
+
+statement ok
+insert into multi_key_scatter_probe values
+    ('AbC', 1, 10, 100, 'matched-1'),
+    ('DEF', 2, 20, 200, 'unmatched-2'),
+    ('ghi', 3, 30, 300, 'matched-3'),
+    ('Jkl', 4, 40, 400, 'unmatched-4')
+
+statement ok
+insert into multi_key_scatter_build values
+    ('abc', 'AbC', 1, 10, 100),
+    ('def', 'DEF', 2, 20, 999),
+    ('ghi', 'ghi', 3, 30, 300),
+    ('jkl', 'Jkl', 4, 999, 400)
+
+query TT
+select p.address, p.payload
+from multi_key_scatter_probe as p
+inner join multi_key_scatter_build as b
+    on lower(p.address) = b.address_lower
+   and p.address = b.address_raw
+   and p.user_id = b.user_id
+   and p.chain_id = b.chain_id
+   and p.wallet_id = b.wallet_id
+order by p.address
+----
+AbC matched-1
+ghi matched-3
+
+query TT
+select p.address, p.payload
+from multi_key_scatter_probe as p
+where not exists (
+    select 1
+    from multi_key_scatter_build as b
+    where lower(p.address) = b.address_lower
+      and p.address = b.address_raw
+      and p.user_id = b.user_id
+      and p.chain_id = b.chain_id
+      and p.wallet_id = b.wallet_id
+)
+order by p.address
+----
+DEF unmatched-2
+Jkl unmatched-4
+
+statement ok
+drop table multi_key_scatter_probe
+
+statement ok
+drop table multi_key_scatter_build
+
+statement ok
+unset enforce_shuffle_join
