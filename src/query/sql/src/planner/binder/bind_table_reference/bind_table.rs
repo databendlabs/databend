@@ -34,7 +34,9 @@ use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::BindContext;
 use crate::LineageSourceRelation;
+use crate::MaterializedCteLineageSource;
 use crate::ViewLineageSourceColumn;
+use crate::Visibility;
 use crate::binder::Binder;
 use crate::binder::ViewIdent;
 use crate::binder::lineage_enabled;
@@ -97,6 +99,7 @@ impl Binder {
 
         // Check and bind common table expression
         let mut cte_suffix_name = None;
+        let mut materialized_cte_lineage = None;
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
@@ -108,6 +111,15 @@ impl Binder {
                     &materialized_cte_info.bound_context.columns,
                 );
             } else if cte_info.user_specified_materialized {
+                if lineage_enabled() {
+                    // The main query scans a temporary table, so retain a separately bound
+                    // producer definition that lineage extraction can follow by output position.
+                    materialized_cte_lineage = Some(self.bind_cte_definition(
+                        &table_name,
+                        cte_map.as_ref(),
+                        &cte_info.query,
+                    )?);
+                }
                 cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
             } else {
                 if self
@@ -375,6 +387,44 @@ impl Binder {
                     sample,
                     true,
                 )?;
+                if let Some((definition, producer_context)) = materialized_cte_lineage {
+                    let consumer_column_count = bind_context
+                        .columns
+                        .iter()
+                        .filter(|column| column.visibility == Visibility::Visible)
+                        .count();
+                    let producer_column_count = producer_context
+                        .columns
+                        .iter()
+                        .filter(|column| column.visibility == Visibility::Visible)
+                        .count();
+                    if consumer_column_count != producer_column_count {
+                        return Err(ErrorCode::Internal(format!(
+                            "Materialized CTE '{}' has {} producer columns but {} temporary-table columns",
+                            table_name, producer_column_count, consumer_column_count
+                        )));
+                    }
+                    let mut metadata = self.metadata.write();
+                    for (consumer, producer) in bind_context
+                        .columns
+                        .iter()
+                        .filter(|column| column.visibility == Visibility::Visible)
+                        .zip(
+                            producer_context
+                                .columns
+                                .iter()
+                                .filter(|column| column.visibility == Visibility::Visible),
+                        )
+                    {
+                        metadata.add_materialized_cte_lineage_source(
+                            consumer.index,
+                            MaterializedCteLineageSource {
+                                definition: definition.clone(),
+                                output_column: producer.index,
+                            },
+                        );
+                    }
+                }
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
