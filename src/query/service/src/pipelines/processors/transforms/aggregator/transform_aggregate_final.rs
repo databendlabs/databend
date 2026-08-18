@@ -34,7 +34,6 @@ use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
-use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
@@ -357,7 +356,6 @@ impl TransformFinalAggregate {
             // payload owns its arena, so finishing one partition also releases its states.
             for payload in hashtable.into_payloads() {
                 loop {
-                    check_interrupt()?;
                     let Some(block) = payload.merge_result(&mut self.flush_state)? else {
                         self.flush_state.clear();
                         break;
