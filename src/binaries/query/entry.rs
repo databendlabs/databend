@@ -260,7 +260,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     if conf.log.structlog.on {
         println!("    structlog: {}", conf.log.structlog);
     }
-    if conf.log.history.on {
+    if conf.log.history.enabled() {
         if let Err(e) = GlobalHistoryLog::instance()
             .initialized(conf.log.history.log_only)
             .await
