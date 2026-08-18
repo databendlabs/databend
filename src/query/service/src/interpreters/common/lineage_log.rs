@@ -208,10 +208,7 @@ pub fn log_lineage_object_deletion(ctx: &Arc<QueryContext>, object_id: u64) {
 }
 
 fn lineage_enabled() -> bool {
-    GlobalConfig::instance()
-        .log
-        .history
-        .is_table_enabled("lineage_history")
+    GlobalConfig::instance().lineage.enabled()
 }
 
 #[cfg(test)]
