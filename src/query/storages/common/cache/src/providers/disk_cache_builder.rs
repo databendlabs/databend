@@ -28,6 +28,7 @@ use log::error;
 use log::info;
 
 use crate::CacheAccessor;
+use crate::LruDiskCache;
 use crate::LruDiskCacheBuilder;
 use crate::providers::LruDiskCacheHolder;
 use crate::providers::disk_cache::disk_cache_lru::CacheItem;
@@ -95,11 +96,11 @@ impl DiskCacheBuilder {
     ) -> Result<DiskCacheAccessor<LruDiskCacheHolder>> {
         // The queue is created first so its sender can be embedded into the
         // holder: holders admit through `populate` without taking the lock,
-        // sharing the same queue and population worker as the accessor. Note
-        // that the worker owns a holder (which carries a sender clone), so
-        // the population thread lives for the rest of the process.
+        // sharing the same queue and population worker as the accessor. The
+        // worker only owns the cache core (not a holder/sender), so it exits
+        // when every external holder/accessor is dropped.
         let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
-        let disk_cache = LruDiskCacheBuilder::new_disk_cache(
+        let disk_cache = LruDiskCacheBuilder::new_disk_cache_with_population(
             path,
             disk_cache_bytes_size,
             disk_cache_reload_policy,
@@ -107,11 +108,12 @@ impl DiskCacheBuilder {
             tx.clone(),
         )?;
         let num_population_thread = 1;
+        let cache_core = disk_cache.cache.clone();
         Ok(DiskCacheAccessor {
-            name,
-            lru_disk_cache: disk_cache.clone(),
+            name: name.clone(),
+            lru_disk_cache: disk_cache,
             population_queue: tx,
-            _cache_populator: DiskCachePopulator::new(rx, disk_cache, num_population_thread)?,
+            _cache_populator: DiskCachePopulator::new(rx, cache_core, name, num_population_thread)?,
         })
     }
 }
@@ -200,12 +202,13 @@ impl CacheAccessor for DiskCacheAccessor {
     }
 }
 
-struct CachePopulationWorker<T> {
-    cache: T,
+struct CachePopulationWorker {
+    cache: Arc<parking_lot::RwLock<LruDiskCache>>,
+    name: String,
     population_queue: crossbeam_channel::Receiver<Vec<CacheItem>>,
 }
 
-impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<T> {
+impl CachePopulationWorker {
     fn populate(&self) {
         loop {
             match self.population_queue.recv() {
@@ -216,11 +219,18 @@ impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<
                         track_pending_metric,
                     } in batch
                     {
-                        if !self.cache.contains_key(&key) {
-                            self.cache.insert(key, value);
+                        let mut cache = self.cache.write();
+                        if !cache.contains_key(&key) {
+                            let crc = crc32fast::hash(value.as_ref());
+                            let crc_bytes = crc.to_le_bytes();
+                            if let Err(e) = cache.insert_bytes(&key, &[value.as_ref(), &crc_bytes])
+                            {
+                                error!("put disk cache item failed {e}");
+                            }
                         }
+                        drop(cache);
                         if track_pending_metric {
-                            metrics_inc_cache_population_pending_count(-1, self.cache.name());
+                            metrics_inc_cache_population_pending_count(-1, &self.name);
                         }
                     }
                 }
@@ -233,7 +243,7 @@ impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<
     }
 
     fn start(self: Arc<Self>) -> Result<JoinHandle<()>> {
-        let thread_builder = std::thread::Builder::new().name(self.cache.name().to_owned());
+        let thread_builder = std::thread::Builder::new().name(self.name.clone());
         thread_builder.spawn(move || self.populate()).map_err(|e| {
             ErrorCode::StorageOther(format!("spawn cache population worker thread failed, {e}"))
         })
@@ -248,42 +258,37 @@ struct DiskCachePopulator {
 
 impl DiskCachePopulator {
     #[cfg(test)]
-    fn new<T>(
+    fn new(
         incoming: crossbeam_channel::Receiver<Vec<CacheItem>>,
-        cache: T,
+        cache: Arc<parking_lot::RwLock<LruDiskCache>>,
+        name: String,
         _num_worker_thread: usize,
-    ) -> Result<Self>
-    where
-        T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
-    {
+    ) -> Result<Self> {
         let receiver = incoming.clone();
-        Self::kick_off(incoming, cache, _num_worker_thread)?;
+        Self::kick_off(incoming, cache, name, _num_worker_thread)?;
         Ok(Self { receiver })
     }
 
     #[cfg(not(test))]
-    fn new<T>(
+    fn new(
         incoming: crossbeam_channel::Receiver<Vec<CacheItem>>,
-        cache: T,
+        cache: Arc<parking_lot::RwLock<LruDiskCache>>,
+        name: String,
         _num_worker_thread: usize,
-    ) -> Result<Self>
-    where
-        T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
-    {
-        Self::kick_off(incoming, cache, _num_worker_thread)?;
+    ) -> Result<Self> {
+        Self::kick_off(incoming, cache, name, _num_worker_thread)?;
         Ok(Self {})
     }
 
-    fn kick_off<T>(
+    fn kick_off(
         incoming: crossbeam_channel::Receiver<Vec<CacheItem>>,
-        cache: T,
+        cache: Arc<parking_lot::RwLock<LruDiskCache>>,
+        name: String,
         _num_worker_thread: usize,
-    ) -> Result<()>
-    where
-        T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
-    {
+    ) -> Result<()> {
         let worker = Arc::new(CachePopulationWorker {
             cache,
+            name,
             population_queue: incoming,
         });
         let _join_handler = worker.start();

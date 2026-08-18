@@ -501,7 +501,11 @@ mod tests {
         // Cold pass: facade streams through the cache layer down to the tail.
         let cold_accessor = RecordingReadAccessor::new(CONTENT, false);
         let mut cold = ChunkedRangeReader::with_range(
-            reader_over(cold_accessor.clone(), cache.clone(), usize::MAX),
+            Box::new(reader_over(
+                cold_accessor.clone(),
+                cache.clone(),
+                usize::MAX,
+            )),
             2..15,
             5,
         )
@@ -515,7 +519,7 @@ mod tests {
         // Warm pass over a fresh chain sharing the cache: zero remote I/O.
         let warm_accessor = RecordingReadAccessor::new(CONTENT, false);
         let mut warm = ChunkedRangeReader::with_range(
-            reader_over(warm_accessor.clone(), cache, usize::MAX),
+            Box::new(reader_over(warm_accessor.clone(), cache, usize::MAX)),
             2..15,
             5,
         )

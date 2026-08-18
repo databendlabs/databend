@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Facade of the ranged-read chain: splits a large range into fixed-size
-//! chunks, feeds them into the chain with feedback-driven pacing, and streams
-//! the results back in order — chunk by chunk or through [`std::io::Read`].
+//! `io::Read` adapter over a ranged-read chain: splits one contiguous file
+//! range into fixed-size windows, prefetches them, and exposes a continuous
+//! byte stream.
 
 use std::collections::VecDeque;
 use std::io;
@@ -26,15 +26,11 @@ use opendal::Buffer;
 
 use crate::range_read::RangeReader;
 
-/// Streams a sequence of chunks through a [`RangeReader`] chain.
-///
-/// Prefetch hints run ahead of consumption and are re-paced after every read
-/// based on the chain's pressure feedback; correctness never depends on a
-/// hint being accepted. The facade keeps no data: everything it holds is the
-/// planning cursor (`pending`/`backlog`) plus the tail of the chunk currently
-/// drained through `io::Read`.
-pub struct ChunkedRangeReader<R: RangeReader> {
-    chain: R,
+/// Adapts one contiguous file range into [`io::Read`] over a [`RangeReader`]
+/// chain. Prefetch hints run ahead of consumption; correctness never depends
+/// on a hint being accepted.
+pub struct ChunkedRangeReader {
+    chain: Box<dyn RangeReader>,
     /// Chunks not yet consumed, in consumption order.
     pending: VecDeque<Range<u64>>,
     /// Chunks not yet hinted; always a suffix of `pending`.
@@ -43,26 +39,20 @@ pub struct ChunkedRangeReader<R: RangeReader> {
     current: Option<Buffer>,
 }
 
-impl<R: RangeReader> ChunkedRangeReader<R> {
-    /// Stream explicit `chunks` through `chain`, consumed in the given order.
-    pub fn new(chain: R, chunks: Vec<Range<u64>>) -> Self {
-        let mut reader = Self {
-            chain,
-            pending: chunks.iter().cloned().collect(),
-            backlog: chunks.into_iter().collect(),
-            current: None,
-        };
-        reader.pump();
-        reader
-    }
-
-    /// Split `range` into `chunk_size`d pieces and stream them through `chain`.
-    pub fn with_range(chain: R, range: Range<u64>, chunk_size: u64) -> Result<Self> {
+impl ChunkedRangeReader {
+    /// Split `range` into `chunk_size`d windows and expose them as one
+    /// continuous byte stream.
+    pub fn with_range(
+        chain: Box<dyn RangeReader>,
+        range: Range<u64>,
+        chunk_size: u64,
+    ) -> Result<Self> {
         if chunk_size == 0 {
             return Err(ErrorCode::BadArguments(
                 "chunked range reader requires a positive chunk size",
             ));
         }
+
         let mut chunks = Vec::new();
         let mut start = range.start;
         while start < range.end {
@@ -70,26 +60,37 @@ impl<R: RangeReader> ChunkedRangeReader<R> {
             chunks.push(start..end);
             start = end;
         }
-        Ok(Self::new(chain, chunks))
+
+        let mut reader = Self {
+            chain,
+            pending: chunks.iter().cloned().collect(),
+            backlog: chunks.into_iter().collect(),
+            current: None,
+        };
+        reader.pump();
+        Ok(reader)
     }
 
-    /// Feed pending chunks into the chain until it reports saturation.
+    /// Feed the current backlog as one batch. Cache layers can therefore do
+    /// one `mget` and coalesce adjacent misses across all prefetched ranges.
     ///
-    /// When `prefetch` returns false the front chunk may or may not have been
-    /// accepted; it stays in the backlog and is hinted again on the next pump,
-    /// which the chain deduplicates (R4: dropped hints are refetched by
-    /// `read` on demand).
+    /// When `prefetch` returns false, some or all ranges may already have been
+    /// accepted; the backlog is retained and retried after the next read. The
+    /// chain deduplicates accepted hints, while dropped hints are fetched on
+    /// demand by `read`.
     fn pump(&mut self) {
-        while let Some(chunk) = self.backlog.front() {
-            if !self.chain.prefetch(std::slice::from_ref(chunk)) {
-                break;
-            }
-            self.backlog.pop_front();
+        if self.backlog.is_empty() {
+            return;
+        }
+
+        let batch = self.backlog.iter().cloned().collect::<Vec<_>>();
+        if self.chain.prefetch(&batch) {
+            self.backlog.clear();
         }
     }
 
-    /// Next chunk in consumption order, or `None` after the last one.
-    pub fn read_next_chunk(&mut self) -> Result<Option<Buffer>> {
+    /// Load the next window in file order, or `None` at EOF.
+    fn load_next(&mut self) -> Result<Option<Buffer>> {
         let Some(chunk) = self.pending.pop_front() else {
             return Ok(None);
         };
@@ -105,11 +106,12 @@ impl<R: RangeReader> ChunkedRangeReader<R> {
     }
 }
 
-impl<R: RangeReader> io::Read for ChunkedRangeReader<R> {
+impl io::Read for ChunkedRangeReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if buf.is_empty() {
             return Ok(0);
         }
+
         loop {
             if let Some(current) = self.current.as_mut() {
                 let read = current.read(buf)?;
@@ -118,7 +120,7 @@ impl<R: RangeReader> io::Read for ChunkedRangeReader<R> {
                 }
                 self.current = None;
             }
-            match self.read_next_chunk().map_err(io::Error::other)? {
+            match self.load_next().map_err(io::Error::other)? {
                 Some(data) => self.current = Some(data),
                 None => return Ok(0),
             }
@@ -142,50 +144,12 @@ mod tests {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
         let chain = OperatorRangeReader::new(recording_operator(accessor.clone()), "s".into(), 2);
-        let mut reader = ChunkedRangeReader::with_range(chain, 3..23, 8).unwrap();
+        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 3..23, 8).unwrap();
 
         let mut out = Vec::new();
         reader.read_to_end(&mut out).unwrap();
         assert_eq!(out, &CONTENT[3..23]);
         assert_eq!(accessor.read_ranges(), vec![3..11, 11..19, 19..23]);
-    }
-
-    #[test]
-    fn test_read_next_chunk_in_order_then_none() {
-        init_test_runtime();
-        let accessor = RecordingReadAccessor::new(CONTENT, false);
-        let chain = OperatorRangeReader::new(recording_operator(accessor.clone()), "c".into(), 4);
-        let mut reader = ChunkedRangeReader::with_range(chain, 0..10, 4).unwrap();
-
-        assert_eq!(
-            reader
-                .read_next_chunk()
-                .unwrap()
-                .unwrap()
-                .to_bytes()
-                .as_ref(),
-            b"abcd"
-        );
-        assert_eq!(
-            reader
-                .read_next_chunk()
-                .unwrap()
-                .unwrap()
-                .to_bytes()
-                .as_ref(),
-            b"efgh"
-        );
-        assert_eq!(
-            reader
-                .read_next_chunk()
-                .unwrap()
-                .unwrap()
-                .to_bytes()
-                .as_ref(),
-            b"ij"
-        );
-        assert!(reader.read_next_chunk().unwrap().is_none());
-        assert!(reader.read_next_chunk().unwrap().is_none());
     }
 
     #[test]
@@ -195,7 +159,7 @@ mod tests {
         // Capacity 1: hints lag behind consumption, so most chunks are read on
         // the spot; none may be dispatched twice.
         let chain = OperatorRangeReader::new(recording_operator(accessor.clone()), "d".into(), 1);
-        let mut reader = ChunkedRangeReader::with_range(chain, 0..25, 5).unwrap();
+        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 0..25, 5).unwrap();
 
         let mut out = Vec::new();
         reader.read_to_end(&mut out).unwrap();
@@ -212,7 +176,7 @@ mod tests {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, true);
         let chain = OperatorRangeReader::new(recording_operator(accessor), "err".into(), 2);
-        let mut reader = ChunkedRangeReader::with_range(chain, 0..16, 8).unwrap();
+        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 0..16, 8).unwrap();
 
         let mut out = Vec::new();
         assert!(reader.read_to_end(&mut out).is_err());
@@ -223,9 +187,8 @@ mod tests {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
         let chain = OperatorRangeReader::new(recording_operator(accessor.clone()), "e".into(), 1);
-        let mut reader = ChunkedRangeReader::with_range(chain, 5..5, 8).unwrap();
+        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 5..5, 8).unwrap();
 
-        assert!(reader.read_next_chunk().unwrap().is_none());
         let mut out = Vec::new();
         reader.read_to_end(&mut out).unwrap();
         assert!(out.is_empty());
@@ -236,6 +199,6 @@ mod tests {
     fn test_zero_chunk_size_is_rejected() {
         init_test_runtime();
         let chain = OperatorRangeReader::new(memory_operator(), "z".into(), 1);
-        assert!(ChunkedRangeReader::with_range(chain, 0..8, 0).is_err());
+        assert!(ChunkedRangeReader::with_range(Box::new(chain), 0..8, 0).is_err());
     }
 }

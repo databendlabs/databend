@@ -253,6 +253,10 @@ impl BlockReadContext {
         self.put_cache
     }
 
+    pub(crate) fn storage_fetch_part_num(&self) -> Result<usize> {
+        Ok(self.ctx.get_settings().get_storage_fetch_part_num()? as usize)
+    }
+
     pub(crate) fn report_cache_metrics<'a>(
         &self,
         block_read_res: &BlockReadResult,

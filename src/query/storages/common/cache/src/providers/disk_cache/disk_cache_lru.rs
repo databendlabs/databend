@@ -174,7 +174,7 @@ pub(crate) struct CacheItem {
 /// queue sender so that holders admit asynchronously without taking the lock.
 #[derive(Clone)]
 pub struct LruDiskCacheHolder {
-    cache: Arc<RwLock<LruDiskCache>>,
+    pub(crate) cache: Arc<RwLock<LruDiskCache>>,
     population_tx: crossbeam_channel::Sender<Vec<CacheItem>>,
 }
 
@@ -251,7 +251,26 @@ impl LruDiskCacheHolder {
 pub struct LruDiskCacheBuilder;
 
 impl LruDiskCacheBuilder {
+    /// Build a standalone disk LRU holder. `populate` is disabled because no
+    /// population worker is attached; direct cache operations still work.
     pub fn new_disk_cache(
+        path: &PathBuf,
+        disk_cache_bytes_size: usize,
+        disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
+        sync_data: bool,
+    ) -> Result<LruDiskCacheHolder> {
+        let (population_tx, population_rx) = crossbeam_channel::bounded(1);
+        drop(population_rx);
+        Self::new_disk_cache_with_population(
+            path,
+            disk_cache_bytes_size,
+            disk_cache_reload_policy,
+            sync_data,
+            population_tx,
+        )
+    }
+
+    pub(crate) fn new_disk_cache_with_population(
         path: &PathBuf,
         disk_cache_bytes_size: usize,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
@@ -555,18 +574,41 @@ mod tests_mget {
 
     fn new_cache(bytes_capacity: usize) -> (TempDir, LruDiskCacheHolder) {
         let dir = TempDir::new().unwrap();
-        // The population worker is irrelevant for holder-level tests; the
-        // queue endpoint is dropped so `populate` becomes a silent no-op.
-        let (population_tx, _population_rx) = crossbeam_channel::bounded(1);
         let holder = LruDiskCacheBuilder::new_disk_cache(
             &dir.path().to_path_buf(),
             bytes_capacity,
             DiskCacheKeyReloadPolicy::Reset,
             false,
-            population_tx,
         )
         .unwrap();
         (dir, holder)
+    }
+
+    #[test]
+    fn test_population_batch_uses_one_queue_slot() {
+        let dir = TempDir::new().unwrap();
+        let (population_tx, population_rx) = crossbeam_channel::bounded(1);
+        let holder = LruDiskCacheBuilder::new_disk_cache_with_population(
+            &dir.path().to_path_buf(),
+            1 << 20,
+            DiskCacheKeyReloadPolicy::Reset,
+            false,
+            population_tx,
+        )
+        .unwrap();
+
+        holder.populate(vec![
+            ("a".to_string(), Bytes::from_static(b"alpha")),
+            ("b".to_string(), Bytes::from_static(b"bravo")),
+            ("c".to_string(), Bytes::from_static(b"charlie")),
+        ]);
+
+        assert_eq!(population_rx.len(), 1);
+        let batch = population_rx.try_recv().unwrap();
+        assert_eq!(batch.len(), 3);
+        assert_eq!(batch[0].key, "a");
+        assert_eq!(batch[1].key, "b");
+        assert_eq!(batch[2].key, "c");
     }
 
     #[test]

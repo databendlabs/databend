@@ -31,7 +31,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_storages_common_blocks::LeafPageLayout;
 use databend_storages_common_blocks::blocks_to_parquet;
-use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BytesRange;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -44,6 +43,7 @@ use opendal::Buffer;
 use opendal::Operator;
 
 use crate::io::DataItem;
+use crate::io::create_file_range_reader;
 use crate::io::granule_index::GranuleMark;
 use crate::io::read::column_chunks_to_record_batch;
 
@@ -334,16 +334,19 @@ fn fetch_granule_marks(
     if byte_ranges.is_empty() {
         return Ok(HashMap::new());
     }
-    let mut reader = OperatorRangeReader::create(
-        settings,
+    let held_budget = usize::try_from(layout.size).unwrap_or(usize::MAX);
+    let mut reader = create_file_range_reader(
         dal.clone(),
         layout.location.0.clone(),
-        &byte_ranges,
-        1,
+        layout.size,
+        byte_ranges.len(),
+        settings.max_range_size,
+        held_budget,
     )?;
+    let _ = reader.prefetch(&byte_ranges);
     let mut per_mark: HashMap<String, Vec<u8>> = HashMap::new();
-    for name in mark_names {
-        let data = reader.read()?;
+    for (name, range) in mark_names.into_iter().zip(byte_ranges) {
+        let data = reader.read(range)?;
         per_mark
             .entry(name)
             .or_default()

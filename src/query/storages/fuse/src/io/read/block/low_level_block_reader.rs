@@ -56,7 +56,6 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_io::ChunkedRangeReader;
-use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
@@ -81,6 +80,8 @@ use parquet::file::reader::ChunkReader;
 use parquet::file::reader::Length;
 use parquet::file::serialized_reader::SerializedPageReader;
 use parquet::schema::types::SchemaDescriptor;
+
+use crate::io::create_file_range_reader;
 
 const DEFAULT_WINDOW_SIZE: usize = 4 * 1024 * 1024;
 const DEFAULT_MAX_PREFETCH: usize = 2;
@@ -1274,7 +1275,7 @@ fn ensure_matching_nulls(field: &str, nulls: &[Option<&arrow::buffer::NullBuffer
 }
 
 struct ForwardState {
-    input: ChunkedRangeReader<OperatorRangeReader>,
+    input: ChunkedRangeReader,
     position: u64,
     len: u64,
 }
@@ -1284,7 +1285,7 @@ struct ForwardChunkReader {
 }
 
 impl ForwardChunkReader {
-    fn new(input: ChunkedRangeReader<OperatorRangeReader>, len: u64) -> Self {
+    fn new(input: ChunkedRangeReader, len: u64) -> Self {
         Self {
             state: Arc::new(Mutex::new(ForwardState {
                 input,
@@ -1369,14 +1370,16 @@ impl ParquetLeafRowGroupAdapter {
         num_values: u64,
     ) -> Result<Self> {
         let len = range.end - range.start;
-        let chain = OperatorRangeReader::new(
+        let chain = create_file_range_reader(
             reader.operator.clone(),
             reader.path.clone(),
-            // `+ 1` keeps the pipeline depth comparable with the previous
-            // window reader, whose bounded channel held `max_prefetch`
-            // completed windows while the worker produced the next one.
-            reader.max_prefetch.saturating_add(1),
-        );
+            reader.block_meta.file_size,
+            reader.max_prefetch,
+            reader.window_size as u64,
+            reader
+                .window_size
+                .saturating_mul(reader.max_prefetch.saturating_add(2)),
+        )?;
         let input = ChunkedRangeReader::with_range(chain, range, reader.window_size as u64)?;
         let Ok(num_values) = i64::try_from(num_values) else {
             return Err(ErrorCode::BadArguments(format!(
