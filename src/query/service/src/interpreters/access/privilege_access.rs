@@ -2065,6 +2065,10 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DescribeView(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, UserPrivilegeType::Select, false, false).await?
             }
+            Plan::RefreshLineage(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?
+            }
             Plan::ShowCreateMaterializedView(plan) => {
                 let table = self.ctx.get_table(&plan.catalog, &plan.database, &plan.view_name).await?;
                 self.validate_mv_source_access(table.as_ref()).await?

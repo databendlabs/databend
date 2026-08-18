@@ -148,6 +148,7 @@ use crate::plans::PresignPlan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshDatabaseCachePlan;
 use crate::plans::RefreshIndexPlan;
+use crate::plans::RefreshLineagePlan;
 use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RefreshTableCachePlan;
 use crate::plans::RefreshTableIndexPlan;
@@ -355,6 +356,7 @@ pub enum Plan {
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
     DescribeView(Box<DescribeViewPlan>),
+    RefreshLineage(Box<RefreshLineagePlan>),
 
     // Materialized Views
     CreateMaterializedView(Box<CreateMaterializedViewPlan>),
@@ -597,6 +599,7 @@ impl Plan {
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
+            Plan::RefreshLineage(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),

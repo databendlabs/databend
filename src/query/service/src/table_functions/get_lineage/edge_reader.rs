@@ -88,7 +88,7 @@ pub(super) const EDGE_COLUMNS: &[&str] = &[
 ];
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(super) enum AddressKind {
+pub(crate) enum AddressKind {
     Id,
     Name,
 }
@@ -106,7 +106,7 @@ impl AddressKind {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(super) enum LineageObjectType {
+pub(crate) enum LineageObjectType {
     Table,
     View,
     Stage,
@@ -134,7 +134,7 @@ impl LineageObjectType {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(super) struct CapturedObject {
+pub(crate) struct CapturedObject {
     pub lineage_key: String,
     pub address_kind: AddressKind,
     pub catalog_type: String,
@@ -152,7 +152,7 @@ impl CapturedObject {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct RawLineageEdge {
+pub(crate) struct RawLineageEdge {
     pub updated_on: Option<i64>,
     pub user_name: Option<String>,
     pub query_parameterized_hash: Option<String>,
@@ -185,12 +185,13 @@ impl RawLineageEdge {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
-pub(super) struct LineageQueryInfo {
+pub(crate) struct LineageQueryInfo {
     pub query_id: Option<String>,
     pub query_text: Option<String>,
     pub query_duration_ms: Option<i64>,
     pub written_rows: Option<u64>,
     pub scan_rows: Option<u64>,
+    pub backfilled_at: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -220,14 +221,14 @@ struct DecodedColumnLineage {
     target_to_source: BTreeMap<String, Vec<String>>,
 }
 
-pub(super) struct LineageEdgeReader {
+pub(crate) struct LineageEdgeReader {
     ctx: Arc<dyn TableContext>,
     table: Arc<dyn Table>,
     next_scan_id: usize,
 }
 
 impl LineageEdgeReader {
-    pub(super) async fn try_create(ctx: Arc<dyn TableContext>) -> Result<Self> {
+    pub(crate) async fn try_create(ctx: Arc<dyn TableContext>) -> Result<Self> {
         let table = ctx
             .get_table(CATALOG_DEFAULT, HISTORY_DATABASE, LINEAGE_TABLE)
             .await?;
@@ -243,7 +244,7 @@ impl LineageEdgeReader {
     /// The table object is pinned for the lifetime of the reader, so every level reads the same
     /// Fuse snapshot even if the history transform commits concurrently. Scan ids are allocated
     /// monotonically per batch instead of reserving a fixed-size range for each distance level.
-    pub(super) async fn read_frontier(
+    pub(crate) async fn read_frontier(
         &mut self,
         match_column: &str,
         frontier: &BTreeSet<String>,

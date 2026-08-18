@@ -560,6 +560,14 @@ impl QueryContext {
         self.shared.get_query_lineage()
     }
 
+    pub(crate) fn attach_pending_lineage_logs(&self, logs: Vec<String>) {
+        self.shared.attach_pending_lineage_logs(logs);
+    }
+
+    pub(crate) fn take_pending_lineage_logs(&self) -> Vec<String> {
+        self.shared.take_pending_lineage_logs()
+    }
+
     /// Reconcile captured lineage after execution resolves the actual target.
     ///
     /// A missing captured id belongs to paths such as CTAS whose target is created during

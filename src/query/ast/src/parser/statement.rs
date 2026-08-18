@@ -1708,6 +1708,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let refresh_lineage = map(
+        rule! {
+            REFRESH ~ LINEAGE ~ ^FOR ~ ^ALL ~ ^VIEWS ~ ( DRY ~ ^RUN )?
+        },
+        |(_, _, _, _, _, dry_run)| {
+            Statement::RefreshLineage(RefreshLineageStmt {
+                dry_run: dry_run.is_some(),
+            })
+        },
+    );
     let show_create_materialized_view = map(
         rule! {
             SHOW ~ CREATE ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3
@@ -3114,7 +3124,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ATTACH => rule!(#attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
             ).parse(i),
         REFRESH => rule!(
-            #refresh_materialized_view: "`REFRESH MATERIALIZED VIEW [<database>.]<view>`"
+            #refresh_lineage: "`REFRESH LINEAGE FOR ALL VIEWS [DRY RUN]`"
+            | #refresh_materialized_view: "`REFRESH MATERIALIZED VIEW [<database>.]<view>`"
             | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"

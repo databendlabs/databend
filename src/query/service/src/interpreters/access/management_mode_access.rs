@@ -86,6 +86,7 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::DropView(_)
                 | Plan::DropMaterializedView(_)
                 | Plan::CreateView(_)
+                | Plan::RefreshLineage(_)
                 | Plan::CreateMaterializedView(_)
                 | Plan::CreateStream(_)
                 | Plan::DropStream(_)
