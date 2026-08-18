@@ -106,6 +106,77 @@ impl<'a> EvaluateOptions<'a> {
     }
 }
 
+/// Merge a source error set into a target error set, keeping the union of
+/// error rows and the first error message. Error sets travel upward through
+/// nested calls while suppression is active, so both sibling arguments and
+/// parent calls must accumulate instead of overwrite.
+///
+/// A length-1 source bitmap comes from a scalar subexpression (evaluated in
+/// a one-row block, e.g. a constant cast in `run_simple_cast`); a scalar
+/// error applies to every row, so it is broadcast to `num_rows` instead of
+/// marking only row 0.
+fn merge_eval_errors(
+    target: &mut Option<(MutableBitmap, String)>,
+    source: Option<(MutableBitmap, String)>,
+    num_rows: usize,
+) {
+    let Some((src_valids, src_msg)) = source else {
+        return;
+    };
+    if src_valids.len() == 1 && num_rows > 1 {
+        if !src_valids.get(0) {
+            *target = Some((Bitmap::new_constant(false, num_rows).make_mut(), src_msg));
+        }
+        return;
+    }
+    match target {
+        Some((valids, _)) => {
+            for (row, valid) in src_valids.iter().enumerate() {
+                if !valid && row < valids.len() {
+                    valids.set(row, false);
+                }
+            }
+        }
+        None => *target = Some((src_valids, src_msg)),
+    }
+}
+
+/// Expand the error set of an all-scalar evaluation over the rows the
+/// evaluation ran for: the rows enabled by `validity`, or every row when
+/// there is no partial selection.
+///
+/// A scalar evaluation records its error at row 0, which is
+/// indistinguishable from a row-0-only column error; expanding here, where
+/// the scalar-ness of the evaluation is still known, lets `merge_eval_errors`
+/// and `render_error` treat every incoming bitmap as row-aligned. When no
+/// row is enabled the error is dropped: the expression ran for nobody.
+fn expand_scalar_error(
+    errors: &mut Option<(MutableBitmap, String)>,
+    validity: Option<&Bitmap>,
+    num_rows: usize,
+) {
+    let Some((valids, msg)) = errors.take() else {
+        return;
+    };
+    let has_enabled_rows = match validity {
+        Some(validity) => validity.null_count() < validity.len(),
+        None => true,
+    };
+    if !has_enabled_rows {
+        return;
+    }
+    if valids.null_count() == 0 {
+        // No error recorded; keep the (empty) error set.
+        *errors = Some((valids, msg));
+        return;
+    }
+    let expanded = match validity {
+        Some(validity) => validity.not().make_mut(),
+        None => Bitmap::new_constant(false, num_rows).make_mut(),
+    };
+    *errors = Some((expanded, msg));
+}
+
 pub struct Evaluator<'a> {
     data_block: &'a DataBlock,
     func_ctx: &'a FunctionContext,
@@ -304,7 +375,11 @@ impl<'a> Evaluator<'a> {
             ..
         } = call;
         let child_suppress_error = function.signature.name == "is_not_error";
-        let mut child_option = options.with_suppress_error(child_suppress_error);
+        // Suppression is sticky downward: once a boundary function opts in
+        // (is_not_error), nested evaluations stay suppressed so row errors
+        // bubble up to the boundary as data instead of raising midway.
+        let mut child_option =
+            options.with_suppress_error(options.suppress_error || child_suppress_error);
         if child_option.strict_eval && call.generics.is_empty() {
             child_option.strict_eval = false;
         }
@@ -339,10 +414,17 @@ impl<'a> Evaluator<'a> {
         } else {
             None
         };
+        // A call whose arguments are all scalars is evaluated once, and an
+        // error it records applies to every row the call runs for. Strip the
+        // validity mask during eval so the error is always recorded — a
+        // scalar reports at row 0, which the validity gate in `set_error`
+        // would otherwise drop whenever row 0 is not enabled — then expand
+        // the recorded error over the enabled rows.
+        let all_scalar = args.iter().all(|arg| matches!(arg, Value::Scalar(_)));
         let mut ctx = EvalContext {
             generics,
             num_rows: self.data_block.num_rows(),
-            validity,
+            validity: if all_scalar { None } else { validity.clone() },
             errors,
             func_ctx: self.func_ctx,
             suppress_error: options.suppress_error,
@@ -352,9 +434,21 @@ impl<'a> Evaluator<'a> {
         let (_, _, eval) = function.eval.as_scalar().unwrap();
         let result = eval.eval(&args, &mut ctx);
 
+        if all_scalar {
+            expand_scalar_error(&mut ctx.errors, validity.as_ref(), ctx.num_rows);
+        }
+
+        // Non-boundary calls are transparent to suppression: errors from
+        // nested evaluations keep bubbling up so a boundary function
+        // (is_not_error) observes errors from its whole subtree, not only
+        // from its direct children.
+        if !child_suppress_error {
+            merge_eval_errors(&mut ctx.errors, child_option.errors.take(), ctx.num_rows);
+        }
+
         if options.suppress_error {
             // inject errors into options, parent will handle it
-            options.errors = ctx.errors.take();
+            merge_eval_errors(&mut options.errors, ctx.errors.take(), ctx.num_rows);
         } else {
             EvalContext::render_error(
                 *span,
@@ -1590,7 +1684,18 @@ impl<'a> Evaluator<'a> {
         let entry = BlockEntry::new(value, || (src_type.clone(), num_rows));
         let block = DataBlock::new(vec![entry], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        let result = evaluator.eval_common_call(&call, validity, expr_display, options)?;
+        // The cast may run on a one-row temporary block for scalar values, so
+        // its error bitmap is scoped to that block. Collect it in local
+        // options first, then merge into the shared options with the outer
+        // row count so a scalar error broadcasts to every row.
+        let mut local_options = options.with_suppress_error(options.suppress_error);
+        let result =
+            evaluator.eval_common_call(&call, validity, expr_display, &mut local_options)?;
+        merge_eval_errors(
+            &mut options.errors,
+            local_options.errors.take(),
+            self.data_block.num_rows(),
+        );
         Ok(Some(result))
     }
 
@@ -2488,7 +2593,11 @@ impl<'a> Evaluator<'a> {
                 ..
             }) => {
                 let child_suppress_error = function.signature.name == "is_not_error";
-                let mut child_option = options.with_suppress_error(child_suppress_error);
+                // Suppression is sticky downward: once a boundary function
+                // opts in (is_not_error), nested evaluations stay suppressed
+                // so row errors bubble up to the boundary as data.
+                let mut child_option =
+                    options.with_suppress_error(options.suppress_error || child_suppress_error);
                 let args = args
                     .iter()
                     .map(|expr| self.get_select_child(expr, &mut child_option))
@@ -2521,9 +2630,24 @@ impl<'a> Evaluator<'a> {
                 let (_, _, eval) = function.eval.as_scalar().unwrap();
                 let result = eval.eval(&args, &mut ctx);
 
+                // Same all-scalar rule as `eval_common_call`: an error from a
+                // scalar evaluation applies to every row. This path carries no
+                // branch validity mask, so expand over the whole block.
+                if args.iter().all(|arg| matches!(arg, Value::Scalar(_))) {
+                    expand_scalar_error(&mut ctx.errors, None, ctx.num_rows);
+                }
+
+                // Non-boundary calls are transparent to suppression: errors
+                // from nested evaluations keep bubbling up so a boundary
+                // function (is_not_error) observes errors from its whole
+                // subtree, not only from its direct children.
+                if !child_suppress_error {
+                    merge_eval_errors(&mut ctx.errors, child_option.errors.take(), ctx.num_rows);
+                }
+
                 // inject errors into options, parent will handle it
                 if options.suppress_error {
-                    options.errors = ctx.errors.take();
+                    merge_eval_errors(&mut options.errors, ctx.errors.take(), ctx.num_rows);
                 } else {
                     EvalContext::render_error(
                         *span,

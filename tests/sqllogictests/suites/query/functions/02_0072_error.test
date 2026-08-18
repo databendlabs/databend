@@ -7,3 +7,106 @@ query ?
 select error_or(from_base64('aak') ,  from_base64('aaj'),  from_base64('MzQz'));
 ----
 333433
+
+# is_not_error as a filter predicate: rows whose argument evaluation fails
+# are removed (1/(number-1) throws for number = 1).
+query I
+select number from numbers(3) where is_not_error(1 / (number - 1)) order by number
+----
+0
+2
+
+# Errors nested inside the argument expression must also be observed.
+query I
+select number from numbers(3) where is_not_error((1 / (number - 1)) > 0) order by number
+----
+0
+2
+
+# is_error is rewritten to not(is_not_error(x)) at type-check time, so it
+# observes nested errors as well, in projection and filter position.
+query I
+select number from numbers(3) where is_error((1 / (number - 1)) > 0)
+----
+1
+
+query B
+select is_error((1 / 0) > 0)
+----
+1
+
+# error_or rewrites to if(is_not_error(a), a, ...): nested errors must not
+# raise midway and must skip the erroring argument.
+query ?
+select error_or(1 / (number - 1), 42) from numbers(3) order by number
+----
+-1.0
+42.0
+1.0
+
+# A scalar subexpression that errors invalidates every row: the constant
+# cast fails for the whole expression, so its (one-row) error bitmap must
+# broadcast to all rows when merged with the column error set.
+query I
+select number from numbers(3) where is_not_error((1 / (number - 1)) + cast('x' as int))
+----
+
+query B
+select is_not_error((1 / (number - 1)) + cast('x' as int)) from numbers(3) order by number
+----
+0
+0
+0
+
+# A failing scalar cast inside a partially selected if branch invalidates
+# exactly the rows the branch runs on: the scalar error must be expanded
+# over the branch validity, not pinned to (or dropped at) row 0.
+
+# Only number = 3 selects the branch; row 0 is not selected, so the scalar
+# error must not be dropped.
+query B
+select is_not_error(if(number = 3, cast('x' as int), 1)) from numbers(4) order by number
+----
+1
+1
+1
+0
+
+# number = 0 and number = 2 select the branch; both must be flagged, not
+# only row 0.
+query B
+select is_not_error(if(number % 2 = 0, cast('x' as int), 1)) from numbers(4) order by number
+----
+0
+1
+0
+1
+
+# No row selects the branch: the failing scalar cast never runs, so nothing
+# is an error.
+query B
+select is_not_error(if(number > 100, cast('x' as int), 1)) from numbers(4) order by number
+----
+1
+1
+1
+1
+
+# Same for a scalar function call (not only casts): the modulo error must
+# invalidate exactly the branch rows.
+query B
+select is_not_error(if(number = 3, 1 % 0, 1)) from numbers(4) order by number
+----
+1
+1
+1
+0
+
+# Without partial selection, a scalar error invalidates every row when mixed
+# with per-row column errors, not only row 0.
+query B
+select is_not_error((1 / (number - 1)) + (1 % 0)) from numbers(3) order by number
+----
+0
+0
+0
