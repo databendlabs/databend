@@ -1033,7 +1033,10 @@ mod tests {
             bitmap.insert(value);
         }
         let start = 1u64 << 32;
-        bitmap.insert_range(start..start + 1_000_000);
+        // Loop + insert because insert_range emits run containers, since 0.11.
+        for value in start..start + 1_000_000 {
+            bitmap.insert(value);
+        }
         bitmap.insert(1u64 << 48);
         bitmap
     }
@@ -1042,8 +1045,13 @@ mod tests {
         let mut bitmap = RoaringTreemap::new();
         for prefix in 0..2u64 {
             let base = prefix << 32;
-            bitmap.insert_range((base)..=(base | 0x09000));
-            bitmap.insert_range((base | 0x0A000)..=(base | 0x10000));
+            // Loop + insert because insert_range emits run containers, since 0.11.
+            for value in base..=(base | 0x09000) {
+                bitmap.insert(value);
+            }
+            for value in (base | 0x0A000)..=(base | 0x10000) {
+                bitmap.insert(value);
+            }
             bitmap.insert(base | 0x20000);
             bitmap.insert(base | 0x20005);
             for value in (0..0x10000u64).step_by(2) {
