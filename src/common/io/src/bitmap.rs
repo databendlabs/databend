@@ -410,14 +410,7 @@ impl HybridBitmap {
                 reader::intersection_assign_with_serialized(lhs_tree, rhs)?;
                 self.try_demote();
             }
-            HybridBitmap::Small(lhs_set) => {
-                let rhs = RoaringTreemap::deserialize_unchecked_from(rhs).map_err(|e| {
-                    let len = rhs.len();
-                    let msg = format!("fail to decode roaring bitmap payload of size {len}: {e}");
-                    ErrorCode::BadBytes(msg)
-                })?;
-                lhs_set.retain(|value| rhs.contains(*value));
-            }
+            HybridBitmap::Small(lhs_set) => small_retain_serialized_large(lhs_set, rhs, false)?,
         }
         Ok(())
     }
@@ -469,14 +462,7 @@ impl HybridBitmap {
                 reader::difference_assign_with_serialized(lhs_tree, rhs)?;
                 self.try_demote();
             }
-            HybridBitmap::Small(lhs_set) => {
-                let rhs = RoaringTreemap::deserialize_unchecked_from(rhs).map_err(|e| {
-                    let len = rhs.len();
-                    let msg = format!("fail to decode roaring bitmap payload of size {len}: {e}");
-                    ErrorCode::BadBytes(msg)
-                })?;
-                lhs_set.retain(|value| !rhs.contains(*value));
-            }
+            HybridBitmap::Small(lhs_set) => small_retain_serialized_large(lhs_set, rhs, true)?,
         }
         Ok(())
     }
@@ -1317,6 +1303,29 @@ fn small_intersection_in_place(target: &mut SmallBitmap, other: &[u64]) {
     target.truncate(write);
 }
 
+fn small_retain_serialized_large(
+    lhs_set: &mut SmallBitmap,
+    rhs: &[u8],
+    invert: bool,
+) -> Result<()> {
+    let reader = reader::TreemapReader::new(rhs)?;
+    let mut err: Option<io::Error> = None;
+    lhs_set.retain(|value| match reader.contains(*value) {
+        Ok(hit) => hit != invert,
+        Err(e) => {
+            err.get_or_insert(e);
+            false
+        }
+    });
+    match err {
+        Some(e) => Err(ErrorCode::BadBytes(format!(
+            "fail to decode roaring bitmap payload of size {}: {e}",
+            rhs.len()
+        ))),
+        None => Ok(()),
+    }
+}
+
 #[inline]
 fn small_intersection_serialized_in_place(target: &mut SmallBitmap, other: &[u8]) {
     if other.is_empty() {
@@ -1705,6 +1714,39 @@ mod tests {
             HybridBitmap::Small(set) => assert_eq!(set.as_slice(), &[1, 5]),
             _ => panic!("expected small hybrid bitmap after serialized intersection"),
         }
+    }
+
+    #[test]
+    fn bitand_small_lhs_with_serialized_large_correct() {
+        let high = 1_u64 << 32;
+        let mut lhs = HybridBitmap::from_iter([1, 5, 100, high + 7, high + 9, u64::MAX]);
+        let rhs = HybridBitmap::from_iter((0_u64..200).chain(high..high + 10));
+        let mut rhs_buf = Vec::new();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+
+        lhs.bitand_assign_rhs(BitmapRhs::Serialized(&rhs_buf))
+            .unwrap();
+
+        assert_eq!(lhs.iter().collect::<Vec<_>>(), vec![
+            1,
+            5,
+            100,
+            high + 7,
+            high + 9
+        ]);
+    }
+
+    #[test]
+    fn sub_small_lhs_with_serialized_large_correct() {
+        let high = 1_u64 << 32;
+        let mut lhs = HybridBitmap::from_iter([1, 5, 100, high + 7, u64::MAX]);
+        let rhs = HybridBitmap::from_iter((0_u64..200).chain(high..high + 10));
+        let mut rhs_buf = Vec::new();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+
+        lhs.sub_assign_rhs(BitmapRhs::Serialized(&rhs_buf)).unwrap();
+
+        assert_eq!(lhs.iter().collect::<Vec<_>>(), vec![u64::MAX]);
     }
 
     #[test]
