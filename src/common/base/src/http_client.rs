@@ -51,9 +51,9 @@ static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> = LazyLock::new(|
     )
 });
 
-/// Global shared http client.
+/// Global shared HTTP client for OpenDAL storage transports.
 ///
-/// Please create your own http client if you want dedicated http connection pool.
+/// Please create your own HTTP client if you want a dedicated connection pool.
 pub static GLOBAL_HTTP_CLIENT: OnceLock<HttpClient> = OnceLock::new();
 
 /// Create an HTTP client builder that preserves storage response bytes.
@@ -127,12 +127,12 @@ impl Default for HttpClient {
 }
 
 impl HttpClient {
-    /// Create a new http client.
+    /// Create a general-purpose HTTP client.
     ///
-    /// # Notes
-    ///
-    /// This client is optimized for interact with storage services.
-    /// Please tune the settings if you want to use it for other purposes.
+    /// This client may transparently decode responses when reqwest content-decoder
+    /// features are enabled. Do not use it as an OpenDAL object-storage transport;
+    /// use [`storage_http_client_builder`] when the encoded response bytes must be
+    /// preserved.
     pub fn new() -> Self {
         let mut builder = reqwest::ClientBuilder::new();
 
