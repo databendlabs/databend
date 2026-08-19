@@ -30,7 +30,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_meta_api::TableApi;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::schema::DBIdTableName;
+use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
@@ -116,10 +118,21 @@ impl SharedTable {
             ));
         }
 
-        let table_name = DBIdTableName::new(
-            self.share_context.binding.provider_database_id,
-            &self.share_context.provider_table,
-        );
+        let table_name = self
+            .meta
+            .get_pb(&TableIdToName {
+                table_id: self.share_context.provider_table_id,
+            })
+            .await
+            .map_err(meta_service_error)?
+            .map(|name| name.data.table_name)
+            .ok_or_else(|| {
+                ErrorCode::InvalidOperation(
+                    "Shared provider table was dropped or recreated; retry the query",
+                )
+            })?;
+        let table_name =
+            DBIdTableName::new(self.share_context.binding.provider_database_id, table_name);
         let current_table = self
             .meta
             .get_table_in_db(&table_name)

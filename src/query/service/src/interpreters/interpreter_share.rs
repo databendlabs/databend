@@ -424,7 +424,6 @@ impl Interpreter for RevokeShareInterpreter {
                     .prepare_revoke_database(
                         &self.plan.tenant,
                         &self.plan.share,
-                        database,
                         current_database_id,
                     )
                     .await?
@@ -442,13 +441,7 @@ impl Interpreter for RevokeShareInterpreter {
                     provider_table_id_if_exists(&self.ctx, &self.plan.tenant, &database, table)
                         .await?;
                 if let Some(target) = manager
-                    .prepare_revoke_table(
-                        &self.plan.tenant,
-                        &self.plan.share,
-                        &database,
-                        table,
-                        current_object_ids,
-                    )
+                    .prepare_revoke_table(&self.plan.tenant, &self.plan.share, current_object_ids)
                     .await?
                 {
                     PrivilegeAccess::validate_share_revoke_target(self.ctx.clone(), &target)

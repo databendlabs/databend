@@ -32,12 +32,10 @@ fn want() -> DataShareMeta {
         comment: Some("shared sales data".to_string()),
         accounts: BTreeSet::from(["consumer_a".to_string(), "consumer_b".to_string()]),
         database: Some(DataShareDatabaseGrant {
-            database: "analytics".to_string(),
             database_id: 11,
             shared_on: Utc.timestamp_opt(1_754_956_801, 0).unwrap(),
         }),
-        tables: BTreeMap::from([("orders".to_string(), DataShareTableGrant {
-            table_id: 101,
+        tables: BTreeMap::from([(101, DataShareTableGrant {
             shared_on: Utc.timestamp_opt(1_754_956_802, 0).unwrap(),
         })]),
         connection: Some("share_conn".to_string()),
@@ -52,9 +50,8 @@ fn test_decode_v183_data_share() -> anyhow::Result<()> {
         48, 50, 53, 45, 48, 56, 45, 49, 50, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 34,
         17, 115, 104, 97, 114, 101, 100, 32, 115, 97, 108, 101, 115, 32, 100, 97, 116, 97, 42, 10,
         99, 111, 110, 115, 117, 109, 101, 114, 95, 97, 42, 10, 99, 111, 110, 115, 117, 109, 101,
-        114, 95, 98, 50, 38, 10, 9, 97, 110, 97, 108, 121, 116, 105, 99, 115, 16, 11, 26, 23, 50,
-        48, 50, 53, 45, 48, 56, 45, 49, 50, 32, 48, 48, 58, 48, 48, 58, 48, 49, 32, 85, 84, 67, 58,
-        37, 10, 6, 111, 114, 100, 101, 114, 115, 18, 27, 8, 101, 18, 23, 50, 48, 50, 53, 45, 48,
+        114, 95, 98, 50, 27, 8, 11, 18, 23, 50, 48, 50, 53, 45, 48, 56, 45, 49, 50, 32, 48, 48, 58,
+        48, 48, 58, 48, 49, 32, 85, 84, 67, 58, 29, 8, 101, 18, 25, 10, 23, 50, 48, 50, 53, 45, 48,
         56, 45, 49, 50, 32, 48, 48, 58, 48, 48, 58, 48, 50, 32, 85, 84, 67, 66, 10, 115, 104, 97,
         114, 101, 95, 99, 111, 110, 110, 160, 6, 183, 1, 168, 6, 24,
     ];

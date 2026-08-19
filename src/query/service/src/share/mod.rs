@@ -35,7 +35,9 @@ use databend_common_meta_app::data_share::ShareNameResource;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
@@ -55,8 +57,7 @@ mod storage;
 
 pub use presentation::ShareDescEntry;
 pub use presentation::ShareShowEntry;
-use presentation::describe_share_entries;
-use presentation::show_share_entries;
+use presentation::like_match;
 pub use storage::resolve_share_storage_params;
 
 const TXN_MAX_RETRY_TIMES: usize = 20;
@@ -66,7 +67,6 @@ pub const SHARE_PROVIDER_TABLE_ENGINE: &str = "FUSE";
 pub const SHARE_OPT_PROVIDER_TENANT: &str = "provider_tenant";
 pub const SHARE_OPT_SHARE_NAME: &str = "share_name";
 pub const SHARE_OPT_SHARE_ID: &str = "share_id";
-pub const SHARE_OPT_PROVIDER_DATABASE: &str = "provider_database";
 pub const SHARE_OPT_PROVIDER_DATABASE_ID: &str = "provider_database_id";
 
 pub(crate) fn ensure_provider_table_can_be_shared(meta: &TableMeta) -> Result<()> {
@@ -103,7 +103,6 @@ pub struct ShareDatabaseBinding {
     pub provider_tenant: String,
     pub share_name: String,
     pub share_id: u64,
-    pub provider_database: String,
     pub provider_database_id: u64,
 }
 
@@ -116,10 +115,6 @@ impl ShareDatabaseBinding {
             ),
             (SHARE_OPT_SHARE_NAME.to_string(), self.share_name.clone()),
             (SHARE_OPT_SHARE_ID.to_string(), self.share_id.to_string()),
-            (
-                SHARE_OPT_PROVIDER_DATABASE.to_string(),
-                self.provider_database.clone(),
-            ),
             (
                 SHARE_OPT_PROVIDER_DATABASE_ID.to_string(),
                 self.provider_database_id.to_string(),
@@ -143,7 +138,6 @@ impl ShareDatabaseBinding {
             provider_tenant: required(SHARE_OPT_PROVIDER_TENANT)?,
             share_name: required(SHARE_OPT_SHARE_NAME)?,
             share_id: parse_u64(SHARE_OPT_SHARE_ID)?,
-            provider_database: required(SHARE_OPT_PROVIDER_DATABASE)?,
             provider_database_id: parse_u64(SHARE_OPT_PROVIDER_DATABASE_ID)?,
         })
     }
@@ -481,11 +475,7 @@ impl ShareMgr {
                     connection,
                     validated_table_ids,
                 } => {
-                    let current_table_ids = meta
-                        .tables
-                        .values()
-                        .map(|grant| grant.table_id)
-                        .collect::<BTreeSet<_>>();
+                    let current_table_ids = meta.tables.keys().copied().collect::<BTreeSet<_>>();
                     if current_table_ids != *validated_table_ids {
                         return Err(ErrorCode::InvalidOperation(
                             "Share grants changed while validating the replacement connection; retry ALTER SHARE",
@@ -509,40 +499,81 @@ impl ShareMgr {
         share: &str,
         grant: ShareGrantDatabase,
     ) -> Result<()> {
-        let conditions = vec![txn_cond_eq_seq(
-            &DatabaseId::new(grant.database_id),
-            grant.database_meta_seq,
-        )];
-        self.update_share_with_conditions(provider, share, false, conditions, move |meta| {
-            if let Some(existing) = &meta.database
+        let name_ident = ShareNameIdent::new(provider.clone(), share);
+        for attempt in 1..=TXN_MAX_RETRY_TIMES {
+            let Some(id) = self
+                .kv_api
+                .get_pb(&name_ident)
+                .await
+                .map_err(meta_service_error)?
+            else {
+                return Err(unknown_share(provider.tenant_name(), share));
+            };
+            let id_ident = ShareIdIdent::new(*id.data);
+            let Some(mut meta) = self
+                .kv_api
+                .get_pb(&id_ident)
+                .await
+                .map_err(meta_service_error)?
+            else {
+                continue;
+            };
+
+            if let Some(existing) = &meta.data.database
                 && existing.database_id != grant.database_id
             {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Share '{}' already has USAGE on database '{}'",
-                    share, existing.database
-                )));
+                let existing_database = self
+                    .kv_api
+                    .get_pb(&DatabaseId::new(existing.database_id))
+                    .await
+                    .map_err(meta_service_error)?;
+                if existing_database
+                    .as_ref()
+                    .is_some_and(|database| database.data.drop_on.is_none())
+                {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Share '{}' already has USAGE on another database",
+                        share
+                    )));
+                }
+                meta.data.tables.clear();
             }
-            meta.database = Some(DataShareDatabaseGrant {
-                database: grant.database.clone(),
+
+            meta.data.database = Some(DataShareDatabaseGrant {
                 database_id: grant.database_id,
                 shared_on: Utc::now(),
             });
-            Ok(())
-        })
-        .await
+
+            let txn = TxnRequest::new(
+                vec![
+                    txn_cond_eq_seq(&name_ident, id.seq),
+                    txn_cond_eq_seq(&id_ident, meta.seq),
+                    txn_cond_eq_seq(&DatabaseId::new(grant.database_id), grant.database_meta_seq),
+                ],
+                vec![txn_put_pb(&id_ident, &meta.data)],
+            );
+            if self.send_txn(txn).await? {
+                return Ok(());
+            }
+            log_txn_retry("grant database", provider, share, attempt);
+        }
+        Err(txn_retry_error("grant database"))
     }
 
     pub(crate) async fn prepare_revoke_database(
         &self,
         provider: &Tenant,
         share: &str,
-        database: &str,
         current_database_id: Option<u64>,
     ) -> Result<Option<ShareRevokeTarget>> {
+        let Some(database_id) = current_database_id else {
+            return Ok(None);
+        };
         let (_, meta) = self.get_share(provider.tenant_name(), share).await?;
-        let Some(grant) = meta.database.filter(|grant| {
-            grant.database == database || current_database_id == Some(grant.database_id)
-        }) else {
+        let Some(grant) = meta
+            .database
+            .filter(|grant| grant.database_id == database_id)
+        else {
             return Ok(None);
         };
         let database_meta = self
@@ -574,14 +605,14 @@ impl ShareMgr {
         self.update_share_with_conditions(provider, share, false, conditions, move |meta| {
             let Some(database) = &meta.database else {
                 return Err(ErrorCode::BadArguments(format!(
-                    "Grant USAGE on database '{}' to share '{}' before granting tables",
-                    grant.database, share
+                    "Grant USAGE on a database to share '{}' before granting tables",
+                    share
                 )));
             };
             if database.database_id != grant.database_id {
                 return Err(ErrorCode::BadArguments(format!(
-                    "Cannot grant table '{}.{}' from a different database to share '{}'",
-                    grant.database, grant.table, share
+                    "Cannot grant table '{}' from a different database to share '{}'",
+                    grant.table, share
                 )));
             }
             if meta.connection.as_deref() != Some(expected_connection.as_str()) {
@@ -590,13 +621,9 @@ impl ShareMgr {
                     share
                 )));
             }
-            meta.tables
-                .retain(|_, existing| existing.table_id != grant.table_id);
-            meta.tables
-                .insert(grant.table.clone(), DataShareTableGrant {
-                    table_id: grant.table_id,
-                    shared_on: Utc::now(),
-                });
+            meta.tables.insert(grant.table_id, DataShareTableGrant {
+                shared_on: Utc::now(),
+            });
             Ok(())
         })
         .await
@@ -606,27 +633,21 @@ impl ShareMgr {
         &self,
         provider: &Tenant,
         share: &str,
-        database: &str,
-        table: &str,
         current_object_ids: Option<ProviderObjectIds>,
     ) -> Result<Option<ShareRevokeTarget>> {
+        let Some(current_object_ids) = current_object_ids else {
+            return Ok(None);
+        };
         let (_, meta) = self.get_share(provider.tenant_name(), share).await?;
         let Some(database_grant) = meta.database else {
             return Ok(None);
         };
-        if database_grant.database != database
-            && current_object_ids.map(|ids| ids.database_id) != Some(database_grant.database_id)
-        {
+        if database_grant.database_id != current_object_ids.database_id {
             return Ok(None);
         }
-        let current_table_id = current_object_ids.map(|ids| ids.table_id);
-        let Some((_, table_grant)) = meta
-            .tables
-            .into_iter()
-            .find(|(name, grant)| name == table || current_table_id == Some(grant.table_id))
-        else {
+        if !meta.tables.contains_key(&current_object_ids.table_id) {
             return Ok(None);
-        };
+        }
 
         let database_meta = self
             .kv_api
@@ -635,7 +656,7 @@ impl ShareMgr {
             .map_err(meta_service_error)?;
         let table_meta = self
             .kv_api
-            .get_pb(&TableId::new(table_grant.table_id))
+            .get_pb(&TableId::new(current_object_ids.table_id))
             .await
             .map_err(meta_service_error)?;
         let requires_object_privilege = database_meta
@@ -646,7 +667,7 @@ impl ShareMgr {
                 .is_some_and(|meta| meta.data.drop_on.is_none());
         Ok(Some(ShareRevokeTarget::Table {
             database_id: database_grant.database_id,
-            table_id: table_grant.table_id,
+            table_id: current_object_ids.table_id,
             database_meta_seq: seq(&database_meta),
             table_meta_seq: seq(&table_meta),
             requires_object_privilege,
@@ -673,7 +694,7 @@ impl ShareMgr {
                     }
                 }
                 ShareRevokeTarget::Table { table_id, .. } => {
-                    meta.tables.retain(|_, grant| grant.table_id != *table_id);
+                    meta.tables.remove(table_id);
                 }
             }
             Ok(())
@@ -687,12 +708,48 @@ impl ShareMgr {
         like_pattern: Option<&str>,
         limit: Option<u64>,
     ) -> Result<Vec<ShareShowEntry>> {
-        Ok(show_share_entries(
-            tenant,
-            self.list_all().await?,
-            like_pattern,
-            limit,
-        ))
+        let metas = self.list_all().await?;
+        let mut rows = Vec::new();
+        for meta in metas {
+            let kind = if meta.provider == tenant.tenant_name() {
+                "OUTBOUND"
+            } else if meta.accounts.contains(tenant.tenant_name()) {
+                "INBOUND"
+            } else {
+                continue;
+            };
+            if like_pattern.is_some_and(|pattern| !like_match(pattern, &meta.name)) {
+                continue;
+            }
+            let mut accounts = meta.accounts.iter().cloned().collect::<Vec<_>>();
+            accounts.sort();
+            let database_name = self.current_database_name(&meta).await?;
+            rows.push(ShareShowEntry {
+                created_on: meta.created_on.to_rfc3339(),
+                kind: kind.to_string(),
+                owner_account: meta.provider,
+                name: meta.name,
+                database_name,
+                to: if kind == "OUTBOUND" {
+                    accounts.join(", ")
+                } else {
+                    String::new()
+                },
+                owner: String::new(),
+                comment: meta.comment.unwrap_or_default(),
+                listing_global_name: String::new(),
+            });
+        }
+        rows.sort_by(|a, b| {
+            a.kind
+                .cmp(&b.kind)
+                .then(a.owner_account.cmp(&b.owner_account))
+                .then(a.name.cmp(&b.name))
+        });
+        if let Some(limit) = limit {
+            rows.truncate(limit as usize);
+        }
+        Ok(rows)
     }
 
     pub async fn describe_share(
@@ -706,7 +763,24 @@ impl ShareMgr {
         if provider != tenant.tenant_name() {
             ensure_account(&meta, tenant.tenant_name())?;
         }
-        Ok(describe_share_entries(&meta))
+        let database_name = self.current_database_name(&meta).await?;
+        let mut rows = Vec::new();
+        if let Some(database) = &meta.database {
+            rows.push(ShareDescEntry {
+                kind: "DATABASE".to_string(),
+                name: database_name.clone(),
+                shared_on: database.shared_on.to_rfc3339(),
+            });
+        }
+        for (table_id, table) in &meta.tables {
+            let table_name = self.current_table_name(*table_id).await?;
+            rows.push(ShareDescEntry {
+                kind: "TABLE".to_string(),
+                name: format!("{}.{}", database_name, table_name),
+                shared_on: table.shared_on.to_rfc3339(),
+            });
+        }
+        Ok(rows)
     }
 
     pub async fn exists(&self, provider: &Tenant, share: &str) -> Result<bool> {
@@ -754,7 +828,7 @@ impl ShareMgr {
         share: &str,
     ) -> Result<BTreeSet<u64>> {
         let (_, meta) = self.get_share(provider.tenant_name(), share).await?;
-        Ok(meta.tables.values().map(|grant| grant.table_id).collect())
+        Ok(meta.tables.keys().copied().collect())
     }
 
     pub async fn bind_share_database(
@@ -777,7 +851,6 @@ impl ShareMgr {
             provider_tenant: provider_tenant.to_string(),
             share_name: share.to_string(),
             share_id,
-            provider_database: database.database,
             provider_database_id: database.database_id,
         })
     }
@@ -789,13 +862,16 @@ impl ShareMgr {
         table: &str,
     ) -> Result<ShareTableContext> {
         let meta = self.validate_binding(consumer, binding).await?;
-        let grant = meta.tables.get(table).ok_or_else(|| {
-            ErrorCode::UnknownTable(format!(
-                "Table '{}' is not granted by share '{}.{}'",
-                table, binding.provider_tenant, binding.share_name
-            ))
-        })?;
-        self.table_context(binding, &meta, table, grant)
+        let grant = self
+            .find_granted_table(&meta, table)
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::UnknownTable(format!(
+                    "Table '{}' is not granted by share '{}.{}'",
+                    table, binding.provider_tenant, binding.share_name
+                ))
+            })?;
+        self.table_context(binding, &meta, grant.0, grant.1)
     }
 
     pub async fn list_shared_tables(
@@ -804,10 +880,15 @@ impl ShareMgr {
         binding: &ShareDatabaseBinding,
     ) -> Result<Vec<ShareTableContext>> {
         let meta = self.validate_binding(consumer, binding).await?;
-        meta.tables
-            .iter()
-            .map(|(table_name, grant)| self.table_context(binding, &meta, table_name, grant))
-            .collect()
+        let mut tables = Vec::with_capacity(meta.tables.len());
+        for table_id in meta.tables.keys().copied() {
+            let table_name = self.current_table_name(table_id).await?;
+            if table_name.is_empty() {
+                continue;
+            }
+            tables.push(self.table_context(binding, &meta, table_name, table_id)?);
+        }
+        Ok(tables)
     }
 
     async fn validate_binding(
@@ -853,8 +934,8 @@ impl ShareMgr {
         &self,
         binding: &ShareDatabaseBinding,
         meta: &DataShareMeta,
-        table_name: &str,
-        grant: &DataShareTableGrant,
+        table_name: impl Into<String>,
+        table_id: u64,
     ) -> Result<ShareTableContext> {
         let connection = meta.connection.clone().ok_or_else(|| {
             ErrorCode::InvalidOperation(format!(
@@ -864,10 +945,47 @@ impl ShareMgr {
         })?;
         Ok(ShareTableContext {
             binding: binding.clone(),
-            provider_table: table_name.to_string(),
-            provider_table_id: grant.table_id,
+            provider_table: table_name.into(),
+            provider_table_id: table_id,
             connection,
         })
+    }
+
+    async fn find_granted_table(
+        &self,
+        meta: &DataShareMeta,
+        table_name: &str,
+    ) -> Result<Option<(String, u64)>> {
+        for table_id in meta.tables.keys().copied() {
+            let current_name = self.current_table_name(table_id).await?;
+            if current_name == table_name {
+                return Ok(Some((current_name, table_id)));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn current_database_name(&self, meta: &DataShareMeta) -> Result<String> {
+        let Some(database) = &meta.database else {
+            return Ok(String::new());
+        };
+        Ok(self
+            .kv_api
+            .get_pb(&DatabaseIdToName::new(database.database_id))
+            .await
+            .map_err(meta_service_error)?
+            .map(|name| name.data.database_name().to_string())
+            .unwrap_or_default())
+    }
+
+    async fn current_table_name(&self, table_id: u64) -> Result<String> {
+        Ok(self
+            .kv_api
+            .get_pb(&TableIdToName { table_id })
+            .await
+            .map_err(meta_service_error)?
+            .map(|name| name.data.table_name)
+            .unwrap_or_default())
     }
 
     async fn get_share(&self, provider: &str, share: &str) -> Result<(u64, DataShareMeta)> {
@@ -1036,9 +1154,13 @@ fn log_txn_retry(operation: &str, provider: &Tenant, share: &str, attempt: usize
 #[cfg(test)]
 mod tests {
     use databend_common_meta_api::kv_pb_api::UpsertPB;
+    use databend_common_meta_app::schema::DBIdTableName;
+    use databend_common_meta_app::schema::DatabaseIdToName;
     use databend_common_meta_app::schema::DatabaseMeta;
     use databend_common_meta_app::schema::SecurityPolicyColumnMap;
+    use databend_common_meta_app::schema::TableIdToName;
     use databend_common_meta_app::schema::TableMeta;
+    use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
     use databend_common_meta_store::MetaStore;
     use databend_meta_runtime::DatabendRuntime;
 
@@ -1098,6 +1220,28 @@ mod tests {
         }
     }
 
+    async fn seed_database_name(manager: &ShareMgr, database_id: u64, database: &str) {
+        manager
+            .kv_api
+            .upsert_pb(&UpsertPB::update(
+                DatabaseIdToName::new(database_id),
+                DatabaseNameIdentRaw::new("provider", database),
+            ))
+            .await
+            .unwrap();
+    }
+
+    async fn seed_table_name(manager: &ShareMgr, database_id: u64, table_id: u64, table: &str) {
+        manager
+            .kv_api
+            .upsert_pb(&UpsertPB::update(
+                TableIdToName { table_id },
+                DBIdTableName::new(database_id, table),
+            ))
+            .await
+            .unwrap();
+    }
+
     async fn create_granted_share(manager: &ShareMgr) -> ShareDatabaseBinding {
         let provider = tenant("provider");
         let consumer = tenant("consumer");
@@ -1109,6 +1253,8 @@ mod tests {
             ))
             .await
             .unwrap();
+        seed_database_name(manager, 11, "db").await;
+        seed_table_name(manager, 11, 101, "orders").await;
         manager
             .create_share(
                 &provider,
@@ -1152,11 +1298,10 @@ mod tests {
         manager: &ShareMgr,
         provider: &Tenant,
         share: &str,
-        database: &str,
         current_database_id: Option<u64>,
     ) {
         if let Some(target) = manager
-            .prepare_revoke_database(provider, share, database, current_database_id)
+            .prepare_revoke_database(provider, share, current_database_id)
             .await
             .unwrap()
         {
@@ -1171,12 +1316,10 @@ mod tests {
         manager: &ShareMgr,
         provider: &Tenant,
         share: &str,
-        database: &str,
-        table: &str,
         current_object_ids: Option<ProviderObjectIds>,
     ) {
         if let Some(target) = manager
-            .prepare_revoke_table(provider, share, database, table, current_object_ids)
+            .prepare_revoke_table(provider, share, current_object_ids)
             .await
             .unwrap()
         {
@@ -1193,7 +1336,6 @@ mod tests {
             provider_tenant: "provider".to_string(),
             share_name: "sales".to_string(),
             share_id: 7,
-            provider_database: "db".to_string(),
             provider_database_id: 9,
         };
         let options = binding.to_engine_options();
@@ -1414,6 +1556,14 @@ mod tests {
         let provider = tenant("provider");
         let consumer = tenant("consumer");
 
+        manager
+            .kv_api
+            .upsert_pb(&UpsertPB::update(
+                DatabaseId::new(22),
+                DatabaseMeta::default(),
+            ))
+            .await
+            .unwrap();
         assert!(
             manager
                 .grant_database(
@@ -1435,6 +1585,58 @@ mod tests {
                 .await
                 .is_err()
         );
+
+        manager
+            .kv_api
+            .upsert_pb(&UpsertPB::update(DatabaseId::new(11), DatabaseMeta {
+                drop_on: Some(Utc::now()),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+        manager
+            .grant_database(
+                &provider,
+                "sales",
+                database_grant(&manager, "other", 22).await,
+            )
+            .await
+            .unwrap();
+        let (_, meta) = manager.get_share("provider", "sales").await.unwrap();
+        assert_eq!(
+            Some(22),
+            meta.database.as_ref().map(|grant| grant.database_id)
+        );
+        assert!(meta.tables.is_empty());
+        manager
+            .kv_api
+            .upsert_pb(&UpsertPB::update(DatabaseId::new(22), DatabaseMeta {
+                drop_on: Some(Utc::now()),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+        manager
+            .kv_api
+            .upsert_pb(&UpsertPB::update(
+                DatabaseId::new(11),
+                DatabaseMeta::default(),
+            ))
+            .await
+            .unwrap();
+        manager
+            .grant_database(&provider, "sales", database_grant(&manager, "db", 11).await)
+            .await
+            .unwrap();
+        manager
+            .grant_table(
+                &provider,
+                "sales",
+                table_grant(&manager, "db", 11, "orders", 101).await,
+                "share_conn".to_string(),
+            )
+            .await
+            .unwrap();
 
         manager
             .add_accounts(
@@ -1496,8 +1698,6 @@ mod tests {
             &manager,
             &provider,
             "sales",
-            "db",
-            "orders",
             Some(ProviderObjectIds {
                 database_id: 11,
                 table_id: 101,
@@ -1529,6 +1729,7 @@ mod tests {
             )
             .await
             .unwrap();
+        seed_table_name(&manager, 11, 102, "items").await;
         manager
             .set_share(
                 &provider,
@@ -1553,10 +1754,11 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn revoke_matches_stable_object_ids_after_rename() {
         let (_store, manager) = manager().await;
-        create_granted_share(&manager).await;
+        let binding = create_granted_share(&manager).await;
         let provider = tenant("provider");
+        let consumer = tenant("consumer");
 
-        revoke_database(&manager, &provider, "sales", "renamed_db", Some(11)).await;
+        revoke_database(&manager, &provider, "sales", Some(11)).await;
         let (_, meta) = manager.get_share("provider", "sales").await.unwrap();
         assert!(meta.database.is_none());
         assert!(meta.tables.is_empty());
@@ -1569,6 +1771,7 @@ mod tests {
             )
             .await
             .unwrap();
+        seed_database_name(&manager, 11, "renamed_db").await;
         manager
             .grant_table(
                 &provider,
@@ -1578,6 +1781,7 @@ mod tests {
             )
             .await
             .unwrap();
+        seed_table_name(&manager, 11, 101, "renamed_table").await;
         manager
             .grant_table(
                 &provider,
@@ -1588,14 +1792,19 @@ mod tests {
             .await
             .unwrap();
         let (_, meta) = manager.get_share("provider", "sales").await.unwrap();
-        assert!(!meta.tables.contains_key("old_table_name"));
-        assert!(meta.tables.contains_key("renamed_table"));
+        assert!(meta.tables.contains_key(&101));
+        assert_eq!(
+            "renamed_table",
+            manager
+                .resolve_shared_table(&consumer, &binding, "renamed_table")
+                .await
+                .unwrap()
+                .provider_table
+        );
         revoke_table(
             &manager,
             &provider,
             "sales",
-            "renamed_db",
-            "renamed_table",
             Some(ProviderObjectIds {
                 database_id: 11,
                 table_id: 101,
@@ -1606,9 +1815,9 @@ mod tests {
         let (_, meta) = manager.get_share("provider", "sales").await.unwrap();
         assert!(meta.tables.is_empty());
 
-        revoke_database(&manager, &provider, "sales", "renamed_db", None).await;
+        revoke_database(&manager, &provider, "sales", None).await;
         let (_, meta) = manager.get_share("provider", "sales").await.unwrap();
-        assert!(meta.database.is_none());
+        assert!(meta.database.is_some());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1657,7 +1866,7 @@ mod tests {
         );
 
         let (_, meta) = manager.get_share("provider", "sales").await.unwrap();
-        assert!(!meta.tables.contains_key("items"));
+        assert!(!meta.tables.contains_key(&102));
         assert!(!meta.accounts.contains("new_consumer"));
     }
 
@@ -1701,8 +1910,6 @@ mod tests {
             .prepare_revoke_table(
                 &provider,
                 "sales",
-                "db",
-                "orders",
                 Some(ProviderObjectIds {
                     database_id: 11,
                     table_id: 101,
@@ -1727,10 +1934,8 @@ mod tests {
             .unwrap();
 
         let (_, meta) = manager.get_share("provider", "sales").await.unwrap();
-        assert_eq!(
-            Some(102),
-            meta.tables.get("orders").map(|grant| grant.table_id)
-        );
+        assert!(meta.tables.contains_key(&102));
+        assert!(!meta.tables.contains_key(&101));
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1827,8 +2032,6 @@ mod tests {
             .prepare_revoke_table(
                 &provider,
                 "sales",
-                "db",
-                "orders",
                 Some(ProviderObjectIds {
                     database_id: 11,
                     table_id: 101,
@@ -1854,10 +2057,7 @@ mod tests {
                 .is_err()
         );
         let (_, meta) = manager.get_share("provider", "sales").await.unwrap();
-        assert_eq!(
-            Some(101),
-            meta.tables.get("orders").map(|grant| grant.table_id)
-        );
+        assert!(meta.tables.contains_key(&101));
     }
 
     #[tokio::test(flavor = "multi_thread")]

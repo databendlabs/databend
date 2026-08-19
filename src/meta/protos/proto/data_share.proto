@@ -26,17 +26,15 @@ message DataShareMeta {
   optional string comment = 4;
   repeated string accounts = 5;
   optional DataShareDatabaseGrant database = 6;
-  map<string, DataShareTableGrant> tables = 7;
+  map<uint64, DataShareTableGrant> tables = 7;
   optional string connection = 8;
 }
 
 message DataShareDatabaseGrant {
-  string database = 1;
-  uint64 database_id = 2;
-  string shared_on = 3;
+  uint64 database_id = 1;
+  string shared_on = 2;
 }
 
 message DataShareTableGrant {
-  uint64 table_id = 1;
-  string shared_on = 2;
+  string shared_on = 1;
 }

@@ -18,11 +18,13 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::TableApi;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 
@@ -53,10 +55,17 @@ impl SharedDatabase {
     }
 
     async fn table_info(&self, context: &ShareTableContext) -> Result<TableInfo> {
-        let name_ident = DBIdTableName::new(
-            context.binding.provider_database_id,
-            &context.provider_table,
-        );
+        let table_name = self
+            .ctx
+            .meta
+            .get_pb(&TableIdToName {
+                table_id: context.provider_table_id,
+            })
+            .await
+            .map_err(meta_service_error)?
+            .map(|name| name.data.table_name)
+            .unwrap_or_else(|| context.provider_table.clone());
+        let name_ident = DBIdTableName::new(context.binding.provider_database_id, &table_name);
         let table_niv = self
             .ctx
             .meta
@@ -66,10 +75,10 @@ impl SharedDatabase {
 
         let Some(table_niv) = table_niv else {
             return Err(AppError::from(UnknownTable::new(
-                &context.provider_table,
+                &table_name,
                 format!(
-                    "shared table '{}'.'{}'",
-                    context.binding.provider_database, context.provider_table
+                    "shared table id {} in provider database {}",
+                    context.provider_table_id, context.binding.provider_database_id
                 ),
             ))
             .into());
@@ -88,11 +97,8 @@ impl SharedDatabase {
                 table_id: id.table_id,
                 seq: seq_meta.seq,
             },
-            desc: format!(
-                "'{}'.'{}'",
-                context.binding.provider_database, context.provider_table
-            ),
-            name: context.provider_table.clone(),
+            desc: format!("'{}'.'{}'", self.get_db_name(), table_name),
+            name: table_name,
             meta: seq_meta.data,
             db_type: DatabaseType::NormalDB,
             catalog_info: Default::default(),

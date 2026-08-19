@@ -44,7 +44,7 @@ impl FromToProto for mt::DataShareMeta {
             tables: p
                 .tables
                 .into_iter()
-                .map(|(name, grant)| Ok((name, table_from_pb(grant)?)))
+                .map(|(table_id, grant)| Ok((table_id, table_from_pb(grant)?)))
                 .collect::<Result<_, Incompatible>>()?,
             connection: p.connection,
         })
@@ -63,7 +63,7 @@ impl FromToProto for mt::DataShareMeta {
             tables: self
                 .tables
                 .iter()
-                .map(|(name, grant)| (name.clone(), table_to_pb(grant)))
+                .map(|(table_id, grant)| (*table_id, table_to_pb(grant)))
                 .collect(),
             connection: self.connection.clone(),
         }
@@ -74,7 +74,6 @@ fn database_from_pb(
     p: pb::DataShareDatabaseGrant,
 ) -> Result<mt::DataShareDatabaseGrant, Incompatible> {
     Ok(mt::DataShareDatabaseGrant {
-        database: p.database,
         database_id: p.database_id,
         shared_on: DateTime::<Utc>::from_pb(p.shared_on)?,
     })
@@ -82,7 +81,6 @@ fn database_from_pb(
 
 fn database_to_pb(grant: &mt::DataShareDatabaseGrant) -> pb::DataShareDatabaseGrant {
     pb::DataShareDatabaseGrant {
-        database: grant.database.clone(),
         database_id: grant.database_id,
         shared_on: grant.shared_on.to_pb(),
     }
@@ -90,14 +88,12 @@ fn database_to_pb(grant: &mt::DataShareDatabaseGrant) -> pb::DataShareDatabaseGr
 
 fn table_from_pb(p: pb::DataShareTableGrant) -> Result<mt::DataShareTableGrant, Incompatible> {
     Ok(mt::DataShareTableGrant {
-        table_id: p.table_id,
         shared_on: DateTime::<Utc>::from_pb(p.shared_on)?,
     })
 }
 
 fn table_to_pb(grant: &mt::DataShareTableGrant) -> pb::DataShareTableGrant {
     pb::DataShareTableGrant {
-        table_id: grant.table_id,
         shared_on: grant.shared_on.to_pb(),
     }
 }

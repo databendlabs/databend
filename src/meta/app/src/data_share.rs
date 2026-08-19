@@ -55,29 +55,52 @@ impl kvapi::Key for ShareIdIdent {
     type ValueType = DataShareMeta;
 }
 
+/// Metadata of a provider-owned data share.
+///
+/// Stored at `__fd_data_share_by_id/<share_id>`. The share name maps to this
+/// id via [`ShareNameIdent`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DataShareMeta {
+    /// Tenant that created and owns this share.
     pub provider: String,
+    /// Share name, unique within the provider tenant.
     pub name: String,
+    /// When the share was created.
     pub created_on: DateTime<Utc>,
+    /// Optional user-supplied comment.
     pub comment: Option<String>,
+    /// Consumer tenants allowed to create a database from this share.
     pub accounts: BTreeSet<String>,
+    /// Provider database exposed by this share, if any.
+    ///
+    /// A share exposes at most one database. Set by
+    /// `GRANT USAGE ON DATABASE ... TO SHARE`. The current name is resolved
+    /// from [`crate::schema::DatabaseIdToName`] when needed.
     pub database: Option<DataShareDatabaseGrant>,
-    pub tables: BTreeMap<String, DataShareTableGrant>,
+    /// Provider tables exposed by this share, keyed by table id.
+    ///
+    /// Set by `GRANT SELECT ON TABLE ... TO SHARE`. The current name is
+    /// resolved from [`crate::schema::TableIdToName`] when needed.
+    pub tables: BTreeMap<u64, DataShareTableGrant>,
     /// Provider-owned named storage connection used to read every shared table.
     pub connection: Option<String>,
 }
 
+/// The provider database attached to a share.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DataShareDatabaseGrant {
-    pub database: String,
+    /// Authoritative provider database identity.
     pub database_id: u64,
+    /// When this database was attached to the share.
     pub shared_on: DateTime<Utc>,
 }
 
+/// One provider table attached to a share.
+///
+/// The table id is the key in [`DataShareMeta::tables`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DataShareTableGrant {
-    pub table_id: u64,
+    /// When this table was attached to the share.
     pub shared_on: DateTime<Utc>,
 }
 
