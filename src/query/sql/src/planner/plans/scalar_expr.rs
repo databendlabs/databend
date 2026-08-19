@@ -1013,13 +1013,11 @@ impl SubqueryComparisonOp {
         right: ScalarExpr,
     ) -> Result<FunctionCall> {
         let mut arguments = vec![left, right];
-        if let SubqueryComparisonOp::Like(escape) = self {
-            if let Some(escape) = escape {
-                arguments.push(ScalarExpr::ConstantExpr(ConstantExpr {
-                    span,
-                    value: Scalar::String(escape.clone()),
-                }))
-            }
+        if let SubqueryComparisonOp::Like(Some(escape)) = self {
+            arguments.push(ScalarExpr::ConstantExpr(ConstantExpr {
+                span,
+                value: Scalar::String(escape.clone()),
+            }))
         }
         let mut function = FunctionCall {
             span,
