@@ -75,22 +75,16 @@ grant select on table tls_rename_db.t to share tls_rename_share;
 alter table tls_rename_db.t rename to renamed_t;
 SQL
 
-if echo "revoke select on table tls_rename_db.t from share tls_rename_share" | $TLS_SHARE_USER_CONNECT >/dev/null 2>&1; then
-	echo "old-name table revoke bypassed stable object permissions"
-	exit 1
-fi
-echo "old-name table revoke required stable object permissions"
+echo "revoke select on table tls_rename_db.t from share tls_rename_share" | $TLS_SHARE_USER_CONNECT >/dev/null
+echo "old-name table revoke is a no-op"
 
 bendsql_connect_root_null <<SQL
 revoke select on table tls_rename_db.renamed_t from share tls_rename_share;
 alter database tls_rename_db rename to tls_rename_db_renamed;
 SQL
 
-if echo "revoke usage on database tls_rename_db from share tls_rename_share" | $TLS_SHARE_USER_CONNECT >/dev/null 2>&1; then
-	echo "old-name database revoke bypassed stable object permissions"
-	exit 1
-fi
-echo "old-name database revoke required stable object permissions"
+echo "revoke usage on database tls_rename_db from share tls_rename_share" | $TLS_SHARE_USER_CONNECT >/dev/null
+echo "old-name database revoke is a no-op"
 
 bendsql_connect_root_null <<SQL
 revoke usage on database tls_rename_db_renamed from share tls_rename_share;

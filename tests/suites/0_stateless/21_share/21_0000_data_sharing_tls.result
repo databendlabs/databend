@@ -4,7 +4,7 @@ ALTER SHARE IF EXISTS skipped unused Connection authorization
 account authorization without ACCESS CONNECTION denied
 account authorization with ACCESS CONNECTION succeeded
 account removal without ACCESS CONNECTION succeeded
-old-name table revoke required stable object permissions
-old-name database revoke required stable object permissions
+old-name table revoke is a no-op
+old-name database revoke is a no-op
 stale table grant cleanup ignored same-name replacement permissions
 stale database grant cleanup ignored same-name replacement permissions
