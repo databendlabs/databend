@@ -344,9 +344,7 @@ impl IPhysicalPlan for Recluster {
                         )?;
                         proc.into_processor()
                     },
-                )?;
-
-                Ok(())
+                )
             }
             _ => Err(ErrorCode::Internal(
                 "A node can only execute one recluster task".to_string(),

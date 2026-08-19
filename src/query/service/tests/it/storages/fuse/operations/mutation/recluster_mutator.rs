@@ -532,10 +532,10 @@ async fn materialize_segment_locations_with_mode(
 
 async fn materialize_candidate_window(
     mutator: &ReclusterMutator,
-    selected_window: Vec<SelectedReclusterSegment>,
+    selected_segs: Vec<SelectedReclusterSegment>,
     task_budget: usize,
 ) -> anyhow::Result<(u64, ReclusterParts)> {
-    let segment_indexes = selected_window
+    let segment_indexes = selected_segs
         .iter()
         .map(|segment| (segment.loc.location.clone(), segment.loc.segment_idx))
         .collect::<HashMap<_, _>>();
@@ -545,12 +545,7 @@ async fn materialize_candidate_window(
     )?);
     let decode_semaphore = Arc::new(Semaphore::new(4));
     let window = mutator
-        .probe_candidate_window(
-            selected_window,
-            task_budget,
-            decode_runtime,
-            decode_semaphore,
-        )
+        .probe_candidate_window(selected_segs, task_budget, decode_runtime, decode_semaphore)
         .await?;
     if window.task_count() == 0 {
         return Ok((0, ReclusterParts::default()));
