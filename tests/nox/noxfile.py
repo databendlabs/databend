@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 import shutil
 import tarfile
 import tempfile
@@ -15,6 +16,14 @@ PYTHON_DRIVER_PINNED = ["0.33.6"]
 PYTHON_DRIVER = ["latest", *PYTHON_DRIVER_PINNED]
 PYTHON_TEST_TIMEZONE = "UTC"
 PYTHON_TEST_ENV = {"TZ": PYTHON_TEST_TIMEZONE}
+# Override with a comma-separated list, for example:
+# PYARROW_COMPAT_VERSIONS=4.0.0,8.0.0,9.0.0.
+# PyArrow 4 is the oldest release with a CPython 3.9 Linux aarch64 wheel.
+PYARROW_COMPAT = [
+    version.strip()
+    for version in os.environ.get("PYARROW_COMPAT_VERSIONS", "4.0.0,8.0.0").split(",")
+    if version.strip()
+]
 CACHE_DIR = Path(__file__).resolve().parent / "cache"
 GITHUB_ARCHIVE_ROOT = "https://github.com/databendlabs"
 HTTP_USER_AGENT = "databend-nox-client"
@@ -486,6 +495,32 @@ def test_suites(session):
     )
     # Usage: nox -s test_suites -- suites/http_handler/test_session.py::test_session
     session.run("pytest", *session.posargs)
+
+
+@nox.session(python="3.9")
+@nox.parametrize("pyarrow_version", PYARROW_COMPAT)
+def pyarrow_compat(session, pyarrow_version):
+    """Read Parquet unload output using explicitly pinned PyArrow versions."""
+    if (
+        platform.system() == "Darwin"
+        and platform.machine() == "arm64"
+        and int(pyarrow_version.split(".", 1)[0]) <= 8
+    ):
+        session.skip("legacy PyArrow Parquet wheels are not usable on macOS arm64")
+
+    # Legacy PyArrow wheels are not compatible with NumPy 2.
+    session.install(
+        "pytest",
+        "requests",
+        "numpy<2",
+        f"pyarrow=={pyarrow_version}",
+    )
+    session.run(
+        "pytest",
+        "pyarrow_compat",
+        *session.posargs,
+        env={"PYARROW_COMPAT_VERSION": pyarrow_version},
+    )
 
 
 @nox.session

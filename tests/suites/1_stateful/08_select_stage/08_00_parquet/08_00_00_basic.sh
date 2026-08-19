@@ -47,11 +47,18 @@ echo 'remove @s4;' | bendsql_connect_root
 echo 'remove @s1;' | bendsql_connect_root
 echo "copy into @s4 from (select number a, number::string b, number::decimal(15,2) c from numbers(5000000)) file_format=(type=parquet) single=true;" | bendsql_connect_root | cut -d$'\t' -f1
 
-## 12MB divide by 2MB = 6, so we will read 6 partitions
-echo """
+## A 2 MiB hint should split the large file into multiple scan partitions.
+PARTITIONS=$(echo """
 set parquet_rowgroup_hint_bytes = 2 * 1024 * 1024;
 explain select * from @s4;
-""" | bendsql_connect_root | grep 'partitions ' | sed  's/^[[:space:]]*//g'
+""" | bendsql_connect_root | grep 'partitions ')
+PARTITIONS_TOTAL=$(echo "$PARTITIONS" | awk -F': ' '/partitions total/ {print $2}')
+PARTITIONS_SCANNED=$(echo "$PARTITIONS" | awk -F': ' '/partitions scanned/ {print $2}')
+if [[ $PARTITIONS_TOTAL -le 1 || $PARTITIONS_SCANNED -ne $PARTITIONS_TOTAL ]]; then
+  echo "expected all of multiple partitions to be scanned, got total=$PARTITIONS_TOTAL scanned=$PARTITIONS_SCANNED" >&2
+  exit 1
+fi
+echo 'parallel scan partitions: true'
 
 echo "copy into @s1 from (select * from @s4) file_format=(type=parquet)" | bendsql_connect_root | cut -d$'\t' -f1
 echo "select * from @s1 order by a except (select * from @s4 order by a)" | bendsql_connect_root

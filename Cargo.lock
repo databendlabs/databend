@@ -5314,6 +5314,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "bstr",
+ "bytes",
  "chrono",
  "csv-core",
  "databend-common-ast",
