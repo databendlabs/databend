@@ -37,7 +37,6 @@ use databend_common_expression::types::number::F64;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::*;
@@ -50,8 +49,8 @@ struct CovarianceBuilder;
 
 impl CovarianceBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        Self::definition::<COVAR_POP>().register_with_combinators(registry, false);
-        Self::definition::<COVAR_SAMP>().register_with_combinators(registry, false);
+        Self::route::<COVAR_POP>().register(registry);
+        Self::route::<COVAR_SAMP>().register(registry);
     }
 }
 
@@ -62,24 +61,29 @@ inventory::submit! {
 }
 
 impl CovarianceBuilder {
-    fn definition<const TYPE: u8>() -> AggregateFunctionDefinition {
-        match TYPE {
-            COVAR_POP => AggregateFunctionDefinition::new(
-                "covar_pop",
-                Self::covariance_arguments(),
+    fn route<const TYPE: u8>() -> v2::DirectNameRoute {
+        let (names, features) = match TYPE {
+            COVAR_POP => (
+                &["covar_pop", "var_pop", "variance_pop"][..],
                 Self::COVAR_POP_FEATURES,
-                Self::try_create::<TYPE>,
-            )
-            .with_aliases(&["var_pop", "variance_pop"]),
-            COVAR_SAMP => AggregateFunctionDefinition::new(
-                "covar_samp",
-                Self::covariance_arguments(),
+            ),
+            COVAR_SAMP => (
+                &["covar_samp", "var_samp", "variance_samp"][..],
                 Self::COVAR_SAMP_FEATURES,
-                Self::try_create::<TYPE>,
-            )
-            .with_aliases(&["var_samp", "variance_samp"]),
+            ),
             _ => unreachable!(),
-        }
+        };
+        v2::DirectNameRoute::new(
+            names,
+            Self::covariance_arguments(),
+            features,
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::multi_arg(false, Self::create::<TYPE>))
+        .then(v2::MergeRoute::multi_arg(true, Self::create::<TYPE>))
+        .then(v2::PlainRoute::multi_arg(Self::create::<TYPE>))
+        .then(v2::IfRoute::multi_arg(Self::create::<TYPE>))
+        .then(v2::StateRoute::multi_arg(Self::create::<TYPE>))
     }
 
     fn covariance_arguments() -> AggregateArgumentsPattern {
@@ -209,16 +213,6 @@ fn large_and_comparable(a: u64, b: u64) -> bool {
 }
 
 impl CovarianceBuilder {
-    fn try_create<const TYPE: u8>(
-        request: AggregateFunctionRequest<'_>,
-    ) -> Result<AggregateFunctionRef> {
-        Self::definition::<TYPE>().build_with_multi_arg_input(
-            request,
-            false,
-            multi_arg_aggregate_function_build_input_fns!(Self::create::<TYPE>),
-        )
-    }
-
     fn create<const TYPE: u8>(
         build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {

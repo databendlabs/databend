@@ -45,7 +45,6 @@ use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::extract_number_param;
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 
@@ -53,20 +52,8 @@ struct ArrayMovingBuilder;
 
 impl ArrayMovingBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let group_array_moving_avg = AggregateFunctionDefinition::new(
-            "group_array_moving_avg",
-            ArrayMovingBuilder::array_moving_arguments(),
-            ArrayMovingBuilder::GROUP_ARRAY_MOVING_AVG_FEATURES,
-            ArrayMovingBuilder::try_create_avg,
-        );
-        group_array_moving_avg.register_with_combinators(registry, false);
-        let group_array_moving_sum = AggregateFunctionDefinition::new(
-            "group_array_moving_sum",
-            ArrayMovingBuilder::array_moving_arguments(),
-            ArrayMovingBuilder::GROUP_ARRAY_MOVING_SUM_FEATURES,
-            ArrayMovingBuilder::try_create_sum,
-        );
-        group_array_moving_sum.register_with_combinators(registry, false);
+        Self::avg_route().register(registry);
+        Self::sum_route().register(registry);
     }
 }
 
@@ -716,30 +703,48 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
 }
 
 impl ArrayMovingBuilder {
-    fn try_create_avg(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef> {
-        v2::build_default_name_route_keep_nulls(request, &[v2::KeepNullNameRoute {
-            names: &["group_array_moving_avg"],
-            features: Self::GROUP_ARRAY_MOVING_AVG_FEATURES,
-            build: direct_aggregate_function_build_input_fns!(|build| Self::create(
-                build,
-                ArrayMovingKind::Avg
-            )),
-        }])
+    fn avg_route() -> v2::DirectNameRoute {
+        let arguments = Self::array_moving_arguments();
+        let features = Self::GROUP_ARRAY_MOVING_AVG_FEATURES;
+        v2::DirectNameRoute::new(
+            &["group_array_moving_avg"],
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::Keep,
+        )
+        .then(v2::MergeRoute::new(false, ArrayMovingBuilder::create_avg))
+        .then(v2::MergeRoute::new(true, ArrayMovingBuilder::create_avg))
+        .then(v2::PlainRoute::new(ArrayMovingBuilder::create_avg))
+        .then(v2::IfRoute::new(ArrayMovingBuilder::create_avg))
+        .then(v2::StateRoute::new(ArrayMovingBuilder::create_avg))
     }
 
-    fn try_create_sum(
-        request: v2::AggregateFunctionRequest<'_>,
+    fn sum_route() -> v2::DirectNameRoute {
+        let arguments = Self::array_moving_arguments();
+        let features = Self::GROUP_ARRAY_MOVING_SUM_FEATURES;
+        v2::DirectNameRoute::new(
+            &["group_array_moving_sum"],
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::Keep,
+        )
+        .then(v2::MergeRoute::new(false, ArrayMovingBuilder::create_sum))
+        .then(v2::MergeRoute::new(true, ArrayMovingBuilder::create_sum))
+        .then(v2::PlainRoute::new(ArrayMovingBuilder::create_sum))
+        .then(v2::IfRoute::new(ArrayMovingBuilder::create_sum))
+        .then(v2::StateRoute::new(ArrayMovingBuilder::create_sum))
+    }
+
+    fn create_avg(
+        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {
-        v2::build_default_name_route_keep_nulls(request, &[v2::KeepNullNameRoute {
-            names: &["group_array_moving_sum"],
-            features: Self::GROUP_ARRAY_MOVING_SUM_FEATURES,
-            build: direct_aggregate_function_build_input_fns!(|build| Self::create(
-                build,
-                ArrayMovingKind::Sum
-            )),
-        }])
+        Self::create(build, ArrayMovingKind::Avg)
+    }
+
+    fn create_sum(
+        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+    ) -> Result<v2::AggregateFunctionRef> {
+        Self::create(build, ArrayMovingKind::Sum)
     }
 
     fn create(

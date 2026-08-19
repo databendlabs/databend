@@ -38,7 +38,6 @@ use databend_common_expression::types::number::F64;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::UnaryState;
@@ -53,8 +52,8 @@ struct StddevBuilder;
 
 impl StddevBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        Self::definition::<STD_POP>().register_with_combinators(registry, false);
-        Self::definition::<STD_SAMP>().register_with_combinators(registry, false);
+        Self::route::<STD_POP>().register(registry);
+        Self::route::<STD_SAMP>().register(registry);
     }
 }
 
@@ -65,24 +64,23 @@ inventory::submit! {
 }
 
 impl StddevBuilder {
-    fn definition<const TYPE: u8>() -> AggregateFunctionDefinition {
-        match TYPE {
-            STD_POP => AggregateFunctionDefinition::new(
-                "stddev_pop",
-                Self::stddev_arguments(),
-                Self::STDDEV_POP_FEATURES,
-                Self::try_create::<TYPE>,
-            )
-            .with_aliases(&["std"]),
-            STD_SAMP => AggregateFunctionDefinition::new(
-                "stddev_samp",
-                Self::stddev_arguments(),
-                Self::STDDEV_SAMP_FEATURES,
-                Self::try_create::<TYPE>,
-            )
-            .with_aliases(&["stddev"]),
+    fn route<const TYPE: u8>() -> v2::DirectNameRoute {
+        let (names, features) = match TYPE {
+            STD_POP => (&["stddev_pop", "std"][..], Self::STDDEV_POP_FEATURES),
+            STD_SAMP => (&["stddev_samp", "stddev"][..], Self::STDDEV_SAMP_FEATURES),
             _ => unreachable!(),
-        }
+        };
+        v2::DirectNameRoute::new(
+            names,
+            Self::stddev_arguments(),
+            features,
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::unary(false, Self::create_for_type::<TYPE>))
+        .then(v2::MergeRoute::unary(true, Self::create_for_type::<TYPE>))
+        .then(v2::PlainRoute::unary(Self::create_for_type::<TYPE>))
+        .then(v2::IfRoute::unary(Self::create_for_type::<TYPE>))
+        .then(v2::StateRoute::unary(Self::create_for_type::<TYPE>))
     }
 
     fn stddev_arguments() -> AggregateArgumentsPattern {
@@ -231,16 +229,6 @@ where
 }
 
 impl StddevBuilder {
-    fn try_create<const TYPE: u8>(
-        request: AggregateFunctionRequest<'_>,
-    ) -> Result<AggregateFunctionRef> {
-        Self::definition::<TYPE>().build_with_unary_input(
-            request,
-            false,
-            unary_aggregate_function_build_input_fns!(Self::create_for_type::<TYPE>),
-        )
-    }
-
     fn create_for_type<const TYPE: u8>(
         build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {

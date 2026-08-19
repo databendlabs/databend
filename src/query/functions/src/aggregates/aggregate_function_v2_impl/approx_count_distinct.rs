@@ -47,8 +47,18 @@ struct ApproxCountDistinctBuilder;
 
 impl ApproxCountDistinctBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let function = Self::definition();
-        function.register_with_combinators(registry, false);
+        v2::DirectNameRoute::new(
+            &["approx_count_distinct"],
+            v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any()]),
+            Self::APPROX_COUNT_DISTINCT_FEATURES,
+            v2::NullPolicy::ReturnsDefaultWhenOnlyNull,
+        )
+        .then(v2::MergeRoute::unary(false, Self::create))
+        .then(v2::MergeRoute::unary(true, Self::create))
+        .then(v2::PlainRoute::unary(Self::create))
+        .then(v2::IfRoute::unary(Self::create))
+        .then(v2::StateRoute::unary(Self::create))
+        .register(registry);
     }
 }
 
@@ -59,15 +69,6 @@ inventory::submit! {
 }
 
 impl ApproxCountDistinctBuilder {
-    fn definition() -> super::AggregateFunctionDefinition {
-        super::AggregateFunctionDefinition::new(
-            "approx_count_distinct",
-            v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any()]),
-            Self::APPROX_COUNT_DISTINCT_FEATURES,
-            Self::try_create,
-        )
-    }
-
     const APPROX_COUNT_DISTINCT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
         is_decomposable: false,
         sort_policy: v2::SortPolicy::Unsupported,
@@ -175,16 +176,6 @@ where
 }
 
 impl ApproxCountDistinctBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        v2::build_default_name_route_with_unary_input(
-            request,
-            &["approx_count_distinct"],
-            Self::APPROX_COUNT_DISTINCT_FEATURES,
-            true,
-            unary_aggregate_function_build_input_fns!(Self::create),
-        )
-    }
-
     fn create(
         build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {

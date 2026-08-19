@@ -18,9 +18,11 @@ use databend_common_expression::types::Decimal128Type;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use goldenfile::Mint;
@@ -459,19 +461,68 @@ fn test_v2_merge_rejects_mismatched_state_function() -> Result<()> {
     Ok(())
 }
 
-/// Legacy states carry no metadata, so the nested signature is recovered by
-/// searching candidate argument lists. Pruning that search with the nested
-/// function's own argument pattern must not change which states resolve.
+/// Legacy states carry no metadata. Migrated aggregates recover a short list of
+/// concrete signatures from their own state layout, while the merge layer still
+/// verifies that rebuilding the signature reproduces that layout.
 #[test]
 fn test_v2_merge_resolves_legacy_physical_state() -> Result<()> {
-    for (state_name, merge_name) in [
-        ("sum_state", "sum_merge"),
-        ("sum_state", "sum_merge_state"),
-        ("count_state", "count_merge"),
-        ("max_state", "max_merge"),
-        ("min_state", "min_merge"),
+    for (case, state_name, merge_name, entry) in [
+        (
+            "unsigned sum",
+            "sum_state",
+            "sum_merge",
+            UInt64Type::from_data(vec![1, 2, 3, 4]).into(),
+        ),
+        (
+            "signed sum",
+            "sum_state",
+            "sum_merge",
+            Int64Type::from_data(vec![-4, 3, -2, 1]).into(),
+        ),
+        (
+            "float sum",
+            "sum_state",
+            "sum_merge",
+            Float64Type::from_data(vec![1.25, -2.5, 3.75, 4.5]).into(),
+        ),
+        (
+            "interval sum",
+            "sum_state",
+            "sum_merge",
+            IntervalType::from_data(vec![
+                months_days_micros::new(1, 2, 3),
+                months_days_micros::new(0, 3, 4),
+                months_days_micros::new(2, 0, 5),
+                months_days_micros::new(0, 1, 6),
+            ])
+            .into(),
+        ),
+        (
+            "sum merge state",
+            "sum_state",
+            "sum_merge_state",
+            UInt64Type::from_data(vec![1, 2, 3, 4]).into(),
+        ),
+        (
+            "count",
+            "count_state",
+            "count_merge",
+            UInt64Type::from_data(vec![1, 2, 3, 4]).into(),
+        ),
+        (
+            "max string",
+            "max_state",
+            "max_merge",
+            StringType::from_data(vec!["delta", "bravo", "charlie", "alpha"]).into(),
+        ),
+        (
+            "min string",
+            "min_state",
+            "min_merge",
+            StringType::from_data(vec!["delta", "bravo", "charlie", "alpha"]).into(),
+        ),
     ] {
-        let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
+        let entries = [entry];
         let (state_column, state_type) = eval_v2_aggr(state_name, &entries, 4, false)?;
         let DataType::AggregateState(metadata) = &state_type else {
             panic!("{state_name} should return an AggregateState type");
@@ -495,15 +546,46 @@ fn test_v2_merge_resolves_legacy_physical_state() -> Result<()> {
         assert_eq!(
             unsafe { merged.0.index_unchecked(0) },
             unsafe { merged_with_metadata.0.index_unchecked(0) },
-            "{merge_name} disagreed between legacy and metadata-carrying state"
+            "{case}: {merge_name} disagreed between legacy and metadata-carrying state"
         );
     }
     Ok(())
 }
 
-/// Pruning removes argument lists the nested function would reject, so states
-/// whose physical layout matches nothing valid must still be refused rather
-/// than silently resolving to some unrelated signature.
+/// Once an aggregate supplies a precise resolver, an empty candidate set is a
+/// definitive refusal. In particular, a decimal sum state retains its scale
+/// and storage width but not the original precision, so merge must not fall
+/// back to guessing the accumulator type as the original argument.
+#[test]
+fn test_v2_sum_merge_does_not_fallback_after_precise_resolver() -> Result<()> {
+    let entries = [Decimal64Type::from_opt_data_with_size(
+        vec![Some(110), Some(220), None, Some(330)],
+        Some(DecimalSize::new_unchecked(15, 2)),
+    )
+    .into()];
+    let (_, state_type) = eval_v2_aggr("sum_state", &entries, 4, false)?;
+    let DataType::AggregateState(metadata) = state_type else {
+        panic!("sum_state should return an AggregateState type");
+    };
+    let physical_type = metadata.physical_type().clone();
+
+    let error = match AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+        name: "sum_merge",
+        params: &[],
+        args_type: std::slice::from_ref(&physical_type),
+        distinct: false,
+        order_by: &[],
+    }) {
+        Ok(_) => panic!("sum_merge should reject an ambiguous legacy decimal state"),
+        Err(error) => error,
+    };
+    assert_eq!(error.code(), 1010);
+    assert!(error.message().contains("Cannot infer"));
+    Ok(())
+}
+
+/// States whose physical layout maps to no concrete signature must still be
+/// refused rather than silently resolving to some unrelated signature.
 #[test]
 fn test_v2_merge_rejects_unrecoverable_legacy_state() -> Result<()> {
     for state_type in [

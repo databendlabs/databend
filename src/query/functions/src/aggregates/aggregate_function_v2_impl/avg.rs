@@ -47,7 +47,6 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::AggregateFunctionRef;
@@ -81,18 +80,20 @@ impl AvgBuilder {
         v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any_numeric()])
     }
 
-    fn definition() -> AggregateFunctionDefinition {
-        AggregateFunctionDefinition::new(
-            Self::NAME,
+    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+        v2::DirectNameRoute::new(
+            &[Self::NAME],
             Self::arguments(),
             Self::FEATURES,
-            Self::try_create,
+            v2::NullPolicy::Skip,
         )
-    }
-
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let avg = Self::definition();
-        avg.register_with_combinators(registry, true);
+        .then(v2::MergeRoute::unary(false, Self::create))
+        .then(v2::MergeRoute::unary(true, Self::create))
+        .then(v2::PlainRoute::unary(Self::create))
+        .then(v2::IfRoute::unary(Self::create))
+        .then(v2::StateRoute::unary(Self::create))
+        .then(v2::DistinctRoute::unary(Self::create))
+        .register(registry);
     }
 }
 
@@ -331,14 +332,6 @@ where T: Decimal + std::ops::AddAssign
 }
 
 impl AvgBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
-        Self::definition().build_with_unary_input(
-            request,
-            false,
-            unary_aggregate_function_build_input_fns_with_distinct!(Self::create),
-        )
-    }
-
     fn create(
         build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {

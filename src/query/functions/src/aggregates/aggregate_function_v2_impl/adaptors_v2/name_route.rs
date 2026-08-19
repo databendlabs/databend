@@ -12,791 +12,258 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRef;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest;
-use databend_common_expression::types::AccessType;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::ValueType;
 
-use super::AggrImpl;
-use super::AggregateFunctionSignature;
-use super::AggregateMultiArgOrNullImplementation;
-use super::AggregateStateDescription;
+use super::AggregateArgumentPattern;
+use super::AggregateArgumentsPattern;
+use super::AggregateFunctionBuilder;
+use super::AggregateFunctionDescriptor;
+use super::AggregateFunctionRef;
+use super::AggregateFunctionRegistry;
+use super::AggregateFunctionRequest;
 use super::CombinatorImpl;
 use super::DirectBuildContext;
 use super::DirectBuildFn;
 use super::DistinctCombinator;
+use super::DistinctPolicy;
 use super::FunctionFeatures;
 use super::IfCombinator;
+use super::LegacySignatureResolver;
 use super::MultiArgBuildContext;
 use super::MultiArgBuildFn;
 use super::NullPolicy;
 use super::PlainCombinator;
 use super::StateCombinator;
 use super::StateCombinatorPlan;
-use super::UnaryAggrImpl;
 use super::UnaryBuildContext;
 use super::UnaryBuildFn;
-use super::UnaryState;
-use super::sort_combinator;
+use super::merge_combinator;
 use super::state_combinator;
 use super::try_create_null_argument_result_function;
 
-pub struct AggregateFunctionNameRoutePath<'a> {
-    request: AggregateFunctionRequest<'a>,
+/// An ordered sequence of direct aggregate name routes.
+///
+/// Registration metadata is fixed when the route is created. Each route node
+/// provides the metadata transformation for its own descriptor.
+pub(crate) struct DirectNameRoute {
+    names: &'static [&'static str],
+    arguments: AggregateArgumentsPattern,
+    features: FunctionFeatures,
+    null_policy: NullPolicy,
+    validate: Option<DirectRouteValidateFn>,
+    routes: Vec<Box<dyn DirectRouteNode>>,
 }
 
-pub struct MatchedNameStep<'a> {
-    request: AggregateFunctionRequest<'a>,
-}
+type DirectRouteValidateFn = for<'a> fn(&AggregateFunctionRequest<'a>) -> Result<()>;
 
-pub struct PlainOrNullStep<'a> {
-    request: AggregateFunctionRequest<'a>,
-}
-
-pub struct IfOrNullStep<'a> {
-    request: AggregateFunctionRequest<'a>,
-    args_type: Vec<DataType>,
+pub(crate) struct DirectRouteContext<'request, 'route> {
+    request: AggregateFunctionRequest<'request>,
+    names: &'route [&'route str],
+    arguments: &'route AggregateArgumentsPattern,
+    features: &'route FunctionFeatures,
     null_policy: NullPolicy,
 }
 
-pub struct StateOrNullStep<'a> {
-    request: AggregateFunctionRequest<'a>,
-    args_type: Option<Vec<DataType>>,
-    state_plan: StateCombinatorPlan,
-}
-
-pub struct DistinctSkipNullStep<'a> {
-    request: AggregateFunctionRequest<'a>,
-    args_type: Vec<DataType>,
-    null_policy: NullPolicy,
-}
-
-fn build_signature(
-    request: &AggregateFunctionRequest<'_>,
-    signature_args_type: &[DataType],
-    return_type: DataType,
-) -> AggregateFunctionSignature {
-    AggregateFunctionSignature {
-        name: request.name.to_string(),
-        params: request.params.to_vec(),
-        args_type: signature_args_type.to_vec(),
-        distinct: request.distinct,
-        order_by: request.order_by.to_vec(),
-        return_type,
+pub(crate) trait DirectRouteNode: Send + Sync {
+    fn suffix(&self) -> Option<&'static str> {
+        None
     }
+
+    fn arguments(&self, base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+        base.clone()
+    }
+
+    fn features(&self, base: &FunctionFeatures) -> FunctionFeatures {
+        base.clone()
+    }
+
+    fn try_build(
+        &self,
+        context: &DirectRouteContext<'_, '_>,
+    ) -> Result<Option<AggregateFunctionRef>>;
 }
 
-impl<'a, C> UnaryBuildContext<'a, C>
-where C: CombinatorImpl
-{
-    fn new(
-        request: AggregateFunctionRequest<'a>,
-        signature_args_type: &'a [DataType],
-        combinator_args_type: &'a [DataType],
+impl DirectNameRoute {
+    pub(crate) fn new(
+        names: &'static [&'static str],
+        arguments: AggregateArgumentsPattern,
         features: FunctionFeatures,
-        combinator: C,
-    ) -> Result<Self> {
-        let [arg_type] = request.args_type else {
-            return Err(ErrorCode::BadArguments(format!(
-                "{} expects exactly one argument, got {}",
-                request.name,
-                request.args_type.len()
-            )));
-        };
-        Ok(Self {
-            request,
-            signature_args_type,
-            combinator_args_type,
+        null_policy: NullPolicy,
+    ) -> Self {
+        assert!(!names.is_empty(), "a direct name route requires a name");
+        Self {
+            names,
+            arguments,
             features,
-            combinator,
-            arg_type: arg_type.remove_nullable(),
-        })
-    }
-
-    pub(crate) fn name(&self) -> &str {
-        self.request.name
-    }
-
-    pub(crate) fn params(&self) -> &[databend_common_expression::Scalar] {
-        self.request.params
-    }
-
-    pub(crate) fn arg_type(&self) -> &DataType {
-        &self.arg_type
-    }
-
-    pub(crate) fn create_unary<S, I, R>(
-        self,
-        return_type: DataType,
-        state: AggregateStateDescription,
-        function_info: S::FunctionInfo,
-    ) -> Result<AggregateFunctionRef>
-    where
-        S: UnaryState<I, R>,
-        I: AccessType,
-        R: ValueType,
-    {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        if signature.args_type[0].is_nullable_or_null() {
-            let implementation =
-                super::UnaryAggregateImplementation::new(super::UnaryImpl::<S, I, R, true>::new(
-                    function_info.into(),
-                ));
-            self.combinator.create_aggregate_function(
-                self.combinator_args_type,
-                signature,
-                self.features,
-                state,
-                implementation,
-            )
-        } else {
-            let implementation =
-                super::UnaryAggregateImplementation::new(super::UnaryImpl::<S, I, R, false>::new(
-                    function_info.into(),
-                ));
-            self.combinator.create_aggregate_function(
-                self.combinator_args_type,
-                signature,
-                self.features,
-                state,
-                implementation,
-            )
+            null_policy,
+            validate: None,
+            routes: Vec::new(),
         }
     }
 
-    pub(crate) fn create_unary_or_null<S, I, R>(
-        self,
-        return_type: DataType,
-        state: AggregateStateDescription,
-        function_info: S::FunctionInfo,
-    ) -> Result<AggregateFunctionRef>
-    where
-        S: UnaryState<I, R>,
-        I: AccessType,
-        R: ValueType,
-    {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        let inner = super::UnaryImpl::<S, I, R, false>::new(std::sync::Arc::new(function_info));
-        let implementation =
-            super::UnaryAggregateImplementation::new(super::UnaryOrNull::new(inner));
-        let state = state.with_null_flag();
-        self.combinator.create_aggregate_function(
-            self.combinator_args_type,
-            signature,
-            self.features,
-            state,
-            implementation,
-        )
+    pub(crate) fn with_validator(mut self, validate: DirectRouteValidateFn) -> Self {
+        self.validate = Some(validate);
+        self
     }
 
-    pub(crate) fn create_unary_or_null_with_impl<I, R, U>(
-        self,
-        return_type: DataType,
-        state: AggregateStateDescription,
-        implementation: U,
-    ) -> Result<AggregateFunctionRef>
-    where
-        I: AccessType,
-        R: ValueType,
-        U: UnaryAggrImpl<I, R>,
-    {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        let implementation =
-            super::UnaryAggregateImplementation::new(super::UnaryOrNull::new(implementation));
-        let state = state.with_null_flag();
-        self.combinator.create_aggregate_function(
-            self.combinator_args_type,
-            signature,
-            self.features,
-            state,
-            implementation,
-        )
+    pub(crate) fn then(mut self, next: impl DirectRouteNode + 'static) -> Self {
+        self.routes.push(Box::new(next));
+        self
     }
-}
 
-impl<'a, C> MultiArgBuildContext<'a, C>
-where C: CombinatorImpl
-{
-    fn new(
-        request: AggregateFunctionRequest<'a>,
-        signature_args_type: &'a [DataType],
-        combinator_args_type: &'a [DataType],
-        features: FunctionFeatures,
-        combinator: C,
-    ) -> Self {
-        let args_type = request
-            .args_type
+    pub(crate) fn into_descriptors(self) -> Vec<AggregateFunctionDescriptor> {
+        let route = Arc::new(self);
+        route
+            .routes
             .iter()
-            .map(DataType::remove_nullable)
-            .collect();
-        Self {
+            .map(|node| {
+                let suffix = node.suffix();
+                let name = suffixed_name(route.names[0], suffix);
+                let aliases = route.names[1..]
+                    .iter()
+                    .map(|alias| suffixed_name(alias, suffix))
+                    .collect::<Vec<_>>();
+                let builder: Arc<dyn AggregateFunctionBuilder> = route.clone();
+                let mut descriptor = AggregateFunctionDescriptor::from_builder(name, builder)
+                    .with_metadata(
+                        node.arguments(&route.arguments),
+                        node.features(&route.features),
+                    );
+                if !aliases.is_empty() {
+                    descriptor = descriptor.with_aliases(aliases);
+                }
+                descriptor
+            })
+            .collect()
+    }
+
+    pub(crate) fn register(self, registry: &mut AggregateFunctionRegistry) {
+        for descriptor in self.into_descriptors() {
+            registry.register(descriptor);
+        }
+    }
+
+    pub(crate) fn build(
+        &self,
+        request: AggregateFunctionRequest<'_>,
+    ) -> Result<AggregateFunctionRef> {
+        if let Some(validate) = self.validate {
+            validate(&request)?;
+        }
+        let context = DirectRouteContext {
             request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            combinator,
-            args_type,
+            names: self.names,
+            arguments: &self.arguments,
+            features: &self.features,
+            null_policy: self.null_policy,
+        };
+        for route in &self.routes {
+            if let Some(function) = route.try_build(&context)? {
+                return Ok(function);
+            }
         }
-    }
-
-    pub(crate) fn name(&self) -> &str {
-        self.request.name
-    }
-
-    pub(crate) fn params(&self) -> &[databend_common_expression::Scalar] {
-        self.request.params
-    }
-
-    pub(crate) fn args_type(&self) -> &[DataType] {
-        &self.args_type
-    }
-
-    pub(crate) fn create_multi_arg_or_null<I>(
-        self,
-        return_type: DataType,
-        state: AggregateStateDescription,
-        implementation: I,
-    ) -> Result<AggregateFunctionRef>
-    where
-        I: AggrImpl,
-    {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        debug_assert!(signature.order_by.is_empty());
-        self.combinator.create_aggregate_function(
-            self.combinator_args_type,
-            signature,
-            self.features,
-            state.with_null_flag(),
-            AggregateMultiArgOrNullImplementation::new(implementation),
-        )
-    }
-}
-
-impl<'a, C> DirectBuildContext<'a, C>
-where C: CombinatorImpl
-{
-    fn new(
-        request: AggregateFunctionRequest<'a>,
-        signature_args_type: &'a [DataType],
-        combinator_args_type: &'a [DataType],
-        features: FunctionFeatures,
-        combinator: C,
-    ) -> Self {
-        Self {
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            combinator,
-        }
-    }
-
-    pub(crate) fn name(&self) -> &str {
-        self.request.name
-    }
-
-    pub(crate) fn params(&self) -> &[databend_common_expression::Scalar] {
-        self.request.params
-    }
-
-    pub(crate) fn args_type(&self) -> &[DataType] {
-        self.request.args_type
-    }
-
-    pub(crate) fn create<I>(
-        self,
-        return_type: DataType,
-        state: AggregateStateDescription,
-        implementation: I,
-    ) -> Result<AggregateFunctionRef>
-    where
-        I: AggrImpl,
-    {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        debug_assert!(signature.order_by.is_empty());
-        self.combinator.create_aggregate_function(
-            self.combinator_args_type,
-            signature,
-            self.features,
-            state,
-            implementation,
-        )
-    }
-
-    pub(crate) fn create_ordered<I>(
-        self,
-        return_type: DataType,
-        state: AggregateStateDescription,
-        implementation: I,
-    ) -> Result<AggregateFunctionRef>
-    where
-        I: AggrImpl,
-    {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        if signature.order_by.is_empty() {
-            return self.combinator.create_aggregate_function(
-                self.combinator_args_type,
-                signature,
-                self.features,
-                state,
-                implementation,
-            );
-        }
-
-        let (input_types, order_by) =
-            sort_combinator::sort_runtime_inputs(self.combinator_args_type, &signature.order_by);
-        let state = sort_combinator::sort_state_description(&state);
-        let implementation = sort_combinator::AggregateSortImplementation::new(
-            implementation,
-            input_types,
-            order_by,
-        );
-        self.combinator.create_aggregate_function(
-            self.combinator_args_type,
-            signature,
-            self.features,
-            state,
-            implementation,
-        )
-    }
-}
-
-impl<'a> AggregateFunctionNameRoutePath<'a> {
-    pub fn root(request: AggregateFunctionRequest<'a>) -> Self {
-        Self { request }
-    }
-
-    pub fn unknown(&self) -> Result<AggregateFunctionRef> {
         Err(ErrorCode::UnknownAggregateFunction(format!(
             "Unsupported AggregateFunction: {}",
-            self.request.name
+            context.request.name
         )))
     }
+}
 
-    pub fn names(&self, names: &[&str]) -> Option<MatchedNameStep<'a>> {
-        matches_name(names, self.request.name).then(|| MatchedNameStep {
-            request: self.request.clone(),
-        })
+impl AggregateFunctionBuilder for DirectNameRoute {
+    fn arguments(&self) -> &AggregateArgumentsPattern {
+        &self.arguments
     }
 
-    pub fn suffixed_names(&self, base_names: &[&str], suffix: &str) -> Option<MatchedNameStep<'a>> {
-        matches_suffixed_name(base_names, suffix, self.request.name).then(|| MatchedNameStep {
-            request: self.request.clone(),
-        })
+    fn features(&self) -> &FunctionFeatures {
+        &self.features
+    }
+
+    fn build(&self, request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
+        DirectNameRoute::build(self, request)
     }
 }
 
-impl<'a> MatchedNameStep<'a> {
-    pub fn build_with_direct_input(
-        self,
-        features: FunctionFeatures,
-        build: DirectBuildFn<PlainCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        build(DirectBuildContext::new(
-            self.request,
-            signature_args_type,
-            signature_args_type,
-            features,
-            PlainCombinator,
-        ))
+fn suffixed_name(name: &str, suffix: Option<&str>) -> String {
+    match suffix {
+        Some(suffix) => format!("{}_{}", name, suffix),
+        None => name.to_string(),
     }
+}
 
-    pub fn plain_null_argument_result(
-        &self,
-        returns_default_when_only_null: bool,
-    ) -> Result<Option<AggregateFunctionRef>> {
-        if matches!(self.request.args_type, [DataType::Null]) {
-            Ok(Some(try_create_null_argument_result_function(
-                self.request.clone(),
-                returns_default_when_only_null,
-            )?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn plain_or_null(self) -> PlainOrNullStep<'a> {
-        PlainOrNullStep {
-            request: self.request,
-        }
-    }
-
-    pub fn null_argument_result(
-        &self,
-        returns_default_when_only_null: bool,
-    ) -> Result<Option<AggregateFunctionRef>> {
-        if self.request.args_type.iter().any(DataType::is_null) {
-            Ok(Some(try_create_null_argument_result_function(
-                self.request.clone(),
-                returns_default_when_only_null,
-            )?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn if_nullable_input_null_argument_result(
-        &self,
-        returns_default_when_only_null: bool,
-    ) -> Result<Option<AggregateFunctionRef>> {
-        let has_null_argument = self.request.args_type.iter().any(DataType::is_null);
-        let has_nested_null_after_nullable_removed = self
-            .request
-            .args_type
-            .split_last()
-            .map(|(_, nested_arg_types)| nested_arg_types.iter().any(DataType::is_null))
-            .unwrap_or(false);
-        if has_null_argument || has_nested_null_after_nullable_removed {
-            Ok(Some(try_create_null_argument_result_function(
-                self.request.clone(),
-                returns_default_when_only_null,
-            )?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn if_combinator(
-        self,
-        null_policy: NullPolicy,
-        strip_nullable_input: bool,
-    ) -> Result<IfOrNullStep<'a>> {
-        let Some((condition_type, nested_arg_types)) = self.request.args_type.split_last() else {
-            return Err(ErrorCode::BadArguments(format!(
-                "{} expects a condition argument",
-                self.request.name
-            )));
+impl DirectRouteContext<'_, '_> {
+    fn matching_name_index(&self, suffix: Option<&str>) -> Option<usize> {
+        let name = match suffix {
+            Some(suffix) => {
+                let name_prefix = strip_suffix_ignore_ascii_case(self.request.name, suffix)?;
+                name_prefix.strip_suffix('_')?
+            }
+            None => self.request.name,
         };
-
-        let condition_type = condition_type.remove_nullable();
-        if !condition_type.is_null() && condition_type != DataType::Boolean {
-            return Err(ErrorCode::BadArguments(format!(
-                "The type of the last argument for {} must be boolean type, but got {:?}",
-                self.request.name,
-                self.request.args_type[self.request.args_type.len() - 1]
-            )));
-        }
-
-        let args_type = if strip_nullable_input {
-            nested_arg_types
-                .iter()
-                .map(DataType::remove_nullable)
-                .collect()
-        } else {
-            nested_arg_types.to_vec()
-        };
-
-        Ok(IfOrNullStep {
-            request: self.request,
-            args_type,
-            null_policy,
-        })
-    }
-
-    pub fn state_null_argument_result(&self) -> Result<Option<AggregateFunctionRef>> {
-        self.request
-            .args_type
+        self.names
             .iter()
-            .any(DataType::is_null)
-            .then(|| state_combinator::create_state_null_result_function(self.request.clone()))
-            .transpose()
+            .position(|candidate| candidate.eq_ignore_ascii_case(name))
+    }
+}
+
+enum RouteBuild<C> {
+    Unary(UnaryBuildFn<C>),
+    MultiArg(MultiArgBuildFn<C>),
+    Direct(DirectBuildFn<C>),
+}
+
+impl<C> RouteBuild<C>
+where C: CombinatorImpl
+{
+    fn null_argument_mode(&self) -> NullArgumentMode {
+        match self {
+            Self::MultiArg(_) => NullArgumentMode::Any,
+            Self::Unary(_) | Self::Direct(_) => NullArgumentMode::Only,
+        }
     }
 
-    pub fn state_nullable_input_plan(
+    fn build<'a>(
         &self,
-        returns_default_when_only_null: bool,
-    ) -> StateCombinatorPlan {
-        let strip_nullable_input = self
-            .request
-            .args_type
-            .iter()
-            .any(|data_type| matches!(data_type, DataType::Nullable(_)));
-        StateCombinatorPlan {
-            strip_nullable_input,
-            nullable_input_result_flag: strip_nullable_input && !returns_default_when_only_null,
-        }
-    }
-
-    pub fn state_combinator(self, state_plan: StateCombinatorPlan) -> StateOrNullStep<'a> {
-        let args_type = if state_plan.strip_nullable_input {
-            Some(
-                self.request
-                    .args_type
-                    .iter()
-                    .map(DataType::remove_nullable)
-                    .collect(),
-            )
-        } else {
-            None
-        };
-
-        StateOrNullStep {
-            request: self.request,
-            args_type,
-            state_plan,
-        }
-    }
-
-    pub fn distinct_combinator(
-        self,
-        null_policy: NullPolicy,
-        strip_nullable_input: bool,
-    ) -> DistinctSkipNullStep<'a> {
-        let args_type = if strip_nullable_input {
-            self.request
-                .args_type
-                .iter()
-                .map(DataType::remove_nullable)
-                .collect()
-        } else {
-            self.request.args_type.to_vec()
-        };
-        DistinctSkipNullStep {
-            request: self.request,
-            args_type,
-            null_policy,
+        request: AggregateFunctionRequest<'a>,
+        signature_args_type: &'a [DataType],
+        combinator_args_type: &'a [DataType],
+        features: FunctionFeatures,
+        combinator: C,
+    ) -> Result<AggregateFunctionRef> {
+        match self {
+            Self::Unary(build) => build(UnaryBuildContext::new(
+                request,
+                signature_args_type,
+                combinator_args_type,
+                features,
+                combinator,
+            )?),
+            Self::MultiArg(build) => build(MultiArgBuildContext::new(
+                request,
+                signature_args_type,
+                combinator_args_type,
+                features,
+                combinator,
+            )),
+            Self::Direct(build) => build(DirectBuildContext::new(
+                request,
+                signature_args_type,
+                combinator_args_type,
+                features,
+                combinator,
+            )),
         }
     }
 }
 
-impl<'a> PlainOrNullStep<'a> {
-    pub fn build_with_unary_input(
-        self,
-        features: FunctionFeatures,
-        build: UnaryBuildFn<PlainCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        build(UnaryBuildContext::new(
-            self.request,
-            signature_args_type,
-            signature_args_type,
-            features,
-            PlainCombinator,
-        )?)
-    }
-
-    pub fn build_with_direct_input(
-        self,
-        features: FunctionFeatures,
-        build: DirectBuildFn<PlainCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        build(DirectBuildContext::new(
-            self.request,
-            signature_args_type,
-            signature_args_type,
-            features,
-            PlainCombinator,
-        ))
-    }
-
-    pub fn build_with_multi_arg_input(
-        self,
-        features: FunctionFeatures,
-        build: MultiArgBuildFn<PlainCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        build(MultiArgBuildContext::new(
-            self.request,
-            signature_args_type,
-            signature_args_type,
-            features,
-            PlainCombinator,
-        ))
-    }
-}
-
-impl<'a> IfOrNullStep<'a> {
-    pub fn build_with_unary_input(
-        self,
-        features: FunctionFeatures,
-        build: UnaryBuildFn<IfCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        let combinator_args_type = self.request.args_type;
-        let request = request_with_args_type(&self.request, &self.args_type, false);
-        build(UnaryBuildContext::new(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            IfCombinator {
-                null_policy: self.null_policy,
-            },
-        )?)
-    }
-
-    pub fn build_with_multi_arg_input(
-        self,
-        features: FunctionFeatures,
-        build: MultiArgBuildFn<IfCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        let combinator_args_type = self.request.args_type;
-        let request = request_with_args_type(&self.request, &self.args_type, false);
-        build(MultiArgBuildContext::new(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            IfCombinator {
-                null_policy: self.null_policy,
-            },
-        ))
-    }
-
-    pub fn build_with_direct_input(
-        self,
-        features: FunctionFeatures,
-        build: DirectBuildFn<IfCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        let combinator_args_type = self.request.args_type;
-        let request = request_with_args_type(&self.request, &self.args_type, false);
-        build(DirectBuildContext::new(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            IfCombinator {
-                null_policy: self.null_policy,
-            },
-        ))
-    }
-}
-
-impl<'a> StateOrNullStep<'a> {
-    pub fn build_with_unary_input(
-        self,
-        features: FunctionFeatures,
-        build: UnaryBuildFn<StateCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        let request = if let Some(args_type) = &self.args_type {
-            request_with_args_type(&self.request, args_type, false)
-        } else {
-            self.request
-        };
-        let combinator_args_type = request.args_type;
-        build(UnaryBuildContext::new(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            StateCombinator {
-                plan: self.state_plan,
-            },
-        )?)
-    }
-
-    pub fn build_with_multi_arg_input(
-        self,
-        features: FunctionFeatures,
-        build: MultiArgBuildFn<StateCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        let request = if let Some(args_type) = &self.args_type {
-            request_with_args_type(&self.request, args_type, false)
-        } else {
-            self.request
-        };
-        let combinator_args_type = request.args_type;
-        build(MultiArgBuildContext::new(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            StateCombinator {
-                plan: self.state_plan,
-            },
-        ))
-    }
-
-    pub fn build_with_direct_input(
-        self,
-        features: FunctionFeatures,
-        build: DirectBuildFn<StateCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        let request = if let Some(args_type) = &self.args_type {
-            request_with_args_type(&self.request, args_type, false)
-        } else {
-            self.request
-        };
-        let combinator_args_type = request.args_type;
-        build(DirectBuildContext::new(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            StateCombinator {
-                plan: self.state_plan,
-            },
-        ))
-    }
-}
-
-impl<'a> DistinctSkipNullStep<'a> {
-    pub fn build_with_unary_input(
-        self,
-        features: FunctionFeatures,
-        build: UnaryBuildFn<DistinctCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        let request = request_with_args_type(&self.request, &self.args_type, true);
-        let combinator_args_type = request.args_type;
-        build(UnaryBuildContext::new(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            DistinctCombinator {
-                null_policy: self.null_policy,
-            },
-        )?)
-    }
-
-    pub fn build_with_multi_arg_input(
-        self,
-        features: FunctionFeatures,
-        build: MultiArgBuildFn<DistinctCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        let request = request_with_args_type(&self.request, &self.args_type, true);
-        let combinator_args_type = request.args_type;
-        build(MultiArgBuildContext::new(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            DistinctCombinator {
-                null_policy: self.null_policy,
-            },
-        ))
-    }
-
-    pub fn build_with_direct_input(
-        self,
-        features: FunctionFeatures,
-        build: DirectBuildFn<DistinctCombinator>,
-    ) -> Result<AggregateFunctionRef> {
-        let signature_args_type = self.request.args_type;
-        let request = request_with_args_type(&self.request, &self.args_type, true);
-        let combinator_args_type = request.args_type;
-        build(DirectBuildContext::new(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            DistinctCombinator {
-                null_policy: self.null_policy,
-            },
-        ))
-    }
+#[derive(Clone, Copy)]
+enum NullArgumentMode {
+    Only,
+    Any,
 }
 
 fn request_with_args_type<'a, 'b>(
@@ -808,31 +275,28 @@ fn request_with_args_type<'a, 'b>(
         name: request.name,
         params: request.params,
         args_type,
-        distinct: if strip_distinct {
-            false
-        } else {
-            request.distinct
-        },
+        distinct: !strip_distinct && request.distinct,
         order_by: request.order_by,
     }
 }
 
-fn matches_name(names: &[&str], name: &str) -> bool {
-    names
-        .iter()
-        .any(|candidate| candidate.eq_ignore_ascii_case(name))
-}
-
-fn matches_suffixed_name(base_names: &[&str], suffix: &str, name: &str) -> bool {
-    base_names.iter().any(|candidate| {
-        let Some(name_prefix) = strip_suffix_ignore_ascii_case(name, suffix) else {
-            return false;
-        };
-        let Some(base_name) = name_prefix.strip_suffix('_') else {
-            return false;
-        };
-        candidate.eq_ignore_ascii_case(base_name)
-    })
+fn null_argument_result(
+    request: &AggregateFunctionRequest<'_>,
+    mode: NullArgumentMode,
+    returns_default_when_only_null: bool,
+) -> Result<Option<AggregateFunctionRef>> {
+    let has_null_argument = match mode {
+        NullArgumentMode::Only => matches!(request.args_type, [DataType::Null]),
+        NullArgumentMode::Any => request.args_type.iter().any(DataType::is_null),
+    };
+    has_null_argument
+        .then(|| {
+            try_create_null_argument_result_function(
+                request.clone(),
+                returns_default_when_only_null,
+            )
+        })
+        .transpose()
 }
 
 fn strip_suffix_ignore_ascii_case<'a>(name: &'a str, suffix: &str) -> Option<&'a str> {
@@ -841,9 +305,761 @@ fn strip_suffix_ignore_ascii_case<'a>(name: &'a str, suffix: &str) -> Option<&'a
     }
 
     let (prefix, name_suffix) = name.split_at(name.len() - suffix.len());
-    if name_suffix.eq_ignore_ascii_case(suffix) {
-        Some(prefix)
-    } else {
-        None
+    name_suffix.eq_ignore_ascii_case(suffix).then_some(prefix)
+}
+
+pub(crate) struct MergeRoute {
+    returns_state: bool,
+    build: RouteBuild<PlainCombinator>,
+    legacy_signature_resolver: Option<LegacySignatureResolver>,
+}
+
+impl MergeRoute {
+    pub(crate) fn new(returns_state: bool, build: DirectBuildFn<PlainCombinator>) -> Self {
+        Self {
+            returns_state,
+            build: RouteBuild::Direct(build),
+            legacy_signature_resolver: None,
+        }
+    }
+
+    pub(crate) fn unary(returns_state: bool, build: UnaryBuildFn<PlainCombinator>) -> Self {
+        Self {
+            returns_state,
+            build: RouteBuild::Unary(build),
+            legacy_signature_resolver: None,
+        }
+    }
+
+    pub(crate) fn multi_arg(returns_state: bool, build: MultiArgBuildFn<PlainCombinator>) -> Self {
+        Self {
+            returns_state,
+            build: RouteBuild::MultiArg(build),
+            legacy_signature_resolver: None,
+        }
+    }
+
+    pub(crate) fn with_legacy_signature_resolver(
+        mut self,
+        resolver: LegacySignatureResolver,
+    ) -> Self {
+        self.legacy_signature_resolver = Some(resolver);
+        self
+    }
+}
+
+impl DirectRouteNode for MergeRoute {
+    fn suffix(&self) -> Option<&'static str> {
+        Some(if self.returns_state {
+            "merge_state"
+        } else {
+            "merge"
+        })
+    }
+
+    fn arguments(&self, _base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
+    }
+
+    fn features(&self, base: &FunctionFeatures) -> FunctionFeatures {
+        let mut features = base.clone();
+        features.distinct_policy = DistinctPolicy::Unsupported;
+        features
+    }
+
+    fn try_build(
+        &self,
+        context: &DirectRouteContext<'_, '_>,
+    ) -> Result<Option<AggregateFunctionRef>> {
+        let suffix = if self.returns_state {
+            "merge_state"
+        } else {
+            "merge"
+        };
+        let Some(matched_name_index) = context.matching_name_index(Some(suffix)) else {
+            return Ok(None);
+        };
+        let request = context.request.clone();
+        let nested_name = context.names[matched_name_index];
+        let order_by = request.order_by;
+        let returns_default_when_only_null =
+            context.null_policy == NullPolicy::ReturnsDefaultWhenOnlyNull;
+        let null_argument_mode = self.build.null_argument_mode();
+        let features = self.features(context.features);
+        let nested_build = |params: &[Scalar], args_type: &[DataType]| {
+            let nested_request = AggregateFunctionRequest {
+                name: nested_name,
+                params,
+                args_type,
+                distinct: false,
+                order_by,
+            };
+            if context.null_policy != NullPolicy::Keep
+                && let Some(function) = null_argument_result(
+                    &nested_request,
+                    null_argument_mode,
+                    returns_default_when_only_null,
+                )?
+            {
+                return Ok(function);
+            }
+            self.build.build(
+                nested_request,
+                args_type,
+                args_type,
+                features.clone(),
+                PlainCombinator,
+            )
+        };
+        merge_combinator::create(
+            request,
+            nested_name,
+            context.names,
+            context.arguments,
+            self.legacy_signature_resolver,
+            &nested_build,
+            self.returns_state,
+        )
+        .map(Some)
+    }
+}
+
+pub(crate) struct PlainRoute {
+    validate: Option<DirectRouteValidateFn>,
+    build: RouteBuild<PlainCombinator>,
+}
+
+impl PlainRoute {
+    pub(crate) fn new(build: DirectBuildFn<PlainCombinator>) -> Self {
+        Self {
+            validate: None,
+            build: RouteBuild::Direct(build),
+        }
+    }
+
+    pub(crate) fn unary(build: UnaryBuildFn<PlainCombinator>) -> Self {
+        Self {
+            validate: None,
+            build: RouteBuild::Unary(build),
+        }
+    }
+
+    pub(crate) fn multi_arg(build: MultiArgBuildFn<PlainCombinator>) -> Self {
+        Self {
+            validate: None,
+            build: RouteBuild::MultiArg(build),
+        }
+    }
+
+    pub(crate) fn with_validator(mut self, validate: DirectRouteValidateFn) -> Self {
+        self.validate = Some(validate);
+        self
+    }
+}
+
+impl DirectRouteNode for PlainRoute {
+    fn try_build(
+        &self,
+        context: &DirectRouteContext<'_, '_>,
+    ) -> Result<Option<AggregateFunctionRef>> {
+        if context.matching_name_index(None).is_none() {
+            return Ok(None);
+        }
+        if let Some(validate) = self.validate {
+            validate(&context.request)?;
+        }
+        let features = context.features.clone();
+        if context.null_policy != NullPolicy::Keep
+            && let Some(function) = null_argument_result(
+                &context.request,
+                self.build.null_argument_mode(),
+                context.null_policy == NullPolicy::ReturnsDefaultWhenOnlyNull,
+            )?
+        {
+            return Ok(Some(function));
+        }
+        let request = context.request.clone();
+        let args_type = request.args_type;
+        let function =
+            self.build
+                .build(request, args_type, args_type, features, PlainCombinator)?;
+        Ok(Some(function))
+    }
+}
+
+pub(crate) struct IfRoute {
+    features: Option<FunctionFeatures>,
+    build: RouteBuild<IfCombinator>,
+}
+
+impl IfRoute {
+    pub(crate) fn new(build: DirectBuildFn<IfCombinator>) -> Self {
+        Self {
+            features: None,
+            build: RouteBuild::Direct(build),
+        }
+    }
+
+    pub(crate) fn unary(build: UnaryBuildFn<IfCombinator>) -> Self {
+        Self {
+            features: None,
+            build: RouteBuild::Unary(build),
+        }
+    }
+
+    pub(crate) fn multi_arg(build: MultiArgBuildFn<IfCombinator>) -> Self {
+        Self {
+            features: None,
+            build: RouteBuild::MultiArg(build),
+        }
+    }
+
+    pub(crate) fn with_features(mut self, features: FunctionFeatures) -> Self {
+        self.features = Some(features);
+        self
+    }
+}
+
+impl DirectRouteNode for IfRoute {
+    fn suffix(&self) -> Option<&'static str> {
+        Some("if")
+    }
+
+    fn arguments(&self, base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::if_condition(base.clone())
+    }
+
+    fn features(&self, base: &FunctionFeatures) -> FunctionFeatures {
+        self.features.clone().unwrap_or_else(|| base.clone())
+    }
+
+    fn try_build(
+        &self,
+        context: &DirectRouteContext<'_, '_>,
+    ) -> Result<Option<AggregateFunctionRef>> {
+        if context.matching_name_index(Some("if")).is_none() {
+            return Ok(None);
+        }
+        let keep_null = context.null_policy == NullPolicy::Keep;
+        if !keep_null {
+            let returns_default = context.null_policy == NullPolicy::ReturnsDefaultWhenOnlyNull;
+            if let Some(function) =
+                null_argument_result(&context.request, NullArgumentMode::Any, returns_default)?
+            {
+                return Ok(Some(function));
+            }
+        }
+
+        let Some((condition_type, nested_arg_types)) = context.request.args_type.split_last()
+        else {
+            return Err(ErrorCode::BadArguments(format!(
+                "{} expects a condition argument",
+                context.request.name
+            )));
+        };
+        let condition_type = condition_type.remove_nullable();
+        if !condition_type.is_null() && condition_type != DataType::Boolean {
+            return Err(ErrorCode::BadArguments(format!(
+                "The type of the last argument for {} must be boolean type, but got {:?}",
+                context.request.name,
+                context.request.args_type[context.request.args_type.len() - 1]
+            )));
+        }
+        let args_type = if keep_null {
+            nested_arg_types.to_vec()
+        } else {
+            nested_arg_types
+                .iter()
+                .map(DataType::remove_nullable)
+                .collect()
+        };
+        let features = self
+            .features
+            .clone()
+            .unwrap_or_else(|| context.features.clone());
+        let signature_args_type = context.request.args_type;
+        let combinator_args_type = context.request.args_type;
+        let request = request_with_args_type(&context.request, &args_type, false);
+        let function = self.build.build(
+            request,
+            signature_args_type,
+            combinator_args_type,
+            features,
+            IfCombinator {
+                null_policy: context.null_policy,
+            },
+        )?;
+        Ok(Some(function))
+    }
+}
+
+pub(crate) struct StateRoute {
+    arguments: Option<AggregateArgumentsPattern>,
+    features: Option<FunctionFeatures>,
+    build: RouteBuild<StateCombinator>,
+}
+
+impl StateRoute {
+    pub(crate) fn new(build: DirectBuildFn<StateCombinator>) -> Self {
+        Self {
+            arguments: None,
+            features: None,
+            build: RouteBuild::Direct(build),
+        }
+    }
+
+    pub(crate) fn unary(build: UnaryBuildFn<StateCombinator>) -> Self {
+        Self {
+            arguments: None,
+            features: None,
+            build: RouteBuild::Unary(build),
+        }
+    }
+
+    pub(crate) fn multi_arg(build: MultiArgBuildFn<StateCombinator>) -> Self {
+        Self {
+            arguments: None,
+            features: None,
+            build: RouteBuild::MultiArg(build),
+        }
+    }
+
+    pub(crate) fn with_arguments(mut self, arguments: AggregateArgumentsPattern) -> Self {
+        self.arguments = Some(arguments);
+        self
+    }
+
+    pub(crate) fn with_features(mut self, features: FunctionFeatures) -> Self {
+        self.features = Some(features);
+        self
+    }
+}
+
+impl DirectRouteNode for StateRoute {
+    fn suffix(&self) -> Option<&'static str> {
+        Some("state")
+    }
+
+    fn arguments(&self, base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+        self.arguments.clone().unwrap_or_else(|| base.clone())
+    }
+
+    fn features(&self, base: &FunctionFeatures) -> FunctionFeatures {
+        self.features.clone().unwrap_or_else(|| base.clone())
+    }
+
+    fn try_build(
+        &self,
+        context: &DirectRouteContext<'_, '_>,
+    ) -> Result<Option<AggregateFunctionRef>> {
+        if context.matching_name_index(Some("state")).is_none() {
+            return Ok(None);
+        }
+        let state_plan = if context.null_policy == NullPolicy::Keep {
+            StateCombinatorPlan::default()
+        } else {
+            let returns_default = context.null_policy == NullPolicy::ReturnsDefaultWhenOnlyNull;
+            if context.request.args_type.iter().any(DataType::is_null) {
+                return Ok(Some(state_combinator::create_state_null_result_function(
+                    context.request.clone(),
+                    returns_default,
+                )?));
+            }
+            let strip_nullable_input = context
+                .request
+                .args_type
+                .iter()
+                .any(|data_type| matches!(data_type, DataType::Nullable(_)));
+            StateCombinatorPlan {
+                strip_nullable_input,
+                nullable_input_result_flag: strip_nullable_input && !returns_default,
+            }
+        };
+        let features = self
+            .features
+            .clone()
+            .unwrap_or_else(|| context.features.clone());
+        let args_type = state_plan.strip_nullable_input.then(|| {
+            context
+                .request
+                .args_type
+                .iter()
+                .map(DataType::remove_nullable)
+                .collect::<Vec<_>>()
+        });
+        let signature_args_type = context.request.args_type;
+        let request = match &args_type {
+            Some(args_type) => request_with_args_type(&context.request, args_type, false),
+            None => context.request.clone(),
+        };
+        let combinator_args_type = request.args_type;
+        let function = self.build.build(
+            request,
+            signature_args_type,
+            combinator_args_type,
+            features,
+            StateCombinator { plan: state_plan },
+        )?;
+        Ok(Some(function))
+    }
+}
+
+pub(crate) struct DistinctAliasRoute {
+    build: RouteBuild<PlainCombinator>,
+}
+
+impl DistinctAliasRoute {
+    pub(crate) fn new(build: DirectBuildFn<PlainCombinator>) -> Self {
+        Self {
+            build: RouteBuild::Direct(build),
+        }
+    }
+
+    pub(crate) fn unary(build: UnaryBuildFn<PlainCombinator>) -> Self {
+        Self {
+            build: RouteBuild::Unary(build),
+        }
+    }
+
+    pub(crate) fn multi_arg(build: MultiArgBuildFn<PlainCombinator>) -> Self {
+        Self {
+            build: RouteBuild::MultiArg(build),
+        }
+    }
+}
+
+impl DirectRouteNode for DistinctAliasRoute {
+    fn suffix(&self) -> Option<&'static str> {
+        Some("distinct")
+    }
+
+    fn try_build(
+        &self,
+        context: &DirectRouteContext<'_, '_>,
+    ) -> Result<Option<AggregateFunctionRef>> {
+        if context.matching_name_index(Some("distinct")).is_none() {
+            return Ok(None);
+        }
+        if context.null_policy != NullPolicy::Keep
+            && let Some(function) = null_argument_result(
+                &context.request,
+                self.build.null_argument_mode(),
+                context.null_policy == NullPolicy::ReturnsDefaultWhenOnlyNull,
+            )?
+        {
+            return Ok(Some(function));
+        }
+        let features = context.features.clone();
+        let request = context.request.clone();
+        let args_type = request.args_type;
+        let function =
+            self.build
+                .build(request, args_type, args_type, features, PlainCombinator)?;
+        Ok(Some(function))
+    }
+}
+
+pub(crate) struct DistinctRoute {
+    build: RouteBuild<DistinctCombinator>,
+}
+
+impl DistinctRoute {
+    pub(crate) fn unary(build: UnaryBuildFn<DistinctCombinator>) -> Self {
+        Self {
+            build: RouteBuild::Unary(build),
+        }
+    }
+
+    pub(crate) fn multi_arg(build: MultiArgBuildFn<DistinctCombinator>) -> Self {
+        Self {
+            build: RouteBuild::MultiArg(build),
+        }
+    }
+}
+
+impl DirectRouteNode for DistinctRoute {
+    fn suffix(&self) -> Option<&'static str> {
+        Some("distinct")
+    }
+
+    fn try_build(
+        &self,
+        context: &DirectRouteContext<'_, '_>,
+    ) -> Result<Option<AggregateFunctionRef>> {
+        if context.matching_name_index(Some("distinct")).is_none() {
+            return Ok(None);
+        }
+        let returns_default = context.null_policy == NullPolicy::ReturnsDefaultWhenOnlyNull;
+        if matches!(self.build, RouteBuild::MultiArg(_))
+            && let Some(function) =
+                null_argument_result(&context.request, NullArgumentMode::Any, returns_default)?
+        {
+            return Ok(Some(function));
+        }
+        let features = context.features.clone();
+        let args_type = context
+            .request
+            .args_type
+            .iter()
+            .map(DataType::remove_nullable)
+            .collect::<Vec<_>>();
+        let signature_args_type = context.request.args_type;
+        let request = request_with_args_type(&context.request, &args_type, true);
+        let combinator_args_type = request.args_type;
+        let function = self.build.build(
+            request,
+            signature_args_type,
+            combinator_args_type,
+            features,
+            DistinctCombinator {
+                null_policy: context.null_policy,
+            },
+        )?;
+        Ok(Some(function))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use databend_common_exception::ErrorCode;
+
+    use super::*;
+
+    struct Miss {
+        count: Arc<AtomicUsize>,
+        arguments: AggregateArgumentsPattern,
+        features: FunctionFeatures,
+    }
+
+    impl DirectRouteNode for Miss {
+        fn arguments(&self, _base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+            self.arguments.clone()
+        }
+
+        fn features(&self, _base: &FunctionFeatures) -> FunctionFeatures {
+            self.features.clone()
+        }
+
+        fn try_build(
+            &self,
+            _context: &DirectRouteContext<'_, '_>,
+        ) -> Result<Option<AggregateFunctionRef>> {
+            self.count.fetch_add(1, Ordering::Relaxed);
+            Ok(None)
+        }
+    }
+
+    struct Stop {
+        count: Arc<AtomicUsize>,
+        arguments: AggregateArgumentsPattern,
+        features: FunctionFeatures,
+    }
+
+    impl DirectRouteNode for Stop {
+        fn arguments(&self, _base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+            self.arguments.clone()
+        }
+
+        fn features(&self, _base: &FunctionFeatures) -> FunctionFeatures {
+            self.features.clone()
+        }
+
+        fn try_build(
+            &self,
+            _context: &DirectRouteContext<'_, '_>,
+        ) -> Result<Option<AggregateFunctionRef>> {
+            self.count.fetch_add(1, Ordering::Relaxed);
+            Err(ErrorCode::Internal("stop"))
+        }
+    }
+
+    struct MustNotRun {
+        arguments: AggregateArgumentsPattern,
+        features: FunctionFeatures,
+    }
+
+    impl DirectRouteNode for MustNotRun {
+        fn arguments(&self, _base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+            self.arguments.clone()
+        }
+
+        fn features(&self, _base: &FunctionFeatures) -> FunctionFeatures {
+            self.features.clone()
+        }
+
+        fn try_build(
+            &self,
+            _context: &DirectRouteContext<'_, '_>,
+        ) -> Result<Option<AggregateFunctionRef>> {
+            panic!("route evaluation must stop after the first result")
+        }
+    }
+
+    #[test]
+    fn test_direct_name_route_is_linear_and_short_circuits() {
+        let misses = Arc::new(AtomicUsize::new(0));
+        let stops = Arc::new(AtomicUsize::new(0));
+        let arguments = AggregateArgumentsPattern::fixed(vec![]);
+        let features = FunctionFeatures::default();
+        let rule = DirectNameRoute::new(
+            &["test"],
+            arguments.clone(),
+            features.clone(),
+            NullPolicy::Skip,
+        )
+        .then(Miss {
+            count: misses.clone(),
+            arguments: arguments.clone(),
+            features: features.clone(),
+        })
+        .then(Stop {
+            count: stops.clone(),
+            arguments: arguments.clone(),
+            features: features.clone(),
+        })
+        .then(MustNotRun {
+            arguments,
+            features,
+        });
+        let request = AggregateFunctionRequest {
+            name: "test",
+            params: &[],
+            args_type: &[],
+            distinct: false,
+            order_by: &[],
+        };
+
+        let error = match rule.build(request) {
+            Ok(_) => panic!("route must stop with the marker error"),
+            Err(error) => error,
+        };
+
+        assert_eq!(misses.load(Ordering::Relaxed), 1);
+        assert_eq!(stops.load(Ordering::Relaxed), 1);
+        assert!(error.message().contains("stop"));
+    }
+
+    struct DescriptorNode {
+        suffix: Option<&'static str>,
+        arguments: AggregateArgumentsPattern,
+        features: FunctionFeatures,
+    }
+
+    impl DirectRouteNode for DescriptorNode {
+        fn suffix(&self) -> Option<&'static str> {
+            self.suffix
+        }
+
+        fn arguments(&self, _base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+            self.arguments.clone()
+        }
+
+        fn features(&self, _base: &FunctionFeatures) -> FunctionFeatures {
+            self.features.clone()
+        }
+
+        fn try_build(
+            &self,
+            _context: &DirectRouteContext<'_, '_>,
+        ) -> Result<Option<AggregateFunctionRef>> {
+            Ok(None)
+        }
+    }
+
+    #[test]
+    fn test_direct_name_route_produces_descriptors() {
+        let base_arguments = AggregateArgumentsPattern::fixed(vec![]);
+        let if_arguments = AggregateArgumentsPattern::if_condition(base_arguments.clone());
+        let base_features = FunctionFeatures {
+            is_decomposable: true,
+            ..Default::default()
+        };
+
+        let descriptors = DirectNameRoute::new(
+            &["test", "test_alias"],
+            base_arguments.clone(),
+            base_features.clone(),
+            NullPolicy::Skip,
+        )
+        .then(DescriptorNode {
+            suffix: None,
+            arguments: base_arguments.clone(),
+            features: base_features.clone(),
+        })
+        .then(DescriptorNode {
+            suffix: Some("if"),
+            arguments: if_arguments.clone(),
+            features: base_features,
+        })
+        .into_descriptors();
+
+        assert_eq!(descriptors.len(), 2);
+        assert_eq!(descriptors[0].name, "test");
+        assert_eq!(descriptors[0].aliases, ["test_alias"]);
+        assert_eq!(descriptors[0].arguments(), &base_arguments);
+        assert!(descriptors[0].features().is_decomposable);
+        assert_eq!(descriptors[1].name, "test_if");
+        assert_eq!(descriptors[1].aliases, ["test_alias_if"]);
+        assert_eq!(descriptors[1].arguments(), &if_arguments);
+        assert!(descriptors[1].features().is_decomposable);
+    }
+
+    #[test]
+    fn test_direct_name_route_registers_descriptor_names_and_aliases() {
+        let mut registry = AggregateFunctionRegistry::empty();
+        let arguments = AggregateArgumentsPattern::fixed(vec![]);
+        let features = FunctionFeatures::default();
+        DirectNameRoute::new(
+            &["test", "test_alias"],
+            arguments.clone(),
+            features.clone(),
+            NullPolicy::Skip,
+        )
+        .then(DescriptorNode {
+            suffix: None,
+            arguments: arguments.clone(),
+            features: features.clone(),
+        })
+        .then(DescriptorNode {
+            suffix: Some("state"),
+            arguments,
+            features,
+        })
+        .register(&mut registry);
+
+        assert!(registry.contains("test"));
+        assert!(registry.contains("test_alias"));
+        assert!(registry.contains("test_state"));
+        assert!(registry.contains("test_alias_state"));
+        assert!(!registry.contains("test_distinct"));
+    }
+
+    #[test]
+    fn test_direct_name_route_without_matcher_returns_unknown() {
+        let rule = DirectNameRoute::new(
+            &["test"],
+            AggregateArgumentsPattern::fixed(vec![]),
+            FunctionFeatures::default(),
+            NullPolicy::Skip,
+        );
+        let request = AggregateFunctionRequest {
+            name: "test_distinct",
+            params: &[],
+            args_type: &[],
+            distinct: false,
+            order_by: &[],
+        };
+
+        let error = match rule.build(request) {
+            Ok(_) => panic!("an unmatched route must return an error"),
+            Err(error) => error,
+        };
+
+        assert!(error.message().contains("Unsupported AggregateFunction"));
+        assert!(error.message().contains("test_distinct"));
     }
 }

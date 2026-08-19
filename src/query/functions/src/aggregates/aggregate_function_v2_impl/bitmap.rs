@@ -54,7 +54,6 @@ use databend_common_io::prelude::BinaryWrite;
 use num_traits::AsPrimitive;
 
 use super::super::extract_number_param;
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use crate::with_simple_no_number_mapped_type;
@@ -63,76 +62,15 @@ struct BitmapBuilder;
 
 impl BitmapBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let bitmap_construct_agg = AggregateFunctionDefinition::new(
-            "bitmap_construct_agg",
-            BitmapBuilder::bitmap_numeric_arguments(),
-            BitmapBuilder::BITMAP_CONSTRUCT_AGG_FEATURES,
-            BitmapBuilder::try_create_construct,
-        )
-        .with_aliases(&["group_bitmap"]);
-        bitmap_construct_agg.register_with_combinators(registry, true);
-        let bitmap_and_count = AggregateFunctionDefinition::new(
-            "bitmap_and_count",
-            BitmapBuilder::bitmap_arguments(),
-            BitmapBuilder::BITMAP_AND_COUNT_FEATURES,
-            BitmapBuilder::try_create_bitmap::<BITMAP_AND, BITMAP_COUNT>,
-        );
-        bitmap_and_count.register_with_combinators(registry, true);
-        let bitmap_not_count = AggregateFunctionDefinition::new(
-            "bitmap_not_count",
-            BitmapBuilder::bitmap_arguments(),
-            BitmapBuilder::BITMAP_NOT_COUNT_FEATURES,
-            BitmapBuilder::try_create_bitmap::<BITMAP_NOT, BITMAP_COUNT>,
-        );
-        bitmap_not_count.register_with_combinators(registry, false);
-
-        let bitmap_or_count = AggregateFunctionDefinition::new(
-            "bitmap_or_count",
-            BitmapBuilder::bitmap_arguments(),
-            BitmapBuilder::BITMAP_OR_COUNT_FEATURES,
-            BitmapBuilder::try_create_bitmap::<BITMAP_OR, BITMAP_COUNT>,
-        );
-        bitmap_or_count.register_with_combinators(registry, true);
-
-        let bitmap_xor_count = AggregateFunctionDefinition::new(
-            "bitmap_xor_count",
-            BitmapBuilder::bitmap_arguments(),
-            BitmapBuilder::BITMAP_XOR_COUNT_FEATURES,
-            BitmapBuilder::try_create_bitmap::<BITMAP_XOR, BITMAP_COUNT>,
-        );
-        bitmap_xor_count.register_with_combinators(registry, false);
-
-        let bitmap_union = AggregateFunctionDefinition::new(
-            "bitmap_union",
-            BitmapBuilder::bitmap_arguments(),
-            BitmapBuilder::BITMAP_UNION_FEATURES,
-            BitmapBuilder::try_create_bitmap::<BITMAP_OR, BITMAP_RAW>,
-        )
-        .with_aliases(&["bitmap_or_agg"]);
-        bitmap_union.register_with_combinators(registry, true);
-        let bitmap_intersect = AggregateFunctionDefinition::new(
-            "bitmap_intersect",
-            BitmapBuilder::bitmap_arguments(),
-            BitmapBuilder::BITMAP_INTERSECT_FEATURES,
-            BitmapBuilder::try_create_bitmap::<BITMAP_AND, BITMAP_RAW>,
-        )
-        .with_aliases(&["bitmap_and_agg"]);
-        bitmap_intersect.register_with_combinators(registry, true);
-        let bitmap_xor_agg = AggregateFunctionDefinition::new(
-            "bitmap_xor_agg",
-            BitmapBuilder::bitmap_arguments(),
-            BitmapBuilder::BITMAP_XOR_AGG_FEATURES,
-            BitmapBuilder::try_create_bitmap::<BITMAP_XOR, BITMAP_RAW>,
-        );
-        bitmap_xor_agg.register_with_combinators(registry, false);
-
-        let intersect_count = AggregateFunctionDefinition::new(
-            "intersect_count",
-            BitmapBuilder::bitmap_intersect_count_arguments(),
-            BitmapBuilder::INTERSECT_COUNT_FEATURES,
-            BitmapBuilder::try_create_intersect_count,
-        );
-        intersect_count.register_with_combinators(registry, true);
+        Self::construct_route().register(registry);
+        Self::bitmap_route::<BITMAP_AND, BITMAP_COUNT>().register(registry);
+        Self::bitmap_route::<BITMAP_NOT, BITMAP_COUNT>().register(registry);
+        Self::bitmap_route::<BITMAP_OR, BITMAP_COUNT>().register(registry);
+        Self::bitmap_route::<BITMAP_XOR, BITMAP_COUNT>().register(registry);
+        Self::bitmap_route::<BITMAP_OR, BITMAP_RAW>().register(registry);
+        Self::bitmap_route::<BITMAP_AND, BITMAP_RAW>().register(registry);
+        Self::bitmap_route::<BITMAP_XOR, BITMAP_RAW>().register(registry);
+        Self::intersect_count_route().register(registry);
     }
 }
 
@@ -761,37 +699,51 @@ where
 }
 
 impl BitmapBuilder {
-    fn try_create_bitmap<const OP_TYPE: u8, const RESULT_TYPE: u8>(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef> {
-        if !request.params.is_empty() {
-            return Err(ErrorCode::BadArguments(format!(
+    fn bitmap_route<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> v2::DirectNameRoute {
+        let arguments = Self::bitmap_arguments();
+        let features = Self::bitmap_features::<OP_TYPE, RESULT_TYPE>();
+        let route = v2::DirectNameRoute::new(
+            Self::bitmap_names::<OP_TYPE, RESULT_TYPE>(),
+            arguments,
+            features,
+            v2::NullPolicy::Skip,
+        )
+        .with_validator(Self::validate_bitmap_request)
+        .then(v2::MergeRoute::multi_arg(
+            false,
+            Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
+        ))
+        .then(v2::MergeRoute::multi_arg(
+            true,
+            Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
+        ))
+        .then(v2::PlainRoute::multi_arg(
+            Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
+        ))
+        .then(v2::IfRoute::multi_arg(
+            Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
+        ))
+        .then(v2::StateRoute::multi_arg(
+            Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
+        ));
+        if Self::bitmap_distinct_is_alias::<OP_TYPE, RESULT_TYPE>() {
+            route.then(v2::DistinctAliasRoute::multi_arg(
+                Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
+            ))
+        } else {
+            route
+        }
+    }
+
+    fn validate_bitmap_request(request: &v2::AggregateFunctionRequest<'_>) -> Result<()> {
+        if request.params.is_empty() {
+            Ok(())
+        } else {
+            Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
                 request.name
-            )));
+            )))
         }
-        let names = Self::bitmap_names::<OP_TYPE, RESULT_TYPE>();
-        let features = Self::bitmap_features::<OP_TYPE, RESULT_TYPE>();
-        v2::build_default_name_route_with_multi_arg_build_input(
-            request,
-            names,
-            features,
-            false,
-            if Self::bitmap_distinct_is_alias::<OP_TYPE, RESULT_TYPE>() {
-                v2::MultiArgAggregateFunctionBuildInputFns::new(
-                    Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
-                    Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
-                    Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
-                    v2::MultiArgDistinctBuildFn::PlainAlias(
-                        Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
-                    ),
-                )
-            } else {
-                multi_arg_aggregate_function_build_input_fns!(
-                    Self::create_bitmap::<OP_TYPE, RESULT_TYPE>
-                )
-            },
-        )
     }
 
     fn create_bitmap<const OP_TYPE: u8, const RESULT_TYPE: u8>(
@@ -816,49 +768,63 @@ impl BitmapBuilder {
         })
     }
 
-    fn try_create_construct(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef> {
-        v2::build_default_name_route_with_direct_input(
-            request,
+    fn construct_route() -> v2::DirectNameRoute {
+        let arguments = Self::bitmap_numeric_arguments();
+        let features = Self::BITMAP_CONSTRUCT_AGG_FEATURES;
+        v2::DirectNameRoute::new(
             &["bitmap_construct_agg", "group_bitmap"],
-            Self::BITMAP_CONSTRUCT_AGG_FEATURES,
-            true,
-            v2::DirectAggregateFunctionBuildInputFns::new(
-                Self::create_group_bitmap,
-                Self::create_group_bitmap,
-                Self::create_group_bitmap,
-                v2::DirectDistinctBuildFn::PlainAlias(Self::create_group_bitmap),
-            ),
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::ReturnsDefaultWhenOnlyNull,
         )
+        .then(v2::MergeRoute::new(
+            false,
+            BitmapBuilder::create_group_bitmap,
+        ))
+        .then(v2::MergeRoute::new(
+            true,
+            BitmapBuilder::create_group_bitmap,
+        ))
+        .then(v2::PlainRoute::new(BitmapBuilder::create_group_bitmap))
+        .then(v2::IfRoute::new(BitmapBuilder::create_group_bitmap))
+        .then(v2::StateRoute::new(BitmapBuilder::create_group_bitmap))
+        .then(v2::DistinctAliasRoute::new(
+            BitmapBuilder::create_group_bitmap,
+        ))
     }
 
-    fn try_create_intersect_count(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef> {
-        if !(1..=32).contains(&request.params.len()) {
-            return Err(ErrorCode::BadArguments(format!(
-                "{} expects between 1 and 32 parameters",
-                request.name
-            )));
-        }
-        v2::build_default_name_route_with_multi_arg_build_input(
-            request,
+    fn intersect_count_route() -> v2::DirectNameRoute {
+        v2::DirectNameRoute::new(
             &["intersect_count"],
+            Self::bitmap_intersect_count_arguments(),
             Self::INTERSECT_COUNT_FEATURES,
-            false,
-            v2::MultiArgAggregateFunctionBuildInputFns::new(
-                Self::create_intersect_count,
-                Self::create_intersect_count,
-                Self::create_intersect_count,
-                v2::MultiArgDistinctBuildFn::PlainAlias(Self::create_intersect_count),
-            ),
+            v2::NullPolicy::Skip,
         )
+        .then(v2::MergeRoute::multi_arg(
+            false,
+            Self::create_intersect_count,
+        ))
+        .then(v2::MergeRoute::multi_arg(
+            true,
+            Self::create_intersect_count,
+        ))
+        .then(v2::PlainRoute::multi_arg(Self::create_intersect_count))
+        .then(v2::IfRoute::multi_arg(Self::create_intersect_count))
+        .then(v2::StateRoute::multi_arg(Self::create_intersect_count))
+        .then(v2::DistinctAliasRoute::multi_arg(
+            Self::create_intersect_count,
+        ))
     }
 
     fn create_intersect_count(
         build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {
+        if !(1..=32).contains(&build.params().len()) {
+            return Err(ErrorCode::BadArguments(format!(
+                "{} expects between 1 and 32 parameters",
+                build.name()
+            )));
+        }
         let [bitmap_type, filter_type] = build.args_type() else {
             unreachable!("bitmap_intersect_count descriptor must provide two arguments")
         };

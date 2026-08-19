@@ -20,6 +20,7 @@ use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::types::AnyType;
@@ -38,7 +39,6 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::UnaryState;
@@ -55,34 +55,56 @@ pub struct AggregateCountImplementation {
 struct CountBuilder;
 
 impl CountBuilder {
+    fn legacy_signatures(_params: &[Scalar], state_type: &DataType) -> Vec<Vec<DataType>> {
+        match state_type {
+            DataType::Tuple(fields)
+                if matches!(
+                    fields.first(),
+                    Some(DataType::Number(NumberDataType::UInt64))
+                ) =>
+            {
+                vec![vec![UInt64Type::data_type()]]
+            }
+            _ => Vec::new(),
+        }
+    }
+
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let count = Self::definition();
-        count.register_with_merge_combinators(registry);
-        AggregateFunctionDefinition::new(
-            "count_distinct",
+        let state_arguments = v2::AggregateArgumentsPattern::variadic(
+            vec![],
+            v2::AggregateArgumentPattern::any(),
+            0,
+            Some(32),
+        );
+        v2::DirectNameRoute::new(
+            &["count"],
+            Self::count_arguments(),
+            Self::COUNT_FEATURES,
+            v2::NullPolicy::ReturnsDefaultWhenOnlyNull,
+        )
+        .then(
+            v2::MergeRoute::new(false, Self::create)
+                .with_legacy_signature_resolver(Self::legacy_signatures),
+        )
+        .then(
+            v2::MergeRoute::new(true, Self::create)
+                .with_legacy_signature_resolver(Self::legacy_signatures),
+        )
+        .then(v2::PlainRoute::new(Self::create))
+        .then(v2::IfRoute::new(Self::create).with_features(Self::COUNT_IF_FEATURES))
+        .then(
+            v2::StateRoute::new(Self::create)
+                .with_arguments(state_arguments)
+                .with_features(Self::COUNT_STATE_FEATURES),
+        )
+        .register(registry);
+        v2::DirectNameRoute::new(
+            &["count_distinct"],
             CountBuilder::count_distinct_arguments(),
             CountBuilder::COUNT_DISTINCT_FEATURES,
-            CountBuilder::try_create_distinct,
+            v2::NullPolicy::Keep,
         )
-        .register(registry);
-        AggregateFunctionDefinition::new(
-            "count_if",
-            v2::AggregateArgumentsPattern::if_condition(Self::count_arguments()),
-            CountBuilder::COUNT_IF_FEATURES,
-            CountBuilder::try_create,
-        )
-        .register(registry);
-        AggregateFunctionDefinition::new(
-            "count_state",
-            v2::AggregateArgumentsPattern::variadic(
-                vec![],
-                v2::AggregateArgumentPattern::any(),
-                0,
-                Some(32),
-            ),
-            CountBuilder::COUNT_STATE_FEATURES,
-            CountBuilder::try_create,
-        )
+        .then(v2::PlainRoute::new(Self::create_distinct))
         .register(registry);
     }
 }
@@ -94,15 +116,6 @@ inventory::submit! {
 }
 
 impl CountBuilder {
-    fn definition() -> AggregateFunctionDefinition {
-        AggregateFunctionDefinition::new(
-            "count",
-            Self::count_arguments(),
-            Self::COUNT_FEATURES,
-            Self::try_create,
-        )
-    }
-
     fn count_arguments() -> v2::AggregateArgumentsPattern {
         v2::AggregateArgumentsPattern::one_of(vec![
             v2::AggregateArgumentsPattern::fixed(vec![]),
@@ -161,50 +174,10 @@ impl CountBuilder {
 }
 
 impl CountBuilder {
-    fn try_create_distinct(
-        request: v2::AggregateFunctionRequest<'_>,
+    fn create_distinct(
+        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {
-        let route = v2::AggregateFunctionNameRoutePath::root(request);
-        if let Some(route) = route.names(&["count_distinct"]) {
-            return route.build_with_direct_input(Self::COUNT_DISTINCT_FEATURES, |build| {
-                create_distinct_count_function(build, true)
-            });
-        }
-        route.unknown()
-    }
-
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        let route = v2::AggregateFunctionNameRoutePath::root(request);
-
-        if let Some(route) = route.names(&["count"]) {
-            if let Some(function) = route.plain_null_argument_result(true)? {
-                return Ok(function);
-            }
-            return route
-                .plain_or_null()
-                .build_with_direct_input(Self::COUNT_FEATURES, Self::create);
-        }
-
-        if let Some(route) = route.names(&["count_if"]) {
-            if let Some(function) = route.null_argument_result(true)? {
-                return Ok(function);
-            }
-            return route
-                .if_combinator(v2::NullPolicy::ReturnsDefaultWhenOnlyNull, true)?
-                .build_with_direct_input(Self::COUNT_IF_FEATURES, Self::create);
-        }
-
-        if let Some(route) = route.names(&["count_state"]) {
-            if let Some(function) = route.state_null_argument_result()? {
-                return Ok(function);
-            }
-            let state_plan = route.state_nullable_input_plan(true);
-            return route
-                .state_combinator(state_plan)
-                .build_with_direct_input(Self::COUNT_STATE_FEATURES, Self::create);
-        }
-
-        route.unknown()
+        create_distinct_count_function(build, true)
     }
 
     fn create(

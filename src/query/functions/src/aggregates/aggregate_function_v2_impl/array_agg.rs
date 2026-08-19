@@ -43,7 +43,6 @@ use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::AggregateUnaryState;
@@ -53,14 +52,7 @@ struct ArrayAggBuilder;
 
 impl ArrayAggBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let array_agg = AggregateFunctionDefinition::new(
-            "array_agg",
-            ArrayAggBuilder::array_agg_arguments(),
-            ArrayAggBuilder::ARRAY_AGG_FEATURES,
-            ArrayAggBuilder::try_create,
-        )
-        .with_aliases(&["list"]);
-        array_agg.register_with_combinators(registry, false);
+        Self::route().register(registry);
     }
 }
 
@@ -604,18 +596,32 @@ where T: ArgType + AccessType + Debug + Send + Sync
 }
 
 impl ArrayAggBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        if !request.params.is_empty() {
-            return Err(ErrorCode::BadArguments(format!(
+    fn route() -> v2::DirectNameRoute {
+        let arguments = Self::array_agg_arguments();
+        let features = Self::ARRAY_AGG_FEATURES;
+        v2::DirectNameRoute::new(
+            &["array_agg", "list"],
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::Keep,
+        )
+        .with_validator(Self::validate_request)
+        .then(v2::MergeRoute::new(false, ArrayAggBuilder::create))
+        .then(v2::MergeRoute::new(true, ArrayAggBuilder::create))
+        .then(v2::PlainRoute::new(ArrayAggBuilder::create))
+        .then(v2::IfRoute::new(ArrayAggBuilder::create))
+        .then(v2::StateRoute::new(ArrayAggBuilder::create))
+    }
+
+    fn validate_request(request: &v2::AggregateFunctionRequest<'_>) -> Result<()> {
+        if request.params.is_empty() {
+            Ok(())
+        } else {
+            Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
                 request.name
-            )));
+            )))
         }
-        v2::build_default_name_route_keep_nulls(request, &[v2::KeepNullNameRoute {
-            names: &["array_agg", "list"],
-            features: Self::ARRAY_AGG_FEATURES,
-            build: direct_aggregate_function_build_input_fns!(Self::create),
-        }])
     }
 
     fn create(

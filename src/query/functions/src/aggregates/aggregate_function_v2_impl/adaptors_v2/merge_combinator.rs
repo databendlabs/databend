@@ -31,7 +31,6 @@ use super::AccumulateRowInput;
 use super::AggrImpl;
 use super::AggregateArgumentsPattern;
 use super::AggregateFunction;
-use super::AggregateFunctionBuildFn;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionRequest;
 use super::AggregateFunctionSignature;
@@ -42,9 +41,17 @@ use super::MergeStatesInput;
 use super::SerializeInput;
 use super::state_combinator::aggregate_state_data_type;
 
-pub(crate) fn try_create(
+type NestedBuild<'a> = dyn Fn(&[Scalar], &[DataType]) -> Result<AggregateFunctionRef> + 'a;
+
+pub(crate) type LegacySignatureResolver = fn(&[Scalar], &DataType) -> Vec<Vec<DataType>>;
+
+pub(super) fn create(
     request: AggregateFunctionRequest<'_>,
-    nested: NestedAggregate<'_>,
+    nested_name: &str,
+    nested_aliases: &[&str],
+    nested_arguments: &AggregateArgumentsPattern,
+    legacy_signature_resolver: Option<LegacySignatureResolver>,
+    nested_build: &NestedBuild<'_>,
     returns_state: bool,
 ) -> Result<AggregateFunctionRef> {
     let combinator_name = if returns_state {
@@ -52,16 +59,18 @@ pub(crate) fn try_create(
     } else {
         "merge"
     };
-    let nested_name = nested.name;
     let [argument_type] = request.args_type else {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
             "Aggregate function {nested_name}_{combinator_name} expects exactly one state argument"
         )));
     };
     let nested_request = NestedRequest {
-        nested,
+        name: nested_name,
+        aliases: nested_aliases,
+        arguments: nested_arguments,
+        legacy_signature_resolver,
+        build: nested_build,
         params: request.params,
-        order_by: request.order_by,
     };
 
     let state_type = argument_type.remove_nullable();
@@ -97,64 +106,16 @@ pub(crate) fn try_create(
     )))
 }
 
-/// The nested aggregate a merge combinator delegates to.
-///
-/// The dispatch site owns all of this, so it is passed as one unit rather than
-/// as four positional arguments threaded through the whole module.
-#[derive(Clone, Copy)]
-pub(crate) struct NestedAggregate<'a> {
-    pub name: &'a str,
-    pub aliases: &'a [&'a str],
-    pub arguments: &'a AggregateArgumentsPattern,
-    pub build: AggregateFunctionBuildFn,
-}
-
-/// A [`NestedAggregate`] plus the params and order-by items of the current
-/// request, i.e. everything needed to build one candidate nested function.
+/// The params, metadata, and static builder needed to create a nested
+/// aggregate function for the current merge request.
 #[derive(Clone, Copy)]
 struct NestedRequest<'a> {
-    nested: NestedAggregate<'a>,
+    name: &'a str,
+    aliases: &'a [&'a str],
+    arguments: &'a AggregateArgumentsPattern,
+    legacy_signature_resolver: Option<LegacySignatureResolver>,
+    build: &'a NestedBuild<'a>,
     params: &'a [Scalar],
-    order_by: &'a [super::AggregateBoundOrderByItem],
-}
-
-impl<'a> NestedRequest<'a> {
-    fn name(&self) -> &'a str {
-        self.nested.name
-    }
-
-    fn arguments(&self) -> &'a AggregateArgumentsPattern {
-        self.nested.arguments
-    }
-
-    /// Builds the nested function for `argument_types`. `params` defaults to the
-    /// request's own params, but the metadata path overrides it with the params
-    /// persisted in the state.
-    fn build(
-        &self,
-        params: &[Scalar],
-        argument_types: &[DataType],
-    ) -> Result<AggregateFunctionRef> {
-        (self.nested.build)(AggregateFunctionRequest {
-            name: self.nested.name,
-            params,
-            args_type: argument_types,
-            distinct: false,
-            order_by: self.order_by,
-        })
-    }
-
-    /// Whether `argument_types` produces exactly `state_type` when serialized.
-    fn produces_state(&self, argument_types: &[DataType], state_type: &DataType) -> bool {
-        self.build(self.params, argument_types)
-            .is_ok_and(|nested| serialized_state_type(&nested) == *state_type)
-    }
-
-    fn matches_name(&self, function_name: &str) -> bool {
-        std::iter::once(self.nested.name)
-            .chain(self.nested.aliases.iter().copied())
-            .any(|name| function_name.eq_ignore_ascii_case(name))
-    }
 }
 
 fn create_from_metadata(
@@ -162,8 +123,11 @@ fn create_from_metadata(
     state: &AggregateStateDataType,
     combinator_name: &str,
 ) -> Result<(AggregateFunctionRef, DataType)> {
-    let nested_name = request.name();
-    if !request.matches_name(&state.function_name) {
+    let nested_name = request.name;
+    if !std::iter::once(request.name)
+        .chain(request.aliases.iter().copied())
+        .any(|name| state.function_name.eq_ignore_ascii_case(name))
+    {
         return Err(ErrorCode::BadDataValueType(format!(
             "Aggregate state for '{}' cannot be merged by {nested_name}_{combinator_name}",
             state.function_name
@@ -182,7 +146,7 @@ fn create_from_metadata(
         .cloned()
         .map(Scalar::from)
         .collect::<Vec<_>>();
-    let nested = request.build(&nested_params, &state.argument_types)?;
+    let nested = (request.build)(&nested_params, &state.argument_types)?;
     if serialized_state_type(&nested) != *state.state_type {
         return Err(ErrorCode::BadDataValueType(format!(
             "Aggregate state layout does not match the signature of {nested_name}_{combinator_name}"
@@ -197,20 +161,42 @@ fn create_from_legacy_state(
     state_type: &DataType,
     combinator_name: &str,
 ) -> Result<(AggregateFunctionRef, DataType)> {
-    let Some((nested, argument_types)) = LegacySignatureSearch::new(request, state_type).run()
-    else {
-        let nested_name = request.name();
+    let resolved = match request.legacy_signature_resolver {
+        Some(resolve) => resolve(request.params, state_type)
+            .into_iter()
+            .find_map(|argument_types| try_legacy_signature(request, state_type, argument_types)),
+        None => LegacySignatureSearch::new(request, state_type).run(),
+    };
+    let Some((nested, argument_types)) = resolved else {
+        let nested_name = request.name;
         return Err(ErrorCode::BadDataValueType(format!(
             "Cannot infer the original aggregate argument from state type '{state_type}' for {nested_name}_{combinator_name}"
         )));
     };
     let result_state_type = aggregate_state_data_type(
-        request.name(),
+        request.name,
         request.params,
         argument_types,
         state_type.clone(),
     )?;
     Ok((nested, result_state_type))
+}
+
+fn try_legacy_signature(
+    request: NestedRequest<'_>,
+    state_type: &DataType,
+    argument_types: Vec<DataType>,
+) -> Option<(AggregateFunctionRef, Vec<DataType>)> {
+    if !request.arguments.matches_types(&argument_types) {
+        return None;
+    }
+    let nested = (request.build)(request.params, &argument_types).ok()?;
+    if serialized_state_type(&nested) != *state_type
+        || legacy_signature_has_ambiguous_decimal_scale(request, &argument_types, state_type)
+    {
+        return None;
+    }
+    Some((nested, argument_types))
 }
 
 fn serialized_state_type(function: &AggregateFunctionRef) -> DataType {
@@ -276,7 +262,7 @@ impl<'a> LegacySignatureSearch<'a> {
         for arity in (1..=Self::MAX_ARGUMENTS).chain(std::iter::once(0)) {
             // The nested function's own argument pattern rules out most arities
             // up front, so those branches are never expanded.
-            if !self.request.arguments().accepts_arity(arity) {
+            if !self.request.arguments.accepts_arity(arity) {
                 continue;
             }
             self.argument_types.clear();
@@ -317,49 +303,35 @@ impl<'a> LegacySignatureSearch<'a> {
     /// Checks the fully built argument list, returning the nested function when
     /// it reproduces the state layout unambiguously.
     fn try_current(&mut self) -> Option<(AggregateFunctionRef, Vec<DataType>)> {
-        // Only argument lists the nested function would accept are worth
-        // building; the build itself stays the authoritative check.
-        if !self.request.arguments().matches_types(&self.argument_types) {
-            return None;
-        }
         self.attempts += 1;
-        let nested = self
-            .request
-            .build(self.request.params, &self.argument_types)
-            .ok()?;
-        if serialized_state_type(&nested) != *self.state_type || self.has_ambiguous_decimal_scale()
-        {
-            return None;
-        }
-        Some((nested, self.argument_types.clone()))
+        try_legacy_signature(self.request, self.state_type, self.argument_types.clone())
+    }
+}
+
+/// A state layout keeps a decimal's scale but not its precision, so when a
+/// different scale would produce the same layout the original arguments cannot
+/// be recovered and the state is refused rather than guessed.
+fn legacy_signature_has_ambiguous_decimal_scale(
+    request: NestedRequest<'_>,
+    argument_types: &[DataType],
+    state_type: &DataType,
+) -> bool {
+    if request.name.eq_ignore_ascii_case("sum")
+        && argument_types.iter().any(is_legacy_decimal_sum_argument)
+    {
+        return true;
     }
 
-    /// A state layout keeps a decimal's scale but not its precision, so when a
-    /// different scale would produce the same layout the original arguments
-    /// cannot be recovered and the state is refused rather than guessed.
-    fn has_ambiguous_decimal_scale(&self) -> bool {
-        if self.request.name().eq_ignore_ascii_case("sum")
-            && self
-                .argument_types
-                .iter()
-                .any(is_legacy_decimal_sum_argument)
-        {
-            return true;
-        }
-
-        self.argument_types
-            .iter()
-            .enumerate()
-            .any(|(index, data_type)| {
-                alternate_decimal_scales(data_type)
-                    .into_iter()
-                    .any(|alternate_type| {
-                        let mut alternate = self.argument_types.clone();
-                        alternate[index] = alternate_type;
-                        self.request.produces_state(&alternate, self.state_type)
-                    })
+    argument_types.iter().enumerate().any(|(index, data_type)| {
+        alternate_decimal_scales(data_type)
+            .into_iter()
+            .any(|alternate_type| {
+                let mut alternate = argument_types.to_vec();
+                alternate[index] = alternate_type;
+                (request.build)(request.params, &alternate)
+                    .is_ok_and(|nested| serialized_state_type(&nested) == *state_type)
             })
-    }
+    })
 }
 
 fn is_legacy_decimal_sum_argument(data_type: &DataType) -> bool {

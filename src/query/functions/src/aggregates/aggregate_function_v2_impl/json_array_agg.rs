@@ -34,7 +34,6 @@ use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::AggregateUnaryState;
@@ -44,20 +43,8 @@ struct JsonArrayAggBuilder;
 
 impl JsonArrayAggBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let json_array_agg = AggregateFunctionDefinition::new(
-            "json_array_agg",
-            JsonArrayAggBuilder::json_array_agg_arguments(),
-            JsonArrayAggBuilder::JSON_ARRAY_AGG_FEATURES,
-            JsonArrayAggBuilder::try_create,
-        );
-        json_array_agg.register_with_combinators(registry, false);
-        let json_agg = AggregateFunctionDefinition::new(
-            "json_agg",
-            JsonArrayAggBuilder::json_array_agg_arguments(),
-            JsonArrayAggBuilder::JSON_AGG_FEATURES,
-            JsonArrayAggBuilder::try_create,
-        );
-        json_agg.register_with_combinators(registry, false);
+        Self::route(&["json_array_agg"], Self::JSON_ARRAY_AGG_FEATURES).register(registry);
+        Self::route(&["json_agg"], Self::JSON_AGG_FEATURES).register(registry);
     }
 }
 
@@ -228,19 +215,34 @@ where
 }
 
 impl JsonArrayAggBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        if !request.params.is_empty() {
-            return Err(ErrorCode::BadArguments(format!(
+    fn route(
+        names: &'static [&'static str],
+        features: v2::FunctionFeatures,
+    ) -> v2::DirectNameRoute {
+        let arguments = Self::json_array_agg_arguments();
+        v2::DirectNameRoute::new(
+            names,
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::Keep,
+        )
+        .with_validator(Self::validate_request)
+        .then(v2::MergeRoute::new(false, JsonArrayAggBuilder::create))
+        .then(v2::MergeRoute::new(true, JsonArrayAggBuilder::create))
+        .then(v2::PlainRoute::new(JsonArrayAggBuilder::create))
+        .then(v2::IfRoute::new(JsonArrayAggBuilder::create))
+        .then(v2::StateRoute::new(JsonArrayAggBuilder::create))
+    }
+
+    fn validate_request(request: &v2::AggregateFunctionRequest<'_>) -> Result<()> {
+        if request.params.is_empty() {
+            Ok(())
+        } else {
+            Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
                 request.name
-            )));
+            )))
         }
-
-        v2::build_default_name_route_keep_nulls(request, &[v2::KeepNullNameRoute {
-            names: &["json_array_agg", "json_agg"],
-            features: Self::JSON_ARRAY_AGG_FEATURES,
-            build: direct_aggregate_function_build_input_fns!(Self::create),
-        }])
     }
 
     fn create(

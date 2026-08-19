@@ -53,7 +53,6 @@ use rand::prelude::SliceRandom;
 use rand::rngs::SmallRng;
 use rand::thread_rng;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::UnaryState;
@@ -63,13 +62,18 @@ struct RangeBoundBuilder;
 
 impl RangeBoundBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let range_bound = AggregateFunctionDefinition::new(
-            "range_bound",
+        v2::DirectNameRoute::new(
+            &["range_bound"],
             RangeBoundBuilder::range_bound_arguments(),
             RangeBoundBuilder::RANGE_BOUND_FEATURES,
-            RangeBoundBuilder::try_create,
-        );
-        range_bound.register_with_combinators(registry, false);
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::unary(false, RangeBoundBuilder::create))
+        .then(v2::MergeRoute::unary(true, RangeBoundBuilder::create))
+        .then(v2::PlainRoute::unary(RangeBoundBuilder::create))
+        .then(v2::IfRoute::unary(RangeBoundBuilder::create))
+        .then(v2::StateRoute::unary(RangeBoundBuilder::create))
+        .register(registry);
     }
 }
 
@@ -328,16 +332,6 @@ where
 }
 
 impl RangeBoundBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        v2::build_default_name_route_with_unary_input(
-            request,
-            &["range_bound"],
-            Self::RANGE_BOUND_FEATURES,
-            false,
-            unary_aggregate_function_build_input_fns!(Self::create),
-        )
-    }
-
     fn create(
         build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {

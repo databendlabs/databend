@@ -36,7 +36,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::UnaryState;
@@ -48,17 +47,7 @@ struct StringAggBuilder;
 
 impl StringAggBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        Self::definition().register_with_combinators(registry, false);
-    }
-
-    fn definition() -> AggregateFunctionDefinition {
-        AggregateFunctionDefinition::new(
-            "string_agg",
-            StringAggBuilder::string_agg_arguments(),
-            StringAggBuilder::STRING_AGG_FEATURES,
-            StringAggBuilder::try_create,
-        )
-        .with_aliases(&["listagg", "group_concat"])
+        Self::route().register(registry);
     }
 }
 
@@ -195,12 +184,20 @@ impl ToStringType for AnyType {
 }
 
 impl StringAggBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        Self::definition().build_with_direct_input(
-            request,
-            false,
-            direct_aggregate_function_build_input_fns!(Self::create),
+    fn route() -> v2::DirectNameRoute {
+        let arguments = Self::string_agg_arguments();
+        let features = Self::STRING_AGG_FEATURES;
+        v2::DirectNameRoute::new(
+            &["string_agg", "listagg", "group_concat"],
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::Skip,
         )
+        .then(v2::MergeRoute::new(false, StringAggBuilder::create))
+        .then(v2::MergeRoute::new(true, StringAggBuilder::create))
+        .then(v2::PlainRoute::new(StringAggBuilder::create))
+        .then(v2::IfRoute::new(StringAggBuilder::create))
+        .then(v2::StateRoute::new(StringAggBuilder::create))
     }
 
     fn create(

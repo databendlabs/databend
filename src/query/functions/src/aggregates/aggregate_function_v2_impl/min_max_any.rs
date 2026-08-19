@@ -23,6 +23,7 @@ use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnView;
+use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::types::AnyType;
@@ -45,7 +46,6 @@ use databend_common_expression::types::i256;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::UnaryState;
@@ -60,9 +60,9 @@ struct MinMaxAnyBuilder;
 
 impl MinMaxAnyBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        Self::definition::<TYPE_MIN>().register_with_combinators(registry, true);
-        Self::definition::<TYPE_MAX>().register_with_combinators(registry, true);
-        Self::definition::<TYPE_ANY>().register_with_combinators(registry, true);
+        Self::route::<TYPE_MIN>().register(registry);
+        Self::route::<TYPE_MAX>().register(registry);
+        Self::route::<TYPE_ANY>().register(registry);
     }
 }
 
@@ -241,48 +241,56 @@ where
 }
 
 impl MinMaxAnyBuilder {
-    fn definition<const CMP_TYPE: u8>() -> AggregateFunctionDefinition {
-        match CMP_TYPE {
-            TYPE_MIN => AggregateFunctionDefinition::new(
-                "min",
-                Self::min_max_any_arguments(),
-                Self::MIN_FEATURES,
-                Self::try_create::<CMP_TYPE>,
-            ),
-            TYPE_MAX => AggregateFunctionDefinition::new(
-                "max",
-                Self::min_max_any_arguments(),
-                Self::MAX_FEATURES,
-                Self::try_create::<CMP_TYPE>,
-            ),
-            TYPE_ANY => AggregateFunctionDefinition::new(
-                "any",
-                Self::min_max_any_arguments(),
-                Self::ANY_FEATURES,
-                Self::try_create::<CMP_TYPE>,
-            )
-            .with_aliases(&["any_value"]),
-            _ => unreachable!(),
+    fn legacy_signatures(_params: &[Scalar], state_type: &DataType) -> Vec<Vec<DataType>> {
+        let DataType::Tuple(fields) = state_type else {
+            return Vec::new();
+        };
+        match fields.as_slice() {
+            [DataType::Boolean, argument_type, ..] => vec![vec![argument_type.clone()]],
+            _ => Vec::new(),
         }
     }
 
-    fn try_create<const CMP_TYPE: u8>(
-        request: AggregateFunctionRequest<'_>,
-    ) -> Result<AggregateFunctionRef> {
-        match CMP_TYPE {
-            TYPE_MIN | TYPE_MAX | TYPE_ANY => Self::definition::<CMP_TYPE>()
-                .build_with_unary_input(
-                    request,
-                    false,
-                    v2::UnaryAggregateFunctionBuildInputFns::new(
-                        Self::create::<CMP_TYPE>,
-                        Self::create::<CMP_TYPE>,
-                        Self::create::<CMP_TYPE>,
-                        v2::UnaryDistinctBuildFn::PlainAlias(Self::create::<CMP_TYPE>),
-                    ),
-                ),
+    fn route<const CMP_TYPE: u8>() -> v2::DirectNameRoute {
+        let (names, features, resolver) = match CMP_TYPE {
+            TYPE_MIN => (
+                &["min"][..],
+                Self::MIN_FEATURES,
+                Some(Self::legacy_signatures as v2::LegacySignatureResolver),
+            ),
+            TYPE_MAX => (
+                &["max"][..],
+                Self::MAX_FEATURES,
+                Some(Self::legacy_signatures as v2::LegacySignatureResolver),
+            ),
+            TYPE_ANY => (&["any", "any_value"][..], Self::ANY_FEATURES, None),
             _ => unreachable!(),
-        }
+        };
+        let route = v2::DirectNameRoute::new(
+            names,
+            Self::min_max_any_arguments(),
+            features,
+            v2::NullPolicy::Skip,
+        );
+        let route = match resolver {
+            Some(resolver) => route
+                .then(
+                    v2::MergeRoute::unary(false, Self::create::<CMP_TYPE>)
+                        .with_legacy_signature_resolver(resolver),
+                )
+                .then(
+                    v2::MergeRoute::unary(true, Self::create::<CMP_TYPE>)
+                        .with_legacy_signature_resolver(resolver),
+                ),
+            None => route
+                .then(v2::MergeRoute::unary(false, Self::create::<CMP_TYPE>))
+                .then(v2::MergeRoute::unary(true, Self::create::<CMP_TYPE>)),
+        };
+        route
+            .then(v2::PlainRoute::unary(Self::create::<CMP_TYPE>))
+            .then(v2::IfRoute::unary(Self::create::<CMP_TYPE>))
+            .then(v2::StateRoute::unary(Self::create::<CMP_TYPE>))
+            .then(v2::DistinctAliasRoute::unary(Self::create::<CMP_TYPE>))
     }
 
     fn create<const CMP_TYPE: u8>(

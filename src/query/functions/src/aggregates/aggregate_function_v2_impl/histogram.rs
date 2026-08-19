@@ -45,7 +45,6 @@ use databend_common_expression::with_number_mapped_type;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::UnaryState;
@@ -54,13 +53,18 @@ struct HistogramBuilder;
 
 impl HistogramBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let histogram = AggregateFunctionDefinition::new(
-            "histogram",
+        v2::DirectNameRoute::new(
+            &["histogram"],
             HistogramBuilder::histogram_arguments(),
             HistogramBuilder::HISTOGRAM_FEATURES,
-            HistogramBuilder::try_create,
-        );
-        histogram.register_with_combinators(registry, false);
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::unary(false, HistogramBuilder::create))
+        .then(v2::MergeRoute::unary(true, HistogramBuilder::create))
+        .then(v2::PlainRoute::unary(HistogramBuilder::create))
+        .then(v2::IfRoute::unary(HistogramBuilder::create))
+        .then(v2::StateRoute::unary(HistogramBuilder::create))
+        .register(registry);
     }
 }
 
@@ -238,16 +242,6 @@ where
 }
 
 impl HistogramBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        v2::build_default_name_route_with_unary_input(
-            request,
-            &["histogram"],
-            Self::HISTOGRAM_FEATURES,
-            false,
-            unary_aggregate_function_build_input_fns!(Self::create),
-        )
-    }
-
     fn create(
         build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {

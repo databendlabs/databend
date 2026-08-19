@@ -28,7 +28,6 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt32Type;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 
@@ -55,28 +54,18 @@ struct RetentionBuilder;
 
 impl RetentionBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let retention = Self::definition();
-        retention.register_with_merge_combinators(registry);
-        AggregateFunctionDefinition::new(
-            "retention_state",
+        v2::DirectNameRoute::new(
+            &["retention"],
             Self::retention_arguments(),
-            RetentionBuilder::RETENTION_STATE_FEATURES,
-            RetentionBuilder::try_create,
+            Self::RETENTION_FEATURES,
+            v2::NullPolicy::Skip,
         )
-        .register(registry);
-        AggregateFunctionDefinition::new(
-            "retention_if",
-            v2::AggregateArgumentsPattern::if_condition(Self::retention_arguments()),
-            RetentionBuilder::RETENTION_FEATURES,
-            RetentionBuilder::try_create,
-        )
-        .register(registry);
-        AggregateFunctionDefinition::new(
-            "retention_distinct",
-            Self::retention_arguments(),
-            RetentionBuilder::RETENTION_FEATURES,
-            RetentionBuilder::try_create,
-        )
+        .then(v2::MergeRoute::multi_arg(false, Self::create))
+        .then(v2::MergeRoute::multi_arg(true, Self::create))
+        .then(v2::PlainRoute::multi_arg(Self::create))
+        .then(v2::IfRoute::multi_arg(Self::create))
+        .then(v2::StateRoute::multi_arg(Self::create).with_features(Self::RETENTION_STATE_FEATURES))
+        .then(v2::DistinctRoute::multi_arg(Self::create))
         .register(registry);
     }
 }
@@ -88,15 +77,6 @@ inventory::submit! {
 }
 
 impl RetentionBuilder {
-    fn definition() -> AggregateFunctionDefinition {
-        AggregateFunctionDefinition::new(
-            "retention",
-            Self::retention_arguments(),
-            Self::RETENTION_FEATURES,
-            Self::try_create,
-        )
-    }
-
     fn retention_arguments() -> v2::AggregateArgumentsPattern {
         v2::AggregateArgumentsPattern::variadic(
             vec![],
@@ -255,49 +235,6 @@ impl v2::AggrImpl for AggregateRetentionImplementation {
 }
 
 impl RetentionBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        let route = v2::AggregateFunctionNameRoutePath::root(request);
-
-        if let Some(route) = route.names(&["retention"]) {
-            if let Some(function) = route.null_argument_result(false)? {
-                return Ok(function);
-            }
-            return route
-                .plain_or_null()
-                .build_with_multi_arg_input(Self::RETENTION_FEATURES, Self::create);
-        }
-
-        if let Some(route) = route.names(&["retention_if"]) {
-            if let Some(function) = route.if_nullable_input_null_argument_result(false)? {
-                return Ok(function);
-            }
-            return route
-                .if_combinator(v2::NullPolicy::Skip, true)?
-                .build_with_multi_arg_input(Self::RETENTION_FEATURES, Self::create);
-        }
-
-        if let Some(route) = route.names(&["retention_state"]) {
-            if let Some(function) = route.state_null_argument_result()? {
-                return Ok(function);
-            }
-            let state_plan = route.state_nullable_input_plan(false);
-            return route
-                .state_combinator(state_plan)
-                .build_with_multi_arg_input(Self::RETENTION_STATE_FEATURES, Self::create);
-        }
-
-        if let Some(route) = route.names(&["retention_distinct"]) {
-            if let Some(function) = route.null_argument_result(false)? {
-                return Ok(function);
-            }
-            return route
-                .distinct_combinator(v2::NullPolicy::Skip, true)
-                .build_with_multi_arg_input(Self::RETENTION_FEATURES, Self::create);
-        }
-
-        route.unknown()
-    }
-
     fn create(
         build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {

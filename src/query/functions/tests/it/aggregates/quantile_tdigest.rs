@@ -1000,15 +1000,15 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
 
     registry.resolve(AggregateFunctionRequest {
         name: "quantile_tdigest_merge",
-        params: &vec![],
-        args_type: &vec![state_type.clone()],
+        params: &[],
+        args_type: std::slice::from_ref(&state_type),
         distinct: false,
         order_by: &[],
     })?;
     registry.resolve(AggregateFunctionRequest {
         name: "quantile_tdigest_merge",
-        params: &vec![level(0.5)],
-        args_type: &vec![state_type.clone()],
+        params: &[level(0.5)],
+        args_type: std::slice::from_ref(&state_type),
         distinct: false,
         order_by: &[],
     })?;
@@ -1017,7 +1017,7 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
         let error = match registry.resolve(AggregateFunctionRequest {
             name,
             params: &[level(0.9)],
-            args_type: &[state_type.clone()],
+            args_type: std::slice::from_ref(&state_type),
             distinct: false,
             order_by: &[],
         }) {

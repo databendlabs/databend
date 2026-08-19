@@ -37,7 +37,6 @@ use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::ValueType;
 
 use super::super::extract_number_param;
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 
@@ -45,13 +44,19 @@ struct MarkovTrainBuilder;
 
 impl MarkovTrainBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let markov_train = AggregateFunctionDefinition::new(
-            "markov_train",
+        v2::DirectNameRoute::new(
+            &["markov_train"],
             MarkovTrainBuilder::markov_train_arguments(),
             MarkovTrainBuilder::MARKOV_TRAIN_FEATURES,
-            MarkovTrainBuilder::try_create,
-        );
-        markov_train.register_with_combinators(registry, true);
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::multi_arg(false, MarkovTrainBuilder::create))
+        .then(v2::MergeRoute::multi_arg(true, MarkovTrainBuilder::create))
+        .then(v2::PlainRoute::multi_arg(MarkovTrainBuilder::create))
+        .then(v2::IfRoute::multi_arg(MarkovTrainBuilder::create))
+        .then(v2::StateRoute::multi_arg(MarkovTrainBuilder::create))
+        .then(v2::DistinctRoute::multi_arg(MarkovTrainBuilder::create))
+        .register(registry);
     }
 }
 
@@ -358,16 +363,6 @@ impl v2::AggrImpl for AggregateMarkovTrainImplementation {
 }
 
 impl MarkovTrainBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        v2::build_default_name_route_with_multi_arg_build_input(
-            request,
-            &["markov_train"],
-            Self::MARKOV_TRAIN_FEATURES,
-            false,
-            multi_arg_aggregate_function_build_input_fns_with_distinct!(Self::create),
-        )
-    }
-
     fn create(
         build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {

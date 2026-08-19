@@ -15,7 +15,6 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::count::create_distinct_count_function;
@@ -24,13 +23,7 @@ struct UniqBuilder;
 
 impl UniqBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let uniq = AggregateFunctionDefinition::new(
-            "uniq",
-            UniqBuilder::uniq_arguments(),
-            UniqBuilder::UNIQ_FEATURES,
-            UniqBuilder::try_create,
-        );
-        uniq.register_with_combinators(registry, false);
+        Self::route().register(registry);
     }
 }
 
@@ -62,22 +55,37 @@ impl UniqBuilder {
 }
 
 impl UniqBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        if !request.params.is_empty() {
-            return Err(ErrorCode::BadArguments(format!(
+    fn route() -> v2::DirectNameRoute {
+        let arguments = Self::uniq_arguments();
+        let features = Self::UNIQ_FEATURES;
+        v2::DirectNameRoute::new(
+            &["uniq"],
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::ReturnsDefaultWhenOnlyNull,
+        )
+        .with_validator(Self::validate_request)
+        .then(v2::MergeRoute::new(false, UniqBuilder::create))
+        .then(v2::MergeRoute::new(true, UniqBuilder::create))
+        .then(v2::PlainRoute::new(UniqBuilder::create))
+        .then(v2::IfRoute::new(UniqBuilder::create))
+        .then(v2::StateRoute::new(UniqBuilder::create))
+    }
+
+    fn validate_request(request: &v2::AggregateFunctionRequest<'_>) -> Result<()> {
+        if request.params.is_empty() {
+            Ok(())
+        } else {
+            Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
                 request.name
-            )));
+            )))
         }
+    }
 
-        v2::build_default_name_route_with_direct_input(
-            request,
-            &["uniq"],
-            Self::UNIQ_FEATURES,
-            true,
-            direct_aggregate_function_build_input_fns!(|build| {
-                create_distinct_count_function(build, false)
-            }),
-        )
+    fn create(
+        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+    ) -> Result<v2::AggregateFunctionRef> {
+        create_distinct_count_function(build, false)
     }
 }

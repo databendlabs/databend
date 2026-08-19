@@ -36,7 +36,6 @@ use databend_common_expression::with_unsigned_integer_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::get_levels;
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::quantile_tdigest::AggregateQuantileTDigestState;
@@ -46,20 +45,30 @@ struct QuantileTDigestWeightedBuilder;
 
 impl QuantileTDigestWeightedBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        AggregateFunctionDefinition::new(
-            "quantile_tdigest_weighted",
+        v2::DirectNameRoute::new(
+            &["quantile_tdigest_weighted"],
             QuantileTDigestWeightedBuilder::quantile_tdigest_weighted_arguments(),
             QuantileTDigestWeightedBuilder::QUANTILE_TDIGEST_WEIGHTED_FEATURES,
-            QuantileTDigestWeightedBuilder::try_create_quantile_tdigest_weighted,
+            v2::NullPolicy::Skip,
         )
-        .register_with_combinators(registry, false);
-        AggregateFunctionDefinition::new(
-            "median_tdigest_weighted",
+        .then(v2::MergeRoute::multi_arg(false, Self::create))
+        .then(v2::MergeRoute::multi_arg(true, Self::create))
+        .then(v2::PlainRoute::multi_arg(Self::create))
+        .then(v2::IfRoute::multi_arg(Self::create))
+        .then(v2::StateRoute::multi_arg(Self::create))
+        .register(registry);
+        v2::DirectNameRoute::new(
+            &["median_tdigest_weighted"],
             QuantileTDigestWeightedBuilder::quantile_tdigest_weighted_arguments(),
             QuantileTDigestWeightedBuilder::MEDIAN_TDIGEST_WEIGHTED_FEATURES,
-            QuantileTDigestWeightedBuilder::try_create_median_tdigest_weighted,
+            v2::NullPolicy::Skip,
         )
-        .register_with_combinators(registry, false);
+        .then(v2::MergeRoute::multi_arg(false, Self::create_median))
+        .then(v2::MergeRoute::multi_arg(true, Self::create_median))
+        .then(v2::PlainRoute::multi_arg(Self::create_median))
+        .then(v2::IfRoute::multi_arg(Self::create_median))
+        .then(v2::StateRoute::multi_arg(Self::create_median))
+        .register(registry);
     }
 }
 
@@ -70,6 +79,18 @@ inventory::submit! {
 }
 
 impl QuantileTDigestWeightedBuilder {
+    fn create_median(
+        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
+    ) -> Result<v2::AggregateFunctionRef> {
+        if !build.params().is_empty() {
+            return Err(ErrorCode::BadArguments(format!(
+                "{} expects no parameters",
+                build.name()
+            )));
+        }
+        Self::create(build)
+    }
+
     fn quantile_tdigest_weighted_arguments() -> v2::AggregateArgumentsPattern {
         v2::AggregateArgumentsPattern::fixed(vec![
             v2::AggregateArgumentPattern::any_number(),
@@ -288,36 +309,6 @@ impl QuantileTDigestWeightedResult<ArrayType<Float64Type>> for AggregateQuantile
 }
 
 impl QuantileTDigestWeightedBuilder {
-    fn try_create_quantile_tdigest_weighted(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef> {
-        v2::build_default_name_route_with_multi_arg_build_input(
-            request,
-            &["quantile_tdigest_weighted"],
-            Self::QUANTILE_TDIGEST_WEIGHTED_FEATURES,
-            false,
-            multi_arg_aggregate_function_build_input_fns!(Self::create),
-        )
-    }
-
-    fn try_create_median_tdigest_weighted(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef> {
-        if !request.params.is_empty() {
-            return Err(ErrorCode::BadArguments(format!(
-                "{} expects no parameters",
-                request.name
-            )));
-        }
-        v2::build_default_name_route_with_multi_arg_build_input(
-            request,
-            &["median_tdigest_weighted"],
-            Self::MEDIAN_TDIGEST_WEIGHTED_FEATURES,
-            false,
-            multi_arg_aggregate_function_build_input_fns!(Self::create),
-        )
-    }
-
     fn create(
         build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {

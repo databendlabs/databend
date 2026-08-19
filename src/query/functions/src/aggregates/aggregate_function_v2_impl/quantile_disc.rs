@@ -37,7 +37,6 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
 use super::super::get_levels;
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::UnaryState;
@@ -46,7 +45,18 @@ struct QuantileDiscBuilder;
 
 impl QuantileDiscBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        Self::definition().register_with_combinators(registry, false);
+        v2::DirectNameRoute::new(
+            &["quantile_disc", "quantile"],
+            Self::quantile_disc_arguments(),
+            Self::QUANTILE_FEATURES,
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::unary(false, Self::create))
+        .then(v2::MergeRoute::unary(true, Self::create))
+        .then(v2::PlainRoute::unary(Self::create))
+        .then(v2::IfRoute::unary(Self::create))
+        .then(v2::StateRoute::unary(Self::create))
+        .register(registry);
     }
 }
 
@@ -57,16 +67,6 @@ inventory::submit! {
 }
 
 impl QuantileDiscBuilder {
-    fn definition() -> AggregateFunctionDefinition {
-        AggregateFunctionDefinition::new(
-            "quantile",
-            Self::quantile_disc_arguments(),
-            Self::QUANTILE_FEATURES,
-            Self::try_create,
-        )
-        .with_aliases(&["quantile_disc"])
-    }
-
     fn quantile_disc_arguments() -> v2::AggregateArgumentsPattern {
         v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any_numeric()])
     }
@@ -290,14 +290,6 @@ where
 }
 
 impl QuantileDiscBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        Self::definition().build_with_unary_input(
-            request,
-            false,
-            unary_aggregate_function_build_input_fns!(Self::create),
-        )
-    }
-
     fn create(
         build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {

@@ -43,7 +43,6 @@ use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::get_levels;
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::UnaryState;
@@ -52,20 +51,30 @@ struct QuantileContBuilder;
 
 impl QuantileContBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let quantile_cont = AggregateFunctionDefinition::new(
-            "quantile_cont",
+        v2::DirectNameRoute::new(
+            &["quantile_cont"],
             QuantileContBuilder::quantile_cont_arguments(),
             QuantileContBuilder::QUANTILE_CONT_FEATURES,
-            QuantileContBuilder::try_create_quantile_cont,
-        );
-        quantile_cont.register_with_combinators(registry, false);
-        let median = AggregateFunctionDefinition::new(
-            "median",
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::unary(false, Self::create))
+        .then(v2::MergeRoute::unary(true, Self::create))
+        .then(v2::PlainRoute::unary(Self::create))
+        .then(v2::IfRoute::unary(Self::create))
+        .then(v2::StateRoute::unary(Self::create))
+        .register(registry);
+        v2::DirectNameRoute::new(
+            &["median"],
             QuantileContBuilder::quantile_cont_arguments(),
             QuantileContBuilder::MEDIAN_FEATURES,
-            QuantileContBuilder::try_create_median,
-        );
-        median.register_with_combinators(registry, false);
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::unary(false, Self::create_median))
+        .then(v2::MergeRoute::unary(true, Self::create_median))
+        .then(v2::PlainRoute::unary(Self::create_median))
+        .then(v2::IfRoute::unary(Self::create_median))
+        .then(v2::StateRoute::unary(Self::create_median))
+        .register(registry);
     }
 }
 
@@ -76,6 +85,18 @@ inventory::submit! {
 }
 
 impl QuantileContBuilder {
+    fn create_median(
+        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+    ) -> Result<v2::AggregateFunctionRef> {
+        if !build.params().is_empty() {
+            return Err(ErrorCode::BadArguments(format!(
+                "{} expects no parameters",
+                build.name()
+            )));
+        }
+        Self::create(build)
+    }
+
     fn quantile_cont_arguments() -> v2::AggregateArgumentsPattern {
         v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any_numeric()])
     }
@@ -514,36 +535,6 @@ where
 }
 
 impl QuantileContBuilder {
-    fn try_create_quantile_cont(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef> {
-        v2::build_default_name_route_with_unary_input(
-            request,
-            &["quantile_cont"],
-            Self::QUANTILE_CONT_FEATURES,
-            false,
-            unary_aggregate_function_build_input_fns!(Self::create),
-        )
-    }
-
-    fn try_create_median(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef> {
-        if !request.params.is_empty() {
-            return Err(ErrorCode::BadArguments(format!(
-                "{} expects no parameters",
-                request.name
-            )));
-        }
-        v2::build_default_name_route_with_unary_input(
-            request,
-            &["median"],
-            Self::MEDIAN_FEATURES,
-            false,
-            unary_aggregate_function_build_input_fns!(Self::create),
-        )
-    }
-
     fn create(
         build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {

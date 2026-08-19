@@ -41,7 +41,6 @@ use databend_common_expression::with_integer_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::extract_number_param;
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 
@@ -49,13 +48,7 @@ struct WindowFunnelBuilder;
 
 impl WindowFunnelBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let window_funnel = AggregateFunctionDefinition::new(
-            "window_funnel",
-            WindowFunnelBuilder::window_funnel_arguments(),
-            WindowFunnelBuilder::WINDOW_FUNNEL_FEATURES,
-            WindowFunnelBuilder::try_create,
-        );
-        window_funnel.register_with_combinators(registry, false);
+        Self::route().register(registry);
     }
 }
 
@@ -155,25 +148,31 @@ fn compare_event<T: Ord>(lhs: &(T, u8), rhs: &(T, u8)) -> Ordering {
 }
 
 impl WindowFunnelBuilder {
-    fn try_create(request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
-        if request.params.len() != 1 {
-            return Err(ErrorCode::BadArguments(format!(
-                "{} expects one parameter",
-                request.name
-            )));
-        }
-        v2::build_default_name_route_with_direct_input(
-            request,
+    fn route() -> v2::DirectNameRoute {
+        let arguments = Self::window_funnel_arguments();
+        let features = Self::WINDOW_FUNNEL_FEATURES;
+        v2::DirectNameRoute::new(
             &["window_funnel"],
-            Self::WINDOW_FUNNEL_FEATURES,
-            false,
-            direct_aggregate_function_build_input_fns!(Self::create),
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::Skip,
         )
+        .then(v2::MergeRoute::new(false, WindowFunnelBuilder::create))
+        .then(v2::MergeRoute::new(true, WindowFunnelBuilder::create))
+        .then(v2::PlainRoute::new(WindowFunnelBuilder::create))
+        .then(v2::IfRoute::new(WindowFunnelBuilder::create))
+        .then(v2::StateRoute::new(WindowFunnelBuilder::create))
     }
 
     fn create(
         build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {
+        if build.params().len() != 1 {
+            return Err(ErrorCode::BadArguments(format!(
+                "{} expects one parameter",
+                build.name()
+            )));
+        }
         for (index, data_type) in build.args_type()[1..].iter().enumerate() {
             if data_type.remove_nullable() != DataType::Boolean {
                 return Err(ErrorCode::BadDataValueType(format!(

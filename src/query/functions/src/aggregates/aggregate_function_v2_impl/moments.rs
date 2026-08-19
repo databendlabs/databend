@@ -38,11 +38,9 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::AggregateFunctionRef;
-use super::adaptors_v2::AggregateFunctionRequest;
 use super::adaptors_v2::AggregateStateDescription;
 use super::adaptors_v2::FunctionFeatures;
 use super::adaptors_v2::UnaryState;
@@ -51,20 +49,30 @@ struct MomentsBuilder;
 
 impl MomentsBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let skewness = AggregateFunctionDefinition::new(
-            "skewness",
+        v2::DirectNameRoute::new(
+            &["skewness"],
             MomentsBuilder::moments_arguments(),
             MomentsBuilder::SKEWNESS_FEATURES,
-            MomentsBuilder::try_create_skewness,
-        );
-        skewness.register_with_combinators(registry, false);
-        let kurtosis = AggregateFunctionDefinition::new(
-            "kurtosis",
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::unary(false, Self::create_skewness))
+        .then(v2::MergeRoute::unary(true, Self::create_skewness))
+        .then(v2::PlainRoute::unary(Self::create_skewness))
+        .then(v2::IfRoute::unary(Self::create_skewness))
+        .then(v2::StateRoute::unary(Self::create_skewness))
+        .register(registry);
+        v2::DirectNameRoute::new(
+            &["kurtosis"],
             MomentsBuilder::moments_arguments(),
             MomentsBuilder::KURTOSIS_FEATURES,
-            MomentsBuilder::try_create_kurtosis,
-        );
-        kurtosis.register_with_combinators(registry, false);
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::unary(false, Self::create_kurtosis))
+        .then(v2::MergeRoute::unary(true, Self::create_kurtosis))
+        .then(v2::PlainRoute::unary(Self::create_kurtosis))
+        .then(v2::IfRoute::unary(Self::create_kurtosis))
+        .then(v2::StateRoute::unary(Self::create_kurtosis))
+        .register(registry);
     }
 }
 
@@ -328,28 +336,16 @@ macro_rules! create_moment_function {
 }
 
 impl MomentsBuilder {
-    fn try_create_skewness(request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
-        v2::build_default_name_route_with_unary_input(
-            request,
-            &["skewness"],
-            Self::SKEWNESS_FEATURES,
-            false,
-            unary_aggregate_function_build_input_fns!(|build| {
-                create_moment_function!(AggregateSkewnessState, build)
-            }),
-        )
+    fn create_skewness(
+        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
+        create_moment_function!(AggregateSkewnessState, build)
     }
 
-    fn try_create_kurtosis(request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
-        v2::build_default_name_route_with_unary_input(
-            request,
-            &["kurtosis"],
-            Self::KURTOSIS_FEATURES,
-            false,
-            unary_aggregate_function_build_input_fns!(|build| {
-                create_moment_function!(AggregateKurtosisState, build)
-            }),
-        )
+    fn create_kurtosis(
+        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
+        create_moment_function!(AggregateKurtosisState, build)
     }
 
     fn create_instance<S, I>(

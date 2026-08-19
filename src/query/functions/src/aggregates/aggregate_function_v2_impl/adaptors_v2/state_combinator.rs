@@ -320,26 +320,35 @@ pub(crate) fn nullable_input_state_description(
 
 pub(crate) fn create_state_null_result_function(
     request: v2::AggregateFunctionRequest<'_>,
+    returns_default_when_only_null: bool,
 ) -> Result<v2::AggregateFunctionRef> {
-    let (data_type, result) = (
-        DataType::Number(NumberDataType::UInt64),
-        Scalar::Number(NumberScalar::UInt64(0)),
-    );
+    let (data_type, result) = if returns_default_when_only_null {
+        (
+            DataType::Number(NumberDataType::UInt64),
+            Scalar::Number(NumberScalar::UInt64(0)),
+        )
+    } else {
+        (DataType::Null, Scalar::Null)
+    };
     let serde_item = StateSerdeItem::DataType(data_type.clone());
     let physical_type = StateSerdeType::new(vec![serde_item.clone()]).data_type();
     let function_name = request
         .name
         .strip_suffix("_state")
         .expect("state combinator names must end with _state");
-    let _function_name = function_name;
-    let _physical_type = physical_type;
+    let return_type = aggregate_state_data_type(
+        function_name,
+        request.params,
+        request.args_type.to_vec(),
+        physical_type,
+    )?;
     let signature = v2::AggregateFunctionSignature {
         name: request.name.to_string(),
         params: request.params.to_vec(),
         args_type: request.args_type.to_vec(),
         distinct: request.distinct,
         order_by: request.order_by.to_vec(),
-        return_type: data_type,
+        return_type,
     };
     let state =
         v2::AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![

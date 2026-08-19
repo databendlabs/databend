@@ -41,7 +41,6 @@ use databend_common_io::geo_to_ewkb;
 use geo::Geometry;
 use geozero::wkb::Ewkb;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 
@@ -50,41 +49,16 @@ struct GeographicBuilder;
 trait GeographicAggregateMetadata {
     const NAMES: &'static [&'static str];
     const FEATURES: v2::FunctionFeatures;
+
+    fn route() -> v2::DirectNameRoute;
 }
 
 impl GeographicBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let st_collect = AggregateFunctionDefinition::new(
-            "st_collect",
-            GeographicBuilder::geometry_arguments(),
-            GeographicBuilder::ST_COLLECT_FEATURES,
-            GeographicBuilder::try_create_collect::<CollectAggOp>,
-        );
-        st_collect.register_with_combinators(registry, false);
-
-        let st_union_agg = AggregateFunctionDefinition::new(
-            "st_union_agg",
-            GeographicBuilder::geometry_arguments(),
-            GeographicBuilder::ST_UNION_AGG_FEATURES,
-            GeographicBuilder::try_create_agg::<GeometryUnionAggOp>,
-        );
-        st_union_agg.register_with_combinators(registry, true);
-
-        let st_intersection_agg = AggregateFunctionDefinition::new(
-            "st_intersection_agg",
-            GeographicBuilder::geometry_arguments(),
-            GeographicBuilder::ST_INTERSECTION_AGG_FEATURES,
-            GeographicBuilder::try_create_agg::<GeometryIntersectionAggOp>,
-        );
-        st_intersection_agg.register_with_combinators(registry, true);
-
-        let st_envelope_agg = AggregateFunctionDefinition::new(
-            "st_envelope_agg",
-            GeographicBuilder::geometry_arguments(),
-            GeographicBuilder::ST_ENVELOPE_AGG_FEATURES,
-            GeographicBuilder::try_create_agg::<EnvelopeAggOp>,
-        );
-        st_envelope_agg.register_with_combinators(registry, true);
+        CollectAggOp::route().register(registry);
+        GeometryUnionAggOp::route().register(registry);
+        GeometryIntersectionAggOp::route().register(registry);
+        EnvelopeAggOp::route().register(registry);
     }
 }
 
@@ -97,21 +71,142 @@ inventory::submit! {
 impl GeographicAggregateMetadata for CollectAggOp {
     const NAMES: &'static [&'static str] = &["st_collect"];
     const FEATURES: v2::FunctionFeatures = GeographicBuilder::ST_COLLECT_FEATURES;
+
+    fn route() -> v2::DirectNameRoute {
+        let arguments = GeographicBuilder::geometry_arguments();
+        let features = CollectAggOp::FEATURES;
+        v2::DirectNameRoute::new(
+            CollectAggOp::NAMES,
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::new(
+            false,
+            GeographicBuilder::create_collect::<CollectAggOp>,
+        ))
+        .then(v2::MergeRoute::new(
+            true,
+            GeographicBuilder::create_collect::<CollectAggOp>,
+        ))
+        .then(v2::PlainRoute::new(
+            GeographicBuilder::create_collect::<CollectAggOp>,
+        ))
+        .then(v2::IfRoute::new(
+            GeographicBuilder::create_collect::<CollectAggOp>,
+        ))
+        .then(v2::StateRoute::new(
+            GeographicBuilder::create_collect::<CollectAggOp>,
+        ))
+    }
 }
 
 impl GeographicAggregateMetadata for GeometryUnionAggOp {
     const NAMES: &'static [&'static str] = &["st_union_agg"];
     const FEATURES: v2::FunctionFeatures = GeographicBuilder::ST_UNION_AGG_FEATURES;
+
+    fn route() -> v2::DirectNameRoute {
+        let arguments = GeographicBuilder::geometry_arguments();
+        let features = GeometryUnionAggOp::FEATURES;
+        v2::DirectNameRoute::new(
+            GeometryUnionAggOp::NAMES,
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::new(
+            false,
+            GeographicBuilder::create_agg::<GeometryUnionAggOp>,
+        ))
+        .then(v2::MergeRoute::new(
+            true,
+            GeographicBuilder::create_agg::<GeometryUnionAggOp>,
+        ))
+        .then(v2::PlainRoute::new(
+            GeographicBuilder::create_agg::<GeometryUnionAggOp>,
+        ))
+        .then(v2::IfRoute::new(
+            GeographicBuilder::create_agg::<GeometryUnionAggOp>,
+        ))
+        .then(v2::StateRoute::new(
+            GeographicBuilder::create_agg::<GeometryUnionAggOp>,
+        ))
+        .then(v2::DistinctAliasRoute::new(
+            GeographicBuilder::create_agg::<GeometryUnionAggOp>,
+        ))
+    }
 }
 
 impl GeographicAggregateMetadata for GeometryIntersectionAggOp {
     const NAMES: &'static [&'static str] = &["st_intersection_agg"];
     const FEATURES: v2::FunctionFeatures = GeographicBuilder::ST_INTERSECTION_AGG_FEATURES;
+
+    fn route() -> v2::DirectNameRoute {
+        let arguments = GeographicBuilder::geometry_arguments();
+        let features = GeometryIntersectionAggOp::FEATURES;
+        v2::DirectNameRoute::new(
+            GeometryIntersectionAggOp::NAMES,
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::new(
+            false,
+            GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
+        ))
+        .then(v2::MergeRoute::new(
+            true,
+            GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
+        ))
+        .then(v2::PlainRoute::new(
+            GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
+        ))
+        .then(v2::IfRoute::new(
+            GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
+        ))
+        .then(v2::StateRoute::new(
+            GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
+        ))
+        .then(v2::DistinctAliasRoute::new(
+            GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
+        ))
+    }
 }
 
 impl GeographicAggregateMetadata for EnvelopeAggOp {
     const NAMES: &'static [&'static str] = &["st_envelope_agg"];
     const FEATURES: v2::FunctionFeatures = GeographicBuilder::ST_ENVELOPE_AGG_FEATURES;
+
+    fn route() -> v2::DirectNameRoute {
+        let arguments = GeographicBuilder::geometry_arguments();
+        let features = EnvelopeAggOp::FEATURES;
+        v2::DirectNameRoute::new(
+            EnvelopeAggOp::NAMES,
+            arguments.clone(),
+            features.clone(),
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::new(
+            false,
+            GeographicBuilder::create_agg::<EnvelopeAggOp>,
+        ))
+        .then(v2::MergeRoute::new(
+            true,
+            GeographicBuilder::create_agg::<EnvelopeAggOp>,
+        ))
+        .then(v2::PlainRoute::new(
+            GeographicBuilder::create_agg::<EnvelopeAggOp>,
+        ))
+        .then(v2::IfRoute::new(
+            GeographicBuilder::create_agg::<EnvelopeAggOp>,
+        ))
+        .then(v2::StateRoute::new(
+            GeographicBuilder::create_agg::<EnvelopeAggOp>,
+        ))
+        .then(v2::DistinctAliasRoute::new(
+            GeographicBuilder::create_agg::<EnvelopeAggOp>,
+        ))
+    }
 }
 
 impl GeographicBuilder {
@@ -661,37 +756,6 @@ where O: GeoAggOp
 }
 
 impl GeographicBuilder {
-    fn try_create_agg<O>(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef>
-    where O: GeoAggOp + GeographicAggregateMetadata {
-        v2::build_default_name_route_with_direct_input(
-            request,
-            O::NAMES,
-            O::FEATURES,
-            false,
-            v2::DirectAggregateFunctionBuildInputFns::new(
-                Self::create_agg::<O>,
-                Self::create_agg::<O>,
-                Self::create_agg::<O>,
-                v2::DirectDistinctBuildFn::PlainAlias(Self::create_agg::<O>),
-            ),
-        )
-    }
-
-    fn try_create_collect<O>(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef>
-    where O: GeoAggOp + GeographicAggregateMetadata {
-        v2::build_default_name_route_with_direct_input(
-            request,
-            O::NAMES,
-            O::FEATURES,
-            false,
-            direct_aggregate_function_build_input_fns!(Self::create_collect::<O>),
-        )
-    }
-
     fn create_agg<O>(
         build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef>

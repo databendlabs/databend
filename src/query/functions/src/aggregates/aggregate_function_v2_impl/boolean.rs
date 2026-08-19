@@ -24,7 +24,6 @@ use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 
-use super::AggregateFunctionDefinition;
 use super::AggregateFunctionV2Factory;
 use super::adaptors_v2 as v2;
 use super::adaptors_v2::UnaryState;
@@ -33,20 +32,32 @@ struct BooleanBuilder;
 
 impl BooleanBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let bool_and = AggregateFunctionDefinition::new(
-            "bool_and",
+        v2::DirectNameRoute::new(
+            &["bool_and"],
             BooleanBuilder::boolean_arguments(),
             BooleanBuilder::BOOL_AND_FEATURES,
-            BooleanBuilder::try_create::<true>,
-        );
-        bool_and.register_with_combinators(registry, true);
-        let bool_or = AggregateFunctionDefinition::new(
-            "bool_or",
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::unary(false, Self::create::<true>))
+        .then(v2::MergeRoute::unary(true, Self::create::<true>))
+        .then(v2::PlainRoute::unary(Self::create::<true>))
+        .then(v2::IfRoute::unary(Self::create::<true>))
+        .then(v2::StateRoute::unary(Self::create::<true>))
+        .then(v2::DistinctAliasRoute::unary(Self::create::<true>))
+        .register(registry);
+        v2::DirectNameRoute::new(
+            &["bool_or"],
             BooleanBuilder::boolean_arguments(),
             BooleanBuilder::BOOL_OR_FEATURES,
-            BooleanBuilder::try_create::<false>,
-        );
-        bool_or.register_with_combinators(registry, true);
+            v2::NullPolicy::Skip,
+        )
+        .then(v2::MergeRoute::unary(false, Self::create::<false>))
+        .then(v2::MergeRoute::unary(true, Self::create::<false>))
+        .then(v2::PlainRoute::unary(Self::create::<false>))
+        .then(v2::IfRoute::unary(Self::create::<false>))
+        .then(v2::StateRoute::unary(Self::create::<false>))
+        .then(v2::DistinctAliasRoute::unary(Self::create::<false>))
+        .register(registry);
     }
 }
 
@@ -154,33 +165,6 @@ impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for AggregateBoole
 }
 
 impl BooleanBuilder {
-    fn try_create<const IS_AND: bool>(
-        request: v2::AggregateFunctionRequest<'_>,
-    ) -> Result<v2::AggregateFunctionRef> {
-        let features = if IS_AND {
-            Self::BOOL_AND_FEATURES
-        } else {
-            Self::BOOL_OR_FEATURES
-        };
-        let names = if IS_AND {
-            &["bool_and"][..]
-        } else {
-            &["bool_or"][..]
-        };
-        v2::build_default_name_route_with_unary_input(
-            request,
-            names,
-            features,
-            false,
-            v2::UnaryAggregateFunctionBuildInputFns::new(
-                Self::create::<IS_AND>,
-                Self::create::<IS_AND>,
-                Self::create::<IS_AND>,
-                v2::UnaryDistinctBuildFn::PlainAlias(Self::create::<IS_AND>),
-            ),
-        )
-    }
-
     fn create<const IS_AND: bool>(
         build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<v2::AggregateFunctionRef> {
