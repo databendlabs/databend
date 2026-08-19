@@ -196,6 +196,16 @@ mod bitmap {
         });
     }
 
+    #[divan::bench(args = [1000, 65535])]
+    fn bitmap_not_count(bencher: divan::Bencher, rows: usize) {
+        let column = build_bitmap_column(rows as u64, 125);
+        let entry = column.into();
+
+        bencher.bench(|| {
+            eval_bitmap_result(&entry, rows, "bitmap_not_count");
+        });
+    }
+
     #[divan::bench(args = [100_000, 1_000_000])]
     fn bitmap_intersect_empty(bencher: divan::Bencher, rows: usize) {
         let column = build_disjoint_bitmap_column(rows as u64);
