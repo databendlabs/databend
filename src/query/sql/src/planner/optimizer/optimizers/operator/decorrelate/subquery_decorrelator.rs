@@ -747,7 +747,7 @@ impl SubqueryDecorrelatorOptimizer {
                             subquery.span,
                             right_condition,
                             left_condition,
-                        ));
+                        )?);
                         (vec![], vec![], vec![other_condition])
                     };
                 // Add a marker column to save comparison result.

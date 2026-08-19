@@ -434,7 +434,7 @@ impl SubqueryDecorrelatorOptimizer {
                     subquery.span,
                     child_expr,
                     right_condition,
-                ))];
+                )?)];
 
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -656,7 +656,7 @@ impl SubqueryDecorrelatorOptimizer {
                             subquery.span,
                             *child_expr.clone(),
                             scalar,
-                        ))));
+                        )?)));
                     }
                     (None, None) => match subquery.typ {
                         SubqueryType::Scalar => {
@@ -822,13 +822,15 @@ impl SubqueryDecorrelatorOptimizer {
                                 .data_type()
                                 .is_nullable_or_null()
                                 .then(|| value_argument.clone());
-                            let contains = ScalarExpr::FunctionCall(FunctionCall {
+                            let mut contains = FunctionCall {
                                 span: subquery.span,
                                 func_name: "contains".to_string(),
                                 params: vec![],
                                 arguments: vec![array_argument, value_argument],
                                 return_type: Box::new(DataType::Boolean),
-                            });
+                            };
+                            contains.refresh_return_type()?;
+                            let contains = ScalarExpr::FunctionCall(contains);
                             let Some(value_argument) = nullable_value else {
                                 return Ok(Some(contains));
                             };

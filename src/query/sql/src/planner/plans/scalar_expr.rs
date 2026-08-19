@@ -1006,31 +1006,30 @@ impl SubqueryComparisonOp {
         }
     }
 
-    pub fn to_func_call(&self, span: Span, left: ScalarExpr, right: ScalarExpr) -> FunctionCall {
-        let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
+    pub fn to_func_call(
+        &self,
+        span: Span,
+        left: ScalarExpr,
+        right: ScalarExpr,
+    ) -> Result<FunctionCall> {
+        let mut arguments = vec![left, right];
         if let SubqueryComparisonOp::Like(escape) = self {
-            let mut arguments = vec![left, right];
             if let Some(escape) = escape {
                 arguments.push(ScalarExpr::ConstantExpr(ConstantExpr {
                     span,
                     value: Scalar::String(escape.clone()),
                 }))
             }
-            return FunctionCall {
-                span,
-                func_name: "like".to_string(),
-                params: vec![],
-                arguments,
-                return_type: Box::new(return_type),
-            };
         }
-        FunctionCall {
+        let mut function = FunctionCall {
             span,
             func_name: self.to_func_name().to_string(),
             params: vec![],
-            arguments: vec![left, right],
-            return_type: Box::new(return_type),
-        }
+            arguments,
+            return_type: Box::new(DataType::Boolean),
+        };
+        function.refresh_return_type()?;
+        Ok(function)
     }
 }
 
