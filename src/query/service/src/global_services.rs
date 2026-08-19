@@ -207,7 +207,7 @@ impl GlobalServices {
 
         Self::init_workload_mgr(config).await?;
 
-        if config.log.history.on {
+        if config.log.history.enabled() {
             GlobalHistoryLog::init(config, version).await?;
         }
         #[cfg(feature = "task-support")]
