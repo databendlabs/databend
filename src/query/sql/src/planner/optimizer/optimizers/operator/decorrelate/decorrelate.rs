@@ -24,6 +24,7 @@ use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::type_check::infer_function_return_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -818,16 +819,19 @@ impl SubqueryDecorrelatorOptimizer {
                             } else {
                                 *child_expr.clone()
                             };
-                            let return_type =
-                                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
-                                    &array_argument,
-                                    &value_argument,
-                                ]);
+                            let arguments = vec![array_argument, value_argument];
+                            let return_type = infer_function_return_type(
+                                subquery.span,
+                                "contains",
+                                &[],
+                                arguments.iter().map(ScalarExpr::data_type),
+                                &BUILTIN_FUNCTIONS,
+                            )?;
                             let func = ScalarExpr::FunctionCall(FunctionCall {
                                 span: subquery.span,
                                 func_name: "contains".to_string(),
                                 params: vec![],
-                                arguments: vec![array_argument, value_argument],
+                                arguments,
                                 return_type: Box::new(return_type),
                             });
                             return Ok(Some(func));
