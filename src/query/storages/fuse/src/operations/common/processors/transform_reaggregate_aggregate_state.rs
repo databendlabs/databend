@@ -28,15 +28,18 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::Transform;
 
 /// Merge equal group keys inside one newly written physical block.
 ///
+/// Only aggregating materialized views persist `AggregateState` columns.
 /// Compact/recluster already gathers neighboring rows into the same block.
 /// Re-aggregating that block with `*_merge_state` collapses duplicate groups
-/// without rewriting the whole materialized view.
+/// without rewriting the whole materialized view. Non-aggregate MVs and
+/// ordinary tables skip this transform.
 #[derive(Clone)]
 pub struct TransformReaggregateAggregateStateBlock {
     table_column_count: usize,
@@ -158,10 +161,16 @@ impl Transform for TransformReaggregateAggregateStateBlock {
 
 /// Compact and recluster already gather neighboring rows into one physical block.
 /// Re-aggregate that block so equal group keys collapse before serialization.
+///
+/// Non-aggregate materialized views and ordinary tables are left unchanged.
 pub fn add_aggregate_state_reaggregate_transform(
     pipeline: &mut Pipeline,
+    engine: &str,
     table_schema: &TableSchema,
 ) -> Result<()> {
+    if !is_materialized_view_engine(engine) {
+        return Ok(());
+    }
     let Some(transform) = TransformReaggregateAggregateStateBlock::try_create(table_schema)? else {
         return Ok(());
     };
@@ -238,6 +247,23 @@ mod tests {
         let output = transform.transform(input)?;
         assert_eq!(output.num_rows(), 1);
         assert_eq!(output.num_columns(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn non_aggregate_schema_skips_reaggregate() -> Result<()> {
+        let schema = TableSchema::new(vec![
+            TableField::new("item_id", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new(
+                "doubled_amount",
+                TableDataType::Number(NumberDataType::Int32),
+            ),
+            TableField::new(
+                "_mv_source_row_id",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+        ]);
+        assert!(TransformReaggregateAggregateStateBlock::try_create(&schema)?.is_none());
         Ok(())
     }
 }

@@ -183,6 +183,7 @@ impl IPhysicalPlan for CompactSource {
         });
         add_aggregate_state_reaggregate_transform(
             &mut builder.main_pipeline,
+            table.engine(),
             table.schema().as_ref(),
         )?;
 
