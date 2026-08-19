@@ -31,10 +31,18 @@ pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION: &str =
     "materialized_view_source_snapshot_location";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME: &str =
+    "materialized_view_source_database_name";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID: &str = "materialized_view_source_table_id";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME: &str = "materialized_view_source_table_name";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ: &str = "materialized_view_source_table_seq";
 pub const OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS: &str =
     "materialized_view_aggregate_compaction_delta_blocks";
+/// Reason reported when the source table bound by CREATE no longer has the same lifecycle identity.
+pub const MATERIALIZED_VIEW_INVALID_SOURCE_REASON: &str =
+    "source table was dropped, renamed, or replaced";
+/// Reason reported when the database name persisted in the MV definition no longer resolves.
+pub const MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON: &str = "source database was renamed";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
 pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
@@ -132,7 +140,9 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
     r
@@ -150,7 +160,9 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
     r
@@ -251,7 +263,19 @@ mod tests {
     #[test]
     fn test_materialized_view_source_table_id_is_reserved() {
         assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME
+        ));
+        assert!(is_reserved_opt_key(
             OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID
+        ));
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME
         ));
         assert!(is_reserved_opt_key(
             OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ
