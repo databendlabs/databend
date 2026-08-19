@@ -197,31 +197,23 @@ impl v2::AggregateFunctionBuilder for AggregateFunctionDefinition {
     }
 
     fn build(&self, request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
+        let nested = v2::merge_combinator::NestedAggregate {
+            name: self.name,
+            aliases: self.aliases,
+            arguments: &self.arguments,
+            build: self.builder,
+        };
         if request
             .name
             .eq_ignore_ascii_case(&suffixed_name(self.name, "merge"))
         {
-            return v2::merge_combinator::try_create(
-                request,
-                self.name,
-                self.aliases,
-                &self.arguments,
-                self.builder,
-                false,
-            );
+            return v2::merge_combinator::try_create(request, nested, false);
         }
         if request
             .name
             .eq_ignore_ascii_case(&suffixed_name(self.name, "merge_state"))
         {
-            return v2::merge_combinator::try_create(
-                request,
-                self.name,
-                self.aliases,
-                &self.arguments,
-                self.builder,
-                true,
-            );
+            return v2::merge_combinator::try_create(request, nested, true);
         }
         (self.builder)(request)
     }
