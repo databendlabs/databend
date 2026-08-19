@@ -33,6 +33,7 @@ use crate::aggregate::AggrState;
 use crate::aggregate::AggrStateLoc;
 use crate::aggregate::AggrStateType;
 use crate::aggregate::StateAddr;
+use crate::aggregate::StateSerdeType;
 use crate::types::DataType;
 
 pub type AggregateFunctionRef = Arc<dyn FunctionInstance>;
@@ -510,6 +511,10 @@ pub trait FunctionInstance: fmt::Display + Send + Sync + 'static {
 
     fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()>;
 
+    fn state_data_type(&self) -> DataType {
+        StateSerdeType::new(self.state().serde_items().to_vec()).data_type()
+    }
+
     /// # Safety
     /// The caller must ensure the state belongs to this function.
     unsafe fn drop_state(&self, state: AggrState<'_>);
@@ -721,6 +726,21 @@ impl AggregateFunctionRegistry {
             .unwrap_or(&[])
     }
 
+    pub fn contains(&self, name: &str) -> bool {
+        !self.descriptors(name).is_empty()
+    }
+
+    pub fn contains_base(&self, name: &str) -> bool {
+        let name = name.to_lowercase();
+        self.functions.contains_key(&name)
+    }
+
+    pub fn is_decomposable(&self, name: &str) -> bool {
+        self.descriptors(name)
+            .iter()
+            .any(|descriptor| descriptor.features().is_decomposable)
+    }
+
     pub fn resolve(&self, request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
         let requested_name = request.name.to_lowercase();
         let name = self.canonical_name(request.name);
@@ -798,6 +818,42 @@ impl DistinctPolicy {
 pub struct AggregateStatesLayout {
     pub layout: Layout,
     pub states_loc: Vec<Box<[AggrStateLoc]>>,
+    pub serialize_type: Vec<StateSerdeType>,
+}
+
+pub fn get_states_layout(functions: &[AggregateFunctionRef]) -> Result<AggregateStatesLayout> {
+    let mut states = Vec::new();
+    let mut offsets = Vec::with_capacity(functions.len() + 1);
+    let mut serialize_type = Vec::with_capacity(functions.len());
+    offsets.push(0);
+
+    for function in functions {
+        states.extend_from_slice(function.state().fields());
+        offsets.push(states.len());
+        serialize_type.push(StateSerdeType::new(function.state().serde_items().to_vec()));
+    }
+
+    let (layout, locs) = sort_states(states);
+    let states_loc = offsets
+        .windows(2)
+        .map(|window| locs[window[0]..window[1]].to_vec().into_boxed_slice())
+        .collect();
+
+    Ok(AggregateStatesLayout {
+        layout,
+        states_loc,
+        serialize_type,
+    })
+}
+
+impl From<AggregateStatesLayout> for crate::aggregate::StatesLayout {
+    fn from(layout: AggregateStatesLayout) -> Self {
+        crate::aggregate::StatesLayout {
+            layout: layout.layout,
+            states_loc: layout.states_loc,
+            serialize_type: layout.serialize_type,
+        }
+    }
 }
 
 pub struct AggregateStateOwner {
@@ -849,25 +905,6 @@ impl Drop for AggregateStateOwner {
             }
         }
     }
-}
-
-fn get_states_layout(functions: &[AggregateFunctionRef]) -> Result<AggregateStatesLayout> {
-    let mut states = Vec::new();
-    let mut offsets = Vec::with_capacity(functions.len() + 1);
-    offsets.push(0);
-
-    for function in functions {
-        states.extend_from_slice(function.state().fields());
-        offsets.push(states.len());
-    }
-
-    let (layout, locs) = sort_states(states);
-    let states_loc = offsets
-        .windows(2)
-        .map(|window| locs[window[0]..window[1]].to_vec().into_boxed_slice())
-        .collect();
-
-    Ok(AggregateStatesLayout { layout, states_loc })
 }
 
 fn sort_states(states: Vec<AggrStateType>) -> (Layout, Vec<AggrStateLoc>) {

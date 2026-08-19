@@ -20,10 +20,10 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::aggregate::aggregate_function_v2 as v2;
+use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRef;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionRef;
 use databend_common_functions::aggregates::StatesLayout;
-use databend_common_functions::aggregates::get_states_layout;
 use databend_common_sql::IndexType;
 use itertools::Itertools;
 
@@ -58,7 +58,7 @@ impl AggregatorParams {
         max_block_bytes: usize,
     ) -> Result<Arc<AggregatorParams>> {
         let states_layout = if !agg_funcs.is_empty() {
-            Some(get_states_layout(agg_funcs)?)
+            Some(v2::get_states_layout(agg_funcs)?.into())
         } else {
             None
         };
@@ -77,16 +77,18 @@ impl AggregatorParams {
     }
 
     pub fn has_distinct_combinator(&self) -> bool {
-        self.aggregate_functions
-            .iter()
-            .any(|f| f.name().contains("DistinctCombinator"))
+        self.aggregate_functions.iter().any(|f| {
+            f.signature().name.contains("distinct")
+                || f.features().distinct_policy
+                    == databend_common_expression::aggregate::aggregate_function_v2::DistinctPolicy::Required
+        })
     }
 
     pub fn empty_result_block(&self) -> DataBlock {
         let columns = self
             .aggregate_functions
             .iter()
-            .map(|f| ColumnBuilder::with_capacity(&f.return_type().unwrap(), 0).build())
+            .map(|f| ColumnBuilder::with_capacity(&f.signature().return_type, 0).build())
             .chain(
                 self.group_data_types
                     .iter()

@@ -497,12 +497,13 @@ impl<'a> MatchedNameStep<'a> {
         })
     }
 
-    pub fn state_null_argument_result(&self) -> Option<AggregateFunctionRef> {
+    pub fn state_null_argument_result(&self) -> Result<Option<AggregateFunctionRef>> {
         self.request
             .args_type
             .iter()
             .any(DataType::is_null)
             .then(|| state_combinator::create_state_null_result_function(self.request.clone()))
+            .transpose()
     }
 
     pub fn state_nullable_input_plan(

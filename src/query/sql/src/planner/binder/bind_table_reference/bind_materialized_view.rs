@@ -32,8 +32,9 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::MVDefinition;
@@ -216,13 +217,14 @@ impl Binder {
                     unreachable!()
                 };
                 let merge_name = format!("{}_merge", state.function_name);
-                let function = AggregateFunctionFactory::instance().get(
-                    &merge_name,
-                    vec![],
-                    vec![argument_type.clone()],
-                    vec![],
-                )?;
-                let return_type = function.return_type()?;
+                let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+                    name: &merge_name,
+                    params: &[],
+                    args_type: &[argument_type.clone()],
+                    distinct: false,
+                    order_by: &[],
+                })?;
+                let return_type = function.signature().return_type.clone();
                 let output = self
                     .create_derived_column_binding(column.column_name.clone(), return_type.clone());
                 aggregate_functions.push(ScalarItem {

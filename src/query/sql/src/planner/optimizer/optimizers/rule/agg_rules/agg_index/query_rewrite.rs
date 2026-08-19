@@ -21,7 +21,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use log::info;
 
 use super::super::view_rewrite::QueryInfo;
@@ -108,7 +108,6 @@ impl AggIndexView {
         // query can use those columns to compute expressions.
         let mut index_fields = Vec::with_capacity(query_info.output_cols.len());
         let mut index_output_cols = HashMap::with_capacity(query_info.output_cols.len());
-        let factory = AggregateFunctionFactory::instance();
         for (index, item) in query_info.output_cols.iter().enumerate() {
             let display_name = format_scalar(&item.scalar, &query_info.column_map);
 
@@ -125,19 +124,27 @@ impl AggIndexView {
                         ScalarExpr::AggregateFunction(func) => func,
                         _ => unreachable!(),
                     };
-                    let func = factory.get(
-                        &func.func_name,
-                        func.params.clone(),
-                        func.args
-                            .iter()
-                            .map(|arg| arg.data_type())
-                            .collect::<Result<_>>()?,
-                        func.sort_descs
+                    let args_type = func
+                        .args
+                        .iter()
+                        .map(|arg| arg.data_type())
+                        .collect::<Result<Vec<_>>>()?;
+                    let order_by = databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by(
+                        &func
+                            .sort_descs
                             .iter()
                             .map(|desc| desc.try_into())
-                            .collect::<Result<_>>()?,
+                            .collect::<Result<Vec<_>>>()?,
                     )?;
-                    (func.serialize_data_type(), true)
+                    let func = AGGR_REGISTRY
+                        .resolve(databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest {
+                            name: &func.func_name,
+                            params: &func.params,
+                            args_type: &args_type,
+                            distinct: false,
+                            order_by: &order_by,
+                        })?;
+                    (func.state_data_type(), true)
                 }
                 None => (item.scalar.data_type().unwrap(), false),
             };

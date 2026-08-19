@@ -23,7 +23,6 @@ use databend_common_expression::StateAddr;
 use super::*;
 use crate::aggregates::AggrStateRegistry;
 use crate::aggregates::AggregateFunction as LegacyAggregateFunction;
-use crate::aggregates::AggregateFunctionRef as LegacyAggregateFunctionRef;
 
 pub struct AggregateFunctionV2LegacyAdapter {
     function: AggregateFunctionRef,
@@ -34,7 +33,7 @@ impl AggregateFunctionV2LegacyAdapter {
     pub fn create(
         function: AggregateFunctionRef,
         order_by: Vec<AggregateRuntimeOrderByItem>,
-    ) -> LegacyAggregateFunctionRef {
+    ) -> crate::aggregates::AggregateFunctionRef {
         Arc::new(Self { function, order_by })
     }
 }

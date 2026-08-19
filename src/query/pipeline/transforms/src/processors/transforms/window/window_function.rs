@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cell::Cell;
-use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
@@ -25,19 +24,21 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
 use databend_common_expression::SymbolOrOffset;
-use databend_common_expression::get_states_layout;
+use databend_common_expression::aggregate::aggregate_function_v2 as v2;
+use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowInput;
+use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRef;
+use databend_common_expression::aggregate::aggregate_function_v2::MergeResultInput;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_functions::aggregates::AggregateFunction;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use databend_common_sql::executor::physical_plans::window::LagLeadDefault;
 use databend_common_sql::executor::physical_plans::window::WindowFunction;
 
 #[derive(Clone)]
 pub enum WindowFunctionInfo {
     // (func instance, argument offsets)
-    Aggregate(Arc<dyn AggregateFunction>, Vec<usize>),
+    Aggregate(AggregateFunctionRef, Vec<usize>),
     RowNumber,
     Rank,
     DenseRank,
@@ -52,7 +53,7 @@ type Arena = bumpalo::Bump;
 pub struct WindowFuncAggImpl {
     // Need to hold arena until `drop`.
     _arena: Arena,
-    agg: Arc<dyn AggregateFunction>,
+    agg: AggregateFunctionRef,
     addr: StateAddr,
     loc: Box<[AggrStateLoc]>,
     args: Vec<usize>,
@@ -64,7 +65,7 @@ unsafe impl Send for WindowFuncAggImpl {}
 impl WindowFuncAggImpl {
     #[inline]
     pub fn reset(&self) {
-        if self.initialized.replace(false) && self.agg.need_manual_drop_state() {
+        if self.initialized.replace(false) && self.agg.state().need_manual_drop() {
             unsafe {
                 self.agg.drop_state(AggrState::new(self.addr, &self.loc));
             }
@@ -80,21 +81,26 @@ impl WindowFuncAggImpl {
 
     #[inline]
     pub fn accumulate_row(&self, args: ProjectedBlock, row: usize) -> Result<()> {
-        self.agg
-            .accumulate_row(AggrState::new(self.addr, &self.loc), args, row)
+        self.agg.accumulate_row(AccumulateRowInput {
+            state: AggrState::new(self.addr, &self.loc),
+            columns: args,
+            row,
+        })
     }
 
     #[inline]
     pub fn merge_result(&self, builder: &mut ColumnBuilder) -> Result<()> {
-        self.agg
-            .merge_result(AggrState::new(self.addr, &self.loc), true, builder)
+        self.agg.merge_result_read_only(MergeResultInput {
+            state: AggrState::new(self.addr, &self.loc),
+            builder,
+        })
     }
 }
 
 impl Drop for WindowFuncAggImpl {
     fn drop(&mut self) {
         drop_guard(move || {
-            if self.initialized.get() && self.agg.need_manual_drop_state() {
+            if self.initialized.get() && self.agg.state().need_manual_drop() {
                 unsafe {
                     self.agg.drop_state(AggrState::new(self.addr, &self.loc));
                 }
@@ -227,12 +233,13 @@ impl WindowFunctionInfo {
                         }
                     })
                     .collect::<Vec<_>>();
-                let agg_func = AggregateFunctionFactory::instance().get(
-                    agg.sig.name.as_str(),
-                    agg.sig.params.clone(),
-                    agg.sig.args.clone(),
-                    remapping_sort_descs,
-                )?;
+                let agg_func = AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest {
+            name: agg.sig.name.as_str(),
+            params: &agg.sig.params.clone(),
+            args_type: &agg.sig.args.clone(),
+            distinct: false,
+            order_by: &databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by(&remapping_sort_descs)?,
+        })?;
                 Self::Aggregate(agg_func, args)
             }
             WindowFunction::RowNumber => Self::RowNumber,
@@ -270,7 +277,7 @@ impl WindowFunctionImpl {
         Ok(match window {
             WindowFunctionInfo::Aggregate(agg, args) => {
                 let arena = Arena::new();
-                let mut states_layout = get_states_layout(std::slice::from_ref(&agg))?;
+                let mut states_layout = v2::get_states_layout(std::slice::from_ref(&agg))?;
                 let addr = arena.alloc_layout(states_layout.layout).into();
                 let loc = states_layout.states_loc.pop().unwrap();
                 let agg = WindowFuncAggImpl {
@@ -297,7 +304,7 @@ impl WindowFunctionImpl {
 
     pub fn return_type(&self) -> Result<DataType> {
         Ok(match self {
-            Self::Aggregate(agg) => agg.agg.return_type()?,
+            Self::Aggregate(agg) => agg.agg.signature().return_type.clone(),
             Self::RowNumber | Self::Rank | Self::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
@@ -325,12 +332,22 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use databend_common_exception::Result;
-    use databend_common_expression::AggrStateRegistry;
     use databend_common_expression::AggrStateType;
-    use databend_common_expression::BlockEntry;
     use databend_common_expression::StateSerdeItem;
-    use databend_common_expression::types::Bitmap;
-    use databend_common_functions::aggregates::AggregateFunctionRef;
+    use databend_common_expression::aggregate::aggregate_function_v2::AccumulateInput;
+    use databend_common_expression::aggregate::aggregate_function_v2::AccumulateKeysInput;
+    use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowCountInput;
+    use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowCountKeysInput;
+    use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowInput;
+    use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRef;
+    use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionSignature;
+    use databend_common_expression::aggregate::aggregate_function_v2::AggregateStateDescription;
+    use databend_common_expression::aggregate::aggregate_function_v2::FunctionFeatures;
+    use databend_common_expression::aggregate::aggregate_function_v2::FunctionInstance;
+    use databend_common_expression::aggregate::aggregate_function_v2::MergeResultInput;
+    use databend_common_expression::aggregate::aggregate_function_v2::MergeSerializedInput;
+    use databend_common_expression::aggregate::aggregate_function_v2::MergeStatesInput;
+    use databend_common_expression::aggregate::aggregate_function_v2::SerializeInput;
 
     use super::*;
 
@@ -354,85 +371,92 @@ mod tests {
         }
     }
 
-    impl AggregateFunction for DropCountingAggregate {
-        fn name(&self) -> &str {
-            "DropCountingAggregate"
+    impl FunctionInstance for DropCountingAggregate {
+        fn signature(&self) -> &AggregateFunctionSignature {
+            static SIGNATURE: std::sync::LazyLock<AggregateFunctionSignature> =
+                std::sync::LazyLock::new(|| AggregateFunctionSignature {
+                    name: "drop_counting_aggregate".to_string(),
+                    params: vec![],
+                    args_type: vec![],
+                    distinct: false,
+                    order_by: vec![],
+                    return_type: DataType::Null,
+                });
+            &SIGNATURE
         }
 
-        fn return_type(&self) -> Result<DataType> {
-            Ok(DataType::Null)
+        fn features(&self) -> &FunctionFeatures {
+            static FEATURES: FunctionFeatures = FunctionFeatures {
+                is_decomposable: false,
+                sort_policy: databend_common_expression::aggregate::aggregate_function_v2::SortPolicy::Unsupported,
+                distinct_policy: databend_common_expression::aggregate::aggregate_function_v2::DistinctPolicy::Unsupported,
+                category: "",
+                description: "",
+                definition: "",
+                example: "",
+            };
+            &FEATURES
         }
 
-        fn init_state(&self, place: AggrState) {
+        fn state(&self) -> &AggregateStateDescription {
+            static STATE: std::sync::LazyLock<AggregateStateDescription> =
+                std::sync::LazyLock::new(|| {
+                    AggregateStateDescription::new(
+                        vec![AggrStateType::Custom(Layout::new::<DropCountingState>())],
+                        vec![StateSerdeItem::DataType(DataType::Null)],
+                    )
+                    .with_manual_drop(true)
+                });
+            &STATE
+        }
+
+        fn init_state(&self, state: AggrState) {
             let drops = self.drops.clone();
-            place.write(|| DropCountingState { drops });
+            state.write(|| DropCountingState { drops });
         }
 
-        fn register_state(&self, registry: &mut AggrStateRegistry) {
-            registry.register(AggrStateType::Custom(Layout::new::<DropCountingState>()));
-        }
-
-        fn accumulate(
-            &self,
-            _place: AggrState,
-            _columns: ProjectedBlock,
-            _validity: Option<&Bitmap>,
-            _input_rows: usize,
-        ) -> Result<()> {
+        fn accumulate(&self, _input: AccumulateInput<'_>) -> Result<()> {
             Ok(())
         }
 
-        fn accumulate_row(
-            &self,
-            _place: AggrState,
-            _columns: ProjectedBlock,
-            _row: usize,
-        ) -> Result<()> {
+        fn accumulate_keys(&self, _input: AccumulateKeysInput<'_>) -> Result<()> {
             Ok(())
         }
 
-        fn serialize_type(&self) -> Vec<StateSerdeItem> {
-            vec![]
-        }
-
-        fn batch_serialize(
-            &self,
-            _places: &[StateAddr],
-            _loc: &[AggrStateLoc],
-            _builders: &mut [ColumnBuilder],
-        ) -> Result<()> {
+        fn accumulate_row(&self, _input: AccumulateRowInput<'_>) -> Result<()> {
             Ok(())
         }
 
-        fn batch_merge(
-            &self,
-            _places: &[StateAddr],
-            _loc: &[AggrStateLoc],
-            _state: &BlockEntry,
-            _filter: Option<&Bitmap>,
-        ) -> Result<()> {
+        fn accumulate_row_count(&self, _input: AccumulateRowCountInput<'_>) -> Result<()> {
             Ok(())
         }
 
-        fn merge_states(&self, _place: AggrState, _rhs: AggrState) -> Result<()> {
+        fn accumulate_row_count_keys(&self, _input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
             Ok(())
         }
 
-        fn merge_result(
-            &self,
-            _place: AggrState,
-            _read_only: bool,
-            _builder: &mut ColumnBuilder,
-        ) -> Result<()> {
+        fn serialize(&self, _input: SerializeInput<'_>) -> Result<()> {
             Ok(())
         }
 
-        fn need_manual_drop_state(&self) -> bool {
-            true
+        fn merge_serialized(&self, _input: MergeSerializedInput<'_>) -> Result<()> {
+            Ok(())
         }
 
-        unsafe fn drop_state(&self, place: AggrState) {
-            let state = place.get::<DropCountingState>();
+        fn merge_states(&self, _input: MergeStatesInput<'_>) -> Result<()> {
+            Ok(())
+        }
+
+        fn merge_result(&self, _input: MergeResultInput<'_>) -> Result<()> {
+            Ok(())
+        }
+
+        fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
+            self.merge_result(input)
+        }
+
+        unsafe fn drop_state(&self, state: AggrState) {
+            let state = state.get::<DropCountingState>();
             unsafe { std::ptr::drop_in_place(state) };
         }
     }
@@ -444,7 +468,7 @@ mod tests {
             drops: drops.clone(),
         });
         let arena = Arena::new();
-        let mut states_layout = get_states_layout(std::slice::from_ref(&agg))?;
+        let mut states_layout = v2::get_states_layout(std::slice::from_ref(&agg))?;
         let addr = arena.alloc_layout(states_layout.layout).into();
         let loc = states_layout.states_loc.pop().unwrap();
 

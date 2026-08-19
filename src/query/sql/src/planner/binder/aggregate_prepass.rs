@@ -27,7 +27,7 @@ use databend_common_ast::visit::Visitor;
 use databend_common_ast::visit::Walk;
 use databend_common_base::runtime::block_on;
 use databend_common_exception::Result;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_users::UserApiProvider;
@@ -66,7 +66,7 @@ fn is_aggregate_target(
     }
 
     let func_name = normalize_identifier(&func.name, name_resolution_ctx).name;
-    AggregateFunctionFactory::instance().contains(func_name.as_str())
+    AGGR_REGISTRY.contains(func_name.as_str())
         || func_name.eq_ignore_ascii_case("grouping")
         || udaf_names.contains(func_name.as_str())
 }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::Layout;
 use std::sync::Arc;
 
 use databend_common_column::bitmap::Bitmap;
@@ -21,14 +22,37 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::StateSerdeType;
+use databend_common_expression::types::AggregateFunctionParam;
+use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::utils::column_merge_validity;
 
 use crate::aggregates::aggregate_function_v2_impl::adaptors_v2 as v2;
+
+pub(crate) fn aggregate_state_data_type(
+    function_name: &str,
+    params: &[databend_common_expression::Scalar],
+    argument_types: Vec<DataType>,
+    physical_type: DataType,
+) -> Result<DataType> {
+    let params = params
+        .iter()
+        .cloned()
+        .map(AggregateFunctionParam::try_from)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(DataType::AggregateState(Box::new(AggregateStateDataType {
+        function_name: function_name.to_string(),
+        params,
+        argument_types,
+        state_type: Box::new(physical_type),
+    })))
+}
 
 pub(crate) struct AggregateStateImplementation<I> {
     nested: I,
@@ -296,27 +320,42 @@ pub(crate) fn nullable_input_state_description(
 
 pub(crate) fn create_state_null_result_function(
     request: v2::AggregateFunctionRequest<'_>,
-) -> v2::AggregateFunctionRef {
-    let return_type = DataType::Number(NumberDataType::UInt64);
+) -> Result<v2::AggregateFunctionRef> {
+    let (data_type, result) = (
+        DataType::Number(NumberDataType::UInt64),
+        Scalar::Number(NumberScalar::UInt64(0)),
+    );
+    let serde_item = StateSerdeItem::DataType(data_type.clone());
+    let physical_type = StateSerdeType::new(vec![serde_item.clone()]).data_type();
+    let function_name = request
+        .name
+        .strip_suffix("_state")
+        .expect("state combinator names must end with _state");
+    let _function_name = function_name;
+    let _physical_type = physical_type;
     let signature = v2::AggregateFunctionSignature {
         name: request.name.to_string(),
         params: request.params.to_vec(),
         args_type: request.args_type.to_vec(),
         distinct: request.distinct,
         order_by: request.order_by.to_vec(),
-        return_type: return_type.clone(),
+        return_type: data_type,
     };
     let state =
-        v2::AggregateStateDescription::new(vec![], vec![StateSerdeItem::DataType(return_type)]);
-    Arc::new(v2::AggregateFunction::new(
+        v2::AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
+            serde_item,
+        ]);
+    Ok(Arc::new(v2::AggregateFunction::new(
         signature,
         AggregateStateNullResultImplementation::FEATURES,
         state,
-        AggregateStateNullResultImplementation,
-    ))
+        AggregateStateNullResultImplementation { result },
+    )))
 }
 
-struct AggregateStateNullResultImplementation;
+struct AggregateStateNullResultImplementation {
+    result: Scalar,
+}
 
 impl AggregateStateNullResultImplementation {
     const FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
@@ -329,8 +368,8 @@ impl AggregateStateNullResultImplementation {
         example: "",
     };
 
-    fn push_result(builder: &mut ColumnBuilder) {
-        builder.push(ScalarRef::Number(NumberScalar::UInt64(0)));
+    fn push_result(&self, builder: &mut ColumnBuilder) {
+        builder.push(self.result.as_ref());
     }
 }
 
@@ -359,7 +398,7 @@ impl v2::AggrImpl for AggregateStateNullResultImplementation {
 
     fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
         for _state in input.states.iter() {
-            Self::push_result(&mut input.builders[0]);
+            self.push_result(&mut input.builders[0]);
         }
         Ok(())
     }
@@ -373,7 +412,11 @@ impl v2::AggrImpl for AggregateStateNullResultImplementation {
     }
 
     fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
-        Self::push_result(input.builder);
+        if let Some(fields) = input.builder.as_tuple_mut() {
+            self.push_result(&mut fields[0]);
+        } else {
+            self.push_result(input.builder);
+        }
         Ok(())
     }
 

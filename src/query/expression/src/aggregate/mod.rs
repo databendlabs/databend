@@ -31,8 +31,10 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+pub use aggregate_function::AggregateFunction as LegacyAggregateFunction;
 pub use aggregate_function::*;
 pub use aggregate_function_state::*;
+pub use aggregate_function_v2::FunctionInstance;
 pub use aggregate_hashtable::*;
 pub use aggregate_meta::*;
 pub use group_hash::*;

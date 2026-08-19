@@ -65,16 +65,9 @@ impl AggregateFunctionDefinition {
         registry: &mut v2::AggregateFunctionRegistry,
         register_distinct: bool,
     ) {
+        self.register_with_merge_combinators(registry);
         let aliases = aliases_to_strings(self.aliases);
         let builder = Arc::new(self.clone());
-        register_descriptor(
-            registry,
-            self.name.to_string(),
-            aliases.clone(),
-            self.arguments.clone(),
-            self.features.clone(),
-            builder.clone(),
-        );
         register_descriptor(
             registry,
             suffixed_name(self.name, "if"),
@@ -101,6 +94,42 @@ impl AggregateFunctionDefinition {
                 builder,
             );
         }
+    }
+
+    pub(super) fn register_with_merge_combinators(
+        &self,
+        registry: &mut v2::AggregateFunctionRegistry,
+    ) {
+        let aliases = aliases_to_strings(self.aliases);
+        let builder = Arc::new(self.clone());
+        register_descriptor(
+            registry,
+            self.name.to_string(),
+            aliases.clone(),
+            self.arguments.clone(),
+            self.features.clone(),
+            builder.clone(),
+        );
+        let arguments =
+            v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any()]);
+        let mut features = self.features.clone();
+        features.distinct_policy = v2::DistinctPolicy::Unsupported;
+        register_descriptor(
+            registry,
+            suffixed_name(self.name, "merge"),
+            suffixed_aliases(&aliases, "merge"),
+            arguments.clone(),
+            features.clone(),
+            builder.clone(),
+        );
+        register_descriptor(
+            registry,
+            suffixed_name(self.name, "merge_state"),
+            suffixed_aliases(&aliases, "merge_state"),
+            arguments,
+            features,
+            builder,
+        );
     }
 
     pub(super) fn build_with_unary_input(
@@ -168,6 +197,30 @@ impl v2::AggregateFunctionBuilder for AggregateFunctionDefinition {
     }
 
     fn build(&self, request: v2::AggregateFunctionRequest<'_>) -> Result<v2::AggregateFunctionRef> {
+        if request
+            .name
+            .eq_ignore_ascii_case(&suffixed_name(self.name, "merge"))
+        {
+            return v2::merge_combinator::try_create(
+                request,
+                self.name,
+                self.aliases,
+                self.builder,
+                false,
+            );
+        }
+        if request
+            .name
+            .eq_ignore_ascii_case(&suffixed_name(self.name, "merge_state"))
+        {
+            return v2::merge_combinator::try_create(
+                request,
+                self.name,
+                self.aliases,
+                self.builder,
+                true,
+            );
+        }
         (self.builder)(request)
     }
 }

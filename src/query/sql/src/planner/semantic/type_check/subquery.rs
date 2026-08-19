@@ -26,7 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Symbol;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AggregateFunctionRegistry;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use smallvec::smallvec;
@@ -400,14 +400,14 @@ where A: super::TypeCheckAdapter
                     #[visitor(Expr(enter), ASTFunctionCall(enter))]
                     struct AggFuncVisitor {
                         contain_agg: bool,
-                        aggregate_function_factory: &'static AggregateFunctionFactory,
+                        aggregate_function_registry: &'static AggregateFunctionRegistry,
                     }
                     impl AggFuncVisitor {
                         fn enter_ast_function_call(&mut self, func: &ASTFunctionCall) {
                             self.contain_agg = self.contain_agg
                                 || self
-                                    .aggregate_function_factory
-                                    .contains(func.name.to_string());
+                                    .aggregate_function_registry
+                                    .contains(&func.name.to_string());
                         }
                         fn enter_expr(&mut self, expr: &Expr) {
                             self.contain_agg = self.contain_agg
@@ -416,7 +416,7 @@ where A: super::TypeCheckAdapter
                     }
                     let mut visitor = AggFuncVisitor {
                         contain_agg: false,
-                        aggregate_function_factory: self.adapter.aggregate_function_factory(),
+                        aggregate_function_registry: self.adapter.aggregate_function_registry(),
                     };
                     select.drive(&mut visitor);
                     contain_agg = Some(visitor.contain_agg);

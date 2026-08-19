@@ -12,6 +12,7 @@ use databend_common_expression::aggregate::aggregate_function_v2 as v2;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 
 use super::aggregate_simulation_support::eval_legacy_aggregate_for_test;
 
@@ -53,9 +54,7 @@ fn eval_v2_aggr_with_params_and_sort(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let registry =
-        databend_common_functions::aggregates::aggregate_function_v2_registry::instance();
-    let function = registry.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
         name,
         params,
         args_type: &args_type,
@@ -201,9 +200,7 @@ pub(super) fn simulate_two_groups_group_by_v2(
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
     let order_by = order_by_from_sort_descs(&sort_descs)?;
-    let registry =
-        databend_common_functions::aggregates::aggregate_function_v2_registry::instance();
-    let function = registry.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &args_type,
@@ -317,9 +314,7 @@ pub(super) fn assert_v2_read_only_matches_legacy(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let registry =
-        databend_common_functions::aggregates::aggregate_function_v2_registry::instance();
-    let function = registry.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &args_type,
@@ -380,9 +375,7 @@ pub(super) fn assert_v2_serialized_read_only_matches_legacy(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let registry =
-        databend_common_functions::aggregates::aggregate_function_v2_registry::instance();
-    let function = registry.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &args_type,

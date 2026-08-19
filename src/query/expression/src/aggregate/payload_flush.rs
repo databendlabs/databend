@@ -17,6 +17,8 @@ use databend_common_io::prelude::bincode_deserialize_from_slice;
 
 use super::BATCH_SIZE;
 use super::StateAddr;
+use super::aggregate_function_v2::AggregateStateSet;
+use super::aggregate_function_v2::SerializeInput;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
@@ -166,7 +168,13 @@ impl Payload {
                 .zip(builders.iter_mut())
             {
                 let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
-                func.batch_serialize(&state.state_places.as_slice()[0..row_count], loc, builders)?;
+                func.serialize(SerializeInput {
+                    states: AggregateStateSet::new(
+                        &state.state_places.as_slice()[0..row_count],
+                        loc,
+                    ),
+                    builders,
+                })?;
             }
 
             entries.extend(builders.into_iter().map(|builder| builder.build().into()));

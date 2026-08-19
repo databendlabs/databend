@@ -1615,12 +1615,13 @@ mod tests {
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
+    use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest;
     use databend_common_expression::block_debug::assert_blocks_eq;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
-    use databend_common_functions::aggregates::AggregateFunctionFactory;
+    use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
     use databend_common_pipeline::core::Event;
     use databend_common_pipeline::core::InputPort;
     use databend_common_pipeline::core::OutputPort;
@@ -1652,8 +1653,13 @@ mod tests {
         bounds: (FrameBound, FrameBound),
         arg_type: DataType,
     ) -> Result<TransformWindow> {
-        let agg =
-            AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type], vec![])?;
+        let agg = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+            name: "sum",
+            params: &vec![],
+            args_type: &vec![arg_type],
+            distinct: false,
+            order_by: &[],
+        })?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         TransformWindow::try_create_rows(
             InputPort::create(),
@@ -1675,8 +1681,13 @@ mod tests {
         bounds: (FrameBound, FrameBound),
         arg_type: DataType,
     ) -> Result<TransformWindow> {
-        let agg =
-            AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type], vec![])?;
+        let agg = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+            name: "sum",
+            params: &vec![],
+            args_type: &vec![arg_type],
+            distinct: false,
+            order_by: &[],
+        })?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         TransformWindow::try_create_rows(
             InputPort::create(),
@@ -2527,12 +2538,13 @@ mod tests {
         _unit: WindowFuncFrameUnits,
         bounds: (FrameBound, FrameBound),
     ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
-        let agg = AggregateFunctionFactory::instance().get(
-            "sum",
-            vec![],
-            vec![DataType::Number(NumberDataType::Int32)],
-            vec![],
-        )?;
+        let agg = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+            name: "sum",
+            params: &vec![],
+            args_type: &vec![DataType::Number(NumberDataType::Int32)],
+            distinct: false,
+            order_by: &[],
+        })?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         let input = InputPort::create();
         let output = OutputPort::create();

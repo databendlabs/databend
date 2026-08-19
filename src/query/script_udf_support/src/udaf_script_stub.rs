@@ -18,7 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunction;
+use databend_common_expression::aggregate::aggregate_function_v2 as v2;
 use databend_common_sql::plans::UDFScriptCode;
 
 pub fn create_udaf_script_function(
@@ -28,7 +28,7 @@ pub fn create_udaf_script_function(
     _state_fields: Vec<DataField>,
     _arguments: Vec<DataField>,
     _output_type: DataType,
-) -> Result<Arc<dyn AggregateFunction>> {
+) -> Result<v2::AggregateFunctionRef> {
     Err(ErrorCode::Unimplemented(
         "Script UDF runtime is disabled, rebuild with cargo feature 'script-udf'",
     ))

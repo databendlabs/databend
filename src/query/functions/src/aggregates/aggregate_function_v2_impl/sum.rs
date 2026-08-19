@@ -76,7 +76,7 @@ impl SumBuilder {
         let sum0 = Self::sum0_definition("sum0");
         let sum_zero = Self::sum0_definition("sum_zero");
 
-        sum.register(registry);
+        sum.register_with_merge_combinators(registry);
         AggregateFunctionDefinition::new(
             "sum_distinct",
             SumBuilder::sum_distinct_arguments(),
@@ -84,8 +84,8 @@ impl SumBuilder {
             SumBuilder::create_distinct,
         )
         .register(registry);
-        sum0.register(registry);
-        sum_zero.register(registry);
+        sum0.register_with_merge_combinators(registry);
+        sum_zero.register_with_merge_combinators(registry);
 
         AggregateFunctionDefinition::new(
             "sum_if",
@@ -417,13 +417,14 @@ impl UnaryState<IntervalType, IntervalType> for AggregateIntervalSumState {
         value: months_days_micros,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        self.value += value;
+        let res = self.value.total_micros() + value.total_micros();
+        self.value = months_days_micros(res as i128);
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        let sum = self.value.total_micros() + rhs.value.total_micros();
-        self.value = months_days_micros(sum as i128);
+        let res = self.value.total_micros() + rhs.value.total_micros();
+        self.value = months_days_micros(res as i128);
         Ok(())
     }
 
@@ -458,19 +459,25 @@ impl UnaryState<IntervalType, IntervalType> for AggregateIntervalSumState {
 
 impl SumBuilder {
     fn try_create_zero(request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
+        if (request.name.eq_ignore_ascii_case("sum0")
+            || request.name.eq_ignore_ascii_case("sum_zero"))
+            && request.args_type.iter().any(DataType::is_null)
+        {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Invalid argument type for {}, must be uint64",
+                request.name
+            )));
+        }
         let route = v2::AggregateFunctionNameRoutePath::root(request);
 
         if let Some(route) = route.names(&["sum0", "sum_zero"]) {
-            if let Some(function) = route.plain_null_argument_result(true)? {
-                return Ok(function);
-            }
             return route
                 .plain_or_null()
                 .build_with_unary_input(Self::SUM_ZERO_FEATURES, Self::create_zero);
         }
 
         if let Some(route) = route.names(&["sum0_state"]) {
-            if let Some(function) = route.state_null_argument_result() {
+            if let Some(function) = route.state_null_argument_result()? {
                 return Ok(function);
             }
             let state_plan = route.state_nullable_input_plan(true);
@@ -480,7 +487,7 @@ impl SumBuilder {
         }
 
         if let Some(route) = route.names(&["sum_zero_state"]) {
-            if let Some(function) = route.state_null_argument_result() {
+            if let Some(function) = route.state_null_argument_result()? {
                 return Ok(function);
             }
             let state_plan = route.state_nullable_input_plan(true);
@@ -520,7 +527,7 @@ impl SumBuilder {
         }
 
         if let Some(route) = route.names(&["sum_state"]) {
-            if let Some(function) = route.state_null_argument_result() {
+            if let Some(function) = route.state_null_argument_result()? {
                 return Ok(function);
             }
             let state_plan = route.state_nullable_input_plan(false);
@@ -710,7 +717,7 @@ impl SumBuilder {
     fn create_zero(
         build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {
-        if build.arg_type() != &NumberType::<u64>::data_type() {
+        if build.arg_type().remove_nullable() != NumberType::<u64>::data_type() {
             return Err(ErrorCode::InvalidArgument(format!(
                 "Invalid argument type for {}, must be uint64",
                 build.name()

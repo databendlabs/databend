@@ -17,11 +17,11 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use itertools::Itertools;
 
-use super::AggregateFunctionRef;
 use super::BATCH_SIZE;
 use super::PayloadFlushState;
 use super::StatesLayout;
-use super::get_states_layout;
+use super::aggregate_function_v2::AggregateFunctionRef;
+use super::aggregate_function_v2::get_states_layout;
 use super::payload::Payload;
 use super::payload::PayloadTransferBatch;
 use super::payload::PayloadTransferStateOffsets;
@@ -95,7 +95,7 @@ impl PartitionedPayload {
             "arenas must be shared or match the payload partition count"
         );
         let states_layout = if !aggrs.is_empty() {
-            Some(get_states_layout(&aggrs).unwrap())
+            Some(get_states_layout(&aggrs).unwrap().into())
         } else {
             None
         };

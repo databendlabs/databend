@@ -46,7 +46,7 @@ use databend_common_exception::Result;
 use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_expression::FunctionKind;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 
 use crate::MetadataRef;
@@ -631,7 +631,7 @@ impl Visitor for MaterializedViewChecker {
         if call.window.is_some() || call.filter.is_some() || !call.order_by.is_empty() {
             self.not_supported = true;
         }
-        if AggregateFunctionFactory::instance().contains(&name) {
+        if AGGR_REGISTRY.contains(&name) {
             self.has_aggregate = true;
             if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&name.as_str())
                 || call.distinct

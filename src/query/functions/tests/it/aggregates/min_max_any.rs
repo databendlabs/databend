@@ -1,8 +1,12 @@
 use databend_common_exception::Result;
 use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::aggregate::aggregate_function_v2 as v2;
+use databend_common_expression::types::AggregateStateDataType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt64Type;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 
 use super::aggregate_function_v2_support::eval_v2_aggr;
 
@@ -33,5 +37,27 @@ fn test_v2_min_max_any_uint64_matches_expected_values() -> Result<()> {
         ScalarRef::Number(NumberScalar::UInt64(9))
     );
     assert_eq!(any_serialized, any);
+    Ok(())
+}
+
+#[test]
+fn test_v2_min_max_any_heap_states_require_manual_drop() -> Result<()> {
+    let aggregate_state = DataType::AggregateState(Box::new(AggregateStateDataType {
+        function_name: "test".to_string(),
+        params: vec![],
+        argument_types: vec![],
+        state_type: Box::new(DataType::Binary),
+    }));
+
+    for data_type in [DataType::Binary, aggregate_state] {
+        let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+            name: "min",
+            params: &[],
+            args_type: &[data_type],
+            distinct: false,
+            order_by: &[],
+        })?;
+        assert!(function.state().need_manual_drop());
+    }
     Ok(())
 }

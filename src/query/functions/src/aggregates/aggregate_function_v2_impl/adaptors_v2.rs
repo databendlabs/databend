@@ -30,7 +30,8 @@ mod combinator;
 mod distinct_combinator;
 pub(crate) mod if_combinator;
 #[cfg(test)]
-mod legacy_adapter;
+pub(crate) mod legacy_adapter;
+pub(super) mod merge_combinator;
 pub(crate) mod multi_arg_nullable;
 mod name_route;
 mod null_argument_result;
@@ -172,7 +173,7 @@ fn try_build_default_name_route_with_unary_input(
             .map(Some);
     }
     if let Some(route) = route.suffixed_names(names, "state") {
-        if let Some(function) = route.state_null_argument_result() {
+        if let Some(function) = route.state_null_argument_result()? {
             return Ok(Some(function));
         }
         let state_plan = route.state_nullable_input_plan(returns_default_when_only_null);
@@ -237,7 +238,7 @@ fn try_build_default_name_route_with_multi_arg_build_input(
             .map(Some);
     }
     if let Some(route) = route.suffixed_names(names, "state") {
-        if let Some(function) = route.state_null_argument_result() {
+        if let Some(function) = route.state_null_argument_result()? {
             return Ok(Some(function));
         }
         let state_plan = route.state_nullable_input_plan(returns_default_when_only_null);
@@ -307,7 +308,7 @@ fn try_build_default_name_route_with_direct_input(
             .map(Some);
     }
     if let Some(route) = route.suffixed_names(names, "state") {
-        if let Some(function) = route.state_null_argument_result() {
+        if let Some(function) = route.state_null_argument_result()? {
             return Ok(Some(function));
         }
         let state_plan = route.state_nullable_input_plan(returns_default_when_only_null);

@@ -571,7 +571,10 @@ where
                 continue;
             }
             let state = state.get::<S>();
-            state.merge_serialized(input.state.index(row).unwrap(), &self.function_info)?;
+            state.merge_serialized(
+                super::serialized_scalar_at(input.state, row, 0),
+                &self.function_info,
+            )?;
         }
         Ok(())
     }

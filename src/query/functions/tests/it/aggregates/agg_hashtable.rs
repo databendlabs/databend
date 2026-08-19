@@ -24,8 +24,8 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::aggregate::aggregate_function_v2 as v2;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
-use databend_common_expression::get_states_layout;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -42,14 +42,25 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::i256;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::DecimalSumState;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use itertools::Itertools;
+
+fn resolve_agg(name: &str, arg_type: DataType) -> v2::AggregateFunctionRef {
+    AGGR_REGISTRY
+        .resolve(v2::AggregateFunctionRequest {
+            name,
+            params: &[],
+            args_type: &[arg_type],
+            distinct: false,
+            order_by: &[],
+        })
+        .unwrap()
+}
 
 // cargo test --package databend-common-functions --test it -- aggregates::agg_hashtable::test_agg_hashtable --exact --nocapture
 #[test]
 fn test_agg_hashtable() {
-    let factory = AggregateFunctionFactory::instance();
     let m: usize = 4;
     for n in [100, 1000, 10_000, 100_000] {
         let columns = [
@@ -70,18 +81,10 @@ fn test_agg_hashtable() {
         let group_types = columns.iter().map(|c| c.data_type()).collect::<Vec<_>>();
 
         let aggrs = vec![
-            factory
-                .get("min", vec![], vec![Int64Type::data_type()], vec![])
-                .unwrap(),
-            factory
-                .get("max", vec![], vec![Int64Type::data_type()], vec![])
-                .unwrap(),
-            factory
-                .get("sum", vec![], vec![Int64Type::data_type()], vec![])
-                .unwrap(),
-            factory
-                .get("count", vec![], vec![Int64Type::data_type()], vec![])
-                .unwrap(),
+            resolve_agg("min", Int64Type::data_type()),
+            resolve_agg("max", Int64Type::data_type()),
+            resolve_agg("sum", Int64Type::data_type()),
+            resolve_agg("count", Int64Type::data_type()),
         ];
 
         let params = aggrs.iter().map(|_| vec![columns[1].clone()]).collect_vec();
@@ -174,16 +177,12 @@ fn test_agg_hashtable() {
 
 #[test]
 fn test_layout() {
-    let factory = AggregateFunctionFactory::instance();
     let decimal_type = DataType::Decimal(DecimalSize::new_unchecked(20, 2));
-
-    let aggrs = factory
-        .get("sum", vec![], vec![decimal_type], vec![])
-        .unwrap();
+    let aggrs = resolve_agg("sum", decimal_type);
     type S = DecimalSumState<false, i128>;
     type M = DecimalSumState<false, i256>;
 
-    let states_layout = get_states_layout(std::slice::from_ref(&aggrs)).unwrap();
+    let states_layout = v2::get_states_layout(std::slice::from_ref(&aggrs)).unwrap();
 
     assert_eq!(
         states_layout.layout,

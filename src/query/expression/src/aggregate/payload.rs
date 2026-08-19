@@ -22,13 +22,14 @@ use log::info;
 use strength_reduce::StrengthReducedU64;
 
 use super::AggrState;
-use super::AggregateFunctionRef;
 use super::BATCH_SIZE;
 use super::MAX_PAGE_SIZE;
 use super::PayloadFlushState;
 use super::RowID;
 use super::StateAddr;
 use super::StatesLayout;
+use super::aggregate_function_v2::AggregateFunctionRef;
+use super::aggregate_function_v2::MergeResultInput;
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
@@ -270,13 +271,14 @@ impl Payload {
                 .iter()
                 .zip(states_layout.states_loc.iter().cloned())
             {
-                let return_type = aggr.return_type()?;
+                let return_type = aggr.signature().return_type.clone();
                 let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
-                aggr.batch_merge_result(
-                    &flush_state.state_places.as_slice()[0..row_count],
-                    loc,
-                    &mut builder,
-                )?;
+                for place in &flush_state.state_places.as_slice()[0..row_count] {
+                    aggr.merge_result(MergeResultInput {
+                        state: AggrState::new(*place, &loc),
+                        builder: &mut builder,
+                    })?;
+                }
                 flush_state.aggregate_results.push(builder.build().into());
             }
         }
@@ -668,7 +670,7 @@ impl Drop for Payload {
                 .zip(states_layout.states_loc.iter())
                 .enumerate()
             {
-                if !aggr.need_manual_drop_state() {
+                if !aggr.state().need_manual_drop() {
                     continue;
                 }
 

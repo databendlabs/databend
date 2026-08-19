@@ -3,9 +3,12 @@ use std::io::Write;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::aggregate::aggregate_function_v2 as v2;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
@@ -19,6 +22,7 @@ use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt64Type;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use goldenfile::Mint;
 
 use super::aggregate_case_support::eval_legacy_aggregate;
@@ -275,4 +279,182 @@ fn test_v2_sum_decorator_read_only_finalization_matches_legacy() -> Result<()> {
         std::slice::from_ref(&values),
         5,
     )
+}
+
+fn eval_v2_state_merge(
+    name: &str,
+    params: &[Scalar],
+    state: &(Column, DataType),
+) -> Result<(Column, DataType)> {
+    eval_v2_state_merge_entry(name, params, &state.1, BlockEntry::from(state.0.clone()))
+}
+
+fn eval_v2_state_merge_entry(
+    name: &str,
+    params: &[Scalar],
+    state_type: &DataType,
+    state: BlockEntry,
+) -> Result<(Column, DataType)> {
+    let args_type = [state_type.clone()];
+    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+        name,
+        params,
+        args_type: &args_type,
+        distinct: false,
+        order_by: &[],
+    })?;
+    let return_type = function.signature().return_type.clone();
+    let owner = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    let entries = [state];
+    function.accumulate(v2::AccumulateInput {
+        state: owner.state(0),
+        columns: (&entries).into(),
+        validity: None,
+        order_by: &[],
+    })?;
+
+    let mut builder = ColumnBuilder::with_capacity(&return_type, 1);
+    function.merge_result(v2::MergeResultInput {
+        state: owner.state(0),
+        builder: &mut builder,
+    })?;
+    Ok((builder.build(), return_type))
+}
+
+#[test]
+fn test_v2_sum_merge_and_merge_state() -> Result<()> {
+    let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
+    let state = eval_v2_aggr("sum_state", &entries, 4, false)?;
+    assert!(matches!(state.1, DataType::AggregateState(_)));
+
+    let merged = eval_v2_state_merge("sum_merge", &[], &state)?;
+    assert_eq!(
+        unsafe { merged.0.index_unchecked(0) },
+        ScalarRef::Number(NumberScalar::UInt64(10))
+    );
+
+    let merged_state = eval_v2_state_merge("sum_merge_state", &[], &state)?;
+    assert_eq!(merged_state.1, state.1);
+    let merged_again = eval_v2_state_merge("sum_merge", &[], &merged_state)?;
+    assert_eq!(merged_again, merged);
+
+    let DataType::AggregateState(state_metadata) = &state.1 else {
+        unreachable!()
+    };
+    let physical_state = (state.0.clone(), state_metadata.physical_type().clone());
+    let merged_legacy_state = eval_v2_state_merge("sum_merge", &[], &physical_state)?;
+    assert_eq!(merged_legacy_state, merged);
+    Ok(())
+}
+
+#[test]
+fn test_v2_sum_merge_null_state_and_const_state() -> Result<()> {
+    let null_entries = [BlockEntry::new_const_column(
+        DataType::Null,
+        Scalar::Null,
+        4,
+    )];
+    let null_state = eval_v2_aggr("sum_state", &null_entries, 4, false)?;
+    let merged_null_state = eval_v2_state_merge("sum_merge_state", &[], &null_state)?;
+    assert_eq!(merged_null_state.1, null_state.1);
+    let merged_null = eval_v2_state_merge("sum_merge", &[], &null_state)?;
+    assert_eq!(unsafe { merged_null.0.index_unchecked(0) }, ScalarRef::Null);
+
+    let DataType::AggregateState(state_metadata) = &null_state.1 else {
+        unreachable!()
+    };
+    assert_eq!(state_metadata.physical_type(), &null_state.0.data_type());
+
+    let sum0_state = eval_v2_aggr("sum0_state", &null_entries, 4, false)?;
+    let merged_sum0 = eval_v2_state_merge("sum0_merge", &[], &sum0_state)?;
+    assert_eq!(
+        unsafe { merged_sum0.0.index_unchecked(0) },
+        ScalarRef::Number(NumberScalar::UInt64(0))
+    );
+
+    let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
+    let state = eval_v2_aggr("sum_state", &entries, 4, false)?;
+    let state_scalar = unsafe { state.0.index_unchecked(0) }.to_owned();
+    let const_state = BlockEntry::new_const_column(state.1.clone(), state_scalar, 2);
+    let merged = eval_v2_state_merge_entry("sum_merge", &[], &state.1, const_state)?;
+    assert_eq!(
+        unsafe { merged.0.index_unchecked(0) },
+        ScalarRef::Number(NumberScalar::UInt64(20))
+    );
+    Ok(())
+}
+
+#[test]
+fn test_v2_sum_merge_keys_skips_nullable_states() -> Result<()> {
+    let left = eval_v2_aggr(
+        "sum_state",
+        &[UInt64Type::from_data(vec![1, 2]).into()],
+        2,
+        false,
+    )?;
+    let right = eval_v2_aggr(
+        "sum_state",
+        &[UInt64Type::from_data(vec![3, 4]).into()],
+        2,
+        false,
+    )?;
+    assert_eq!(left.1, right.1);
+
+    let mut state_builder = ColumnBuilder::with_capacity(&left.1, 2);
+    state_builder.push(unsafe { left.0.index_unchecked(0) });
+    state_builder.push(unsafe { right.0.index_unchecked(0) });
+    let states = state_builder
+        .build()
+        .wrap_nullable(Some(Bitmap::from([true, false])));
+
+    let nullable_state_type = DataType::Nullable(Box::new(left.1));
+    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+        name: "sum_merge",
+        params: &[],
+        args_type: &[nullable_state_type],
+        distinct: false,
+        order_by: &[],
+    })?;
+    let first = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    let second = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    let places = [first.state(0).addr, second.state(0).addr];
+    let entries = [BlockEntry::from(states)];
+    function.accumulate_keys(v2::AccumulateKeysInput {
+        states: v2::AggregateStateSet::new(&places, first.state(0).loc),
+        columns: (&entries).into(),
+        order_by: &[],
+    })?;
+
+    for (owner, expected) in [(&first, Some(3)), (&second, None)] {
+        let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
+        function.merge_result(v2::MergeResultInput {
+            state: owner.state(0),
+            builder: &mut builder,
+        })?;
+        let result = builder.build();
+        let expected = expected.map_or(ScalarRef::Null, |value| {
+            ScalarRef::Number(NumberScalar::UInt64(value))
+        });
+        assert_eq!(unsafe { result.index_unchecked(0) }, expected);
+    }
+    Ok(())
+}
+
+#[test]
+fn test_v2_merge_rejects_mismatched_state_function() -> Result<()> {
+    let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
+    let (_, state_type) = eval_v2_aggr("sum_state", &entries, 4, false)?;
+    let error = match AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+        name: "avg_merge",
+        params: &[],
+        args_type: &[state_type],
+        distinct: false,
+        order_by: &[],
+    }) {
+        Ok(_) => panic!("avg_merge should reject sum state metadata"),
+        Err(error) => error,
+    };
+    assert_eq!(error.code(), 1010);
+    assert!(error.message().contains("cannot be merged"));
+    Ok(())
 }

@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::Layout;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
+use databend_common_expression::AggrStateType;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::types::DataType;
@@ -28,7 +31,7 @@ pub(crate) fn try_create_null_argument_result_function(
     request: v2::AggregateFunctionRequest<'_>,
     returns_default_when_only_null: bool,
 ) -> Result<v2::AggregateFunctionRef> {
-    let (return_type, result) = if returns_default_when_only_null {
+    let (data_type, result) = if returns_default_when_only_null {
         (
             DataType::Number(NumberDataType::UInt64),
             Scalar::Number(NumberScalar::UInt64(0)),
@@ -36,16 +39,19 @@ pub(crate) fn try_create_null_argument_result_function(
     } else {
         (DataType::Null, Scalar::Null)
     };
+    let return_type = data_type.clone();
     let signature = v2::AggregateFunctionSignature {
         name: request.name.to_string(),
         params: request.params.to_vec(),
         args_type: request.args_type.to_vec(),
         distinct: request.distinct,
         order_by: request.order_by.to_vec(),
-        return_type: return_type.clone(),
+        return_type,
     };
     let state =
-        v2::AggregateStateDescription::new(vec![], vec![StateSerdeItem::DataType(return_type)]);
+        v2::AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
+            StateSerdeItem::DataType(data_type),
+        ]);
     Ok(Arc::new(v2::AggregateFunction::new(
         signature,
         v2::FunctionFeatures::default(),
@@ -56,6 +62,16 @@ pub(crate) fn try_create_null_argument_result_function(
 
 struct AggregateFixedResultImplementation {
     result: Scalar,
+}
+
+impl AggregateFixedResultImplementation {
+    fn push_result(&self, builder: &mut ColumnBuilder) {
+        if let Some(fields) = builder.as_tuple_mut() {
+            fields[0].push(self.result.as_ref());
+        } else {
+            builder.push(self.result.as_ref());
+        }
+    }
 }
 
 impl v2::AggrImpl for AggregateFixedResultImplementation {
@@ -83,7 +99,7 @@ impl v2::AggrImpl for AggregateFixedResultImplementation {
 
     fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
         for _state in input.states.iter() {
-            input.builders[0].push(self.result.as_ref());
+            self.push_result(&mut input.builders[0]);
         }
         Ok(())
     }
@@ -97,7 +113,7 @@ impl v2::AggrImpl for AggregateFixedResultImplementation {
     }
 
     fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
-        input.builder.push(self.result.as_ref());
+        self.push_result(input.builder);
         Ok(())
     }
 

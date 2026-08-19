@@ -79,6 +79,7 @@ pub mod types;
 pub mod utils;
 pub mod values;
 
+pub use crate::aggregate::LegacyAggregateFunction;
 pub use crate::aggregate::*;
 pub use crate::block::BlockMetaInfo;
 pub use crate::block::BlockMetaInfoPtr;

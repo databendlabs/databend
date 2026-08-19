@@ -57,7 +57,7 @@ struct CountBuilder;
 impl CountBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
         let count = Self::definition();
-        count.register(registry);
+        count.register_with_merge_combinators(registry);
         AggregateFunctionDefinition::new(
             "count_distinct",
             CountBuilder::count_distinct_arguments(),
@@ -195,7 +195,7 @@ impl CountBuilder {
         }
 
         if let Some(route) = route.names(&["count_state"]) {
-            if let Some(function) = route.state_null_argument_result() {
+            if let Some(function) = route.state_null_argument_result()? {
                 return Ok(function);
             }
             let state_plan = route.state_nullable_input_plan(true);

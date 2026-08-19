@@ -168,7 +168,17 @@ impl CombinatorImpl for StateCombinator {
         } else {
             state
         };
-        let return_type = StateSerdeType::new(state.serde_items().to_vec()).data_type();
+        let physical_type = StateSerdeType::new(state.serde_items().to_vec()).data_type();
+        let function_name = signature
+            .name
+            .strip_suffix("_state")
+            .expect("state combinator names must end with _state");
+        let return_type = state_combinator::aggregate_state_data_type(
+            function_name,
+            &signature.params,
+            signature.args_type.clone(),
+            physical_type,
+        )?;
         let signature = AggregateFunctionSignature {
             return_type,
             ..signature

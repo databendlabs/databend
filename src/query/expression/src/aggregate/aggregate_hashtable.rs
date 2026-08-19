@@ -34,7 +34,12 @@ use super::probe_state::ProbeState;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
-use crate::aggregate::AggregateFunctionRef;
+use crate::aggregate::aggregate_function_v2::AccumulateKeysInput;
+use crate::aggregate::aggregate_function_v2::AggregateFunctionRef;
+use crate::aggregate::aggregate_function_v2::AggregateStateSet;
+use crate::aggregate::aggregate_function_v2::MergeResultInput;
+use crate::aggregate::aggregate_function_v2::MergeSerializedInput;
+use crate::aggregate::aggregate_function_v2::MergeStatesInput;
 use crate::types::DataType;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
@@ -259,7 +264,11 @@ impl AggregateHashTable {
                     .zip(params.iter())
                     .zip(states_layout.states_loc.iter())
                 {
-                    func.accumulate_keys(state_places, loc, *params, row_count)?;
+                    func.accumulate_keys(AccumulateKeysInput {
+                        states: AggregateStateSet::new(state_places, loc),
+                        columns: *params,
+                        order_by: &[],
+                    })?;
                 }
             } else {
                 for ((func, state), loc) in self
@@ -269,7 +278,11 @@ impl AggregateHashTable {
                     .zip(agg_states.iter())
                     .zip(states_layout.states_loc.iter())
                 {
-                    func.batch_merge(state_places, loc, state, None)?;
+                    func.merge_serialized(MergeSerializedInput {
+                        states: AggregateStateSet::new(state_places, loc),
+                        state,
+                        filter: None,
+                    })?;
                 }
             }
         }
@@ -371,7 +384,12 @@ impl AggregateHashTable {
             if let Some(layout) = self.payload.row_layout.states_layout.as_ref() {
                 let rhses = &flush_state.state_places[..row_count];
                 for (aggr, loc) in self.payload.aggrs.iter().zip(layout.states_loc.iter()) {
-                    aggr.batch_merge_states(places, rhses, loc)?;
+                    for (place, rhs) in places.iter().zip(rhses.iter()) {
+                        aggr.merge_states(MergeStatesInput {
+                            state: crate::aggregate::AggrState::new(*place, loc),
+                            rhs: crate::aggregate::AggrState::new(*rhs, loc),
+                        })?;
+                    }
                 }
             }
         }
@@ -393,14 +411,15 @@ impl AggregateHashTable {
                 .iter()
                 .zip(states_layout.states_loc.iter().cloned())
             {
-                let return_type = aggr.return_type()?;
+                let return_type = aggr.signature().return_type.clone();
                 let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
 
-                aggr.batch_merge_result(
-                    &flush_state.state_places.as_slice()[0..row_count],
-                    loc,
-                    &mut builder,
-                )?;
+                for place in &flush_state.state_places.as_slice()[0..row_count] {
+                    aggr.merge_result(MergeResultInput {
+                        state: crate::aggregate::AggrState::new(*place, &loc),
+                        builder: &mut builder,
+                    })?;
+                }
                 flush_state.aggregate_results.push(builder.build().into());
             }
         }

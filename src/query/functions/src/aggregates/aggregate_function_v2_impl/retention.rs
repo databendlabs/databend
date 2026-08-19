@@ -56,7 +56,7 @@ struct RetentionBuilder;
 impl RetentionBuilder {
     fn register(registry: &mut v2::AggregateFunctionRegistry) {
         let retention = Self::definition();
-        retention.register(registry);
+        retention.register_with_merge_combinators(registry);
         AggregateFunctionDefinition::new(
             "retention_state",
             Self::retention_arguments(),
@@ -277,7 +277,7 @@ impl RetentionBuilder {
         }
 
         if let Some(route) = route.names(&["retention_state"]) {
-            if let Some(function) = route.state_null_argument_result() {
+            if let Some(function) = route.state_null_argument_result()? {
                 return Ok(function);
             }
             let state_plan = route.state_nullable_input_plan(false);
