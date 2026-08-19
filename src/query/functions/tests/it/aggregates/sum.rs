@@ -458,3 +458,109 @@ fn test_v2_merge_rejects_mismatched_state_function() -> Result<()> {
     assert!(error.message().contains("cannot be merged"));
     Ok(())
 }
+
+/// Legacy states carry no metadata, so the nested signature is recovered by
+/// searching candidate argument lists. Pruning that search with the nested
+/// function's own argument pattern must not change which states resolve.
+#[test]
+fn test_v2_merge_resolves_legacy_physical_state() -> Result<()> {
+    for (state_name, merge_name) in [
+        ("sum_state", "sum_merge"),
+        ("sum_state", "sum_merge_state"),
+        ("count_state", "count_merge"),
+        ("max_state", "max_merge"),
+        ("min_state", "min_merge"),
+    ] {
+        let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
+        let (state_column, state_type) = eval_v2_aggr(state_name, &entries, 4, false)?;
+        let DataType::AggregateState(metadata) = &state_type else {
+            panic!("{state_name} should return an AggregateState type");
+        };
+
+        // Strip the metadata to emulate a pre-v182 column, then merge it.
+        let physical_type = metadata.physical_type().clone();
+        let merged = eval_v2_state_merge_entry(
+            merge_name,
+            &[],
+            &physical_type,
+            BlockEntry::from(state_column.clone()),
+        )?;
+        // And confirm the metadata-carrying column resolves to the same result.
+        let merged_with_metadata = eval_v2_state_merge_entry(
+            merge_name,
+            &[],
+            &state_type,
+            BlockEntry::from(state_column),
+        )?;
+        assert_eq!(
+            unsafe { merged.0.index_unchecked(0) },
+            unsafe { merged_with_metadata.0.index_unchecked(0) },
+            "{merge_name} disagreed between legacy and metadata-carrying state"
+        );
+    }
+    Ok(())
+}
+
+/// Pruning removes argument lists the nested function would reject, so states
+/// whose physical layout matches nothing valid must still be refused rather
+/// than silently resolving to some unrelated signature.
+#[test]
+fn test_v2_merge_rejects_unrecoverable_legacy_state() -> Result<()> {
+    for state_type in [
+        // A layout no aggregate serializes to.
+        DataType::Tuple(vec![DataType::String, DataType::String, DataType::String]),
+        // Bare, non-tuple layouts are never produced by serialization.
+        UInt64Type::data_type(),
+    ] {
+        let error = match AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+            name: "sum_merge",
+            params: &[],
+            args_type: std::slice::from_ref(&state_type),
+            distinct: false,
+            order_by: &[],
+        }) {
+            Ok(_) => panic!("sum_merge should reject state type {state_type}"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code(), 1010);
+        assert!(error.message().contains("Cannot infer"));
+    }
+    Ok(())
+}
+
+/// Intervals keep months, days and microseconds as separate components, so
+/// accumulating must add them component-wise rather than folding through
+/// `total_micros` (which would normalise a month to 30 days). Merging peer
+/// states does collapse to a microsecond total, and the two paths are
+/// deliberately asymmetric; this pins both.
+#[test]
+fn test_v2_sum_interval_accumulates_component_wise() -> Result<()> {
+    let entries = [IntervalType::from_data(vec![
+        months_days_micros::new(1, 2, 3),
+        months_days_micros::new(0, 3, 4),
+        months_days_micros::new(2, 0, 5),
+        months_days_micros::new(0, 1, 6),
+    ])
+    .into()];
+
+    // Direct accumulation keeps the components separate: 3 months, 6 days, 18us.
+    let (column, _) = eval_v2_aggr("sum", &entries, 4, false)?;
+    let ScalarRef::Interval(total) = (unsafe { column.index_unchecked(0) }) else {
+        panic!("sum(interval) should return an interval");
+    };
+    assert_eq!(
+        (total.months(), total.days(), total.microseconds()),
+        (3, 6, 18),
+        "interval sum must not be collapsed into microseconds"
+    );
+
+    // Round-tripping through serialization merges peer states, which folds the
+    // components into a single microsecond total.
+    let (column, _) = eval_v2_aggr("sum", &entries, 4, true)?;
+    let ScalarRef::Interval(merged) = (unsafe { column.index_unchecked(0) }) else {
+        panic!("sum(interval) should return an interval");
+    };
+    let expected_micros = (3 * 30 + 6) * months_days_micros::MICROS_PER_DAY + 18;
+    assert_eq!(merged.total_micros(), expected_micros);
+    Ok(())
+}

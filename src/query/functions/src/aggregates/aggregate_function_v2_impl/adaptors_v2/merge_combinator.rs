@@ -29,6 +29,7 @@ use super::AccumulateInput;
 use super::AccumulateKeysInput;
 use super::AccumulateRowInput;
 use super::AggrImpl;
+use super::AggregateArgumentsPattern;
 use super::AggregateFunction;
 use super::AggregateFunctionBuildFn;
 use super::AggregateFunctionRef;
@@ -45,6 +46,7 @@ pub(crate) fn try_create(
     request: AggregateFunctionRequest<'_>,
     nested_name: &str,
     nested_aliases: &[&str],
+    nested_arguments: &AggregateArgumentsPattern,
     nested_builder: AggregateFunctionBuildFn,
     returns_state: bool,
 ) -> Result<AggregateFunctionRef> {
@@ -76,6 +78,7 @@ pub(crate) fn try_create(
             request.params,
             &state_type,
             request.order_by,
+            nested_arguments,
             nested_builder,
             combinator_name,
         )?
@@ -155,11 +158,13 @@ fn create_from_metadata(
     Ok((nested, DataType::AggregateState(Box::new(state.clone()))))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_from_legacy_state(
     nested_name: &str,
     params: &[Scalar],
     state_type: &DataType,
     order_by: &[super::AggregateBoundOrderByItem],
+    nested_arguments: &AggregateArgumentsPattern,
     nested_builder: AggregateFunctionBuildFn,
     combinator_name: &str,
 ) -> Result<(AggregateFunctionRef, DataType)> {
@@ -170,6 +175,7 @@ fn create_from_legacy_state(
         params,
         state_type,
         order_by,
+        nested_arguments,
         nested_builder,
         &candidates,
     ) else {
@@ -219,11 +225,13 @@ fn collect_candidates(data_type: &DataType, candidates: &mut Vec<DataType>) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn find_legacy_signature(
     nested_name: &str,
     params: &[Scalar],
     state_type: &DataType,
     order_by: &[super::AggregateBoundOrderByItem],
+    nested_arguments: &AggregateArgumentsPattern,
     nested_builder: AggregateFunctionBuildFn,
     candidates: &[DataType],
 ) -> Option<(AggregateFunctionRef, Vec<DataType>)> {
@@ -232,12 +240,18 @@ fn find_legacy_signature(
 
     let mut attempts = 0;
     for arity in (1..=MAX_LEGACY_ARGUMENTS).chain(std::iter::once(0)) {
+        // The nested function's own argument pattern rules out most arities up
+        // front, so we never expand those branches of the search tree.
+        if !nested_arguments.accepts_arity(arity) {
+            continue;
+        }
         let mut argument_types = Vec::with_capacity(arity);
         if let Some(signature) = find_legacy_signature_with_arity(
             nested_name,
             params,
             state_type,
             order_by,
+            nested_arguments,
             nested_builder,
             candidates,
             arity,
@@ -260,6 +274,7 @@ fn find_legacy_signature_with_arity(
     params: &[Scalar],
     state_type: &DataType,
     order_by: &[super::AggregateBoundOrderByItem],
+    nested_arguments: &AggregateArgumentsPattern,
     nested_builder: AggregateFunctionBuildFn,
     candidates: &[DataType],
     arity: usize,
@@ -268,6 +283,11 @@ fn find_legacy_signature_with_arity(
     max_attempts: usize,
 ) -> Option<(AggregateFunctionRef, Vec<DataType>)> {
     if argument_types.len() == arity {
+        // Only argument lists the nested function would actually accept are
+        // worth building; the build itself stays the authoritative check.
+        if !nested_arguments.matches_types(argument_types) {
+            return None;
+        }
         *attempts += 1;
         let nested = build_nested(
             nested_name,
@@ -302,6 +322,7 @@ fn find_legacy_signature_with_arity(
             params,
             state_type,
             order_by,
+            nested_arguments,
             nested_builder,
             candidates,
             arity,

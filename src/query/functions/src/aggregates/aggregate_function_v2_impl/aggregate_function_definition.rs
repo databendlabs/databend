@@ -205,6 +205,7 @@ impl v2::AggregateFunctionBuilder for AggregateFunctionDefinition {
                 request,
                 self.name,
                 self.aliases,
+                &self.arguments,
                 self.builder,
                 false,
             );
@@ -217,6 +218,7 @@ impl v2::AggregateFunctionBuilder for AggregateFunctionDefinition {
                 request,
                 self.name,
                 self.aliases,
+                &self.arguments,
                 self.builder,
                 true,
             );

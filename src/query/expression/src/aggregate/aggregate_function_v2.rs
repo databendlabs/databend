@@ -259,6 +259,32 @@ impl AggregateArgumentsPattern {
             }
         }
     }
+
+    /// Whether this pattern can accept an argument list of `arity` elements.
+    ///
+    /// This is a cheap necessary condition derived from the pattern shape alone,
+    /// intended for pruning candidate argument lists before they are built.
+    /// `matches_types` remains the authoritative check.
+    pub fn accepts_arity(&self, arity: usize) -> bool {
+        match self {
+            Self::Fixed(args) => args.len() == arity,
+            Self::OneOf(patterns) => patterns.iter().any(|pattern| pattern.accepts_arity(arity)),
+            Self::If(arguments) => arity
+                .checked_sub(1)
+                .is_some_and(|nested_arity| arguments.accepts_arity(nested_arity)),
+            Self::Variadic {
+                prefix,
+                min_repeats,
+                max_repeats,
+                ..
+            } => {
+                let Some(repeats) = arity.checked_sub(prefix.len()) else {
+                    return false;
+                };
+                repeats >= *min_repeats && !max_repeats.is_some_and(|max| repeats > max)
+            }
+        }
+    }
 }
 
 impl From<Vec<AggregateArgumentPattern>> for AggregateArgumentsPattern {

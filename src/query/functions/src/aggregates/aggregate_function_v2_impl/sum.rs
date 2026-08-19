@@ -417,12 +417,17 @@ impl UnaryState<IntervalType, IntervalType> for AggregateIntervalSumState {
         value: months_days_micros,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let res = self.value.total_micros() + value.total_micros();
-        self.value = months_days_micros(res as i128);
+        // Intervals keep months, days and microseconds as separate components: a
+        // month is not a fixed number of days, so folding through `total_micros`
+        // would normalise 1 month to 30 days and lose the calendar semantics.
+        self.value += value;
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
+        // Asymmetric with `add` on purpose: merging two already-accumulated
+        // states folds the components into a single microsecond total, matching
+        // the v1 `IntervalSumState` behaviour the goldenfiles encode.
         let res = self.value.total_micros() + rhs.value.total_micros();
         self.value = months_days_micros(res as i128);
         Ok(())
@@ -453,7 +458,9 @@ impl UnaryState<IntervalType, IntervalType> for AggregateIntervalSumState {
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
         let value = IntervalType::try_downcast_scalar(&value)?;
-        self.add(value, &())
+        // Deserialising yields a peer state, so this goes through `merge` rather
+        // than `add`, mirroring v1's `batch_merge`.
+        self.merge(&Self { value })
     }
 }
 

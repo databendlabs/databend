@@ -259,7 +259,7 @@ impl RetentionBuilder {
         let route = v2::AggregateFunctionNameRoutePath::root(request);
 
         if let Some(route) = route.names(&["retention"]) {
-            if let Some(function) = route.plain_null_argument_result(false)? {
+            if let Some(function) = route.null_argument_result(false)? {
                 return Ok(function);
             }
             return route
