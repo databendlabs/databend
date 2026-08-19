@@ -56,13 +56,26 @@ static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> = LazyLock::new(|
 /// Please create your own http client if you want dedicated http connection pool.
 pub static GLOBAL_HTTP_CLIENT: OnceLock<HttpClient> = OnceLock::new();
 
+/// Create an HTTP client builder that preserves storage response bytes.
+///
+/// Cargo features are unified across the dependency graph, so another crate can
+/// enable reqwest's content decoders for this client. OpenDAL must receive the
+/// encoded object bytes to keep range lengths and checksums valid.
+pub fn storage_http_client_builder() -> reqwest::ClientBuilder {
+    reqwest::ClientBuilder::new()
+        .no_gzip()
+        .no_brotli()
+        .no_zstd()
+        .no_deflate()
+}
+
 pub fn get_global_http_client(
     pool_max_idle_per_host: usize,
     connect_timeout: u64,
     keepalive: u64,
 ) -> &'static HttpClient {
     GLOBAL_HTTP_CLIENT.get_or_init(move || {
-        let mut builder = reqwest::ClientBuilder::new();
+        let mut builder = storage_http_client_builder();
 
         // Disable http2 for better performance.
         builder = builder.http1_only();
@@ -161,5 +174,61 @@ impl HttpClient {
     /// Get the inner reqwest client.
     pub fn inner(&self) -> reqwest::Client {
         self.client.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use reqwest::header::CONTENT_ENCODING;
+    use reqwest::header::CONTENT_LENGTH;
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpListener;
+
+    use super::storage_http_client_builder;
+
+    const GZIP_BODY: &[u8] = &[
+        0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x2b, 0x4a, 0x2c, 0x57, 0x28,
+        0x2e, 0xc9, 0x2f, 0x4a, 0x4c, 0x4f, 0x55, 0xc8, 0x4f, 0xca, 0x4a, 0x4d, 0x2e, 0x51, 0x48,
+        0xaa, 0x2c, 0x49, 0x2d, 0xe6, 0x02, 0x00, 0xae, 0xc5, 0xf2, 0x24, 0x19, 0x00, 0x00, 0x00,
+    ];
+
+    #[tokio::test]
+    async fn test_storage_http_client_preserves_encoded_response() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = crate::runtime::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0; 1024];
+            let bytes_read = stream.read(&mut request).await.unwrap();
+            assert!(bytes_read > 0);
+
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                GZIP_BODY.len()
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+            stream.write_all(GZIP_BODY).await.unwrap();
+        });
+
+        let response = storage_http_client_builder()
+            .build()
+            .unwrap()
+            .get("http://".to_string() + &address.to_string() + "/object.json.gz")
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.headers()[CONTENT_ENCODING], "gzip");
+        assert_eq!(
+            response.headers()[CONTENT_LENGTH]
+                .to_str()
+                .unwrap()
+                .parse::<usize>()
+                .unwrap(),
+            GZIP_BODY.len()
+        );
+        assert_eq!(response.bytes().await.unwrap().as_ref(), GZIP_BODY);
+        server.await.unwrap();
     }
 }

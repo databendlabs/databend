@@ -25,6 +25,7 @@ use std::time::Instant;
 use databend_common_base::http_client::GLOBAL_HICKORY_POSITIVE_MIN_TTL;
 use databend_common_base::http_client::get_global_hickory_resolver;
 use databend_common_base::http_client::get_global_http_client;
+use databend_common_base::http_client::storage_http_client_builder;
 use databend_common_metrics::storage::metrics_inc_storage_http_requests_count;
 use futures::TryStreamExt;
 use http::Request;
@@ -138,7 +139,7 @@ impl StorageHttpClient {
                 // window) and IP-literal endpoints (closing a 30x
                 // bounce-to-internal bypass), since check_url_with_dns now
                 // populates resolved_addrs for IP literals as well.
-                let mut builder = reqwest::ClientBuilder::new()
+                let mut builder = storage_http_client_builder()
                     .http1_only()
                     .use_native_tls()
                     .dns_resolver(get_global_hickory_resolver())
