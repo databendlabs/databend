@@ -364,6 +364,50 @@ mod tests {
         }
     }
 
+    // gzip of "raw storage object bytes\n"
+    const GZIP_BODY: &[u8] = &[
+        0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x2b, 0x4a, 0x2c, 0x57, 0x28,
+        0x2e, 0xc9, 0x2f, 0x4a, 0x4c, 0x4f, 0x55, 0xc8, 0x4f, 0xca, 0x4a, 0x4d, 0x2e, 0x51, 0x48,
+        0xaa, 0x2c, 0x49, 0x2d, 0xe6, 0x02, 0x00, 0xae, 0xc5, 0xf2, 0x24, 0x19, 0x00, 0x00, 0x00,
+    ];
+
+    async fn serve_gzip_object() -> (SocketAddr, databend_common_base::runtime::JoinHandle<()>) {
+        use tokio::io::AsyncReadExt;
+        use tokio::io::AsyncWriteExt;
+        use tokio::net::TcpListener;
+        use tokio::time::timeout;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = databend_common_base::runtime::spawn(async move {
+            timeout(Duration::from_secs(5), async {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                let mut buf = [0; 1024];
+                loop {
+                    let n = stream.read(&mut buf).await.unwrap();
+                    assert!(n > 0);
+                    request.extend_from_slice(&buf[..n]);
+                    if request.windows(4).any(|w| w == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    GZIP_BODY.len()
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+                stream.write_all(GZIP_BODY).await.unwrap();
+                stream.flush().await.unwrap();
+                let _ = stream.shutdown().await;
+            })
+            .await
+            .expect("gzip fixture server timed out");
+        });
+        (address, server)
+    }
+
     fn populate_checked_endpoint_cache(
         client: &StorageHttpClient,
         url: &Url,
@@ -496,5 +540,64 @@ mod tests {
         let client = make_client(EndpointPolicyScope::Trusted);
         assert_eq!(client.endpoint_policy_scope, EndpointPolicyScope::Trusted);
         assert_eq!(checked_endpoint_cache_len(&client), 0);
+    }
+
+    #[tokio::test]
+    async fn test_storage_http_client_fetch_preserves_encoded_response() {
+        use http::Request;
+        use opendal::Buffer;
+        use opendal::raw::HttpFetch;
+        use reqwest::header::CONTENT_ENCODING;
+
+        let (address, server) = serve_gzip_object().await;
+        let url = format!("http://{address}/object.json.gz");
+        let req = Request::builder()
+            .method("GET")
+            .uri(&url)
+            .body(Buffer::new())
+            .unwrap();
+
+        let client = make_client(EndpointPolicyScope::Trusted);
+        let mut resp = client.fetch(req).await.unwrap();
+        assert_eq!(resp.headers()[CONTENT_ENCODING], "gzip");
+        assert_eq!(
+            resp.body_mut().to_buffer().await.unwrap().to_vec(),
+            GZIP_BODY
+        );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_storage_http_client_pinned_fetch_preserves_encoded_response() {
+        use http::Request;
+        use opendal::Buffer;
+        use opendal::raw::HttpFetch;
+        use reqwest::header::CONTENT_ENCODING;
+
+        let (address, server) = serve_gzip_object().await;
+        let url = Url::parse(&format!("http://{address}/object.json.gz")).unwrap();
+        let req = Request::builder()
+            .method("GET")
+            .uri(url.as_str())
+            .body(Buffer::new())
+            .unwrap();
+
+        let client = make_client(EndpointPolicyScope::External);
+        populate_checked_endpoint_cache(
+            &client,
+            &url,
+            EndpointUrlCheck {
+                resolved_addrs: Some(vec![address]),
+            },
+            Duration::ZERO,
+        );
+
+        let mut resp = client.fetch(req).await.unwrap();
+        assert_eq!(resp.headers()[CONTENT_ENCODING], "gzip");
+        assert_eq!(
+            resp.body_mut().to_buffer().await.unwrap().to_vec(),
+            GZIP_BODY
+        );
+        server.await.unwrap();
     }
 }

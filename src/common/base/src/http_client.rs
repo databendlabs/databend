@@ -179,42 +179,78 @@ impl HttpClient {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use reqwest::header::CONTENT_ENCODING;
     use reqwest::header::CONTENT_LENGTH;
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWriteExt;
     use tokio::net::TcpListener;
+    use tokio::time::timeout;
 
     use super::storage_http_client_builder;
 
+    // gzip of "raw storage object bytes\n"
     const GZIP_BODY: &[u8] = &[
         0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x2b, 0x4a, 0x2c, 0x57, 0x28,
         0x2e, 0xc9, 0x2f, 0x4a, 0x4c, 0x4f, 0x55, 0xc8, 0x4f, 0xca, 0x4a, 0x4d, 0x2e, 0x51, 0x48,
         0xaa, 0x2c, 0x49, 0x2d, 0xe6, 0x02, 0x00, 0xae, 0xc5, 0xf2, 0x24, 0x19, 0x00, 0x00, 0x00,
     ];
+    const RAW_BODY: &[u8] = b"raw storage object bytes\n";
 
-    #[tokio::test]
-    async fn test_storage_http_client_preserves_encoded_response() {
+    async fn serve_gzip_object() -> (std::net::SocketAddr, crate::runtime::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let server = crate::runtime::spawn(async move {
-            let (mut stream, _) = listener.accept().await.unwrap();
-            let mut request = [0; 1024];
-            let bytes_read = stream.read(&mut request).await.unwrap();
-            assert!(bytes_read > 0);
+            timeout(Duration::from_secs(5), async {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                let mut buf = [0; 1024];
+                loop {
+                    let n = stream.read(&mut buf).await.unwrap();
+                    assert!(n > 0);
+                    request.extend_from_slice(&buf[..n]);
+                    if request.windows(4).any(|w| w == b"\r\n\r\n") {
+                        break;
+                    }
+                }
 
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                GZIP_BODY.len()
-            );
-            stream.write_all(response.as_bytes()).await.unwrap();
-            stream.write_all(GZIP_BODY).await.unwrap();
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    GZIP_BODY.len()
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+                stream.write_all(GZIP_BODY).await.unwrap();
+                stream.flush().await.unwrap();
+                let _ = stream.shutdown().await;
+            })
+            .await
+            .expect("gzip fixture server timed out");
         });
+        (address, server)
+    }
 
+    #[tokio::test]
+    async fn test_storage_http_client_preserves_encoded_response() {
+        let (address, server) = serve_gzip_object().await;
+        let url = format!("http://{address}/object.json.gz");
+
+        let decoded = reqwest::ClientBuilder::new()
+            .build()
+            .unwrap()
+            .get(&url)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(decoded.bytes().await.unwrap().as_ref(), RAW_BODY);
+        server.await.unwrap();
+
+        let (address, server) = serve_gzip_object().await;
+        let url = format!("http://{address}/object.json.gz");
         let response = storage_http_client_builder()
             .build()
             .unwrap()
-            .get("http://".to_string() + &address.to_string() + "/object.json.gz")
+            .get(&url)
             .send()
             .await
             .unwrap();
