@@ -378,12 +378,11 @@ impl ShareMgr {
                     .push(txn_cond_eq_seq(&old_id_ident, seq(&old_meta)));
                 txn.if_then.push(txn_del(&old_id_ident));
             }
-            txn.if_then.push(
-                txn_put_pb(&name_ident, &DataId::<ShareNameResource>::new(share_id))
-                    .map_err(invalid_meta_argument)?,
-            );
-            txn.if_then
-                .push(txn_put_pb(&id_ident, &meta).map_err(invalid_meta_argument)?);
+            txn.if_then.push(txn_put_pb(
+                &name_ident,
+                &DataId::<ShareNameResource>::new(share_id),
+            ));
+            txn.if_then.push(txn_put_pb(&id_ident, &meta));
 
             if self.send_txn(txn).await? {
                 return Ok(());
@@ -944,9 +943,7 @@ impl ShareMgr {
                 txn_cond_eq_seq(&id_ident, meta.seq),
             ];
             conditions.extend(extra_conditions.iter().cloned());
-            let txn = TxnRequest::new(conditions, vec![
-                txn_put_pb(&id_ident, &meta.data).map_err(invalid_meta_argument)?,
-            ]);
+            let txn = TxnRequest::new(conditions, vec![txn_put_pb(&id_ident, &meta.data)]);
             if self.send_txn(txn).await? {
                 return Ok(());
             }
@@ -1034,10 +1031,6 @@ fn log_txn_retry(operation: &str, provider: &Tenant, share: &str, attempt: usize
         attempt,
         TXN_MAX_RETRY_TIMES
     );
-}
-
-fn invalid_meta_argument(error: impl std::fmt::Display) -> ErrorCode {
-    ErrorCode::MetaServiceError(error.to_string())
 }
 
 #[cfg(test)]

@@ -50,23 +50,23 @@ impl FromToProto for mt::DataShareMeta {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             provider: self.provider.clone(),
             name: self.name.clone(),
-            created_on: self.created_on.to_pb()?,
+            created_on: self.created_on.to_pb(),
             comment: self.comment.clone(),
             accounts: self.accounts.iter().cloned().collect(),
-            database: self.database.as_ref().map(database_to_pb).transpose()?,
+            database: self.database.as_ref().map(database_to_pb),
             tables: self
                 .tables
                 .iter()
-                .map(|(name, grant)| Ok((name.clone(), table_to_pb(grant)?)))
-                .collect::<Result<_, Incompatible>>()?,
+                .map(|(name, grant)| (name.clone(), table_to_pb(grant)))
+                .collect(),
             connection: self.connection.clone(),
-        })
+        }
     }
 }
 
@@ -80,14 +80,12 @@ fn database_from_pb(
     })
 }
 
-fn database_to_pb(
-    grant: &mt::DataShareDatabaseGrant,
-) -> Result<pb::DataShareDatabaseGrant, Incompatible> {
-    Ok(pb::DataShareDatabaseGrant {
+fn database_to_pb(grant: &mt::DataShareDatabaseGrant) -> pb::DataShareDatabaseGrant {
+    pb::DataShareDatabaseGrant {
         database: grant.database.clone(),
         database_id: grant.database_id,
-        shared_on: grant.shared_on.to_pb()?,
-    })
+        shared_on: grant.shared_on.to_pb(),
+    }
 }
 
 fn table_from_pb(p: pb::DataShareTableGrant) -> Result<mt::DataShareTableGrant, Incompatible> {
@@ -97,9 +95,9 @@ fn table_from_pb(p: pb::DataShareTableGrant) -> Result<mt::DataShareTableGrant, 
     })
 }
 
-fn table_to_pb(grant: &mt::DataShareTableGrant) -> Result<pb::DataShareTableGrant, Incompatible> {
-    Ok(pb::DataShareTableGrant {
+fn table_to_pb(grant: &mt::DataShareTableGrant) -> pb::DataShareTableGrant {
+    pb::DataShareTableGrant {
         table_id: grant.table_id,
-        shared_on: grant.shared_on.to_pb()?,
-    })
+        shared_on: grant.shared_on.to_pb(),
+    }
 }

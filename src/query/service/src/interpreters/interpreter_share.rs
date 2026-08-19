@@ -695,7 +695,7 @@ impl Interpreter for CreateDatabaseFromShareInterpreter {
         }
 
         let req = CreateDatabaseReq {
-            create_option: self.plan.create_option,
+            override_existing: self.plan.create_option.is_overriding(),
             catalog_name: if self.plan.create_option.is_overriding() {
                 Some(self.plan.catalog.clone())
             } else {
