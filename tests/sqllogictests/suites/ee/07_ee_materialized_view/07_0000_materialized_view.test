@@ -240,10 +240,10 @@ select count(*) from source
 ----
 0
 
-# Incremental aggregate refreshes append extra state rows. Compact/recluster then
+# Incremental aggregate refreshes append extra state rows. Compact then
 # re-aggregates each newly written physical block so equal group keys collapse.
 # Disable ordinary FUSE compact-after-write so each incremental refresh contributes
-# one observable state block before the explicit recluster.
+# one observable state block before the explicit compact.
 statement ok
 set enable_compact_after_write = 0
 
@@ -304,10 +304,10 @@ select category, total_amount from compact_mv
 ----
 a 8
 
-# Recluster gathers the same-key blocks, then re-aggregates each newly written block
+# Compact gathers small state blocks, then re-aggregates each newly written block
 # so this single-group MV collapses to one row.
 statement ok
-alter materialized view compact_mv recluster
+optimize table compact_mv compact
 
 query I
 select block_count

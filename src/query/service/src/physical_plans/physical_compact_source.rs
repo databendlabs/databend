@@ -26,7 +26,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline::sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
@@ -243,13 +242,7 @@ impl PhysicalPlanBuilder {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(catalog).await?;
         let tbl = catalog.get_table(&tenant, database, table).await?;
-        tbl.check_mutable().or_else(|error| {
-            if is_materialized_view_engine(tbl.engine()) {
-                Ok(())
-            } else {
-                Err(error)
-            }
-        })?;
+        tbl.check_mutable_or_materialized_view()?;
 
         let table_info = tbl.get_table_info().clone();
 

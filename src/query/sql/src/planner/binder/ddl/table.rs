@@ -1809,13 +1809,14 @@ impl Binder {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
         let table_meta = self.ctx.get_table(&catalog, &database, &table).await?;
-        if is_materialized_view_engine(table_meta.engine()) {
-            return Err(ErrorCode::InvalidOperation(format!(
-                "OPTIMIZE TABLE is not supported on materialized view '{catalog}.{database}.{table}'"
-            )));
-        }
+        let is_materialized_view = is_materialized_view_engine(table_meta.engine());
         let limit = limit.map(|v| v as usize);
         let plan = match ast_action {
+            AstOptimizeTableAction::All if is_materialized_view => {
+                return Err(ErrorCode::InvalidOperation(format!(
+                    "OPTIMIZE TABLE ALL is not supported on materialized view '{catalog}.{database}.{table}'; use OPTIMIZE TABLE ... COMPACT instead"
+                )));
+            }
             AstOptimizeTableAction::All => {
                 let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
                     catalog,
@@ -1831,6 +1832,11 @@ impl Binder {
                     s_expr: Box::new(s_expr),
                     need_purge: true,
                 }
+            }
+            AstOptimizeTableAction::Purge { before } if is_materialized_view => {
+                return Err(ErrorCode::InvalidOperation(format!(
+                    "OPTIMIZE TABLE PURGE is not supported on materialized view '{catalog}.{database}.{table}'"
+                )));
             }
             AstOptimizeTableAction::Purge { before } => {
                 let instant = if let Some(point) = before {
