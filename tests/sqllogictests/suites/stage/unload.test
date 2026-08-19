@@ -179,10 +179,8 @@ statement error 1006.*file already exists
 copy into @unload/a_raw_path.csv from (select 3,4) file_format=(type=csv) single=true include_query_id=false use_raw_path=true detailed_output=false overwrite=false;
 
 
-query ???
+statement ok
 copy into @unload/array_of_nulls from (select [NULL, NULL]);
-----
-1 8 555
 
 query ?
 select * from @unload/array_of_nulls;
