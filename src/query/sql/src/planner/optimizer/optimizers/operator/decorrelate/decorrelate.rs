@@ -24,7 +24,6 @@ use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::type_check::common_super_type;
-use databend_common_expression::type_check::infer_function_return_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -819,22 +818,41 @@ impl SubqueryDecorrelatorOptimizer {
                             } else {
                                 *child_expr.clone()
                             };
-                            let arguments = vec![array_argument, value_argument];
-                            let return_type = infer_function_return_type(
-                                subquery.span,
-                                "contains",
-                                &[],
-                                arguments.iter().map(ScalarExpr::data_type),
-                                &BUILTIN_FUNCTIONS,
-                            )?;
-                            let func = ScalarExpr::FunctionCall(FunctionCall {
+                            let nullable_value = value_argument
+                                .data_type()
+                                .is_nullable_or_null()
+                                .then(|| value_argument.clone());
+                            let contains = ScalarExpr::FunctionCall(FunctionCall {
                                 span: subquery.span,
                                 func_name: "contains".to_string(),
                                 params: vec![],
-                                arguments,
-                                return_type: Box::new(return_type),
+                                arguments: vec![array_argument, value_argument],
+                                return_type: Box::new(DataType::Boolean),
                             });
-                            return Ok(Some(func));
+                            let Some(value_argument) = nullable_value else {
+                                return Ok(Some(contains));
+                            };
+                            let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
+                                span: subquery.span,
+                                func_name: "is_not_null".to_string(),
+                                params: vec![],
+                                arguments: vec![value_argument],
+                                return_type: Box::new(DataType::Boolean),
+                            });
+                            return Ok(Some(ScalarExpr::FunctionCall(FunctionCall {
+                                span: subquery.span,
+                                func_name: "if".to_string(),
+                                params: vec![],
+                                arguments: vec![
+                                    is_not_null,
+                                    contains,
+                                    ScalarExpr::ConstantExpr(ConstantExpr {
+                                        span: subquery.span,
+                                        value: Scalar::Null,
+                                    }),
+                                ],
+                                return_type: Box::new(DataType::Boolean.wrap_nullable()),
+                            })));
                         }
 
                         let mut funcs = Vec::with_capacity(values.len());
