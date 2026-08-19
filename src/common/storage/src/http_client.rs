@@ -370,6 +370,7 @@ mod tests {
         0x2e, 0xc9, 0x2f, 0x4a, 0x4c, 0x4f, 0x55, 0xc8, 0x4f, 0xca, 0x4a, 0x4d, 0x2e, 0x51, 0x48,
         0xaa, 0x2c, 0x49, 0x2d, 0xe6, 0x02, 0x00, 0xae, 0xc5, 0xf2, 0x24, 0x19, 0x00, 0x00, 0x00,
     ];
+    const RAW_BODY: &[u8] = b"raw storage object bytes\n";
 
     async fn serve_gzip_object() -> (SocketAddr, databend_common_base::runtime::JoinHandle<()>) {
         use tokio::io::AsyncReadExt;
@@ -540,6 +541,28 @@ mod tests {
         let client = make_client(EndpointPolicyScope::Trusted);
         assert_eq!(client.endpoint_policy_scope, EndpointPolicyScope::Trusted);
         assert_eq!(checked_endpoint_cache_len(&client), 0);
+    }
+
+    /// Negative control for the two `fetch` tests below.
+    ///
+    /// A default reqwest client must decode the gzip body. If this test starts
+    /// failing because the body comes back encoded, `reqwest/gzip` is no longer
+    /// active in this crate's test graph (it comes in via the `reqwest`
+    /// dev-dependency), and the `fetch` tests below prove nothing.
+    #[tokio::test]
+    async fn test_default_http_client_decodes_encoded_response() {
+        let (address, server) = serve_gzip_object().await;
+        let url = format!("http://{address}/object.json.gz");
+
+        let decoded = reqwest::ClientBuilder::new()
+            .build()
+            .unwrap()
+            .get(&url)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(decoded.bytes().await.unwrap().as_ref(), RAW_BODY);
+        server.await.unwrap();
     }
 
     #[tokio::test]

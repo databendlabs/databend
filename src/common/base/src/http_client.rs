@@ -230,8 +230,14 @@ mod tests {
         (address, server)
     }
 
+    /// Negative control for [`test_storage_http_client_preserves_encoded_response`].
+    ///
+    /// A default reqwest client must decode the gzip body. If this test starts
+    /// failing because the body comes back encoded, `reqwest/gzip` is no longer
+    /// active in this crate's test graph (it comes in via the `reqwest`
+    /// dev-dependency), and the test below proves nothing.
     #[tokio::test]
-    async fn test_storage_http_client_preserves_encoded_response() {
+    async fn test_default_http_client_decodes_encoded_response() {
         let (address, server) = serve_gzip_object().await;
         let url = format!("http://{address}/object.json.gz");
 
@@ -244,7 +250,10 @@ mod tests {
             .unwrap();
         assert_eq!(decoded.bytes().await.unwrap().as_ref(), RAW_BODY);
         server.await.unwrap();
+    }
 
+    #[tokio::test]
+    async fn test_storage_http_client_preserves_encoded_response() {
         let (address, server) = serve_gzip_object().await;
         let url = format!("http://{address}/object.json.gz");
         let response = storage_http_client_builder()
