@@ -39,6 +39,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
+use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -255,6 +256,11 @@ impl IPhysicalPlan for Recluster {
                     compact_thresholds,
                     max_threads,
                     cluster_stats_gen.extra_key_num,
+                )?;
+
+                add_aggregate_state_reaggregate_transform(
+                    &mut builder.main_pipeline,
+                    table.schema().as_ref(),
                 )?;
 
                 builder.main_pipeline.add_transform(

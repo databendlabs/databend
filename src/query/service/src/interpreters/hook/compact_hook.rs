@@ -22,6 +22,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::always_callback;
@@ -274,11 +275,18 @@ pub(crate) async fn compact_table(
                 &compact_target.table,
             )?;
             ctx.set_enable_sort_spill(false);
+            let target = if is_materialized_view_engine(table.engine()) {
+                MaintenanceTarget::MaterializedView {
+                    table_id: table.get_id(),
+                }
+            } else {
+                MaintenanceTarget::Table
+            };
             let recluster = ReclusterPlan {
                 catalog: compact_target.catalog,
                 database: compact_target.database,
                 table: compact_target.table,
-                target: MaintenanceTarget::Table,
+                target,
                 limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
                 selection: None,
                 is_final: false,

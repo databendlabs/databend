@@ -92,6 +92,7 @@ use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline::core::SharedLockGuard;
 use databend_common_storage::EndpointPolicyScope;
@@ -1807,6 +1808,12 @@ impl Binder {
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
+        let table_meta = self.ctx.get_table(&catalog, &database, &table).await?;
+        if is_materialized_view_engine(table_meta.engine()) {
+            return Err(ErrorCode::InvalidOperation(format!(
+                "OPTIMIZE TABLE is not supported on materialized view '{catalog}.{database}.{table}'"
+            )));
+        }
         let limit = limit.map(|v| v as usize);
         let plan = match ast_action {
             AstOptimizeTableAction::All => {
