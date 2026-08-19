@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_hashtable::HashMap as FastHashMap;
 use databend_common_hashtable::HashSet as FastHashSet;
@@ -978,6 +979,14 @@ pub struct TableVisibilityTarget<'a> {
     pub table_id: u64,
 }
 
+/// A table target for exact privilege filtering.
+pub struct TablePrivilegeTarget<'a> {
+    pub database_name: &'a str,
+    pub database_id: u64,
+    pub table_name: Option<&'a str>,
+    pub table_id: u64,
+}
+
 /// Result of `filter_db_tables_by_visibility`.
 pub struct DbTableVisibilityResult {
     /// Indexes into the input `tables` slice that are visible.
@@ -992,6 +1001,142 @@ pub struct DbTableVisibilityResult {
 /// Maximum batch size for `mget_ownerships` calls to avoid oversized RPC payloads.
 /// Aligned with `KVPbApi::CHUNK_SIZE = 256` as the default batch size.
 const MGET_OWNERSHIP_BATCH_SIZE: usize = 256;
+
+/// Filter table targets by one exact privilege, with table/database ownership fallback.
+///
+/// Unlike [`GrantObjectVisibilityChecker`], this helper does not treat unrelated privileges as
+/// visibility. ID-based and legacy name-based grants are both checked in memory before unresolved
+/// targets enter the batched ownership path. Database ownership is checked first so its tables do
+/// not need individual ownership lookups.
+pub async fn filter_tables_by_privilege(
+    user: &UserInfo,
+    effective_roles: &[RoleInfo],
+    tenant: &Tenant,
+    catalog_name: &str,
+    targets: &[TablePrivilegeTarget<'_>],
+    privilege: UserPrivilegeType,
+) -> Result<Vec<usize>> {
+    let has_privilege = |object: &GrantObject| {
+        user.grants.verify_privilege(object, privilege)
+            || effective_roles
+                .iter()
+                .any(|role| role.grants.verify_privilege(object, privilege))
+    };
+
+    let mut visible = Vec::with_capacity(targets.len());
+    let mut unresolved = Vec::new();
+    for (target_index, target) in targets.iter().enumerate() {
+        let id_object = GrantObject::TableById(
+            catalog_name.to_string(),
+            target.database_id,
+            target.table_id,
+        );
+        let legacy_database =
+            GrantObject::Database(catalog_name.to_string(), target.database_name.to_string());
+        let legacy_table = target.table_name.map(|table_name| {
+            GrantObject::Table(
+                catalog_name.to_string(),
+                target.database_name.to_string(),
+                table_name.to_string(),
+            )
+        });
+
+        if has_privilege(&id_object)
+            || has_privilege(&legacy_database)
+            || legacy_table.as_ref().is_some_and(&has_privilege)
+        {
+            visible.push(target_index);
+        } else {
+            unresolved.push(target_index);
+        }
+    }
+    if unresolved.is_empty() {
+        return Ok(visible);
+    }
+
+    let database_ids = unresolved
+        .iter()
+        .map(|target_index| targets[*target_index].database_id)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let database_objects = database_ids
+        .iter()
+        .map(|database_id| OwnershipObject::Database {
+            catalog_name: catalog_name.to_string(),
+            db_id: *database_id,
+        })
+        .collect::<Vec<_>>();
+
+    let user_api = UserApiProvider::instance();
+    let mut database_ownerships = Vec::with_capacity(database_objects.len());
+    for chunk in database_objects.chunks(MGET_OWNERSHIP_BATCH_SIZE) {
+        database_ownerships.extend(user_api.mget_ownerships(tenant, chunk).await?);
+    }
+    if database_ownerships.len() != database_objects.len() {
+        return Err(ErrorCode::Internal(format!(
+            "ownership MGET expected {} responses, got {}",
+            database_objects.len(),
+            database_ownerships.len()
+        )));
+    }
+
+    let effective_role_names = effective_roles
+        .iter()
+        .map(|role| role.name.as_str())
+        .collect::<HashSet<_>>();
+    let mut database_owners = HashSet::new();
+    for (database_id, ownership) in database_ids.iter().zip(database_ownerships.iter()) {
+        if ownership
+            .as_ref()
+            .is_some_and(|owner| effective_role_names.contains(owner.role.as_str()))
+        {
+            database_owners.insert(*database_id);
+        }
+    }
+
+    let mut unresolved_tables = Vec::with_capacity(unresolved.len());
+    for target_index in unresolved {
+        if database_owners.contains(&targets[target_index].database_id) {
+            visible.push(target_index);
+        } else {
+            unresolved_tables.push(target_index);
+        }
+    }
+
+    for target_indexes in unresolved_tables.chunks(MGET_OWNERSHIP_BATCH_SIZE) {
+        let ownership_objects = target_indexes
+            .iter()
+            .map(|target_index| {
+                let target = &targets[*target_index];
+                OwnershipObject::Table {
+                    catalog_name: catalog_name.to_string(),
+                    db_id: target.database_id,
+                    table_id: target.table_id,
+                }
+            })
+            .collect::<Vec<_>>();
+        let ownerships = user_api.mget_ownerships(tenant, &ownership_objects).await?;
+        if ownerships.len() != ownership_objects.len() {
+            return Err(ErrorCode::Internal(format!(
+                "ownership MGET expected {} responses, got {}",
+                ownership_objects.len(),
+                ownerships.len()
+            )));
+        }
+
+        for (target_index, ownership) in target_indexes.iter().zip(ownerships) {
+            if ownership
+                .as_ref()
+                .is_some_and(|owner| effective_role_names.contains(owner.role.as_str()))
+            {
+                visible.push(*target_index);
+            }
+        }
+    }
+    visible.sort_unstable();
+    Ok(visible)
+}
 
 /// Filter tables under a single database by visibility using grant-first + lazy ownership.
 ///
