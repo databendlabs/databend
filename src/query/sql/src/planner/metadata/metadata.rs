@@ -86,6 +86,10 @@ pub struct Metadata {
     /// View output symbols that should remain at the view boundary after the
     /// view query is expanded into the surrounding plan.
     view_lineage_source_columns: HashMap<Symbol, Vec<ViewLineageSourceColumn>>,
+    /// Explicit materialized CTEs are executed through temporary tables. Keep
+    /// one producer definition and its temporary-table output mappings so
+    /// lineage extraction can look through that execution detail.
+    materialized_cte_lineage_sources: HashMap<IndexType, MaterializedCteLineageSource>,
     next_runtime_filter_id: usize,
     next_logical_recursive_cte_id: u32,
     next_materialized_cte_id: usize,
@@ -582,6 +586,31 @@ impl Metadata {
             })
     }
 
+    pub(crate) fn add_materialized_cte_lineage_source(
+        &mut self,
+        table_index: IndexType,
+        source: MaterializedCteLineageSource,
+    ) {
+        self.materialized_cte_lineage_sources
+            .insert(table_index, source);
+    }
+
+    pub(crate) fn materialized_cte_lineage_source(
+        &self,
+        table_index: IndexType,
+    ) -> Option<&MaterializedCteLineageSource> {
+        self.materialized_cte_lineage_sources.get(&table_index)
+    }
+
+    pub(crate) fn materialized_cte_lineage_output(&self, column_index: Symbol) -> Option<Symbol> {
+        let table_index = self.columns.get(column_index.as_usize())?.table_index()?;
+        self.materialized_cte_lineage_sources
+            .get(&table_index)?
+            .column_mapping
+            .get(&column_index)
+            .copied()
+    }
+
     pub(crate) fn set_stream_lineage_source(
         &mut self,
         table_index: IndexType,
@@ -595,6 +624,12 @@ impl Metadata {
             entry.table = table.clone();
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct MaterializedCteLineageSource {
+    pub(crate) definition: SExpr,
+    pub(crate) column_mapping: HashMap<Symbol, Symbol>,
 }
 
 #[derive(Clone)]
