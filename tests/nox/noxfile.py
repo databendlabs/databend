@@ -4,6 +4,7 @@ import platform
 import shutil
 import tarfile
 import tempfile
+import time
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
@@ -136,13 +137,23 @@ def download_file(url, target):
         return target
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(get_request(url)) as response:
-        with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as temp_file:
-            shutil.copyfileobj(response, temp_file)
-            temp_path = Path(temp_file.name)
-
-    temp_path.replace(target)
-    return target
+    last_error = None
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(get_request(url), timeout=60) as response:
+                with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as temp_file:
+                    shutil.copyfileobj(response, temp_file)
+                    temp_path = Path(temp_file.name)
+            if temp_path.stat().st_size == 0:
+                temp_path.unlink(missing_ok=True)
+                raise RuntimeError(f"empty download from {url}")
+            temp_path.replace(target)
+            return target
+        except Exception as exc:  # noqa: BLE001 - retry Maven/GitHub flakes
+            last_error = exc
+            print(f"WARN: download {url} failed (attempt {attempt + 1}/5): {exc}")
+            time.sleep(2 * (attempt + 1))
+    raise RuntimeError(f"failed to download {url}: {last_error}")
 
 
 def merge_env(*env_sets):

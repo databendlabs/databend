@@ -8,10 +8,67 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from pyspark.sql import SparkSession
+
+PAIMON_VERSION = "1.4.1"
+PAIMON_SPARK_COORD = f"org.apache.paimon:paimon-spark-3.5_2.12:{PAIMON_VERSION}"
+PAIMON_S3_COORD = f"org.apache.paimon:paimon-s3:{PAIMON_VERSION}"
+MAVEN_MIRRORS = (
+    "https://repo1.maven.org/maven2",
+    "https://maven-central.storage-download.googleapis.com/maven2",
+    "https://repo.maven.apache.org/maven2",
+)
+
+
+def maven_artifact_url(mirror: str, coordinate: str) -> str:
+    group, artifact, version = coordinate.split(":")
+    return (
+        f"{mirror.rstrip('/')}/{group.replace('.', '/')}/"
+        f"{artifact}/{version}/{artifact}-{version}.jar"
+    )
+
+
+def download_maven_jar(coordinate: str, dest: Path) -> Path:
+    if dest.exists() and dest.stat().st_size > 0:
+        return dest
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    last_error: Exception | None = None
+    for attempt in range(5):
+        for mirror in MAVEN_MIRRORS:
+            url = maven_artifact_url(mirror, coordinate)
+            try:
+                request = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "databend-paimon-ci"},
+                )
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    with tempfile.NamedTemporaryFile(
+                        dir=dest.parent, delete=False
+                    ) as tmp:
+                        shutil.copyfileobj(response, tmp)
+                        tmp_path = Path(tmp.name)
+                if tmp_path.stat().st_size == 0:
+                    tmp_path.unlink(missing_ok=True)
+                    raise RuntimeError(f"empty download from {url}")
+                tmp_path.replace(dest)
+                print(f"Downloaded {coordinate} from {mirror}", file=sys.stderr)
+                return dest
+            except (OSError, urllib.error.URLError, RuntimeError) as exc:
+                last_error = exc
+                print(f"WARN: download {url} failed: {exc}", file=sys.stderr)
+        time.sleep(2 * (attempt + 1))
+
+    raise RuntimeError(f"failed to download {coordinate}: {last_error}")
+
 
 warehouse = os.environ.get(
     "PAIMON_WAREHOUSE",
@@ -25,14 +82,30 @@ else:
     Path(warehouse).mkdir(parents=True, exist_ok=True)
     warehouse_uri = f"file://{warehouse}"
 
-packages = "org.apache.paimon:paimon-spark-3.5_2.12:1.4.1"
+jars_dir = Path(
+    os.environ.get(
+        "PAIMON_JARS_DIR",
+        str(Path.home() / ".cache" / "databend-paimon-jars"),
+    )
+)
+jars = [
+    download_maven_jar(
+        PAIMON_SPARK_COORD,
+        jars_dir / f"paimon-spark-3.5_2.12-{PAIMON_VERSION}.jar",
+    )
+]
 if warehouse.startswith("s3://"):
-    packages += ",org.apache.paimon:paimon-s3:1.4.1"
+    jars.append(
+        download_maven_jar(
+            PAIMON_S3_COORD,
+            jars_dir / f"paimon-s3-{PAIMON_VERSION}.jar",
+        )
+    )
 
 builder = (
     SparkSession.builder.appName("prepare-paimon-fs-data")
     .master("local[4]")
-    .config("spark.jars.packages", packages)
+    .config("spark.jars", ",".join(str(path) for path in jars))
     .config(
         "spark.sql.extensions",
         "org.apache.paimon.spark.extensions.PaimonSparkSessionExtensions",
