@@ -68,6 +68,7 @@ use databend_query::sessions::TableContextTableManagement;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -209,11 +210,21 @@ impl<'a> MaterializedViewRefresh<'a> {
                     database, view_name
                 ))
             })?;
+        let physical_query = Self::parse_persisted_definition_query(
+            ctx.as_ref(),
+            catalog,
+            database,
+            mv_table,
+            &definition.data.query,
+            "invalid materialized view physical query",
+            view_name,
+        )
+        .await?;
         Self::validate_source_table_id(
             ctx.clone(),
             database,
             view_name,
-            &definition.data.query,
+            physical_query,
             source_table_id,
         )
         .await?;
@@ -278,10 +289,16 @@ impl<'a> MaterializedViewRefresh<'a> {
                 .is_none_or(|(mv_source_seq, _)| *mv_source_seq != source_seq)
         );
 
-        let logical_query = parse_materialized_view_query(
+        let logical_query = Self::parse_persisted_definition_query(
+            ctx.as_ref(),
+            catalog,
+            database,
+            mv_table,
             &definition.data.original_query,
             "invalid materialized view logical query",
-        )?;
+            view_name,
+        )
+        .await?;
         let is_aggregating = MaterializedViewChecker::check_query(&logical_query).is_aggregating();
 
         let source_database_id = source_meta
@@ -338,17 +355,79 @@ impl<'a> MaterializedViewRefresh<'a> {
         }))
     }
 
+    async fn persist_invalid_definition_reason(
+        ctx: &QueryContext,
+        catalog: &str,
+        database: &str,
+        mv_table: &FuseTable,
+        reason: impl Into<String>,
+    ) -> Result<()> {
+        let reason = reason.into();
+        if mv_table
+            .get_table_info()
+            .meta
+            .options
+            .get(OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON)
+            == Some(&reason)
+        {
+            return Ok(());
+        }
+
+        let catalog_obj = ctx.get_catalog(catalog).await?;
+        catalog_obj
+            .upsert_table_option(&ctx.get_tenant(), database, UpsertTableOptionReq {
+                table_id: mv_table.get_id(),
+                // `upsert_table_option` merges options in a bounded CAS loop. Use the
+                // version we parsed as a lower bound so that loop can absorb concurrent
+                // TableMeta updates without accepting an older version.
+                seq: MatchSeq::GE(mv_table.get_table_info().ident.seq),
+                options: HashMap::from([(
+                    OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON.to_string(),
+                    Some(reason),
+                )]),
+            })
+            .await?;
+        Ok(())
+    }
+
+    async fn parse_persisted_definition_query(
+        ctx: &QueryContext,
+        catalog: &str,
+        database: &str,
+        mv_table: &FuseTable,
+        sql: &str,
+        error: &str,
+        view_name: &str,
+    ) -> Result<Query> {
+        match parse_materialized_view_query(sql, error) {
+            Ok(query) => Ok(query),
+            Err(error) => {
+                if let Err(persist_error) = Self::persist_invalid_definition_reason(
+                    ctx,
+                    catalog,
+                    database,
+                    mv_table,
+                    error.message(),
+                )
+                .await
+                {
+                    warn!(
+                        "failed to persist materialized view {}.{} invalid definition reason: {}",
+                        database, view_name, persist_error
+                    );
+                }
+                Err(error)
+            }
+        }
+    }
+
     async fn validate_source_table_id(
         ctx: Arc<QueryContext>,
         database: &str,
         view_name: &str,
-        physical_query: &str,
+        query: Query,
         expected_source_table_id: u64,
     ) -> Result<()> {
-        let query = parse_materialized_view_query(
-            physical_query,
-            "invalid materialized view physical query",
-        )?;
         let mut planner = Planner::new_with_query_executor(
             ctx.clone(),
             Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(

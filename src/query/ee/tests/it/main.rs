@@ -14,5 +14,6 @@
 
 #![feature(unwrap_infallible)]
 mod license;
+mod materialized_view;
 mod storages;
 mod stream;

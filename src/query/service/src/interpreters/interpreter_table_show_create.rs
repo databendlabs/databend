@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
@@ -32,6 +31,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::ClusterKeyNormalizer;
+use databend_common_sql::format_materialized_view_create_sql;
 use databend_common_sql::plans::ShowCreateTablePlan;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -431,28 +431,12 @@ impl ShowCreateTableInterpreter {
             })?
             .data;
 
-        let table_info = table.get_table_info();
-        let mut create_sql = format!(
-            "CREATE MATERIALIZED VIEW {}.{}",
-            QuotedIdent(database, '`'),
-            QuotedIdent(name, '`')
-        );
-
-        let columns = definition
-            .logical_schema
-            .fields()
-            .iter()
-            .map(|field| QuotedIdent(field.name(), '`').to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        create_sql.push_str(&format!(" ({columns})"));
-
-        if let Some(cluster_key) = table_info.meta.cluster_key_str() {
-            create_sql.push_str(&format!(" CLUSTER BY {}", cluster_key));
-        }
-
-        create_sql.push_str(&format!(" AS {}", definition.original_query));
-        Ok(create_sql)
+        Ok(format_materialized_view_create_sql(
+            database,
+            name,
+            &definition,
+            &table.get_table_info().meta,
+        ))
     }
 
     async fn show_create_stream_query(catalog: &dyn Catalog, table: &dyn Table) -> Result<String> {

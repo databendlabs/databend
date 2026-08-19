@@ -546,6 +546,23 @@ impl Binder {
         let source_table_name = source_entry.name().to_string();
         let source_table_id = source_table.get_id();
         let source_table_seq = source_table.get_table_info().ident.seq;
+        let source_database_id = source_table
+            .get_table_info()
+            .meta
+            .options
+            .get(OPT_KEY_DATABASE_ID)
+            .ok_or_else(|| {
+                ErrorCode::InvalidMaterializedView(format!(
+                    "source table id {source_table_id} does not record its database id"
+                ))
+            })?
+            .parse::<u64>()?;
+        if source_catalog_name != catalog_name || source_database_id != target_database_id {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view and source table must belong to the same catalog and database: target '{}.{}', source '{}.{}'",
+                catalog_name, database_name, source_catalog_name, source_database
+            )));
+        }
         let source_table_option =
             (!source_table.change_tracking_enabled()).then(|| UpsertTableOptionReq {
                 table_id: source_table_id,
@@ -917,18 +934,28 @@ impl Binder {
         let database_name = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = SelectBuilder::from(&format!(
-            "{}.system.tables",
+            "{}.system.materialized_views",
             QuotedIdent(catalog_name.to_lowercase(), '`')
         ));
         select_builder
-            .with_column("name AS Name")
-            .with_column("database AS Database")
-            .with_column("engine AS Engine")
-            .with_column("created_on AS \"Created On\"");
+            .with_column("created_on")
+            .with_column("name")
+            .with_column("catalog")
+            .with_column("database")
+            .with_column("cluster_by")
+            .with_column("num_rows")
+            .with_column("data_size")
+            .with_column("data_compressed_size")
+            .with_column("source_catalog")
+            .with_column("source_database")
+            .with_column("source_table")
+            .with_column("invalid")
+            .with_column("invalid_reason")
+            .with_column("comment")
+            .with_column("text");
 
         select_builder.with_filter(format!("database = {}", QuotedString(&database_name, '\'')));
         select_builder.with_filter(format!("catalog = {}", QuotedString(&catalog_name, '\'')));
-        select_builder.with_filter("table_type = 'MATERIALIZED VIEW'".to_string());
 
         select_builder
             .with_order_by("database")
@@ -949,7 +976,7 @@ impl Binder {
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowTables(catalog_name, database_name),
+            RewriteKind::ShowMaterializedViews,
         )
         .await
     }
