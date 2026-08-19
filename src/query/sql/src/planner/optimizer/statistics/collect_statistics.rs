@@ -101,6 +101,9 @@ impl CollectStatisticsOptimizer {
     async fn optimize_async(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut collector = TraceCollector::default();
         let s_expr = self.collect(s_expr, &mut collector).await?;
+        // Candidate read plans live in metadata, not in the query tree. Collect their
+        // scan statistics so materialized-view rewrite can compare rewrite costs.
+        self.collect_materialized_view_candidates().await?;
         if self.should_collect_trace() {
             self.finalize_trace(&s_expr, &mut collector)?;
             if self.enable_trace {
@@ -123,6 +126,43 @@ impl CollectStatisticsOptimizer {
             }
         }
         Ok(s_expr)
+    }
+
+    async fn collect_materialized_view_candidates(&mut self) -> Result<()> {
+        if !self.metadata.read().has_materialized_view_candidates() {
+            return Ok(());
+        }
+
+        let source_table_ids: Vec<u64> = self
+            .metadata
+            .read()
+            .materialized_view_candidates()
+            .keys()
+            .copied()
+            .collect();
+        // Candidate traces must not leak into the query statistics replay.
+        let mut collector = TraceCollector::default();
+        for source_table_id in source_table_ids {
+            let read_plans: Vec<SExpr> = self
+                .metadata
+                .read()
+                .get_materialized_view_candidates(source_table_id)
+                .unwrap_or_default()
+                .iter()
+                .map(|candidate| candidate.read_plan.clone())
+                .collect();
+            if read_plans.is_empty() {
+                continue;
+            }
+            let mut updated = Vec::with_capacity(read_plans.len());
+            for read_plan in read_plans {
+                updated.push(self.collect(&read_plan, &mut collector).await?);
+            }
+            self.metadata
+                .write()
+                .replace_materialized_view_candidate_read_plans(source_table_id, updated);
+        }
+        Ok(())
     }
 
     fn should_collect_trace(&self) -> bool {

@@ -385,6 +385,21 @@ impl Metadata {
             .map(Vec::as_slice)
     }
 
+    /// Replace candidate `read_plan`s after statistics have been collected.
+    /// `read_plans` must stay in the same order as the stored candidates.
+    pub fn replace_materialized_view_candidate_read_plans(
+        &mut self,
+        source_table_id: u64,
+        read_plans: Vec<SExpr>,
+    ) {
+        let Some(candidates) = self.materialized_view_candidates.get_mut(&source_table_id) else {
+            return;
+        };
+        for (candidate, read_plan) in candidates.iter_mut().zip(read_plans) {
+            candidate.read_plan = read_plan;
+        }
+    }
+
     pub fn has_materialized_view_candidates(&self) -> bool {
         !self.materialized_view_candidates.is_empty()
     }
