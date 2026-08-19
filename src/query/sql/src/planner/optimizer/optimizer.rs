@@ -364,7 +364,7 @@ fn rewrite_insert_multi_table_whens(
 
         let condition_index = opt_ctx.get_metadata().write().add_derived_column(
             format!("_insert_multi_when_{}", idx),
-            when.condition.data_type()?.into_owned(),
+            when.condition.data_type().into_owned(),
         );
         let eval_expr = source_expr.clone().build_unary(EvalScalar {
             items: vec![ScalarItem {

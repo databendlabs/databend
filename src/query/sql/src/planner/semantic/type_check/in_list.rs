@@ -127,7 +127,7 @@ where A: super::TypeCheckAdapter
         let result = self
             .fold_or_levels(span, predicate_levels)?
             .expect("IN list should not be empty");
-        let data_type = result.data_type()?.into_owned();
+        let data_type = result.data_type().into_owned();
         if not {
             self.resolve_scalar_function_call(span, "not", vec![], vec![result])
         } else {

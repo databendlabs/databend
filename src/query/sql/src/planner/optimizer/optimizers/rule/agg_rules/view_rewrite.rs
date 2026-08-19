@@ -284,6 +284,7 @@ impl QueryInfo {
                 }
                 let mut new_func = func.clone();
                 new_func.arguments = new_args;
+                new_func.refresh_return_type()?;
                 ScalarExpr::FunctionCall(new_func)
             }
             ScalarExpr::CastExpr(cast) => {

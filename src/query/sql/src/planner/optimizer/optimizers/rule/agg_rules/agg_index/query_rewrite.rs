@@ -130,8 +130,8 @@ impl AggIndexView {
                         func.params.clone(),
                         func.args
                             .iter()
-                            .map(|arg| arg.data_type().map(|data_type| data_type.into_owned()))
-                            .collect::<Result<_>>()?,
+                            .map(|arg| arg.data_type().into_owned())
+                            .collect(),
                         func.sort_descs
                             .iter()
                             .map(|desc| desc.try_into())
@@ -139,7 +139,7 @@ impl AggIndexView {
                     )?;
                     (func.serialize_data_type(), true)
                 }
-                None => (item.scalar.data_type().unwrap().into_owned(), false),
+                None => (item.scalar.data_type().into_owned(), false),
             };
 
             let name = index.to_string();

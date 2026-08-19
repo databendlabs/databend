@@ -293,6 +293,37 @@ async fn test_nullable_tuple_cast_to_variant_keeps_function_signature() -> anyho
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_folded_in_predicate_preserves_nullability() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings()
+        .set_setting("inlist_to_join_threshold".to_string(), "6".to_string())?;
+    ctx.get_settings()
+        .set_setting("max_inlist_to_or".to_string(), "2".to_string())?;
+    fixture
+        .execute_command("CREATE TABLE folded_in_type_t(a Nullable(Int64))")
+        .await?;
+
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner
+        .plan_sql("SELECT * FROM folded_in_type_t WHERE a IN (1, 2, 3, 1, 2, 3)")
+        .await?;
+    let Plan::Query {
+        s_expr,
+        metadata,
+        bind_context,
+        ..
+    } = plan
+    else {
+        panic!("expected query plan");
+    };
+    let mut builder = PhysicalPlanBuilder::new(metadata, ctx, false);
+    builder.build(&s_expr, bind_context.column_set()).await?;
+
+    Ok(())
+}
+
 fn max_or_depth<I: ColumnIndex>(expr: &Expr<I>) -> usize {
     match expr {
         Expr::Cast(cast) => max_or_depth(&cast.expr),

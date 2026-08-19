@@ -161,10 +161,7 @@ where A: super::TypeCheckAdapter
         if !self.should_try_rewrite_variant_function(func_name) {
             return None;
         }
-        let first_arg_type = match args.first()?.data_type() {
-            Ok(data_type) => data_type,
-            Err(error) => return Some(Err(error)),
-        };
+        let first_arg_type = args.first()?.data_type();
         if first_arg_type.remove_nullable() != DataType::Variant {
             return None;
         }
@@ -278,7 +275,7 @@ where A: super::TypeCheckAdapter
         paths: Vec<(CoreExprId, OwnedKeyPath)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let last_index = paths.len().saturating_sub(1);
-        let mut data_type = scalar.data_type()?.into_owned();
+        let mut data_type = scalar.data_type().into_owned();
         for (index, (path, _)) in paths.into_iter().enumerate() {
             let box (path_scalar, _) = self.resolve_core(arena, path)?;
             let func_name = if string_result && index == last_index {
@@ -363,10 +360,7 @@ where A: super::TypeCheckAdapter
         data_type: &TableDataType,
         is_try: bool,
     ) -> ScalarExpr {
-        let scalar_is_nullable = scalar
-            .data_type()
-            .expect("ScalarExpr always carries a resolved data type")
-            .is_nullable_or_null();
+        let scalar_is_nullable = scalar.data_type().is_nullable_or_null();
         let return_type = if is_try || data_type.is_nullable() || scalar_is_nullable {
             DataType::Nullable(Box::new(DataType::Variant))
         } else {
@@ -553,7 +547,7 @@ where A: super::TypeCheckAdapter
             }
             .into();
         }
-        let return_type = scalar.data_type()?.into_owned();
+        let return_type = scalar.data_type().into_owned();
         Ok(Box::new((scalar, return_type)))
     }
 
@@ -691,7 +685,7 @@ where A: super::TypeCheckAdapter
                     .into();
                     scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
                 }
-                let return_type = scalar.data_type()?.into_owned();
+                let return_type = scalar.data_type().into_owned();
                 Ok(Box::new((scalar, return_type)))
             }
         }

@@ -162,7 +162,7 @@ impl Binder {
             partition_items.push(condition.right.clone());
         }
 
-        let return_type = asof_window_result_type(left_column.data_type()?.as_ref());
+        let return_type = asof_window_result_type(left_column.data_type().as_ref());
         let func_type = WindowFuncType::LagLead(LagLeadFunction {
             is_lag: false,
             return_type: Box::new(return_type),

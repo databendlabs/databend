@@ -402,10 +402,11 @@ impl SubqueryDecorrelatorOptimizer {
                 for arg in arguments.iter_mut() {
                     (*arg, outer) = self.try_rewrite_subquery(arg, outer, false)?;
                 }
-                let expr = FunctionCall {
+                let mut expr = FunctionCall {
                     arguments,
                     ..func.clone()
                 };
+                expr.refresh_return_type()?;
                 Ok((expr.into(), outer))
             }
             ScalarExpr::UDFCall(udf) => {
@@ -729,7 +730,7 @@ impl SubqueryDecorrelatorOptimizer {
                     .build(),
                 });
                 let left_condition =
-                    if left_condition_base.data_type()?.as_ref() == subquery.data_type.as_ref() {
+                    if left_condition_base.data_type().as_ref() == subquery.data_type.as_ref() {
                         left_condition_base
                     } else {
                         wrap_cast(&left_condition_base, &subquery.data_type)
@@ -769,7 +770,7 @@ impl SubqueryDecorrelatorOptimizer {
                     .zip(right_conditions.iter())
                     .enumerate()
                 {
-                    if l.data_type()?.is_nullable() || r.data_type()?.is_nullable() {
+                    if l.data_type().is_nullable() || r.data_type().is_nullable() {
                         is_null_equal.push(i);
                     }
                 }

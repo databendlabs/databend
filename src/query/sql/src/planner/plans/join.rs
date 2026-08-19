@@ -581,8 +581,8 @@ impl Join {
             };
             estimator.apply_condition(
                 columns,
-                condition.left.data_type()?.as_ref(),
-                condition.right.data_type()?.as_ref(),
+                condition.left.data_type().as_ref(),
+                condition.right.data_type().as_ref(),
                 condition.is_null_equal,
                 &mut left_join_keys,
                 &mut right_join_keys,
@@ -1216,8 +1216,8 @@ mod tests {
             .expect("test condition should be a single-column join key");
         estimator.apply_condition(
             columns,
-            condition.left.data_type()?.as_ref(),
-            condition.right.data_type()?.as_ref(),
+            condition.left.data_type().as_ref(),
+            condition.right.data_type().as_ref(),
             condition.is_null_equal,
             &mut left_statistics.column_stats,
             &mut right_statistics.column_stats,

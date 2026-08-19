@@ -116,7 +116,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         {
                             let (is_adjusted, constant) = adjust_scalar(
                                 constant.value.clone(),
-                                func.arguments[0].data_type()?.as_ref(),
+                                func.arguments[0].data_type().as_ref(),
                             );
                             if is_adjusted {
                                 self.add_expr_predicate(&func.arguments[0], Predicate {
@@ -132,7 +132,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         {
                             let (is_adjusted, constant) = adjust_scalar(
                                 constant.value.clone(),
-                                func.arguments[1].data_type()?.as_ref(),
+                                func.arguments[1].data_type().as_ref(),
                             );
                             if is_adjusted {
                                 self.add_expr_predicate(&func.arguments[1], Predicate {
@@ -189,12 +189,8 @@ impl<'a> InferFilterOptimizer<'a> {
     }
 
     pub fn add_equal_expr(&mut self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
-        let Ok(left_ty) = left.data_type() else {
-            return false;
-        };
-        let Ok(right_ty) = right.data_type() else {
-            return false;
-        };
+        let left_ty = left.data_type();
+        let right_ty = right.data_type();
         if !common_super_type_with_conversion(left_ty.as_ref(), right_ty.as_ref())
             .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
         {
@@ -814,8 +810,7 @@ impl<'a> InferFilterOptimizer<'a> {
         for predicate in predicates {
             replace.reset();
             let mut new_predicate = predicate.clone();
-            replace.visit(&mut new_predicate).unwrap();
-            if !replace.can_replace {
+            if replace.visit(&mut new_predicate).is_err() || !replace.can_replace {
                 result_predicates.push(predicate);
                 continue;
             }
@@ -844,7 +839,7 @@ impl<'a> InferFilterOptimizer<'a> {
                 continue;
             }
 
-            if new_predicate != predicate && new_predicate.data_type().is_ok() {
+            if new_predicate != predicate {
                 result_predicates.push(new_predicate);
             }
 

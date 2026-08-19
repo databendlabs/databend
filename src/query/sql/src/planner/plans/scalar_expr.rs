@@ -161,31 +161,25 @@ impl ScalarExpr {
         )
     }
 
-    pub fn data_type(&self) -> Result<Cow<'_, DataType>> {
+    pub fn data_type(&self) -> Cow<'_, DataType> {
         match self {
-            ScalarExpr::BoundColumnRef(column) => {
-                Ok(Cow::Borrowed(column.column.data_type.as_ref()))
-            }
+            ScalarExpr::BoundColumnRef(column) => Cow::Borrowed(column.column.data_type.as_ref()),
             ScalarExpr::ConstantExpr(constant) => {
-                Ok(Cow::Owned(constant.value.as_ref().infer_data_type()))
+                Cow::Owned(constant.value.as_ref().infer_data_type())
             }
-            ScalarExpr::TypedConstantExpr(_, data_type) => Ok(Cow::Borrowed(data_type)),
-            ScalarExpr::WindowFunction(window) => Ok(Cow::Owned(window.func.return_type())),
+            ScalarExpr::TypedConstantExpr(_, data_type) => Cow::Borrowed(data_type),
+            ScalarExpr::WindowFunction(window) => Cow::Owned(window.func.return_type()),
             ScalarExpr::AggregateFunction(aggregate) => {
-                Ok(Cow::Borrowed(aggregate.return_type.as_ref()))
+                Cow::Borrowed(aggregate.return_type.as_ref())
             }
-            ScalarExpr::LambdaFunction(function) => {
-                Ok(Cow::Borrowed(function.return_type.as_ref()))
-            }
-            ScalarExpr::FunctionCall(function) => Ok(Cow::Borrowed(function.return_type.as_ref())),
-            ScalarExpr::CastExpr(cast) => Ok(Cow::Borrowed(cast.target_type.as_ref())),
-            ScalarExpr::SubqueryExpr(subquery) => Ok(Cow::Owned(subquery.output_data_type())),
-            ScalarExpr::UDFCall(udf) => Ok(Cow::Borrowed(udf.return_type.as_ref())),
-            ScalarExpr::UDAFCall(udaf) => Ok(Cow::Borrowed(udaf.return_type.as_ref())),
+            ScalarExpr::LambdaFunction(function) => Cow::Borrowed(function.return_type.as_ref()),
+            ScalarExpr::FunctionCall(function) => Cow::Borrowed(function.return_type.as_ref()),
+            ScalarExpr::CastExpr(cast) => Cow::Borrowed(cast.target_type.as_ref()),
+            ScalarExpr::SubqueryExpr(subquery) => Cow::Owned(subquery.output_data_type()),
+            ScalarExpr::UDFCall(udf) => Cow::Borrowed(udf.return_type.as_ref()),
+            ScalarExpr::UDAFCall(udaf) => Cow::Borrowed(udaf.return_type.as_ref()),
             ScalarExpr::UDFLambdaCall(udf) => udf.scalar.data_type(),
-            ScalarExpr::AsyncFunctionCall(function) => {
-                Ok(Cow::Borrowed(function.return_type.as_ref()))
-            }
+            ScalarExpr::AsyncFunctionCall(function) => Cow::Borrowed(function.return_type.as_ref()),
         }
     }
 
@@ -193,12 +187,10 @@ impl ScalarExpr {
         data_type: DataType,
         arguments: impl IntoIterator<Item = &'a ScalarExpr>,
     ) -> DataType {
-        if arguments.into_iter().any(|argument| {
-            argument
-                .data_type()
-                .expect("ScalarExpr always carries a resolved data type")
-                .is_nullable_or_null()
-        }) {
+        if arguments
+            .into_iter()
+            .any(|argument| argument.data_type().is_nullable_or_null())
+        {
             data_type.wrap_nullable()
         } else {
             data_type
@@ -1083,7 +1075,7 @@ impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
         Ok(AggregateFunctionSortDesc {
             index: SymbolOrOffset::Symbol(col.column.index),
             is_reuse_index: self.is_reuse_index,
-            data_type: expr.data_type()?.into_owned(),
+            data_type: expr.data_type().into_owned(),
             nulls_first: self.nulls_first,
             asc: self.asc,
         })
@@ -1195,16 +1187,11 @@ pub struct FunctionCall {
 
 impl FunctionCall {
     pub fn infer_return_type(&self) -> Result<DataType> {
-        let argument_types = self
-            .arguments
-            .iter()
-            .map(ScalarExpr::data_type)
-            .collect::<Result<Vec<_>>>()?;
         type_check::infer_function_return_type(
             self.span,
             &self.func_name,
             &self.params,
-            argument_types.into_iter(),
+            self.arguments.iter().map(ScalarExpr::data_type),
             &BUILTIN_FUNCTIONS,
         )
     }
@@ -1838,7 +1825,7 @@ mod tests {
 
     fn assert_stored_type_matches_inferred(expr: &ScalarExpr) {
         assert_eq!(
-            expr.data_type().unwrap().as_ref(),
+            expr.data_type().as_ref(),
             expr.as_expr().unwrap().data_type()
         );
     }

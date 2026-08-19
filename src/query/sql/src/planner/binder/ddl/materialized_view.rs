@@ -366,7 +366,7 @@ impl Binder {
                 data_types.push(infer_schema_type(function.return_type.as_ref())?);
             }
             for item in &aggregate.group_items {
-                data_types.push(infer_schema_type(item.scalar.data_type()?.as_ref())?);
+                data_types.push(infer_schema_type(item.scalar.data_type().as_ref())?);
             }
             data_types
         } else {

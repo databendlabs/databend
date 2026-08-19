@@ -105,11 +105,11 @@ impl SExprVisitor for SExprTypeValidator<'_> {
                     .zip(&union.output_indexes)
                 {
                     let left_type = match left_cast {
-                        Some(cast) => cast.data_type()?,
+                        Some(cast) => cast.data_type(),
                         None => Cow::Owned(self.metadata_type(*left)?),
                     };
                     let right_type = match right_cast {
-                        Some(cast) => cast.data_type()?,
+                        Some(cast) => cast.data_type(),
                         None => Cow::Owned(self.metadata_type(*right)?),
                     };
                     self.validate_symbol_type(*output, left_type.as_ref(), "union left output")?;
@@ -128,7 +128,7 @@ impl SExprTypeValidator<'_> {
         for item in items {
             self.validate_symbol_type(
                 item.index,
-                item.scalar.data_type()?.as_ref(),
+                item.scalar.data_type().as_ref(),
                 "scalar producer",
             )?;
         }
@@ -197,9 +197,6 @@ impl SExprTypeValidator<'_> {
     }
 
     fn validate_scalar(&self, scalar: &ScalarExpr, symbol_types: SymbolTypeSource) -> Result<()> {
-        // Resolve the complete expression first, then validate all embedded
-        // symbol and aggregate declarations.
-        scalar.data_type()?;
         ScalarTypeValidator { symbol_types }.visit(scalar)
     }
 }
@@ -275,8 +272,8 @@ impl ScalarTypeValidator<'_> {
         let argument_types = aggregate
             .args
             .iter()
-            .map(|argument| argument.data_type().map(|data_type| data_type.into_owned()))
-            .collect::<Result<Vec<_>>>()?;
+            .map(|argument| argument.data_type().into_owned())
+            .collect::<Vec<_>>();
         let sort_descs = aggregate
             .sort_descs
             .iter()

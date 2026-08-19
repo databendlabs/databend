@@ -1406,7 +1406,7 @@ fn test_replaced_remaining_predicate_must_still_type_check() -> anyhow::Result<(
     let result = run_optimizer(vec![builder.eq(int_col, variant_col), is_not_null])?;
 
     assert!(
-        result.iter().all(|expr| expr.data_type().is_ok()),
+        result.iter().all(|expr| expr.as_expr().is_ok()),
         "Inferred predicates should not contain invalid function arguments"
     );
 

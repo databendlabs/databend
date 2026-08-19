@@ -127,7 +127,7 @@ fn visit_group_by_keys(child: &SExpr, visitor: &mut impl FnMut(Symbol, &DataType
         }
         RelOperator::Aggregate(agg) => {
             for item in agg.group_items.iter() {
-                visitor(item.index, item.scalar.data_type()?.as_ref());
+                visitor(item.index, item.scalar.data_type().as_ref());
             }
         }
         RelOperator::Sort(_)

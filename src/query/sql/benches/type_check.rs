@@ -257,7 +257,7 @@ mod data_type {
         let scalar = case.resolve_first();
 
         bencher.bench_local(|| {
-            let data_type = divan::black_box(&scalar).data_type().unwrap();
+            let data_type = divan::black_box(&scalar).data_type();
             divan::black_box(data_type);
         });
     }

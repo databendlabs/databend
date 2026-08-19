@@ -432,16 +432,16 @@ where A: TypeCheckAdapter
         let arg1 = &func.arguments[1];
         let (constant_arg_index, constant_arg) = match (arg0, arg1) {
             (ScalarExpr::ConstantExpr(_), _)
-                if arg1.data_type()?.remove_nullable() == DataType::Variant
+                if arg1.data_type().remove_nullable() == DataType::Variant
                     && !arg1.used_columns().is_empty()
-                    && arg0.data_type()?.as_ref() == &DataType::String =>
+                    && arg0.data_type().as_ref() == &DataType::String =>
             {
                 (0, arg0)
             }
             (_, ScalarExpr::ConstantExpr(_))
-                if arg0.data_type()?.remove_nullable() == DataType::Variant
+                if arg0.data_type().remove_nullable() == DataType::Variant
                     && !arg0.used_columns().is_empty()
-                    && arg1.data_type()?.as_ref() == &DataType::String =>
+                    && arg1.data_type().as_ref() == &DataType::String =>
             {
                 (1, arg1)
             }
@@ -498,7 +498,7 @@ where A: TypeCheckAdapter
         if ["round", "truncate"].contains(&func_name)
             && !args.is_empty()
             && params.is_empty()
-            && args[0].data_type()?.remove_nullable().is_decimal()
+            && args[0].data_type().remove_nullable().is_decimal()
         {
             let scale = if args.len() == 2 {
                 let scalar_expr = &arguments[1];
@@ -603,7 +603,7 @@ where A: TypeCheckAdapter
             };
 
             let (precision_index, scale_index) =
-                if args.len() > 1 && args[1].data_type()?.remove_nullable().is_string() {
+                if args.len() > 1 && args[1].data_type().remove_nullable().is_string() {
                     (2, 3)
                 } else {
                     (1, 2)

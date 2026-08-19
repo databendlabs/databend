@@ -189,7 +189,7 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
                 column_ref.clone()
             } else {
                 let name = format!("{}_arg_{}", &udf.display_name, i);
-                let data_type = arg.data_type()?.into_owned();
+                let data_type = arg.data_type().into_owned();
                 let index = self
                     .metadata
                     .write()

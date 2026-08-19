@@ -135,7 +135,7 @@ impl SelectInfo {
                 .iter_mut()
                 .find(|column| column.index == item.index)
             {
-                column.data_type = Box::new(item.scalar.data_type()?.into_owned());
+                column.data_type = Box::new(item.scalar.data_type().into_owned());
             }
         }
 
@@ -271,7 +271,7 @@ impl Binder {
             }
             _ => self.create_derived_column_binding(
                 item.alias.clone(),
-                item.scalar.data_type()?.into_owned(),
+                item.scalar.data_type().into_owned(),
             ),
         };
 
@@ -314,7 +314,7 @@ impl Binder {
             };
             let projection_item = self.prepare_select_output_item(bind_context, &source_item)?;
             let mut column_binding = column_binding;
-            column_binding.data_type = Box::new(projection_item.scalar.data_type()?.into_owned());
+            column_binding.data_type = Box::new(projection_item.scalar.data_type().into_owned());
             source_scalars.insert(source_item.index, source_item);
             projection_scalars.insert(projection_item.index, projection_item);
             columns.push(column_binding);

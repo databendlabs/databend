@@ -184,7 +184,7 @@ where A: TypeCheckAdapter
                 (BoundColumnRef { span, column }.into(), data_type)
             }
             NameResolutionResult::Alias { scalar, .. } => {
-                (scalar.clone(), scalar.data_type()?.into_owned())
+                (scalar.clone(), scalar.data_type().into_owned())
             }
         };
 

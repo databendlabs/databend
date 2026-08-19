@@ -793,8 +793,8 @@ impl PhysicalPlanBuilder {
                         args: agg
                             .args
                             .iter()
-                            .map(|s| s.data_type().map(|data_type| data_type.into_owned()))
-                            .collect::<Result<_>>()?,
+                            .map(|s| s.data_type().into_owned())
+                            .collect(),
                         params: agg.params.clone(),
                         sort_descs: agg
                             .sort_descs

@@ -595,7 +595,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 column: ColumnBindingBuilder::new(
                     format!("group_item_{}", group_item.index),
                     group_item.index,
-                    Box::new(group_item.scalar.data_type()?.into_owned()),
+                    Box::new(group_item.scalar.data_type().into_owned()),
                     Visibility::Visible,
                 )
                 .build(),
@@ -605,7 +605,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         // Transform aggregate functions for re-aggregation
         for agg_func in hierarchical_agg.aggregate_functions.iter_mut() {
             // Get the original data type before modifying the function
-            let original_data_type = agg_func.scalar.data_type()?.into_owned();
+            let original_data_type = agg_func.scalar.data_type().into_owned();
             if let ScalarExpr::AggregateFunction(func) = &mut agg_func.scalar {
                 match func.func_name.as_str() {
                     "count" => {

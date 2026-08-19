@@ -344,7 +344,7 @@ impl SubqueryDecorrelatorOptimizer {
                     .zip(right_conditions.iter())
                     .enumerate()
                 {
-                    if l.data_type()?.is_nullable() || r.data_type()?.is_nullable() {
+                    if l.data_type().is_nullable() || r.data_type().is_nullable() {
                         is_null_equal.push(i);
                     }
                 }
@@ -409,7 +409,7 @@ impl SubqueryDecorrelatorOptimizer {
                     .zip(right_conditions.iter())
                     .enumerate()
                 {
-                    if l.data_type()?.is_nullable() || r.data_type()?.is_nullable() {
+                    if l.data_type().is_nullable() || r.data_type().is_nullable() {
                         is_null_equal.push(i);
                     }
                 }
@@ -647,7 +647,7 @@ impl SubqueryDecorrelatorOptimizer {
                     let Ok(const_scalar) = ConstantExpr::try_from(scalar_expr.clone()) else {
                         return Ok(None);
                     };
-                    let scalar_data_type = scalar_expr.data_type()?.wrap_nullable();
+                    let scalar_data_type = scalar_expr.data_type().wrap_nullable();
                     ScalarExpr::TypedConstantExpr(const_scalar, scalar_data_type)
                 };
                 match (&subquery.child_expr, subquery.compare_op.clone()) {
@@ -783,7 +783,7 @@ impl SubqueryDecorrelatorOptimizer {
                                 value: Scalar::Array(builder.build()),
                             });
 
-                            let expr_type = child_expr.data_type()?.into_owned();
+                            let expr_type = child_expr.data_type().into_owned();
                             let common_type = common_super_type(
                                 value_type.clone(),
                                 expr_type.clone(),
@@ -818,12 +818,17 @@ impl SubqueryDecorrelatorOptimizer {
                             } else {
                                 *child_expr.clone()
                             };
+                            let return_type =
+                                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                                    &array_argument,
+                                    &value_argument,
+                                ]);
                             let func = ScalarExpr::FunctionCall(FunctionCall {
                                 span: subquery.span,
                                 func_name: "contains".to_string(),
                                 params: vec![],
                                 arguments: vec![array_argument, value_argument],
-                                return_type: Box::new(DataType::Boolean),
+                                return_type: Box::new(return_type),
                             });
                             return Ok(Some(func));
                         }

@@ -57,7 +57,7 @@ impl ScalarItem {
         Ok(ColumnBindingBuilder::new(
             name,
             self.index,
-            Box::new(self.scalar.data_type()?.into_owned()),
+            Box::new(self.scalar.data_type().into_owned()),
             Visibility::Visible,
         )
         .build())

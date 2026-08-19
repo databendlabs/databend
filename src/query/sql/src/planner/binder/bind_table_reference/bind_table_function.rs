@@ -420,7 +420,7 @@ impl Binder {
                 // Delete srf result tuple column, extract tuple inner columns instead
                 let _ = bind_context.columns.pop();
                 let scalar = &plan.items[0].scalar;
-                let scalar_type = scalar.data_type()?;
+                let scalar_type = scalar.data_type();
                 let tuple_types = scalar_type.as_tuple().ok_or_else(|| {
                     ErrorCode::Internal(format!(
                         "Invalid table function result type, expected tuple, got {scalar_type}"
@@ -552,7 +552,7 @@ impl Binder {
                                 column_ref.column.clone()
                             } else {
                                 // Add result column to metadata
-                                let data_type = srf_result.data_type()?.into_owned();
+                                let data_type = srf_result.data_type().into_owned();
                                 let index = self
                                     .metadata
                                     .write()

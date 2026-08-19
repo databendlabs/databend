@@ -102,9 +102,9 @@ async fn nested_get_virtual_column_rewrite_skips_intermediate_paths() -> Result<
         &SqlTestOutcome::Plan(format!(
             "first_scalar: {}\nfirst_type: {}\nsecond_scalar: {}\nsecond_type: {}\nthird_scalar: {}\nthird_type: {}\nbound_virtual_columns:\n{}\nmetadata_columns:\n{}",
             format_scalar(&first),
-            first.data_type()?,
+            first.data_type(),
             format_scalar(&second),
-            second.data_type()?,
+            second.data_type(),
             format_scalar(&third),
             third_type,
             format_virtual_columns(&bind_context),

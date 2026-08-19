@@ -316,7 +316,7 @@ impl Binder {
                     .zip(cache_scan_column_indexes.iter())
                 {
                     let field =
-                        DataField::new(&column_index.to_string(), column.data_type()?.into_owned());
+                        DataField::new(&column_index.to_string(), column.data_type().into_owned());
                     cache_scan_fields.push(field);
                 }
 

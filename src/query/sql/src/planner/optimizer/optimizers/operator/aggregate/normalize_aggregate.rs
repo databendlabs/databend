@@ -72,7 +72,7 @@ impl RuleNormalizeAggregateOptimizer {
                 if !function.distinct
                     && function.func_name == "count"
                     && (function.args.is_empty()
-                        || !function.args[0].data_type()?.is_nullable_or_null())
+                        || !function.args[0].data_type().is_nullable_or_null())
                 {
                     rewritten = true;
                     if work_expr.is_none() {
@@ -106,12 +106,10 @@ impl RuleNormalizeAggregateOptimizer {
                             false
                         }
                     })
-                    && function.args.iter().all(|expr| {
-                        !expr
-                            .data_type()
-                            .map(|t| t.is_nullable_or_null())
-                            .unwrap_or(true)
-                    });
+                    && function
+                        .args
+                        .iter()
+                        .all(|expr| !expr.data_type().is_nullable_or_null());
 
                 if distinct_on_group_key {
                     rewritten = true;
@@ -119,7 +117,7 @@ impl RuleNormalizeAggregateOptimizer {
                     // Grouping sets rewrite will wrap grouping keys into nullable and inject NULLs
                     // for sets where the key is absent, so treat them as nullable even if the
                     // original column type is non-nullable.
-                    let mut nullable = function.args[0].data_type()?.is_nullable_or_null();
+                    let mut nullable = function.args[0].data_type().is_nullable_or_null();
                     if !nullable {
                         if let Some(grouping_sets) = &aggregate.grouping_sets {
                             if !grouping_sets.sets.is_empty() {
@@ -264,11 +262,11 @@ impl RuleNormalizeAggregateOptimizer {
         }
 
         // Skip rewrite when any argument is nullable or Null, to preserve NULL-skipping semantics.
-        if function.args.iter().any(|expr| {
-            expr.data_type()
-                .map(|t| t.is_nullable_or_null())
-                .unwrap_or(true)
-        }) {
+        if function
+            .args
+            .iter()
+            .any(|expr| expr.data_type().is_nullable_or_null())
+        {
             return Ok(None);
         }
 
