@@ -104,7 +104,7 @@ GROUP BY ss_store_sk",
 
     let opt_ctx = OptimizerContext::new(ctx, metadata.clone());
     let split =
-        RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate]).optimize_sync(&s_expr)?;
+        RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate]).optimize_sync(*s_expr)?;
     let rewritten = RuleEagerAggregation::new(metadata.clone()).optimize_sync(&split)?;
     rewritten.validate_types(&metadata)?;
 

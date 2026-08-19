@@ -297,8 +297,8 @@ impl Optimizer for CascadesOptimizer {
         "CascadesOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        self.optimize_sync(s_expr.clone())
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        self.optimize_sync(s_expr)
     }
 
     fn memo(&self) -> Option<&Memo> {

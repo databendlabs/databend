@@ -33,34 +33,29 @@ impl FinalizeSpatialJoinOptimizer {
         Self { ctx }
     }
 
-    pub fn optimize_sync(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<SExpr> {
         if !self
             .ctx
             .get_table_ctx()
             .get_settings()
             .get_enable_spatial_join()?
         {
-            return Ok(s_expr.clone());
+            return Ok(s_expr);
         }
 
         Self::finalize_spatial_join(s_expr)
     }
 
     #[recursive::recursive]
-    fn finalize_spatial_join(s_expr: &SExpr) -> Result<SExpr> {
-        let mut changed = false;
-        let mut children = Vec::with_capacity(s_expr.arity());
-        for child in s_expr.children() {
-            let new_child = Self::finalize_spatial_join(child)?;
-            changed |= !new_child.eq(child);
-            children.push(Arc::new(new_child));
+    fn finalize_spatial_join(mut s_expr: SExpr) -> Result<SExpr> {
+        let mut children = Vec::with_capacity(s_expr.children.len());
+        for child in std::mem::take(&mut s_expr.children) {
+            children.push(Arc::new(Self::finalize_spatial_join(
+                Arc::unwrap_or_clone(child),
+            )?));
         }
 
-        let mut result = if changed {
-            s_expr.replace_children(children)
-        } else {
-            s_expr.clone()
-        };
+        let mut result = s_expr.replace_children(children);
 
         if let RelOperator::Join(join) = result.plan() {
             let left_prop = RelExpr::with_s_expr(result.left_child()).derive_relational_prop()?;
@@ -70,9 +65,10 @@ impl FinalizeSpatialJoinOptimizer {
                     .map(Box::new);
 
             if join.spatial_join != spatial_join {
-                let mut join = join.clone();
+                let RelOperator::Join(join) = Arc::make_mut(&mut result.plan) else {
+                    unreachable!()
+                };
                 join.spatial_join = spatial_join;
-                result = result.replace_plan(Arc::new(RelOperator::Join(join)));
             }
         }
 
@@ -86,7 +82,7 @@ impl Optimizer for FinalizeSpatialJoinOptimizer {
         "FinalizeSpatialJoinOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr)
     }
 }
