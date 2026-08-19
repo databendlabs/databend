@@ -72,6 +72,27 @@ SELECT count(*) FROM spi_t WHERE (a >= 100 AND a < 200) OR (a >= 9000 AND a < 91
 ----
 200
 
+# IN list bound as `contains(<array>, a)`: interior granules between the listed
+# values are pruned.
+query I
+SELECT count(*) FROM spi_t WHERE a IN (42, 424, 4242, 9942)
+----
+4
+
+query IT
+SELECT * FROM spi_t WHERE a IN (123, 4321, 6789, 9876) ORDER BY a
+----
+123 v123
+4321 v4321
+6789 v6789
+9876 v9876
+
+# Small IN list stays a disjunction of equalities.
+query I
+SELECT count(*) FROM spi_t WHERE a = 77 OR a = 8888
+----
+2
+
 # Narrowed read split into <= max_block_size sub-blocks: with a tiny max_block_size the surviving
 # granule run is read as many row-bounded DataBlocks instead of one. Results must stay correct.
 statement ok

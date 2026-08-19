@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::mem::discriminant;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -147,6 +149,9 @@ struct GranulePredicateEvaluator {
     filter: Expr<String>,
     key_columns: Vec<(String, DataType)>,
     projected_key_domains: Vec<Option<Domain>>,
+    /// Discrete values per key column from `eq`/`IN` conjuncts. Domain folding
+    /// only sees an `IN` list's min/max envelope, so hole pruning needs these.
+    point_constraints: Vec<Option<Vec<Scalar>>>,
     source_predicate_impossible: bool,
     touches_cluster_key: bool,
     func_ctx: FunctionContext,
@@ -190,11 +195,13 @@ impl GranulePredicateEvaluator {
             .iter()
             .map(|key| project_source_domains(key, &source_domains, &func_ctx))
             .collect();
+        let point_constraints = extract_point_constraints(&filter, &key_columns);
 
         Ok(Self {
             filter,
             key_columns,
             projected_key_domains,
+            point_constraints,
             source_predicate_impossible,
             touches_cluster_key,
             func_ctx,
@@ -209,7 +216,19 @@ impl GranulePredicateEvaluator {
         if min_values.is_empty() {
             return Ok(vec![]);
         }
+        if self.point_constraints.iter().all(Option::is_none) {
+            return self.apply_envelope(min_values, max_value);
+        }
+        self.apply_discrete(min_values, max_value)
+    }
 
+    /// Probe inwards from both ends; exact for predicates whose survivors form
+    /// one contiguous run.
+    fn apply_envelope(
+        &self,
+        min_values: &[Scalar],
+        max_value: &Scalar,
+    ) -> Result<Vec<Range<usize>>> {
         let mut start = 0;
         let mut end = min_values.len() - 1;
         while start <= end {
@@ -244,6 +263,29 @@ impl GranulePredicateEvaluator {
         }
     }
 
+    fn apply_discrete(
+        &self,
+        min_values: &[Scalar],
+        max_value: &Scalar,
+    ) -> Result<Vec<Range<usize>>> {
+        let mut ranges: Vec<Range<usize>> = Vec::new();
+        for index in 0..min_values.len() {
+            let upper = if index + 1 < min_values.len() {
+                &min_values[index + 1]
+            } else {
+                max_value
+            };
+            if !self.eval_single_granule(&min_values[index], upper)? {
+                continue;
+            }
+            match ranges.last_mut() {
+                Some(last) if last.end == index => last.end = index + 1,
+                _ => ranges.push(index..index + 1),
+            }
+        }
+        Ok(ranges)
+    }
+
     fn eval_single_granule(&self, min_value: &Scalar, max_value: &Scalar) -> Result<bool> {
         if self.source_predicate_impossible {
             return Ok(false);
@@ -259,22 +301,35 @@ impl GranulePredicateEvaluator {
             return Ok(true);
         }
 
-        let mut page_domains = Vec::new();
-        for (index, ((min, max), (_, data_type))) in min_values
+        // A lexicographic tuple interval only bounds a key component while all
+        // preceding components are equal.
+        let mut bounded = Vec::with_capacity(self.key_columns.len());
+        for (index, (min, max)) in min_values
             .iter()
             .zip(max_values.iter())
-            .zip(self.key_columns.iter())
+            .take(self.key_columns.len())
             .enumerate()
         {
-            let stat = ColumnStatistics::new(min.clone(), max.clone(), 0, 0, None);
-            let domain = statistics_to_domain(vec![&stat], data_type);
-            page_domains.push((index, domain));
-
-            // A lexicographic tuple interval only gives a useful independent domain for a suffix
-            // while all preceding key components are equal.
+            bounded.push((index, min, max));
             if min != max {
                 break;
             }
+        }
+
+        for (index, min, max) in &bounded {
+            let Some(points) = &self.point_constraints[*index] else {
+                continue;
+            };
+            if !points_hit_interval(points, min, max) {
+                return Ok(false);
+            }
+        }
+
+        let mut page_domains = Vec::new();
+        for (index, min, max) in &bounded {
+            let stat = ColumnStatistics::new((*min).clone(), (*max).clone(), 0, 0, None);
+            let domain = statistics_to_domain(vec![&stat], &self.key_columns[*index].1);
+            page_domains.push((*index, domain));
         }
 
         // First handle predicates written on source columns, for example
@@ -463,6 +518,182 @@ fn is_monotonic_key_expr(
                 .is_some_and(|arg| is_monotonic_key_expr(arg, source_domains, func_ctx))
         }
         _ => false,
+    }
+}
+
+fn extract_point_constraints(
+    filter: &Expr<String>,
+    key_columns: &[(String, DataType)],
+) -> Vec<Option<Vec<Scalar>>> {
+    let mut result: Vec<Option<Vec<Scalar>>> = vec![None; key_columns.len()];
+    let mut conjuncts = Vec::new();
+    collect_conjuncts(filter, &mut conjuncts);
+    for conjunct in conjuncts {
+        let Some((index, mut points)) = conjunct_point_set(conjunct, key_columns) else {
+            continue;
+        };
+        points.sort();
+        points.dedup();
+        let merged = match result[index].take() {
+            Some(existing) => intersect_sorted_points(&existing, &points),
+            None => points,
+        };
+        result[index] = Some(merged);
+    }
+    result
+}
+
+fn collect_conjuncts<'a>(expr: &'a Expr<String>, conjuncts: &mut Vec<&'a Expr<String>>) {
+    if let Expr::FunctionCall(call) = expr {
+        match call.function.signature.name.as_str() {
+            "and" | "and_filters" => {
+                for arg in &call.args {
+                    collect_conjuncts(arg, conjuncts);
+                }
+                return;
+            }
+            "is_true" if call.args.len() == 1 => {
+                collect_conjuncts(&call.args[0], conjuncts);
+                return;
+            }
+            _ => {}
+        }
+    }
+    conjuncts.push(expr);
+}
+
+fn conjunct_point_set(
+    conjunct: &Expr<String>,
+    key_columns: &[(String, DataType)],
+) -> Option<(usize, Vec<Scalar>)> {
+    let Expr::FunctionCall(call) = conjunct else {
+        return None;
+    };
+    match call.function.signature.name.as_str() {
+        "eq" => {
+            let (index, point) = eq_key_point(call, key_columns)?;
+            Some((index, vec![point]))
+        }
+        "contains" => contains_key_points(call, key_columns),
+        "or" | "or_filters" => {
+            let mut disjuncts = Vec::new();
+            collect_disjuncts(conjunct, &mut disjuncts);
+            let mut key_index = None;
+            let mut points = Vec::new();
+            for disjunct in disjuncts {
+                let Expr::FunctionCall(call) = disjunct else {
+                    return None;
+                };
+                if call.function.signature.name != "eq" {
+                    return None;
+                }
+                let (index, point) = eq_key_point(call, key_columns)?;
+                if *key_index.get_or_insert(index) != index {
+                    return None;
+                }
+                points.push(point);
+            }
+            let index = key_index?;
+            Some((index, points))
+        }
+        _ => None,
+    }
+}
+
+fn collect_disjuncts<'a>(expr: &'a Expr<String>, disjuncts: &mut Vec<&'a Expr<String>>) {
+    if let Expr::FunctionCall(call) = expr
+        && matches!(call.function.signature.name.as_str(), "or" | "or_filters")
+    {
+        for arg in &call.args {
+            collect_disjuncts(arg, disjuncts);
+        }
+        return;
+    }
+    disjuncts.push(expr);
+}
+
+fn eq_key_point(
+    call: &FunctionCall<String>,
+    key_columns: &[(String, DataType)],
+) -> Option<(usize, Scalar)> {
+    let constraint = RangeConstraint::try_from_function_call(call)?;
+    if constraint.operator != "eq" || constraint.constant.is_null() {
+        return None;
+    }
+    let index = key_columns
+        .iter()
+        .position(|(name, _)| *name == constraint.column_id)?;
+    Some((index, constraint.constant))
+}
+
+fn contains_key_points(
+    call: &FunctionCall<String>,
+    key_columns: &[(String, DataType)],
+) -> Option<(usize, Vec<Scalar>)> {
+    let [array, probe] = call.args.as_slice() else {
+        return None;
+    };
+    let Expr::Constant(Constant {
+        scalar: Scalar::Array(items),
+        ..
+    }) = array
+    else {
+        return None;
+    };
+    let probe = probe.as_column_ref()?;
+    let index = key_columns.iter().position(|(name, _)| *name == probe.id)?;
+    let mut points = Vec::with_capacity(items.len());
+    for item in items.iter() {
+        let point = item.to_owned();
+        // NULL list entries can never satisfy the equality.
+        if point.is_null() {
+            continue;
+        }
+        points.push(point);
+    }
+    Some((index, points))
+}
+
+fn intersect_sorted_points(left: &[Scalar], right: &[Scalar]) -> Vec<Scalar> {
+    let mut result = Vec::new();
+    let (mut l, mut r) = (0, 0);
+    while l < left.len() && r < right.len() {
+        match left[l].cmp(&right[r]) {
+            Ordering::Less => l += 1,
+            Ordering::Greater => r += 1,
+            Ordering::Equal => {
+                result.push(left[l].clone());
+                l += 1;
+                r += 1;
+            }
+        }
+    }
+    result
+}
+
+fn points_hit_interval(points: &[Scalar], min: &Scalar, max: &Scalar) -> bool {
+    if min.is_null() || max.is_null() {
+        return true;
+    }
+    let Some(first) = points.first() else {
+        return false;
+    };
+    if !same_scalar_kind(first, min) || !same_scalar_kind(first, max) {
+        return true;
+    }
+    let start = points.partition_point(|point| point < min);
+    start < points.len() && &points[start] <= max
+}
+
+/// `Scalar` ordering across different variants (or number widths) is positional,
+/// not semantic, so point pruning only compares identical kinds.
+fn same_scalar_kind(left: &Scalar, right: &Scalar) -> bool {
+    match (left, right) {
+        (Scalar::Number(left), Scalar::Number(right)) => discriminant(left) == discriminant(right),
+        (Scalar::Decimal(left), Scalar::Decimal(right)) => {
+            discriminant(left) == discriminant(right) && left.size() == right.size()
+        }
+        _ => discriminant(left) == discriminant(right),
     }
 }
 
@@ -687,7 +918,9 @@ fn intersect_ranges(left: &[Range<usize>], right: &[Range<usize>]) -> Vec<Range<
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::FromData;
     use databend_common_expression::type_check::check_function;
+    use databend_common_expression::types::Int64Type;
     use databend_common_expression::types::NumberDataType;
 
     use super::*;
@@ -951,6 +1184,196 @@ mod tests {
         ];
         let max = tuple(vec![Scalar::Number(20250104_u32.into())]);
         assert_eq!(evaluator.apply(&mins, &max).unwrap(), vec![0..2]);
+    }
+
+    fn int64_array(values: Vec<i64>) -> Expr<String> {
+        constant(
+            Scalar::Array(Int64Type::from_data(values)),
+            DataType::Array(Box::new(DataType::Number(NumberDataType::Int64))),
+        )
+    }
+
+    fn int64_point(value: i64) -> Expr<String> {
+        constant(
+            Scalar::Number(value.into()),
+            DataType::Number(NumberDataType::Int64),
+        )
+    }
+
+    fn int64_tuple(values: Vec<i64>) -> Scalar {
+        tuple(
+            values
+                .into_iter()
+                .map(|v| Scalar::Number(v.into()))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn test_in_list_contains_prunes_interior_granules() {
+        let account = column("account", DataType::Number(NumberDataType::Int64));
+        let filter = call("contains", vec![
+            int64_array(vec![150, 460]),
+            account.clone(),
+        ]);
+        let evaluator = GranulePredicateEvaluator::try_create(
+            FunctionContext::default(),
+            vec![account],
+            filter,
+        )
+        .unwrap();
+
+        let mins = vec![
+            int64_tuple(vec![0]),
+            int64_tuple(vec![100]),
+            int64_tuple(vec![200]),
+            int64_tuple(vec![300]),
+            int64_tuple(vec![400]),
+        ];
+        let max = int64_tuple(vec![500]);
+        assert_eq!(evaluator.apply(&mins, &max).unwrap(), vec![1..2, 4..5]);
+    }
+
+    #[test]
+    fn test_in_list_respects_leading_key_prefix_rule() {
+        let site = column("site", DataType::Number(NumberDataType::Int64));
+        let account = column("account", DataType::Number(NumberDataType::Int64));
+        let filter = call("and", vec![
+            call("eq", vec![site.clone(), int64_point(5)]),
+            call("contains", vec![
+                int64_array(vec![150, 999]),
+                account.clone(),
+            ]),
+        ]);
+        let evaluator = GranulePredicateEvaluator::try_create(
+            FunctionContext::default(),
+            vec![site, account],
+            filter,
+        )
+        .unwrap();
+
+        let mins = vec![
+            int64_tuple(vec![5, 0]),
+            int64_tuple(vec![5, 100]),
+            int64_tuple(vec![5, 200]),
+            int64_tuple(vec![5, 300]),
+            int64_tuple(vec![6, 0]),
+        ];
+        let max = int64_tuple(vec![6, 50]);
+        // Granule 2 is a pruned interior hole; granule 3 spans the leading-key
+        // boundary and is conservatively kept.
+        assert_eq!(evaluator.apply(&mins, &max).unwrap(), vec![1..2, 3..4]);
+    }
+
+    #[test]
+    fn test_or_of_equalities_prunes_interior_granules() {
+        let account = column("account", DataType::Number(NumberDataType::Int64));
+        let filter = call("or", vec![
+            call("eq", vec![account.clone(), int64_point(100)]),
+            call("eq", vec![account.clone(), int64_point(400)]),
+        ]);
+        let evaluator = GranulePredicateEvaluator::try_create(
+            FunctionContext::default(),
+            vec![account],
+            filter,
+        )
+        .unwrap();
+
+        let mins = vec![
+            int64_tuple(vec![0]),
+            int64_tuple(vec![100]),
+            int64_tuple(vec![200]),
+            int64_tuple(vec![300]),
+            int64_tuple(vec![400]),
+        ];
+        let max = int64_tuple(vec![500]);
+        assert_eq!(evaluator.apply(&mins, &max).unwrap(), vec![0..2, 3..5]);
+    }
+
+    #[test]
+    fn test_conflicting_point_conjuncts_intersect() {
+        let account = column("account", DataType::Number(NumberDataType::Int64));
+        let filter = call("and", vec![
+            call("eq", vec![account.clone(), int64_point(150)]),
+            call("contains", vec![
+                int64_array(vec![150, 460]),
+                account.clone(),
+            ]),
+        ]);
+        let evaluator = GranulePredicateEvaluator::try_create(
+            FunctionContext::default(),
+            vec![account],
+            filter,
+        )
+        .unwrap();
+
+        let mins = vec![
+            int64_tuple(vec![0]),
+            int64_tuple(vec![100]),
+            int64_tuple(vec![200]),
+            int64_tuple(vec![300]),
+            int64_tuple(vec![400]),
+        ];
+        let max = int64_tuple(vec![500]);
+        assert_eq!(evaluator.apply(&mins, &max).unwrap(), vec![1..2]);
+    }
+
+    #[test]
+    fn test_cast_probe_falls_back_to_envelope() {
+        // The cast around the probe column blocks point extraction, so the
+        // interior hole is kept.
+        let account = column("account", DataType::Number(NumberDataType::Int32));
+        let filter = call("contains", vec![
+            int64_array(vec![150, 350]),
+            account.clone(),
+        ]);
+        let evaluator = GranulePredicateEvaluator::try_create(
+            FunctionContext::default(),
+            vec![account],
+            filter,
+        )
+        .unwrap();
+        assert!(evaluator.point_constraints.iter().all(Option::is_none));
+
+        let mins = vec![
+            tuple(vec![Scalar::Number(0_i32.into())]),
+            tuple(vec![Scalar::Number(100_i32.into())]),
+            tuple(vec![Scalar::Number(200_i32.into())]),
+            tuple(vec![Scalar::Number(300_i32.into())]),
+        ];
+        let max = tuple(vec![Scalar::Number(400_i32.into())]);
+        assert_eq!(evaluator.apply(&mins, &max).unwrap(), vec![1..4]);
+    }
+
+    #[test]
+    fn test_points_hit_interval_guards_scalar_kinds() {
+        let points = vec![Scalar::Number(150_i64.into())];
+        assert!(points_hit_interval(
+            &points,
+            &Scalar::Number(100_i64.into()),
+            &Scalar::Number(200_i64.into()),
+        ));
+        assert!(!points_hit_interval(
+            &points,
+            &Scalar::Number(200_i64.into()),
+            &Scalar::Number(300_i64.into()),
+        ));
+        // Mismatched numeric kinds: conservatively keep.
+        assert!(points_hit_interval(
+            &points,
+            &Scalar::Number(200_u64.into()),
+            &Scalar::Number(300_u64.into()),
+        ));
+        assert!(points_hit_interval(
+            &points,
+            &Scalar::Null,
+            &Scalar::Number(300_i64.into()),
+        ));
+        assert!(!points_hit_interval(
+            &[],
+            &Scalar::Number(100_i64.into()),
+            &Scalar::Number(200_i64.into()),
+        ));
     }
 
     #[test]
