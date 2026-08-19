@@ -79,10 +79,12 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::ListedMaterializedView;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+use databend_common_meta_app::schema::MaterializedViewListFilter;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -301,6 +303,15 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             generation: 0,
             materialized_views: vec![],
         })
+    }
+
+    /// List materialized views for management and system-table consumers.
+    async fn list_materialized_views(
+        &self,
+        _tenant: &Tenant,
+        _filter: &MaterializedViewListFilter,
+    ) -> Result<Vec<ListedMaterializedView>> {
+        Ok(vec![])
     }
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.

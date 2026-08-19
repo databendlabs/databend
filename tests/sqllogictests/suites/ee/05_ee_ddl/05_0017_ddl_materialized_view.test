@@ -191,6 +191,9 @@ CREATE OR REPLACE MATERIALIZED VIEW test_mv AS SELECT id, val, amount FROM mv_ba
 statement error 1301
 CREATE TABLE fake_mv (x INT) materialized_view_source_table_id = '1'
 
+statement error 1301
+CREATE TABLE fake_mv (x INT) materialized_view_source_table_name = 'source'
+
 # The MV engine cannot be used to bypass CREATE MATERIALIZED VIEW metadata creation.
 statement error 1005
 CREATE TABLE fake_mv_engine (x INT) ENGINE = MATERIALIZED_VIEW
@@ -198,6 +201,9 @@ CREATE TABLE fake_mv_engine (x INT) ENGINE = MATERIALIZED_VIEW
 # Protected options: user cannot set MV options via ALTER TABLE.
 statement error 1301
 ALTER TABLE test_mv SET OPTIONS (materialized_view_source_table_id = '1')
+
+statement error 1301
+ALTER TABLE test_mv SET OPTIONS (materialized_view_source_table_name = 'source')
 
 # Even an option valid for the MV engine cannot be changed through ALTER TABLE.
 statement error 3905
@@ -538,6 +544,59 @@ SELECT count(*) FROM test_mv2
 ----
 2
 
+# The native system table exposes MV/source identity, validity, and physical TableMeta statistics.
+query TTTBTIIB
+SELECT name, database, source_table, invalid, invalid_reason, bound_source_generation, current_source_generation,
+       text = 'CREATE MATERIALIZED VIEW `test_mv_ddl`.`test_mv2` (`val`, `cnt`) CLUSTER BY (val) AS SELECT val, COUNT(*) AS cnt FROM test_mv_ddl.mv_base_t WHERE 1 = 1 GROUP BY val'
+FROM system.materialized_views
+WHERE catalog = 'default' AND database = 'test_mv_ddl' AND name = 'test_mv2'
+----
+test_mv2 test_mv_ddl mv_base_t 0 NULL 0 0 1
+
+query BBB
+SELECT m.num_rows = t.num_rows,
+       m.data_size = t.data_size,
+       m.data_compressed_size = t.data_compressed_size
+FROM system.materialized_views AS m
+JOIN system.tables AS t ON m.materialized_view_id = t.table_id
+WHERE m.database = 'test_mv_ddl' AND m.name = 'test_mv2'
+----
+1 1 1
+
+# Equality conjunctions and same-column ORs are safe pushdown hints; the full predicate remains
+# evaluated by the SQL engine.
+query T
+SELECT name
+FROM system.materialized_views
+WHERE catalog = 'default' AND database = 'test_mv_ddl'
+  AND (name = 'test_mv' OR name = 'test_mv2')
+ORDER BY name
+----
+test_mv
+test_mv2
+
+# LIKE, NOT, and mixed-column OR remain residual predicates and must not over-prune candidates.
+query T
+SELECT name
+FROM system.materialized_views
+WHERE (name = 'test_mv' OR database = 'missing_database')
+  AND name LIKE 'test_mv%'
+  AND NOT name = 'missing_mv'
+ORDER BY name
+----
+test_mv
+
+query I
+SELECT count(*) FROM system.materialized_views WHERE catalog = 'missing_catalog'
+----
+0
+
+statement ok
+SHOW MATERIALIZED VIEWS FROM default.test_mv_ddl LIKE 'test_mv%'
+
+statement ok
+SHOW MATERIALIZED VIEWS FROM default.test_mv_ddl WHERE source_table = 'mv_base_t' AND invalid = false
+
 query TT
 SHOW CREATE MATERIALIZED VIEW test_mv2
 ----
@@ -651,7 +710,7 @@ ALTER MATERIALIZED VIEW test_mv2 CLUSTER BY (cnt)
 statement ok
 ALTER MATERIALIZED VIEW test_mv2 CLUSTER BY (val)
 
-# Cross-database MV creation resolves source references in the session database.
+# Materialized views and their sources must belong to the same database.
 statement ok
 CREATE DATABASE mv_src_db
 
@@ -676,18 +735,8 @@ INSERT INTO mv_dst_db.t VALUES (100)
 statement ok
 USE mv_src_db
 
-statement ok
+statement error 2328
 CREATE MATERIALIZED VIEW mv_dst_db.cross_mv AS SELECT id FROM t WHERE 1 = 1
-
-query I
-SELECT count(*) FROM mv_dst_db.cross_mv
-----
-2
-
-query TT
-SHOW CREATE MATERIALIZED VIEW mv_dst_db.cross_mv
-----
-cross_mv CREATE MATERIALIZED VIEW `mv_dst_db`.`cross_mv` (`id`) AS SELECT id FROM mv_src_db.t WHERE 1 = 1
 
 statement ok
 USE test_mv_ddl
@@ -757,8 +806,8 @@ UNDROP TABLE test_mv
 statement error 1302
 DROP MATERIALIZED VIEW mv_base_t
 
-# A persisted definition resolving to a same-named replacement table must not read old MV storage
-# or execute against the replacement source.
+# Source lifecycle invalidity is derived from the source name bound by CREATE and current source
+# metadata. REFRESH does not persist an invalid reason.
 statement ok
 create table replaced_source (id int) change_tracking = true
 
@@ -774,20 +823,70 @@ refresh materialized view replaced_mv
 statement ok
 alter table replaced_source rename to renamed_replaced_source
 
-# Renaming the source invalidates the persisted query binding.
+# Rename is visible immediately without planning the persisted MV query.
+query TBT
+select source_table, invalid, invalid_reason
+from system.materialized_views
+where database = 'test_mv_ddl' and name = 'replaced_mv'
+----
+renamed_replaced_source 1 source table was dropped, renamed, or replaced
+
 statement error 1025
 select * from replaced_mv
 
-statement error (?s)2328.*source table changed
+statement error 2328
 refresh materialized view replaced_mv
 
-statement ok
-create table replaced_source (id int) change_tracking = true
+query BT
+select invalid, invalid_reason
+from system.materialized_views
+where database = 'test_mv_ddl' and name = 'replaced_mv'
+----
+1 source table was dropped, renamed, or replaced
 
-statement error (?s)2328.*source table changed
+# Restoring the original source identity makes the MV current again.
+statement ok
+alter table renamed_replaced_source rename to replaced_source
+
+query BB
+select invalid, invalid_reason is null
+from system.materialized_views
+where database = 'test_mv_ddl' and name = 'replaced_mv'
+----
+0 1
+
+query I
+select count(*) from replaced_mv
+----
+1
+
+statement ok
+insert into replaced_source values (2)
+
+statement ok
+create or replace materialized view replaced_mv as select id from replaced_source where id > 0
+
+statement ok
+refresh materialized view replaced_mv
+
+# A same-named replacement does not match the table ID/name pair bound by CREATE.
+statement ok
+alter table replaced_source rename to renamed_replaced_source
+
+statement ok
+create table replaced_source (replacement_id int) change_tracking = true
+
+query TBT
+select source_table, invalid, invalid_reason
+from system.materialized_views
+where database = 'test_mv_ddl' and name = 'replaced_mv'
+----
+renamed_replaced_source 1 source table was dropped, renamed, or replaced
+
+statement error
 select * from replaced_mv
 
-statement error (?s)2328.*source table changed
+statement error 2328
 refresh materialized view replaced_mv
 
 statement ok
@@ -798,6 +897,101 @@ drop table replaced_source
 
 statement ok
 drop table renamed_replaced_source
+
+# Soft DROP is detected from source TableMeta even though its ID-to-name mapping is retained.
+statement ok
+create table dropped_source (id int) change_tracking = true
+
+statement ok
+insert into dropped_source values (1)
+
+statement ok
+create materialized view dropped_mv as select id from dropped_source where id > 0
+
+statement ok
+refresh materialized view dropped_mv
+
+statement ok
+drop table dropped_source
+
+query TBT
+select source_table, invalid, invalid_reason
+from system.materialized_views
+where database = 'test_mv_ddl' and name = 'dropped_mv'
+----
+dropped_source 1 source table was dropped, renamed, or replaced
+
+statement error 1025
+select * from dropped_mv
+
+statement error 2328
+refresh materialized view dropped_mv
+
+query BT
+select invalid, invalid_reason
+from system.materialized_views
+where database = 'test_mv_ddl' and name = 'dropped_mv'
+----
+1 source table was dropped, renamed, or replaced
+
+# UNDROP restores the same table ID/name and therefore clears the dynamic lifecycle state.
+statement ok
+undrop table dropped_source
+
+query BB
+select invalid, invalid_reason is null
+from system.materialized_views
+where database = 'test_mv_ddl' and name = 'dropped_mv'
+----
+0 1
+
+statement ok
+drop materialized view dropped_mv
+
+statement ok
+drop table dropped_source
+
+# CREATE stores the bound catalog spelling, so a real case-only rename is also detected exactly.
+statement ok
+set unquoted_ident_case_sensitive = 1
+
+statement ok
+create table CaseSource (id int) change_tracking = true
+
+statement ok
+create materialized view case_rename_mv as select id from CaseSource where id > 0
+
+statement ok
+refresh materialized view case_rename_mv
+
+statement ok
+alter table CaseSource rename to casesource
+
+query TBT
+select source_table, invalid, invalid_reason
+from system.materialized_views
+where database = 'test_mv_ddl' and name = 'case_rename_mv'
+----
+casesource 1 source table was dropped, renamed, or replaced
+
+statement ok
+alter table casesource rename to CaseSource
+
+query BB
+select invalid, invalid_reason is null
+from system.materialized_views
+where database = 'test_mv_ddl' and name = 'case_rename_mv'
+----
+0 1
+
+statement ok
+drop materialized view case_rename_mv
+
+statement ok
+drop table CaseSource
+
+statement ok
+set unquoted_ident_case_sensitive = 0
 
 # Source schema changes invalidate the MV binding without blocking DDL.
 statement ok
@@ -823,6 +1017,13 @@ ALTER TABLE mv_guard_source RENAME COLUMN a TO renamed_a
 statement error 2328
 REFRESH MATERIALIZED VIEW mv_guard
 
+query BTII
+SELECT invalid, invalid_reason, bound_source_generation, current_source_generation
+FROM system.materialized_views
+WHERE database = 'test_mv_ddl' AND name = 'mv_guard'
+----
+1 NULL 0 1
+
 # Reads reject the same stale source binding instead of using MV storage.
 statement error 2328
 SELECT * FROM mv_guard
@@ -833,7 +1034,7 @@ SHOW CREATE MATERIALIZED VIEW mv_guard
 ----
 mv_guard CREATE MATERIALIZED VIEW `test_mv_ddl`.`mv_guard` (`a`, `b`) AS SELECT a, b FROM test_mv_ddl.mv_guard_source WHERE 1 = 1
 
-# CREATE observes the nonzero generation produced by RENAME and can publish a new binding.
+# CREATE observes the nonzero generation produced by RENAME COLUMN and can publish a new binding.
 statement ok
 CREATE MATERIALIZED VIEW mv_guard_recreated AS SELECT renamed_a, b, c FROM mv_guard_source WHERE 1 = 1
 

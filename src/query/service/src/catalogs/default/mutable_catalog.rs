@@ -104,10 +104,12 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::ListedMaterializedView;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+use databend_common_meta_app::schema::MaterializedViewListFilter;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -612,6 +614,18 @@ impl Catalog for MutableCatalog {
         self.ctx
             .meta
             .get_mv_source_binding_snapshot(tenant, source_table_id)
+            .await
+            .map_err(meta_service_error)
+    }
+
+    async fn list_materialized_views(
+        &self,
+        tenant: &Tenant,
+        filter: &MaterializedViewListFilter,
+    ) -> Result<Vec<ListedMaterializedView>> {
+        self.ctx
+            .meta
+            .list_materialized_views(tenant, filter)
             .await
             .map_err(meta_service_error)
     }
