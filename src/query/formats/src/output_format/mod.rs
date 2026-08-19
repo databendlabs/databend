@@ -210,3 +210,45 @@ mod test_utils {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::Result;
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::StringType;
+
+    use super::test_utils::gen_schema_and_block;
+    use super::test_utils::get_output_format_clickhouse;
+
+    #[test]
+    fn test_sliced_string_output_does_not_preallocate_parent_buffer_size() -> Result<()> {
+        const PARENT_ROWS: usize = 4096;
+        const VALUE_LEN: usize = 1024;
+
+        let value = "x".repeat(VALUE_LEN);
+        let (schema, parent) =
+            gen_schema_and_block(vec![TableField::new("c1", TableDataType::String)], vec![
+                StringType::from_data(vec![value; PARENT_ROWS]),
+            ]);
+        let block = parent.slice(0..2);
+        let retained_size = block.memory_size();
+        let visible_size = block.estimate_block_size(block.num_columns());
+
+        assert!(retained_size > visible_size * 1000);
+
+        for format in ["ndjson", "csv", "tsv"] {
+            let mut output_format = get_output_format_clickhouse(format, schema.clone())?;
+            let output = output_format.serialize_block(&block)?;
+
+            assert!(
+                output.capacity() < retained_size / 8,
+                "{format} output capacity {} retained the sliced parent buffer size {retained_size}",
+                output.capacity()
+            );
+        }
+
+        Ok(())
+    }
+}
