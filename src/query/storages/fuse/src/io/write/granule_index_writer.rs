@@ -487,19 +487,6 @@ pub fn load_granule_mins(
         .collect())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct GranuleColumnBounds {
-    pub(crate) column_id: ColumnId,
-    pub(crate) dict_range: Option<Range<u64>>,
-    pub(crate) data_range: Range<u64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct GranuleRangeBounds {
-    pub(crate) columns: Vec<GranuleColumnBounds>,
-    pub(crate) row_range: Range<usize>,
-}
-
 pub struct OffsetsIndex {
     granule_rows: usize,
     offsets: HashMap<ColumnId, Vec<u64>>,
@@ -513,6 +500,7 @@ impl OffsetsIndex {
         granule_rows: usize,
         block_rows: usize,
         col_metas: &HashMap<ColumnId, ColumnMeta>,
+        projected_column_ids: impl IntoIterator<Item = ColumnId>,
     ) -> Result<Self> {
         let num_granules = num_granules_of(block_rows, granule_rows);
         if num_granules == 0 {
@@ -520,13 +508,21 @@ impl OffsetsIndex {
                 "granule index offsets cannot be loaded for zero granules",
             ));
         }
-        let names: Vec<String> = col_metas
-            .keys()
+        let mut projected_column_ids = projected_column_ids.into_iter().collect::<Vec<_>>();
+        projected_column_ids.sort_unstable();
+        projected_column_ids.dedup();
+        let names = projected_column_ids
+            .iter()
             .map(|id| format!("{GRANULE_INDEX_OFFSET_COL_PREFIX}{id}"))
-            .collect();
+            .collect::<Vec<_>>();
         let mut buffers = fetch_granule_marks(dal, settings, layout, &names)?;
-        let mut offsets = HashMap::with_capacity(col_metas.len());
-        for (id, meta) in col_metas {
+        let mut offsets = HashMap::with_capacity(projected_column_ids.len());
+        for id in projected_column_ids {
+            let meta = col_metas.get(&id).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "granule index metadata missing projected leaf column {id}"
+                ))
+            })?;
             let name = format!("{GRANULE_INDEX_OFFSET_COL_PREFIX}{id}");
             let bytes = buffers.remove(&name).ok_or_else(|| {
                 ErrorCode::Internal(format!(
@@ -551,7 +547,7 @@ impl OffsetsIndex {
                     "granule index offsets for column {id} are not strictly increasing"
                 )));
             }
-            offsets.insert(*id, values);
+            offsets.insert(id, values);
         }
         Ok(OffsetsIndex {
             granule_rows,
@@ -559,55 +555,55 @@ impl OffsetsIndex {
         })
     }
 
-    fn bounds_for_granules(
-        &self,
-        col_metas: &HashMap<ColumnId, ColumnMeta>,
-        s: usize,
-        e: usize,
-        block_rows: usize,
-    ) -> GranuleRangeBounds {
-        let run_start_row = s * self.granule_rows;
-        let run_end_row = (e * self.granule_rows).min(block_rows);
-
-        let mut columns = Vec::with_capacity(self.offsets.len());
-        for (column_id, offs) in &self.offsets {
-            let Some(meta) = col_metas.get(column_id) else {
-                continue;
-            };
-            let (chunk_start, chunk_len) = meta.offset_length();
-            let chunk_end = chunk_start + chunk_len;
-            let data_start = offs[s];
-            let data_end = if e < offs.len() { offs[e] } else { chunk_end };
-            let dict_range = if offs[0] > chunk_start {
-                Some(chunk_start..offs[0])
-            } else {
-                None
-            };
-            columns.push(GranuleColumnBounds {
-                column_id: *column_id,
-                dict_range,
-                data_range: data_start..data_end,
-            });
+    pub(crate) fn validate_ranges(&self, ranges: &[Range<usize>], block_rows: usize) -> Result<()> {
+        let num_granules = num_granules_of(block_rows, self.granule_rows);
+        for range in ranges {
+            if range.start >= range.end || range.end > num_granules {
+                return Err(ErrorCode::Internal(format!(
+                    "invalid granule data range {range:?} for {num_granules} granules"
+                )));
+            }
         }
-        GranuleRangeBounds {
-            columns,
-            row_range: run_start_row..run_end_row,
-        }
+        Ok(())
     }
 
-    pub(crate) fn ranges_for_granules(
+    pub(crate) fn granule_rows(&self) -> usize {
+        self.granule_rows
+    }
+
+    pub(crate) fn column_byte_ranges(
         &self,
-        col_metas: &HashMap<ColumnId, ColumnMeta>,
-        range: Range<usize>,
-        block_rows: usize,
-    ) -> Result<GranuleRangeBounds> {
-        let num_granules = num_granules_of(block_rows, self.granule_rows);
-        if range.start >= range.end || range.end > num_granules {
-            return Err(ErrorCode::Internal(format!(
-                "invalid granule data range {range:?} for {num_granules} granules"
-            )));
+        column_id: ColumnId,
+        meta: &ColumnMeta,
+        ranges: &[Range<usize>],
+    ) -> Result<(bool, Vec<Range<u64>>)> {
+        let offsets = self.offsets.get(&column_id).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "granule offset index has no offsets for projected column {column_id}"
+            ))
+        })?;
+        let (chunk_start, chunk_len) = meta.offset_length();
+        let chunk_end = chunk_start + chunk_len;
+        let dictionary = (offsets[0] > chunk_start).then(|| chunk_start..offsets[0]);
+        let mut byte_ranges = Vec::with_capacity(ranges.len() + usize::from(dictionary.is_some()));
+        if let Some(range) = &dictionary {
+            byte_ranges.push(range.clone());
         }
-        Ok(self.bounds_for_granules(col_metas, range.start, range.end, block_rows))
+        for range in ranges {
+            if range.start >= range.end || range.end > offsets.len() {
+                return Err(ErrorCode::Internal(format!(
+                    "invalid granule data range {range:?} for {} column {column_id} offsets",
+                    offsets.len()
+                )));
+            }
+            let data_end = if range.end < offsets.len() {
+                offsets[range.end]
+            } else {
+                chunk_end
+            };
+            byte_ranges.push(offsets[range.start]..data_end);
+        }
+        Ok((dictionary.is_some(), byte_ranges))
     }
 }
 
@@ -733,6 +729,7 @@ mod tests {
             granule_rows,
             300,
             &col_metas,
+            [7, 9],
         )
         .unwrap();
         assert_eq!(offsets.offsets.get(&7).unwrap(), &vec![100, 260, 480]);
@@ -793,7 +790,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_offsets_index_rejects_missing_projected_column() {
+    async fn test_offsets_index_loads_only_projected_columns() {
         crate::test_utils::init_test_globals().unwrap();
         let op = Operator::new(Memory::default()).unwrap().finish();
         let settings = test_settings();
@@ -824,6 +821,18 @@ mod tests {
                 num_values: 200,
             }),
         );
+        let offsets = OffsetsIndex::load(
+            &op,
+            &settings,
+            &state.layout().offsets,
+            100,
+            200,
+            &col_metas,
+            [7],
+        )
+        .unwrap();
+        assert_eq!(offsets.offsets.keys().copied().collect::<Vec<_>>(), vec![7]);
+
         let err = OffsetsIndex::load(
             &op,
             &settings,
@@ -831,6 +840,7 @@ mod tests {
             100,
             200,
             &col_metas,
+            [7, 9],
         )
         .err()
         .unwrap();
@@ -883,7 +893,7 @@ mod tests {
     // Byte-range bounds: chunk boundaries come from col_metas, dict range from the gap before the
     // first data page, data range from the offsets (last granule bounded by chunk_end).
     #[test]
-    fn test_bounds_for_granules() {
+    fn test_ranges_for_granules() {
         let mut offsets = HashMap::new();
         offsets.insert(7u32, vec![100u64, 260, 480]);
         offsets.insert(9u32, vec![50u64, 600, 1500]);
@@ -891,37 +901,35 @@ mod tests {
             granule_rows: 100,
             offsets,
         };
+        let range = 1..3;
+        let ranges = std::slice::from_ref(&range);
 
-        let mut col_metas = HashMap::new();
+        index.validate_ranges(ranges, 300).unwrap();
+        let invalid_range = 1..4;
+        assert!(
+            index
+                .validate_ranges(std::slice::from_ref(&invalid_range), 300)
+                .is_err()
+        );
+
         // Column 7 chunk [100, 1000): no dict (first data page == chunk start).
-        col_metas.insert(
-            7u32,
-            ColumnMeta::Parquet(SingleColumnMeta {
-                offset: 100,
-                len: 900,
-                num_values: 300,
-            }),
-        );
+        let col_7 = ColumnMeta::Parquet(SingleColumnMeta {
+            offset: 100,
+            len: 900,
+            num_values: 300,
+        });
+        let (has_dictionary, byte_ranges) = index.column_byte_ranges(7, &col_7, ranges).unwrap();
+        assert!(!has_dictionary);
+        assert_eq!(byte_ranges, vec![260..1000]);
+
         // Column 9 chunk [10, 2000): dict page occupies [10, 50) before the first data page.
-        col_metas.insert(
-            9u32,
-            ColumnMeta::Parquet(SingleColumnMeta {
-                offset: 10,
-                len: 1990,
-                num_values: 300,
-            }),
-        );
-
-        // Sub-run [1, 3): granules 1 and 2, rows 100..300.
-        let bounds = index.bounds_for_granules(&col_metas, 1, 3, 300);
-        assert_eq!(bounds.row_range, 100..300);
-
-        let get = |id: u32| bounds.columns.iter().find(|c| c.column_id == id).unwrap();
-        let c7 = get(7);
-        assert_eq!(c7.dict_range, None);
-        assert_eq!(c7.data_range, 260..1000); // last granule bounded by chunk_end
-        let c9 = get(9);
-        assert_eq!(c9.dict_range, Some(10..50));
-        assert_eq!(c9.data_range, 600..2000);
+        let col_9 = ColumnMeta::Parquet(SingleColumnMeta {
+            offset: 10,
+            len: 1990,
+            num_values: 300,
+        });
+        let (has_dictionary, byte_ranges) = index.column_byte_ranges(9, &col_9, ranges).unwrap();
+        assert!(has_dictionary);
+        assert_eq!(byte_ranges, vec![10..50, 600..2000]);
     }
 }

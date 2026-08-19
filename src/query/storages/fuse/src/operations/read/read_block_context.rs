@@ -164,6 +164,10 @@ impl ReadBlockContext {
             granule_index.granule_rows as usize,
             fuse_part.nums_rows,
             &fuse_part.columns_meta,
+            self.block_read_ctx
+                .project_indices()
+                .values()
+                .map(|(column_id, ..)| *column_id),
         )?;
         GranuleDataReader::create(
             &self.block_read_ctx,

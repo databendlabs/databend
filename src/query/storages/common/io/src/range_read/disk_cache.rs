@@ -74,8 +74,8 @@ pub struct DiskCacheRangeReader<R: RangeReader> {
 }
 
 impl<R: RangeReader> DiskCacheRangeReader<R> {
-    /// `file_len` pins the tail chunk of the grid; `max_segment_size` caps how
-    /// many adjacent miss chunks merge into one downstream request;
+    /// `file_len` pins the tail chunk of the grid; `max_segment_size` caps each
+    /// downstream miss envelope, including cache-hit chunks bridged within it;
     /// `held_budget` bounds the bytes parked in this layer before it reports
     /// saturation; `populate` gates admission of fetched chunks into the
     /// disk cache.
@@ -159,29 +159,50 @@ impl<R: RangeReader> DiskCacheRangeReader<R> {
             .any(|range| range.start < chunk.end && chunk.start < range.end)
     }
 
-    /// Merge adjacent chunks (already offset-ordered) into seamless segments,
-    /// capped at `max_segment_size`. Segments never cross gaps, so segment
-    /// membership stays recoverable through the grid.
-    fn coalesce(&self, chunks: Vec<Range<u64>>) -> Vec<Range<u64>> {
+    /// Merge misses into downstream segments, capped at `max_segment_size`.
+    /// Besides adjacent misses, a segment may span cached chunks when every
+    /// intervening chunk belongs to the current requested ranges. This matches
+    /// Doris' first-miss-to-last-miss envelope without crossing an unrequested
+    /// hole or duplicating a chunk that is already in flight.
+    fn coalesce_misses(
+        &self,
+        misses: Vec<Range<u64>>,
+        requested_ranges: &[Range<u64>],
+    ) -> Vec<Range<u64>> {
+        let requested_chunks = requested_ranges
+            .iter()
+            .flat_map(|range| self.grid.chunks_of(range))
+            .collect::<HashSet<_>>();
         let mut segments: Vec<Range<u64>> = Vec::new();
-        for chunk in chunks {
-            if let Some(last) = segments.last_mut()
-                && last.end == chunk.start
-                && chunk.end - last.start <= self.max_segment_size
-            {
-                last.end = chunk.end;
-                continue;
+        for chunk in misses {
+            if let Some(last) = segments.last_mut() {
+                let bridge_is_cached = last.end <= chunk.start
+                    && self
+                        .grid
+                        .chunks_of(&(last.end..chunk.start))
+                        .into_iter()
+                        .all(|gap| {
+                            requested_chunks.contains(&gap) && self.parked.contains_key(&gap)
+                        });
+                if bridge_is_cached && chunk.end - last.start <= self.max_segment_size {
+                    last.end = chunk.end;
+                    continue;
+                }
             }
             segments.push(chunk);
         }
         segments
     }
 
-    /// Split an arrived segment back into grid chunks, asynchronously admit
-    /// them into the shared disk LRU and park them for pending reads.
+    /// Split an arrived envelope back into grid chunks. Chunks already parked
+    /// were cache hits bridged by the envelope: discard their duplicate remote
+    /// bytes and admit only the original misses into the shared disk LRU.
     fn park_segment(&mut self, segment: Range<u64>, data: Buffer) {
         let mut batch = Vec::new();
         for chunk in self.grid.chunks_of(&segment) {
+            if self.parked.contains_key(&chunk) {
+                continue;
+            }
             let start = (chunk.start - segment.start) as usize;
             let end = (chunk.end - segment.start) as usize;
             let piece = data.slice(start..end);
@@ -260,7 +281,7 @@ impl<R: RangeReader> RangeReader for DiskCacheRangeReader<R> {
         let deferred = kept < total;
 
         let misses = self.park_hits(candidates);
-        let segments = self.coalesce(misses);
+        let segments = self.coalesce_misses(misses, ranges);
         let downstream = self.next.prefetch(&segments);
         for segment in segments {
             // Recorded even when the hint was dropped downstream: the segment
@@ -292,7 +313,7 @@ impl<R: RangeReader> RangeReader for DiskCacheRangeReader<R> {
         // them on the spot; they do not enter `dispatched`.
         let candidates = self.candidate_chunks(std::slice::from_ref(&range));
         let misses = self.park_hits(candidates);
-        for segment in self.coalesce(misses) {
+        for segment in self.coalesce_misses(misses, std::slice::from_ref(&range)) {
             let data = self.next.read(segment.clone())?;
             self.park_segment(segment, data);
         }
@@ -460,19 +481,90 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_hit_splits_miss_segments() {
+    fn test_cache_hit_is_bridged_by_one_miss_envelope() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(CONTENT, false);
+        let (_dir, cache) = new_cache();
+        seed(&cache, "cached", 4..8, b"WXYZ");
+        let mut reader = reader_over(accessor.clone(), cache.clone(), usize::MAX);
+
+        assert!(reader.prefetch(&[0..12]));
+        assert_eq!(
+            reader.read(0..12).unwrap().to_bytes().as_ref(),
+            b"abcdWXYZijkl"
+        );
+        // The cache hit in the middle is read through so both misses use one
+        // first-miss-to-last-miss request. Its duplicate remote bytes are
+        // discarded: the result above still contains the cached sentinel.
+        assert_eq!(accessor.read_ranges(), vec![0..12]);
+        // The hit was not overwritten; only the two misses were admitted.
+        wait_admitted(&cache, "cached", &[0..4, 4..8, 8..12]);
+        assert_eq!(cache.len(), 3);
+        assert_eq!(cache.get("cached-4-4").unwrap().as_ref().as_ref(), b"WXYZ");
+    }
+
+    #[test]
+    fn test_direct_read_bridges_cache_hit_with_one_miss_envelope() {
         init_test_runtime();
         let accessor = RecordingReadAccessor::new(CONTENT, false);
         let (_dir, cache) = new_cache();
         seed(&cache, "cached", 4..8, &CONTENT[4..8]);
         let mut reader = reader_over(accessor.clone(), cache, usize::MAX);
 
-        assert!(reader.prefetch(&[0..12]));
         assert_eq!(
             reader.read(0..12).unwrap().to_bytes().as_ref(),
             &CONTENT[0..12]
         );
-        // The hit chunk in the middle keeps the two misses apart.
+        assert_eq!(accessor.read_ranges(), vec![0..12]);
+        assert!(reader.dispatched.is_empty());
+    }
+
+    #[test]
+    fn test_miss_envelope_respects_max_segment_size_across_hits() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(CONTENT, false);
+        let (_dir, cache) = new_cache();
+        seed(&cache, "capped-envelope", 4..8, &CONTENT[4..8]);
+        let path = "capped-envelope".to_string();
+        let next = OperatorRangeReader::new(recording_operator(accessor.clone()), path.clone(), 8);
+        let mut reader = DiskCacheRangeReader::new(
+            cache,
+            next,
+            path,
+            CONTENT.len() as u64,
+            4,
+            8,
+            usize::MAX,
+            true,
+        )
+        .unwrap();
+
+        assert!(reader.prefetch(&[0..16]));
+        assert_eq!(reader.read(0..16).unwrap().to_bytes().as_ref(), CONTENT);
+        // Bridging the hit would make the first envelope 12 bytes, so the
+        // 8-byte cap keeps the leading miss separate.
+        assert_eq!(accessor.read_ranges(), vec![0..4, 8..16]);
+    }
+
+    #[test]
+    fn test_miss_envelope_does_not_cross_unrequested_chunks() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(CONTENT, false);
+        let (_dir, cache) = new_cache();
+        seed(&cache, "cached", 4..8, &CONTENT[4..8]);
+        let mut reader = reader_over(accessor.clone(), cache, usize::MAX);
+
+        assert!(reader.prefetch(&[0..4, 8..12]));
+        assert_eq!(
+            reader.read(0..4).unwrap().to_bytes().as_ref(),
+            &CONTENT[0..4]
+        );
+        assert_eq!(
+            reader.read(8..12).unwrap().to_bytes().as_ref(),
+            &CONTENT[8..12]
+        );
+        // The cached middle chunk was not requested, so it cannot bridge the
+        // two downstream requests.
         assert_eq!(accessor.read_ranges(), vec![0..4, 8..12]);
     }
 

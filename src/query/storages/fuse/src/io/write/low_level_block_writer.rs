@@ -1951,6 +1951,7 @@ mod tests {
             granule.granule_rows as usize,
             result.block_meta.row_count as usize,
             &result.block_meta.col_metas,
+            result.block_meta.col_metas.keys().copied(),
         )
         .unwrap();
     }

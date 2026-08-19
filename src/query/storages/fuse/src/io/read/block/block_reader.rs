@@ -257,6 +257,12 @@ impl BlockReadContext {
         Ok(self.ctx.get_settings().get_storage_fetch_part_num()? as usize)
     }
 
+    pub(crate) fn storage_io_merge_equivalent_bytes(&self) -> Result<u64> {
+        self.ctx
+            .get_settings()
+            .get_storage_io_merge_equivalent_bytes()
+    }
+
     pub(crate) fn report_cache_metrics<'a>(
         &self,
         block_read_res: &BlockReadResult,

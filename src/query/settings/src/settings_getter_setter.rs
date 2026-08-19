@@ -306,6 +306,10 @@ impl Settings {
         self.try_get_u64("storage_io_min_bytes_for_seek")
     }
 
+    pub fn get_storage_io_merge_equivalent_bytes(&self) -> Result<u64> {
+        self.try_get_u64("storage_io_merge_equivalent_bytes")
+    }
+
     pub fn get_storage_io_max_page_bytes_for_read(&self) -> Result<u64> {
         self.try_get_u64("storage_io_max_page_bytes_for_read")
     }

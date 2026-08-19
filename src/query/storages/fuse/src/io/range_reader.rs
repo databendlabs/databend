@@ -21,6 +21,12 @@ use opendal::Operator;
 
 const DISK_CACHE_CHUNK_SIZE: u64 = 1024 * 1024;
 
+/// The chunk size of the disk cache layer when it is active, `None` otherwise.
+pub(crate) fn disk_cache_chunk_size() -> Option<u64> {
+    let column_cache = CacheManager::instance().get_column_data_cache()?;
+    column_cache.on_disk_cache().map(|_| DISK_CACHE_CHUNK_SIZE)
+}
+
 pub(crate) fn create_file_range_reader(
     operator: Operator,
     path: String,
