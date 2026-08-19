@@ -55,6 +55,6 @@ pub const LEGACY_FUSE_TBL_REF_PREFIX: &str = "_ref";
 pub const DEFAULT_ROW_PER_PAGE: usize = 8192;
 pub const DEFAULT_ROW_PER_INDEX: usize = 100000;
 
-pub const MIN_RECLUSTER_DEPTH: u64 = 8;
+pub const MIN_RECLUSTER_DEPTH: u64 = 1;
 pub const MAX_RECLUSTER_DEPTH: u64 = 32;
 pub const DEFAULT_RECLUSTER_DEPTH: u64 = 16;

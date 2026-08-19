@@ -57,7 +57,6 @@ use crate::DEFAULT_RECLUSTER_DEPTH;
 use crate::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use crate::FuseTable;
 use crate::MAX_RECLUSTER_DEPTH;
-use crate::MIN_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
 use crate::io::MetaReaders;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
@@ -85,6 +84,8 @@ const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
 /// keep them out of future recluster tasks to avoid unbounded level growth.
 const MAX_RECLUSTER_LEVEL: i32 = 32;
 const MAX_RECLUSTER_WINDOW_SEGMENTS: usize = 128;
+/// Hilbert MBR overlap is conservative, so execution never uses a threshold below 8.
+const MIN_HILBERT_RECLUSTER_DEPTH: u64 = 8;
 /// Linear tables with no explicit depth use a lower threshold while they remain small.
 const LINEAR_SMALL_TABLE_RECLUSTER_DEPTH: u64 = 1;
 /// Maximum block count for applying the Linear small-table depth threshold.
@@ -216,19 +217,15 @@ impl ReclusterMutator {
                 })
             })
             .transpose()?;
-        let depth_threshold = configured_depth.unwrap_or_else(|| {
-            if cluster_key_info.cluster_type == ClusterType::Linear
-                && snapshot.summary.block_count <= SMALL_TABLE_RECLUSTER_BLOCK_COUNT
+        let depth_threshold = match (configured_depth, cluster_key_info.cluster_type) {
+            (Some(depth), ClusterType::Hilbert) => depth.max(MIN_HILBERT_RECLUSTER_DEPTH),
+            (Some(depth), ClusterType::Linear) => depth,
+            (None, ClusterType::Linear)
+                if snapshot.summary.block_count <= SMALL_TABLE_RECLUSTER_BLOCK_COUNT =>
             {
                 LINEAR_SMALL_TABLE_RECLUSTER_DEPTH
-            } else {
-                DEFAULT_RECLUSTER_DEPTH
             }
-        });
-        let depth_threshold = if cluster_key_info.cluster_type == ClusterType::Hilbert {
-            depth_threshold.max(MIN_RECLUSTER_DEPTH)
-        } else {
-            depth_threshold
+            _ => DEFAULT_RECLUSTER_DEPTH,
         } as f64;
 
         let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
