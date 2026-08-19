@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::Progress;
@@ -68,6 +69,34 @@ struct DecodedRange {
     start_row: usize,
 }
 
+#[derive(Default)]
+struct ExecuteScanDiagnostics {
+    normal_parts: usize,
+    normal_ranges: usize,
+    granule_parts: usize,
+    granule_groups: usize,
+    granule_ranges: usize,
+    projected_columns: usize,
+    selected_bytes: u64,
+    coalesced_bytes: u64,
+    coalesced_requests: usize,
+    input_rows: usize,
+    output_blocks: usize,
+    output_rows: usize,
+    output_bytes: usize,
+    granule_reader_create: Duration,
+    granule_read: Duration,
+    decode_filter: Duration,
+    finalize_concat: Duration,
+    normal_process: Duration,
+}
+
+impl ExecuteScanDiagnostics {
+    fn has_activity(&self) -> bool {
+        self.normal_parts != 0 || self.granule_parts != 0
+    }
+}
+
 pub struct DeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
     scan_id: usize,
@@ -92,6 +121,7 @@ pub struct DeserializeDataTransform {
 
     prewhere_info: Option<PrewhereInfo>,
     read_state: Option<ReadState>,
+    diagnostics: ExecuteScanDiagnostics,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -153,6 +183,7 @@ impl DeserializeDataTransform {
             block_meta_options: plan.block_meta_options.clone(),
             prewhere_info,
             read_state: None,
+            diagnostics: ExecuteScanDiagnostics::default(),
         })))
     }
 
@@ -168,12 +199,14 @@ impl DeserializeDataTransform {
         Ok(())
     }
 
-    fn record_block_progress(&self, block: &DataBlock) {
-        self.scan_progress.incr(&ProgressValues {
-            rows: block.num_rows(),
-            bytes: block.memory_size(),
-        });
-        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, block.memory_size());
+    fn record_block_progress(&mut self, block: &DataBlock) {
+        let rows = block.num_rows();
+        let bytes = block.memory_size();
+        self.scan_progress.incr(&ProgressValues { rows, bytes });
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, bytes);
+        self.diagnostics.output_blocks += 1;
+        self.diagnostics.output_rows += rows;
+        self.diagnostics.output_bytes += bytes;
     }
 
     fn offsets_for_range(
@@ -203,9 +236,22 @@ impl DeserializeDataTransform {
         data: BlockReadResult,
         virtual_data: Option<VirtualBlockReadResult>,
     ) -> Result<DecodedRange> {
+        let start = Instant::now();
+        let result = self.decode_normal_range_inner(part, data, virtual_data);
+        self.diagnostics.decode_filter += start.elapsed();
+        result
+    }
+
+    fn decode_normal_range_inner(
+        &mut self,
+        part: &FuseBlockPartInfo,
+        data: BlockReadResult,
+        virtual_data: Option<VirtualBlockReadResult>,
+    ) -> Result<DecodedRange> {
         self.ensure_read_state()?;
         let row_range = data.row_range();
         let num_rows = row_range.map(|range| range.len()).unwrap_or(part.nums_rows);
+        self.diagnostics.input_rows += num_rows;
         let start_row = row_range.map(|range| range.start).unwrap_or(0);
         let columns_chunks = data.columns_chunks()?;
         let (mut block, row_selection, bitmap_selection) = self
@@ -270,15 +316,21 @@ impl DeserializeDataTransform {
         virtual_data: Option<VirtualBlockReadResult>,
     ) -> Result<()> {
         let start = Instant::now();
+        self.diagnostics.normal_parts += 1;
+        self.diagnostics.normal_ranges += results.len();
         let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let mut virtual_data = virtual_data;
         for data in results {
             let decoded = self.decode_normal_range(fuse_part, data, virtual_data.take())?;
+            let finalize_start = Instant::now();
             let block = self.finalize_normal_range(fuse_part, decoded)?;
+            self.diagnostics.finalize_concat += finalize_start.elapsed();
             self.record_block_progress(&block);
             self.output_data.push_back(block);
         }
-        metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+        let elapsed = start.elapsed();
+        self.diagnostics.normal_process += elapsed;
+        metrics_inc_remote_io_deserialize_milliseconds(elapsed.as_millis() as u64);
         Ok(())
     }
 
@@ -287,9 +339,19 @@ impl DeserializeDataTransform {
         part: PartInfoPtr,
         groups: Vec<Vec<std::ops::Range<usize>>>,
     ) -> Result<()> {
+        let start = Instant::now();
+        self.diagnostics.granule_parts += 1;
+        self.diagnostics.granule_groups += groups.len();
+        self.diagnostics.granule_ranges += groups.iter().map(Vec::len).sum::<usize>();
         let reader = self
             .read_block_context
             .create_granule_data_reader(&part, &groups)?;
+        let (columns, selected, coalesced, requests) = reader.read_plan_stats();
+        self.diagnostics.projected_columns += columns;
+        self.diagnostics.selected_bytes += selected;
+        self.diagnostics.coalesced_bytes += coalesced;
+        self.diagnostics.coalesced_requests += requests;
+        self.diagnostics.granule_reader_create += start.elapsed();
         self.active_granule_read = Some(ActiveGranuleRead {
             part,
             groups: groups.into(),
@@ -310,15 +372,18 @@ impl DeserializeDataTransform {
         let fuse_part = FuseBlockPartInfo::from_part(&active.part)?;
         let mut decoded_ranges = Vec::with_capacity(group.len());
         for expected_range in group {
+            let read_start = Instant::now();
             let range_read = active.reader.read_next()?.ok_or_else(|| {
                 ErrorCode::Internal("granule data reader ended before group was complete")
             })?;
+            self.diagnostics.granule_read += read_start.elapsed();
             if range_read.range != expected_range {
                 return Err(ErrorCode::Internal("granule read ranges are out of sync"));
             }
             decoded_ranges.push(self.decode_normal_range(fuse_part, range_read.data, None)?);
         }
 
+        let finalize_start = Instant::now();
         if self.block_meta_options.update_stream_columns {
             for decoded in decoded_ranges {
                 let block = self.finalize_normal_range(fuse_part, decoded)?;
@@ -351,12 +416,44 @@ impl DeserializeDataTransform {
             self.record_block_progress(&block);
             self.output_data.push_back(block);
         }
+        self.diagnostics.finalize_concat += finalize_start.elapsed();
         metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
 
         if !active.groups.is_empty() {
             self.active_granule_read = Some(active);
         }
         Ok(())
+    }
+}
+
+impl Drop for DeserializeDataTransform {
+    fn drop(&mut self) {
+        let diagnostics = &self.diagnostics;
+        if !diagnostics.has_activity() {
+            return;
+        }
+        log::info!(
+            "[FUSE-PRUNER-DIAG] stage=execute_scan scan_id={} normal_parts={} normal_ranges={} granule_parts={} granule_groups={} granule_ranges={} projected_columns={} selected_bytes={} coalesced_bytes={} coalesced_requests={} input_rows={} output_blocks={} output_rows={} output_bytes={} granule_reader_create_us={} granule_read_us={} decode_filter_us={} finalize_concat_us={} normal_process_us={}",
+            self.scan_id,
+            diagnostics.normal_parts,
+            diagnostics.normal_ranges,
+            diagnostics.granule_parts,
+            diagnostics.granule_groups,
+            diagnostics.granule_ranges,
+            diagnostics.projected_columns,
+            diagnostics.selected_bytes,
+            diagnostics.coalesced_bytes,
+            diagnostics.coalesced_requests,
+            diagnostics.input_rows,
+            diagnostics.output_blocks,
+            diagnostics.output_rows,
+            diagnostics.output_bytes,
+            diagnostics.granule_reader_create.as_micros(),
+            diagnostics.granule_read.as_micros(),
+            diagnostics.decode_filter.as_micros(),
+            diagnostics.finalize_concat.as_micros(),
+            diagnostics.normal_process.as_micros(),
+        );
     }
 }
 

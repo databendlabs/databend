@@ -252,6 +252,9 @@ struct GranuleColumnReader {
     reader: Box<dyn RangeReader>,
     outputs: VecDeque<GranuleColumnOutput>,
     ranges: VecDeque<Range<u64>>,
+    selected_bytes: u64,
+    coalesced_bytes: u64,
+    coalesced_requests: usize,
     fetch_part_num: usize,
     current: Option<(Range<u64>, Buffer)>,
 }
@@ -266,6 +269,12 @@ impl GranuleColumnReader {
         fetch_part_num: usize,
     ) -> Result<Self> {
         let (outputs, ranges) = merge_column_ranges(column_id, input_ranges, policy)?;
+        let selected_bytes = input_ranges
+            .iter()
+            .map(|range| range.end - range.start)
+            .sum();
+        let coalesced_bytes = ranges.iter().map(|range| range.end - range.start).sum();
+        let coalesced_requests = ranges.len();
         let fetch_part_num = fetch_part_num.max(1);
 
         // One batched hint for the initial window: the cache layer probes
@@ -285,6 +294,9 @@ impl GranuleColumnReader {
             reader,
             outputs,
             ranges,
+            selected_bytes,
+            coalesced_bytes,
+            coalesced_requests,
             fetch_part_num,
             current: None,
         })
@@ -464,6 +476,20 @@ impl GranuleDataReader {
             granule_rows: offsets.granule_rows(),
             block_rows: part.nums_rows,
         })
+    }
+
+    pub(crate) fn read_plan_stats(&self) -> (usize, u64, u64, usize) {
+        self.column_readers.iter().fold(
+            (0, 0, 0, 0),
+            |(columns, selected, coalesced, requests), reader| {
+                (
+                    columns + 1,
+                    selected + reader.selected_bytes,
+                    coalesced + reader.coalesced_bytes,
+                    requests + reader.coalesced_requests,
+                )
+            },
+        )
     }
 
     pub(crate) fn read_next(&mut self) -> Result<Option<GranuleRangeRead>> {

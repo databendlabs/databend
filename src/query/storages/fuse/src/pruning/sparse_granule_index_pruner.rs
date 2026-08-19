@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::mem::discriminant;
 use std::ops::Range;
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_common_expression::ColumnRef;
@@ -56,6 +58,12 @@ pub struct SparseGranuleIndexPruner {
     read_settings: ReadSettings,
     cluster_key_types: Vec<DataType>,
     table_cluster_key_id: u32,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct SparseGranulePruneProfile {
+    pub(crate) load: Duration,
+    pub(crate) evaluate: Duration,
 }
 
 impl SparseGranuleIndexPruner {
@@ -108,12 +116,22 @@ impl SparseGranuleIndexPruner {
         granule_index: &GranuleIndexLayout,
         input: &[Range<usize>],
     ) -> Result<Vec<Range<usize>>> {
+        self.select_granule_ranges_profiled(block_meta, granule_index, input)
+            .map(|(ranges, _)| ranges)
+    }
+
+    pub(crate) fn select_granule_ranges_profiled(
+        &self,
+        block_meta: &BlockMeta,
+        granule_index: &GranuleIndexLayout,
+        input: &[Range<usize>],
+    ) -> Result<(Vec<Range<usize>>, SparseGranulePruneProfile)> {
         let Some(cluster_stats) = block_meta.cluster_stats.as_ref() else {
-            return Ok(input.to_vec());
+            return Ok((input.to_vec(), SparseGranulePruneProfile::default()));
         };
 
         if self.table_cluster_key_id != cluster_stats.cluster_key_id {
-            return Ok(input.to_vec());
+            return Ok((input.to_vec(), SparseGranulePruneProfile::default()));
         }
 
         let num_granules = num_granules_of(
@@ -121,13 +139,14 @@ impl SparseGranuleIndexPruner {
             granule_index.granule_rows as usize,
         );
         if num_granules == 0 {
-            return Ok(input.to_vec());
+            return Ok((input.to_vec(), SparseGranulePruneProfile::default()));
         }
 
         let Some(mins_layout) = granule_index.mins.as_ref() else {
-            return Ok(input.to_vec());
+            return Ok((input.to_vec(), SparseGranulePruneProfile::default()));
         };
 
+        let load_start = Instant::now();
         let granule_mins = load_granule_mins(
             &self.dal,
             &self.read_settings,
@@ -135,10 +154,14 @@ impl SparseGranuleIndexPruner {
             &self.cluster_key_types,
             num_granules,
         )?;
+        let load = load_start.elapsed();
 
+        let evaluate_start = Instant::now();
         let block_max = Scalar::Tuple(cluster_stats.max().clone());
         let ranges = self.evaluator.apply(&granule_mins, &block_max)?;
-        Ok(intersect_ranges(input, &ranges))
+        let ranges = intersect_ranges(input, &ranges);
+        let evaluate = evaluate_start.elapsed();
+        Ok((ranges, SparseGranulePruneProfile { load, evaluate }))
     }
 }
 
