@@ -31,7 +31,6 @@ use databend_common_sql::QueryLineageKind;
 use databend_common_sql::QueryLineageRelation;
 use databend_common_sql::QueryLineageRelationKind;
 use databend_common_sql::plans::Plan;
-use databend_common_tracing::HistoryTableConfig;
 
 use crate::framework::LiteTableContext;
 use crate::framework::init_testing_globals_with_config;
@@ -469,12 +468,7 @@ async fn test_query_lineage_merge_insert_subset_preserves_target_column_id() -> 
 
 async fn lineage_test_context() -> Result<Arc<LiteTableContext>> {
     let mut config = InnerConfig::default();
-    config.log.history.on = true;
-    config.log.history.tables.push(HistoryTableConfig {
-        table_name: "lineage_history".to_string(),
-        retention: None,
-        invisible: false,
-    });
+    config.lineage.lineage_on = true;
     // Lite globals are thread-local in debug builds. Initialize capture on the test's current
     // thread before LiteTableContext::create() attempts to install the default configuration.
     init_testing_globals_with_config(config);

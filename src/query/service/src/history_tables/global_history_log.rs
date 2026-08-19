@@ -116,7 +116,7 @@ impl GlobalHistoryLog {
             _runtime: runtime.clone(),
         });
         GlobalInstance::set(instance);
-        if cfg.log.history.log_only {
+        if !cfg.log.history.transforms_enabled() {
             info!("History tables transform is disabled, only logging is enabled.");
             return Ok(());
         }

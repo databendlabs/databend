@@ -115,12 +115,12 @@ pub fn init_history_tables(cfg: &HistoryConfig) -> Result<Vec<Arc<HistoryTable>>
             .map(|table| (table.name.clone(), table)),
     );
 
-    let mut history_tables = Vec::with_capacity(cfg.tables.len());
+    let mut history_tables = Vec::with_capacity(cfg.tables.len() + cfg.internal_tables.len());
     // log_history is the source table, it is always included
     // if user defined log_history, we will use the user defined retention
     // if user did not define log_history, we will use the default retention of 24*7 hours
     let mut user_defined_log_history = false;
-    for enable_table in cfg.tables.iter() {
+    for enable_table in cfg.transform_tables() {
         if enable_table.table_name == "log_history" {
             user_defined_log_history = true;
         }
@@ -310,6 +310,7 @@ mod tests {
     #[test]
     fn test_lineage_retention_defaults_to_permanent() {
         let config = |table_name: &str, retention| HistoryConfig {
+            on: true,
             tables: vec![crate::HistoryTableConfig {
                 table_name: table_name.to_string(),
                 retention,
