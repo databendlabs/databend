@@ -1,31 +1,49 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+import sys
+from pathlib import Path
 
-spark = (
-    SparkSession.builder.appName("CSV to Iceberg REST Catalog")
-    .config(
-        "spark.sql.extensions",
-        "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
-    )
-    .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog")
-    .config("spark.sql.catalog.iceberg.type", "rest")
-    .config("spark.sql.catalog.iceberg.uri", "http://127.0.0.1:8181")
-    .config("spark.sql.catalog.iceberg.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
-    .config("spark.sql.catalog.iceberg.warehouse", "s3://iceberg-tpch/")
-    .config("spark.sql.catalog.iceberg.s3.access-key-id", "admin")
-    .config("spark.sql.catalog.iceberg.s3.secret-access-key", "password")
-    .config("spark.sql.catalog.iceberg.s3.path-style-access", "true")
-    .config("spark.sql.catalog.iceberg.s3.endpoint", "http://127.0.0.1:9002")
-    .config("spark.sql.catalog.iceberg.client.region", "us-east-1")
-    .config(
-        "spark.jars.packages",
-        "org.apache.iceberg:iceberg-aws-bundle:1.10.0,org.apache.iceberg:iceberg-spark-runtime-4.0_2.13:1.10.0",
-    )
-    # for delete file
-    .config("spark.sql.shuffle.partitions", "1")
-    # for delete file
-    .config("spark.default.parallelism", "1")
-    .getOrCreate()
+from pyspark.sql import SparkSession
+from pyspark.sql.types import IntegerType, StringType, StructField, StructType
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from maven_artifact import download_maven_jars, retry_call  # noqa: E402
+
+jars = download_maven_jars(
+    [
+        "org.apache.iceberg:iceberg-aws-bundle:1.10.0",
+        "org.apache.iceberg:iceberg-spark-runtime-4.0_2.13:1.10.0",
+    ]
+)
+
+spark = retry_call(
+    lambda: (
+        SparkSession.builder.appName("CSV to Iceberg REST Catalog")
+        .config(
+            "spark.sql.extensions",
+            "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+        )
+        .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog")
+        .config("spark.sql.catalog.iceberg.type", "rest")
+        .config("spark.sql.catalog.iceberg.uri", "http://127.0.0.1:8181")
+        .config(
+            "spark.sql.catalog.iceberg.io-impl", "org.apache.iceberg.aws.s3.S3FileIO"
+        )
+        .config("spark.sql.catalog.iceberg.warehouse", "s3://iceberg-tpch/")
+        .config("spark.sql.catalog.iceberg.s3.access-key-id", "admin")
+        .config("spark.sql.catalog.iceberg.s3.secret-access-key", "password")
+        .config("spark.sql.catalog.iceberg.s3.path-style-access", "true")
+        .config("spark.sql.catalog.iceberg.s3.endpoint", "http://127.0.0.1:9002")
+        .config("spark.sql.catalog.iceberg.client.region", "us-east-1")
+        .config("spark.jars", ",".join(jars))
+        # for delete file
+        .config("spark.sql.shuffle.partitions", "1")
+        # for delete file
+        .config("spark.default.parallelism", "1")
+        .getOrCreate()
+    ),
+    what="create Iceberg test Spark session",
 )
 
 spark.sql("CREATE NAMESPACE IF NOT EXISTS iceberg.test")

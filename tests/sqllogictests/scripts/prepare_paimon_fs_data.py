@@ -13,6 +13,12 @@ from pathlib import Path
 
 from pyspark.sql import SparkSession
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from maven_artifact import download_maven_jars, retry_call  # noqa: E402
+
 warehouse = os.environ.get(
     "PAIMON_WAREHOUSE",
     str(Path(__file__).resolve().parents[2] / "data" / "paimon_warehouse"),
@@ -25,14 +31,15 @@ else:
     Path(warehouse).mkdir(parents=True, exist_ok=True)
     warehouse_uri = f"file://{warehouse}"
 
-packages = "org.apache.paimon:paimon-spark-3.5_2.12:1.4.1"
+coords = ["org.apache.paimon:paimon-spark-3.5_2.12:1.4.1"]
 if warehouse.startswith("s3://"):
-    packages += ",org.apache.paimon:paimon-s3:1.4.1"
+    coords.append("org.apache.paimon:paimon-s3:1.4.1")
+jars = download_maven_jars(coords)
 
 builder = (
     SparkSession.builder.appName("prepare-paimon-fs-data")
     .master("local[4]")
-    .config("spark.jars.packages", packages)
+    .config("spark.jars", ",".join(jars))
     .config(
         "spark.sql.extensions",
         "org.apache.paimon.spark.extensions.PaimonSparkSessionExtensions",
@@ -61,7 +68,7 @@ if warehouse.startswith("s3://"):
         .config("spark.sql.catalog.paimon.s3.region", "us-east-1")
     )
 
-spark = builder.getOrCreate()
+spark = retry_call(builder.getOrCreate, what="create Paimon Spark session")
 
 
 def prepare_tables() -> None:

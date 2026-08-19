@@ -4,6 +4,8 @@ import platform
 import shutil
 import tarfile
 import tempfile
+import time
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
@@ -54,6 +56,8 @@ JDBC_MAIN_TEST_ARGS = [
     "test",
     "-Dgroups=IT",
     "-DexcludedGroups=FLAKY",
+    "-Daether.connector.http.retryHandler.count=8",
+    "-Daether.connector.http.retryHandler.interval=2000",
 ]
 JDBC_TEST_LIBS = [
     "https://repo.maven.apache.org/maven2/org/testng/testng/7.11.0/testng-7.11.0.jar",
@@ -131,18 +135,44 @@ def prepare_source_archive(
     return source_dir
 
 
-def download_file(url, target):
+def download_file(url, target, attempts=8):
     if target.exists():
         return target
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(get_request(url)) as response:
-        with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as temp_file:
-            shutil.copyfileobj(response, temp_file)
-            temp_path = Path(temp_file.name)
-
-    temp_path.replace(target)
-    return target
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        temp_path = None
+        retryable = False
+        try:
+            with urllib.request.urlopen(get_request(url)) as response:
+                with tempfile.NamedTemporaryFile(
+                    dir=target.parent, delete=False
+                ) as temp_file:
+                    temp_path = Path(temp_file.name)
+                    shutil.copyfileobj(response, temp_file)
+            temp_path.replace(target)
+            return target
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            retryable = exc.code in {408, 425, 429, 500, 502, 503, 504}
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last_error = exc
+            retryable = True
+        finally:
+            if temp_path is not None and temp_path.exists() and temp_path != target:
+                temp_path.unlink()
+        if not retryable or attempt == attempts:
+            break
+        delay = min(60, 2 ** (attempt - 1))
+        print(
+            f"download {url} failed on attempt {attempt}/{attempts}: {last_error}; "
+            f"retrying in {delay}s"
+        )
+        time.sleep(delay)
+    raise RuntimeError(
+        f"failed to download {url} after {attempts} attempts"
+    ) from last_error
 
 
 def merge_env(*env_sets):
@@ -157,7 +187,9 @@ def resolve_python_driver_version(driver_version):
     if driver_version != "latest":
         return driver_version
 
-    return resolve_latest_release_tag(PYTHON_CLIENT_LATEST_RELEASE_URL).removeprefix("v")
+    return resolve_latest_release_tag(PYTHON_CLIENT_LATEST_RELEASE_URL).removeprefix(
+        "v"
+    )
 
 
 def prepare_python_client_source():
@@ -312,7 +344,9 @@ def build_jdbc_testng_suite(test_jar):
     suite_path = CACHE_DIR / "generated" / f"{test_jar.stem}-testng.xml"
     suite_path.parent.mkdir(parents=True, exist_ok=True)
 
-    suite = ET.Element("suite", {"name": "DatabendJdbcTests", "verbose": "10", "parallel": "none"})
+    suite = ET.Element(
+        "suite", {"name": "DatabendJdbcTests", "verbose": "10", "parallel": "none"}
+    )
     test = ET.SubElement(suite, "test", {"name": "AllTests"})
     groups = ET.SubElement(test, "groups")
     run = ET.SubElement(groups, "run")
@@ -432,7 +466,9 @@ def python_client(session, driver_version):
         )
         with session.chdir(str(bindings_dir)):
             for impl in ["blocking", "asyncio", "cursor"]:
-                session.run("behave", f"tests/{impl}", env=merge_env(PYTHON_TEST_ENV, env))
+                session.run(
+                    "behave", f"tests/{impl}", env=merge_env(PYTHON_TEST_ENV, env)
+                )
     finally:
         current_timezone = get_current_timezone()
         if current_timezone != original_timezone:

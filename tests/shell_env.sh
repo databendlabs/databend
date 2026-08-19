@@ -39,6 +39,21 @@ bendsql_connect_root_null() {
 	bendsql_connect_root --output null "$@"
 }
 
+# Keep Spark/Maven bootstrap logs out of databend-test .result files.
+# On failure, dump the captured log so CI shows HTTP 429 / missing jars.
+prepare_paimon_fs_data() {
+	local script_dir prepare_script log
+	script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+	prepare_script="${script_dir}/sqllogictests/scripts/prepare_paimon_fs_data.sh"
+	log="$(mktemp)"
+	trap 'rm -f "${log}"' RETURN
+	if ! "${prepare_script}" >"${log}" 2>&1; then
+		echo "FAIL: paimon warehouse prepare failed" >&2
+		cat "${log}" >&2
+		return 1
+	fi
+}
+
 # share client
 export QUERY_MYSQL_HANDLER_SHARE_PROVIDER_PORT="18000"
 export QUERY_MYSQL_HANDLER_SHARE_CONSUMER_PORT="28000"

@@ -22,11 +22,25 @@ runs:
         distribution: temurin
         java-version: "17"
 
+    # setup-maven downloads from repo.maven.apache.org and fails CI with HTTP 429.
+    # Apache dist is a separate host and curl retries 429/5xx.
     - name: Set up Maven
       if: ${{ inputs.nox_session == 'java_client' }}
-      uses: stCarolas/setup-maven@v5
-      with:
-        maven-version: 3.9.9
+      shell: bash
+      run: |
+        set -euo pipefail
+        version=3.9.9
+        sha512=a555254d6b53d267965a3404ecb14e53c3827c09c3b94b5678835887ab404556bfaf78dcfe03ba76fa2508649dca8531c74bca4d5846513522404d48e8c4ac8b
+        dest="${RUNNER_TEMP}/apache-maven-${version}"
+        tarball="${RUNNER_TEMP}/apache-maven-${version}-bin.tar.gz"
+        url="https://archive.apache.org/dist/maven/maven-3/${version}/binaries/apache-maven-${version}-bin.tar.gz"
+        curl --connect-timeout 10 --retry 8 --retry-all-errors --retry-delay 5 -fsSL "$url" -o "$tarball"
+        echo "${sha512}  ${tarball}" | sha512sum -c -
+        mkdir -p "$dest"
+        tar -xzf "$tarball" -C "$dest" --strip-components=1
+        echo "$dest/bin" >> "$GITHUB_PATH"
+        echo "MAVEN_HOME=$dest" >> "$GITHUB_ENV"
+        echo "MAVEN_OPTS=-Daether.connector.http.retryHandler.count=8 -Daether.connector.http.retryHandler.interval=2000 ${MAVEN_OPTS:-}" >> "$GITHUB_ENV"
 
     - name: Setup Go
       if: ${{ inputs.nox_session == 'go_client' }}
