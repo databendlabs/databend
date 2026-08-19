@@ -26,6 +26,19 @@ FROM get_lineage('lineage_history_statements.insert_dst', 'TABLE', 'UPSTREAM', 1
 ----
 1 lineage_history_statements src lineage_history_statements insert_dst
 
+query ISS rowsort
+SELECT distance, source_column_name, target_column_name
+FROM get_lineage('lineage_history_statements.mcte_dst.x', 'COLUMN', 'UPSTREAM', 1)
+----
+1 a x
+1 b x
+
+query ISS
+SELECT distance, source_column_name, target_column_name
+FROM get_lineage('lineage_history_statements.mcte_tuple_dst.x', 'COLUMN', 'UPSTREAM', 1)
+----
+1 t x
+
 query I
 SELECT count(*)
 FROM system_history.lineage_history
