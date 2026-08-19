@@ -595,29 +595,38 @@ fn restrict_float_range(
 ) -> StatRangeBounds {
     let new_min = match lower {
         Bound::Unbounded => min,
-        Bound::Included(Datum::Float(value)) | Bound::Excluded(Datum::Float(value)) => {
-            min.max(*value)
+        Bound::Included(value) => match float_bound_value(value) {
+            Some(value) => min.max(value),
+            None => return StatRangeBounds::Imprecise,
+        },
+        Bound::Excluded(value) => {
+            let Some(value) = float_bound_value(value) else {
+                return StatRangeBounds::Imprecise;
+            };
+            // Column stats store closed bounds. Float has no representable
+            // adjacent value here, so keep the literal as a coarse closed bound
+            // unless it already empties the existing endpoint.
+            if value >= max {
+                return StatRangeBounds::Empty;
+            }
+            min.max(value)
         }
-        Bound::Included(Datum::Int(value)) | Bound::Excluded(Datum::Int(value)) => {
-            min.max(F64::from(*value as f64))
-        }
-        Bound::Included(Datum::UInt(value)) | Bound::Excluded(Datum::UInt(value)) => {
-            min.max(F64::from(*value as f64))
-        }
-        Bound::Included(_) | Bound::Excluded(_) => return StatRangeBounds::Imprecise,
     };
     let new_max = match upper {
         Bound::Unbounded => max,
-        Bound::Included(Datum::Float(value)) | Bound::Excluded(Datum::Float(value)) => {
-            max.min(*value)
+        Bound::Included(value) => match float_bound_value(value) {
+            Some(value) => max.min(value),
+            None => return StatRangeBounds::Imprecise,
+        },
+        Bound::Excluded(value) => {
+            let Some(value) = float_bound_value(value) else {
+                return StatRangeBounds::Imprecise;
+            };
+            if value <= min {
+                return StatRangeBounds::Empty;
+            }
+            max.min(value)
         }
-        Bound::Included(Datum::Int(value)) | Bound::Excluded(Datum::Int(value)) => {
-            max.min(F64::from(*value as f64))
-        }
-        Bound::Included(Datum::UInt(value)) | Bound::Excluded(Datum::UInt(value)) => {
-            max.min(F64::from(*value as f64))
-        }
-        Bound::Included(_) | Bound::Excluded(_) => return StatRangeBounds::Imprecise,
     };
     if new_min > new_max {
         return StatRangeBounds::Empty;
@@ -628,6 +637,15 @@ fn restrict_float_range(
     })
 }
 
+fn float_bound_value(datum: &Datum) -> Option<F64> {
+    match datum {
+        Datum::Float(value) => Some(*value),
+        Datum::Int(value) => Some(F64::from(*value as f64)),
+        Datum::UInt(value) => Some(F64::from(*value as f64)),
+        Datum::Bool(_) | Datum::Bytes(_) => None,
+    }
+}
+
 fn restrict_bytes_range(
     min: &[u8],
     max: &[u8],
@@ -636,23 +654,25 @@ fn restrict_bytes_range(
 ) -> StatRangeBounds {
     let new_min = match lower {
         Bound::Unbounded => min.to_vec(),
-        Bound::Included(Datum::Bytes(value)) | Bound::Excluded(Datum::Bytes(value)) => {
-            if min > value.as_slice() {
-                min.to_vec()
-            } else {
-                value.clone()
+        Bound::Included(Datum::Bytes(value)) => bytes_lower_bound(min, value),
+        Bound::Excluded(Datum::Bytes(value)) => {
+            // See restrict_float_range: keep the literal as a coarse closed bound
+            // unless the excluded endpoint already empties the range.
+            if value.as_slice() >= max {
+                return StatRangeBounds::Empty;
             }
+            bytes_lower_bound(min, value)
         }
         Bound::Included(_) | Bound::Excluded(_) => return StatRangeBounds::Imprecise,
     };
     let new_max = match upper {
         Bound::Unbounded => max.to_vec(),
-        Bound::Included(Datum::Bytes(value)) | Bound::Excluded(Datum::Bytes(value)) => {
-            if max < value.as_slice() {
-                max.to_vec()
-            } else {
-                value.clone()
+        Bound::Included(Datum::Bytes(value)) => bytes_upper_bound(max, value),
+        Bound::Excluded(Datum::Bytes(value)) => {
+            if value.as_slice() <= min {
+                return StatRangeBounds::Empty;
             }
+            bytes_upper_bound(max, value)
         }
         Bound::Included(_) | Bound::Excluded(_) => return StatRangeBounds::Imprecise,
     };
@@ -663,6 +683,22 @@ fn restrict_bytes_range(
         min: new_min,
         max: new_max,
     })
+}
+
+fn bytes_lower_bound(min: &[u8], value: &[u8]) -> Vec<u8> {
+    if min > value {
+        min.to_vec()
+    } else {
+        value.to_vec()
+    }
+}
+
+fn bytes_upper_bound(max: &[u8], value: &[u8]) -> Vec<u8> {
+    if max < value {
+        max.to_vec()
+    } else {
+        value.to_vec()
+    }
 }
 
 #[cfg(test)]
@@ -880,6 +916,70 @@ mod tests {
         assert_eq!(
             bounds.restrict_by_range(&Bound::Unbounded, &Bound::Excluded(Datum::Int(5))),
             StatRangeBounds::Bounds(StatBounds::UInt { min: 1, max: 4 })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_restrict_float_singleton_excluded_endpoint_is_empty() -> Result<()> {
+        let bounds = StatBounds::new(Datum::Float(F64::from(1.0)), Datum::Float(F64::from(1.0)))?;
+        let value = Datum::Float(F64::from(1.0));
+
+        assert_eq!(
+            bounds.restrict_by_range(&Bound::Excluded(value.clone()), &Bound::Unbounded),
+            StatRangeBounds::Empty
+        );
+        assert_eq!(
+            bounds.restrict_by_range(&Bound::Unbounded, &Bound::Excluded(value.clone())),
+            StatRangeBounds::Empty
+        );
+        assert_eq!(
+            bounds.restrict_by_range(&Bound::Included(value.clone()), &Bound::Unbounded),
+            StatRangeBounds::Bounds(StatBounds::Float {
+                min: F64::from(1.0),
+                max: F64::from(1.0),
+            })
+        );
+
+        let range = StatBounds::new(Datum::Float(F64::from(1.0)), Datum::Float(F64::from(3.0)))?;
+        assert_eq!(
+            range.restrict_by_range(&Bound::Excluded(value), &Bound::Unbounded),
+            StatRangeBounds::Bounds(StatBounds::Float {
+                min: F64::from(1.0),
+                max: F64::from(3.0),
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_restrict_bytes_singleton_excluded_endpoint_is_empty() -> Result<()> {
+        let bounds = StatBounds::new(Datum::Bytes(b"x".to_vec()), Datum::Bytes(b"x".to_vec()))?;
+        let value = Datum::Bytes(b"x".to_vec());
+
+        assert_eq!(
+            bounds.restrict_by_range(&Bound::Excluded(value.clone()), &Bound::Unbounded),
+            StatRangeBounds::Empty
+        );
+        assert_eq!(
+            bounds.restrict_by_range(&Bound::Unbounded, &Bound::Excluded(value.clone())),
+            StatRangeBounds::Empty
+        );
+        assert_eq!(
+            bounds.restrict_by_range(&Bound::Included(value.clone()), &Bound::Unbounded),
+            StatRangeBounds::Bounds(StatBounds::Bytes {
+                min: b"x".to_vec(),
+                max: b"x".to_vec(),
+            })
+        );
+
+        let range = StatBounds::new(Datum::Bytes(b"a".to_vec()), Datum::Bytes(b"z".to_vec()))?;
+        assert_eq!(
+            range.restrict_by_range(&Bound::Excluded(value), &Bound::Unbounded),
+            StatRangeBounds::Bounds(StatBounds::Bytes {
+                min: b"x".to_vec(),
+                max: b"z".to_vec(),
+            })
         );
         Ok(())
     }

@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::stat_distribution::StatCardinality;
@@ -624,12 +625,12 @@ impl JoinSideColumnStats {
             };
             if let Some(histogram) = &side_stats.matched_histogram {
                 stat.set_histogram(Some(histogram.clone()))
-                    .map_err(databend_common_exception::ErrorCode::Internal)?;
+                    .map_err(ErrorCode::Internal)?;
             } else if !matches!(stat, ColumnStat::AllNull { .. })
                 && let Some(input_stat) = self.input_join_stats.get(&joined_column)
             {
                 stat.replace_histogram_from(input_stat, cardinality)
-                    .map_err(databend_common_exception::ErrorCode::Internal)?;
+                    .map_err(ErrorCode::Internal)?;
             }
         }
         Ok(self)

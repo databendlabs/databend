@@ -537,20 +537,14 @@ impl ColumnStat {
         }
     }
 
-    fn ndv_mut(&mut self) -> Option<&mut NdvEstimate> {
+    pub(crate) fn set_ndv(&mut self, value: NdvEstimate) {
         match self {
             ColumnStat::Boolean { ndv, .. }
             | ColumnStat::Int { ndv, .. }
             | ColumnStat::UInt { ndv, .. }
             | ColumnStat::Float { ndv, .. }
-            | ColumnStat::Bytes { ndv, .. } => Some(ndv),
-            ColumnStat::AllNull { .. } => None,
-        }
-    }
-
-    pub(crate) fn set_ndv(&mut self, value: NdvEstimate) {
-        if let Some(ndv) = self.ndv_mut() {
-            *ndv = value;
+            | ColumnStat::Bytes { ndv, .. } => *ndv = value,
+            ColumnStat::AllNull { .. } => (),
         }
     }
 
