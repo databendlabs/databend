@@ -1,0 +1,110 @@
+statement ok
+set sandbox_tenant = 'share_policy_provider_e2e'
+
+statement ok
+set global enable_experimental_row_access_policy = 1
+
+statement ok
+DROP SHARE IF EXISTS share_policy_e2e
+
+statement ok
+DROP CONNECTION IF EXISTS share_policy_conn_e2e
+
+statement ok
+DROP DATABASE IF EXISTS share_policy_db_e2e
+
+statement ok
+DROP ROW ACCESS POLICY IF EXISTS share_row_policy_e2e
+
+statement ok
+DROP MASKING POLICY IF EXISTS share_mask_policy_e2e
+
+statement ok
+CREATE CONNECTION share_policy_conn_e2e STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE SHARE share_policy_e2e CONNECTION = share_policy_conn_e2e
+
+statement ok
+CREATE DATABASE share_policy_db_e2e
+
+statement ok
+CREATE TABLE share_policy_db_e2e.row_secured(id INT, region STRING)
+
+statement ok
+CREATE TABLE share_policy_db_e2e.mask_secured(id INT, secret STRING)
+
+statement ok
+GRANT USAGE ON DATABASE share_policy_db_e2e TO SHARE share_policy_e2e
+
+statement ok
+CREATE ROW ACCESS POLICY share_row_policy_e2e AS (region STRING) RETURNS BOOLEAN -> region = 'APAC'
+
+statement ok
+ALTER TABLE share_policy_db_e2e.row_secured ADD ROW ACCESS POLICY share_row_policy_e2e ON (region)
+
+statement error (?s).*do not support provider row access or masking policies.*
+GRANT SELECT ON TABLE share_policy_db_e2e.row_secured TO SHARE share_policy_e2e
+
+statement ok
+ALTER TABLE share_policy_db_e2e.row_secured DROP ROW ACCESS POLICY share_row_policy_e2e
+
+statement ok
+GRANT SELECT ON TABLE share_policy_db_e2e.row_secured TO SHARE share_policy_e2e
+
+statement ok
+ALTER TABLE share_policy_db_e2e.row_secured ADD ROW ACCESS POLICY share_row_policy_e2e ON (region)
+
+statement ok
+ALTER SHARE share_policy_e2e ADD ACCOUNTS = share_policy_consumer_e2e
+
+statement ok
+set sandbox_tenant = 'share_policy_consumer_e2e'
+
+statement ok
+DROP DATABASE IF EXISTS share_policy_consumer_db_e2e
+
+statement ok
+CREATE DATABASE share_policy_consumer_db_e2e FROM SHARE share_policy_provider_e2e.share_policy_e2e
+
+statement error (?s).*do not support provider row access or masking policies.*
+SELECT * FROM share_policy_consumer_db_e2e.row_secured
+
+statement ok
+set sandbox_tenant = 'share_policy_provider_e2e'
+
+statement ok
+CREATE MASKING POLICY share_mask_policy_e2e AS (val STRING) RETURNS STRING -> '***'
+
+statement ok
+ALTER TABLE share_policy_db_e2e.mask_secured MODIFY COLUMN secret SET MASKING POLICY share_mask_policy_e2e
+
+statement error (?s).*do not support provider row access or masking policies.*
+GRANT SELECT ON TABLE share_policy_db_e2e.mask_secured TO SHARE share_policy_e2e
+
+statement ok
+ALTER TABLE share_policy_db_e2e.row_secured DROP ROW ACCESS POLICY share_row_policy_e2e
+
+statement ok
+ALTER TABLE share_policy_db_e2e.mask_secured MODIFY COLUMN secret UNSET MASKING POLICY
+
+statement ok
+DROP SHARE share_policy_e2e
+
+statement ok
+DROP CONNECTION share_policy_conn_e2e
+
+statement ok
+DROP DATABASE share_policy_db_e2e
+
+statement ok
+DROP ROW ACCESS POLICY share_row_policy_e2e
+
+statement ok
+DROP MASKING POLICY share_mask_policy_e2e
+
+statement ok
+set sandbox_tenant = 'share_policy_consumer_e2e'
+
+statement ok
+DROP DATABASE share_policy_consumer_db_e2e

@@ -446,6 +446,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn plan_can_be_cached(&self) -> bool {
+        true
+    }
+
     fn broadcast_truncate_to_warehouse(&self) -> bool {
         false
     }
