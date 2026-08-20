@@ -775,7 +775,7 @@ async fn build_virtual_columns(
                     );
                 } else {
                     info!(
-                        "No virtual column data produced for block {} (rows={}); no sidecar file will be written",
+                        "No virtual column data produced for block {} (rows={}); no auxiliary file will be written",
                         task.block_location,
                         block.num_rows()
                     );

@@ -233,8 +233,8 @@ impl TableMetaLocationGenerator {
 
     /// Derive the sparse granule-mins location from its data block location.
     ///
-    /// Keeping the block object key (including the vacuum2 prefix) makes the sidecar lifecycle
-    /// deterministic: block GC can remove the sidecar before removing the block without listing
+    /// Keeping the block object key (including the vacuum2 prefix) makes the granule index file lifecycle
+    /// deterministic: block GC can remove the granule index file before removing the block without listing
     /// the granule-index directory.
     pub fn gen_granule_mins_location_from_block_location(loc: &str) -> Location {
         Self::gen_granule_index_location_from_block_location(loc, "mins")
@@ -245,7 +245,7 @@ impl TableMetaLocationGenerator {
         Self::gen_granule_index_location_from_block_location(loc, "offsets")
     }
 
-    /// Return all sparse granule sidecars whose lifetime is anchored to this block.
+    /// Return all sparse granule index files whose lifetime is anchored to this block.
     pub fn gen_granule_index_locations_from_block_location(loc: &str) -> [String; 2] {
         [
             Self::gen_granule_mins_location_from_block_location(loc).0,

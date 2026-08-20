@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::ops::Range;
+use std::sync::Arc;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -23,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::metrics_inc_remote_io_read_bytes;
 use databend_common_metrics::storage::metrics_inc_remote_io_read_parts;
+use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::OwnerMemory;
 use databend_storages_common_io::RangeReader;
@@ -34,7 +36,7 @@ use super::BlockReadContext;
 use super::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::io::OffsetsIndex;
-use crate::io::create_file_range_reader;
+use crate::io::create_file_range_reader_with_stats;
 
 const GRANULE_IO_RANGE_SIZE: u64 = 16 * 1024 * 1024;
 /// A hole this large always splits: a new request is cheaper than reading through.
@@ -420,6 +422,7 @@ impl GranuleDataReader {
         part: &FuseBlockPartInfo,
         groups: &[Vec<Range<usize>>],
         offsets: &OffsetsIndex,
+        lock_stats: Option<Arc<CacheLockStats>>,
     ) -> Result<Self> {
         let ranges = collect_ranges(groups);
         offsets.validate_ranges(&ranges, part.nums_rows)?;
@@ -449,7 +452,7 @@ impl GranuleDataReader {
                 offsets.column_byte_ranges(*column_id, meta, &ranges)?;
             record_remote_bytes(&byte_ranges);
 
-            let reader = create_file_range_reader(
+            let reader = create_file_range_reader_with_stats(
                 read_context.operator().clone(),
                 part.location.clone(),
                 file_len,
@@ -457,6 +460,7 @@ impl GranuleDataReader {
                 GRANULE_IO_RANGE_SIZE,
                 held_budget,
                 read_context.put_cache(),
+                lock_stats.clone(),
             )?;
             let reader = GranuleColumnReader::try_create(
                 *column_id,

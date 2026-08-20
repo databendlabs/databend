@@ -18,6 +18,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_io::ReadSettings;
 use log::debug;
 
@@ -151,13 +152,14 @@ impl ReadBlockContext {
         &self,
         part: &PartInfoPtr,
         groups: &[Vec<std::ops::Range<usize>>],
+        lock_stats: Arc<CacheLockStats>,
     ) -> Result<GranuleDataReader> {
         let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let granule_index = fuse_part
             .granule_index
             .as_ref()
             .ok_or_else(|| ErrorCode::Internal("granule index metadata is missing"))?;
-        let offsets = OffsetsIndex::load(
+        let offsets = OffsetsIndex::load_with_stats(
             self.block_read_ctx.operator(),
             &self.read_settings,
             &granule_index.offsets,
@@ -168,6 +170,7 @@ impl ReadBlockContext {
                 .project_indices()
                 .values()
                 .map(|(column_id, ..)| *column_id),
+            Some(lock_stats.clone()),
         )?;
         GranuleDataReader::create(
             &self.block_read_ctx,
@@ -175,6 +178,7 @@ impl ReadBlockContext {
             fuse_part,
             groups,
             &offsets,
+            Some(lock_stats),
         )
     }
 

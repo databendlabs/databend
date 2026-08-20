@@ -14,6 +14,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 
 use bytes::Bytes;
 use databend_common_config::DiskCacheKeyReloadPolicy;
@@ -25,6 +26,7 @@ use log::warn;
 use parking_lot::RwLock;
 
 use crate::CacheAccessor;
+use crate::CacheLockStats;
 use crate::providers::disk_cache::DiskCache;
 
 impl CacheAccessor for LruDiskCacheHolder {
@@ -193,7 +195,14 @@ impl LruDiskCacheHolder {
     /// one read lock; the whole batch is silently dropped when the queue is
     /// full or the worker is gone.
     pub fn populate(&self, items: Vec<(String, Bytes)>) {
+        self.populate_with_stats(items, None)
+    }
+
+    pub fn populate_with_stats(&self, items: Vec<(String, Bytes)>, stats: Option<&CacheLockStats>) {
+        let wait_start = Instant::now();
         let cache = self.cache.read();
+        let wait = wait_start.elapsed();
+        let hold_start = Instant::now();
         let batch = items
             .into_iter()
             .filter(|(key, _)| !cache.contains_key(key))
@@ -203,7 +212,11 @@ impl LruDiskCacheHolder {
                 track_pending_metric: false,
             })
             .collect::<Vec<_>>();
+        let hold = hold_start.elapsed();
         drop(cache);
+        if let Some(stats) = stats {
+            stats.record_disk(wait, hold);
+        }
 
         if !batch.is_empty() {
             let _ = self.population_tx.try_send(batch);
@@ -216,14 +229,28 @@ impl LruDiskCacheHolder {
     /// corrupted entries are evicted under one more lock acquisition at the
     /// end. Results align with `keys` one to one.
     pub fn mget<Q: AsRef<str>>(&self, keys: &[Q]) -> Vec<Option<Arc<Bytes>>> {
+        self.mget_with_stats(keys, None)
+    }
+
+    pub fn mget_with_stats<Q: AsRef<str>>(
+        &self,
+        keys: &[Q],
+        stats: Option<&CacheLockStats>,
+    ) -> Vec<Option<Arc<Bytes>>> {
         // Phase 1: LRU touches and path resolution only; no file I/O may
         // enter this critical section.
         let mut located = Vec::with_capacity(keys.len());
-        {
-            let mut cache = self.write();
-            for key in keys {
-                located.push(cache.get_cache_item_path_and_size(key.as_ref()));
-            }
+        let wait_start = Instant::now();
+        let mut cache = self.write();
+        let wait = wait_start.elapsed();
+        let hold_start = Instant::now();
+        for key in keys {
+            located.push(cache.get_cache_item_path_and_size(key.as_ref()));
+        }
+        let hold = hold_start.elapsed();
+        drop(cache);
+        if let Some(stats) = stats {
+            stats.record_disk(wait, hold);
         }
 
         // Phase 2: read and validate the files without holding the lock. An
@@ -259,11 +286,19 @@ impl LruDiskCacheHolder {
 
         // Phase 3: evict corrupted entries, errors of removal ignored.
         if !corrupted.is_empty() {
+            let wait_start = Instant::now();
             let mut cache = self.write();
+            let wait = wait_start.elapsed();
+            let hold_start = Instant::now();
             for k in corrupted {
                 if let Err(e) = cache.remove(k) {
                     warn!("failed to remove invalid cache item of key {k}: {e}");
                 }
+            }
+            let hold = hold_start.elapsed();
+            drop(cache);
+            if let Some(stats) = stats {
+                stats.record_disk(wait, hold);
             }
         }
         results
@@ -593,6 +628,7 @@ mod tests_mget {
 
     use super::*;
     use crate::CacheAccessor;
+    use crate::CacheLockStats;
 
     fn new_cache(bytes_capacity: usize) -> (TempDir, LruDiskCacheHolder) {
         let dir = TempDir::new().unwrap();
@@ -639,7 +675,9 @@ mod tests_mget {
         cache.insert("a".to_string(), Bytes::from_static(b"alpha"));
         cache.insert("c".to_string(), Bytes::from_static(b"charlie"));
 
-        let results = cache.mget(&["a", "b", "c"]);
+        let stats = CacheLockStats::default();
+        let results = cache.mget_with_stats(&["a", "b", "c"], Some(&stats));
+        assert_eq!(stats.snapshot().disk_acquires, 1);
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].as_deref(), Some(&Bytes::from_static(b"alpha")));
         assert!(results[1].is_none());

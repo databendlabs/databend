@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::future::Future;
 use std::ops::Range;
 use std::pin::Pin;
@@ -24,6 +25,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::*;
+use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
@@ -39,6 +41,13 @@ use crate::io::num_granules_of;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostKind;
 use crate::pruning::RuntimeStatsPruner;
+use crate::pruning::sparse_granule_index_pruner::SparsePrunePrefetch;
+
+/// Upper bound of blocks whose sparse-mins file requests may be in flight
+/// at once. The drain side finishes the oldest block while the fill side
+/// starts a replacement, so a segment pays O(blocks / window) round trips
+/// instead of one round trip per block.
+const SPARSE_PRUNE_PREFETCH_BLOCKS: usize = 32;
 
 pub struct BlockPruner {
     pub pruning_ctx: Arc<PruningContext>,
@@ -58,6 +67,7 @@ struct RangeGranulePruneDiagnostics {
     blocks_after_granule: usize,
     block_range: std::time::Duration,
     runtime_stats: std::time::Duration,
+    sparse_prefetch: std::time::Duration,
     granule_total: std::time::Duration,
     granule: GranulePruneDiagnostics,
 }
@@ -399,6 +409,9 @@ impl BlockPruner {
             blocks_after_internal: block_meta_indexes.len(),
             ..Default::default()
         };
+        let mut window: VecDeque<(usize, Arc<BlockMeta>, Option<SparsePrunePrefetch>)> =
+            VecDeque::with_capacity(SPARSE_PRUNE_PREFETCH_BLOCKS);
+        let cache_lock_stats = Arc::new(CacheLockStats::default());
 
         for (block_idx, block_meta) in block_meta_indexes {
             metrics_inc_blocks_range_pruning_before(1);
@@ -432,50 +445,54 @@ impl BlockPruner {
             }
             diagnostics.blocks_after_runtime += 1;
 
-            let granule_start = Instant::now();
-            let outcome = Self::prune_granule_indexes(&self.pruning_ctx, &block_meta, None);
-            diagnostics.granule_total += granule_start.elapsed();
-            diagnostics.granule.add(&outcome.diagnostics);
-            if outcome.granule_ranges.as_ref().is_some_and(Vec::is_empty) {
-                continue;
-            }
-            diagnostics.blocks_after_granule += 1;
+            // Fill the prefetch window: the mins file requests of up to
+            // `SPARSE_PRUNE_PREFETCH_BLOCKS` blocks stay in flight while the
+            // oldest block is finished below.
+            let sparse_prefetch = Instant::now();
+            let pending = Self::prefetch_sparse_mins(
+                &self.pruning_ctx,
+                &block_meta,
+                Some(cache_lock_stats.clone()),
+            );
+            diagnostics.sparse_prefetch += sparse_prefetch.elapsed();
+            window.push_back((block_idx, block_meta, pending));
 
-            result.push(GranulePrunedBlock {
-                block_meta_index: BlockMetaIndex {
-                    segment_idx: segment_location.segment_idx,
-                    block_idx,
-                    range: None,
-                    granule_ranges: outcome.granule_ranges,
-                    page_size: block_meta
-                        .granule_index
-                        .as_ref()
-                        .map_or(block_meta.row_count as usize, |index| {
-                            index.granule_rows as usize
-                        }),
-                    block_id: block_id_in_segment(block_num, block_idx),
-                    block_location: block_meta.location.0.clone(),
-                    segment_location: segment_location.location.0.clone(),
-                    snapshot_location: segment_location.snapshot_loc.clone(),
-                    matched_rows: None,
-                    matched_scores: None,
-                    vector_scores: None,
-                    virtual_block_meta: None,
-                },
-                block_meta,
-                granule_bloom_applied: outcome.granule_bloom_applied,
-            });
+            if window.len() >= SPARSE_PRUNE_PREFETCH_BLOCKS {
+                let entry = window.pop_front().expect("window checked non-empty");
+                self.prune_windowed_block(
+                    entry,
+                    &segment_location,
+                    block_num,
+                    Some(cache_lock_stats.clone()),
+                    &mut diagnostics,
+                    &mut result,
+                );
+            }
+        }
+
+        while let Some(entry) = window.pop_front() {
+            self.prune_windowed_block(
+                entry,
+                &segment_location,
+                block_num,
+                Some(cache_lock_stats.clone()),
+                &mut diagnostics,
+                &mut result,
+            );
         }
 
         let elapsed_duration = start.elapsed();
         let elapsed = elapsed_duration.as_millis() as u64;
         metrics_inc_pruning_milliseconds(elapsed);
         info!("[FUSE-PRUNER] range and granule prune elapsed: {elapsed}");
-        let accounted =
-            diagnostics.block_range + diagnostics.runtime_stats + diagnostics.granule_total;
+        let accounted = diagnostics.block_range
+            + diagnostics.runtime_stats
+            + diagnostics.sparse_prefetch
+            + diagnostics.granule_total;
         let unaccounted = elapsed_duration.saturating_sub(accounted);
+        let lock_stats = cache_lock_stats.snapshot();
         info!(
-            "[FUSE-PRUNER-DIAG] stage=prune segment_idx={} total_us={} unaccounted_us={} blocks_total={} blocks_after_internal={} blocks_after_range={} blocks_after_runtime={} blocks_after_granule={} block_range_us={} runtime_stats_us={} granule_total_us={} granule_blocks={} granules_before={} granules_after={} sparse_blocks={} sparse_load_us={} sparse_eval_us={} sparse_unaccounted_us={} marks_loads={} marks_load_us={} bloom_prunes={} bloom_prune_us={} other_index_prunes={} other_index_prune_us={}",
+            "[FUSE-PRUNER-DIAG] stage=prune segment_idx={} total_us={} unaccounted_us={} blocks_total={} blocks_after_internal={} blocks_after_range={} blocks_after_runtime={} blocks_after_granule={} block_range_us={} runtime_stats_us={} sparse_prefetch_us={} granule_total_us={} granule_blocks={} granules_before={} granules_after={} sparse_blocks={} sparse_load_us={} sparse_eval_us={} sparse_unaccounted_us={} marks_loads={} marks_load_us={} bloom_prunes={} bloom_prune_us={} other_index_prunes={} other_index_prune_us={} memory_cache_lock_wait_ns={} memory_cache_lock_hold_ns={} memory_cache_lock_acquires={} disk_cache_lock_wait_ns={} disk_cache_lock_hold_ns={} disk_cache_lock_acquires={}",
             segment_location.segment_idx,
             duration_us(elapsed_duration),
             duration_us(unaccounted),
@@ -486,6 +503,7 @@ impl BlockPruner {
             diagnostics.blocks_after_granule,
             duration_us(diagnostics.block_range),
             duration_us(diagnostics.runtime_stats),
+            duration_us(diagnostics.sparse_prefetch),
             duration_us(diagnostics.granule_total),
             diagnostics.granule.blocks,
             diagnostics.granule.granules_before,
@@ -500,8 +518,66 @@ impl BlockPruner {
             duration_us(diagnostics.granule.bloom_prune),
             diagnostics.granule.other_index_prunes,
             duration_us(diagnostics.granule.other_index_prune),
+            lock_stats.memory_wait_ns,
+            lock_stats.memory_hold_ns,
+            lock_stats.memory_acquires,
+            lock_stats.disk_wait_ns,
+            lock_stats.disk_hold_ns,
+            lock_stats.disk_acquires,
         );
         Ok(result)
+    }
+
+    /// Drain the oldest block of the prefetch window: await its sparse mins,
+    /// run the remaining granule indexes and collect the surviving block.
+    fn prune_windowed_block(
+        &self,
+        (block_idx, block_meta, pending): (usize, Arc<BlockMeta>, Option<SparsePrunePrefetch>),
+        segment_location: &SegmentLocation,
+        block_num: usize,
+        lock_stats: Option<Arc<CacheLockStats>>,
+        diagnostics: &mut RangeGranulePruneDiagnostics,
+        result: &mut Vec<GranulePrunedBlock>,
+    ) {
+        let granule_start = Instant::now();
+        let outcome = Self::prune_granules_with_mins(
+            &self.pruning_ctx,
+            &block_meta,
+            pending,
+            None,
+            lock_stats,
+        );
+        diagnostics.granule_total += granule_start.elapsed();
+        diagnostics.granule.add(&outcome.diagnostics);
+        if outcome.granule_ranges.as_ref().is_some_and(Vec::is_empty) {
+            return;
+        }
+        diagnostics.blocks_after_granule += 1;
+
+        result.push(GranulePrunedBlock {
+            block_meta_index: BlockMetaIndex {
+                segment_idx: segment_location.segment_idx,
+                block_idx,
+                range: None,
+                granule_ranges: outcome.granule_ranges,
+                page_size: block_meta
+                    .granule_index
+                    .as_ref()
+                    .map_or(block_meta.row_count as usize, |index| {
+                        index.granule_rows as usize
+                    }),
+                block_id: block_id_in_segment(block_num, block_idx),
+                block_location: block_meta.location.0.clone(),
+                segment_location: segment_location.location.0.clone(),
+                snapshot_location: segment_location.snapshot_loc.clone(),
+                matched_rows: None,
+                matched_scores: None,
+                vector_scores: None,
+                virtual_block_meta: None,
+            },
+            block_meta,
+            granule_bloom_applied: outcome.granule_bloom_applied,
+        });
     }
 
     /// Apply the ordinary asynchronous block indexes after pipeline-local
@@ -605,6 +681,39 @@ impl BlockPruner {
         block_meta: &BlockMeta,
         input_ranges: Option<Vec<Range<usize>>>,
     ) -> GranulePruneOutcome {
+        let pending = Self::prefetch_sparse_mins(pruning_ctx, block_meta, None);
+        Self::prune_granules_with_mins(pruning_ctx, block_meta, pending, input_ranges, None)
+    }
+
+    /// Prefetch the sparse-mins file of one block without waiting.
+    /// `None` means sparse pruning does not apply (bypass) or prefetch failed
+    /// (fail-open, mirrored on the old inline error handling).
+    fn prefetch_sparse_mins(
+        pruning_ctx: &PruningContext,
+        block_meta: &BlockMeta,
+        lock_stats: Option<Arc<CacheLockStats>>,
+    ) -> Option<SparsePrunePrefetch> {
+        let pruner = pruning_ctx.sparse_granule_index_pruner.as_ref()?;
+        let granule_index = block_meta.granule_index.as_ref()?;
+        match pruner.prefetch_mins_with_stats(block_meta, granule_index, lock_stats) {
+            Ok(pending) => pending,
+            Err(e) => {
+                log::warn!(
+                    "[FUSE-PRUNER] sparse granule mins prefetch failed for {}, preserving input ranges: {e}",
+                    block_meta.location.0
+                );
+                None
+            }
+        }
+    }
+
+    fn prune_granules_with_mins(
+        pruning_ctx: &PruningContext,
+        block_meta: &BlockMeta,
+        pending_sparse: Option<SparsePrunePrefetch>,
+        input_ranges: Option<Vec<Range<usize>>>,
+        lock_stats: Option<Arc<CacheLockStats>>,
+    ) -> GranulePruneOutcome {
         let sparse_pruner = pruning_ctx.sparse_granule_index_pruner.as_ref();
         let index_pruners = &pruning_ctx.granule_index_pruners;
         let has_granule_pipeline =
@@ -652,22 +761,22 @@ impl BlockPruner {
             .add_granules_pruning_before(granules_before as u64);
         let pruning_cost = &pruning_ctx.pruning_cost;
 
-        if let Some(pruner) = sparse_pruner {
+        if let (Some(pruner), Some(pending)) = (sparse_pruner, pending_sparse) {
             diagnostics.sparse_blocks = 1;
-            let sparse_start = Instant::now();
+            let sparse_prune = Instant::now();
             match pruning_cost.measure(PruningCostKind::BlocksRange, || {
-                pruner.select_granule_ranges_profiled(block_meta, granule_index, &survivors)
+                pruner.prune_with_mins(pending, &survivors)
             }) {
                 Ok((ranges, profile)) => {
                     diagnostics.sparse_load += profile.load;
                     diagnostics.sparse_evaluate += profile.evaluate;
-                    diagnostics.sparse_unaccounted += sparse_start
+                    diagnostics.sparse_unaccounted += sparse_prune
                         .elapsed()
                         .saturating_sub(profile.load + profile.evaluate);
                     survivors = ranges;
                 }
                 Err(e) => {
-                    diagnostics.sparse_unaccounted += sparse_start.elapsed();
+                    diagnostics.sparse_unaccounted += sparse_prune.elapsed();
                     log::warn!(
                         "[FUSE-PRUNER] sparse granule pruning failed for {}, preserving input ranges: {e}",
                         block_meta.location.0
@@ -693,12 +802,13 @@ impl BlockPruner {
                 .collect::<Vec<_>>();
             diagnostics.marks_loads = 1;
             let marks_start = Instant::now();
-            let read_ctx = match GranulePruningReadContext::load(
+            let read_ctx = match GranulePruningReadContext::load_with_stats(
                 &pruning_ctx.dal,
                 &pruning_ctx.granule_read_settings,
                 &granule_index.offsets,
                 &mark_names,
                 num_granules,
+                lock_stats,
             ) {
                 Ok(ctx) => {
                     diagnostics.marks_load += marks_start.elapsed();

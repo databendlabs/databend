@@ -32,10 +32,12 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_cache::LruDiskCacheHolder;
 use opendal::Buffer;
 
@@ -67,6 +69,7 @@ pub struct DiskCacheRangeReader<R: RangeReader> {
     max_segment_size: u64,
     held_budget: usize,
     populate: bool,
+    lock_stats: Option<Arc<CacheLockStats>>,
     parked: HashMap<Range<u64>, Buffer>,
     dispatched: HashSet<Range<u64>>,
     pending_reads: HashMap<Range<u64>, usize>,
@@ -90,6 +93,31 @@ impl<R: RangeReader> DiskCacheRangeReader<R> {
         held_budget: usize,
         populate: bool,
     ) -> Result<Self> {
+        Self::new_with_stats(
+            cache,
+            next,
+            path,
+            file_len,
+            chunk_size,
+            max_segment_size,
+            held_budget,
+            populate,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_stats(
+        cache: LruDiskCacheHolder,
+        next: R,
+        path: String,
+        file_len: u64,
+        chunk_size: u64,
+        max_segment_size: u64,
+        held_budget: usize,
+        populate: bool,
+        lock_stats: Option<Arc<CacheLockStats>>,
+    ) -> Result<Self> {
         Ok(Self {
             cache,
             next,
@@ -98,6 +126,7 @@ impl<R: RangeReader> DiskCacheRangeReader<R> {
             max_segment_size: max_segment_size.max(chunk_size),
             held_budget,
             populate,
+            lock_stats,
             parked: HashMap::new(),
             dispatched: HashSet::new(),
             pending_reads: HashMap::new(),
@@ -213,7 +242,8 @@ impl<R: RangeReader> DiskCacheRangeReader<R> {
         }
         // One queue slot per fetched file segment, not per 1 MiB chunk.
         if !batch.is_empty() {
-            self.cache.populate(batch);
+            self.cache
+                .populate_with_stats(batch, self.lock_stats.as_deref());
         }
     }
 
@@ -243,7 +273,10 @@ impl<R: RangeReader> DiskCacheRangeReader<R> {
             .map(|chunk| self.cache_key(chunk))
             .collect::<Vec<_>>();
         let mut misses = Vec::new();
-        for (chunk, hit) in chunks.into_iter().zip(self.cache.mget(&keys)) {
+        for (chunk, hit) in chunks.into_iter().zip(
+            self.cache
+                .mget_with_stats(&keys, self.lock_stats.as_deref()),
+        ) {
             match hit {
                 Some(bytes) => {
                     let bytes = bytes.as_ref().clone();

@@ -1491,7 +1491,7 @@ mod tests {
 
     use super::*;
     use crate::io::OffsetsIndex;
-    use crate::io::load_granule_mins;
+    use crate::io::PrefetchedGranuleMins;
 
     fn options(operator: Operator, schema: TableSchemaRef) -> FuseLowLevelBlockWriteOptions {
         let properties = Arc::new(build_parquet_writer_properties(
@@ -1922,18 +1922,20 @@ mod tests {
             max_range_size: 1024 * 1024,
             parquet_fast_read_bytes: 0,
         };
-        let mins = load_granule_mins(
+        let mins = PrefetchedGranuleMins::prefetch(
             &operator,
             &settings,
             granule.mins.as_ref().unwrap(),
-            &[
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
-                DataType::Nullable(Box::new(DataType::String)),
-            ],
+            2,
             3,
         )
+        .unwrap()
+        .read(&[
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+            DataType::Nullable(Box::new(DataType::String)),
+        ])
         .unwrap();
-        assert_eq!(mins, vec![
+        assert_eq!(mins.into_scalars(), vec![
             Scalar::Tuple(vec![
                 Scalar::Number(1i32.into()),
                 Scalar::String("one".to_string()),

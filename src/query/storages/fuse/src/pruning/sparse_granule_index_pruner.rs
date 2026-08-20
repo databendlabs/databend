@@ -38,6 +38,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -46,7 +47,8 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::GranuleIndexLayout;
 use opendal::Operator;
 
-use crate::io::load_granule_mins;
+use crate::io::GranuleMins;
+use crate::io::PrefetchedGranuleMins;
 use crate::io::num_granules_of;
 
 const GRANULE_KEY_COLUMN_PREFIX: &str = "__granule_cluster_key_";
@@ -64,6 +66,12 @@ pub struct SparseGranuleIndexPruner {
 pub(crate) struct SparseGranulePruneProfile {
     pub(crate) load: Duration,
     pub(crate) evaluate: Duration,
+}
+
+/// A block's sparse prune whose mins file requests are already in flight.
+pub(crate) struct SparsePrunePrefetch {
+    mins: PrefetchedGranuleMins,
+    block_max: Scalar,
 }
 
 impl SparseGranuleIndexPruner {
@@ -116,22 +124,34 @@ impl SparseGranuleIndexPruner {
         granule_index: &GranuleIndexLayout,
         input: &[Range<usize>],
     ) -> Result<Vec<Range<usize>>> {
-        self.select_granule_ranges_profiled(block_meta, granule_index, input)
-            .map(|(ranges, _)| ranges)
+        match self.prefetch_mins(block_meta, granule_index)? {
+            Some(pending) => Ok(self.prune_with_mins(pending, input)?.0),
+            None => Ok(input.to_vec()),
+        }
     }
 
-    pub(crate) fn select_granule_ranges_profiled(
+    /// Issue the mins file requests for one block without waiting for them.
+    /// Returns `Ok(None)` when sparse pruning does not apply to this block.
+    pub(crate) fn prefetch_mins(
         &self,
         block_meta: &BlockMeta,
         granule_index: &GranuleIndexLayout,
-        input: &[Range<usize>],
-    ) -> Result<(Vec<Range<usize>>, SparseGranulePruneProfile)> {
+    ) -> Result<Option<SparsePrunePrefetch>> {
+        self.prefetch_mins_with_stats(block_meta, granule_index, None)
+    }
+
+    pub(crate) fn prefetch_mins_with_stats(
+        &self,
+        block_meta: &BlockMeta,
+        granule_index: &GranuleIndexLayout,
+        lock_stats: Option<Arc<CacheLockStats>>,
+    ) -> Result<Option<SparsePrunePrefetch>> {
         let Some(cluster_stats) = block_meta.cluster_stats.as_ref() else {
-            return Ok((input.to_vec(), SparseGranulePruneProfile::default()));
+            return Ok(None);
         };
 
         if self.table_cluster_key_id != cluster_stats.cluster_key_id {
-            return Ok((input.to_vec(), SparseGranulePruneProfile::default()));
+            return Ok(None);
         }
 
         let num_granules = num_granules_of(
@@ -139,26 +159,40 @@ impl SparseGranuleIndexPruner {
             granule_index.granule_rows as usize,
         );
         if num_granules == 0 {
-            return Ok((input.to_vec(), SparseGranulePruneProfile::default()));
+            return Ok(None);
         }
 
         let Some(mins_layout) = granule_index.mins.as_ref() else {
-            return Ok((input.to_vec(), SparseGranulePruneProfile::default()));
+            return Ok(None);
         };
 
-        let load_start = Instant::now();
-        let granule_mins = load_granule_mins(
+        let mins = PrefetchedGranuleMins::prefetch_with_stats(
             &self.dal,
             &self.read_settings,
             mins_layout,
-            &self.cluster_key_types,
+            self.cluster_key_types.len(),
             num_granules,
+            lock_stats,
         )?;
+        Ok(Some(SparsePrunePrefetch {
+            mins,
+            block_max: Scalar::Tuple(cluster_stats.max().clone()),
+        }))
+    }
+
+    /// Await the mins issued by [`Self::prefetch_mins`], decode them and apply
+    /// the cluster-key predicate to `input`.
+    pub(crate) fn prune_with_mins(
+        &self,
+        pending: SparsePrunePrefetch,
+        input: &[Range<usize>],
+    ) -> Result<(Vec<Range<usize>>, SparseGranulePruneProfile)> {
+        let load_start = Instant::now();
+        let granule_mins = pending.mins.read(&self.cluster_key_types)?;
         let load = load_start.elapsed();
 
         let evaluate_start = Instant::now();
-        let block_max = Scalar::Tuple(cluster_stats.max().clone());
-        let ranges = self.evaluator.apply(&granule_mins, &block_max)?;
+        let ranges = self.evaluator.apply(&granule_mins, &pending.block_max)?;
         let ranges = intersect_ranges(input, &ranges);
         let evaluate = evaluate_start.elapsed();
         Ok((ranges, SparseGranulePruneProfile { load, evaluate }))
@@ -168,6 +202,35 @@ impl SparseGranuleIndexPruner {
 /// Evaluates a source-column predicate against synthetic columns representing cluster-key
 /// expressions. It supports both predicates written directly on the key expression and predicates
 /// on source columns by projecting their domains through the key expression.
+trait GranuleMinValues {
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    fn value(&self, index: usize) -> Scalar;
+}
+
+impl GranuleMinValues for GranuleMins {
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn value(&self, index: usize) -> Scalar {
+        self.value(index)
+    }
+}
+
+#[cfg(test)]
+impl GranuleMinValues for Vec<Scalar> {
+    fn len(&self) -> usize {
+        Vec::len(self)
+    }
+
+    fn value(&self, index: usize) -> Scalar {
+        self[index].clone()
+    }
+}
+
 struct GranulePredicateEvaluator {
     filter: Expr<String>,
     key_columns: Vec<(String, DataType)>,
@@ -235,7 +298,11 @@ impl GranulePredicateEvaluator {
         self.touches_cluster_key
     }
 
-    fn apply(&self, min_values: &[Scalar], max_value: &Scalar) -> Result<Vec<Range<usize>>> {
+    fn apply<M: GranuleMinValues + ?Sized>(
+        &self,
+        min_values: &M,
+        max_value: &Scalar,
+    ) -> Result<Vec<Range<usize>>> {
         if min_values.is_empty() {
             return Ok(vec![]);
         }
@@ -247,32 +314,26 @@ impl GranulePredicateEvaluator {
 
     /// Probe inwards from both ends; exact for predicates whose survivors form
     /// one contiguous run.
-    fn apply_envelope(
+    fn apply_envelope<M: GranuleMinValues + ?Sized>(
         &self,
-        min_values: &[Scalar],
+        min_values: &M,
         max_value: &Scalar,
     ) -> Result<Vec<Range<usize>>> {
         let mut start = 0;
         let mut end = min_values.len() - 1;
         while start <= end {
-            let upper = if start + 1 < min_values.len() {
-                &min_values[start + 1]
-            } else {
-                max_value
-            };
-            if self.eval_single_granule(&min_values[start], upper)? {
+            let lower = min_values.value(start);
+            let upper = (start + 1 < min_values.len()).then(|| min_values.value(start + 1));
+            if self.eval_single_granule(&lower, upper.as_ref().unwrap_or(max_value))? {
                 break;
             }
             start += 1;
         }
 
         while end >= start {
-            let upper = if end + 1 < min_values.len() {
-                &min_values[end + 1]
-            } else {
-                max_value
-            };
-            if self.eval_single_granule(&min_values[end], upper)? {
+            let lower = min_values.value(end);
+            let upper = (end + 1 < min_values.len()).then(|| min_values.value(end + 1));
+            if self.eval_single_granule(&lower, upper.as_ref().unwrap_or(max_value))? {
                 break;
             }
             end -= 1;
@@ -286,19 +347,16 @@ impl GranulePredicateEvaluator {
         }
     }
 
-    fn apply_discrete(
+    fn apply_discrete<M: GranuleMinValues + ?Sized>(
         &self,
-        min_values: &[Scalar],
+        min_values: &M,
         max_value: &Scalar,
     ) -> Result<Vec<Range<usize>>> {
         let mut ranges: Vec<Range<usize>> = Vec::new();
         for index in 0..min_values.len() {
-            let upper = if index + 1 < min_values.len() {
-                &min_values[index + 1]
-            } else {
-                max_value
-            };
-            if !self.eval_single_granule(&min_values[index], upper)? {
+            let lower = min_values.value(index);
+            let upper = (index + 1 < min_values.len()).then(|| min_values.value(index + 1));
+            if !self.eval_single_granule(&lower, upper.as_ref().unwrap_or(max_value))? {
                 continue;
             }
             match ranges.last_mut() {

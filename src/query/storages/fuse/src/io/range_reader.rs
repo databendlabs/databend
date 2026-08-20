@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
+use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::DiskCacheRangeReader;
 use databend_storages_common_io::OperatorRangeReader;
@@ -36,6 +39,29 @@ pub(crate) fn create_file_range_reader(
     held_budget: usize,
     populate_cache: bool,
 ) -> Result<Box<dyn RangeReader>> {
+    create_file_range_reader_with_stats(
+        operator,
+        path,
+        file_len,
+        max_prefetch,
+        max_segment_size,
+        held_budget,
+        populate_cache,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn create_file_range_reader_with_stats(
+    operator: Operator,
+    path: String,
+    file_len: u64,
+    max_prefetch: usize,
+    max_segment_size: u64,
+    held_budget: usize,
+    populate_cache: bool,
+    lock_stats: Option<Arc<CacheLockStats>>,
+) -> Result<Box<dyn RangeReader>> {
     let tail = OperatorRangeReader::new(operator, path.clone(), max_prefetch.saturating_add(1));
     let cache_manager = CacheManager::instance();
     let mut disk_cache = None;
@@ -46,7 +72,7 @@ pub(crate) fn create_file_range_reader(
     }
 
     match disk_cache {
-        Some(cache) => Ok(Box::new(DiskCacheRangeReader::new(
+        Some(cache) => Ok(Box::new(DiskCacheRangeReader::new_with_stats(
             cache,
             tail,
             path,
@@ -55,6 +81,7 @@ pub(crate) fn create_file_range_reader(
             max_segment_size,
             held_budget,
             populate_cache,
+            lock_stats,
         )?)),
         None => Ok(Box::new(tail)),
     }
