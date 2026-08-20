@@ -40,23 +40,28 @@ const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 pub fn group_hash_entries(entries: ProjectedBlock, values: &mut [u64]) {
     debug_assert!(!entries.is_empty());
     for (i, entry) in entries.iter().enumerate() {
-        debug_assert_eq!(entry.len(), values.len());
-        match entry {
-            BlockEntry::Const(scalar, data_type, _) => {
-                if i == 0 {
-                    combine_group_hash_const::<true>(scalar, data_type, values);
-                } else {
-                    combine_group_hash_const::<false>(scalar, data_type, values);
-                }
-            }
-            BlockEntry::Column(column) => {
-                if i == 0 {
-                    combine_group_hash_column::<true>(column, values);
-                } else {
-                    combine_group_hash_column::<false>(column, values);
-                }
-            }
+        group_hash_entry(entry, values, i == 0);
+    }
+}
+
+/// Hash one group key into `values`.
+///
+/// The first key initializes the hashes; subsequent keys are merged into them.
+pub fn group_hash_entry(entry: &BlockEntry, values: &mut [u64], is_first: bool) {
+    debug_assert_eq!(entry.len(), values.len());
+    if is_first {
+        combine_group_hash_entry::<true>(entry, values);
+    } else {
+        combine_group_hash_entry::<false>(entry, values);
+    }
+}
+
+fn combine_group_hash_entry<const IS_FIRST: bool>(entry: &BlockEntry, values: &mut [u64]) {
+    match entry {
+        BlockEntry::Const(scalar, data_type, _) => {
+            combine_group_hash_const::<IS_FIRST>(scalar, data_type, values);
         }
+        BlockEntry::Column(column) => combine_group_hash_column::<IS_FIRST>(column, values),
     }
 }
 
@@ -684,6 +689,22 @@ mod tests {
             );
             assert_eq!(const_hashes, col_hashes);
         }
+    }
+
+    #[test]
+    fn test_incremental_group_hash_equals_projected_block() {
+        let block = sample_block(5).convert_to_full();
+        let projection = (0..block.num_columns()).collect::<Vec<_>>();
+        let entries = ProjectedBlock::project(&projection, &block);
+        let mut projected_hashes = vec![0; block.num_rows()];
+        let mut incremental_hashes = vec![0; block.num_rows()];
+
+        group_hash_entries(entries, &mut projected_hashes);
+        for (index, entry) in entries.iter().enumerate() {
+            group_hash_entry(entry, &mut incremental_hashes, index == 0);
+        }
+
+        assert_eq!(projected_hashes, incremental_hashes);
     }
 
     fn sample_block(num_rows: usize) -> DataBlock {

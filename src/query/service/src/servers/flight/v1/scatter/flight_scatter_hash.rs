@@ -19,11 +19,10 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionID;
-use databend_common_expression::ProjectedBlock;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use databend_common_expression::group_hash_entries;
+use databend_common_expression::group_hash_entry;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
@@ -184,18 +183,13 @@ impl HashFlightScatter {
         }
 
         let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let hash_keys = self
-            .hash_key
-            .iter()
-            .map(|expr| {
-                Ok(BlockEntry::new(evaluator.run(expr)?, || {
-                    (expr.data_type().clone(), num_rows)
-                }))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
         let mut hashes = vec![0; num_rows];
-        group_hash_entries(ProjectedBlock::from(&hash_keys), &mut hashes);
+        for (index, expr) in self.hash_key.iter().enumerate() {
+            let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                (expr.data_type().clone(), num_rows)
+            });
+            group_hash_entry(&entry, &mut hashes, index == 0);
+        }
 
         let scatter_size = self.scatter_size as u64;
         for hash in &mut hashes {
@@ -342,12 +336,12 @@ mod tests {
 
     #[test]
     fn hashes_evaluated_and_materialized_keys_consistently() -> Result<()> {
-        let raw_addresses = StringType::from_data(vec!["AbC", "DEF", "ghI", "Jkl"]);
-        let lower_addresses = StringType::from_data(vec!["abc", "def", "ghi", "jkl"]);
-        let wallet_ids = UInt64Type::from_data(vec![1, 2, 3, 4]);
+        let text_keys = StringType::from_data(vec!["AbC", "DEF", "ghI", "Jkl"]);
+        let normalized_text_keys = StringType::from_data(vec!["abc", "def", "ghi", "jkl"]);
+        let numeric_keys = UInt64Type::from_data(vec![1, 2, 3, 4]);
 
-        let raw_block = DataBlock::new_from_columns(vec![raw_addresses, wallet_ids.clone()]);
-        let lower_block = DataBlock::new_from_columns(vec![lower_addresses, wallet_ids]);
+        let raw_block = DataBlock::new_from_columns(vec![text_keys, numeric_keys.clone()]);
+        let lower_block = DataBlock::new_from_columns(vec![normalized_text_keys, numeric_keys]);
 
         let lower_expr = check_function(
             None,
@@ -480,23 +474,23 @@ mod tests {
     fn distributes_five_mixed_keys_across_partitions() -> Result<()> {
         const ROWS: usize = 1 << 16;
 
-        let addresses = (0..ROWS)
+        let text_keys = (0..ROWS)
             .map(|row| format!("{row:042x}"))
             .collect::<Vec<_>>();
-        let raw_addresses = (0..ROWS)
+        let tag_keys = (0..ROWS)
             .map(|row| format!("{:042x}", row.wrapping_mul(17)))
             .collect::<Vec<_>>();
-        let user_ids = (0..ROWS).map(|row| row as u64).collect::<Vec<_>>();
-        let chain_ids = (0..ROWS).map(|row| (row % 2048) as u64).collect::<Vec<_>>();
-        let wallet_ids = (0..ROWS)
+        let key_num_1 = (0..ROWS).map(|row| row as u64).collect::<Vec<_>>();
+        let key_num_2 = (0..ROWS).map(|row| (row % 2048) as u64).collect::<Vec<_>>();
+        let key_num_3 = (0..ROWS)
             .map(|row| row.wrapping_mul(31) as u64)
             .collect::<Vec<_>>();
         let block = DataBlock::new_from_columns(vec![
-            StringType::from_data(addresses),
-            StringType::from_data(raw_addresses),
-            UInt64Type::from_data(user_ids),
-            UInt64Type::from_data(chain_ids),
-            UInt64Type::from_data(wallet_ids),
+            StringType::from_data(text_keys),
+            StringType::from_data(tag_keys),
+            UInt64Type::from_data(key_num_1),
+            UInt64Type::from_data(key_num_2),
+            UInt64Type::from_data(key_num_3),
         ]);
 
         for partitions in [3, 4, 8] {
