@@ -55,16 +55,14 @@ fn extract_or_predicate(
     or_args: &[ScalarExpr],
     required_columns: &ColumnSet,
 ) -> Result<Option<ScalarExpr>> {
-    let flatten_or_args = flatten_ors(or_args);
     let mut extracted_scalars = Vec::new();
-    for or_arg in flatten_or_args.iter() {
+    for or_arg in flatten_ors(or_args) {
         let mut sub_scalars = Vec::new();
         match or_arg {
             ScalarExpr::FunctionCall(func)
                 if matches!(func.func_name.as_str(), "and" | "and_filters") =>
             {
-                let and_args = flatten_and(&func.arguments);
-                for and_arg in and_args.iter() {
+                for and_arg in flatten_and(&func.arguments) {
                     match and_arg {
                         ScalarExpr::FunctionCall(func)
                             if matches!(func.func_name.as_str(), "or" | "or_filters") =>
@@ -107,36 +105,36 @@ fn extract_or_predicate(
 
 // Flatten nested ORs, such as `a=1 or b=1 or c=1`
 // It'll be flatten to [a=1, b=1, c=1]
-fn flatten_ors(or_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
-    let mut flattened_ors = Vec::new();
-    for or_arg in or_args.iter() {
-        match or_arg {
-            ScalarExpr::FunctionCall(func)
-                if matches!(func.func_name.as_str(), "or" | "or_filters") =>
-            {
-                flattened_ors.extend(flatten_ors(&func.arguments))
-            }
-            _ => flattened_ors.push(or_arg.clone()),
-        }
-    }
-    flattened_ors
+fn flatten_ors(or_args: &[ScalarExpr]) -> impl Iterator<Item = &ScalarExpr> {
+    flatten(or_args, |func| {
+        matches!(func.func_name.as_str(), "or" | "or_filters")
+    })
 }
 
-// Flatten nested ORs, such as `a=1 and b=1 and c=1`
+// Flatten nested ANDs, such as `a=1 and b=1 and c=1`
 // It'll be flatten to [a=1, b=1, c=1]
-fn flatten_and(and_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
-    let mut flattened_and = Vec::new();
-    for and_arg in and_args.iter() {
-        match and_arg {
-            ScalarExpr::FunctionCall(func)
-                if matches!(func.func_name.as_str(), "and" | "and_filters") =>
-            {
-                flattened_and.extend(flatten_and(&func.arguments));
+fn flatten_and(and_args: &[ScalarExpr]) -> impl Iterator<Item = &ScalarExpr> {
+    flatten(and_args, |func| {
+        matches!(func.func_name.as_str(), "and" | "and_filters")
+    })
+}
+
+fn flatten(
+    args: &[ScalarExpr],
+    is_nested: impl Fn(&FunctionCall) -> bool,
+) -> impl Iterator<Item = &ScalarExpr> {
+    let mut stack = args.iter().rev().collect::<Vec<_>>();
+    std::iter::from_fn(move || {
+        loop {
+            let scalar = stack.pop()?;
+            match scalar {
+                ScalarExpr::FunctionCall(func) if is_nested(func) => {
+                    stack.extend(func.arguments.iter().rev());
+                }
+                _ => return Some(scalar),
             }
-            _ => flattened_and.push(and_arg.clone()),
         }
-    }
-    flattened_and
+    })
 }
 
 // Merge predicates to AND scalar
