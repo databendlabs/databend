@@ -337,7 +337,7 @@ impl HybridBitmap {
             }),
             HybridBitmap::Small(lhs_set) => {
                 small_union(lhs_set, rhs.into_small_bitmap().as_slice());
-                if lhs_set.len() >= LARGE_THRESHOLD {
+                if lhs_set.len() > LARGE_THRESHOLD {
                     let _ = self.promote_to_tree();
                 }
             }
@@ -439,7 +439,7 @@ impl HybridBitmap {
             }
             HybridBitmap::Small(lhs_set) => {
                 small_symmetric_difference(lhs_set, rhs.into_small_bitmap().as_slice());
-                if lhs_set.len() >= LARGE_THRESHOLD {
+                if lhs_set.len() > LARGE_THRESHOLD {
                     let _ = self.promote_to_tree();
                 }
             }
