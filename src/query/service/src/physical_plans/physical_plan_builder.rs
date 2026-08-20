@@ -77,7 +77,9 @@ impl PhysicalPlanBuilder {
         }
 
         if !self.is_cte_required_columns_collected {
-            self.collect_cte_required_columns(s_expr, required.clone())?;
+            if Self::requires_cte_column_collection(s_expr) {
+                self.collect_cte_required_columns(s_expr, required.clone())?;
+            }
             self.is_cte_required_columns_collected = true;
         }
 
@@ -419,6 +421,14 @@ impl PhysicalPlanBuilder {
         Ok(child_required)
     }
 
+    #[recursive::recursive]
+    fn requires_cte_column_collection(s_expr: &SExpr) -> bool {
+        matches!(
+            s_expr.plan(),
+            RelOperator::Sequence(_) | RelOperator::MaterializedCTERef(_)
+        ) || s_expr.children().any(Self::requires_cte_column_collection)
+    }
+
     fn collect_cte_required_columns(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<()> {
         match s_expr.plan() {
             RelOperator::MaterializedCTERef(cte_ref) => {
@@ -478,4 +488,49 @@ pub struct MutationBuildInfo {
     pub partitions: Partitions,
     pub statistics: PartStatistics,
     pub table_meta_timestamps: TableMetaTimestamps,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_sql::optimizer::ir::SExpr;
+    use databend_common_sql::plans::DummyTableScan;
+    use databend_common_sql::plans::Limit;
+    use databend_common_sql::plans::MaterializedCTERef;
+    use databend_common_sql::plans::Sequence;
+
+    use super::PhysicalPlanBuilder;
+
+    #[test]
+    fn test_requires_cte_column_collection() {
+        let leaf = SExpr::create_leaf(DummyTableScan::new());
+        let limit = Limit {
+            before_exchange: false,
+            limit: Some(1),
+            offset: 0,
+            lazy_columns: Default::default(),
+        };
+        let ordinary_plan = SExpr::create_unary(limit.clone(), leaf.clone());
+        assert!(!PhysicalPlanBuilder::requires_cte_column_collection(
+            &ordinary_plan
+        ));
+
+        let sequence = SExpr::create_binary(Sequence, leaf.clone(), leaf.clone());
+        let nested_sequence = SExpr::create_unary(limit, sequence);
+        assert!(PhysicalPlanBuilder::requires_cte_column_collection(
+            &nested_sequence
+        ));
+
+        let cte_ref = SExpr::create_leaf(MaterializedCTERef {
+            cte_name: "cte".to_string(),
+            output_columns: vec![],
+            def: leaf,
+            column_mapping: HashMap::new(),
+            stat_info: None,
+        });
+        assert!(PhysicalPlanBuilder::requires_cte_column_collection(
+            &cte_ref
+        ));
+    }
 }
