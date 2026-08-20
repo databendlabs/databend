@@ -843,14 +843,14 @@ pub fn generate_update_list(
         Vec::with_capacity(update_list.len()),
         |mut acc, (index, scalar)| {
             let field = schema.field(*index);
-            let data_type = scalar.data_type()?;
+            let data_type = scalar.data_type();
             let target_type = field.data_type();
 
             let scalar = if col_indices.is_empty() {
                 // The condition is always true.
                 // Replace column to the result of the following expression:
                 // CAST(expression, type)
-                if data_type != *target_type {
+                if data_type.as_ref() != target_type {
                     wrap_cast(scalar, target_type)
                 } else {
                     scalar.clone()
@@ -882,12 +882,12 @@ pub fn generate_update_list(
                 })?;
 
                 // If right is nullable, left must also be wrapped in nullable to ensure both have the same type.
-                let target_type = if right.data_type()?.is_nullable() {
+                let target_type = if right.data_type().is_nullable() {
                     target_type.wrap_nullable()
                 } else {
                     target_type.clone()
                 };
-                let left = if data_type != target_type {
+                let left = if data_type.as_ref() != &target_type {
                     wrap_cast(scalar, &target_type)
                 } else {
                     scalar.clone()
@@ -902,6 +902,7 @@ pub fn generate_update_list(
                     func_name: "if".to_string(),
                     params: vec![],
                     arguments: vec![predicate.clone(), left, right],
+                    return_type: Box::new(target_type),
                 })
             };
             let expr = scalar
@@ -946,7 +947,7 @@ pub fn mutation_update_expr(
         Vec::with_capacity(update_list.len()),
         |mut acc, (index, scalar)| {
             let field = schema.field(*index);
-            let data_type = scalar.data_type()?;
+            let data_type = scalar.data_type();
             let target_type = field.data_type();
 
             // Replace column to the result of the following expression:
@@ -973,12 +974,12 @@ pub fn mutation_update_expr(
             })?;
 
             // If right is nullable, left must also be wrapped in nullable to ensure both have the same type.
-            let target_type = if right.data_type()?.is_nullable() {
+            let target_type = if right.data_type().is_nullable() {
                 target_type.wrap_nullable()
             } else {
                 target_type.clone()
             };
-            let left = if data_type != target_type {
+            let left = if data_type.as_ref() != &target_type {
                 wrap_cast(scalar, &target_type)
             } else {
                 scalar.clone()
@@ -989,6 +990,7 @@ pub fn mutation_update_expr(
                 func_name: "if".to_string(),
                 params: vec![],
                 arguments: vec![predicate.clone(), left, right],
+                return_type: Box::new(target_type),
             });
             let expr = scalar
                 .type_check(input_schema.as_ref())?

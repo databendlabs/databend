@@ -24,6 +24,7 @@ use databend_common_ast::ast::split_equivalent_predicate_expr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -985,11 +986,16 @@ impl<'a> JoinConditionResolver<'a> {
             }
 
             if Some(index) == asof_range_column {
+                let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                    &left_scalar,
+                    &right_scalar,
+                ]);
                 non_equi_conditions.push(ScalarExpr::FunctionCall(FunctionCall {
                     span: *span,
                     func_name: ASOF_USING_RANGE_FUNC.to_string(),
                     params: vec![],
                     arguments: vec![left_scalar, right_scalar],
+                    return_type: Box::new(return_type),
                 }));
             } else {
                 self.add_equi_conditions(

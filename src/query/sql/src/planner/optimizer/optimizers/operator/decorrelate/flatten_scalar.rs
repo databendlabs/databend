@@ -96,6 +96,7 @@ impl SubqueryDecorrelatorOptimizer {
                     func_name: func.func_name.clone(),
                     params: func.params.clone(),
                     arguments,
+                    return_type: func.return_type.clone(),
                 }))
             }
             ScalarExpr::CastExpr(cast_expr) => {

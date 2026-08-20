@@ -1462,6 +1462,7 @@ mod tests {
                 func_name: "gt".to_string(),
                 params: vec![],
                 arguments: vec![column(0), column(1)],
+                return_type: Box::new(DataType::Boolean),
             })],
             ..Default::default()
         };
