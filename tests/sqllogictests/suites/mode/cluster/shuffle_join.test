@@ -520,7 +520,7 @@ create or replace table node_shuffle_l(
 
 statement ok
 create or replace table node_shuffle_r(
-    k1 int not null,
+    k1 int,
     k2 string not null,
     payload string not null
 )
@@ -534,6 +534,7 @@ insert into node_shuffle_l values
 statement ok
 insert into node_shuffle_r values
     (1, 'a', 'right-1'),
+    (NULL, 'b', 'right-null'),
     (2, 'x', 'right-2'),
     (4, 'd', 'right-4')
 
@@ -577,13 +578,15 @@ left-2
 left-3
 
 query ITB
-select l.k1, l.k2, (l.k1, l.k2) in (select r.k1, r.k2 from node_shuffle_r as r)
+select l.k1, l.k2, l.k1 in (
+    select r.k1 from node_shuffle_r as r where l.k2 = r.k2
+)
 from node_shuffle_l as l
 order by l.k1
 ----
-1 a true
-2 b false
-3 c false
+1 a 1
+2 b NULL
+3 c 0
 
 statement ok
 drop table node_shuffle_l
