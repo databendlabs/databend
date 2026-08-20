@@ -947,22 +947,35 @@ impl Operator for Join {
             }
         }
 
-        // Otherwise, use hash shuffle
-        if child_index == 0 {
-            let left_conditions = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.left.clone())
-                .collect();
-            required.distribution = hash_join_distribution(left_conditions);
+        // Otherwise, use hash shuffle. Reuse an existing matching global hash
+        // distribution on either side instead of reshuffling it node-to-node.
+        let left_conditions: Vec<_> = self
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.left.clone())
+            .collect();
+        let right_conditions: Vec<_> = self
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.right.clone())
+            .collect();
+        let reuse_global_hash =
+            matches_global_hash_distribution(&probe_physical_prop.distribution, &left_conditions)
+                || matches_global_hash_distribution(
+                    &build_physical_prop.distribution,
+                    &right_conditions,
+                );
+
+        let keys = if child_index == 0 {
+            left_conditions
         } else {
-            let right_conditions = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.right.clone())
-                .collect();
-            required.distribution = hash_join_distribution(right_conditions);
-        }
+            right_conditions
+        };
+        required.distribution = if reuse_global_hash {
+            global_hash_join_distribution(keys)
+        } else {
+            hash_join_distribution(keys)
+        };
 
         Ok(required)
     }
@@ -1031,14 +1044,22 @@ impl Operator for Join {
                     .equi_conditions
                     .iter()
                     .map(|condition| condition.right.clone())
-                    .collect();
+                    .collect::<Vec<_>>();
 
                 children_required.push(vec![
                     RequiredProperty {
                         distribution: Distribution::Broadcast,
                     },
                     RequiredProperty {
-                        distribution: hash_join_distribution(conditions),
+                        distribution: hash_join_distribution(conditions.clone()),
+                    },
+                ]);
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                    RequiredProperty {
+                        distribution: global_hash_join_distribution(conditions),
                     },
                 ]);
             } else {
@@ -1047,11 +1068,19 @@ impl Operator for Join {
                     .equi_conditions
                     .iter()
                     .map(|condition| condition.left.clone())
-                    .collect();
+                    .collect::<Vec<_>>();
 
                 children_required.push(vec![
                     RequiredProperty {
-                        distribution: hash_join_distribution(conditions),
+                        distribution: hash_join_distribution(conditions.clone()),
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                ]);
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: global_hash_join_distribution(conditions),
                     },
                     RequiredProperty {
                         distribution: Distribution::Broadcast,
@@ -1078,10 +1107,18 @@ impl Operator for Join {
             if !left_keys.is_empty() {
                 children_required.push(vec![
                     RequiredProperty {
-                        distribution: hash_join_distribution(left_keys),
+                        distribution: hash_join_distribution(left_keys.clone()),
                     },
                     RequiredProperty {
-                        distribution: hash_join_distribution(right_keys),
+                        distribution: hash_join_distribution(right_keys.clone()),
+                    },
+                ]);
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: global_hash_join_distribution(left_keys),
+                    },
+                    RequiredProperty {
+                        distribution: global_hash_join_distribution(right_keys),
                     },
                 ]);
             }
@@ -1135,6 +1172,17 @@ impl Operator for Join {
 
 fn hash_join_distribution(keys: Vec<ScalarExpr>) -> Distribution {
     Distribution::NodeToNodeHash(keys)
+}
+
+fn global_hash_join_distribution(keys: Vec<ScalarExpr>) -> Distribution {
+    Distribution::GlobalHash(keys)
+}
+
+fn matches_global_hash_distribution(distribution: &Distribution, keys: &[ScalarExpr]) -> bool {
+    matches!(
+        distribution,
+        Distribution::GlobalHash(actual) if actual.as_slice() == keys
+    )
 }
 
 #[cfg(test)]
@@ -1234,6 +1282,26 @@ mod tests {
             panic!("hash joins should use node-to-node shuffle");
         };
         assert_eq!(actual, keys);
+    }
+
+    #[test]
+    fn test_matching_global_hash_distribution() {
+        let first_key = column(0, DataType::Number(NumberDataType::UInt64));
+        let second_key = column(1, DataType::Number(NumberDataType::UInt64));
+        let keys = vec![first_key.clone(), second_key.clone()];
+
+        assert!(matches_global_hash_distribution(
+            &Distribution::GlobalHash(keys.clone()),
+            &keys,
+        ));
+        assert!(!matches_global_hash_distribution(
+            &Distribution::GlobalHash(vec![second_key, first_key]),
+            &keys,
+        ));
+        assert!(!matches_global_hash_distribution(
+            &Distribution::NodeToNodeHash(keys.clone()),
+            &keys,
+        ));
     }
 
     #[test]

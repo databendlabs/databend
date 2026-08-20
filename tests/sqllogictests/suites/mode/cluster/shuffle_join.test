@@ -577,13 +577,15 @@ left-2
 left-3
 
 query ITB
-select l.k1, l.k2, (l.k1, l.k2) in (select r.k1, r.k2 from node_shuffle_r as r)
+select l.k1, l.k2, l.k1 in (
+    select r.k1 from node_shuffle_r as r where l.k2 = r.k2
+)
 from node_shuffle_l as l
 order by l.k1
 ----
-1 a true
-2 b false
-3 c false
+1 a 1
+2 b 0
+3 c 0
 
 statement ok
 drop table node_shuffle_l
