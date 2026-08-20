@@ -137,7 +137,7 @@ impl AggIndexView {
                             .collect::<Result<Vec<_>>>()?,
                     )?;
                     let func = AGGR_REGISTRY
-                        .resolve(databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest {
+                        .resolve(databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
                             name: &func.func_name,
                             params: &func.params,
                             args_type: &args_type,

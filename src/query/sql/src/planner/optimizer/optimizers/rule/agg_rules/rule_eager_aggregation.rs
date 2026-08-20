@@ -1269,7 +1269,7 @@ impl EagerAnalysis {
             index: new_index,
         };
         aggregate_function.return_type = Box::new(
-            AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest {
+            AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
             name: &aggregate_function.func_name,
             params: &aggregate_function.params.clone(),
             args_type: &[multiplied_type.clone()],

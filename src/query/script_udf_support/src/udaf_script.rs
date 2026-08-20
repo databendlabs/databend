@@ -36,7 +36,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateSerdeItem;
-use databend_common_expression::aggregate::aggregate_function_v2 as v2;
+use databend_common_expression::aggregate::aggregate_function as v2;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
 use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::types::BinaryType;

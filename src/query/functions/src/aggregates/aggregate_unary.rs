@@ -21,8 +21,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
-use databend_common_expression::AggregateFunction;
-use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnView;
@@ -36,6 +34,8 @@ use databend_common_expression::types::ValueType;
 
 use super::AggrState;
 use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionRef;
 use super::SerializeInfo;
 use super::StateSerde;
 

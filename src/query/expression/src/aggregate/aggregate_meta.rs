@@ -24,7 +24,7 @@ use super::Payload;
 use super::ProbeState;
 use crate::DataBlock;
 use crate::ProjectedBlock;
-use crate::aggregate::aggregate_function_v2::AggregateFunctionRef;
+use crate::aggregate::aggregate_function::AggregateFunctionRef;
 use crate::types::DataType;
 
 pub struct SerializedPayload {

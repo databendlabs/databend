@@ -30,7 +30,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StatesLayout;
 use databend_common_expression::Value;
-use databend_common_expression::aggregate::aggregate_function_v2 as v2;
+use databend_common_expression::aggregate::aggregate_function as v2;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
@@ -238,7 +238,7 @@ pub(super) fn simulate_two_groups_group_by(
     let arguments: Vec<DataType> = entries.iter().map(|c| c.data_type()).collect();
     let order_by = databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by(&sort_descs)?;
     let func = AGGR_REGISTRY.resolve(
-        databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest {
+        databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
             name,
             params: &params,
             args_type: &arguments,
@@ -308,7 +308,7 @@ pub(super) fn eval_legacy_aggregate_for_test(
         .collect::<Vec<_>>();
     let order_by = databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by(&sort_descs)?;
     let func = AGGR_REGISTRY.resolve(
-        databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest {
+        databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
             name,
             params: &params,
             args_type: &arguments,

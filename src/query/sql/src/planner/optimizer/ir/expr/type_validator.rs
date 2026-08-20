@@ -264,7 +264,7 @@ impl ScalarTypeValidator<'_> {
             .iter()
             .map(TryInto::try_into)
             .collect::<Result<Vec<_>>>()?;
-        let inferred = AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest {
+        let inferred = AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
             name: &aggregate.func_name,
             params: &aggregate.params.clone(),
             args_type: &argument_types,

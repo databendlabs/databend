@@ -24,10 +24,10 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
 use databend_common_expression::SymbolOrOffset;
-use databend_common_expression::aggregate::aggregate_function_v2 as v2;
-use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowInput;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRef;
-use databend_common_expression::aggregate::aggregate_function_v2::MergeResultInput;
+use databend_common_expression::aggregate::aggregate_function as v2;
+use databend_common_expression::aggregate::aggregate_function::AccumulateRowInput;
+use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
+use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
@@ -233,7 +233,7 @@ impl WindowFunctionInfo {
                         }
                     })
                     .collect::<Vec<_>>();
-                let agg_func = AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest {
+                let agg_func = AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
             name: agg.sig.name.as_str(),
             params: &agg.sig.params.clone(),
             args_type: &agg.sig.args.clone(),
@@ -334,20 +334,20 @@ mod tests {
     use databend_common_exception::Result;
     use databend_common_expression::AggrStateType;
     use databend_common_expression::StateSerdeItem;
-    use databend_common_expression::aggregate::aggregate_function_v2::AccumulateInput;
-    use databend_common_expression::aggregate::aggregate_function_v2::AccumulateKeysInput;
-    use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowCountInput;
-    use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowCountKeysInput;
-    use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowInput;
-    use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRef;
-    use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionSignature;
-    use databend_common_expression::aggregate::aggregate_function_v2::AggregateStateDescription;
-    use databend_common_expression::aggregate::aggregate_function_v2::FunctionFeatures;
-    use databend_common_expression::aggregate::aggregate_function_v2::FunctionInstance;
-    use databend_common_expression::aggregate::aggregate_function_v2::MergeResultInput;
-    use databend_common_expression::aggregate::aggregate_function_v2::MergeSerializedInput;
-    use databend_common_expression::aggregate::aggregate_function_v2::MergeStatesInput;
-    use databend_common_expression::aggregate::aggregate_function_v2::SerializeInput;
+    use databend_common_expression::aggregate::aggregate_function::AccumulateInput;
+    use databend_common_expression::aggregate::aggregate_function::AccumulateKeysInput;
+    use databend_common_expression::aggregate::aggregate_function::AccumulateRowCountInput;
+    use databend_common_expression::aggregate::aggregate_function::AccumulateRowCountKeysInput;
+    use databend_common_expression::aggregate::aggregate_function::AccumulateRowInput;
+    use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
+    use databend_common_expression::aggregate::aggregate_function::AggregateFunctionSignature;
+    use databend_common_expression::aggregate::aggregate_function::AggregateStateDescription;
+    use databend_common_expression::aggregate::aggregate_function::FunctionFeatures;
+    use databend_common_expression::aggregate::aggregate_function::FunctionInstance;
+    use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
+    use databend_common_expression::aggregate::aggregate_function::MergeSerializedInput;
+    use databend_common_expression::aggregate::aggregate_function::MergeStatesInput;
+    use databend_common_expression::aggregate::aggregate_function::SerializeInput;
 
     use super::*;
 
@@ -388,8 +388,8 @@ mod tests {
         fn features(&self) -> &FunctionFeatures {
             static FEATURES: FunctionFeatures = FunctionFeatures {
                 is_decomposable: false,
-                sort_policy: databend_common_expression::aggregate::aggregate_function_v2::SortPolicy::Unsupported,
-                distinct_policy: databend_common_expression::aggregate::aggregate_function_v2::DistinctPolicy::Unsupported,
+                sort_policy: databend_common_expression::aggregate::aggregate_function::SortPolicy::Unsupported,
+                distinct_policy: databend_common_expression::aggregate::aggregate_function::DistinctPolicy::Unsupported,
                 category: "",
                 description: "",
                 definition: "",

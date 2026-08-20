@@ -24,7 +24,7 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::aggregate::aggregate_function_v2 as v2;
+use databend_common_expression::aggregate::aggregate_function as v2;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;

@@ -40,10 +40,10 @@ use databend_common_expression::Value;
 use databend_common_expression::aggregate::AggrState;
 use databend_common_expression::aggregate::StateAddr;
 use databend_common_expression::aggregate::StatesLayout;
-use databend_common_expression::aggregate::aggregate_function_v2 as v2;
-use databend_common_expression::aggregate::aggregate_function_v2::AccumulateInput;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRef;
-use databend_common_expression::aggregate::aggregate_function_v2::MergeResultInput;
+use databend_common_expression::aggregate::aggregate_function as v2;
+use databend_common_expression::aggregate::aggregate_function::AccumulateInput;
+use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
+use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
 use databend_common_expression::domain_evaluator;
 use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
@@ -1291,7 +1291,7 @@ struct ArrayAggDesc {
 
 impl ArrayAggDesc {
     fn new(name: &str, array_type: &DataType) -> Result<Self> {
-        let func = AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest {
+        let func = AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
             name,
             params: &[],
             args_type: std::slice::from_ref(array_type),
@@ -1300,7 +1300,7 @@ impl ArrayAggDesc {
         })?;
         let return_type = func.signature().return_type.clone();
         let funcs = [func.clone()];
-        let state_layout = Arc::new(v2::get_states_layout(&funcs)?.into());
+        let state_layout = Arc::new(v2::get_states_layout(&funcs)?);
         Ok(Self {
             func,
             state_layout,

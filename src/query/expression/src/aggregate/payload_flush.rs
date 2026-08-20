@@ -17,8 +17,8 @@ use databend_common_io::prelude::bincode_deserialize_from_slice;
 
 use super::BATCH_SIZE;
 use super::StateAddr;
-use super::aggregate_function_v2::AggregateStateSet;
-use super::aggregate_function_v2::SerializeInput;
+use super::aggregate_function::AggregateStateSet;
+use super::aggregate_function::SerializeInput;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;

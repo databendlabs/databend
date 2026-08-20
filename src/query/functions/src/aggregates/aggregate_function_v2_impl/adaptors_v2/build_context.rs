@@ -14,8 +14,8 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRef;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
+use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;

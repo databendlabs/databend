@@ -34,12 +34,12 @@ use super::probe_state::ProbeState;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
-use crate::aggregate::aggregate_function_v2::AccumulateKeysInput;
-use crate::aggregate::aggregate_function_v2::AggregateFunctionRef;
-use crate::aggregate::aggregate_function_v2::AggregateStateSet;
-use crate::aggregate::aggregate_function_v2::MergeResultInput;
-use crate::aggregate::aggregate_function_v2::MergeSerializedInput;
-use crate::aggregate::aggregate_function_v2::MergeStatesInput;
+use crate::aggregate::aggregate_function::AccumulateKeysInput;
+use crate::aggregate::aggregate_function::AggregateFunctionRef;
+use crate::aggregate::aggregate_function::AggregateStateSet;
+use crate::aggregate::aggregate_function::MergeResultInput;
+use crate::aggregate::aggregate_function::MergeSerializedInput;
+use crate::aggregate::aggregate_function::MergeStatesInput;
 use crate::types::DataType;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;

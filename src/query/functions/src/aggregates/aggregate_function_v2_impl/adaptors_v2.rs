@@ -22,7 +22,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::aggregate::AggrState;
-pub use databend_common_expression::aggregate::aggregate_function_v2::*;
+pub use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::types::DataType;
 
 mod build_context;

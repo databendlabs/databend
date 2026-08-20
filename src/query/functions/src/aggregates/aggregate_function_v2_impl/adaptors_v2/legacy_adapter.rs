@@ -22,7 +22,7 @@ use databend_common_expression::StateAddr;
 
 use super::*;
 use crate::aggregates::AggrStateRegistry;
-use crate::aggregates::AggregateFunction as LegacyAggregateFunction;
+use crate::aggregates::aggregate_function_v1::AggregateFunction as LegacyAggregateFunction;
 
 pub struct AggregateFunctionV2LegacyAdapter {
     function: AggregateFunctionRef,

@@ -1,7 +1,7 @@
 use databend_common_exception::Result;
 use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::aggregate::aggregate_function_v2 as v2;
+use databend_common_expression::aggregate::aggregate_function as v2;
 use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;

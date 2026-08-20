@@ -17,7 +17,7 @@ use std::sync::LazyLock;
 use databend_common_exception::Result;
 use databend_common_expression::Symbol;
 use databend_common_expression::SymbolOrOffset;
-use databend_common_expression::aggregate::aggregate_function_v2 as v2;
+use databend_common_expression::aggregate::aggregate_function as v2;
 
 use super::AggregateFunctionSortDesc;
 use super::aggregate_function_v2_impl;

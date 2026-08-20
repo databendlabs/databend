@@ -37,22 +37,7 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SerializedPayload;
 use databend_common_expression::StateSerdeItem;
-use databend_common_expression::aggregate::aggregate_function_v2::AccumulateInput;
-use databend_common_expression::aggregate::aggregate_function_v2::AccumulateKeysInput;
-use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowCountInput;
-use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowCountKeysInput;
-use databend_common_expression::aggregate::aggregate_function_v2::AccumulateRowInput;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateArgumentPattern;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateArgumentsPattern;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRef;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionSignature;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateStateDescription;
-use databend_common_expression::aggregate::aggregate_function_v2::FunctionFeatures;
-use databend_common_expression::aggregate::aggregate_function_v2::FunctionInstance;
-use databend_common_expression::aggregate::aggregate_function_v2::MergeResultInput;
-use databend_common_expression::aggregate::aggregate_function_v2::MergeSerializedInput;
-use databend_common_expression::aggregate::aggregate_function_v2::MergeStatesInput;
-use databend_common_expression::aggregate::aggregate_function_v2::SerializeInput;
+use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
@@ -169,8 +154,8 @@ impl FunctionInstance for TrackedHeapAggregateFunction {
     fn features(&self) -> &FunctionFeatures {
         static FEATURES: FunctionFeatures = FunctionFeatures {
             is_decomposable: false,
-            sort_policy: databend_common_expression::aggregate::aggregate_function_v2::SortPolicy::Unsupported,
-            distinct_policy: databend_common_expression::aggregate::aggregate_function_v2::DistinctPolicy::Unsupported,
+            sort_policy: databend_common_expression::aggregate::aggregate_function::SortPolicy::Unsupported,
+            distinct_policy: databend_common_expression::aggregate::aggregate_function::DistinctPolicy::Unsupported,
             category: "",
             description: "",
             definition: "",

@@ -16,7 +16,6 @@ use std::any::Any;
 
 use adaptors::*;
 pub use aggregate_count::AggregateCountFunction;
-pub use aggregate_function::*;
 pub use aggregate_function_factory::*;
 pub use aggregate_function_v2_registry::AggregateFunctionRegistry;
 use aggregate_null_result::AggregateNullResultFunction;
@@ -29,7 +28,9 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::aggregate as aggregate_function;
+pub use databend_common_expression::aggregate::*;
+use databend_common_expression::aggregate_function_v1::AggregateFunction;
+use databend_common_expression::aggregate_function_v1::AggregateFunctionRef;
 use databend_common_expression::types::DataType;
 
 trait StateSerde {

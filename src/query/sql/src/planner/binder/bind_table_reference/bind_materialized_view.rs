@@ -32,7 +32,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use databend_common_license::license::Feature;

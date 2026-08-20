@@ -20,8 +20,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::aggregate::aggregate_function_v2 as v2;
-use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRef;
+use databend_common_expression::aggregate::aggregate_function as v2;
+use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::StatesLayout;
 use databend_common_sql::IndexType;
@@ -80,7 +80,7 @@ impl AggregatorParams {
         self.aggregate_functions.iter().any(|f| {
             f.signature().name.contains("distinct")
                 || f.features().distinct_policy
-                    == databend_common_expression::aggregate::aggregate_function_v2::DistinctPolicy::Required
+                    == databend_common_expression::aggregate::aggregate_function::DistinctPolicy::Required
         })
     }
 

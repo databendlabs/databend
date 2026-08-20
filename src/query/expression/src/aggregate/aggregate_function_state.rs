@@ -19,7 +19,7 @@ use databend_common_base::hints::assume;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
-use super::AggregateFunctionRef;
+use super::aggregate_function_v1::AggregateFunctionRef;
 use crate::ColumnBuilder;
 use crate::types::DataType;
 use crate::types::binary::BinaryColumnBuilder;

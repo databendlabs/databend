@@ -1615,7 +1615,7 @@ mod tests {
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
-    use databend_common_expression::aggregate::aggregate_function_v2::AggregateFunctionRequest;
+    use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
     use databend_common_expression::block_debug::assert_blocks_eq;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
