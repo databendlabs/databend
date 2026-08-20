@@ -19,7 +19,15 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------+
 
 
-error: string_agg does not support type 'Null'
+ast: string_agg(NULL)
+evaluation (internal):
++--------+------------------------------------------+
+| Column | Data                                     |
++--------+------------------------------------------+
+| s      | Column(StringColumn[abc, def, opq, xyz]) |
+| Output | Null { len: 2 }                          |
++--------+------------------------------------------+
+
 
 ast: string_agg(s_null)
 evaluation (internal):
@@ -111,7 +119,15 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------+
 
 
-error: string_agg does not support type 'Null'
+ast: string_agg(NULL, '|')
+evaluation (internal):
++--------+------------------------------------------+
+| Column | Data                                     |
++--------+------------------------------------------+
+| s      | Column(StringColumn[abc, def, opq, xyz]) |
+| Output | Null { len: 2 }                          |
++--------+------------------------------------------+
+
 
 ast: string_agg(s_null, '-')
 evaluation (internal):

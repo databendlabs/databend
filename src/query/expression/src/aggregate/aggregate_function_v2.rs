@@ -793,7 +793,7 @@ impl AggregateFunctionRegistry {
             }
 
             let request = AggregateFunctionRequest {
-                name: descriptor.name.as_str(),
+                name: requested_name.as_str(),
                 params: request.params,
                 args_type: request.args_type,
                 distinct: request.distinct,
