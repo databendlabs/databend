@@ -1822,9 +1822,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                 }
             }
-            Plan::ShowShares(_) | Plan::DescShare(_) => {
-                self.validate_share_management_access(None).await?;
-            }
+            Plan::ShowShares(_) | Plan::DescShare(_) => {}
             Plan::GrantShare(plan) => {
                 self.validate_share_management_access(None).await?;
                 self.validate_share_object_access(&plan.object).await?;

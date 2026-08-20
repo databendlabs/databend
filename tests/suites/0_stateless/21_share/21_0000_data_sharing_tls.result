@@ -1,4 +1,6 @@
 share management without GRANT denied
+consumer SHOW SHARES without GRANT exposed inbound share
+consumer DESC SHARE without GRANT described inbound share
 CREATE SHARE IF NOT EXISTS skipped unused Connection authorization
 ALTER SHARE IF EXISTS skipped unused Connection authorization
 account authorization without ACCESS CONNECTION denied

@@ -9,6 +9,11 @@ export TLS_SHARE_USER_CONNECT="bendsql_connect_user tls_share_user 123 -A --quot
 
 bendsql_connect_root_null <<SQL
 set global enable_experimental_connection_privilege_check=1;
+set sandbox_tenant = 'tls_share_provider';
+drop share if exists tls_inbound_share;
+drop database if exists tls_inbound_db;
+drop connection if exists tls_inbound_conn;
+set sandbox_tenant = '';
 drop user if exists tls_share_user;
 drop role if exists tls_share_role;
 drop share if exists tls_share;
@@ -25,6 +30,15 @@ grant select on table tls_share_db.orders to share tls_share;
 create role tls_share_role;
 create user tls_share_user identified by '123' with default_role='tls_share_role';
 grant role tls_share_role to tls_share_user;
+
+set sandbox_tenant = 'tls_share_provider';
+create connection tls_inbound_conn storage_type = 'fs';
+create share tls_inbound_share connection = tls_inbound_conn;
+create database tls_inbound_db;
+create table tls_inbound_db.orders(id int);
+grant usage on database tls_inbound_db to share tls_inbound_share;
+grant select on table tls_inbound_db.orders to share tls_inbound_share;
+alter share tls_inbound_share add accounts = test_tenant;
 SQL
 
 if echo "create share unauthorized_tls_share" | $TLS_SHARE_USER_CONNECT >/dev/null 2>&1; then
@@ -32,6 +46,18 @@ if echo "create share unauthorized_tls_share" | $TLS_SHARE_USER_CONNECT >/dev/nu
 	exit 1
 fi
 echo "share management without GRANT denied"
+
+if ! echo "show shares like 'tls_inbound_share'" | $TLS_SHARE_USER_CONNECT | grep -q "INBOUND.*tls_share_provider.*tls_inbound_share.*tls_inbound_db"; then
+	echo "consumer SHOW SHARES without GRANT did not expose inbound share"
+	exit 1
+fi
+echo "consumer SHOW SHARES without GRANT exposed inbound share"
+
+if ! echo "desc share tls_share_provider.tls_inbound_share" | $TLS_SHARE_USER_CONNECT | grep -q "TABLE.*tls_inbound_db.orders"; then
+	echo "consumer DESC SHARE without GRANT did not describe inbound share"
+	exit 1
+fi
+echo "consumer DESC SHARE without GRANT described inbound share"
 
 bendsql_connect_root_null <<SQL
 grant grant on *.* to role tls_share_role;
@@ -113,6 +139,13 @@ echo "revoke usage on database tls_stale_db from share tls_stale_share" | $TLS_S
 echo "stale database grant cleanup ignored same-name replacement permissions"
 
 bendsql_connect_root_null <<SQL
+set sandbox_tenant = 'tls_share_provider';
+revoke select on table tls_inbound_db.orders from share tls_inbound_share;
+revoke usage on database tls_inbound_db from share tls_inbound_share;
+drop share tls_inbound_share;
+drop database tls_inbound_db;
+drop connection tls_inbound_conn;
+set sandbox_tenant = '';
 drop database tls_stale_db;
 drop share tls_stale_share;
 drop user tls_share_user;
