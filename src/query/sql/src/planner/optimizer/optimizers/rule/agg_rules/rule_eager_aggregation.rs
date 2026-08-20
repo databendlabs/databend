@@ -15,11 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
+use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::number::NumberDataType;
-use databend_common_functions::aggregates::AggregateFunctionRegistry;
 use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 
 use crate::ColumnSet;
@@ -1269,16 +1270,17 @@ impl EagerAnalysis {
             index: new_index,
         };
         aggregate_function.return_type = Box::new(
-            AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
-            name: &aggregate_function.func_name,
-            params: &aggregate_function.params.clone(),
-            args_type: &[multiplied_type.clone()],
-            distinct: false,
-            order_by: &[],
-        })?
-            .signature()
-            .return_type
-            .clone(),
+            AGGR_REGISTRY
+                .resolve(AggregateFunctionRequest {
+                    name: &aggregate_function.func_name,
+                    params: &aggregate_function.params.clone(),
+                    args_type: std::slice::from_ref(&multiplied_type),
+                    distinct: false,
+                    order_by: &[],
+                })?
+                .signature()
+                .return_type
+                .clone(),
         );
         if let ScalarExpr::BoundColumnRef(column) = &mut aggregate_function.args[0] {
             column.column.index = new_index;

@@ -68,17 +68,12 @@ impl StddevBuilder {
             STD_SAMP => (&["stddev_samp", "stddev"][..], Self::STDDEV_SAMP_FEATURES),
             _ => unreachable!(),
         };
-        DirectNameRoute::new(
-            names,
-            Self::stddev_arguments(),
-            features,
-            NullPolicy::Skip,
-        )
-        .then(MergeRoute::unary(false, Self::create_for_type::<TYPE>))
-        .then(MergeRoute::unary(true, Self::create_for_type::<TYPE>))
-        .then(PlainRoute::unary(Self::create_for_type::<TYPE>))
-        .then(IfRoute::unary(Self::create_for_type::<TYPE>))
-        .then(StateRoute::unary(Self::create_for_type::<TYPE>))
+        DirectNameRoute::new(names, Self::stddev_arguments(), features, NullPolicy::Skip)
+            .then(MergeRoute::unary(false, Self::create_for_type::<TYPE>))
+            .then(MergeRoute::unary(true, Self::create_for_type::<TYPE>))
+            .then(PlainRoute::unary(Self::create_for_type::<TYPE>))
+            .then(IfRoute::unary(Self::create_for_type::<TYPE>))
+            .then(StateRoute::unary(Self::create_for_type::<TYPE>))
     }
 
     fn stddev_arguments() -> AggregateArgumentsPattern {

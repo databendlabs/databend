@@ -123,12 +123,7 @@ impl CountBuilder {
     }
 
     fn count_distinct_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::variadic(
-            vec![],
-            AggregateArgumentPattern::any(),
-            1,
-            Some(32),
-        )
+        AggregateArgumentsPattern::variadic(vec![], AggregateArgumentPattern::any(), 1, Some(32))
     }
 
     const COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
@@ -179,9 +174,7 @@ impl CountBuilder {
         create_distinct_count_function(build, true)
     }
 
-    fn create(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let has_argument = !build.args_type().is_empty();
 
         build.create(
@@ -223,13 +216,12 @@ pub(super) fn create_distinct_count_function(
 
     let state = CountBuilder::distinct_state_description();
     let args_type = build.args_type().to_vec();
-    let implementation =
-        AggregateMultiArgSkipNullImplementation::new(AggregateDistinctImplementation::<
-            false,
-        >::new(
+    let implementation = AggregateMultiArgSkipNullImplementation::new(
+        AggregateDistinctImplementation::<false>::new(
             AggregateCountImplementation::new(count_argument),
             args_type,
-        ));
+        ),
+    );
 
     build.create(UInt64Type::data_type(), state, implementation)
 }
@@ -255,11 +247,10 @@ fn create_unary_distinct_count_function_typed<T>(
 where T: ValueType {
     let state = AggregateCountImplementation::state_description();
     let distinct_arg_type = build.args_type()[0].remove_nullable();
-    let implementation =
-        UnaryAggregateImplementation::new(UnarySkipNull::new(UnaryDistinct::new(
-            UnaryImpl::<AggregateCountState, T, UInt64Type, false>::new(().into()),
-            distinct_arg_type,
-        )));
+    let implementation = UnaryAggregateImplementation::new(UnarySkipNull::new(UnaryDistinct::new(
+        UnaryImpl::<AggregateCountState, T, UInt64Type, false>::new(().into()),
+        distinct_arg_type,
+    )));
     build.create(
         UInt64Type::data_type(),
         unary_distinct_state_description(&state),

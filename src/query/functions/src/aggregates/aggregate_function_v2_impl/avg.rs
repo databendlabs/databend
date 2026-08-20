@@ -321,9 +321,7 @@ where T: Decimal + std::ops::AddAssign
 }
 
 impl AvgBuilder {
-    fn create(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
 

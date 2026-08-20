@@ -17,7 +17,6 @@ use std::fmt::Write;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use super::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
@@ -37,6 +36,7 @@ use databend_common_expression::with_number_mapped_type;
 
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionFeatures;
+use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::SerializeInfo;

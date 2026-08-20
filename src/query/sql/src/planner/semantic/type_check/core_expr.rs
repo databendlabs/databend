@@ -20,9 +20,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionRegistry;
 use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use smallvec::smallvec;
 

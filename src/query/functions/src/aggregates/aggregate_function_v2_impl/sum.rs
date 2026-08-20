@@ -456,9 +456,7 @@ impl UnaryState<IntervalType, IntervalType> for AggregateIntervalSumState {
 }
 
 impl SumBuilder {
-    fn create(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
 
         #[rustfmt::skip]

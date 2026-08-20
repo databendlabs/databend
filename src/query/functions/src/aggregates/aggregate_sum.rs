@@ -16,7 +16,6 @@ use boolean::TrueIdxIter;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use super::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnView;
@@ -38,6 +37,7 @@ use num_traits::AsPrimitive;
 
 use super::AggrStateLoc;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::SerializeInfo;

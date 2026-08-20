@@ -8,7 +8,7 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::Symbol;
 use databend_common_expression::SymbolOrOffset;
-use databend_common_expression::aggregate::aggregate_function as v2;
+use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
@@ -48,13 +48,13 @@ fn eval_v2_aggr_with_params_and_sort(
     entries: &[BlockEntry],
     rows: usize,
     with_serialize: bool,
-    order_by: &[v2::AggregateBoundOrderByItem],
+    order_by: &[AggregateBoundOrderByItem],
 ) -> Result<(Column, DataType)> {
     let args_type = entries
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params,
         args_type: &args_type,
@@ -63,14 +63,14 @@ fn eval_v2_aggr_with_params_and_sort(
     })?;
     let data_type = function.signature().return_type.clone();
 
-    let owner = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    let owner = AggregateStateOwner::new(vec![function.clone()])?;
     if entries.is_empty() {
-        function.accumulate_row_count(v2::AccumulateRowCountInput {
+        function.accumulate_row_count(AccumulateRowCountInput {
             state: owner.state(0),
             rows,
         })?;
     } else {
-        function.accumulate(v2::AccumulateInput {
+        function.accumulate(AccumulateInput {
             state: owner.state(0),
             columns: entries.into(),
             validity: None,
@@ -89,7 +89,7 @@ fn eval_v2_aggr_with_params_and_sort(
             .iter()
             .map(|data_type| ColumnBuilder::with_capacity(data_type, 1))
             .collect::<Vec<_>>();
-        function.serialize(v2::SerializeInput {
+        function.serialize(SerializeInput {
             states: owner.state_set(0),
             builders: &mut builders,
         })?;
@@ -103,8 +103,8 @@ fn eval_v2_aggr_with_params_and_sort(
             Column::Tuple(columns).into()
         };
 
-        let serialized_owner = v2::AggregateStateOwner::new(vec![function.clone()])?;
-        function.merge_serialized(v2::MergeSerializedInput {
+        let serialized_owner = AggregateStateOwner::new(vec![function.clone()])?;
+        function.merge_serialized(MergeSerializedInput {
             states: serialized_owner.state_set(0),
             state: &state,
             filter: None,
@@ -115,7 +115,7 @@ fn eval_v2_aggr_with_params_and_sort(
     };
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result(v2::MergeResultInput {
+    function.merge_result(MergeResultInput {
         state: result_owner.state(0),
         builder: &mut builder,
     })?;
@@ -200,7 +200,7 @@ pub(super) fn simulate_two_groups_group_by_v2(
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
     let order_by = order_by_from_sort_descs(&sort_descs)?;
-    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &args_type,
@@ -209,17 +209,17 @@ pub(super) fn simulate_two_groups_group_by_v2(
     })?;
     let data_type = function.signature().return_type.clone();
 
-    let group1 = v2::AggregateStateOwner::new(vec![function.clone()])?;
-    let group2 = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    let group1 = AggregateStateOwner::new(vec![function.clone()])?;
+    let group2 = AggregateStateOwner::new(vec![function.clone()])?;
 
     if entries.is_empty() {
         let group1_rows = rows.div_ceil(2);
         let group2_rows = rows / 2;
-        function.accumulate_row_count(v2::AccumulateRowCountInput {
+        function.accumulate_row_count(AccumulateRowCountInput {
             state: group1.state(0),
             rows: group1_rows,
         })?;
-        function.accumulate_row_count(v2::AccumulateRowCountInput {
+        function.accumulate_row_count(AccumulateRowCountInput {
             state: group2.state(0),
             rows: group2_rows,
         })?;
@@ -230,7 +230,7 @@ pub(super) fn simulate_two_groups_group_by_v2(
             } else {
                 group2.state(0)
             };
-            function.accumulate_row(v2::AccumulateRowInput {
+            function.accumulate_row(AccumulateRowInput {
                 state,
                 columns: entries.into(),
                 row,
@@ -239,11 +239,11 @@ pub(super) fn simulate_two_groups_group_by_v2(
     }
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 2);
-    function.merge_result(v2::MergeResultInput {
+    function.merge_result(MergeResultInput {
         state: group1.state(0),
         builder: &mut builder,
     })?;
-    function.merge_result(v2::MergeResultInput {
+    function.merge_result(MergeResultInput {
         state: group2.state(0),
         builder: &mut builder,
     })?;
@@ -253,7 +253,7 @@ pub(super) fn simulate_two_groups_group_by_v2(
 
 fn order_by_from_sort_descs(
     sort_descs: &[AggregateFunctionSortDesc],
-) -> Result<Vec<v2::AggregateBoundOrderByItem>> {
+) -> Result<Vec<AggregateBoundOrderByItem>> {
     sort_descs
         .iter()
         .map(|desc| {
@@ -266,9 +266,9 @@ fn order_by_from_sort_descs(
                     "v2 aggregate test evaluator only supports reused sort descriptors",
                 ));
             }
-            Ok(v2::AggregateBoundOrderByItem {
+            Ok(AggregateBoundOrderByItem {
                 symbol: Symbol::new(index),
-                source: v2::AggregateBoundOrderBySource::Argument { index },
+                source: AggregateBoundOrderBySource::Argument { index },
                 data_type: desc.data_type.clone(),
                 asc: desc.asc,
                 nulls_first: desc.nulls_first,
@@ -314,7 +314,7 @@ pub(super) fn assert_v2_read_only_matches_legacy(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &args_type,
@@ -323,14 +323,14 @@ pub(super) fn assert_v2_read_only_matches_legacy(
     })?;
     let data_type = function.signature().return_type.clone();
 
-    let owner = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    let owner = AggregateStateOwner::new(vec![function.clone()])?;
     if entries.is_empty() {
-        function.accumulate_row_count(v2::AccumulateRowCountInput {
+        function.accumulate_row_count(AccumulateRowCountInput {
             state: owner.state(0),
             rows,
         })?;
     } else {
-        function.accumulate(v2::AccumulateInput {
+        function.accumulate(AccumulateInput {
             state: owner.state(0),
             columns: entries.into(),
             validity: None,
@@ -339,13 +339,13 @@ pub(super) fn assert_v2_read_only_matches_legacy(
     }
 
     let mut read_only_builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result_read_only(v2::MergeResultInput {
+    function.merge_result_read_only(MergeResultInput {
         state: owner.state(0),
         builder: &mut read_only_builder,
     })?;
 
     let mut final_builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result(v2::MergeResultInput {
+    function.merge_result(MergeResultInput {
         state: owner.state(0),
         builder: &mut final_builder,
     })?;
@@ -375,7 +375,7 @@ pub(super) fn assert_v2_serialized_read_only_matches_legacy(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &args_type,
@@ -384,8 +384,8 @@ pub(super) fn assert_v2_serialized_read_only_matches_legacy(
     })?;
     let data_type = function.signature().return_type.clone();
 
-    let owner = v2::AggregateStateOwner::new(vec![function.clone()])?;
-    function.accumulate(v2::AccumulateInput {
+    let owner = AggregateStateOwner::new(vec![function.clone()])?;
+    function.accumulate(AccumulateInput {
         state: owner.state(0),
         columns: entries.into(),
         validity: None,
@@ -402,7 +402,7 @@ pub(super) fn assert_v2_serialized_read_only_matches_legacy(
         .iter()
         .map(|data_type| ColumnBuilder::with_capacity(data_type, 1))
         .collect::<Vec<_>>();
-    function.serialize(v2::SerializeInput {
+    function.serialize(SerializeInput {
         states: owner.state_set(0),
         builders: &mut serialized_builders,
     })?;
@@ -416,15 +416,15 @@ pub(super) fn assert_v2_serialized_read_only_matches_legacy(
         Column::Tuple(serialized_columns).into()
     };
 
-    let serialized_owner = v2::AggregateStateOwner::new(vec![function.clone()])?;
-    function.merge_serialized(v2::MergeSerializedInput {
+    let serialized_owner = AggregateStateOwner::new(vec![function.clone()])?;
+    function.merge_serialized(MergeSerializedInput {
         states: serialized_owner.state_set(0),
         state: &serialized_state,
         filter: None,
     })?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result_read_only(v2::MergeResultInput {
+    function.merge_result_read_only(MergeResultInput {
         state: serialized_owner.state(0),
         builder: &mut builder,
     })?;

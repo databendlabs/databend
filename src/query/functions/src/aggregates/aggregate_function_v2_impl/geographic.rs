@@ -197,9 +197,7 @@ impl GeographicAggregateMetadata for EnvelopeAggOp {
         .then(PlainRoute::new(
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
-        .then(IfRoute::new(
-            GeographicBuilder::create_agg::<EnvelopeAggOp>,
-        ))
+        .then(IfRoute::new(GeographicBuilder::create_agg::<EnvelopeAggOp>))
         .then(StateRoute::new(
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
@@ -215,9 +213,7 @@ impl GeographicBuilder {
             AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(
                 DataType::Geometry,
             )]),
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(
-                DataType::Null,
-            )]),
+            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::Null)]),
         ])
     }
 
@@ -280,10 +276,9 @@ impl<O> Default for AggregateGeometryAggState<O> {
 
 impl<O> AggregateGeometryAggState<O> {
     pub fn state_description() -> AggregateStateDescription {
-        AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 }
@@ -390,10 +385,9 @@ impl<O> Default for AggregateGeometryCollectState<O> {
 
 impl<O> AggregateGeometryCollectState<O> {
     fn state_description() -> AggregateStateDescription {
-        AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 }

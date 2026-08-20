@@ -25,8 +25,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
-use databend_common_expression::aggregate::aggregate_function as v2;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
@@ -49,7 +48,7 @@ use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
 
 struct StateDropGuard {
-    func: v2::AggregateFunctionRef,
+    func: AggregateFunctionRef,
     loc: Box<[databend_common_expression::AggrStateLoc]>,
     addrs: Vec<StateAddr>,
 }
@@ -88,7 +87,7 @@ fn simulate_accumulate_matches_rows(
         order_by: &order_by,
     })?;
     let data_type = func.signature().return_type.clone();
-    let states_layout = v2::get_states_layout(std::slice::from_ref(&func))?;
+    let states_layout = get_states_layout(std::slice::from_ref(&func))?;
     let loc = states_layout.states_loc[0].clone();
 
     let arena = Bump::new();
@@ -104,14 +103,14 @@ fn simulate_accumulate_matches_rows(
         addrs: vec![batch_addr, rows_addr],
     };
 
-    func.accumulate(v2::AccumulateInput {
+    func.accumulate(AccumulateInput {
         state: batch_state,
         columns: entries.into(),
         validity: None,
         order_by: &[],
     })?;
     for row in 0..rows {
-        func.accumulate_row(v2::AccumulateRowInput {
+        func.accumulate_row(AccumulateRowInput {
             state: rows_state,
             columns: entries.into(),
             row,
@@ -119,14 +118,14 @@ fn simulate_accumulate_matches_rows(
     }
 
     let mut batch_builder = ColumnBuilder::with_capacity(&data_type, 1);
-    func.merge_result(v2::MergeResultInput {
+    func.merge_result(MergeResultInput {
         state: batch_state,
         builder: &mut batch_builder,
     })?;
     let batch_column = batch_builder.build();
 
     let mut rows_builder = ColumnBuilder::with_capacity(&data_type, 1);
-    func.merge_result(v2::MergeResultInput {
+    func.merge_result(MergeResultInput {
         state: rows_state,
         builder: &mut rows_builder,
     })?;
@@ -505,7 +504,7 @@ fn simulate_accumulate_keys_matches_rows(
         order_by: &order_by,
     })?;
     let data_type = func.signature().return_type.clone();
-    let states_layout = v2::get_states_layout(std::slice::from_ref(&func))?;
+    let states_layout = get_states_layout(std::slice::from_ref(&func))?;
     let loc = states_layout.states_loc[0].clone();
 
     let arena = Bump::new();
@@ -541,15 +540,15 @@ fn simulate_accumulate_keys_matches_rows(
             }
         })
         .collect::<Vec<_>>();
-    func.accumulate_keys(v2::AccumulateKeysInput {
-        states: v2::AggregateStateSet::new(&places, &loc),
+    func.accumulate_keys(AccumulateKeysInput {
+        states: AggregateStateSet::new(&places, &loc),
         columns: entries.into(),
         order_by: &[],
     })?;
 
     for row in 0..rows {
         let state = if row % 2 == 0 { rows_left } else { rows_right };
-        func.accumulate_row(v2::AccumulateRowInput {
+        func.accumulate_row(AccumulateRowInput {
             state,
             columns: entries.into(),
             row,
@@ -557,22 +556,22 @@ fn simulate_accumulate_keys_matches_rows(
     }
 
     let mut keys_builder = ColumnBuilder::with_capacity(&data_type, 2);
-    func.merge_result(v2::MergeResultInput {
+    func.merge_result(MergeResultInput {
         state: keys_left,
         builder: &mut keys_builder,
     })?;
-    func.merge_result(v2::MergeResultInput {
+    func.merge_result(MergeResultInput {
         state: keys_right,
         builder: &mut keys_builder,
     })?;
     let keys_column = keys_builder.build();
 
     let mut rows_builder = ColumnBuilder::with_capacity(&data_type, 2);
-    func.merge_result(v2::MergeResultInput {
+    func.merge_result(MergeResultInput {
         state: rows_left,
         builder: &mut rows_builder,
     })?;
-    func.merge_result(v2::MergeResultInput {
+    func.merge_result(MergeResultInput {
         state: rows_right,
         builder: &mut rows_builder,
     })?;
@@ -710,7 +709,7 @@ fn simulate_v2_merge_split(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &args_type,
@@ -719,29 +718,29 @@ fn simulate_v2_merge_split(
     })?;
     let data_type = function.signature().return_type.clone();
 
-    let left = v2::AggregateStateOwner::new(vec![function.clone()])?;
-    let right = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    let left = AggregateStateOwner::new(vec![function.clone()])?;
+    let right = AggregateStateOwner::new(vec![function.clone()])?;
     for row in 0..right_start {
-        function.accumulate_row(v2::AccumulateRowInput {
+        function.accumulate_row(AccumulateRowInput {
             state: left.state(0),
             columns: entries.into(),
             row,
         })?;
     }
     for row in right_start..rows {
-        function.accumulate_row(v2::AccumulateRowInput {
+        function.accumulate_row(AccumulateRowInput {
             state: right.state(0),
             columns: entries.into(),
             row,
         })?;
     }
-    function.merge_states(v2::MergeStatesInput {
+    function.merge_states(MergeStatesInput {
         state: left.state(0),
         rhs: right.state(0),
     })?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result(v2::MergeResultInput {
+    function.merge_result(MergeResultInput {
         state: left.state(0),
         builder: &mut builder,
     })?;
@@ -769,7 +768,7 @@ fn simulate_merge_split(
         order_by: &order_by,
     })?;
     let data_type = func.signature().return_type.clone();
-    let states_layout = v2::get_states_layout(std::slice::from_ref(&func))?;
+    let states_layout = get_states_layout(std::slice::from_ref(&func))?;
     let loc = states_layout.states_loc[0].clone();
 
     let arena = Bump::new();
@@ -786,26 +785,26 @@ fn simulate_merge_split(
     };
 
     for row in 0..right_start {
-        func.accumulate_row(v2::AccumulateRowInput {
+        func.accumulate_row(AccumulateRowInput {
             state: left,
             columns: entries.into(),
             row,
         })?;
     }
     for row in right_start..rows {
-        func.accumulate_row(v2::AccumulateRowInput {
+        func.accumulate_row(AccumulateRowInput {
             state: right,
             columns: entries.into(),
             row,
         })?;
     }
-    func.merge_states(v2::MergeStatesInput {
+    func.merge_states(MergeStatesInput {
         state: left,
         rhs: right,
     })?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
-    func.merge_result(v2::MergeResultInput {
+    func.merge_result(MergeResultInput {
         state: left,
         builder: &mut builder,
     })?;
@@ -1029,7 +1028,7 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
     }
 
     let arguments = [DataType::Number(NumberDataType::UInt64)];
-    let state = registry.resolve(v2::AggregateFunctionRequest {
+    let state = registry.resolve(AggregateFunctionRequest {
         name: "quantile_tdigest_state",
         params: &[level(0.5)],
         args_type: &arguments,
@@ -1039,7 +1038,7 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
     let state_type = [state.signature().return_type.clone()];
 
     for params in [vec![], vec![level(0.5)]] {
-        registry.resolve(v2::AggregateFunctionRequest {
+        registry.resolve(AggregateFunctionRequest {
             name: "quantile_tdigest_merge",
             params: &params,
             args_type: &state_type,
@@ -1048,7 +1047,7 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
         })?;
     }
     for name in ["quantile_tdigest_merge", "quantile_tdigest_merge_state"] {
-        let error = match registry.resolve(v2::AggregateFunctionRequest {
+        let error = match registry.resolve(AggregateFunctionRequest {
             name,
             params: &[level(0.9)],
             args_type: &state_type,

@@ -28,6 +28,7 @@ use databend_common_expression::aggregate::aggregate_function as v2;
 use databend_common_expression::aggregate::aggregate_function::AccumulateRowInput;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
 use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
+use databend_common_expression::aggregate_function::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
@@ -277,7 +278,7 @@ impl WindowFunctionImpl {
         Ok(match window {
             WindowFunctionInfo::Aggregate(agg, args) => {
                 let arena = Arena::new();
-                let mut states_layout = v2::get_states_layout(std::slice::from_ref(&agg))?;
+                let mut states_layout = get_states_layout(std::slice::from_ref(&agg))?;
                 let addr = arena.alloc_layout(states_layout.layout).into();
                 let loc = states_layout.states_loc.pop().unwrap();
                 let agg = WindowFuncAggImpl {
@@ -468,7 +469,7 @@ mod tests {
             drops: drops.clone(),
         });
         let arena = Arena::new();
-        let mut states_layout = v2::get_states_layout(std::slice::from_ref(&agg))?;
+        let mut states_layout = get_states_layout(std::slice::from_ref(&agg))?;
         let addr = arena.alloc_layout(states_layout.layout).into();
         let loc = states_layout.states_loc.pop().unwrap();
 

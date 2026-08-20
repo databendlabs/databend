@@ -16,7 +16,6 @@ use boolean::TrueIdxIter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateLoc;
-use super::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnView;
@@ -30,6 +29,7 @@ use databend_common_expression::types::*;
 
 use super::AggrState;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::SerializeInfo;

@@ -434,10 +434,9 @@ where
     T::Scalar: Send + Sync,
 {
     fn state_description(return_type: DataType) -> AggregateStateDescription {
-        AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::DataType(return_type)],
-        )
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(return_type),
+        ])
         .with_manual_drop(true)
     }
 
@@ -473,12 +472,9 @@ where
 {
     fn state_description(return_type: DataType) -> AggregateStateDescription {
         let data_type = return_type.as_array().unwrap().remove_nullable();
-        AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::DataType(DataType::Array(Box::new(
-                data_type,
-            )))],
-        )
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(DataType::Array(Box::new(data_type))),
+        ])
         .with_manual_drop(true)
     }
 
@@ -516,12 +512,9 @@ impl<V, const IS_NULL: bool> AggregateUnaryState<ZeroSizeValueType<V>>
 where V: ZeroSizeType
 {
     fn state_description(_return_type: DataType) -> AggregateStateDescription {
-        AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::DataType(
-                ArrayType::<BooleanType>::data_type(),
-            )],
-        )
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(ArrayType::<BooleanType>::data_type()),
+        ])
         .with_manual_drop(true)
     }
 
@@ -559,12 +552,9 @@ where T: ArgType + AccessType + Debug + Send + Sync
 {
     fn state_description(return_type: DataType) -> AggregateStateDescription {
         let data_type = return_type.as_array().unwrap().remove_nullable();
-        AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::DataType(DataType::Array(Box::new(
-                data_type,
-            )))],
-        )
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(DataType::Array(Box::new(data_type))),
+        ])
         .with_manual_drop(true)
     }
 
@@ -622,9 +612,7 @@ impl ArrayAggBuilder {
         }
     }
 
-    fn create(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let data_type = build.args_type()[0].clone();
         let not_null_type = data_type.remove_nullable();
         let return_type = DataType::Array(Box::new(not_null_type.clone()));

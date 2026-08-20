@@ -1,7 +1,7 @@
 use databend_common_exception::Result;
 use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::aggregate::aggregate_function as v2;
+use databend_common_expression::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
@@ -50,7 +50,7 @@ fn test_v2_min_max_any_heap_states_require_manual_drop() -> Result<()> {
     }));
 
     for data_type in [DataType::Binary, aggregate_state] {
-        let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+        let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
             name: "min",
             params: &[],
             args_type: &[data_type],

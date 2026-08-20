@@ -67,9 +67,7 @@ impl ArrayMovingBuilder {
     fn array_moving_arguments() -> AggregateArgumentsPattern {
         AggregateArgumentsPattern::one_of(vec![
             AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()]),
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(
-                DataType::Null,
-            )]),
+            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::Null)]),
         ])
     }
 
@@ -136,10 +134,9 @@ where
     S: ValueType,
 {
     pub fn state_description(serialized_type: DataType) -> AggregateStateDescription {
-        AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::DataType(serialized_type)],
-        )
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(serialized_type),
+        ])
         .with_manual_drop(true)
     }
 }
@@ -231,10 +228,9 @@ impl<T> AggregateDecimalArrayMovingState<T>
 where T: Decimal
 {
     pub fn state_description(serialized_type: DataType) -> AggregateStateDescription {
-        AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::DataType(serialized_type)],
-        )
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(serialized_type),
+        ])
         .with_manual_drop(true)
     }
 }
@@ -361,8 +357,7 @@ impl<State> AggregateArrayMovingImplementation<State> {
     }
 }
 
-impl<I, S> AggrImpl
-    for AggregateArrayMovingImplementation<AggregateNumberArrayMovingState<I, S>>
+impl<I, S> AggrImpl for AggregateArrayMovingImplementation<AggregateNumberArrayMovingState<I, S>>
 where
     I: ValueType + AccessType + ArgType,
     S: ValueType + AccessType + ArgType,

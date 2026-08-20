@@ -220,7 +220,7 @@ impl Binder {
                 let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
                     name: &merge_name,
                     params: &[],
-                    args_type: &[argument_type.clone()],
+                    args_type: std::slice::from_ref(&argument_type),
                     distinct: false,
                     order_by: &[],
                 })?;

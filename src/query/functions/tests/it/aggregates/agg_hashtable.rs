@@ -24,7 +24,9 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::aggregate::aggregate_function as v2;
+use databend_common_expression::aggregate_function::AggregateFunctionRef;
+use databend_common_expression::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate_function::get_states_layout;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
@@ -46,9 +48,9 @@ use databend_common_functions::aggregates::DecimalSumState;
 use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
 use itertools::Itertools;
 
-fn resolve_agg(name: &str, arg_type: DataType) -> v2::AggregateFunctionRef {
+fn resolve_agg(name: &str, arg_type: DataType) -> AggregateFunctionRef {
     AGGR_REGISTRY
-        .resolve(v2::AggregateFunctionRequest {
+        .resolve(AggregateFunctionRequest {
             name,
             params: &[],
             args_type: &[arg_type],
@@ -182,7 +184,7 @@ fn test_layout() {
     type S = DecimalSumState<false, i128>;
     type M = DecimalSumState<false, i256>;
 
-    let states_layout = v2::get_states_layout(std::slice::from_ref(&aggrs)).unwrap();
+    let states_layout = get_states_layout(std::slice::from_ref(&aggrs)).unwrap();
 
     assert_eq!(
         states_layout.layout,

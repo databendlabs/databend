@@ -8,7 +8,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::aggregate::aggregate_function as v2;
+use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
@@ -298,7 +298,7 @@ fn eval_v2_state_merge_entry(
     state: BlockEntry,
 ) -> Result<(Column, DataType)> {
     let args_type = [state_type.clone()];
-    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params,
         args_type: &args_type,
@@ -306,9 +306,9 @@ fn eval_v2_state_merge_entry(
         order_by: &[],
     })?;
     let return_type = function.signature().return_type.clone();
-    let owner = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    let owner = AggregateStateOwner::new(vec![function.clone()])?;
     let entries = [state];
-    function.accumulate(v2::AccumulateInput {
+    function.accumulate(AccumulateInput {
         state: owner.state(0),
         columns: (&entries).into(),
         validity: None,
@@ -316,7 +316,7 @@ fn eval_v2_state_merge_entry(
     })?;
 
     let mut builder = ColumnBuilder::with_capacity(&return_type, 1);
-    function.merge_result(v2::MergeResultInput {
+    function.merge_result(MergeResultInput {
         state: owner.state(0),
         builder: &mut builder,
     })?;
@@ -410,26 +410,26 @@ fn test_v2_sum_merge_keys_skips_nullable_states() -> Result<()> {
         .wrap_nullable(Some(Bitmap::from([true, false])));
 
     let nullable_state_type = DataType::Nullable(Box::new(left.1));
-    let function = AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name: "sum_merge",
         params: &[],
         args_type: &[nullable_state_type],
         distinct: false,
         order_by: &[],
     })?;
-    let first = v2::AggregateStateOwner::new(vec![function.clone()])?;
-    let second = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    let first = AggregateStateOwner::new(vec![function.clone()])?;
+    let second = AggregateStateOwner::new(vec![function.clone()])?;
     let places = [first.state(0).addr, second.state(0).addr];
     let entries = [BlockEntry::from(states)];
-    function.accumulate_keys(v2::AccumulateKeysInput {
-        states: v2::AggregateStateSet::new(&places, first.state(0).loc),
+    function.accumulate_keys(AccumulateKeysInput {
+        states: AggregateStateSet::new(&places, first.state(0).loc),
         columns: (&entries).into(),
         order_by: &[],
     })?;
 
     for (owner, expected) in [(&first, Some(3)), (&second, None)] {
         let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
-        function.merge_result(v2::MergeResultInput {
+        function.merge_result(MergeResultInput {
             state: owner.state(0),
             builder: &mut builder,
         })?;
@@ -446,7 +446,7 @@ fn test_v2_sum_merge_keys_skips_nullable_states() -> Result<()> {
 fn test_v2_merge_rejects_mismatched_state_function() -> Result<()> {
     let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
     let (_, state_type) = eval_v2_aggr("sum_state", &entries, 4, false)?;
-    let error = match AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+    let error = match AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name: "avg_merge",
         params: &[],
         args_type: &[state_type],
@@ -569,7 +569,7 @@ fn test_v2_sum_merge_does_not_fallback_after_precise_resolver() -> Result<()> {
     };
     let physical_type = metadata.physical_type().clone();
 
-    let error = match AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+    let error = match AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name: "sum_merge",
         params: &[],
         args_type: std::slice::from_ref(&physical_type),
@@ -594,7 +594,7 @@ fn test_v2_merge_rejects_unrecoverable_legacy_state() -> Result<()> {
         // Bare, non-tuple layouts are never produced by serialization.
         UInt64Type::data_type(),
     ] {
-        let error = match AGGR_REGISTRY.resolve(v2::AggregateFunctionRequest {
+        let error = match AGGR_REGISTRY.resolve(AggregateFunctionRequest {
             name: "sum_merge",
             params: &[],
             args_type: std::slice::from_ref(&state_type),

@@ -148,10 +148,9 @@ struct Centroid {
 
 impl AggregateQuantileTDigestState {
     pub fn state_description() -> AggregateStateDescription {
-        AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 
@@ -483,9 +482,7 @@ where for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 }
 
 impl QuantileTDigestBuilder {
-    fn create(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
         let levels = get_levels(build.params())?;
