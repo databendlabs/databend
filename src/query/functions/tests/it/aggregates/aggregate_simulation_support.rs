@@ -28,6 +28,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
+use databend_common_expression::StatesLayout;
 use databend_common_expression::Value;
 use databend_common_expression::aggregate::aggregate_function_v2 as v2;
 use databend_common_expression::type_check;
@@ -365,7 +366,7 @@ pub(super) fn eval_legacy_aggregate_for_test(
 
 struct EvalAggr {
     addr: StateAddr,
-    state_layout: v2::AggregateStatesLayout,
+    state_layout: StatesLayout,
     _arena: Bump,
     func: v2::AggregateFunctionRef,
 }

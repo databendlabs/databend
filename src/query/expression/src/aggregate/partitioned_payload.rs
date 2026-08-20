@@ -95,7 +95,7 @@ impl PartitionedPayload {
             "arenas must be shared or match the payload partition count"
         );
         let states_layout = if !aggrs.is_empty() {
-            Some(get_states_layout(&aggrs).unwrap().into())
+            Some(get_states_layout(&aggrs).unwrap())
         } else {
             None
         };

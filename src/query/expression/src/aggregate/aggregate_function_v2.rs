@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Layout;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
@@ -21,19 +22,19 @@ use bumpalo::Bump;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use itertools::Itertools;
 
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggrStateType;
+use super::StateAddr;
+use super::StateSerdeType;
+use super::StatesLayout;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
 use crate::Scalar;
 use crate::StateSerdeItem;
 use crate::Symbol;
-use crate::aggregate::AggrState;
-use crate::aggregate::AggrStateLoc;
-use crate::aggregate::AggrStateType;
-use crate::aggregate::StateAddr;
-use crate::aggregate::StateSerdeType;
 use crate::types::DataType;
 
 pub type AggregateFunctionRef = Arc<dyn FunctionInstance>;
@@ -727,21 +728,20 @@ impl AggregateFunctionRegistry {
     }
 
     pub fn registered_names(&self) -> Vec<String> {
-        self.functions
-            .keys()
-            .chain(self.aliases.keys())
-            .unique()
+        BTreeSet::from_iter(self.functions.keys().chain(self.aliases.keys()))
+            .into_iter()
             .cloned()
-            .sorted()
             .collect()
     }
 
     pub fn aliases(&self) -> Vec<(&str, &str)> {
-        self.aliases
+        let mut aliases = self
+            .aliases
             .iter()
             .map(|(alias, target)| (alias.as_str(), target.as_str()))
-            .sorted_by_key(|(alias, _)| *alias)
-            .collect()
+            .collect::<Vec<_>>();
+        aliases.sort_by_key(|(alias, _)| *alias);
+        aliases
     }
 
     pub fn descriptors(&self, name: &str) -> &[AggregateFunctionDescriptor] {
@@ -840,14 +840,7 @@ impl DistinctPolicy {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct AggregateStatesLayout {
-    pub layout: Layout,
-    pub states_loc: Vec<Box<[AggrStateLoc]>>,
-    pub serialize_type: Vec<StateSerdeType>,
-}
-
-pub fn get_states_layout(functions: &[AggregateFunctionRef]) -> Result<AggregateStatesLayout> {
+pub fn get_states_layout(functions: &[AggregateFunctionRef]) -> Result<StatesLayout> {
     let mut states = Vec::new();
     let mut offsets = Vec::with_capacity(functions.len() + 1);
     let mut serialize_type = Vec::with_capacity(functions.len());
@@ -865,26 +858,16 @@ pub fn get_states_layout(functions: &[AggregateFunctionRef]) -> Result<Aggregate
         .map(|window| locs[window[0]..window[1]].to_vec().into_boxed_slice())
         .collect();
 
-    Ok(AggregateStatesLayout {
+    Ok(StatesLayout {
         layout,
         states_loc,
         serialize_type,
     })
 }
 
-impl From<AggregateStatesLayout> for crate::aggregate::StatesLayout {
-    fn from(layout: AggregateStatesLayout) -> Self {
-        crate::aggregate::StatesLayout {
-            layout: layout.layout,
-            states_loc: layout.states_loc,
-            serialize_type: layout.serialize_type,
-        }
-    }
-}
-
 pub struct AggregateStateOwner {
     addr: StateAddr,
-    layout: AggregateStatesLayout,
+    layout: StatesLayout,
     functions: Vec<AggregateFunctionRef>,
     _arena: Bump,
 }
