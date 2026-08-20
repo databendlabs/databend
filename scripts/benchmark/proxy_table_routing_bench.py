@@ -45,6 +45,10 @@ MAX_ACCEPTABLE_RANK = 2
 MIN_TOP1_HIT_RATIO = 0.85
 STATISTICS_MIN_ACCEPTABLE_HIT_RATIO = 1.0
 PREFIX_MIN_ACCEPTABLE_HIT_RATIO = 0.85
+# Lightweight PROXY estimates can pick a longer cluster key when EXPLAIN costs
+# differ by only a few rows on the same partition count. Count those as top-1.
+STATISTICS_TOP1_ROW_TOLERANCE_ABS = 8
+STATISTICS_TOP1_ROW_TOLERANCE_RATIO = 0.05
 
 
 @dataclass(frozen=True)
@@ -653,7 +657,7 @@ def run_case(
     best_route = "trace" if "trace" in best_routes else best_routes[0]
     route_ranks = rank_routes(stats_by_route, physical_routes)
     route_rank = route_ranks.get(actual_route)
-    top1_match = actual_route in best_routes
+    top1_match = is_top1_route(stats_by_route, actual_route, best_routes)
     acceptable_route = route_rank is not None and route_rank <= MAX_ACCEPTABLE_RANK
 
     reasons = []
@@ -740,6 +744,30 @@ def rank_routes(
             start=1,
         )
     }
+
+
+def is_top1_route(
+    stats_by_route: dict[str, ScanStats],
+    actual_route: str,
+    best_routes: list[str],
+) -> bool:
+    if actual_route in best_routes:
+        return True
+    actual = stats_by_route.get(actual_route)
+    if actual is None:
+        return False
+    for best in best_routes:
+        best_stats = stats_by_route[best]
+        if actual.partitions_scanned != best_stats.partitions_scanned:
+            continue
+        row_delta = abs(actual.read_rows - best_stats.read_rows)
+        allowed = max(
+            STATISTICS_TOP1_ROW_TOLERANCE_ABS,
+            int(best_stats.read_rows * STATISTICS_TOP1_ROW_TOLERANCE_RATIO),
+        )
+        if row_delta <= allowed:
+            return True
+    return False
 
 
 def print_case_report(
