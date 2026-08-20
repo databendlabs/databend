@@ -790,7 +790,19 @@ impl LineageResolver {
         let RelOperator::Scan(scan) = operator else {
             return Ok(());
         };
+        let materialized_cte = metadata.materialized_cte_lineage_source(scan.table_index);
+        if let Some(source) = materialized_cte {
+            self.collect_s_expr(&source.definition, metadata)?;
+        }
         for column in &scan.columns {
+            if let Some(output_column) = materialized_cte
+                .and_then(|source| source.column_mapping.get(column))
+                .copied()
+            {
+                self.definitions
+                    .insert(*column, vec![SourceExpr::Symbol(output_column)]);
+                continue;
+            }
             let Some(source) = source_column_from_symbol(metadata, *column)? else {
                 continue;
             };
@@ -936,6 +948,14 @@ fn source_column_from_output(
 
 fn source_column_from_symbol(metadata: &Metadata, symbol: Symbol) -> Result<Option<SourceColumn>> {
     if symbol.is_dummy_column() || symbol.as_usize() >= metadata.columns().len() {
+        return Ok(None);
+    }
+
+    // A user-specified materialized CTE is scanned through a temporary table,
+    // but its outputs retain producer definitions in metadata for lineage.
+    // Prefer those definitions because the temporary table is only an
+    // execution detail, not a lineage source.
+    if metadata.materialized_cte_lineage_output(symbol).is_some() {
         return Ok(None);
     }
 
