@@ -33,6 +33,7 @@ fn test_control() {
     test_if(file);
     test_is_not_null(file);
     test_is_not_error(file);
+    test_assume_true_on_error(file);
 }
 
 fn test_if(file: &mut impl Write) {
@@ -217,5 +218,38 @@ fn test_is_not_error(file: &mut impl Write) {
             func_ctx: FunctionContext::default(),
             strict_eval: true,
         },
+    );
+}
+
+fn test_assume_true_on_error(file: &mut impl Write) {
+    // Clean evaluations pass through unchanged: rows proven false are still
+    // dropped, only evaluation errors are converted to true.
+    run_ast(file, "assume_true_on_error(true)", &[]);
+    run_ast(file, "assume_true_on_error(false)", &[]);
+    run_ast(file, "assume_true_on_error(bool_col)", &[(
+        "bool_col",
+        BooleanType::from_data(vec![true, false, true, false]),
+    )]);
+    // Rows whose evaluation fails (division by zero) yield true, i.e. keep the
+    // row and defer the error to the real evaluation site.
+    run_ast(file, "assume_true_on_error(1 / denom > 0)", &[(
+        "denom",
+        Int64Type::from_data(vec![2i64, 0, -1, 4]),
+    )]);
+    // Errors from deeply nested expressions are suppressed all the way up:
+    // the sticky suppression opts in at assume_true_on_error and propagates
+    // downward through intermediate calls.
+    run_ast(
+        file,
+        "assume_true_on_error(not(is_not_null(nullable_col)) and (1 / denom > 0))",
+        &[
+            (
+                "nullable_col",
+                Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![
+                    true, false, true, false,
+                ]),
+            ),
+            ("denom", Int64Type::from_data(vec![1i64, 1, 0, 2])),
+        ],
     );
 }

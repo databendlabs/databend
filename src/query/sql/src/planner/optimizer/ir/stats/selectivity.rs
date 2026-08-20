@@ -124,14 +124,31 @@ impl SelectivityEstimator {
             return Ok(0.0);
         }
 
-        let scalar_expr = match predicates {
+        // Optimizer-derived predicates restate a fact another operator
+        // already enforces (e.g. a null-rejecting join discards NULL-key rows
+        // anyway), so counting them double-counts NULL filtering. Worse, on
+        // stats-less expressions (unnest output, aggregate results, ...) they
+        // pick up the default selectivity and can badly distort cardinality
+        // estimates. Skip a derived predicate unless its selectivity is
+        // exactly computable from real column statistics — counting it must
+        // refine the estimate, never approximate it with the default.
+        let predicates: Vec<ScalarExpr> = predicates
+            .iter()
+            .filter(|pred| !pred.is_derived() || self.derived_predicate_is_exactly_estimable(pred))
+            .cloned()
+            .collect();
+        if predicates.is_empty() {
+            return Ok(self.cardinality.value());
+        }
+
+        let scalar_expr = match predicates.as_slice() {
             [pred] => pred.clone(),
-            predicates => ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "and_filters".to_string(),
-                params: vec![],
-                arguments: predicates.to_vec(),
-            }),
+            predicates => ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                "and_filters".to_string(),
+                vec![],
+                predicates.to_vec(),
+            )),
         };
         let expr = scalar_expr.as_expr()?;
         let input_domains = self.build_input_domains(&expr)?;
@@ -192,6 +209,40 @@ impl SelectivityEstimator {
             self.apply_selectivity_to_column_stats(selectivity, &not_null_columns);
 
         Ok(output_cardinality)
+    }
+
+    /// Whether a derived predicate's selectivity is exactly computable from
+    /// real column statistics.
+    ///
+    /// Today that means a null check on a single materialized column with
+    /// collected stats (see `SelectivityVisitor::compute_is_not_null`),
+    /// possibly under the non-throwing `assume_true_on_error` wrapper.
+    /// Anything richer — e.g. a computed join key inlined below an
+    /// `EvalScalar`, `is_not_null(k > 1)` — references stats-bearing columns
+    /// yet still estimates as `Selectivity::Unknown`, which would apply the
+    /// default selectivity and distort the estimate instead of refining it.
+    fn derived_predicate_is_exactly_estimable(&self, pred: &ScalarExpr) -> bool {
+        // Peel the non-throwing wrapper; it does not change the value domain.
+        let mut pred = pred;
+        while let ScalarExpr::FunctionCall(func) = pred {
+            if func.func_name == "assume_true_on_error" && func.arguments.len() == 1 {
+                pred = &func.arguments[0];
+            } else {
+                break;
+            }
+        }
+        match pred {
+            ScalarExpr::FunctionCall(func)
+                if func.func_name == "is_not_null" && func.arguments.len() == 1 =>
+            {
+                matches!(
+                    &func.arguments[0],
+                    ScalarExpr::BoundColumnRef(column)
+                        if self.column_stats.contains_key(&column.column.index)
+                )
+            }
+            _ => false,
+        }
     }
 
     fn build_input_domains(

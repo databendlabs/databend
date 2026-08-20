@@ -24,6 +24,7 @@ use crate::optimizer::ir::Statistics;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::plans::DerivedFrom;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
@@ -178,12 +179,13 @@ impl Rule for RuleFilterNulls {
 
 /// Creates a NOT NULL filter predicate for a given join key.
 fn join_key_null_filter(key: &ScalarExpr) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "is_not_null".to_string(),
-        params: vec![],
-        arguments: vec![key.clone()],
-    })
+    // Derived from the join condition: rows violating this predicate
+    // would be dropped by the join anyway, so it must be evaluated in
+    // non-throwing mode.
+    ScalarExpr::FunctionCall(
+        FunctionCall::new(None, "is_not_null".to_string(), vec![], vec![key.clone()])
+            .derived(DerivedFrom::FilterNulls),
+    )
 }
 
 /// Checks if an expression represents a single-path plan.

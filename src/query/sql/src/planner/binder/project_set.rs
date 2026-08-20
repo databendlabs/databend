@@ -144,12 +144,12 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                     replaced_args.push(arg);
                 }
 
-                let replaced_expr: ScalarExpr = FunctionCall {
-                    span: func.span,
-                    func_name: func.func_name.clone(),
-                    params: func.params.clone(),
-                    arguments: replaced_args,
-                }
+                let replaced_expr: ScalarExpr = FunctionCall::new(
+                    func.span,
+                    func.func_name.clone(),
+                    func.params.clone(),
+                    replaced_args,
+                )
                 .into();
 
                 let srf_display_name = format_scalar(&replaced_expr);

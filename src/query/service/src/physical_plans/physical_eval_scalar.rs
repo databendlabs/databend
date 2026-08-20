@@ -395,12 +395,12 @@ impl PhysicalPlanBuilder {
                         }
                     }
 
-                    srf_item.scalar = ScalarExpr::FunctionCall(FunctionCall {
-                        span: srf_func.span,
-                        func_name: srf_func.func_name.clone(),
-                        params: visitor.params.into_iter().collect::<Vec<_>>(),
-                        arguments: srf_func.arguments.clone(),
-                    });
+                    srf_item.scalar = ScalarExpr::FunctionCall(FunctionCall::new(
+                        srf_func.span,
+                        srf_func.func_name.clone(),
+                        visitor.params.into_iter().collect::<Vec<_>>(),
+                        srf_func.arguments.clone(),
+                    ));
                 }
             }
         }

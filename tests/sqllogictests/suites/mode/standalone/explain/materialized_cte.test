@@ -20,7 +20,7 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│   ├── push downs: [filters: [], limit: NONE]
+│   ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
 │   └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.default.t1
@@ -31,7 +31,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [is_not_null(t1.a (#0))], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 10.00
 
@@ -57,7 +57,7 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│   ├── push downs: [filters: [], limit: NONE]
+│   ├── push downs: [filters: [is_not_null(t2.b (#1))], limit: NONE]
 │   └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.default.t1
@@ -68,6 +68,6 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [is_not_null(t1.a (#0))], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 10.00

@@ -222,12 +222,10 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .cloned()
                 .chain(join.equi_conditions.iter().cloned().map(|condition| {
-                    FunctionCall {
-                        span: condition.left.span(),
-                        func_name: "eq".to_string(),
-                        params: vec![],
-                        arguments: vec![condition.left, condition.right],
-                    }
+                    FunctionCall::new(condition.left.span(), "eq".to_string(), vec![], vec![
+                        condition.left,
+                        condition.right,
+                    ])
                     .into()
                 }))
                 .partition(|condition| {

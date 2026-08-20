@@ -750,15 +750,15 @@ impl AggregateInfo {
             }
         }
 
-        Ok(FunctionCall {
-            span: function.span,
-            func_name: function.func_name.clone(),
-            params: replaced_params,
-            arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+        Ok(FunctionCall::new(
+            function.span,
+            function.func_name.clone(),
+            replaced_params,
+            vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: function.span,
                 column: grouping_id_column,
             })],
-        })
+        ))
     }
 }
 
@@ -1522,19 +1522,14 @@ mod tests {
     }
 
     fn add_one(expr: ScalarExpr) -> ScalarExpr {
-        FunctionCall {
-            span: None,
-            func_name: "plus".to_string(),
-            params: vec![],
-            arguments: vec![
-                expr,
-                ConstantExpr {
-                    span: None,
-                    value: Scalar::Number(NumberScalar::Int64(1)),
-                }
-                .into(),
-            ],
-        }
+        FunctionCall::new(None, "plus".to_string(), vec![], vec![
+            expr,
+            ConstantExpr {
+                span: None,
+                value: Scalar::Number(NumberScalar::Int64(1)),
+            }
+            .into(),
+        ])
         .into()
     }
 

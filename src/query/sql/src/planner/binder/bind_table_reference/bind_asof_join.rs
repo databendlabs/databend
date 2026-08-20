@@ -202,31 +202,26 @@ fn make_asof_interval_end_condition(
     lead_key: ScalarExpr,
     func_name: &str,
 ) -> ScalarExpr {
-    let compare = ScalarExpr::FunctionCall(FunctionCall {
+    let compare = ScalarExpr::FunctionCall(FunctionCall::new(
         span,
-        func_name: func_name.to_string(),
-        params: vec![],
-        arguments: vec![probe_key, lead_key.clone()],
-    });
+        func_name.to_string(),
+        vec![],
+        vec![probe_key, lead_key.clone()],
+    ));
 
-    ScalarExpr::FunctionCall(FunctionCall {
-        span,
-        func_name: "if".to_string(),
-        params: vec![],
-        arguments: vec![
-            ScalarExpr::FunctionCall(FunctionCall {
-                span,
-                func_name: "is_not_null".to_string(),
-                params: vec![],
-                arguments: vec![lead_key],
-            }),
-            compare,
-            ScalarExpr::ConstantExpr(ConstantExpr {
-                span,
-                value: Scalar::Boolean(true),
-            }),
-        ],
-    })
+    ScalarExpr::FunctionCall(FunctionCall::new(span, "if".to_string(), vec![], vec![
+        ScalarExpr::FunctionCall(FunctionCall::new(
+            span,
+            "is_not_null".to_string(),
+            vec![],
+            vec![lead_key],
+        )),
+        compare,
+        ScalarExpr::ConstantExpr(ConstantExpr {
+            span,
+            value: Scalar::Boolean(true),
+        }),
+    ]))
 }
 
 pub fn is_range_join_condition<'a>(

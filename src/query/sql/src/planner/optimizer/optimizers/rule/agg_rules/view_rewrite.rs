@@ -969,12 +969,12 @@ impl ViewMatcher {
                                 span: None,
                                 value: lower_val.clone(),
                             });
-                            let pred = ScalarExpr::FunctionCall(FunctionCall {
-                                span: None,
-                                func_name: "eq".to_string(),
-                                params: vec![],
-                                arguments: vec![new_scalar.clone(), lower_val_scalar],
-                            });
+                            let pred = ScalarExpr::FunctionCall(FunctionCall::new(
+                                None,
+                                "eq".to_string(),
+                                vec![],
+                                vec![new_scalar.clone(), lower_val_scalar],
+                            ));
                             new_predicates.push(pred);
                             continue;
                         }
@@ -985,12 +985,12 @@ impl ViewMatcher {
                             span: None,
                             value: lower_val,
                         });
-                        let pred = ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: func_name.to_string(),
-                            params: vec![],
-                            arguments: vec![new_scalar.clone(), lower_val_scalar],
-                        });
+                        let pred = ScalarExpr::FunctionCall(FunctionCall::new(
+                            None,
+                            func_name.to_string(),
+                            vec![],
+                            vec![new_scalar.clone(), lower_val_scalar],
+                        ));
                         new_predicates.push(pred);
                     }
                     if let Some((upper_val, func_name)) = upper {
@@ -998,12 +998,12 @@ impl ViewMatcher {
                             span: None,
                             value: upper_val,
                         });
-                        let pred = ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: func_name.to_string(),
-                            params: vec![],
-                            arguments: vec![new_scalar.clone(), upper_val_scalar],
-                        });
+                        let pred = ScalarExpr::FunctionCall(FunctionCall::new(
+                            None,
+                            func_name.to_string(),
+                            vec![],
+                            vec![new_scalar.clone(), upper_val_scalar],
+                        ));
                         new_predicates.push(pred);
                     }
                 } else {

@@ -487,7 +487,10 @@ impl<'a> Selector<'a> {
                     expr.sql_display(),
                     return_type
                 );
-                let child_suppress_error = function.signature.name == "is_not_error";
+                let child_suppress_error = matches!(
+                    function.signature.name.as_str(),
+                    "is_not_error" | "assume_true_on_error"
+                );
                 let mut eval_options = EvaluateOptions::new_for_select(selection)
                     .with_suppress_error(child_suppress_error);
 

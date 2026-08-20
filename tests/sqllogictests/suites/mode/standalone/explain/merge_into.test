@@ -51,7 +51,7 @@ CommitSink
             │   ├── partitions total: 1
             │   ├── partitions scanned: 1
             │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            │   ├── push downs: [filters: [], limit: NONE]
+            │   ├── push downs: [filters: [is_not_null(salaries2.employee_id (#3))], limit: NONE]
             │   └── estimated rows: 4.00
             └── TableScan(Probe)
                 ├── table: default.default.employees2
@@ -98,7 +98,7 @@ CommitSink
                 │   ├── partitions total: 1
                 │   ├── partitions scanned: 1
                 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                │   ├── push downs: [filters: [], limit: NONE]
+                │   ├── push downs: [filters: [is_not_null(salaries2.employee_id (#3))], limit: NONE]
                 │   └── estimated rows: 4.00
                 └── TableScan(Probe)
                     ├── table: default.default.employees2
@@ -178,7 +178,7 @@ CommitSink
                 │   ├── partitions total: 1
                 │   ├── partitions scanned: 1
                 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                │   ├── push downs: [filters: [], limit: NONE]
+                │   ├── push downs: [filters: [is_not_null(salaries2.employee_id (#3))], limit: NONE]
                 │   └── estimated rows: 4.00
                 └── TableScan(Probe)
                     ├── table: default.default.employees2
@@ -238,7 +238,7 @@ CommitSink
                     ├── partitions total: 2
                     ├── partitions scanned: 2
                     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
-                    ├── push downs: [filters: [], limit: NONE]
+                    ├── push downs: [filters: [is_not_null(salaries2.employee_id (#3))], limit: NONE]
                     ├── apply join filters: [#0]
                     └── estimated rows: 6.00
 
@@ -285,7 +285,7 @@ CommitSink
                     ├── partitions total: 2
                     ├── partitions scanned: 2
                     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
-                    ├── push downs: [filters: [], limit: NONE]
+                    ├── push downs: [filters: [is_not_null(salaries2.employee_id (#3))], limit: NONE]
                     ├── apply join filters: [#0]
                     └── estimated rows: 6.00
 
@@ -334,7 +334,7 @@ CommitSink
                 │   ├── read size: 0
                 │   ├── partitions total: 0
                 │   ├── partitions scanned: 0
-                │   ├── push downs: [filters: [], limit: NONE]
+                │   ├── push downs: [filters: [is_not_null(column_only_optimization_target.a (#2))], limit: NONE]
                 │   └── estimated rows: 0.00
                 └── TableScan(Probe)
                     ├── table: default.default.column_only_optimization_source
@@ -376,7 +376,7 @@ CommitSink
                 │   ├── read size: 0
                 │   ├── partitions total: 0
                 │   ├── partitions scanned: 0
-                │   ├── push downs: [filters: [], limit: NONE]
+                │   ├── push downs: [filters: [is_not_null(column_only_optimization_target.a (#2))], limit: NONE]
                 │   └── estimated rows: 0.00
                 └── TableScan(Probe)
                     ├── table: default.default.column_only_optimization_source
@@ -421,7 +421,7 @@ CommitSink
                 │   ├── read size: 0
                 │   ├── partitions total: 0
                 │   ├── partitions scanned: 0
-                │   ├── push downs: [filters: [], limit: NONE]
+                │   ├── push downs: [filters: [is_not_null(column_only_optimization_target.a (#2))], limit: NONE]
                 │   └── estimated rows: 0.00
                 └── TableScan(Probe)
                     ├── table: default.default.column_only_optimization_source
@@ -463,7 +463,7 @@ CommitSink
                 │   ├── read size: 0
                 │   ├── partitions total: 0
                 │   ├── partitions scanned: 0
-                │   ├── push downs: [filters: [], limit: NONE]
+                │   ├── push downs: [filters: [is_not_null(column_only_optimization_target.a (#2))], limit: NONE]
                 │   └── estimated rows: 0.00
                 └── TableScan(Probe)
                     ├── table: default.default.column_only_optimization_source

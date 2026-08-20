@@ -431,20 +431,24 @@ AggregateFinal
         │   ├── partitions total: 1
         │   ├── partitions scanned: 1
         │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        │   ├── push downs: [filters: [], limit: NONE]
+        │   ├── push downs: [filters: [is_not_null(t1.a (#2))], limit: NONE]
         │   └── estimated rows: 1.00
-        └── TableScan(Probe)
-            ├── table: default.test_virtual_db.t2
-            ├── scan id: 0
-            ├── output columns: [v['b']['c'] (#4)]
-            ├── read rows: 1
-            ├── read size: < 1 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            ├── push downs: [filters: [], limit: NONE]
-            ├── virtual columns: [v['b']['c']]
-            └── estimated rows: 1.00
+        └── Filter(Probe)
+            ├── output columns: [t2.v['b']['c'] (#4)]
+            ├── filters: [is_not_null(t2.v['b']['c'] (#4))]
+            ├── estimated rows: 1.00
+            └── TableScan
+                ├── table: default.test_virtual_db.t2
+                ├── scan id: 0
+                ├── output columns: [v['b']['c'] (#4)]
+                ├── read rows: 1
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [is_not_null(t2.v['b']['c'] (#4))], limit: NONE]
+                ├── virtual columns: [v['b']['c']]
+                └── estimated rows: 1.00
 
 query T
 settings (enable_auto_materialize_cte = 1)
@@ -585,7 +589,7 @@ EvalScalar
                 │       ├── partitions total: 1
                 │       ├── partitions scanned: 1
                 │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                │       ├── push downs: [filters: [is_not_null(CAST(data_source_a.content_object['category_a'] (#19) AS String NULL)) and is_not_null(CAST(data_source_a.content_object['category_b'] (#20) AS String NULL)) and is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#16) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))], limit: NONE]
+                │       ├── push downs: [filters: [is_not_null(CAST(data_source_a.content_object['category_a'] (#19) AS String NULL)) and is_not_null(CAST(data_source_a.content_object['category_b'] (#20) AS String NULL)) and is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#16) AS Int64 NULL) AS Timestamp NULL) AS Date NULL)) and is_not_null(data_source_a.entity_id (#0)) and is_not_null(data_source_a.source_id (#1))], limit: NONE]
                 │       ├── virtual columns: [content_object['category_a'], content_object['category_b'], content_object['event_date'], metadata_object['type']]
                 │       └── estimated rows: 1.00
                 └── EvalScalar(Probe)
@@ -618,7 +622,7 @@ EvalScalar
                                     ├── estimated rows: 0.20
                                     ├── Filter(Build)
                                     │   ├── output columns: [a.entity_id (#5), a.source_id (#6), a.content_object['event_date'] (#13)]
-                                    │   ├── filters: [is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#13) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))]
+                                    │   ├── filters: [assume_true_on_error(is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#13) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))), is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#13) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))]
                                     │   ├── estimated rows: 0.20
                                     │   └── TableScan
                                     │       ├── table: default.test_virtual_db.data_source_a
@@ -628,8 +632,8 @@ EvalScalar
                                     │       ├── read size: < 1 KiB
                                     │       ├── partitions total: 1
                                     │       ├── partitions scanned: 1
-                                    │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                                    │       ├── push downs: [filters: [is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#13) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))], limit: NONE]
+                                    │       ├── pruning stats: [segments: <read cost: 1 ms, decompress cost: 1 ms, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                                    │       ├── push downs: [filters: [is_not_null(data_source_a.entity_id (#5)) and is_not_null(data_source_a.source_id (#6)) and is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#13) AS Int64 NULL) AS Timestamp NULL) AS Date NULL)) and assume_true_on_error(is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#13) AS Int64 NULL) AS Timestamp NULL) AS Date NULL)))], limit: NONE]
                                     │       ├── apply join filters: [#2, #3]
                                     │       ├── virtual columns: [content_object['event_date']]
                                     │       └── estimated rows: 1.00
@@ -641,8 +645,8 @@ EvalScalar
                                         ├── read size: < 1 KiB
                                         ├── partitions total: 1
                                         ├── partitions scanned: 1
-                                        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-                                        ├── push downs: [filters: [is_true(config_table.process_mode (#12) = 'standard_mode')], limit: NONE]
+                                        ├── pruning stats: [segments: <read cost: 1 ms, decompress cost: 1 ms, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+                                        ├── push downs: [filters: [config_table.process_mode (#12) = 'standard_mode' and is_not_null(config_table.entity_id (#10)) and is_not_null(config_table.source_id (#11))], limit: NONE]
                                         ├── apply join filters: [#2, #3, #0, #1]
                                         └── estimated rows: 1.00
 
@@ -762,18 +766,22 @@ CommitSink
                 │   ├── output columns: [data_staging.data_object['unique_key'] (#1), data_staging.data_object['metadata']['category_id'] (#2), reference_time (#3)]
                 │   ├── expressions: [1624900000000]
                 │   ├── estimated rows: 1.00
-                │   └── TableScan
-                │       ├── table: default.test_virtual_db.data_staging
-                │       ├── scan id: 0
-                │       ├── output columns: [data_object['unique_key'] (#1), data_object['metadata']['category_id'] (#2)]
-                │       ├── read rows: 1
-                │       ├── read size: < 1 KiB
-                │       ├── partitions total: 1
-                │       ├── partitions scanned: 1
-                │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                │       ├── push downs: [filters: [], limit: NONE]
-                │       ├── virtual columns: [data_object['metadata']['category_id'], data_object['unique_key']]
-                │       └── estimated rows: 1.00
+                │   └── Filter
+                │       ├── output columns: [data_staging.data_object['unique_key'] (#1), data_staging.data_object['metadata']['category_id'] (#2)]
+                │       ├── filters: [is_not_null(data_staging.data_object['unique_key'] (#1)), is_not_null(data_staging.data_object['metadata']['category_id'] (#2))]
+                │       ├── estimated rows: 1.00
+                │       └── TableScan
+                │           ├── table: default.test_virtual_db.data_staging
+                │           ├── scan id: 0
+                │           ├── output columns: [data_object['unique_key'] (#1), data_object['metadata']['category_id'] (#2)]
+                │           ├── read rows: 1
+                │           ├── read size: < 1 KiB
+                │           ├── partitions total: 1
+                │           ├── partitions scanned: 1
+                │           ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                │           ├── push downs: [filters: [is_not_null(data_staging.data_object['unique_key'] (#1)) and is_not_null(data_staging.data_object['metadata']['category_id'] (#2))], limit: NONE]
+                │           ├── virtual columns: [data_object['metadata']['category_id'], data_object['unique_key']]
+                │           └── estimated rows: 1.00
                 └── TableScan(Probe)
                     ├── table: default.test_virtual_db.data_main
                     ├── scan id: 1
@@ -783,7 +791,7 @@ CommitSink
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                    ├── push downs: [filters: [], limit: NONE]
+                    ├── push downs: [filters: [is_not_null(data_main.record_id (#4)) and is_not_null(data_main.category_id (#5))], limit: NONE]
                     ├── apply join filters: [#0, #1]
                     └── estimated rows: 1.00
 

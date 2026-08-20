@@ -230,7 +230,10 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             name: "left_outer_disjoint_bounds",
             description: "A disjoint LEFT join preserves its outer input and NULL-extends every column on the nullable side, including non-key payloads.",
             sql: "SELECT * FROM l LEFT JOIN r ON l.k = r.k",
-            expected_join_type: JoinType::Right,
+            // With the derived is_not_null(r.k) filter, r's estimate drops to
+            // match l's (both 4 rows), so the join keeps its original
+            // orientation instead of flipping sides.
+            expected_join_type: JoinType::Left,
             left: sql_join_table("CREATE TABLE l(k INT NULL)", 4, [(
                 "k",
                 r#"{"min": 1, "max": 3, "ndv": 3, "null_count": 1}"#,

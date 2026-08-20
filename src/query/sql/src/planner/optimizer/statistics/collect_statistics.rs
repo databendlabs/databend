@@ -231,17 +231,17 @@ impl CollectStatisticsOptimizer {
                             && let Some(probability) =
                                 row_level.sample_probability(stats.num_rows)?
                         {
-                            let rand_expr = ScalarExpr::FunctionCall(FunctionCall {
-                                span: None,
-                                func_name: "rand".to_string(),
-                                params: vec![],
-                                arguments: vec![],
-                            });
-                            let filter = ScalarExpr::FunctionCall(FunctionCall {
-                                span: None,
-                                func_name: "lte".to_string(),
-                                params: vec![],
-                                arguments: vec![
+                            let rand_expr = ScalarExpr::FunctionCall(FunctionCall::new(
+                                None,
+                                "rand".to_string(),
+                                vec![],
+                                vec![],
+                            ));
+                            let filter = ScalarExpr::FunctionCall(FunctionCall::new(
+                                None,
+                                "lte".to_string(),
+                                vec![],
+                                vec![
                                     rand_expr,
                                     ScalarExpr::ConstantExpr(ConstantExpr {
                                         span: None,
@@ -250,7 +250,7 @@ impl CollectStatisticsOptimizer {
                                         ))),
                                     }),
                                 ],
-                            });
+                            ));
                             s_expr = SExpr::create_unary(
                                 Arc::new(
                                     Filter {

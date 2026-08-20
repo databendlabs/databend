@@ -104,8 +104,8 @@ Filter
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 5.00
+                ├── push downs: [filters: [is_not_null(t_nullable.c1 (#0))], limit: NONE]
+                └── estimated rows: 3.00
 
 query II
 select t3.c1, t3.c2
@@ -193,8 +193,8 @@ HashJoin
 │               ├── partitions total: 1
 │               ├── partitions scanned: 1
 │               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│               ├── push downs: [filters: [], limit: NONE]
-│               └── estimated rows: 5.00
+│               ├── push downs: [filters: [is_not_null(t_nullable.c1 (#3))], limit: NONE]
+│               └── estimated rows: 3.00
 └── Filter(Probe)
     ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
     ├── filters: [is_true(sum(c2) (#2) = 10)]
@@ -217,9 +217,9 @@ HashJoin
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                ├── push downs: [filters: [], limit: NONE]
+                ├── push downs: [filters: [is_not_null(t_nullable.c1 (#0))], limit: NONE]
                 ├── apply join filters: [#0]
-                └── estimated rows: 5.00
+                └── estimated rows: 3.00
 
 query II
 select t3.c1, t3.c2
@@ -523,20 +523,20 @@ on t3.c1 = t4.c1
 Filter
 ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
 ├── filters: [is_true(c1 (#0) = t3.c1 (#0))]
-├── estimated rows: 0.26
+├── estimated rows: 0.30
 └── Filter
     ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
     ├── filters: [is_true(sum(c2) (#2) > 0)]
-    ├── estimated rows: 1.28
+    ├── estimated rows: 1.50
     └── AggregateFinal
         ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
         ├── group by: [c1]
         ├── aggregate functions: [sum(c2)]
-        ├── estimated rows: 2.56
+        ├── estimated rows: 3.00
         └── AggregatePartial
             ├── group by: [c1]
             ├── aggregate functions: [sum(c2)]
-            ├── estimated rows: 2.56
+            ├── estimated rows: 3.00
             └── TableScan
                 ├── table: default.eliminate_self_join.t_nullable
                 ├── scan id: 0
@@ -546,8 +546,8 @@ Filter
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                ├── push downs: [filters: [t_nullable.c2 (#1) > 15], limit: NONE]
-                └── estimated rows: 4.27
+                ├── push downs: [filters: [t_nullable.c2 (#1) > 15 and is_not_null(t_nullable.c1 (#0))], limit: NONE]
+                └── estimated rows: 3.00
 
 query II
 select t3.c1, t3.c2
@@ -599,20 +599,20 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:t3.c1 (#0), probe targets:[t4.c1 (#3)@scan1], filter type:bloom,inlist,min_max
-├── estimated rows: 1.28
+├── estimated rows: 1.50
 ├── Filter(Build)
 │   ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
 │   ├── filters: [is_true(sum(c2) (#2) > 0)]
-│   ├── estimated rows: 1.28
+│   ├── estimated rows: 1.50
 │   └── AggregateFinal
 │       ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
 │       ├── group by: [c1]
 │       ├── aggregate functions: [sum(c2)]
-│       ├── estimated rows: 2.56
+│       ├── estimated rows: 3.00
 │       └── AggregatePartial
 │           ├── group by: [c1]
 │           ├── aggregate functions: [sum(c2)]
-│           ├── estimated rows: 2.56
+│           ├── estimated rows: 3.00
 │           └── TableScan
 │               ├── table: default.eliminate_self_join.t_nullable
 │               ├── scan id: 0
@@ -622,17 +622,17 @@ HashJoin
 │               ├── partitions total: 1
 │               ├── partitions scanned: 1
 │               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│               ├── push downs: [filters: [t_nullable.c2 (#1) > 15], limit: NONE]
-│               └── estimated rows: 4.27
+│               ├── push downs: [filters: [t_nullable.c2 (#1) > 15 and is_not_null(t_nullable.c1 (#0))], limit: NONE]
+│               └── estimated rows: 3.00
 └── AggregateFinal(Probe)
     ├── output columns: [t_nullable.c1 (#3)]
     ├── group by: [c1]
     ├── aggregate functions: []
-    ├── estimated rows: 1.83
+    ├── estimated rows: 3.00
     └── AggregatePartial
         ├── group by: [c1]
         ├── aggregate functions: []
-        ├── estimated rows: 1.83
+        ├── estimated rows: 3.00
         └── TableScan
             ├── table: default.eliminate_self_join.t_nullable
             ├── scan id: 1
@@ -642,9 +642,9 @@ HashJoin
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            ├── push downs: [filters: [t_nullable.c2 (#4) > 25], limit: NONE]
+            ├── push downs: [filters: [t_nullable.c2 (#4) > 25 and is_not_null(t_nullable.c1 (#3))], limit: NONE]
             ├── apply join filters: [#0]
-            └── estimated rows: 3.05
+            └── estimated rows: 3.00
 
 query II
 select t3.c1, t3.c2
@@ -694,20 +694,20 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:t3.c1 (#0), probe targets:[t4.c1 (#3)@scan1], filter type:bloom,inlist,min_max
-├── estimated rows: 1.28
+├── estimated rows: 1.50
 ├── Filter(Build)
 │   ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
 │   ├── filters: [is_true(sum(c2) (#2) > 0)]
-│   ├── estimated rows: 1.28
+│   ├── estimated rows: 1.50
 │   └── AggregateFinal
 │       ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
 │       ├── group by: [c1]
 │       ├── aggregate functions: [sum(c2)]
-│       ├── estimated rows: 2.56
+│       ├── estimated rows: 3.00
 │       └── AggregatePartial
 │           ├── group by: [c1]
 │           ├── aggregate functions: [sum(c2)]
-│           ├── estimated rows: 2.56
+│           ├── estimated rows: 3.00
 │           └── TableScan
 │               ├── table: default.eliminate_self_join.t_nullable
 │               ├── scan id: 0
@@ -717,8 +717,8 @@ HashJoin
 │               ├── partitions total: 1
 │               ├── partitions scanned: 1
 │               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│               ├── push downs: [filters: [t_nullable.c2 (#1) > 15], limit: NONE]
-│               └── estimated rows: 4.27
+│               ├── push downs: [filters: [t_nullable.c2 (#1) > 15 and is_not_null(t_nullable.c1 (#0))], limit: NONE]
+│               └── estimated rows: 3.00
 └── AggregateFinal(Probe)
     ├── output columns: [t_nullable.c1 (#3)]
     ├── group by: [c1]
@@ -737,9 +737,9 @@ HashJoin
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            ├── push downs: [filters: [], limit: NONE]
+            ├── push downs: [filters: [is_not_null(t_nullable.c1 (#3))], limit: NONE]
             ├── apply join filters: [#0]
-            └── estimated rows: 5.00
+            └── estimated rows: 3.00
 
 query II
 select t3.c1, t3.c2
@@ -790,7 +790,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:t3.c1 (#0), probe targets:[t4.c1 (#3)@scan1], filter type:bloom,inlist,min_max
-├── estimated rows: 0.30
+├── estimated rows: 0.50
 ├── Filter(Build)
 │   ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
 │   ├── filters: [is_true(sum(c2) (#2) > 0)]
@@ -813,7 +813,7 @@ HashJoin
 │               ├── partitions total: 1
 │               ├── partitions scanned: 1
 │               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│               ├── push downs: [filters: [rand() < 0.5], limit: NONE]
+│               ├── push downs: [filters: [rand() < 0.5 and is_not_null(t_nullable.c1 (#0))], limit: NONE]
 │               └── estimated rows: 1.00
 └── AggregateFinal(Probe)
     ├── output columns: [t_nullable.c1 (#3)]
@@ -833,7 +833,7 @@ HashJoin
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            ├── push downs: [filters: [rand() < 0.5], limit: NONE]
+            ├── push downs: [filters: [rand() < 0.5 and is_not_null(t_nullable.c1 (#3))], limit: NONE]
             ├── apply join filters: [#0]
             └── estimated rows: 1.00
 
@@ -883,7 +883,7 @@ Filter
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                ├── push downs: [filters: [t_nullable.c2 (#1) > 15 and t_nullable.c1 (#0) < 3], limit: NONE]
+                ├── push downs: [filters: [t_nullable.c2 (#1) > 15 and t_nullable.c1 (#0) < 3 and is_not_null(t_nullable.c1 (#0))], limit: NONE]
                 └── estimated rows: 2.00
 
 query II
@@ -928,20 +928,20 @@ on t3.c1 = t4.c1
 Filter
 ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
 ├── filters: [is_true(c1 (#0) = t3.c1 (#0))]
-├── estimated rows: 0.26
+├── estimated rows: 0.30
 └── Filter
     ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
     ├── filters: [is_true(sum(c2) (#2) > 0)]
-    ├── estimated rows: 1.28
+    ├── estimated rows: 1.50
     └── AggregateFinal
         ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
         ├── group by: [c1]
         ├── aggregate functions: [sum(c2)]
-        ├── estimated rows: 2.56
+        ├── estimated rows: 3.00
         └── AggregatePartial
             ├── group by: [c1]
             ├── aggregate functions: [sum(c2)]
-            ├── estimated rows: 2.56
+            ├── estimated rows: 3.00
             └── TableScan
                 ├── table: default.eliminate_self_join.t_nullable
                 ├── scan id: 0
@@ -951,8 +951,8 @@ Filter
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                ├── push downs: [filters: [t_nullable.c2 (#1) > 15], limit: NONE]
-                └── estimated rows: 4.27
+                ├── push downs: [filters: [t_nullable.c2 (#1) > 15 and is_not_null(t_nullable.c1 (#0))], limit: NONE]
+                └── estimated rows: 3.00
 
 # A filtered CTE referenced twice: with inlining the same predicate is pushed
 # into both scans, so the self join is eliminated.
@@ -970,24 +970,24 @@ on a.c1 = b.c1
 EvalScalar
 ├── output columns: [t_nullable.c1 (#0), sum(c2) (#2)]
 ├── expressions: [c1 (#3), sum(c2) (#5)]
-├── estimated rows: 0.26
+├── estimated rows: 0.30
 └── Filter
     ├── output columns: [sum(c2) (#5), t_nullable.c1 (#3)]
     ├── filters: [is_true(c1 (#3) = b.c1 (#3))]
-    ├── estimated rows: 0.26
+    ├── estimated rows: 0.30
     └── Filter
         ├── output columns: [sum(c2) (#5), t_nullable.c1 (#3)]
         ├── filters: [is_true(sum(c2) (#5) > 25)]
-        ├── estimated rows: 1.28
+        ├── estimated rows: 1.50
         └── AggregateFinal
             ├── output columns: [sum(c2) (#5), t_nullable.c1 (#3)]
             ├── group by: [c1]
             ├── aggregate functions: [sum(c2)]
-            ├── estimated rows: 2.56
+            ├── estimated rows: 3.00
             └── AggregatePartial
                 ├── group by: [c1]
                 ├── aggregate functions: [sum(c2)]
-                ├── estimated rows: 2.56
+                ├── estimated rows: 3.00
                 └── TableScan
                     ├── table: default.eliminate_self_join.t_nullable
                     ├── scan id: 1
@@ -997,8 +997,8 @@ EvalScalar
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                    ├── push downs: [filters: [t_nullable.c2 (#4) > 15], limit: NONE]
-                    └── estimated rows: 4.27
+                    ├── push downs: [filters: [t_nullable.c2 (#4) > 15 and is_not_null(t_nullable.c1 (#3))], limit: NONE]
+                    └── estimated rows: 3.00
 
 query II
 with v as (select c1, c2 from t_nullable where c2 > 15)

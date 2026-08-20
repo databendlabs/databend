@@ -31,7 +31,7 @@ Sequence
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(cte_prune_t.a (#0) > 0)], limit: NONE]
+│       ├── push downs: [filters: [is_not_null(cte_prune_t.a (#0)) and cte_prune_t.a (#0) > 0], limit: NONE]
 │       └── estimated rows: 2.00
 └── HashJoin
     ├── output columns: [cte_prune_t.a (#4), cte_prune_t.c (#10)]
@@ -45,7 +45,7 @@ Sequence
     ├── estimated rows: 2.00
     ├── Filter(Build)
     │   ├── output columns: [cte_prune_t.a (#8), cte_prune_t.c (#10)]
-    │   ├── filters: [is_true(y.a (#8) > 0)]
+    │   ├── filters: [is_not_null(y.a (#8)), is_true(y.a (#8) > 0)]
     │   ├── estimated rows: 2.00
     │   └── MaterializeCTERef
     │       ├── cte_name: cte
@@ -53,7 +53,7 @@ Sequence
     │       └── estimated rows: 2.00
     └── Filter(Probe)
         ├── output columns: [cte_prune_t.a (#4)]
-        ├── filters: [is_true(x.a (#4) > 0)]
+        ├── filters: [is_not_null(x.a (#4)), is_true(x.a (#4) > 0)]
         ├── estimated rows: 2.00
         └── MaterializeCTERef
             ├── cte_name: cte
@@ -78,7 +78,7 @@ Sequence
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [], limit: NONE]
+│       ├── push downs: [filters: [is_not_null(cte_prune_t.a (#0))], limit: NONE]
 │       └── estimated rows: 3.00
 └── HashJoin
     ├── output columns: [cte_prune_t.b (#5), cte_prune_t.c (#10)]
@@ -90,14 +90,22 @@ Sequence
     ├── build join filters:
     │   └── filter id:0, build key:y.a (#8), probe targets:[x.a (#4)@scan1], filter type:bloom,inlist,min_max
     ├── estimated rows: 3.00
-    ├── MaterializeCTERef(Build)
-    │   ├── cte_name: cte
-    │   ├── cte_schema: [a (#8), b (#9), c (#10)]
-    │   └── estimated rows: 3.00
-    └── MaterializeCTERef(Probe)
-        ├── cte_name: cte
-        ├── cte_schema: [a (#4), b (#5), c (#6)]
-        └── estimated rows: 3.00
+    ├── Filter(Build)
+    │   ├── output columns: [cte_prune_t.a (#8), cte_prune_t.c (#10)]
+    │   ├── filters: [is_not_null(y.a (#8))]
+    │   ├── estimated rows: 3.00
+    │   └── MaterializeCTERef
+    │       ├── cte_name: cte
+    │       ├── cte_schema: [a (#8), b (#9), c (#10)]
+    │       └── estimated rows: 3.00
+    └── Filter(Probe)
+        ├── output columns: [cte_prune_t.a (#4), cte_prune_t.b (#5)]
+        ├── filters: [is_not_null(x.a (#4))]
+        ├── estimated rows: 3.00
+        └── MaterializeCTERef
+            ├── cte_name: cte
+            ├── cte_schema: [a (#4), b (#5), c (#6)]
+            └── estimated rows: 3.00
 
 query T nosort
 explain
@@ -122,7 +130,7 @@ Sequence
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [], limit: NONE]
+│       ├── push downs: [filters: [is_not_null(cte_prune_t.a (#0))], limit: NONE]
 │       └── estimated rows: 3.00
 └── Sequence
     ├── MaterializedCTE: outer_cte
@@ -136,14 +144,22 @@ Sequence
     │       ├── build join filters:
     │       │   └── filter id:0, build key:y.a (#8), probe targets:[x.a (#4)@scan1], filter type:bloom,inlist,min_max
     │       ├── estimated rows: 3.00
-    │       ├── MaterializeCTERef(Build)
-    │       │   ├── cte_name: inner_cte
-    │       │   ├── cte_schema: [a (#8)]
-    │       │   └── estimated rows: 3.00
-    │       └── MaterializeCTERef(Probe)
-    │           ├── cte_name: inner_cte
-    │           ├── cte_schema: [a (#4)]
-    │           └── estimated rows: 3.00
+    │       ├── Filter(Build)
+    │       │   ├── output columns: [cte_prune_t.a (#8)]
+    │       │   ├── filters: [is_not_null(y.a (#8))]
+    │       │   ├── estimated rows: 3.00
+    │       │   └── MaterializeCTERef
+    │       │       ├── cte_name: inner_cte
+    │       │       ├── cte_schema: [a (#8)]
+    │       │       └── estimated rows: 3.00
+    │       └── Filter(Probe)
+    │           ├── output columns: [cte_prune_t.a (#4)]
+    │           ├── filters: [is_not_null(x.a (#4))]
+    │           ├── estimated rows: 3.00
+    │           └── MaterializeCTERef
+    │               ├── cte_name: inner_cte
+    │               ├── cte_schema: [a (#4)]
+    │               └── estimated rows: 3.00
     └── HashJoin
         ├── output columns: [cte_prune_t.a (#12)]
         ├── join type: INNER
@@ -154,14 +170,22 @@ Sequence
         ├── build join filters:
         │   └── filter id:1, build key:y.a (#20), probe targets:[x.a (#12)@scan3], filter type:bloom,inlist,min_max
         ├── estimated rows: 3.00
-        ├── MaterializeCTERef(Build)
-        │   ├── cte_name: outer_cte
-        │   ├── cte_schema: [a (#20)]
-        │   └── estimated rows: 3.00
-        └── MaterializeCTERef(Probe)
-            ├── cte_name: outer_cte
-            ├── cte_schema: [a (#12)]
-            └── estimated rows: 3.00
+        ├── Filter(Build)
+        │   ├── output columns: [cte_prune_t.a (#20)]
+        │   ├── filters: [is_not_null(y.a (#20))]
+        │   ├── estimated rows: 3.00
+        │   └── MaterializeCTERef
+        │       ├── cte_name: outer_cte
+        │       ├── cte_schema: [a (#20)]
+        │       └── estimated rows: 3.00
+        └── Filter(Probe)
+            ├── output columns: [cte_prune_t.a (#12)]
+            ├── filters: [is_not_null(x.a (#12))]
+            ├── estimated rows: 3.00
+            └── MaterializeCTERef
+                ├── cte_name: outer_cte
+                ├── cte_schema: [a (#12)]
+                └── estimated rows: 3.00
 
 query T nosort
 explain
@@ -191,7 +215,7 @@ Sequence
 │           ├── partitions total: 1
 │           ├── partitions scanned: 1
 │           ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│           ├── push downs: [filters: [], limit: NONE]
+│           ├── push downs: [filters: [is_not_null(cte_prune_t.a (#0))], limit: NONE]
 │           └── estimated rows: 3.00
 └── EvalScalar
     ├── output columns: [1 (#17)]
@@ -211,14 +235,22 @@ Sequence
             ├── build join filters:
             │   └── filter id:0, build key:y.a (#10), probe targets:[x.a (#5)@scan1], filter type:bloom,inlist,min_max
             ├── estimated rows: 3.00
-            ├── MaterializeCTERef(Build)
-            │   ├── cte_name: inner_cte
-            │   ├── cte_schema: [a (#10), arr (#14)]
-            │   └── estimated rows: 3.00
-            └── MaterializeCTERef(Probe)
-                ├── cte_name: inner_cte
-                ├── cte_schema: [a (#5), arr (#9)]
-                └── estimated rows: 3.00
+            ├── Filter(Build)
+            │   ├── output columns: [cte_prune_t.a (#10)]
+            │   ├── filters: [is_not_null(y.a (#10))]
+            │   ├── estimated rows: 3.00
+            │   └── MaterializeCTERef
+            │       ├── cte_name: inner_cte
+            │       ├── cte_schema: [a (#10), arr (#14)]
+            │       └── estimated rows: 3.00
+            └── Filter(Probe)
+                ├── output columns: [cte_prune_t.a (#5), arr (#9)]
+                ├── filters: [is_not_null(x.a (#5))]
+                ├── estimated rows: 3.00
+                └── MaterializeCTERef
+                    ├── cte_name: inner_cte
+                    ├── cte_schema: [a (#5), arr (#9)]
+                    └── estimated rows: 3.00
 
 statement ok
 drop table cte_prune_t;

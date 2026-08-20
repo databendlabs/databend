@@ -86,10 +86,45 @@ impl PullUpFilterOptimizer {
 
     fn pull_up_filter(&mut self, s_expr: &SExpr, filter: &Filter) -> Result<SExpr> {
         let child = self.pull_up(s_expr.child(0)?)?;
+        let mut kept_predicates = vec![];
         for predicate in filter.predicates.iter() {
-            self.predicates.extend(conjunctions(predicate).cloned());
+            // Optimizer-derived predicates (e.g. `is_not_null` from the null
+            // addition rule) are only guaranteed by an operator *below* this
+            // filter — pulling them up detaches them from that operator and
+            // lets them participate in inference or join rewrites they must
+            // not influence. Keep them in place.
+            //
+            // Classify per conjunct, not per list item: a conjunction scalar
+            // that mixes derived and user predicates has an untagged root, so
+            // checking the root alone would leak the derived conjunct into
+            // the inference set. `conjunctions` yields the predicate itself
+            // when it is not an `and`/`and_filters` call, so a standalone
+            // derived conjunct is kept whole.
+            if predicate.is_derived() {
+                kept_predicates.push(predicate.clone());
+                continue;
+            }
+            for conjunct in conjunctions(predicate) {
+                if conjunct.is_derived() {
+                    kept_predicates.push(conjunct.clone());
+                } else {
+                    self.predicates.push(conjunct.clone());
+                }
+            }
         }
-        Ok(child)
+        if kept_predicates.is_empty() {
+            Ok(child)
+        } else {
+            Ok(SExpr::create_unary(
+                Arc::new(
+                    Filter {
+                        predicates: kept_predicates,
+                    }
+                    .into(),
+                ),
+                Arc::new(child),
+            ))
+        }
     }
 
     fn pull_up_join(&mut self, s_expr: &SExpr, join: &Join) -> Result<SExpr> {
@@ -125,12 +160,12 @@ impl PullUpFilterOptimizer {
         let mut join = join.clone();
         if left_need_pull_up && right_need_pull_up {
             for condition in std::mem::take(&mut join.equi_conditions) {
-                let predicate = ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "eq".to_string(),
-                    params: vec![],
-                    arguments: vec![condition.left, condition.right],
-                });
+                let predicate = ScalarExpr::FunctionCall(FunctionCall::new(
+                    None,
+                    "eq".to_string(),
+                    vec![],
+                    vec![condition.left, condition.right],
+                ));
                 self.predicates.push(predicate);
             }
             for predicate in std::mem::take(&mut join.non_equi_conditions) {

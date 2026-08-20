@@ -112,7 +112,7 @@ RowFetch
                     │       ├── partitions total: 1
                     │       ├── partitions scanned: 1
                     │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                    │       ├── push downs: [filters: [is_true(lazy_join_t1.create_time (#3) >= '2021-01-02 00:00:00.000000')], limit: NONE]
+                    │       ├── push downs: [filters: [lazy_join_t1.create_time (#3) >= '2021-01-02 00:00:00.000000' and is_not_null(lazy_join_t1.id (#0))], limit: NONE]
                     │       └── estimated rows: 2.67
                     └── TableScan(Probe)
                         ├── table: default.default.lazy_join_t2
@@ -123,7 +123,7 @@ RowFetch
                         ├── partitions total: 1
                         ├── partitions scanned: 1
                         ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                        ├── push downs: [filters: [], limit: NONE]
+                        ├── push downs: [filters: [is_not_null(lazy_join_t2.id (#4))], limit: NONE]
                         ├── apply join filters: [#0]
                         └── estimated rows: 3.00
 
@@ -193,6 +193,6 @@ RowFetch
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                    ├── push downs: [filters: [], limit: NONE]
+                    ├── push downs: [filters: [is_not_null(lazy_join_t2.id (#4))], limit: NONE]
                     ├── apply join filters: [#0]
                     └── estimated rows: 3.00

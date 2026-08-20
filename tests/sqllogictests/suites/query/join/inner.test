@@ -132,3 +132,33 @@ select a.number, pt,register_at from ( select number,  to_yyyymmdd(to_timestamp(
 7 19700101 19700101
 8 19700101 19700101
 9 19700101 19700101
+
+# Derived is_not_null on a computed join key must not introduce new errors:
+# the dirty row is removed by the user predicate before the key is evaluated.
+statement ok
+CREATE OR REPLACE TABLE t_na_t1(d DATE)
+
+statement ok
+CREATE OR REPLACE TABLE t_na_t2(s STRING, flag INT)
+
+statement ok
+INSERT INTO t_na_t1 VALUES ('2024-01-01')
+
+statement ok
+INSERT INTO t_na_t2 VALUES ('2024-01-01', 1), ('not-a-date', 2)
+
+query T
+SELECT * FROM t_na_t1 JOIN (SELECT CAST(s AS DATE) AS sd, flag FROM t_na_t2) v ON t_na_t1.d = v.sd WHERE v.flag = 1
+----
+2024-01-01 2024-01-01 1
+
+# The dirty row survives the user predicate here, so the join key evaluation
+# must still raise the cast error: derived filters defer errors, never swallow.
+statement error
+SELECT * FROM t_na_t1 JOIN (SELECT CAST(s AS DATE) AS sd, flag FROM t_na_t2) v ON t_na_t1.d = v.sd WHERE v.flag IN (1, 2)
+
+statement ok
+DROP TABLE t_na_t1
+
+statement ok
+DROP TABLE t_na_t2

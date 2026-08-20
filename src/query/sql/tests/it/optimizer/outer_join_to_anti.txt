@@ -33,7 +33,7 @@ EvalScalar
     ├── other filters: []
     ├── Scan
     │   ├── table: default.outer_to_anti_right (#1)
-    │   ├── filters: []
+    │   ├── filters: [is_not_null(outer_to_anti_right.k (#3))]
     │   ├── order by: []
     │   └── limit: NONE
     └── Scan
@@ -78,7 +78,7 @@ EvalScalar
     ├── other filters: []
     ├── Scan
     │   ├── table: default.outer_to_anti_right (#1)
-    │   ├── filters: []
+    │   ├── filters: [is_not_null(outer_to_anti_right.k (#3))]
     │   ├── order by: []
     │   └── limit: NONE
     └── Scan
@@ -130,7 +130,7 @@ EvalScalar
         ├── other filters: []
         ├── Scan
         │   ├── table: default.outer_to_anti_right (#1)
-        │   ├── filters: []
+        │   ├── filters: [is_not_null(outer_to_anti_right.k (#3)), is_not_null(outer_to_anti_right.item (#4))]
         │   ├── order by: []
         │   └── limit: NONE
         └── Scan
@@ -175,7 +175,7 @@ Filter
     ├── other filters: []
     ├── Scan
     │   ├── table: default.outer_to_anti_right (#1)
-    │   ├── filters: []
+    │   ├── filters: [is_not_null(outer_to_anti_right.k (#3))]
     │   ├── order by: []
     │   └── limit: NONE
     └── Scan
@@ -220,7 +220,7 @@ EvalScalar
     ├── other filters: []
     ├── Scan
     │   ├── table: default.outer_to_anti_left (#0)
-    │   ├── filters: []
+    │   ├── filters: [is_not_null(outer_to_anti_left.k (#0))]
     │   ├── order by: []
     │   └── limit: NONE
     └── Scan
@@ -265,7 +265,7 @@ EvalScalar
     ├── other filters: []
     ├── Scan
     │   ├── table: default.outer_to_anti_left (#0)
-    │   ├── filters: []
+    │   ├── filters: [is_not_null(outer_to_anti_left.k (#0))]
     │   ├── order by: []
     │   └── limit: NONE
     └── Scan
@@ -317,7 +317,7 @@ EvalScalar
         ├── other filters: []
         ├── Scan
         │   ├── table: default.outer_to_anti_left (#0)
-        │   ├── filters: []
+        │   ├── filters: [is_not_null(outer_to_anti_left.k (#0)), is_not_null(outer_to_anti_left.item (#1))]
         │   ├── order by: []
         │   └── limit: NONE
         └── Scan
@@ -362,7 +362,7 @@ Filter
     ├── other filters: []
     ├── Scan
     │   ├── table: default.outer_to_anti_left (#0)
-    │   ├── filters: []
+    │   ├── filters: [is_not_null(outer_to_anti_left.k (#0))]
     │   ├── order by: []
     │   └── limit: NONE
     └── Scan

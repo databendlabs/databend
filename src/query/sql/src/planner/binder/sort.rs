@@ -360,12 +360,12 @@ impl Binder {
                         )
                     })
                     .collect::<Result<Vec<_>>>()?;
-                Ok(ScalarExpr::FunctionCall(FunctionCall {
-                    span: func.span,
-                    func_name: func.func_name.clone(),
-                    params: func.params.clone(),
+                Ok(ScalarExpr::FunctionCall(FunctionCall::new(
+                    func.span,
+                    func.func_name.clone(),
+                    func.params.clone(),
                     arguments,
-                }))
+                )))
             }
             ScalarExpr::CastExpr(CastExpr {
                 span,

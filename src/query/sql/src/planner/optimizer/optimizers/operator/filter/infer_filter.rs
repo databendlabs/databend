@@ -689,15 +689,15 @@ impl<'a> InferFilterOptimizer<'a> {
             let parent_index = Self::find(&mut parents, *index);
             let parent_predicates = &self.expr_predicates[parent_index];
             for predicate in parent_predicates.iter() {
-                result.push(ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: String::from(predicate.op.to_func_name()),
-                    params: vec![],
-                    arguments: vec![
+                result.push(ScalarExpr::FunctionCall(FunctionCall::new(
+                    None,
+                    String::from(predicate.op.to_func_name()),
+                    vec![],
+                    vec![
                         expr.clone(),
                         ScalarExpr::ConstantExpr(predicate.constant.clone()),
                     ],
-                }));
+                )));
             }
         }
 
@@ -711,15 +711,15 @@ impl<'a> InferFilterOptimizer<'a> {
                     let equal_indexes_len = equal_indexes.len();
                     for i in 0..equal_indexes_len {
                         for j in i + 1..equal_indexes_len {
-                            result.push(ScalarExpr::FunctionCall(FunctionCall {
-                                span: None,
-                                func_name: String::from(ComparisonOp::Equal.to_func_name()),
-                                params: vec![],
-                                arguments: vec![
+                            result.push(ScalarExpr::FunctionCall(FunctionCall::new(
+                                None,
+                                String::from(ComparisonOp::Equal.to_func_name()),
+                                vec![],
+                                vec![
                                     self.exprs[equal_indexes[i]].clone(),
                                     self.exprs[equal_indexes[j]].clone(),
                                 ],
-                            }));
+                            )));
                         }
                     }
                 }

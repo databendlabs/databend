@@ -47,17 +47,17 @@ Aggregate(Final)
         │   ├── other filters: []
         │   ├── Scan
         │   │   ├── table: current_time_selectivity.fact_events (#0)
-        │   │   ├── filters: [gte(fact_events.event_time (#1), subtract_hours(now(), 24))]
+        │   │   ├── filters: [gte(fact_events.event_time (#1), subtract_hours(now(), 24)), is_not_null(fact_events.customer_id (#0))]
         │   │   ├── order by: []
         │   │   └── limit: NONE
         │   └── Scan
         │       ├── table: current_time_selectivity.customers (#1)
-        │       ├── filters: []
+        │       ├── filters: [is_not_null(customers.customer_id (#2)), is_not_null(customers.segment_id (#3))]
         │       ├── order by: []
         │       └── limit: NONE
         └── Scan
             ├── table: current_time_selectivity.segments (#2)
-            ├── filters: []
+            ├── filters: [is_not_null(segments.segment_id (#4))]
             ├── order by: []
             └── limit: NONE
 

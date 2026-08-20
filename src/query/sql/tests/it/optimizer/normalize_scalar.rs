@@ -94,15 +94,14 @@ fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> Scala
         }),
         RawExpr::FunctionCall {
             name, args, params, ..
-        } => ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: name.clone(),
-            params: params.clone(),
-            arguments: args
-                .iter()
+        } => ScalarExpr::FunctionCall(FunctionCall::new(
+            None,
+            name.clone(),
+            params.clone(),
+            args.iter()
                 .map(|arg| raw_expr_to_scalar(arg, columns))
                 .collect(),
-        }),
+        )),
         RawExpr::LambdaFunctionCall { .. } => {
             unreachable!("lambda expressions are not used in tests")
         }

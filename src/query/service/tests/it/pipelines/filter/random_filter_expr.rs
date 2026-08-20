@@ -103,12 +103,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 let child_expr = convert_predicate_tree_to_scalar_expr(child, data_type);
                 and_args.push(child_expr);
             }
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "and".to_string(),
-                params: vec![],
-                arguments: and_args,
-            })
+            ScalarExpr::FunctionCall(FunctionCall::new(None, "and".to_string(), vec![], and_args))
         }
         PredicateNode::Or(children) => {
             let mut or_args = Vec::with_capacity(children.len());
@@ -116,21 +111,13 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 let child_expr = convert_predicate_tree_to_scalar_expr(child, data_type);
                 or_args.push(child_expr);
             }
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "or".to_string(),
-                params: vec![],
-                arguments: or_args,
-            })
+            ScalarExpr::FunctionCall(FunctionCall::new(None, "or".to_string(), vec![], or_args))
         }
         PredicateNode::Not(child) => {
             let child_expr = convert_predicate_tree_to_scalar_expr(*child, data_type);
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "not".to_string(),
-                params: vec![],
-                arguments: vec![child_expr],
-            })
+            ScalarExpr::FunctionCall(FunctionCall::new(None, "not".to_string(), vec![], vec![
+                child_expr,
+            ]))
         }
         PredicateNode::Leaf => {
             let mut rng = rand::thread_rng();
@@ -157,12 +144,10 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 column_name_lower: None,
             };
             let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: op.to_string(),
-                params: vec![],
-                arguments: vec![scalar_expr.clone(), scalar_expr],
-            })
+            ScalarExpr::FunctionCall(FunctionCall::new(None, op.to_string(), vec![], vec![
+                scalar_expr.clone(),
+                scalar_expr,
+            ]))
         }
     }
 }

@@ -374,10 +374,13 @@ impl<'a> Evaluator<'a> {
             args,
             ..
         } = call;
-        let child_suppress_error = function.signature.name == "is_not_error";
+        let child_suppress_error = matches!(
+            function.signature.name.as_str(),
+            "is_not_error" | "assume_true_on_error"
+        );
         // Suppression is sticky downward: once a boundary function opts in
-        // (is_not_error), nested evaluations stay suppressed so row errors
-        // bubble up to the boundary as data instead of raising midway.
+        // (is_not_error / assume_true_on_error), nested evaluations stay
+        // suppressed so row errors bubble up to the boundary as data.
         let mut child_option =
             options.with_suppress_error(options.suppress_error || child_suppress_error);
         if child_option.strict_eval && call.generics.is_empty() {
@@ -2592,10 +2595,14 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             }) => {
-                let child_suppress_error = function.signature.name == "is_not_error";
+                let child_suppress_error = matches!(
+                    function.signature.name.as_str(),
+                    "is_not_error" | "assume_true_on_error"
+                );
                 // Suppression is sticky downward: once a boundary function
-                // opts in (is_not_error), nested evaluations stay suppressed
-                // so row errors bubble up to the boundary as data.
+                // opts in (is_not_error / assume_true_on_error), nested
+                // evaluations stay suppressed so row errors bubble up to the
+                // boundary as data.
                 let mut child_option =
                     options.with_suppress_error(options.suppress_error || child_suppress_error);
                 let args = args

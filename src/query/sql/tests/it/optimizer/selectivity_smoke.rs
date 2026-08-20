@@ -46,6 +46,7 @@ use databend_common_sql::optimizer::ir::HistogramBuilder;
 use databend_common_sql::optimizer::ir::SelectivityEstimator;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
+use databend_common_sql::plans::DerivedFrom;
 use databend_common_sql::plans::FunctionCall as ScalarFunctionCall;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
@@ -76,12 +77,95 @@ fn comparison_expr(func_name: &str, left: ScalarExpr, right: ScalarExpr) -> Scal
 }
 
 fn function_expr(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
-    ScalarExpr::FunctionCall(ScalarFunctionCall {
-        span: None,
-        func_name: func_name.to_string(),
-        params: vec![],
+    ScalarExpr::FunctionCall(ScalarFunctionCall::new(
+        None,
+        func_name.to_string(),
+        vec![],
         arguments,
-    })
+    ))
+}
+
+/// Optimizer-derived predicates restate guarantees of the operator that
+/// produced them, so they must not shrink cardinality estimates unless real
+/// column statistics back them: on stats-less expressions they would pick up
+/// the default selectivity and distort estimates (e.g. `is_not_null` on an
+/// unnest output estimating 30 rows as 6).
+#[test]
+fn derived_predicate_selectivity_requires_column_stats() {
+    let nullable_ty = DataType::Number(NumberDataType::UInt64).wrap_nullable();
+    let column = column_expr("b", 0, nullable_ty);
+    let is_not_null = |derived: bool| {
+        let func = ScalarFunctionCall::new(None, "is_not_null".to_string(), vec![], vec![
+            column.clone(),
+        ]);
+        ScalarExpr::FunctionCall(if derived {
+            func.derived(DerivedFrom::NullAddition)
+        } else {
+            func
+        })
+    };
+
+    // No statistics for the column: the derived predicate is skipped entirely.
+    let mut estimator =
+        SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::estimate(30.0));
+    let rows = estimator.apply(&[is_not_null(true)]).unwrap();
+    assert_eq!(
+        rows, 30.0,
+        "derived predicate without stats must be a no-op"
+    );
+
+    // The same predicate written in the query still filters.
+    let mut estimator =
+        SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::estimate(30.0));
+    let rows = estimator.apply(&[is_not_null(false)]).unwrap();
+    assert!(rows < 30.0, "user-written predicate must apply selectivity");
+
+    // With real column statistics, the derived predicate is counted.
+    let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(0),
+        max: Datum::Int(9),
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(3),
+        histogram: None,
+    })]);
+    let mut estimator =
+        SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(30.0));
+    let rows = estimator.apply(&[is_not_null(true)]).unwrap();
+    assert!(
+        rows < 30.0,
+        "derived predicate with real null_count stats must still filter"
+    );
+
+    // A derived predicate on a computed expression (e.g. a join key inlined
+    // below an EvalScalar, optionally wrapped in assume_true_on_error) must
+    // be skipped even though the referenced column has stats: its selectivity
+    // is not exactly computable and would fall back to the default.
+    let computed_key = ScalarFunctionCall::new(None, "gt".to_string(), vec![], vec![
+        column.clone(),
+        constant_expr(Scalar::Number(NumberScalar::UInt64(1))),
+    ]);
+    let computed_pred = |wrapped: bool| {
+        let is_not_null = ScalarFunctionCall::new(None, "is_not_null".to_string(), vec![], vec![
+            ScalarExpr::FunctionCall(computed_key.clone()),
+        ]);
+        let pred = if wrapped {
+            ScalarFunctionCall::new(None, "assume_true_on_error".to_string(), vec![], vec![
+                ScalarExpr::FunctionCall(is_not_null),
+            ])
+        } else {
+            is_not_null
+        };
+        ScalarExpr::FunctionCall(pred.derived(DerivedFrom::NullAddition))
+    };
+    for wrapped in [false, true] {
+        let mut estimator =
+            SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(30.0));
+        let rows = estimator.apply(&[computed_pred(wrapped)]).unwrap();
+        assert_eq!(
+            rows, 30.0,
+            "derived predicate on a computed key must be a no-op (wrapped: {wrapped})"
+        );
+    }
 }
 
 #[test]

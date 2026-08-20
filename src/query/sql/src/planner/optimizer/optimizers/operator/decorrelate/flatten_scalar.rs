@@ -91,12 +91,12 @@ impl SubqueryDecorrelatorOptimizer {
                     .iter()
                     .map(|arg| self.flatten_scalar(arg, correlated_columns, derived_columns))
                     .collect::<Result<Vec<_>>>()?;
-                Ok(ScalarExpr::FunctionCall(FunctionCall {
-                    span: func.span,
-                    func_name: func.func_name.clone(),
-                    params: func.params.clone(),
+                Ok(ScalarExpr::FunctionCall(FunctionCall::new(
+                    func.span,
+                    func.func_name.clone(),
+                    func.params.clone(),
                     arguments,
-                }))
+                )))
             }
             ScalarExpr::CastExpr(cast_expr) => {
                 let scalar =

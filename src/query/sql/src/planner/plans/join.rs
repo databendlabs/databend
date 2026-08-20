@@ -1178,12 +1178,12 @@ mod tests {
     }
 
     fn function_call(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: func_name.to_string(),
-            params: vec![],
+        ScalarExpr::FunctionCall(FunctionCall::new(
+            None,
+            func_name.to_string(),
+            vec![],
             arguments,
-        })
+        ))
     }
 
     fn column_set(indices: &[usize]) -> ColumnSet {

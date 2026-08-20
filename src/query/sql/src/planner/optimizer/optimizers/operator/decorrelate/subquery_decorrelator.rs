@@ -521,12 +521,12 @@ impl SubqueryDecorrelatorOptimizer {
                 let scalar = if flatten_info.from_count_func && subquery.typ == SubqueryType::Scalar
                 {
                     // convert count aggregate function to `if(count() is not null, count(), 0)`
-                    let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
-                        span: subquery.span,
-                        func_name: "is_not_null".to_string(),
-                        params: vec![],
-                        arguments: vec![column_ref.clone()],
-                    });
+                    let is_not_null = ScalarExpr::FunctionCall(FunctionCall::new(
+                        subquery.span,
+                        "is_not_null".to_string(),
+                        vec![],
+                        vec![column_ref.clone()],
+                    ));
                     let cast_column_ref_to_uint64 = ScalarExpr::CastExpr(CastExpr {
                         span: subquery.span,
                         is_try: true,
@@ -542,12 +542,12 @@ impl SubqueryDecorrelatorOptimizer {
                     ScalarExpr::CastExpr(CastExpr {
                         span: subquery.span,
                         is_try: true,
-                        argument: Box::new(ScalarExpr::FunctionCall(FunctionCall {
-                            span: subquery.span,
-                            func_name: "if".to_string(),
-                            params: vec![],
-                            arguments: vec![is_not_null, cast_column_ref_to_uint64, zero],
-                        })),
+                        argument: Box::new(ScalarExpr::FunctionCall(FunctionCall::new(
+                            subquery.span,
+                            "if".to_string(),
+                            vec![],
+                            vec![is_not_null, cast_column_ref_to_uint64, zero],
+                        ))),
                         target_type: Box::new(
                             DataType::Number(NumberDataType::UInt64).wrap_nullable(),
                         ),
@@ -555,25 +555,25 @@ impl SubqueryDecorrelatorOptimizer {
                 } else if subquery.typ == SubqueryType::NotExists {
                     // Not exists subquery should be rewritten to `not(is_true(column_ref))`
                     // not null mark value will consider as:  not [null] ---> not [false] ---> true
-                    ScalarExpr::FunctionCall(FunctionCall {
-                        span: subquery.span,
-                        func_name: "not".to_string(),
-                        params: vec![],
-                        arguments: vec![ScalarExpr::FunctionCall(FunctionCall {
-                            span: subquery.span,
-                            func_name: "is_true".to_string(),
-                            params: vec![],
-                            arguments: vec![column_ref],
-                        })],
-                    })
+                    ScalarExpr::FunctionCall(FunctionCall::new(
+                        subquery.span,
+                        "not".to_string(),
+                        vec![],
+                        vec![ScalarExpr::FunctionCall(FunctionCall::new(
+                            subquery.span,
+                            "is_true".to_string(),
+                            vec![],
+                            vec![column_ref],
+                        ))],
+                    ))
                 } else if subquery.typ == SubqueryType::Exists {
                     // null value will consider as false
-                    ScalarExpr::FunctionCall(FunctionCall {
-                        span: subquery.span,
-                        func_name: "is_true".to_string(),
-                        params: vec![],
-                        arguments: vec![column_ref],
-                    })
+                    ScalarExpr::FunctionCall(FunctionCall::new(
+                        subquery.span,
+                        "is_true".to_string(),
+                        vec![],
+                        vec![column_ref],
+                    ))
                 } else {
                     column_ref
                 };
@@ -640,15 +640,15 @@ impl SubqueryDecorrelatorOptimizer {
                     ..Default::default()
                 };
 
-                let compare = FunctionCall {
-                    span: subquery.span,
-                    func_name: if subquery.typ == SubqueryType::Exists {
+                let compare = FunctionCall::new(
+                    subquery.span,
+                    if subquery.typ == SubqueryType::Exists {
                         "eq".to_string()
                     } else {
                         "noteq".to_string()
                     },
-                    params: vec![],
-                    arguments: vec![
+                    vec![],
+                    vec![
                         BoundColumnRef {
                             span: subquery.span,
                             column: ColumnBindingBuilder::new(
@@ -665,7 +665,7 @@ impl SubqueryDecorrelatorOptimizer {
                             value: Scalar::Number(NumberScalar::UInt64(1)),
                         }),
                     ],
-                };
+                );
 
                 let agg_s_expr = Arc::new(subquery_expr.build_unary(agg));
 

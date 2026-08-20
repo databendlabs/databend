@@ -424,12 +424,12 @@ impl Binder {
                 // Add tuple inner columns
                 let mut items = Vec::with_capacity(fields.len());
                 for (i, field) in fields.into_iter().enumerate() {
-                    let field_expr = ScalarExpr::FunctionCall(FunctionCall {
-                        span: *span,
-                        func_name: "get".to_string(),
-                        params: vec![Scalar::Number(NumberScalar::Int64((i + 1) as i64))],
-                        arguments: vec![scalar.clone()],
-                    });
+                    let field_expr = ScalarExpr::FunctionCall(FunctionCall::new(
+                        *span,
+                        "get".to_string(),
+                        vec![Scalar::Number(NumberScalar::Int64((i + 1) as i64))],
+                        vec![scalar.clone()],
+                    ));
                     let data_type = field_expr.data_type()?;
                     let index = self
                         .metadata

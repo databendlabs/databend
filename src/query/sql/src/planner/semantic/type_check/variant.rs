@@ -375,12 +375,12 @@ where A: super::TypeCheckAdapter
                     }
                     .into();
 
-                    let value = FunctionCall {
+                    let value = FunctionCall::new(
                         span,
-                        params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
-                        arguments: vec![scalar.clone()],
-                        func_name: "get".to_string(),
-                    }
+                        "get".to_string(),
+                        vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
+                        vec![scalar.clone()],
+                    )
                     .into();
 
                     let value =
@@ -398,13 +398,7 @@ where A: super::TypeCheckAdapter
                 } else {
                     "json_object_keep_null".to_string()
                 };
-                FunctionCall {
-                    span,
-                    params: vec![],
-                    arguments: args,
-                    func_name,
-                }
-                .into()
+                FunctionCall::new(span, func_name, vec![], args).into()
             }
             _ => {
                 let func_name = if is_try {
@@ -412,13 +406,7 @@ where A: super::TypeCheckAdapter
                 } else {
                     "to_variant".to_string()
                 };
-                FunctionCall {
-                    span,
-                    params: vec![],
-                    arguments: vec![scalar.clone()],
-                    func_name,
-                }
-                .into()
+                FunctionCall::new(span, func_name, vec![], vec![scalar.clone()]).into()
             }
         }
     }
@@ -498,12 +486,12 @@ where A: super::TypeCheckAdapter
                     _ => unreachable!(),
                 };
                 table_data_type = fields_type.get(idx).unwrap().clone();
-                scalar = FunctionCall {
-                    span: expr_span,
-                    func_name: "get".to_string(),
-                    params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
-                    arguments: vec![scalar.clone()],
-                }
+                scalar = FunctionCall::new(
+                    expr_span,
+                    "get".to_string(),
+                    vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
+                    vec![scalar.clone()],
+                )
                 .into();
                 continue;
             }
@@ -512,12 +500,10 @@ where A: super::TypeCheckAdapter
                 table_data_type = *inner_type;
             }
             table_data_type = table_data_type.wrap_nullable();
-            scalar = FunctionCall {
-                span: path_scalar.span(),
-                func_name: "get".to_string(),
-                params: vec![],
-                arguments: vec![scalar.clone(), path_scalar],
-            }
+            scalar = FunctionCall::new(path_scalar.span(), "get".to_string(), vec![], vec![
+                scalar.clone(),
+                path_scalar,
+            ])
             .into();
         }
         let return_type = scalar.data_type()?;
@@ -644,12 +630,12 @@ where A: super::TypeCheckAdapter
                 // inner column is not exist in view, desugar it into a `get` function.
                 let mut scalar: ScalarExpr = BoundColumnRef { span, column }.into();
                 while let Some((idx, table_data_type)) = index_with_types.pop_front() {
-                    scalar = FunctionCall {
+                    scalar = FunctionCall::new(
                         span,
-                        params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
-                        arguments: vec![scalar.clone()],
-                        func_name: "get".to_string(),
-                    }
+                        "get".to_string(),
+                        vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
+                        vec![scalar.clone()],
+                    )
                     .into();
                     scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
                 }
@@ -763,12 +749,12 @@ where A: super::TypeCheckAdapter
         let args = vec![scalar, path_scalar];
 
         Ok(Box::new((
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "get_by_keypath".to_string(),
-                params: vec![],
-                arguments: args,
-            }),
+            ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                "get_by_keypath".to_string(),
+                vec![],
+                args,
+            )),
             DataType::Nullable(Box::new(DataType::Variant)),
         )))
     }

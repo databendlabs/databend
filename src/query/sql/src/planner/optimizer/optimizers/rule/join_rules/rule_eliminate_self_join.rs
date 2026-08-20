@@ -328,8 +328,13 @@ impl RuleEliminateSelfJoin {
             node = node.unary_child();
         }
 
-        while matches!(node.plan(), RelOperator::Filter(_)) {
-            strict = true;
+        while let RelOperator::Filter(filter) = node.plan() {
+            // Optimizer-derived predicates (e.g. `is_not_null` from the null
+            // addition rule) restate a fact the join itself already enforces,
+            // so they must not turn a loose candidate into a strict one.
+            if !filter.predicates.iter().all(|p| p.is_derived()) {
+                strict = true;
+            }
             node = node.unary_child();
         }
 
@@ -389,13 +394,16 @@ impl RuleEliminateSelfJoin {
         })
     }
 
-    /// Sorted, deduplicated canonical signatures of the scan's predicates
-    /// (`push_down_predicates` + prewhere). Only deterministic predicates may
-    /// participate: two branches with identical `rand() < 0.5` filters still
-    /// sample *different* row sets, so a volatile predicate must reject the
-    /// candidate. Returns `None` if any predicate cannot be normalized
-    /// (subquery, UDF, non-base column, ...), rejecting the candidate
-    /// conservatively.
+    /// Sorted, deduplicated canonical signatures of the scan's user-visible
+    /// predicates (`push_down_predicates` + prewhere). Derived predicates are
+    /// included: they currently are all `is_not_null(join key)` and therefore
+    /// symmetric across self-join branches, but including them keeps the
+    /// signature an honest description of the row set instead of relying on
+    /// that invariant. Only deterministic predicates may participate: two
+    /// branches with identical `rand() < 0.5` filters still sample *different*
+    /// row sets, so a volatile predicate must reject the candidate. Returns
+    /// `None` if any predicate cannot be normalized (subquery, UDF, non-base
+    /// column, ...), rejecting the candidate conservatively.
     fn scan_predicate_signatures(scan: &Scan, metadata: &Metadata) -> Option<Vec<String>> {
         let mut sigs = Vec::new();
         if let Some(predicates) = &scan.push_down_predicates {
@@ -695,12 +703,12 @@ impl RuleEliminateSelfJoin {
                 .saturating_add(non_equi_conditions.len()),
         );
         for cond in equi_conditions.into_iter() {
-            predicates.push(ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: String::from(ComparisonOp::Equal.to_func_name()),
-                params: vec![],
-                arguments: vec![cond.left, cond.right],
-            }));
+            predicates.push(ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                String::from(ComparisonOp::Equal.to_func_name()),
+                vec![],
+                vec![cond.left, cond.right],
+            )));
         }
         predicates.extend(non_equi_conditions);
 

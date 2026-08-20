@@ -819,12 +819,12 @@ impl SubqueryDecorrelatorOptimizer {
                             } else {
                                 arguments.push(*child_expr.clone());
                             }
-                            let func = ScalarExpr::FunctionCall(FunctionCall {
-                                span: subquery.span,
-                                func_name: "contains".to_string(),
-                                params: vec![],
+                            let func = ScalarExpr::FunctionCall(FunctionCall::new(
+                                subquery.span,
+                                "contains".to_string(),
+                                vec![],
                                 arguments,
-                            });
+                            ));
                             return Ok(Some(func));
                         }
 
@@ -834,12 +834,12 @@ impl SubqueryDecorrelatorOptimizer {
                                 span: subquery.span,
                                 value,
                             });
-                            let func = ScalarExpr::FunctionCall(FunctionCall {
-                                span: subquery.span,
-                                func_name: "eq".to_string(),
-                                params: vec![],
-                                arguments: vec![*child_expr.clone(), scalar_value],
-                            });
+                            let func = ScalarExpr::FunctionCall(FunctionCall::new(
+                                subquery.span,
+                                "eq".to_string(),
+                                vec![],
+                                vec![*child_expr.clone(), scalar_value],
+                            ));
                             funcs.push(func);
                         }
                         let or_func = funcs
@@ -848,12 +848,12 @@ impl SubqueryDecorrelatorOptimizer {
                                 match acc.as_mut() {
                                     None => acc = Some(func),
                                     Some(acc) => {
-                                        *acc = ScalarExpr::FunctionCall(FunctionCall {
-                                            span: subquery.span,
-                                            func_name: "or".to_string(),
-                                            params: vec![],
-                                            arguments: vec![acc.clone(), func],
-                                        });
+                                        *acc = ScalarExpr::FunctionCall(FunctionCall::new(
+                                            subquery.span,
+                                            "or".to_string(),
+                                            vec![],
+                                            vec![acc.clone(), func],
+                                        ));
                                     }
                                 }
                                 acc

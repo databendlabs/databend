@@ -463,15 +463,15 @@ mod tests {
         let nullable_int = DataType::Nullable(Box::new(int_type()));
         let stats = derive(
             vec![ScalarItem {
-                scalar: ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "plus".to_string(),
-                    params: vec![],
-                    arguments: vec![
+                scalar: ScalarExpr::FunctionCall(FunctionCall::new(
+                    None,
+                    "plus".to_string(),
+                    vec![],
+                    vec![
                         column_with_type(0, nullable_int.clone()),
                         typed_int_constant(10, nullable_int),
                     ],
-                }),
+                )),
                 index: Symbol::new(1),
             }],
             HashMap::from([

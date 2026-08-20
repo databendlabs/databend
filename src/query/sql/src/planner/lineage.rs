@@ -2108,13 +2108,7 @@ mod tests {
     }
 
     fn plus(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-        FunctionCall {
-            span: None,
-            func_name: "plus".to_string(),
-            params: vec![],
-            arguments: vec![left, right],
-        }
-        .into()
+        FunctionCall::new(None, "plus".to_string(), vec![], vec![left, right]).into()
     }
 
     fn int_data_type() -> DataType {

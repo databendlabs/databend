@@ -24,6 +24,7 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::ImplByEvaluator;
 use databend_common_expression::Value;
 use databend_common_expression::domain_evaluator;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GenericType;
@@ -144,6 +145,33 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Value::Scalar(_) => Value::Scalar(bitmap.get(0)),
             },
             None => Value::Scalar(true),
+        },
+    );
+
+    // Internal predicate wrapper for optimizer-derived filters: evaluates the
+    // child with error suppression and yields TRUE for rows whose evaluation
+    // failed, i.e. "keep the row and let the real evaluation site raise the
+    // error". Never drop a row on an evaluation error — the guarantee of a
+    // derived predicate is positional, and a row we cannot prove removable
+    // must flow through unchanged.
+    registry.register_1_arg_core::<BooleanType, BooleanType, _, _>(
+        "assume_true_on_error",
+        |_, _| FunctionDomain::Full,
+        |arg, ctx| match ctx.errors.take() {
+            Some((valids, _)) => {
+                let no_error: Bitmap = valids.into();
+                match arg {
+                    Value::Scalar(b) => Value::Scalar(b || !no_error.get(0).unwrap_or(true)),
+                    Value::Column(bitmap) => Value::Column(
+                        bitmap
+                            .iter()
+                            .zip(no_error.iter())
+                            .map(|(value, no_error)| value || !no_error)
+                            .collect(),
+                    ),
+                }
+            }
+            None => arg,
         },
     );
 }

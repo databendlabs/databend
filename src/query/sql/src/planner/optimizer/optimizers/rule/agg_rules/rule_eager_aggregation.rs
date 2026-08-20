@@ -1227,11 +1227,11 @@ impl EagerAnalysis {
             unreachable!()
         };
 
-        let multiplied_scalar = ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "multiply".to_string(),
-            params: vec![],
-            arguments: vec![
+        let multiplied_scalar = ScalarExpr::FunctionCall(FunctionCall::new(
+            None,
+            "multiply".to_string(),
+            vec![],
+            vec![
                 new_scalar,
                 wrap_cast(
                     &ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -1249,7 +1249,7 @@ impl EagerAnalysis {
                     &DataType::Number(NumberDataType::UInt64),
                 ),
             ],
-        });
+        ));
         let multiplied_scalar = if matches!(
             aggregate_function.return_type.remove_nullable(),
             DataType::Decimal(_)

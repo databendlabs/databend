@@ -114,13 +114,7 @@ impl RewritePredicates {
         let mut expr = if predicates.len() == 1 {
             predicates[0].clone()
         } else {
-            FunctionCall {
-                span: None,
-                func_name: "and_filters".to_string(),
-                params: vec![],
-                arguments: predicates.to_vec(),
-            }
-            .into()
+            FunctionCall::new(None, "and_filters".to_string(), vec![], predicates.to_vec()).into()
         };
         self.visit(&mut expr)?;
 

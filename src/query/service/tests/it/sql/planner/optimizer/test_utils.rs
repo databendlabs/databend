@@ -116,12 +116,9 @@ pub fn create_table_bound_column_ref(
 
 /// Creates a column reference with the given name
 pub fn create_column_function_call(name: &str) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "column".to_string(),
-        params: vec![],
-        arguments: vec![create_constant_string(name)],
-    })
+    ScalarExpr::FunctionCall(FunctionCall::new(None, "column".to_string(), vec![], vec![
+        create_constant_string(name),
+    ]))
 }
 
 /// Creates an integer constant expression
@@ -449,33 +446,24 @@ impl ExprBuilder {
 
     /// Create an AND expression
     pub fn and(&self, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "and".to_string(),
-            params: vec![],
-            arguments: vec![left, right],
-        })
+        ScalarExpr::FunctionCall(FunctionCall::new(None, "and".to_string(), vec![], vec![
+            left, right,
+        ]))
     }
 
     /// Create an OR expression
     pub fn or(&self, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "or".to_string(),
-            params: vec![],
-            arguments: vec![left, right],
-        })
+        ScalarExpr::FunctionCall(FunctionCall::new(None, "or".to_string(), vec![], vec![
+            left, right,
+        ]))
     }
 
     /// Create a comparison expression with the given operator
     pub fn comparison(&self, left: ScalarExpr, right: ScalarExpr, op: ComparisonOp) -> ScalarExpr {
         let func_name = op.to_func_name().to_string();
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name,
-            arguments: vec![left, right],
-            params: vec![],
-        })
+        ScalarExpr::FunctionCall(FunctionCall::new(None, func_name, vec![], vec![
+            left, right,
+        ]))
     }
 
     /// Create an IF expression
@@ -485,12 +473,9 @@ impl ExprBuilder {
         then_expr: ScalarExpr,
         else_expr: ScalarExpr,
     ) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "if".to_string(),
-            arguments: vec![condition, then_expr, else_expr],
-            params: vec![],
-        })
+        ScalarExpr::FunctionCall(FunctionCall::new(None, "if".to_string(), vec![], vec![
+            condition, then_expr, else_expr,
+        ]))
     }
 
     /// Create a join

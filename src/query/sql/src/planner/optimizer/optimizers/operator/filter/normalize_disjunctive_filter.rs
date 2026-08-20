@@ -110,21 +110,21 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
     match predicate_scalar {
         PredicateScalar::And(args) => {
             assert!(args.len() >= 2);
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "and_filters".to_string(),
-                params: vec![],
-                arguments: args.into_iter().map(normalize_predicate_scalar).collect(),
-            })
+            ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                "and_filters".to_string(),
+                vec![],
+                args.into_iter().map(normalize_predicate_scalar).collect(),
+            ))
         }
         PredicateScalar::Or(args) => {
             assert!(args.len() >= 2);
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "or_filters".to_string(),
-                params: vec![],
-                arguments: args.into_iter().map(normalize_predicate_scalar).collect(),
-            })
+            ScalarExpr::FunctionCall(FunctionCall::new(
+                None,
+                "or_filters".to_string(),
+                vec![],
+                args.into_iter().map(normalize_predicate_scalar).collect(),
+            ))
         }
         PredicateScalar::Other(expr) => *expr,
     }
@@ -152,12 +152,12 @@ mod tests {
     }
 
     fn binary_filter(func_name: &str, lhs: ScalarExpr, rhs: ScalarExpr) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: func_name.to_string(),
-            params: vec![],
-            arguments: vec![lhs, rhs],
-        })
+        ScalarExpr::FunctionCall(FunctionCall::new(
+            None,
+            func_name.to_string(),
+            vec![],
+            vec![lhs, rhs],
+        ))
     }
 
     #[test]
