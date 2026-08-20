@@ -272,11 +272,11 @@ impl PhysicalPlanBuilder {
         let mut maybe_udfs = BTreeSet::new();
         for matched_evaluator in matched_evaluators {
             if let Some(condition) = &matched_evaluator.condition {
-                maybe_udfs.extend(condition.used_columns());
+                condition.collect_used_columns(&mut maybe_udfs);
             }
             if let Some(update_list) = &matched_evaluator.update {
                 for update_scalar in update_list.values() {
-                    maybe_udfs.extend(update_scalar.used_columns());
+                    update_scalar.collect_used_columns(&mut maybe_udfs);
                 }
             }
         }
@@ -285,17 +285,17 @@ impl PhysicalPlanBuilder {
         let mut unmatched_required = BTreeSet::new();
         for unmatched_evaluator in unmatched_evaluators {
             if let Some(condition) = &unmatched_evaluator.condition {
-                maybe_udfs.extend(condition.used_columns());
-                unmatched_required.extend(condition.used_columns());
+                condition.collect_used_columns(&mut maybe_udfs);
+                condition.collect_used_columns(&mut unmatched_required);
             }
             for value in &unmatched_evaluator.values {
-                maybe_udfs.extend(value.used_columns());
-                unmatched_required.extend(value.used_columns());
+                value.collect_used_columns(&mut maybe_udfs);
+                value.collect_used_columns(&mut unmatched_required);
             }
         }
         required.extend(unmatched_required);
         for filter_value in direct_filter {
-            maybe_udfs.extend(filter_value.used_columns());
+            filter_value.collect_used_columns(&mut maybe_udfs);
         }
 
         let udf_ids = s_expr.get_udfs_col_ids()?;

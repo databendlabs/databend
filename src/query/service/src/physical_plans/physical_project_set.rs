@@ -155,7 +155,7 @@ impl PhysicalPlanBuilder {
         // 1. Prune unused Columns.
         let column_projections = required.clone().into_iter().collect::<Vec<_>>();
         for s in project_set.srfs.iter() {
-            required.extend(s.scalar.used_columns().iter().copied());
+            s.scalar.collect_used_columns(&mut required);
         }
 
         // 2. Build physical plan.

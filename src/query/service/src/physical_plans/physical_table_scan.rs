@@ -324,7 +324,7 @@ impl PhysicalPlanBuilder {
             // on tenant_id would fail when the query only selects id.
             if let Some(secure_preds) = &scan.secure_predicates {
                 for pred in secure_preds {
-                    used = used.union(&pred.used_columns()).cloned().collect();
+                    pred.collect_used_columns(&mut used);
                 }
             }
 
