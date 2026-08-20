@@ -43,35 +43,38 @@ Sort(Final)
             ├── build join filters(distributed):
             │   └── filter id:0, build key:t2.number (#1), probe targets:[t1.number (#0)@scan0], filter type:bloom,inlist,min_max
             ├── estimated rows: 7.00
-            ├── Filter(Build)
+            ├── Exchange(Build)
             │   ├── output columns: [t2.number (#1)]
-            │   ├── filters: [row_number() OVER (PARTITION BY number ORDER BY number DESC) (#2) = 1]
-            │   ├── estimated rows: 7.00
-            │   └── Window
-            │       ├── output columns: [t2.number (#1), row_number() OVER (PARTITION BY number ORDER BY number DESC) (#2)]
-            │       ├── aggregate function: [row_number]
-            │       ├── partition by: [number]
-            │       ├── order by: [number]
-            │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
-            │       └── WindowPartition
-            │           ├── output columns: [t2.number (#1)]
-            │           ├── hash keys: [number]
-            │           ├── top: 1
-            │           ├── estimated rows: 14.00
-            │           └── Exchange
+            │   ├── exchange type: Hash(t2.number (#1))
+            │   └── Filter
+            │       ├── output columns: [t2.number (#1)]
+            │       ├── filters: [row_number() OVER (PARTITION BY number ORDER BY number DESC) (#2) = 1]
+            │       ├── estimated rows: 7.00
+            │       └── Window
+            │           ├── output columns: [t2.number (#1), row_number() OVER (PARTITION BY number ORDER BY number DESC) (#2)]
+            │           ├── aggregate function: [row_number]
+            │           ├── partition by: [number]
+            │           ├── order by: [number]
+            │           ├── frame: [Range: Preceding(None) ~ CurrentRow]
+            │           └── WindowPartition
             │               ├── output columns: [t2.number (#1)]
-            │               ├── exchange type: Hash(t2.number (#1))
-            │               └── TableScan
-            │                   ├── table: default.default.t2
-            │                   ├── scan id: 1
-            │                   ├── output columns: [number (#1)]
-            │                   ├── read rows: 14
-            │                   ├── read size: < 1 KiB
-            │                   ├── partitions total: <slt:ignore>
-            │                   ├── partitions scanned: <slt:ignore>
-            │                   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>]
-            │                   ├── push downs: [filters: [], limit: NONE]
-            │                   └── estimated rows: 14.00
+            │               ├── hash keys: [number]
+            │               ├── top: 1
+            │               ├── estimated rows: 14.00
+            │               └── Exchange
+            │                   ├── output columns: [t2.number (#1)]
+            │                   ├── exchange type: Hash(t2.number (#1))
+            │                   └── TableScan
+            │                       ├── table: default.default.t2
+            │                       ├── scan id: 1
+            │                       ├── output columns: [number (#1)]
+            │                       ├── read rows: 14
+            │                       ├── read size: < 1 KiB
+            │                       ├── partitions total: <slt:ignore>
+            │                       ├── partitions scanned: <slt:ignore>
+            │                       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>]
+            │                       ├── push downs: [filters: [], limit: NONE]
+            │                       └── estimated rows: 14.00
             └── Exchange(Probe)
                 ├── output columns: [t1.number (#0)]
                 ├── exchange type: Hash(t1.number (#0))
