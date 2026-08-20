@@ -18,6 +18,12 @@ from pathlib import Path
 
 from pyspark.sql import SparkSession
 
+os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
+os.environ.setdefault(
+    "PYSPARK_SUBMIT_ARGS",
+    "--conf spark.ui.showConsoleProgress=false pyspark-shell",
+)
+
 PAIMON_VERSION = "1.4.1"
 PAIMON_SPARK_COORD = f"org.apache.paimon:paimon-spark-3.5_2.12:{PAIMON_VERSION}"
 PAIMON_S3_COORD = f"org.apache.paimon:paimon-s3:{PAIMON_VERSION}"
@@ -114,6 +120,7 @@ builder = (
     .config("spark.sql.catalog.paimon.warehouse", warehouse_uri)
     .config("spark.sql.shuffle.partitions", "4")
     .config("spark.default.parallelism", "4")
+    .config("spark.ui.showConsoleProgress", "false")
 )
 
 if warehouse.startswith("s3://"):

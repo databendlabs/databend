@@ -7,8 +7,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 WAREHOUSE_PATH="${PAIMON_WAREHOUSE_PATH:-${TESTS_DATA_DIR}/paimon_warehouse}"
 
-if ! "${CURDIR}"/../../../sqllogictests/scripts/prepare_paimon_fs_data.sh >/dev/null; then
+prepare_log=$(mktemp)
+if ! "${CURDIR}"/../../../sqllogictests/scripts/prepare_paimon_fs_data.sh >"${prepare_log}" 2>&1; then
 	echo "FAIL: paimon warehouse prepare failed"
+	cat "${prepare_log}"
 	exit 1
 fi
 

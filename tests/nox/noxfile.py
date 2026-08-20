@@ -47,9 +47,12 @@ JDBC_RELEASE_DOWNLOAD_ROOT = (
 JDBC_SOURCE_BUILD_ENV = {"TEST_HANDLERS": "http"}
 JDBC_EXCLUDED_GROUPS = "FLAKY,cluster,MULTI_HOST"
 TESTNG_EXIT_CODE_SKIPPED = 2
+JDBC_MAVEN_SETTINGS = Path(__file__).resolve().parent / "maven-settings.xml"
 JDBC_MAIN_TEST_ARGS = [
     "-B",
     "-ntp",
+    "-s",
+    str(JDBC_MAVEN_SETTINGS),
     "-pl",
     "databend-jdbc",
     "test",
@@ -57,7 +60,7 @@ JDBC_MAIN_TEST_ARGS = [
     "-DexcludedGroups=FLAKY",
 ]
 JDBC_TEST_LIBS = [
-    "https://repo.maven.apache.org/maven2/org/testng/testng/7.11.0/testng-7.11.0.jar",
+    "https://repo1.maven.org/maven2/org/testng/testng/7.11.0/testng-7.11.0.jar",
     "https://repo1.maven.org/maven2/com/vdurmont/semver4j/3.1.0/semver4j-3.1.0.jar",
     "https://repo1.maven.org/maven2/org/jcommander/jcommander/1.83/jcommander-1.83.jar",
     "https://repo1.maven.org/maven2/org/locationtech/jts/jts-core/1.19.0/jts-core-1.19.0.jar",
@@ -65,6 +68,11 @@ JDBC_TEST_LIBS = [
     "https://repo1.maven.org/maven2/org/slf4j/slf4j-simple/2.0.13/slf4j-simple-2.0.13.jar",
     "https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.11.3/junit-platform-console-standalone-1.11.3.jar",
 ]
+MAVEN_MIRRORS = (
+    "https://repo1.maven.org/maven2",
+    "https://maven-central.storage-download.googleapis.com/maven2",
+    "https://repo.maven.apache.org/maven2",
+)
 
 GO_DRIVER_PINNED = ["v0.9.1"]
 GO_DRIVER = ["main", "latest", *GO_DRIVER_PINNED]
@@ -139,21 +147,44 @@ def download_file(url, target):
     target.parent.mkdir(parents=True, exist_ok=True)
     last_error = None
     for attempt in range(5):
-        try:
-            with urllib.request.urlopen(get_request(url), timeout=60) as response:
-                with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as temp_file:
-                    shutil.copyfileobj(response, temp_file)
-                    temp_path = Path(temp_file.name)
-            if temp_path.stat().st_size == 0:
-                temp_path.unlink(missing_ok=True)
-                raise RuntimeError(f"empty download from {url}")
-            temp_path.replace(target)
-            return target
-        except Exception as exc:  # noqa: BLE001 - retry Maven/GitHub flakes
-            last_error = exc
-            print(f"WARN: download {url} failed (attempt {attempt + 1}/5): {exc}")
-            time.sleep(2 * (attempt + 1))
+        for candidate in download_urls(url):
+            try:
+                with urllib.request.urlopen(get_request(candidate), timeout=60) as response:
+                    with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as temp_file:
+                        shutil.copyfileobj(response, temp_file)
+                        temp_path = Path(temp_file.name)
+                if temp_path.stat().st_size == 0:
+                    temp_path.unlink(missing_ok=True)
+                    raise RuntimeError(f"empty download from {candidate}")
+                temp_path.replace(target)
+                return target
+            except Exception as exc:  # noqa: BLE001 - retry Maven/GitHub flakes
+                last_error = exc
+                print(
+                    f"WARN: download {candidate} failed "
+                    f"(attempt {attempt + 1}/5): {exc}"
+                )
+        time.sleep(2 * (attempt + 1))
     raise RuntimeError(f"failed to download {url}: {last_error}")
+
+
+def download_urls(url):
+    urls = [url]
+    for source, mirror in (
+        ("https://repo.maven.apache.org/maven2", MAVEN_MIRRORS),
+        ("https://repo1.maven.org/maven2", MAVEN_MIRRORS),
+    ):
+        if url.startswith(source + "/"):
+            suffix = url[len(source) :]
+            urls.extend(f"{item}{suffix}" for item in mirror)
+            break
+    seen = set()
+    unique = []
+    for item in urls:
+        if item not in seen:
+            seen.add(item)
+            unique.append(item)
+    return unique
 
 
 def merge_env(*env_sets):
@@ -377,13 +408,22 @@ def run_jdbc_release_test(session, jdbc_target):
 
 
 def run_jdbc_main_test(session, jdbc_target):
+    last_error = None
     with session.chdir(str(jdbc_target["source_dir"])):
-        session.run(
-            "mvn",
-            *JDBC_MAIN_TEST_ARGS,
-            external=True,
-            env=merge_env(jdbc_target["env"]),
-        )
+        for attempt in range(5):
+            try:
+                session.run(
+                    "mvn",
+                    *JDBC_MAIN_TEST_ARGS,
+                    external=True,
+                    env=merge_env(jdbc_target["env"]),
+                )
+                return
+            except Exception as exc:  # noqa: BLE001 - retry Maven Central flakes
+                last_error = exc
+                print(f"WARN: mvn jdbc main test failed (attempt {attempt + 1}/5): {exc}")
+                time.sleep(3 * (attempt + 1))
+    raise RuntimeError(f"mvn jdbc main test failed: {last_error}")
 
 
 def resolve_go_source_ref(source_ref):
