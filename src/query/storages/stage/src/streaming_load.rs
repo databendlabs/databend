@@ -140,8 +140,8 @@ fn row_based(
         StageFileCompression::None => {}
         compression => {
             let algo = get_compression_with_path(compression, "")?;
-            pipeline.try_add_accumulating_transformer(|| {
-                Decompressor::try_create(load_ctx.clone(), algo)
+            pipeline.add_transform(|input, output| {
+                Decompressor::create(input, output, load_ctx.clone(), algo)
             })?;
         }
     }
