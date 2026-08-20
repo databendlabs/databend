@@ -513,20 +513,20 @@ set enforce_shuffle_join = 1
 
 statement ok
 create or replace table multi_key_scatter_probe(
-    address string not null,
-    user_id uint64 not null,
-    chain_id uint64 not null,
-    wallet_id uint64 not null,
+    text_key string not null,
+    key_num_1 uint64 not null,
+    key_num_2 uint64 not null,
+    key_num_3 uint64 not null,
     payload string not null
 )
 
 statement ok
 create or replace table multi_key_scatter_build(
-    address_lower string not null,
-    address_raw string not null,
-    user_id uint64 not null,
-    chain_id uint64 not null,
-    wallet_id uint64 not null
+    normalized_text_key string not null,
+    raw_text_key string not null,
+    key_num_1 uint64 not null,
+    key_num_2 uint64 not null,
+    key_num_3 uint64 not null
 )
 
 statement ok
@@ -544,32 +544,32 @@ insert into multi_key_scatter_build values
     ('jkl', 'Jkl', 4, 999, 400)
 
 query TT
-select p.address, p.payload
+select p.text_key, p.payload
 from multi_key_scatter_probe as p
 inner join multi_key_scatter_build as b
-    on lower(p.address) = b.address_lower
-   and p.address = b.address_raw
-   and p.user_id = b.user_id
-   and p.chain_id = b.chain_id
-   and p.wallet_id = b.wallet_id
-order by p.address
+    on lower(p.text_key) = b.normalized_text_key
+   and p.text_key = b.raw_text_key
+   and p.key_num_1 = b.key_num_1
+   and p.key_num_2 = b.key_num_2
+   and p.key_num_3 = b.key_num_3
+order by p.text_key
 ----
 AbC matched-1
 ghi matched-3
 
 query TT
-select p.address, p.payload
+select p.text_key, p.payload
 from multi_key_scatter_probe as p
 where not exists (
     select 1
     from multi_key_scatter_build as b
-    where lower(p.address) = b.address_lower
-      and p.address = b.address_raw
-      and p.user_id = b.user_id
-      and p.chain_id = b.chain_id
-      and p.wallet_id = b.wallet_id
+    where lower(p.text_key) = b.normalized_text_key
+      and p.text_key = b.raw_text_key
+      and p.key_num_1 = b.key_num_1
+      and p.key_num_2 = b.key_num_2
+      and p.key_num_3 = b.key_num_3
 )
-order by p.address
+order by p.text_key
 ----
 DEF unmatched-2
 Jkl unmatched-4
