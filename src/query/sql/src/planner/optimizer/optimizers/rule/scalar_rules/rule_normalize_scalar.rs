@@ -111,6 +111,10 @@ struct RewritePredicates {}
 
 impl RewritePredicates {
     fn rewrite(&mut self, predicates: &[ScalarExpr]) -> Result<Option<Vec<ScalarExpr>>> {
+        if !Self::may_rewrite(predicates) {
+            return Ok(None);
+        }
+
         let mut expr = if predicates.len() == 1 {
             predicates[0].clone()
         } else {
@@ -138,6 +142,28 @@ impl RewritePredicates {
             }
             expr => Ok(Some(vec![expr])),
         }
+    }
+
+    fn may_rewrite(predicates: &[ScalarExpr]) -> bool {
+        predicates.is_empty()
+            || predicates.iter().any(|predicate| {
+                if is_true(predicate) || is_falsy(predicate) {
+                    return true;
+                }
+
+                let ScalarExpr::FunctionCall(call) = predicate else {
+                    return false;
+                };
+
+                match call.func_name.as_str() {
+                    "and" | "and_filters" | "or" | "or_filters" => true,
+                    "not" => matches!(
+                        call.arguments.first(),
+                        Some(ScalarExpr::FunctionCall(inner)) if inner.func_name == "not"
+                    ),
+                    _ => false,
+                }
+            })
     }
 
     fn rewrite_and(
