@@ -748,6 +748,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
 
+    pub fn get_enable_materialized_view_rewrite(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_materialized_view_rewrite")? != 0)
+    }
+
     pub fn get_enable_compact_after_write(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_compact_after_write")? != 0)
     }

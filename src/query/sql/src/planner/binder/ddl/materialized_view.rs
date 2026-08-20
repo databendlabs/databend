@@ -173,6 +173,7 @@ impl Binder {
         if bind_context.planning_agg_index
             || bind_context.planning_materialized_view_rewrite
             || !self.ctx.get_can_scan_from_agg_index()
+            || !self.enable_materialized_view_rewrite
         {
             return Ok(());
         }
