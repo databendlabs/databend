@@ -53,8 +53,7 @@ pub struct TransformReaggregateAggregateStateBlock {
 impl TransformReaggregateAggregateStateBlock {
     pub fn try_create(table_schema: &TableSchema) -> Result<Option<Self>> {
         if table_schema.fields().iter().any(|field| {
-            is_stream_column(field.name())
-                || field.name() == MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN
+            is_stream_column(field.name()) || field.name() == MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN
         }) {
             return Ok(None);
         }
