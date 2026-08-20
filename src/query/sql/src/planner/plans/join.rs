@@ -689,17 +689,22 @@ impl Join {
     }
 
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
+        self.replace_columns(|column| Ok(if column == old { new } else { column }))
+    }
+
+    pub fn replace_columns<F>(&mut self, mut replace: F) -> Result<()>
+    where F: FnMut(Symbol) -> Result<Symbol> {
         for condition in &mut self.equi_conditions {
-            condition.left.replace_column(old, new)?;
-            condition.right.replace_column(old, new)?;
+            condition.left.replace_columns(&mut replace)?;
+            condition.right.replace_columns(&mut replace)?;
         }
 
         for condition in &mut self.non_equi_conditions {
-            condition.replace_column(old, new)?;
+            condition.replace_columns(&mut replace)?;
         }
 
-        if self.marker_index == Some(old) {
-            self.marker_index = Some(new)
+        if let Some(marker_index) = &mut self.marker_index {
+            *marker_index = replace(*marker_index)?;
         }
 
         self.build_side_cache_info = None;

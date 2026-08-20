@@ -315,23 +315,25 @@ impl ScalarExpr {
     }
 
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
-        struct ReplaceColumnVisitor {
-            old: Symbol,
-            new: Symbol,
+        self.replace_columns(|column| Ok(if column == old { new } else { column }))
+    }
+
+    pub fn replace_columns<F>(&mut self, replace: F) -> Result<()>
+    where F: FnMut(Symbol) -> Result<Symbol> {
+        struct ReplaceColumnsVisitor<F> {
+            replace: F,
         }
 
-        impl VisitorMut<'_> for ReplaceColumnVisitor {
+        impl<F> VisitorMut<'_> for ReplaceColumnsVisitor<F>
+        where F: FnMut(Symbol) -> Result<Symbol>
+        {
             fn visit_bound_column_ref(&mut self, col: &mut BoundColumnRef) -> Result<()> {
-                if col.column.index == self.old {
-                    col.column.index = self.new;
-                }
+                col.column.index = (self.replace)(col.column.index)?;
                 Ok(())
             }
         }
 
-        let mut visitor = ReplaceColumnVisitor { old, new };
-        visitor.visit(self)?;
-        Ok(())
+        ReplaceColumnsVisitor { replace }.visit(self)
     }
 
     pub fn replace_column_binding(
@@ -1783,6 +1785,21 @@ mod tests {
     use databend_common_expression::types::number::NumberDataType;
 
     use super::*;
+    use crate::ColumnBindingBuilder;
+    use crate::Visibility;
+
+    fn column_expr(index: usize) -> ScalarExpr {
+        ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                format!("c{index}"),
+                Symbol::new(index),
+                Box::new(DataType::Number(NumberDataType::Int32)),
+                Visibility::Visible,
+            )
+            .build(),
+        })
+    }
 
     fn casted_nextval_expr() -> ScalarExpr {
         ScalarExpr::CastExpr(CastExpr {
@@ -1880,5 +1897,42 @@ mod tests {
         });
 
         assert_stored_type_matches_inferred(&expr);
+    }
+
+    #[test]
+    fn test_replace_columns_visits_each_column_reference_once() -> Result<()> {
+        let mut expr = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "test".to_string(),
+            params: vec![],
+            arguments: vec![
+                column_expr(1),
+                ScalarExpr::CastExpr(CastExpr {
+                    span: None,
+                    is_try: false,
+                    argument: Box::new(column_expr(2)),
+                    target_type: Box::new(DataType::Number(NumberDataType::Int64)),
+                }),
+                column_expr(1),
+            ],
+            return_type: Box::new(DataType::Number(NumberDataType::Int32)),
+        });
+        let mut visited = Vec::new();
+
+        expr.replace_columns(|column| {
+            visited.push(column);
+            Ok(Symbol::new(column.as_usize() + 10))
+        })?;
+
+        assert_eq!(visited, vec![
+            Symbol::new(1),
+            Symbol::new(2),
+            Symbol::new(1)
+        ]);
+        assert_eq!(
+            expr.used_columns(),
+            [Symbol::new(11), Symbol::new(12)].into_iter().collect()
+        );
+        Ok(())
     }
 }
