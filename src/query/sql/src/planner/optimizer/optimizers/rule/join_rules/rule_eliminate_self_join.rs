@@ -715,7 +715,7 @@ impl RuleEliminateSelfJoin {
         }
 
         let root = if predicates.is_empty() {
-            join_tree.as_ref().clone()
+            Arc::unwrap_or_clone(join_tree)
         } else {
             SExpr::create_unary(
                 Arc::new(RelOperator::Filter(Filter { predicates })),
@@ -730,7 +730,7 @@ impl RuleEliminateSelfJoin {
     fn push_down_filter(&self, root: SExpr) -> Result<SExpr> {
         static RULES: &[RuleID] = &[RuleID::PushDownFilterJoin, RuleID::EliminateFilter];
         let optimizer = RecursiveRuleOptimizer::new(self.opt_ctx.clone(), RULES);
-        optimizer.optimize_sync(&root)
+        optimizer.optimize_sync(root)
     }
 }
 
