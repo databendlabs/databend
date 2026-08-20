@@ -28,6 +28,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
@@ -35,11 +36,11 @@ use databend_common_pipeline_transforms::processors::Transform;
 
 /// Merge equal group keys inside one newly written physical block.
 ///
-/// Only aggregating materialized views persist `AggregateState` columns.
-/// Compact/recluster already gathers neighboring rows into the same block.
-/// Re-aggregating that block with `*_merge_state` collapses duplicate groups
-/// without rewriting the whole materialized view. Non-aggregate MVs and
-/// ordinary tables skip this transform.
+/// Aggregating materialized views, including `GROUP BY` without aggregate
+/// functions, do not persist `_mv_source_row_id`. Compact/recluster already
+/// gathers neighboring rows into the same block. Re-aggregating that block
+/// collapses duplicate groups without rewriting the whole materialized view.
+/// Non-aggregate MVs keep `_mv_source_row_id` and skip this transform.
 #[derive(Clone)]
 pub struct TransformReaggregateAggregateStateBlock {
     table_column_count: usize,
@@ -51,11 +52,10 @@ pub struct TransformReaggregateAggregateStateBlock {
 
 impl TransformReaggregateAggregateStateBlock {
     pub fn try_create(table_schema: &TableSchema) -> Result<Option<Self>> {
-        if table_schema
-            .fields()
-            .iter()
-            .any(|field| is_stream_column(field.name()))
-        {
+        if table_schema.fields().iter().any(|field| {
+            is_stream_column(field.name())
+                || field.name() == MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN
+        }) {
             return Ok(None);
         }
 
@@ -88,7 +88,7 @@ impl TransformReaggregateAggregateStateBlock {
                 }
             }
         }
-        if state_indices.is_empty() {
+        if group_indices.is_empty() && state_indices.is_empty() {
             return Ok(None);
         }
 
@@ -162,7 +162,7 @@ impl Transform for TransformReaggregateAggregateStateBlock {
 /// Compact and recluster already gather neighboring rows into one physical block.
 /// Re-aggregate that block so equal group keys collapse before serialization.
 ///
-/// Non-aggregate materialized views and ordinary tables are left unchanged.
+/// Non-aggregate materialized views keep `_mv_source_row_id` and are left unchanged.
 pub fn add_aggregate_state_reaggregate_transform(
     pipeline: &mut Pipeline,
     engine: &str,
@@ -264,6 +264,22 @@ mod tests {
             ),
         ]);
         assert!(TransformReaggregateAggregateStateBlock::try_create(&schema)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn group_only_schema_reaggregates_duplicate_keys() -> Result<()> {
+        let schema = TableSchema::new(vec![TableField::new("category", TableDataType::String)]);
+        let mut transform = TransformReaggregateAggregateStateBlock::try_create(&schema)?
+            .expect("group-only schema should build a reaggregate transform");
+        let input = DataBlock::new_from_columns(vec![StringType::from_data(vec![
+            "a".to_string(),
+            "a".to_string(),
+            "b".to_string(),
+        ])]);
+        let output = transform.transform(input)?;
+        assert_eq!(output.num_rows(), 2);
+        assert_eq!(output.num_columns(), 1);
         Ok(())
     }
 }

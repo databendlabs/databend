@@ -354,6 +354,71 @@ drop materialized view compact_mv
 statement ok
 drop table compact_source
 
+# GROUP BY without aggregate functions is still an aggregating MV: it has no
+# `_mv_source_row_id`, so compact must collapse duplicate group keys.
+statement ok
+create table compact_group_source (category string) change_tracking = true
+
+statement ok
+create materialized view compact_group_mv cluster by (category) as
+select category from compact_group_source group by category
+
+statement ok
+insert into compact_group_source values ('a'), ('a'), ('b')
+
+statement ok
+refresh materialized view compact_group_mv
+
+statement ok
+insert into compact_group_source values ('a'), ('b')
+
+statement ok
+refresh materialized view compact_group_mv
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'compact_group_mv')
+order by timestamp desc
+limit 1
+----
+2
+
+query T
+select category from compact_group_mv order by category
+----
+a
+a
+b
+b
+
+statement ok
+optimize table compact_group_mv compact
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'compact_group_mv')
+order by timestamp desc
+limit 1
+----
+1
+
+query T
+select category from compact_group_mv order by category
+----
+a
+b
+
+query I
+select row_count from fuse_block('test_materialized_view', 'compact_group_mv')
+----
+2
+
+statement ok
+drop materialized view compact_group_mv
+
+statement ok
+drop table compact_group_source
+
 statement ok
 unset enable_compact_after_write
 
