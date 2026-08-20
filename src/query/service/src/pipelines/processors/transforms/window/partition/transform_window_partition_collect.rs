@@ -144,12 +144,12 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
                 Ok(Event::NeedData)
             }
             Step::Output => {
-                if !self.output.can_push() {
-                    return Ok(Event::NeedConsume);
-                }
-
                 if self.buffer.need_spill() {
                     return Ok(Event::Sync);
+                }
+
+                if !self.output.can_push() {
+                    return Ok(Event::NeedConsume);
                 }
 
                 if let Some(block) = self.output_data_blocks.pop_front() {
