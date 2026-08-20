@@ -251,7 +251,7 @@ statement ok
 create table compact_source (category string, amount int) change_tracking = true
 
 statement ok
-create materialized view compact_mv cluster by (category) as
+create materialized view compact_mv (category, total_amount) cluster by (category) as
 select category, sum(amount) as total_amount
 from compact_source
 group by category
@@ -360,7 +360,7 @@ statement ok
 create table compact_group_source (category string) change_tracking = true
 
 statement ok
-create materialized view compact_group_mv cluster by (category) as
+create materialized view compact_group_mv (category) cluster by (category) as
 select category from compact_group_source group by category
 
 statement ok
