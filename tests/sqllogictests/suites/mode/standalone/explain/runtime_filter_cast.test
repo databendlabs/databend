@@ -60,7 +60,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:b.id (#1), probe targets:[CAST(p.a (#0) AS Int32 NULL)@scan0], filter type:bloom,inlist,min_max
-├── estimated rows: 2.60
+├── estimated rows: 3.00
 ├── TableScan(Build)
 │   ├── table: default.default.rf_cast_build
 │   ├── scan id: 1
@@ -294,7 +294,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:b.id (#1), probe targets:[p.a (#0) + 10@scan0], filter type:bloom,inlist,min_max
-├── estimated rows: 6.00
+├── estimated rows: 2.00
 ├── TableScan(Build)
 │   ├── table: default.default.rf_expr_build
 │   ├── scan id: 1
@@ -337,7 +337,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:1, build key:b.id (#2), probe targets:[p.a (#0) + 10@scan0], filter type:bloom,inlist,min_max
-├── estimated rows: 18.00
+├── estimated rows: 2.00
 ├── TableScan(Build)
 │   ├── table: default.default.rf_expr_build
 │   ├── scan id: 2
@@ -358,7 +358,7 @@ HashJoin
     ├── filters: []
     ├── build join filters:
     │   └── filter id:0, build key:c.id (#1), probe targets:[p.a (#0) + 10@scan0], filter type:bloom,inlist,min_max
-    ├── estimated rows: 9.00
+    ├── estimated rows: 3.00
     ├── TableScan(Build)
     │   ├── table: default.default.rf_expr_connector
     │   ├── scan id: 1
@@ -452,7 +452,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:b.id (#1), probe targets:[CAST(CAST(p.a (#0) AS Int32) AS Int64)@scan0], filter type:bloom,inlist,min_max
-├── estimated rows: 12.00
+├── estimated rows: 3.00
 ├── TableScan(Build)
 │   ├── table: default.default.rf_nested_cast_build
 │   ├── scan id: 1
