@@ -36,52 +36,52 @@ use databend_common_expression::with_unsigned_integer_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::get_levels;
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
+use super::FunctionFactory;
+use super::adaptors::*;
 use super::quantile_tdigest::AggregateQuantileTDigestState;
 use super::serialized_scalar_at;
 
 struct QuantileTDigestWeightedBuilder;
 
 impl QuantileTDigestWeightedBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &["quantile_tdigest_weighted"],
             QuantileTDigestWeightedBuilder::quantile_tdigest_weighted_arguments(),
             QuantileTDigestWeightedBuilder::QUANTILE_TDIGEST_WEIGHTED_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::multi_arg(false, Self::create))
-        .then(v2::MergeRoute::multi_arg(true, Self::create))
-        .then(v2::PlainRoute::multi_arg(Self::create))
-        .then(v2::IfRoute::multi_arg(Self::create))
-        .then(v2::StateRoute::multi_arg(Self::create))
+        .then(MergeRoute::multi_arg(false, Self::create))
+        .then(MergeRoute::multi_arg(true, Self::create))
+        .then(PlainRoute::multi_arg(Self::create))
+        .then(IfRoute::multi_arg(Self::create))
+        .then(StateRoute::multi_arg(Self::create))
         .register(registry);
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["median_tdigest_weighted"],
             QuantileTDigestWeightedBuilder::quantile_tdigest_weighted_arguments(),
             QuantileTDigestWeightedBuilder::MEDIAN_TDIGEST_WEIGHTED_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::multi_arg(false, Self::create_median))
-        .then(v2::MergeRoute::multi_arg(true, Self::create_median))
-        .then(v2::PlainRoute::multi_arg(Self::create_median))
-        .then(v2::IfRoute::multi_arg(Self::create_median))
-        .then(v2::StateRoute::multi_arg(Self::create_median))
+        .then(MergeRoute::multi_arg(false, Self::create_median))
+        .then(MergeRoute::multi_arg(true, Self::create_median))
+        .then(PlainRoute::multi_arg(Self::create_median))
+        .then(IfRoute::multi_arg(Self::create_median))
+        .then(StateRoute::multi_arg(Self::create_median))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: QuantileTDigestWeightedBuilder::register,
     }
 }
 
 impl QuantileTDigestWeightedBuilder {
     fn create_median(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         if !build.params().is_empty() {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
@@ -91,27 +91,27 @@ impl QuantileTDigestWeightedBuilder {
         Self::create(build)
     }
 
-    fn quantile_tdigest_weighted_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![
-            v2::AggregateArgumentPattern::any_number(),
-            v2::AggregateArgumentPattern::any_number(),
+    fn quantile_tdigest_weighted_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![
+            AggregateArgumentPattern::any_number(),
+            AggregateArgumentPattern::any_number(),
         ])
     }
 
-    const QUANTILE_TDIGEST_WEIGHTED_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const QUANTILE_TDIGEST_WEIGHTED_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns an approximate weighted quantile value using t-digest",
         definition: "quantile_tdigest_weighted(level)(expr, weight)",
         example: "select quantile_tdigest_weighted(0.5)(number, weight) from t",
     };
 
-    const MEDIAN_TDIGEST_WEIGHTED_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const MEDIAN_TDIGEST_WEIGHTED_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the approximate weighted median input value using t-digest",
         definition: "median_tdigest_weighted(expr, weight)",
@@ -147,7 +147,7 @@ where
     }
 }
 
-impl<V, W, R> v2::AggrImpl for AggregateQuantileTDigestWeightedImplementation<V, W, R>
+impl<V, W, R> AggrImpl for AggregateQuantileTDigestWeightedImplementation<V, W, R>
 where
     V: AccessType,
     V::Scalar: Number + AsPrimitive<f64>,
@@ -161,7 +161,7 @@ where
         state.write(AggregateQuantileTDigestState::new);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<V>().unwrap();
         let weights = input.columns[1].downcast::<W>().unwrap();
         let state = input.state.get::<AggregateQuantileTDigestState>();
@@ -190,7 +190,7 @@ where
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<V>().unwrap();
         let weights = input.columns[1].downcast::<W>().unwrap();
         for (row, state) in input.states.iter().enumerate() {
@@ -206,7 +206,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<V>().unwrap();
         let weights = input.columns[1].downcast::<W>().unwrap();
         let value = unsafe { values.index_unchecked(input.row) };
@@ -221,7 +221,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let binary_builder = input.builders[0].as_binary_mut().unwrap();
         for state in input.states.iter() {
             let state = state.get::<AggregateQuantileTDigestState>();
@@ -231,7 +231,7 @@ where
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -247,14 +247,14 @@ where
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateQuantileTDigestState>();
         let rhs = input.rhs.get::<AggregateQuantileTDigestState>();
         let mut rhs = rhs.clone_for_merge();
         state.merge_state(&mut rhs)
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateQuantileTDigestState>();
         state.write_result(input.builder, &self.function_info)
     }
@@ -310,8 +310,8 @@ impl QuantileTDigestWeightedResult<ArrayType<Float64Type>> for AggregateQuantile
 
 impl QuantileTDigestWeightedBuilder {
     fn create(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         let value_type = build.args_type()[0].clone();
         let weight_type = build.args_type()[1].clone();
         let display_name = build.name().to_string();
@@ -337,9 +337,9 @@ impl QuantileTDigestWeightedBuilder {
     }
 
     fn create_typed<V, W>(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
         levels: Vec<f64>,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         V: AccessType,
         V::Scalar: Number + AsPrimitive<f64>,
@@ -358,10 +358,10 @@ impl QuantileTDigestWeightedBuilder {
     }
 
     fn create_result<V, W, R>(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
         return_type: DataType,
         levels: Vec<f64>,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         V: AccessType,
         V::Scalar: Number + AsPrimitive<f64>,

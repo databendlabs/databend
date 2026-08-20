@@ -28,8 +28,8 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt32Type;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 #[derive(Default)]
 pub struct AggregateRetentionState {
@@ -53,53 +53,53 @@ pub struct AggregateRetentionImplementation {
 struct RetentionBuilder;
 
 impl RetentionBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &["retention"],
             Self::retention_arguments(),
             Self::RETENTION_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::multi_arg(false, Self::create))
-        .then(v2::MergeRoute::multi_arg(true, Self::create))
-        .then(v2::PlainRoute::multi_arg(Self::create))
-        .then(v2::IfRoute::multi_arg(Self::create))
-        .then(v2::StateRoute::multi_arg(Self::create).with_features(Self::RETENTION_STATE_FEATURES))
-        .then(v2::DistinctRoute::multi_arg(Self::create))
+        .then(MergeRoute::multi_arg(false, Self::create))
+        .then(MergeRoute::multi_arg(true, Self::create))
+        .then(PlainRoute::multi_arg(Self::create))
+        .then(IfRoute::multi_arg(Self::create))
+        .then(StateRoute::multi_arg(Self::create).with_features(Self::RETENTION_STATE_FEATURES))
+        .then(DistinctRoute::multi_arg(Self::create))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: RetentionBuilder::register,
     }
 }
 
 impl RetentionBuilder {
-    fn retention_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::variadic(
+    fn retention_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::variadic(
             vec![],
-            v2::AggregateArgumentPattern::exact(DataType::Boolean),
+            AggregateArgumentPattern::exact(DataType::Boolean),
             1,
             Some(32),
         )
     }
 
-    const RETENTION_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const RETENTION_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "calculates event retention flags",
         definition: "retention(cond1, cond2, ...)",
         example: "select retention(event1, event2) from t",
     };
 
-    const RETENTION_STATE_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const RETENTION_STATE_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the serialized aggregate state",
         definition: "aggregate_state(args...)",
@@ -113,8 +113,8 @@ impl AggregateRetentionImplementation {
         Self { events_size }
     }
 
-    fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(
                 Layout::new::<AggregateRetentionState>(),
             )],
@@ -143,12 +143,12 @@ impl AggregateRetentionImplementation {
     }
 }
 
-impl v2::AggrImpl for AggregateRetentionImplementation {
+impl AggrImpl for AggregateRetentionImplementation {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(AggregateRetentionState::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateRetentionState>();
         let views = self.boolean_views(input.columns);
         for row in 0..input.columns.num_rows() {
@@ -157,7 +157,7 @@ impl v2::AggrImpl for AggregateRetentionImplementation {
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let views = self.boolean_views(input.columns);
         for (row, state) in input.states.iter().enumerate() {
             let state = state.get::<AggregateRetentionState>();
@@ -166,14 +166,14 @@ impl v2::AggrImpl for AggregateRetentionImplementation {
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateRetentionState>();
         let views = self.boolean_views(input.columns);
         self.accumulate_row_into_state(state, &views, input.row);
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for state in input.states.iter() {
             let state = state.get::<AggregateRetentionState>();
             input.builders[0].push(ScalarRef::Number(NumberScalar::UInt32(state.events)));
@@ -181,7 +181,7 @@ impl v2::AggrImpl for AggregateRetentionImplementation {
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -198,13 +198,13 @@ impl v2::AggrImpl for AggregateRetentionImplementation {
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         let rhs = input.rhs.get::<AggregateRetentionState>();
         input.state.get::<AggregateRetentionState>().merge(rhs);
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateRetentionState>();
         let builder = input.builder.as_array_mut().unwrap();
         let inner = builder
@@ -236,8 +236,8 @@ impl v2::AggrImpl for AggregateRetentionImplementation {
 
 impl RetentionBuilder {
     fn create(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         let events_size = build.args_type().len();
         build.create_multi_arg_or_null(
             DataType::Array(Box::new(UInt8Type::data_type())).wrap_nullable(),

@@ -41,20 +41,20 @@ use databend_common_io::geo_to_ewkb;
 use geo::Geometry;
 use geozero::wkb::Ewkb;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct GeographicBuilder;
 
 trait GeographicAggregateMetadata {
     const NAMES: &'static [&'static str];
-    const FEATURES: v2::FunctionFeatures;
+    const FEATURES: FunctionFeatures;
 
-    fn route() -> v2::DirectNameRoute;
+    fn route() -> DirectNameRoute;
 }
 
 impl GeographicBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         CollectAggOp::route().register(registry);
         GeometryUnionAggOp::route().register(registry);
         GeometryIntersectionAggOp::route().register(registry);
@@ -63,39 +63,39 @@ impl GeographicBuilder {
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: GeographicBuilder::register,
     }
 }
 
 impl GeographicAggregateMetadata for CollectAggOp {
     const NAMES: &'static [&'static str] = &["st_collect"];
-    const FEATURES: v2::FunctionFeatures = GeographicBuilder::ST_COLLECT_FEATURES;
+    const FEATURES: FunctionFeatures = GeographicBuilder::ST_COLLECT_FEATURES;
 
-    fn route() -> v2::DirectNameRoute {
+    fn route() -> DirectNameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
         let features = CollectAggOp::FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             CollectAggOp::NAMES,
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::new(
+        .then(MergeRoute::new(
             false,
             GeographicBuilder::create_collect::<CollectAggOp>,
         ))
-        .then(v2::MergeRoute::new(
+        .then(MergeRoute::new(
             true,
             GeographicBuilder::create_collect::<CollectAggOp>,
         ))
-        .then(v2::PlainRoute::new(
+        .then(PlainRoute::new(
             GeographicBuilder::create_collect::<CollectAggOp>,
         ))
-        .then(v2::IfRoute::new(
+        .then(IfRoute::new(
             GeographicBuilder::create_collect::<CollectAggOp>,
         ))
-        .then(v2::StateRoute::new(
+        .then(StateRoute::new(
             GeographicBuilder::create_collect::<CollectAggOp>,
         ))
     }
@@ -103,35 +103,35 @@ impl GeographicAggregateMetadata for CollectAggOp {
 
 impl GeographicAggregateMetadata for GeometryUnionAggOp {
     const NAMES: &'static [&'static str] = &["st_union_agg"];
-    const FEATURES: v2::FunctionFeatures = GeographicBuilder::ST_UNION_AGG_FEATURES;
+    const FEATURES: FunctionFeatures = GeographicBuilder::ST_UNION_AGG_FEATURES;
 
-    fn route() -> v2::DirectNameRoute {
+    fn route() -> DirectNameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
         let features = GeometryUnionAggOp::FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             GeometryUnionAggOp::NAMES,
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::new(
+        .then(MergeRoute::new(
             false,
             GeographicBuilder::create_agg::<GeometryUnionAggOp>,
         ))
-        .then(v2::MergeRoute::new(
+        .then(MergeRoute::new(
             true,
             GeographicBuilder::create_agg::<GeometryUnionAggOp>,
         ))
-        .then(v2::PlainRoute::new(
+        .then(PlainRoute::new(
             GeographicBuilder::create_agg::<GeometryUnionAggOp>,
         ))
-        .then(v2::IfRoute::new(
+        .then(IfRoute::new(
             GeographicBuilder::create_agg::<GeometryUnionAggOp>,
         ))
-        .then(v2::StateRoute::new(
+        .then(StateRoute::new(
             GeographicBuilder::create_agg::<GeometryUnionAggOp>,
         ))
-        .then(v2::DistinctAliasRoute::new(
+        .then(DistinctAliasRoute::new(
             GeographicBuilder::create_agg::<GeometryUnionAggOp>,
         ))
     }
@@ -139,35 +139,35 @@ impl GeographicAggregateMetadata for GeometryUnionAggOp {
 
 impl GeographicAggregateMetadata for GeometryIntersectionAggOp {
     const NAMES: &'static [&'static str] = &["st_intersection_agg"];
-    const FEATURES: v2::FunctionFeatures = GeographicBuilder::ST_INTERSECTION_AGG_FEATURES;
+    const FEATURES: FunctionFeatures = GeographicBuilder::ST_INTERSECTION_AGG_FEATURES;
 
-    fn route() -> v2::DirectNameRoute {
+    fn route() -> DirectNameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
         let features = GeometryIntersectionAggOp::FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             GeometryIntersectionAggOp::NAMES,
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::new(
+        .then(MergeRoute::new(
             false,
             GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
         ))
-        .then(v2::MergeRoute::new(
+        .then(MergeRoute::new(
             true,
             GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
         ))
-        .then(v2::PlainRoute::new(
+        .then(PlainRoute::new(
             GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
         ))
-        .then(v2::IfRoute::new(
+        .then(IfRoute::new(
             GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
         ))
-        .then(v2::StateRoute::new(
+        .then(StateRoute::new(
             GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
         ))
-        .then(v2::DistinctAliasRoute::new(
+        .then(DistinctAliasRoute::new(
             GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
         ))
     }
@@ -175,86 +175,86 @@ impl GeographicAggregateMetadata for GeometryIntersectionAggOp {
 
 impl GeographicAggregateMetadata for EnvelopeAggOp {
     const NAMES: &'static [&'static str] = &["st_envelope_agg"];
-    const FEATURES: v2::FunctionFeatures = GeographicBuilder::ST_ENVELOPE_AGG_FEATURES;
+    const FEATURES: FunctionFeatures = GeographicBuilder::ST_ENVELOPE_AGG_FEATURES;
 
-    fn route() -> v2::DirectNameRoute {
+    fn route() -> DirectNameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
         let features = EnvelopeAggOp::FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             EnvelopeAggOp::NAMES,
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::new(
+        .then(MergeRoute::new(
             false,
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
-        .then(v2::MergeRoute::new(
+        .then(MergeRoute::new(
             true,
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
-        .then(v2::PlainRoute::new(
+        .then(PlainRoute::new(
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
-        .then(v2::IfRoute::new(
+        .then(IfRoute::new(
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
-        .then(v2::StateRoute::new(
+        .then(StateRoute::new(
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
-        .then(v2::DistinctAliasRoute::new(
+        .then(DistinctAliasRoute::new(
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
     }
 }
 
 impl GeographicBuilder {
-    fn geometry_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::one_of(vec![
-            v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::exact(
+    fn geometry_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::one_of(vec![
+            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(
                 DataType::Geometry,
             )]),
-            v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::exact(
+            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(
                 DataType::Null,
             )]),
         ])
     }
 
-    const ST_COLLECT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const ST_COLLECT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "collects geometry values",
         definition: "st_collect(geometry)",
         example: "select st_collect(geom) from t",
     };
 
-    const ST_UNION_AGG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const ST_UNION_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the union of geometry values",
         definition: "st_union_agg(geometry)",
         example: "select st_union_agg(geom) from t",
     };
 
-    const ST_INTERSECTION_AGG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const ST_INTERSECTION_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the intersection of geometry values",
         definition: "st_intersection_agg(geometry)",
         example: "select st_intersection_agg(geom) from t",
     };
 
-    const ST_ENVELOPE_AGG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const ST_ENVELOPE_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the envelope of geometry values",
         definition: "st_envelope_agg(geometry)",
@@ -279,8 +279,8 @@ impl<O> Default for AggregateGeometryAggState<O> {
 }
 
 impl<O> AggregateGeometryAggState<O> {
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<Self>())],
             vec![StateSerdeItem::Binary(None)],
         )
@@ -389,8 +389,8 @@ impl<O> Default for AggregateGeometryCollectState<O> {
 }
 
 impl<O> AggregateGeometryCollectState<O> {
-    fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<Self>())],
             vec![StateSerdeItem::Binary(None)],
         )
@@ -523,14 +523,14 @@ fn merge_geometry_validity(entry: &BlockEntry, validity: Option<Bitmap>) -> Opti
     }
 }
 
-impl<O> v2::AggrImpl for AggregateGeometryAggImplementation<O>
+impl<O> AggrImpl for AggregateGeometryAggImplementation<O>
 where O: GeoAggOp
 {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(AggregateGeometryAggState::<O>::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateGeometryAggState<O>>();
         let (entry, validity) = strip_nullable_geometry_input(input.columns, input.validity);
         if entry.data_type().is_null() {
@@ -554,7 +554,7 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let (entry, validity) = strip_nullable_geometry_input(input.columns, None);
         if entry.data_type().is_null() {
             return Ok(());
@@ -574,7 +574,7 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let (entry, validity) = strip_nullable_geometry_input(input.columns, None);
         if entry.data_type().is_null()
             || validity
@@ -591,7 +591,7 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for state in input.states.iter() {
             state
                 .get::<AggregateGeometryAggState<O>>()
@@ -600,7 +600,7 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -612,7 +612,7 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input
             .state
             .get::<AggregateGeometryAggState<O>>()
@@ -620,14 +620,14 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         input
             .state
             .get::<AggregateGeometryAggState<O>>()
             .merge_result(input.builder)
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         input
             .state
             .get::<AggregateGeometryAggState<O>>()
@@ -639,14 +639,14 @@ where O: GeoAggOp
     }
 }
 
-impl<O> v2::AggrImpl for AggregateGeometryCollectImplementation<O>
+impl<O> AggrImpl for AggregateGeometryCollectImplementation<O>
 where O: GeoAggOp
 {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(AggregateGeometryCollectState::<O>::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateGeometryCollectState<O>>();
         let (entry, validity) = strip_nullable_geometry_input(input.columns, input.validity);
         if entry.data_type().is_null() {
@@ -670,7 +670,7 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let (entry, validity) = strip_nullable_geometry_input(input.columns, None);
         if entry.data_type().is_null() {
             return Ok(());
@@ -690,7 +690,7 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let (entry, validity) = strip_nullable_geometry_input(input.columns, None);
         if entry.data_type().is_null()
             || validity
@@ -707,7 +707,7 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for state in input.states.iter() {
             state
                 .get::<AggregateGeometryCollectState<O>>()
@@ -716,7 +716,7 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -728,7 +728,7 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input
             .state
             .get::<AggregateGeometryCollectState<O>>()
@@ -736,14 +736,14 @@ where O: GeoAggOp
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         input
             .state
             .get::<AggregateGeometryCollectState<O>>()
             .merge_result(input.builder)
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         input
             .state
             .get::<AggregateGeometryCollectState<O>>()
@@ -757,8 +757,8 @@ where O: GeoAggOp
 
 impl GeographicBuilder {
     fn create_agg<O>(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef>
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef>
     where O: GeoAggOp {
         Self::validate_request(&build)?;
 
@@ -770,8 +770,8 @@ impl GeographicBuilder {
     }
 
     fn create_collect<O>(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef>
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef>
     where O: GeoAggOp {
         Self::validate_request(&build)?;
 
@@ -782,7 +782,7 @@ impl GeographicBuilder {
         )
     }
 
-    fn validate_request(build: &v2::DirectBuildContext<'_, impl v2::CombinatorImpl>) -> Result<()> {
+    fn validate_request(build: &DirectBuildContext<'_, impl CombinatorImpl>) -> Result<()> {
         if !build.params().is_empty() {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",

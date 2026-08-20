@@ -37,46 +37,44 @@ use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::ValueType;
 
 use super::super::extract_number_param;
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct MarkovTrainBuilder;
 
 impl MarkovTrainBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &["markov_train"],
             MarkovTrainBuilder::markov_train_arguments(),
             MarkovTrainBuilder::MARKOV_TRAIN_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::multi_arg(false, MarkovTrainBuilder::create))
-        .then(v2::MergeRoute::multi_arg(true, MarkovTrainBuilder::create))
-        .then(v2::PlainRoute::multi_arg(MarkovTrainBuilder::create))
-        .then(v2::IfRoute::multi_arg(MarkovTrainBuilder::create))
-        .then(v2::StateRoute::multi_arg(MarkovTrainBuilder::create))
-        .then(v2::DistinctRoute::multi_arg(MarkovTrainBuilder::create))
+        .then(MergeRoute::multi_arg(false, MarkovTrainBuilder::create))
+        .then(MergeRoute::multi_arg(true, MarkovTrainBuilder::create))
+        .then(PlainRoute::multi_arg(MarkovTrainBuilder::create))
+        .then(IfRoute::multi_arg(MarkovTrainBuilder::create))
+        .then(StateRoute::multi_arg(MarkovTrainBuilder::create))
+        .then(DistinctRoute::multi_arg(MarkovTrainBuilder::create))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: MarkovTrainBuilder::register,
     }
 }
 
 impl MarkovTrainBuilder {
-    fn markov_train_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::exact(
-            DataType::String,
-        )])
+    fn markov_train_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::String)])
     }
 
-    const MARKOV_TRAIN_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const MARKOV_TRAIN_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "trains a markov model",
         definition: "markov_train([params])(expr)",
@@ -166,11 +164,10 @@ pub struct AggregateMarkovTrainState {
 }
 
 impl AggregateMarkovTrainState {
-    fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+    fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 
@@ -261,12 +258,12 @@ impl AggregateMarkovTrainImplementation {
     }
 }
 
-impl v2::AggrImpl for AggregateMarkovTrainImplementation {
+impl AggrImpl for AggregateMarkovTrainImplementation {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(AggregateMarkovTrainState::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateMarkovTrainState>();
         let values = input.columns[0].downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
@@ -287,7 +284,7 @@ impl v2::AggrImpl for AggregateMarkovTrainImplementation {
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
         for (row, state) in input.states.iter().enumerate() {
@@ -300,7 +297,7 @@ impl v2::AggrImpl for AggregateMarkovTrainImplementation {
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
         input.state.get::<AggregateMarkovTrainState>().consume(
@@ -311,7 +308,7 @@ impl v2::AggrImpl for AggregateMarkovTrainImplementation {
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let binary_builder = input.builders[0].as_binary_mut().unwrap();
         for state in input.states.iter() {
             state
@@ -322,7 +319,7 @@ impl v2::AggrImpl for AggregateMarkovTrainImplementation {
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -337,7 +334,7 @@ impl v2::AggrImpl for AggregateMarkovTrainImplementation {
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input
             .state
             .get::<AggregateMarkovTrainState>()
@@ -345,13 +342,13 @@ impl v2::AggrImpl for AggregateMarkovTrainImplementation {
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let model = input.state.get::<AggregateMarkovTrainState>();
         model.finalize(&self.params);
         self.append_model_result(model, input.builder)
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         let mut model = input.state.get::<AggregateMarkovTrainState>().clone();
         model.finalize(&self.params);
         self.append_model_result(&model, input.builder)
@@ -364,8 +361,8 @@ impl v2::AggrImpl for AggregateMarkovTrainImplementation {
 
 impl MarkovTrainBuilder {
     fn create(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         if build.args_type()[0] != DataType::String {
             return Err(ErrorCode::BadDataValueType(format!(
                 "{} does not support type '{:?}', must be string type",

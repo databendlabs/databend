@@ -15,38 +15,33 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
+use super::FunctionFactory;
+use super::adaptors::*;
 use super::count::create_distinct_count_function;
 
 struct UniqBuilder;
 
 impl UniqBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::route().register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: UniqBuilder::register,
     }
 }
 
 impl UniqBuilder {
-    fn uniq_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::variadic(
-            vec![],
-            v2::AggregateArgumentPattern::any(),
-            1,
-            Some(32),
-        )
+    fn uniq_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::variadic(vec![], AggregateArgumentPattern::any(), 1, Some(32))
     }
 
-    const UNIQ_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const UNIQ_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "counts distinct non-null input rows",
         definition: "uniq(expr[, ...])",
@@ -55,24 +50,24 @@ impl UniqBuilder {
 }
 
 impl UniqBuilder {
-    fn route() -> v2::DirectNameRoute {
+    fn route() -> DirectNameRoute {
         let arguments = Self::uniq_arguments();
         let features = Self::UNIQ_FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["uniq"],
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::ReturnsDefaultWhenOnlyNull,
+            NullPolicy::ReturnsDefaultWhenOnlyNull,
         )
         .with_validator(Self::validate_request)
-        .then(v2::MergeRoute::new(false, UniqBuilder::create))
-        .then(v2::MergeRoute::new(true, UniqBuilder::create))
-        .then(v2::PlainRoute::new(UniqBuilder::create))
-        .then(v2::IfRoute::new(UniqBuilder::create))
-        .then(v2::StateRoute::new(UniqBuilder::create))
+        .then(MergeRoute::new(false, UniqBuilder::create))
+        .then(MergeRoute::new(true, UniqBuilder::create))
+        .then(PlainRoute::new(UniqBuilder::create))
+        .then(IfRoute::new(UniqBuilder::create))
+        .then(StateRoute::new(UniqBuilder::create))
     }
 
-    fn validate_request(request: &v2::AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_request(request: &AggregateFunctionRequest<'_>) -> Result<()> {
         if request.params.is_empty() {
             Ok(())
         } else {
@@ -83,9 +78,7 @@ impl UniqBuilder {
         }
     }
 
-    fn create(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         create_distinct_count_function(build, false)
     }
 }

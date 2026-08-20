@@ -33,7 +33,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::utils::column_merge_validity;
 
-use crate::aggregates::aggregate_function_v2_impl::adaptors_v2 as v2;
+use super::*;
 
 pub(crate) fn aggregate_state_data_type(
     function_name: &str,
@@ -81,7 +81,7 @@ impl<I> AggregateStateImplementation<I> {
         }
     }
 
-    fn nested_states<'a>(&self, states: v2::AggregateStateSet<'a>) -> v2::AggregateStateSet<'a> {
+    fn nested_states<'a>(&self, states: AggregateStateSet<'a>) -> AggregateStateSet<'a> {
         if self.nullable_input_result_flag {
             states.without_last_loc()
         } else {
@@ -115,8 +115,8 @@ impl<I> AggregateStateImplementation<I> {
     }
 }
 
-impl<I> v2::AggrImpl for AggregateStateImplementation<I>
-where I: v2::AggrImpl
+impl<I> AggrImpl for AggregateStateImplementation<I>
+where I: AggrImpl
 {
     fn init_state(&self, state: AggrState<'_>) {
         if self.nullable_input_result_flag {
@@ -125,7 +125,7 @@ where I: v2::AggrImpl
         self.nested.init_state(self.nested_state(state))
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         if self.strip_nullable_input {
             let (columns, validity) =
                 Self::strip_nullable_columns(input.columns, input.validity.cloned());
@@ -134,7 +134,7 @@ where I: v2::AggrImpl
             {
                 *Self::nullable_input_flag(input.state) = 1;
             }
-            return self.nested.accumulate(v2::AccumulateInput {
+            return self.nested.accumulate(AccumulateInput {
                 state: self.nested_state(input.state),
                 columns: (&columns).into(),
                 order_by: input.order_by,
@@ -144,7 +144,7 @@ where I: v2::AggrImpl
         self.nested.accumulate(input)
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         if self.strip_nullable_input {
             let (columns, validity) = Self::strip_nullable_columns(input.columns, None);
             let columns: ProjectedBlock<'_> = (&columns).into();
@@ -154,7 +154,7 @@ where I: v2::AggrImpl
                         if self.nullable_input_result_flag {
                             *Self::nullable_input_flag(state) = 1;
                         }
-                        self.nested.accumulate_row(v2::AccumulateRowInput {
+                        self.nested.accumulate_row(AccumulateRowInput {
                             state: self.nested_state(state),
                             columns,
                             row,
@@ -168,7 +168,7 @@ where I: v2::AggrImpl
                     *Self::nullable_input_flag(state) = 1;
                 }
             }
-            return self.nested.accumulate_keys(v2::AccumulateKeysInput {
+            return self.nested.accumulate_keys(AccumulateKeysInput {
                 states: self.nested_states(input.states),
                 columns,
                 order_by: input.order_by,
@@ -177,7 +177,7 @@ where I: v2::AggrImpl
         self.nested.accumulate_keys(input)
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         if self.strip_nullable_input {
             let (columns, validity) = Self::strip_nullable_columns(input.columns, None);
             if validity
@@ -189,7 +189,7 @@ where I: v2::AggrImpl
             if self.nullable_input_result_flag {
                 *Self::nullable_input_flag(input.state) = 1;
             }
-            return self.nested.accumulate_row(v2::AccumulateRowInput {
+            return self.nested.accumulate_row(AccumulateRowInput {
                 state: self.nested_state(input.state),
                 columns: (&columns).into(),
                 row: input.row,
@@ -198,43 +198,41 @@ where I: v2::AggrImpl
         self.nested.accumulate_row(input)
     }
 
-    fn accumulate_row_count(&self, input: v2::AccumulateRowCountInput<'_>) -> Result<()> {
+    fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()> {
         if self.nullable_input_result_flag {
             if input.rows > 0 {
                 *Self::nullable_input_flag(input.state) = 1;
             }
-            return self
-                .nested
-                .accumulate_row_count(v2::AccumulateRowCountInput {
-                    state: self.nested_state(input.state),
-                    rows: input.rows,
-                });
+            return self.nested.accumulate_row_count(AccumulateRowCountInput {
+                state: self.nested_state(input.state),
+                rows: input.rows,
+            });
         }
         self.nested.accumulate_row_count(input)
     }
 
-    fn accumulate_row_count_keys(&self, input: v2::AccumulateRowCountKeysInput<'_>) -> Result<()> {
+    fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
         if self.nullable_input_result_flag {
             for state in input.states.iter() {
                 *Self::nullable_input_flag(state) = 1;
             }
             return self
                 .nested
-                .accumulate_row_count_keys(v2::AccumulateRowCountKeysInput {
+                .accumulate_row_count_keys(AccumulateRowCountKeysInput {
                     states: self.nested_states(input.states),
                 });
         }
         self.nested.accumulate_row_count_keys(input)
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         if self.nullable_input_result_flag {
             let (nested_builders, flag_builder) =
                 input.builders.split_at_mut(input.builders.len() - 1);
             for state in input.states.iter() {
                 flag_builder[0].push(ScalarRef::Boolean(*Self::nullable_input_flag(state) != 0));
             }
-            return self.nested.serialize(v2::SerializeInput {
+            return self.nested.serialize(SerializeInput {
                 states: self.nested_states(input.states),
                 builders: nested_builders,
             });
@@ -242,12 +240,12 @@ where I: v2::AggrImpl
         self.nested.serialize(input)
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         if self.nullable_input_result_flag {
-            let field_count = v2::serialized_field_count(input.state);
+            let field_count = serialized_field_count(input.state);
             let flag_field = field_count - 1;
             let flag_filter =
-                v2::combined_serialized_flag_filter(input.state, input.filter, flag_field);
+                combined_serialized_flag_filter(input.state, input.filter, flag_field);
             for (row, state) in input.states.iter().enumerate() {
                 if flag_filter
                     .as_ref()
@@ -256,8 +254,8 @@ where I: v2::AggrImpl
                     *Self::nullable_input_flag(state) = 1;
                 }
             }
-            let nested_state = v2::project_serialized_fields(input.state, 0, flag_field);
-            return self.nested.merge_serialized(v2::MergeSerializedInput {
+            let nested_state = project_serialized_fields(input.state, 0, flag_field);
+            return self.nested.merge_serialized(MergeSerializedInput {
                 states: self.nested_states(input.states),
                 state: &nested_state,
                 filter: flag_filter.as_ref(),
@@ -266,12 +264,12 @@ where I: v2::AggrImpl
         self.nested.merge_serialized(input)
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         if self.nullable_input_result_flag {
             if *Self::nullable_input_flag(input.rhs) != 0 {
                 *Self::nullable_input_flag(input.state) = 1;
             }
-            return self.nested.merge_states(v2::MergeStatesInput {
+            return self.nested.merge_states(MergeStatesInput {
                 state: self.nested_state(input.state),
                 rhs: self.nested_state(input.rhs),
             });
@@ -279,7 +277,7 @@ where I: v2::AggrImpl
         self.nested.merge_states(input)
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let places = [input.state.addr];
         let builders = input.builder.as_tuple_mut().unwrap().as_mut_slice();
         if self.nullable_input_result_flag {
@@ -287,18 +285,18 @@ where I: v2::AggrImpl
             flag_builder[0].push(ScalarRef::Boolean(
                 *Self::nullable_input_flag(input.state) != 0,
             ));
-            return self.nested.serialize(v2::SerializeInput {
-                states: v2::AggregateStateSet::new(&places, input.state.loc).without_last_loc(),
+            return self.nested.serialize(SerializeInput {
+                states: AggregateStateSet::new(&places, input.state.loc).without_last_loc(),
                 builders: nested_builders,
             });
         }
-        self.nested.serialize(v2::SerializeInput {
-            states: v2::AggregateStateSet::new(&places, input.state.loc),
+        self.nested.serialize(SerializeInput {
+            states: AggregateStateSet::new(&places, input.state.loc),
             builders,
         })
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.merge_result(input)
     }
 
@@ -308,20 +306,19 @@ where I: v2::AggrImpl
 }
 
 pub(crate) fn nullable_input_state_description(
-    state: &v2::AggregateStateDescription,
-) -> v2::AggregateStateDescription {
+    state: &AggregateStateDescription,
+) -> AggregateStateDescription {
     let mut fields = state.fields().to_vec();
     fields.push(AggrStateType::Bool);
     let mut serde_items = state.serde_items().to_vec();
     serde_items.push(StateSerdeItem::DataType(DataType::Boolean));
-    v2::AggregateStateDescription::new(fields, serde_items)
-        .with_manual_drop(state.need_manual_drop())
+    AggregateStateDescription::new(fields, serde_items).with_manual_drop(state.need_manual_drop())
 }
 
 pub(crate) fn create_state_null_result_function(
-    request: v2::AggregateFunctionRequest<'_>,
+    request: AggregateFunctionRequest<'_>,
     returns_default_when_only_null: bool,
-) -> Result<v2::AggregateFunctionRef> {
+) -> Result<AggregateFunctionRef> {
     let (data_type, result) = if returns_default_when_only_null {
         (
             DataType::Number(NumberDataType::UInt64),
@@ -342,7 +339,7 @@ pub(crate) fn create_state_null_result_function(
         request.args_type.to_vec(),
         physical_type,
     )?;
-    let signature = v2::AggregateFunctionSignature {
+    let signature = AggregateFunctionSignature {
         name: request.name.to_string(),
         params: request.params.to_vec(),
         args_type: request.args_type.to_vec(),
@@ -351,10 +348,10 @@ pub(crate) fn create_state_null_result_function(
         return_type,
     };
     let state =
-        v2::AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
             serde_item,
         ]);
-    Ok(Arc::new(v2::AggregateFunction::new(
+    Ok(Arc::new(AggregateFunction::new(
         signature,
         AggregateStateNullResultImplementation::FEATURES,
         state,
@@ -367,10 +364,10 @@ struct AggregateStateNullResultImplementation {
 }
 
 impl AggregateStateNullResultImplementation {
-    const FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "",
         description: "",
         definition: "",
@@ -382,45 +379,45 @@ impl AggregateStateNullResultImplementation {
     }
 }
 
-impl v2::AggrImpl for AggregateStateNullResultImplementation {
+impl AggrImpl for AggregateStateNullResultImplementation {
     fn init_state(&self, _state: AggrState<'_>) {}
 
-    fn accumulate(&self, _input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, _input: AccumulateInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_keys(&self, _input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, _input: AccumulateKeysInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_row(&self, _input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, _input: AccumulateRowInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_row_count(&self, _input: v2::AccumulateRowCountInput<'_>) -> Result<()> {
+    fn accumulate_row_count(&self, _input: AccumulateRowCountInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_row_count_keys(&self, _input: v2::AccumulateRowCountKeysInput<'_>) -> Result<()> {
+    fn accumulate_row_count_keys(&self, _input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for _state in input.states.iter() {
             self.push_result(&mut input.builders[0]);
         }
         Ok(())
     }
 
-    fn merge_serialized(&self, _input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, _input: MergeSerializedInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn merge_states(&self, _input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, _input: MergeStatesInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         if let Some(fields) = input.builder.as_tuple_mut() {
             self.push_result(&mut fields[0]);
         } else {
@@ -429,7 +426,7 @@ impl v2::AggrImpl for AggregateStateNullResultImplementation {
         Ok(())
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.merge_result(input)
     }
 

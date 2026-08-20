@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(super) mod adaptors_v2;
-
+mod adaptors;
 mod approx_count_distinct;
 mod arg_min_max;
 mod array_agg;
@@ -45,17 +44,16 @@ mod window_funnel;
 
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
 
-use self::adaptors_v2 as v2;
-
-struct AggregateFunctionV2Factory {
-    register: fn(&mut v2::AggregateFunctionRegistry),
+struct FunctionFactory {
+    register: fn(&mut AggregateFunctionRegistry),
 }
 
-inventory::collect!(AggregateFunctionV2Factory);
+inventory::collect!(FunctionFactory);
 
-pub(super) fn register_functions(registry: &mut v2::AggregateFunctionRegistry) {
-    for factory in inventory::iter::<AggregateFunctionV2Factory> {
+pub(super) fn register_functions(registry: &mut AggregateFunctionRegistry) {
+    for factory in inventory::iter::<FunctionFactory> {
         (factory.register)(registry);
     }
 }

@@ -43,34 +43,32 @@ use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::AggregateUnaryState;
-use super::adaptors_v2::AggregateUnaryStateImplementation;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct ArrayAggBuilder;
 
 impl ArrayAggBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::route().register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: ArrayAggBuilder::register,
     }
 }
 
 impl ArrayAggBuilder {
-    fn array_agg_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any()])
+    fn array_agg_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
     }
 
-    const ARRAY_AGG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const ARRAY_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Optional,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Optional,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "aggregates values into an array",
         definition: "array_agg(expr)",
@@ -435,8 +433,8 @@ where
     T: AccessType + ValueType,
     T::Scalar: Send + Sync,
 {
-    fn state_description(return_type: DataType) -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    fn state_description(return_type: DataType) -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<Self>())],
             vec![StateSerdeItem::DataType(return_type)],
         )
@@ -473,9 +471,9 @@ where
     T: SimpleType + Debug,
     T::Scalar: Send + Sync,
 {
-    fn state_description(return_type: DataType) -> v2::AggregateStateDescription {
+    fn state_description(return_type: DataType) -> AggregateStateDescription {
         let data_type = return_type.as_array().unwrap().remove_nullable();
-        v2::AggregateStateDescription::new(
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<Self>())],
             vec![StateSerdeItem::DataType(DataType::Array(Box::new(
                 data_type,
@@ -517,8 +515,8 @@ impl<V, const IS_NULL: bool> AggregateUnaryState<ZeroSizeValueType<V>>
     for AggregateArrayAggStateZST<IS_NULL>
 where V: ZeroSizeType
 {
-    fn state_description(_return_type: DataType) -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    fn state_description(_return_type: DataType) -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<Self>())],
             vec![StateSerdeItem::DataType(
                 ArrayType::<BooleanType>::data_type(),
@@ -559,9 +557,9 @@ where V: ZeroSizeType
 impl<T> AggregateUnaryState<T> for AggregateArrayAggStateBinary<T>
 where T: ArgType + AccessType + Debug + Send + Sync
 {
-    fn state_description(return_type: DataType) -> v2::AggregateStateDescription {
+    fn state_description(return_type: DataType) -> AggregateStateDescription {
         let data_type = return_type.as_array().unwrap().remove_nullable();
-        v2::AggregateStateDescription::new(
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<Self>())],
             vec![StateSerdeItem::DataType(DataType::Array(Box::new(
                 data_type,
@@ -596,24 +594,24 @@ where T: ArgType + AccessType + Debug + Send + Sync
 }
 
 impl ArrayAggBuilder {
-    fn route() -> v2::DirectNameRoute {
+    fn route() -> DirectNameRoute {
         let arguments = Self::array_agg_arguments();
         let features = Self::ARRAY_AGG_FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["array_agg", "list"],
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::Keep,
+            NullPolicy::Keep,
         )
         .with_validator(Self::validate_request)
-        .then(v2::MergeRoute::new(false, ArrayAggBuilder::create))
-        .then(v2::MergeRoute::new(true, ArrayAggBuilder::create))
-        .then(v2::PlainRoute::new(ArrayAggBuilder::create))
-        .then(v2::IfRoute::new(ArrayAggBuilder::create))
-        .then(v2::StateRoute::new(ArrayAggBuilder::create))
+        .then(MergeRoute::new(false, ArrayAggBuilder::create))
+        .then(MergeRoute::new(true, ArrayAggBuilder::create))
+        .then(PlainRoute::new(ArrayAggBuilder::create))
+        .then(IfRoute::new(ArrayAggBuilder::create))
+        .then(StateRoute::new(ArrayAggBuilder::create))
     }
 
-    fn validate_request(request: &v2::AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_request(request: &AggregateFunctionRequest<'_>) -> Result<()> {
         if request.params.is_empty() {
             Ok(())
         } else {
@@ -625,16 +623,16 @@ impl ArrayAggBuilder {
     }
 
     fn create(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         let data_type = build.args_type()[0].clone();
         let not_null_type = data_type.remove_nullable();
         let return_type = DataType::Array(Box::new(not_null_type.clone()));
 
         fn simple<V>(
-            build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+            build: DirectBuildContext<'_, impl CombinatorImpl>,
             return_type: DataType,
-        ) -> Result<v2::AggregateFunctionRef>
+        ) -> Result<AggregateFunctionRef>
         where
             V: SimpleType + Debug,
             V::Scalar: Send + Sync,
@@ -708,9 +706,9 @@ impl ArrayAggBuilder {
     }
 
     fn create_instance<T, State>(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
         return_type: DataType,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         T: AccessType,
         State: Default + AggregateUnaryState<T>,

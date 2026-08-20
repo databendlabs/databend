@@ -46,10 +46,8 @@ use databend_common_expression::types::i256;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
-use super::adaptors_v2::*;
+use super::FunctionFactory;
+use super::adaptors::*;
 use super::serialized_scalar_at;
 
 pub const TYPE_ANY: u8 = 0;
@@ -59,7 +57,7 @@ pub const TYPE_MAX: u8 = 2;
 struct MinMaxAnyBuilder;
 
 impl MinMaxAnyBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::route::<TYPE_MIN>().register(registry);
         Self::route::<TYPE_MAX>().register(registry);
         Self::route::<TYPE_ANY>().register(registry);
@@ -67,7 +65,7 @@ impl MinMaxAnyBuilder {
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: MinMaxAnyBuilder::register,
     }
 }
@@ -251,50 +249,50 @@ impl MinMaxAnyBuilder {
         }
     }
 
-    fn route<const CMP_TYPE: u8>() -> v2::DirectNameRoute {
+    fn route<const CMP_TYPE: u8>() -> DirectNameRoute {
         let (names, features, resolver) = match CMP_TYPE {
             TYPE_MIN => (
                 &["min"][..],
                 Self::MIN_FEATURES,
-                Some(Self::legacy_signatures as v2::LegacySignatureResolver),
+                Some(Self::legacy_signatures as LegacySignatureResolver),
             ),
             TYPE_MAX => (
                 &["max"][..],
                 Self::MAX_FEATURES,
-                Some(Self::legacy_signatures as v2::LegacySignatureResolver),
+                Some(Self::legacy_signatures as LegacySignatureResolver),
             ),
             TYPE_ANY => (&["any", "any_value"][..], Self::ANY_FEATURES, None),
             _ => unreachable!(),
         };
-        let route = v2::DirectNameRoute::new(
+        let route = DirectNameRoute::new(
             names,
             Self::min_max_any_arguments(),
             features,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         );
         let route = match resolver {
             Some(resolver) => route
                 .then(
-                    v2::MergeRoute::unary(false, Self::create::<CMP_TYPE>)
+                    MergeRoute::unary(false, Self::create::<CMP_TYPE>)
                         .with_legacy_signature_resolver(resolver),
                 )
                 .then(
-                    v2::MergeRoute::unary(true, Self::create::<CMP_TYPE>)
+                    MergeRoute::unary(true, Self::create::<CMP_TYPE>)
                         .with_legacy_signature_resolver(resolver),
                 ),
             None => route
-                .then(v2::MergeRoute::unary(false, Self::create::<CMP_TYPE>))
-                .then(v2::MergeRoute::unary(true, Self::create::<CMP_TYPE>)),
+                .then(MergeRoute::unary(false, Self::create::<CMP_TYPE>))
+                .then(MergeRoute::unary(true, Self::create::<CMP_TYPE>)),
         };
         route
-            .then(v2::PlainRoute::unary(Self::create::<CMP_TYPE>))
-            .then(v2::IfRoute::unary(Self::create::<CMP_TYPE>))
-            .then(v2::StateRoute::unary(Self::create::<CMP_TYPE>))
-            .then(v2::DistinctAliasRoute::unary(Self::create::<CMP_TYPE>))
+            .then(PlainRoute::unary(Self::create::<CMP_TYPE>))
+            .then(IfRoute::unary(Self::create::<CMP_TYPE>))
+            .then(StateRoute::unary(Self::create::<CMP_TYPE>))
+            .then(DistinctAliasRoute::unary(Self::create::<CMP_TYPE>))
     }
 
     fn create<const CMP_TYPE: u8>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
         let need_drop = need_manual_drop_state(&data_type);
@@ -352,7 +350,7 @@ impl MinMaxAnyBuilder {
     }
 
     fn create_instance<T, const CMP_TYPE: u8>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
         return_type: DataType,
         need_manual_drop: bool,
     ) -> Result<AggregateFunctionRef>

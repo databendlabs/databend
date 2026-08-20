@@ -34,45 +34,43 @@ use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::AggregateUnaryState;
-use super::adaptors_v2::AggregateUnaryStateImplementation;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct JsonArrayAggBuilder;
 
 impl JsonArrayAggBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::route(&["json_array_agg"], Self::JSON_ARRAY_AGG_FEATURES).register(registry);
         Self::route(&["json_agg"], Self::JSON_AGG_FEATURES).register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: JsonArrayAggBuilder::register,
     }
 }
 
 impl JsonArrayAggBuilder {
-    fn json_array_agg_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any()])
+    fn json_array_agg_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
     }
 
-    const JSON_ARRAY_AGG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const JSON_ARRAY_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "aggregates values into a JSON array",
         definition: "json_array_agg(expr)",
         example: "select json_array_agg(number) from numbers(10)",
     };
 
-    const JSON_AGG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const JSON_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "aggregates values into a JSON array",
         definition: "json_agg(expr)",
@@ -104,11 +102,10 @@ where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
 {
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 
@@ -185,7 +182,7 @@ where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Clone + Send + Sync,
 {
-    fn state_description(_return_type: DataType) -> v2::AggregateStateDescription {
+    fn state_description(_return_type: DataType) -> AggregateStateDescription {
         Self::state_description()
     }
 
@@ -215,26 +212,18 @@ where
 }
 
 impl JsonArrayAggBuilder {
-    fn route(
-        names: &'static [&'static str],
-        features: v2::FunctionFeatures,
-    ) -> v2::DirectNameRoute {
+    fn route(names: &'static [&'static str], features: FunctionFeatures) -> DirectNameRoute {
         let arguments = Self::json_array_agg_arguments();
-        v2::DirectNameRoute::new(
-            names,
-            arguments.clone(),
-            features.clone(),
-            v2::NullPolicy::Keep,
-        )
-        .with_validator(Self::validate_request)
-        .then(v2::MergeRoute::new(false, JsonArrayAggBuilder::create))
-        .then(v2::MergeRoute::new(true, JsonArrayAggBuilder::create))
-        .then(v2::PlainRoute::new(JsonArrayAggBuilder::create))
-        .then(v2::IfRoute::new(JsonArrayAggBuilder::create))
-        .then(v2::StateRoute::new(JsonArrayAggBuilder::create))
+        DirectNameRoute::new(names, arguments.clone(), features.clone(), NullPolicy::Keep)
+            .with_validator(Self::validate_request)
+            .then(MergeRoute::new(false, JsonArrayAggBuilder::create))
+            .then(MergeRoute::new(true, JsonArrayAggBuilder::create))
+            .then(PlainRoute::new(JsonArrayAggBuilder::create))
+            .then(IfRoute::new(JsonArrayAggBuilder::create))
+            .then(StateRoute::new(JsonArrayAggBuilder::create))
     }
 
-    fn validate_request(request: &v2::AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_request(request: &AggregateFunctionRequest<'_>) -> Result<()> {
         if request.params.is_empty() {
             Ok(())
         } else {
@@ -245,9 +234,7 @@ impl JsonArrayAggBuilder {
         }
     }
 
-    fn create(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         build.create(
             DataType::Variant,
             <JsonArrayAggState<AnyType> as AggregateUnaryState<AnyType>>::state_description(

@@ -27,7 +27,7 @@ use super::unary::UnaryAccumulateInput;
 use super::unary::UnaryAccumulateKeysInput;
 use super::unary::UnaryAccumulateRowInput;
 use super::unary::UnaryAggrImpl;
-use crate::aggregates::aggregate_function_v2_impl::adaptors_v2 as v2;
+use super::*;
 
 pub(crate) type UnarySkipNull<U> = UnaryNullable<U, false>;
 pub(crate) type UnaryOrNull<U> = UnaryNullable<U, true>;
@@ -43,7 +43,7 @@ impl<U, const RESULT_NULL: bool> UnaryNullable<U, RESULT_NULL> {
 
     fn flag(state: AggrState<'_>) -> &mut u8 {
         debug_assert!(RESULT_NULL);
-        v2::state_at(state, state.loc.len() - 1)
+        state_at(state, state.loc.len() - 1)
     }
 
     fn mark_seen(rows: usize, validity: Option<&Bitmap>) -> bool {
@@ -177,7 +177,7 @@ where
         })
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         if !RESULT_NULL {
             return self.inner.serialize(input);
         }
@@ -185,20 +185,19 @@ where
         for state in input.states.iter() {
             flag_builder[0].push(ScalarRef::Boolean(*Self::flag(state) != 0));
         }
-        self.inner.serialize(v2::SerializeInput {
+        self.inner.serialize(SerializeInput {
             states: input.states.without_last_loc(),
             builders: inner_builders,
         })
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         if !RESULT_NULL {
             return self.inner.merge_serialized(input);
         }
-        let field_count = v2::serialized_field_count(input.state);
+        let field_count = serialized_field_count(input.state);
         let flag_field = field_count - 1;
-        let flag_filter =
-            v2::combined_serialized_flag_filter(input.state, input.filter, flag_field);
+        let flag_filter = combined_serialized_flag_filter(input.state, input.filter, flag_field);
         for (row, state) in input.states.iter().enumerate() {
             if flag_filter
                 .as_ref()
@@ -207,28 +206,28 @@ where
                 *Self::flag(state) = 1;
             }
         }
-        let inner_state = v2::project_serialized_fields(input.state, 0, flag_field);
-        self.inner.merge_serialized(v2::MergeSerializedInput {
+        let inner_state = project_serialized_fields(input.state, 0, flag_field);
+        self.inner.merge_serialized(MergeSerializedInput {
             states: input.states.without_last_loc(),
             state: &inner_state,
             filter: flag_filter.as_ref(),
         })
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         if RESULT_NULL {
             let seen = *Self::flag(input.rhs) != 0;
             if seen {
                 *Self::flag(input.state) = 1;
             }
         }
-        self.inner.merge_states(v2::MergeStatesInput {
+        self.inner.merge_states(MergeStatesInput {
             state: Self::inner_state(input.state),
             rhs: Self::inner_state(input.rhs),
         })
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         if !RESULT_NULL {
             return self.inner.merge_result(input);
         }
@@ -237,20 +236,20 @@ where
             return Ok(());
         }
         if let ColumnBuilder::Nullable(inner) = input.builder {
-            self.inner.merge_result(v2::MergeResultInput {
+            self.inner.merge_result(MergeResultInput {
                 state: input.state.remove_last_loc(),
                 builder: &mut inner.builder,
             })?;
             inner.validity.push(true);
             return Ok(());
         }
-        self.inner.merge_result(v2::MergeResultInput {
+        self.inner.merge_result(MergeResultInput {
             state: input.state.remove_last_loc(),
             builder: input.builder,
         })
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         if !RESULT_NULL {
             return self.inner.merge_result_read_only(input);
         }
@@ -259,14 +258,14 @@ where
             return Ok(());
         }
         if let ColumnBuilder::Nullable(inner) = input.builder {
-            self.inner.merge_result_read_only(v2::MergeResultInput {
+            self.inner.merge_result_read_only(MergeResultInput {
                 state: input.state.remove_last_loc(),
                 builder: &mut inner.builder,
             })?;
             inner.validity.push(true);
             return Ok(());
         }
-        self.inner.merge_result_read_only(v2::MergeResultInput {
+        self.inner.merge_result_read_only(MergeResultInput {
             state: input.state.remove_last_loc(),
             builder: input.builder,
         })

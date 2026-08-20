@@ -47,19 +47,8 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::AggregateFunctionRef;
-use super::adaptors_v2::AggregateStateDescription;
-use super::adaptors_v2::FunctionFeatures;
-use super::adaptors_v2::MergeResultInput;
-use super::adaptors_v2::MergeSerializedInput;
-use super::adaptors_v2::MergeStatesInput;
-use super::adaptors_v2::SerializeInput;
-use super::adaptors_v2::UnaryAccumulateInput;
-use super::adaptors_v2::UnaryAccumulateKeysInput;
-use super::adaptors_v2::UnaryAccumulateRowInput;
-use super::adaptors_v2::UnaryAggrImpl;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct AvgBuilder;
 
@@ -68,37 +57,37 @@ impl AvgBuilder {
 
     const FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "averages non-null numeric values",
         definition: "avg(expr)",
         example: "select avg(number) from numbers(10)",
     };
 
-    fn arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any_numeric()])
+    fn arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()])
     }
 
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &[Self::NAME],
             Self::arguments(),
             Self::FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::unary(false, Self::create))
-        .then(v2::MergeRoute::unary(true, Self::create))
-        .then(v2::PlainRoute::unary(Self::create))
-        .then(v2::IfRoute::unary(Self::create))
-        .then(v2::StateRoute::unary(Self::create))
-        .then(v2::DistinctRoute::unary(Self::create))
+        .then(MergeRoute::unary(false, Self::create))
+        .then(MergeRoute::unary(true, Self::create))
+        .then(PlainRoute::unary(Self::create))
+        .then(IfRoute::unary(Self::create))
+        .then(StateRoute::unary(Self::create))
+        .then(DistinctRoute::unary(Self::create))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: AvgBuilder::register,
     }
 }
@@ -333,7 +322,7 @@ where T: Decimal + std::ops::AddAssign
 
 impl AvgBuilder {
     fn create(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
@@ -382,7 +371,7 @@ impl AvgBuilder {
     }
 
     fn create_number<S, I>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
         sum_type: DataType,
     ) -> Result<AggregateFunctionRef>
     where
@@ -399,7 +388,7 @@ impl AvgBuilder {
     }
 
     fn create_decimal<S, T>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
         return_type: DataType,
         function_info: DecimalAvgData,
     ) -> Result<AggregateFunctionRef>
@@ -416,7 +405,7 @@ impl AvgBuilder {
     }
 
     fn create_instance<S, I, R>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
         return_type: DataType,
         state: AggregateStateDescription,
         function_info: Arc<S::FunctionInfo>,

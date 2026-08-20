@@ -38,44 +38,43 @@ use databend_common_expression::types::i256;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct ModeBuilder;
 
 impl ModeBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &["mode"],
             ModeBuilder::mode_arguments(),
             ModeBuilder::MODE_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::unary(false, ModeBuilder::create))
-        .then(v2::MergeRoute::unary(true, ModeBuilder::create))
-        .then(v2::PlainRoute::unary(ModeBuilder::create))
-        .then(v2::IfRoute::unary(ModeBuilder::create))
-        .then(v2::StateRoute::unary(ModeBuilder::create))
+        .then(MergeRoute::unary(false, ModeBuilder::create))
+        .then(MergeRoute::unary(true, ModeBuilder::create))
+        .then(PlainRoute::unary(ModeBuilder::create))
+        .then(IfRoute::unary(ModeBuilder::create))
+        .then(StateRoute::unary(ModeBuilder::create))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: ModeBuilder::register,
     }
 }
 
 impl ModeBuilder {
-    fn mode_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any()])
+    fn mode_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
     }
 
-    const MODE_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const MODE_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the most frequent input value",
         definition: "mode(expr)",
@@ -109,11 +108,10 @@ where
     T: ValueType,
     T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize,
 {
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 
@@ -218,9 +216,7 @@ where
 }
 
 impl ModeBuilder {
-    fn create(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
 
         with_number_mapped_type!(|NUM| match &data_type {
@@ -239,9 +235,9 @@ impl ModeBuilder {
     }
 
     fn create_instance<T>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
         return_type: DataType,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         T: AccessType + ValueType,
         T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize,

@@ -38,7 +38,7 @@ use databend_common_expression::utils::column_merge_validity;
 
 use super::unary_nullable::UnaryOrNull;
 use super::unary_nullable::UnarySkipNull;
-use crate::aggregates::aggregate_function_v2_impl::adaptors_v2 as v2;
+use super::*;
 
 pub(crate) trait UnaryState<I, R>: Send + 'static
 where
@@ -123,7 +123,7 @@ pub(crate) struct UnaryAccumulateInput<'a> {
 }
 
 pub(crate) struct UnaryAccumulateKeysInput<'a> {
-    pub(crate) states: v2::AggregateStateSet<'a>,
+    pub(crate) states: AggregateStateSet<'a>,
     pub(crate) column: &'a BlockEntry,
 }
 
@@ -146,15 +146,15 @@ where
 
     fn accumulate_row(&self, input: UnaryAccumulateRowInput<'_>) -> Result<()>;
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()>;
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()>;
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()>;
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()>;
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()>;
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()>;
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()>;
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()>;
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.merge_result(input)
     }
 
@@ -202,7 +202,7 @@ impl<U> UnaryDistinct<U> {
     }
 
     fn state(state: AggrState<'_>) -> &mut UnaryDistinctState {
-        v2::state_at(state, 0)
+        state_at(state, 0)
     }
 
     fn add_scalar(state: &mut UnaryDistinctState, value: ScalarRef<'_>) -> Result<()> {
@@ -263,17 +263,17 @@ where
 
 pub(crate) fn create_unary_distinct_or_null_aggregate_function<S, I, R, C>(
     combinator: C,
-    signature: v2::AggregateFunctionSignature,
-    features: v2::FunctionFeatures,
-    state: v2::AggregateStateDescription,
+    signature: AggregateFunctionSignature,
+    features: FunctionFeatures,
+    state: AggregateStateDescription,
     function_info: S::FunctionInfo,
     distinct_args_type: Vec<DataType>,
-) -> Result<v2::AggregateFunctionRef>
+) -> Result<AggregateFunctionRef>
 where
     S: UnaryState<I, R>,
     I: AccessType,
     R: ValueType,
-    C: v2::CombinatorImpl,
+    C: CombinatorImpl,
 {
     debug_assert_eq!(distinct_args_type.len(), 1);
     let implementation = UnaryAggregateImplementation::new(UnarySkipNull::new(UnaryOrNull::new(
@@ -293,8 +293,8 @@ where
 }
 
 fn unary_distinct_or_null_state_description(
-    state: &v2::AggregateStateDescription,
-) -> v2::AggregateStateDescription {
+    state: &AggregateStateDescription,
+) -> AggregateStateDescription {
     let mut fields = Vec::with_capacity(state.fields().len() + 2);
     fields.push(AggrStateType::Custom(Layout::new::<UnaryDistinctState>()));
     fields.extend_from_slice(state.fields());
@@ -307,12 +307,12 @@ fn unary_distinct_or_null_state_description(
     serde_items.extend_from_slice(state.serde_items());
     serde_items.push(StateSerdeItem::DataType(DataType::Boolean));
 
-    v2::AggregateStateDescription::new(fields, serde_items).with_manual_drop(true)
+    AggregateStateDescription::new(fields, serde_items).with_manual_drop(true)
 }
 
 pub fn unary_distinct_state_description(
-    state: &v2::AggregateStateDescription,
-) -> v2::AggregateStateDescription {
+    state: &AggregateStateDescription,
+) -> AggregateStateDescription {
     let mut fields = Vec::with_capacity(state.fields().len() + 1);
     fields.push(AggrStateType::Custom(Layout::new::<UnaryDistinctState>()));
     fields.extend_from_slice(state.fields());
@@ -323,7 +323,7 @@ pub fn unary_distinct_state_description(
     ))));
     serde_items.extend_from_slice(state.serde_items());
 
-    v2::AggregateStateDescription::new(fields, serde_items).with_manual_drop(true)
+    AggregateStateDescription::new(fields, serde_items).with_manual_drop(true)
 }
 
 impl<I, R, U> UnaryAggrImpl<I, R> for UnaryDistinct<U>
@@ -333,7 +333,7 @@ where
     U: UnaryAggrImpl<I, R>,
 {
     fn init_state(&self, state: AggrState<'_>) {
-        v2::write_state_at(state, 0, UnaryDistinctState::default());
+        write_state_at(state, 0, UnaryDistinctState::default());
         self.inner.init_state(state.remove_first_loc());
     }
 
@@ -365,7 +365,7 @@ where
         )
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let (key_builders, inner_builders) = input.builders.split_at_mut(1);
         let mut key_builder = ArrayType::<BinaryType>::downcast_builder(&mut key_builders[0]);
         for state in input.states.iter() {
@@ -374,19 +374,19 @@ where
             }
             key_builder.commit_row();
         }
-        self.inner.serialize(v2::SerializeInput {
+        self.inner.serialize(SerializeInput {
             states: input.states.without_first_loc(),
             builders: inner_builders,
         })
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
             }
             let state = Self::state(state);
-            let ScalarRef::Array(keys) = v2::serialized_scalar_at(input.state, row, 0) else {
+            let ScalarRef::Array(keys) = serialized_scalar_at(input.state, row, 0) else {
                 unreachable!()
             };
             let keys = BinaryType::try_downcast_column(&keys).unwrap();
@@ -395,16 +395,16 @@ where
             }
         }
 
-        let field_count = v2::serialized_field_count(input.state);
-        let inner_state = v2::project_serialized_fields(input.state, 1, field_count);
-        self.inner.merge_serialized(v2::MergeSerializedInput {
+        let field_count = serialized_field_count(input.state);
+        let inner_state = project_serialized_fields(input.state, 1, field_count);
+        self.inner.merge_serialized(MergeSerializedInput {
             states: input.states.without_first_loc(),
             state: &inner_state,
             filter: input.filter,
         })
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         let state = Self::state(input.state);
         let rhs = Self::state(input.rhs);
         for key in rhs.keys.drain() {
@@ -414,17 +414,17 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.replay_keys::<I, R>(input.state)?;
-        self.inner.merge_result(v2::MergeResultInput {
+        self.inner.merge_result(MergeResultInput {
             state: input.state.remove_first_loc(),
             builder: input.builder,
         })
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.replay_keys::<I, R>(input.state)?;
-        self.inner.merge_result_read_only(v2::MergeResultInput {
+        self.inner.merge_result_read_only(MergeResultInput {
             state: input.state.remove_first_loc(),
             builder: input.builder,
         })
@@ -436,7 +436,7 @@ where
     }
 }
 
-impl<I, R, U> v2::AggrImpl for UnaryAggregateImplementation<I, R, U>
+impl<I, R, U> AggrImpl for UnaryAggregateImplementation<I, R, U>
 where
     I: AccessType,
     R: ValueType,
@@ -446,7 +446,7 @@ where
         self.inner.init_state(state)
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         self.inner.accumulate(UnaryAccumulateInput {
             state: input.state,
             column: &input.columns[0],
@@ -454,14 +454,14 @@ where
         })
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         self.inner.accumulate_keys(UnaryAccumulateKeysInput {
             states: input.states,
             column: &input.columns[0],
         })
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         self.inner.accumulate_row(UnaryAccumulateRowInput {
             state: input.state,
             column: &input.columns[0],
@@ -469,23 +469,23 @@ where
         })
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         self.inner.serialize(input)
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         self.inner.merge_serialized(input)
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         self.inner.merge_states(input)
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.inner.merge_result(input)
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.inner.merge_result_read_only(input)
     }
 
@@ -557,7 +557,7 @@ where
         state.add(value, &self.function_info)
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for state in input.states.iter() {
             let state = state.get::<S>();
             state.serialize(&mut input.builders[0], &self.function_info)?;
@@ -565,7 +565,7 @@ where
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -579,12 +579,12 @@ where
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         let state = input.state.get::<S>();
         state.merge_owned(input.rhs.get::<S>())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = input.state.get::<S>();
         let builder = R::downcast_builder(input.builder);
         state.merge_result(builder, &self.function_info)

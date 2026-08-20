@@ -41,37 +41,37 @@ use databend_common_expression::with_integer_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::extract_number_param;
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct WindowFunnelBuilder;
 
 impl WindowFunnelBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::route().register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: WindowFunnelBuilder::register,
     }
 }
 
 impl WindowFunnelBuilder {
-    fn window_funnel_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::variadic(
-            vec![v2::AggregateArgumentPattern::any()],
-            v2::AggregateArgumentPattern::exact(DataType::Boolean),
+    fn window_funnel_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::variadic(
+            vec![AggregateArgumentPattern::any()],
+            AggregateArgumentPattern::exact(DataType::Boolean),
             1,
             Some(32),
         )
     }
 
-    const WINDOW_FUNNEL_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const WINDOW_FUNNEL_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "calculates the maximum event funnel level within a time window",
         definition: "window_funnel(window)(timestamp, event1, ...)",
@@ -148,25 +148,23 @@ fn compare_event<T: Ord>(lhs: &(T, u8), rhs: &(T, u8)) -> Ordering {
 }
 
 impl WindowFunnelBuilder {
-    fn route() -> v2::DirectNameRoute {
+    fn route() -> DirectNameRoute {
         let arguments = Self::window_funnel_arguments();
         let features = Self::WINDOW_FUNNEL_FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["window_funnel"],
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::new(false, WindowFunnelBuilder::create))
-        .then(v2::MergeRoute::new(true, WindowFunnelBuilder::create))
-        .then(v2::PlainRoute::new(WindowFunnelBuilder::create))
-        .then(v2::IfRoute::new(WindowFunnelBuilder::create))
-        .then(v2::StateRoute::new(WindowFunnelBuilder::create))
+        .then(MergeRoute::new(false, WindowFunnelBuilder::create))
+        .then(MergeRoute::new(true, WindowFunnelBuilder::create))
+        .then(PlainRoute::new(WindowFunnelBuilder::create))
+        .then(IfRoute::new(WindowFunnelBuilder::create))
+        .then(StateRoute::new(WindowFunnelBuilder::create))
     }
 
-    fn create(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         if build.params().len() != 1 {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects one parameter",
@@ -199,9 +197,9 @@ impl WindowFunnelBuilder {
     }
 
     fn create_instance<T>(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
         window: u64,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         T: ArgType,
         T::Scalar: Number
@@ -218,7 +216,7 @@ impl WindowFunnelBuilder {
         build.create(
             UInt8Type::data_type().wrap_nullable(),
             state.with_null_flag(),
-            v2::AggregateMultiArgOrNullImplementation::new(implementation),
+            AggregateMultiArgOrNullImplementation::new(implementation),
         )
     }
 }
@@ -248,8 +246,8 @@ where
         }
     }
 
-    fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<
                 AggregateWindowFunnelState<T::Scalar>,
             >())],
@@ -326,7 +324,7 @@ where
         serialized_state: &BlockEntry,
         row: usize,
     ) -> Result<()> {
-        let ScalarRef::Binary(mut data) = v2::serialized_scalar_at(serialized_state, row, 0) else {
+        let ScalarRef::Binary(mut data) = serialized_scalar_at(serialized_state, row, 0) else {
             unreachable!()
         };
         let mut rhs = AggregateWindowFunnelState::<T::Scalar>::deserialize_reader(&mut data)?;
@@ -335,7 +333,7 @@ where
     }
 }
 
-impl<T> v2::AggrImpl for AggregateWindowFunnelImplementation<T>
+impl<T> AggrImpl for AggregateWindowFunnelImplementation<T>
 where
     T: ArgType,
     T::Scalar: Number
@@ -350,7 +348,7 @@ where
         state.write(AggregateWindowFunnelState::<T::Scalar>::new);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let rows = input.columns.num_rows();
         let state = self.window_state(input.state);
         for row in 0..rows {
@@ -365,19 +363,19 @@ where
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             self.accumulate_seen_row(state, input.columns, row)?;
         }
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         self.accumulate_seen_row(input.state, input.columns, input.row)?;
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let [state_builder] = input.builders else {
             unreachable!()
         };
@@ -390,7 +388,7 @@ where
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -400,13 +398,13 @@ where
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         self.window_state(input.state)
             .merge_owned(self.window_state(input.rhs));
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = self.window_state(input.state);
         let result = self.event_level(state);
         input

@@ -25,12 +25,12 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 
-use crate::aggregates::aggregate_function_v2_impl::adaptors_v2 as v2;
+use super::*;
 
 pub(crate) fn try_create_null_argument_result_function(
-    request: v2::AggregateFunctionRequest<'_>,
+    request: AggregateFunctionRequest<'_>,
     returns_default_when_only_null: bool,
-) -> Result<v2::AggregateFunctionRef> {
+) -> Result<AggregateFunctionRef> {
     let (data_type, result) = if returns_default_when_only_null {
         (
             DataType::Number(NumberDataType::UInt64),
@@ -40,7 +40,7 @@ pub(crate) fn try_create_null_argument_result_function(
         (DataType::Null, Scalar::Null)
     };
     let return_type = data_type.clone();
-    let signature = v2::AggregateFunctionSignature {
+    let signature = AggregateFunctionSignature {
         name: request.name.to_string(),
         params: request.params.to_vec(),
         args_type: request.args_type.to_vec(),
@@ -49,12 +49,12 @@ pub(crate) fn try_create_null_argument_result_function(
         return_type,
     };
     let state =
-        v2::AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
             StateSerdeItem::DataType(data_type),
         ]);
-    Ok(Arc::new(v2::AggregateFunction::new(
+    Ok(Arc::new(AggregateFunction::new(
         signature,
-        v2::FunctionFeatures::default(),
+        FunctionFeatures::default(),
         state,
         AggregateFixedResultImplementation { result },
     )))
@@ -74,50 +74,50 @@ impl AggregateFixedResultImplementation {
     }
 }
 
-impl v2::AggrImpl for AggregateFixedResultImplementation {
+impl AggrImpl for AggregateFixedResultImplementation {
     fn init_state(&self, _state: AggrState<'_>) {}
 
-    fn accumulate(&self, _input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, _input: AccumulateInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_keys(&self, _input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, _input: AccumulateKeysInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_row(&self, _input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, _input: AccumulateRowInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_row_count(&self, _input: v2::AccumulateRowCountInput<'_>) -> Result<()> {
+    fn accumulate_row_count(&self, _input: AccumulateRowCountInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_row_count_keys(&self, _input: v2::AccumulateRowCountKeysInput<'_>) -> Result<()> {
+    fn accumulate_row_count_keys(&self, _input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for _state in input.states.iter() {
             self.push_result(&mut input.builders[0]);
         }
         Ok(())
     }
 
-    fn merge_serialized(&self, _input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, _input: MergeSerializedInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn merge_states(&self, _input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, _input: MergeStatesInput<'_>) -> Result<()> {
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.push_result(input.builder);
         Ok(())
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.merge_result(input)
     }
 

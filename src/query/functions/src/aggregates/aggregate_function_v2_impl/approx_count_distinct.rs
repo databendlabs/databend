@@ -39,40 +39,39 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 use simple_hll::HyperLogLog;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct ApproxCountDistinctBuilder;
 
 impl ApproxCountDistinctBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &["approx_count_distinct"],
-            v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any()]),
+            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()]),
             Self::APPROX_COUNT_DISTINCT_FEATURES,
-            v2::NullPolicy::ReturnsDefaultWhenOnlyNull,
+            NullPolicy::ReturnsDefaultWhenOnlyNull,
         )
-        .then(v2::MergeRoute::unary(false, Self::create))
-        .then(v2::MergeRoute::unary(true, Self::create))
-        .then(v2::PlainRoute::unary(Self::create))
-        .then(v2::IfRoute::unary(Self::create))
-        .then(v2::StateRoute::unary(Self::create))
+        .then(MergeRoute::unary(false, Self::create))
+        .then(MergeRoute::unary(true, Self::create))
+        .then(PlainRoute::unary(Self::create))
+        .then(IfRoute::unary(Self::create))
+        .then(StateRoute::unary(Self::create))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: ApproxCountDistinctBuilder::register,
     }
 }
 
 impl ApproxCountDistinctBuilder {
-    const APPROX_COUNT_DISTINCT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const APPROX_COUNT_DISTINCT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "estimates the number of distinct input values",
         definition: "approx_count_distinct(expr)",
@@ -103,11 +102,10 @@ where
     T: ValueType,
     T::Scalar: Hash,
 {
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 
@@ -176,9 +174,7 @@ where
 }
 
 impl ApproxCountDistinctBuilder {
-    fn create(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let mut p = 14;
         if !build.params().is_empty() {
             let error_rate = Self::extract_f64_param(build.params()[0].clone())?;
@@ -204,9 +200,9 @@ impl ApproxCountDistinctBuilder {
     }
 
     fn create_templated<const P: usize>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
         data_type: &DataType,
-    ) -> Result<v2::AggregateFunctionRef> {
+    ) -> Result<AggregateFunctionRef> {
         with_number_mapped_type!(|NUM_TYPE| match data_type {
             DataType::Number(NumberDataType::NUM_TYPE) => {
                 Self::create_instance::<P, NumberType<NUM_TYPE>>(build)
@@ -219,8 +215,8 @@ impl ApproxCountDistinctBuilder {
     }
 
     fn create_instance<const P: usize, T>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef>
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef>
     where
         T: ValueType,
         T::Scalar: Hash,

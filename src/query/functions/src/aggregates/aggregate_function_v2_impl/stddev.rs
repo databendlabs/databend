@@ -38,10 +38,8 @@ use databend_common_expression::types::number::F64;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
-use super::adaptors_v2::*;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 pub const STD_POP: u8 = 0;
 pub const STD_SAMP: u8 = 1;
@@ -51,36 +49,36 @@ pub const VAR_SAMP: u8 = 3;
 struct StddevBuilder;
 
 impl StddevBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::route::<STD_POP>().register(registry);
         Self::route::<STD_SAMP>().register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: StddevBuilder::register,
     }
 }
 
 impl StddevBuilder {
-    fn route<const TYPE: u8>() -> v2::DirectNameRoute {
+    fn route<const TYPE: u8>() -> DirectNameRoute {
         let (names, features) = match TYPE {
             STD_POP => (&["stddev_pop", "std"][..], Self::STDDEV_POP_FEATURES),
             STD_SAMP => (&["stddev_samp", "stddev"][..], Self::STDDEV_SAMP_FEATURES),
             _ => unreachable!(),
         };
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             names,
             Self::stddev_arguments(),
             features,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::unary(false, Self::create_for_type::<TYPE>))
-        .then(v2::MergeRoute::unary(true, Self::create_for_type::<TYPE>))
-        .then(v2::PlainRoute::unary(Self::create_for_type::<TYPE>))
-        .then(v2::IfRoute::unary(Self::create_for_type::<TYPE>))
-        .then(v2::StateRoute::unary(Self::create_for_type::<TYPE>))
+        .then(MergeRoute::unary(false, Self::create_for_type::<TYPE>))
+        .then(MergeRoute::unary(true, Self::create_for_type::<TYPE>))
+        .then(PlainRoute::unary(Self::create_for_type::<TYPE>))
+        .then(IfRoute::unary(Self::create_for_type::<TYPE>))
+        .then(StateRoute::unary(Self::create_for_type::<TYPE>))
     }
 
     fn stddev_arguments() -> AggregateArgumentsPattern {
@@ -230,7 +228,7 @@ where
 
 impl StddevBuilder {
     fn create_for_type<const TYPE: u8>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {
         let display_name = build.name();
         let data_type = build.arg_type().clone();
@@ -256,7 +254,7 @@ impl StddevBuilder {
     }
 
     fn create<const TYPE: u8, I>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
     ) -> Result<AggregateFunctionRef>
     where
         AggregateStddevState<TYPE>: UnaryState<I, NullableType<Float64Type>, FunctionInfo = ()>,

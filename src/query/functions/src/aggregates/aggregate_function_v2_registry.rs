@@ -17,44 +17,42 @@ use std::sync::LazyLock;
 use databend_common_exception::Result;
 use databend_common_expression::Symbol;
 use databend_common_expression::SymbolOrOffset;
-use databend_common_expression::aggregate::aggregate_function as v2;
+pub use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRegistry;
+use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
+use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 
 use super::AggregateFunctionSortDesc;
 use super::aggregate_function_v2_impl;
 
-pub static AGGR_REGISTRY: LazyLock<v2::AggregateFunctionRegistry> = LazyLock::new(|| {
-    let mut registry = v2::AggregateFunctionRegistry::empty();
+pub static AGGR_REGISTRY: LazyLock<AggregateFunctionRegistry> = LazyLock::new(|| {
+    let mut registry = AggregateFunctionRegistry::empty();
     aggregate_function_v2_impl::register_functions(&mut registry);
     registry
 });
 
-pub use v2::AggregateFunctionRegistry;
-
 pub fn sort_descs_to_bound_order_by(
     sort_descs: &[AggregateFunctionSortDesc],
-) -> Result<Vec<v2::AggregateBoundOrderByItem>> {
+) -> Result<Vec<AggregateBoundOrderByItem>> {
     sort_descs
         .iter()
         .map(|desc| {
             let (symbol, source) = match desc.index {
                 SymbolOrOffset::Symbol(symbol) if desc.is_reuse_index => {
-                    (symbol, v2::AggregateBoundOrderBySource::Argument {
+                    (symbol, AggregateBoundOrderBySource::Argument {
                         index: symbol.as_usize(),
                     })
                 }
-                SymbolOrOffset::Offset(offset) if desc.is_reuse_index => (
-                    Symbol::new(offset),
-                    v2::AggregateBoundOrderBySource::Argument { index: offset },
-                ),
-                SymbolOrOffset::Symbol(symbol) => {
-                    (symbol, v2::AggregateBoundOrderBySource::Derived)
+                SymbolOrOffset::Offset(offset) if desc.is_reuse_index => {
+                    (Symbol::new(offset), AggregateBoundOrderBySource::Argument {
+                        index: offset,
+                    })
                 }
-                SymbolOrOffset::Offset(offset) => (
-                    Symbol::new(offset),
-                    v2::AggregateBoundOrderBySource::Derived,
-                ),
+                SymbolOrOffset::Symbol(symbol) => (symbol, AggregateBoundOrderBySource::Derived),
+                SymbolOrOffset::Offset(offset) => {
+                    (Symbol::new(offset), AggregateBoundOrderBySource::Derived)
+                }
             };
-            Ok(v2::AggregateBoundOrderByItem {
+            Ok(AggregateBoundOrderByItem {
                 symbol,
                 source,
                 data_type: desc.data_type.clone(),

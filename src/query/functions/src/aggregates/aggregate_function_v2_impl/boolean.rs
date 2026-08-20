@@ -24,70 +24,67 @@ use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct BooleanBuilder;
 
 impl BooleanBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &["bool_and"],
             BooleanBuilder::boolean_arguments(),
             BooleanBuilder::BOOL_AND_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::unary(false, Self::create::<true>))
-        .then(v2::MergeRoute::unary(true, Self::create::<true>))
-        .then(v2::PlainRoute::unary(Self::create::<true>))
-        .then(v2::IfRoute::unary(Self::create::<true>))
-        .then(v2::StateRoute::unary(Self::create::<true>))
-        .then(v2::DistinctAliasRoute::unary(Self::create::<true>))
+        .then(MergeRoute::unary(false, Self::create::<true>))
+        .then(MergeRoute::unary(true, Self::create::<true>))
+        .then(PlainRoute::unary(Self::create::<true>))
+        .then(IfRoute::unary(Self::create::<true>))
+        .then(StateRoute::unary(Self::create::<true>))
+        .then(DistinctAliasRoute::unary(Self::create::<true>))
         .register(registry);
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["bool_or"],
             BooleanBuilder::boolean_arguments(),
             BooleanBuilder::BOOL_OR_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::unary(false, Self::create::<false>))
-        .then(v2::MergeRoute::unary(true, Self::create::<false>))
-        .then(v2::PlainRoute::unary(Self::create::<false>))
-        .then(v2::IfRoute::unary(Self::create::<false>))
-        .then(v2::StateRoute::unary(Self::create::<false>))
-        .then(v2::DistinctAliasRoute::unary(Self::create::<false>))
+        .then(MergeRoute::unary(false, Self::create::<false>))
+        .then(MergeRoute::unary(true, Self::create::<false>))
+        .then(PlainRoute::unary(Self::create::<false>))
+        .then(IfRoute::unary(Self::create::<false>))
+        .then(StateRoute::unary(Self::create::<false>))
+        .then(DistinctAliasRoute::unary(Self::create::<false>))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: BooleanBuilder::register,
     }
 }
 
 impl BooleanBuilder {
-    fn boolean_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::exact(
-            DataType::Boolean,
-        )])
+    fn boolean_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::Boolean)])
     }
 
-    const BOOL_AND_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const BOOL_AND_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns true when all non-null input values are true",
         definition: "bool_and(expr)",
         example: "select bool_and(flag) from t",
     };
 
-    const BOOL_OR_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const BOOL_OR_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns true when any non-null input value is true",
         definition: "bool_or(expr)",
@@ -106,11 +103,10 @@ impl<const IS_AND: bool> Default for AggregateBooleanState<IS_AND> {
 }
 
 impl<const IS_AND: bool> AggregateBooleanState<IS_AND> {
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::DataType(DataType::Boolean)],
-        )
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(DataType::Boolean),
+        ])
     }
 }
 
@@ -166,8 +162,8 @@ impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for AggregateBoole
 
 impl BooleanBuilder {
     fn create<const IS_AND: bool>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         debug_assert_eq!(build.arg_type(), &DataType::Boolean);
         build.create_unary_or_null::<AggregateBooleanState<IS_AND>, BooleanType, BooleanType>(
             DataType::Boolean.wrap_nullable(),

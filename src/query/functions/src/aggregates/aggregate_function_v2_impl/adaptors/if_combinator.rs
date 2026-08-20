@@ -21,7 +21,7 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::utils::column_merge_validity;
 
-use crate::aggregates::aggregate_function_v2_impl::adaptors_v2 as v2;
+use super::*;
 
 pub(crate) struct AggregateIfImplementation<I> {
     nested: I,
@@ -116,14 +116,14 @@ impl<I> AggregateIfImplementation<I> {
     }
 }
 
-impl<I> v2::AggrImpl for AggregateIfImplementation<I>
-where I: v2::AggrImpl
+impl<I> AggrImpl for AggregateIfImplementation<I>
+where I: AggrImpl
 {
     fn init_state(&self, state: AggrState<'_>) {
         self.nested.init_state(state)
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         if self.always_false {
             return Ok(());
         }
@@ -137,15 +137,13 @@ where I: v2::AggrImpl
         let args = self.arguments(columns);
         if args.is_empty() {
             let rows = predicate.as_ref().map(Bitmap::true_count).unwrap_or(rows);
-            return self
-                .nested
-                .accumulate_row_count(v2::AccumulateRowCountInput {
-                    state: input.state,
-                    rows,
-                });
+            return self.nested.accumulate_row_count(AccumulateRowCountInput {
+                state: input.state,
+                rows,
+            });
         }
 
-        self.nested.accumulate(v2::AccumulateInput {
+        self.nested.accumulate(AccumulateInput {
             state: input.state,
             columns: (&args).into(),
             order_by: input.order_by,
@@ -153,7 +151,7 @@ where I: v2::AggrImpl
         })
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         if self.always_false {
             return Ok(());
         }
@@ -168,9 +166,9 @@ where I: v2::AggrImpl
             }
             if args.is_empty() {
                 self.nested
-                    .accumulate_row_count(v2::AccumulateRowCountInput { state, rows: 1 })?;
+                    .accumulate_row_count(AccumulateRowCountInput { state, rows: 1 })?;
             } else {
-                self.nested.accumulate_row(v2::AccumulateRowInput {
+                self.nested.accumulate_row(AccumulateRowInput {
                     state,
                     columns: args,
                     row,
@@ -180,7 +178,7 @@ where I: v2::AggrImpl
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         if self.always_false {
             return Ok(());
         }
@@ -192,45 +190,43 @@ where I: v2::AggrImpl
         }
         let args = self.arguments(columns);
         if args.is_empty() {
-            return self
-                .nested
-                .accumulate_row_count(v2::AccumulateRowCountInput {
-                    state: input.state,
-                    rows: 1,
-                });
+            return self.nested.accumulate_row_count(AccumulateRowCountInput {
+                state: input.state,
+                rows: 1,
+            });
         }
-        self.nested.accumulate_row(v2::AccumulateRowInput {
+        self.nested.accumulate_row(AccumulateRowInput {
             state: input.state,
             columns: (&args).into(),
             row: input.row,
         })
     }
 
-    fn accumulate_row_count(&self, input: v2::AccumulateRowCountInput<'_>) -> Result<()> {
+    fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()> {
         self.nested.accumulate_row_count(input)
     }
 
-    fn accumulate_row_count_keys(&self, input: v2::AccumulateRowCountKeysInput<'_>) -> Result<()> {
+    fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
         self.nested.accumulate_row_count_keys(input)
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         self.nested.serialize(input)
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         self.nested.merge_serialized(input)
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         self.nested.merge_states(input)
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.nested.merge_result(input)
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.nested.merge_result_read_only(input)
     }
 

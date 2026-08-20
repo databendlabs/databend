@@ -39,9 +39,8 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 #[derive(Default)]
 pub struct AggregateCountState {
@@ -69,103 +68,103 @@ impl CountBuilder {
         }
     }
 
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        let state_arguments = v2::AggregateArgumentsPattern::variadic(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        let state_arguments = AggregateArgumentsPattern::variadic(
             vec![],
-            v2::AggregateArgumentPattern::any(),
+            AggregateArgumentPattern::any(),
             0,
             Some(32),
         );
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["count"],
             Self::count_arguments(),
             Self::COUNT_FEATURES,
-            v2::NullPolicy::ReturnsDefaultWhenOnlyNull,
+            NullPolicy::ReturnsDefaultWhenOnlyNull,
         )
         .then(
-            v2::MergeRoute::new(false, Self::create)
+            MergeRoute::new(false, Self::create)
                 .with_legacy_signature_resolver(Self::legacy_signatures),
         )
         .then(
-            v2::MergeRoute::new(true, Self::create)
+            MergeRoute::new(true, Self::create)
                 .with_legacy_signature_resolver(Self::legacy_signatures),
         )
-        .then(v2::PlainRoute::new(Self::create))
-        .then(v2::IfRoute::new(Self::create).with_features(Self::COUNT_IF_FEATURES))
+        .then(PlainRoute::new(Self::create))
+        .then(IfRoute::new(Self::create).with_features(Self::COUNT_IF_FEATURES))
         .then(
-            v2::StateRoute::new(Self::create)
+            StateRoute::new(Self::create)
                 .with_arguments(state_arguments)
                 .with_features(Self::COUNT_STATE_FEATURES),
         )
         .register(registry);
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["count_distinct"],
             CountBuilder::count_distinct_arguments(),
             CountBuilder::COUNT_DISTINCT_FEATURES,
-            v2::NullPolicy::Keep,
+            NullPolicy::Keep,
         )
-        .then(v2::PlainRoute::new(Self::create_distinct))
+        .then(PlainRoute::new(Self::create_distinct))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: CountBuilder::register,
     }
 }
 
 impl CountBuilder {
-    fn count_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::one_of(vec![
-            v2::AggregateArgumentsPattern::fixed(vec![]),
-            v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any()]),
+    fn count_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::one_of(vec![
+            AggregateArgumentsPattern::fixed(vec![]),
+            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()]),
         ])
     }
 
-    fn count_distinct_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::variadic(
+    fn count_distinct_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::variadic(
             vec![],
-            v2::AggregateArgumentPattern::any(),
+            AggregateArgumentPattern::any(),
             1,
             Some(32),
         )
     }
 
-    const COUNT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "counts input rows or non-null argument values",
         definition: "count([expr])",
         example: "select count(*) from numbers(10)",
     };
 
-    const COUNT_DISTINCT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const COUNT_DISTINCT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "counts distinct non-null input rows",
         definition: "count_distinct(expr[, ...])",
         example: "select count_distinct(number) from numbers(10)",
     };
 
-    const COUNT_IF_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const COUNT_IF_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "counts rows matching a boolean condition",
         definition: "count_if(cond)",
         example: "select count_if(number > 0) from numbers(10)",
     };
 
-    const COUNT_STATE_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const COUNT_STATE_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the serialized aggregate state",
         definition: "aggregate_state(args...)",
@@ -175,14 +174,14 @@ impl CountBuilder {
 
 impl CountBuilder {
     fn create_distinct(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         create_distinct_count_function(build, true)
     }
 
     fn create(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         let has_argument = !build.args_type().is_empty();
 
         build.create(
@@ -192,10 +191,10 @@ impl CountBuilder {
         )
     }
 
-    fn distinct_state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    fn distinct_state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![
-                AggrStateType::Custom(Layout::new::<v2::AggregateDistinctState>()),
+                AggrStateType::Custom(Layout::new::<AggregateDistinctState>()),
                 AggrStateType::Custom(Layout::new::<AggregateCountState>()),
             ],
             vec![
@@ -208,9 +207,9 @@ impl CountBuilder {
 }
 
 pub(super) fn create_distinct_count_function(
-    build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+    build: DirectBuildContext<'_, impl CombinatorImpl>,
     count_argument: bool,
-) -> Result<v2::AggregateFunctionRef> {
+) -> Result<AggregateFunctionRef> {
     if !build.params().is_empty() {
         return Err(ErrorCode::BadArguments(format!(
             "{} expects no parameters",
@@ -225,7 +224,7 @@ pub(super) fn create_distinct_count_function(
     let state = CountBuilder::distinct_state_description();
     let args_type = build.args_type().to_vec();
     let implementation =
-        v2::AggregateMultiArgSkipNullImplementation::new(v2::AggregateDistinctImplementation::<
+        AggregateMultiArgSkipNullImplementation::new(AggregateDistinctImplementation::<
             false,
         >::new(
             AggregateCountImplementation::new(count_argument),
@@ -236,8 +235,8 @@ pub(super) fn create_distinct_count_function(
 }
 
 fn create_unary_distinct_count_function(
-    build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-) -> Result<v2::AggregateFunctionRef> {
+    build: DirectBuildContext<'_, impl CombinatorImpl>,
+) -> Result<AggregateFunctionRef> {
     let data_type = build.args_type()[0].remove_nullable();
     with_number_mapped_type!(|NUM_TYPE| match data_type {
         DataType::Number(NumberDataType::NUM_TYPE) => {
@@ -251,19 +250,19 @@ fn create_unary_distinct_count_function(
 }
 
 fn create_unary_distinct_count_function_typed<T>(
-    build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-) -> Result<v2::AggregateFunctionRef>
+    build: DirectBuildContext<'_, impl CombinatorImpl>,
+) -> Result<AggregateFunctionRef>
 where T: ValueType {
     let state = AggregateCountImplementation::state_description();
     let distinct_arg_type = build.args_type()[0].remove_nullable();
     let implementation =
-        v2::UnaryAggregateImplementation::new(v2::UnarySkipNull::new(v2::UnaryDistinct::new(
-            v2::UnaryImpl::<AggregateCountState, T, UInt64Type, false>::new(().into()),
+        UnaryAggregateImplementation::new(UnarySkipNull::new(UnaryDistinct::new(
+            UnaryImpl::<AggregateCountState, T, UInt64Type, false>::new(().into()),
             distinct_arg_type,
         )));
     build.create(
         UInt64Type::data_type(),
-        v2::unary_distinct_state_description(&state),
+        unary_distinct_state_description(&state),
         implementation,
     )
 }
@@ -273,8 +272,8 @@ impl AggregateCountImplementation {
         Self { has_argument }
     }
 
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<AggregateCountState>())],
             vec![StateSerdeItem::DataType(UInt64Type::data_type())],
         )
@@ -295,12 +294,12 @@ impl AggregateCountImplementation {
     }
 }
 
-impl v2::AggrImpl for AggregateCountImplementation {
+impl AggrImpl for AggregateCountImplementation {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(AggregateCountState::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         if !self.has_argument {
             return Err(ErrorCode::BadArguments("count(*) expects rows-only input"));
         }
@@ -311,9 +310,9 @@ impl v2::AggrImpl for AggregateCountImplementation {
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         if !self.has_argument {
-            return self.accumulate_row_count_keys(v2::AccumulateRowCountKeysInput {
+            return self.accumulate_row_count_keys(AccumulateRowCountKeysInput {
                 states: input.states,
             });
         }
@@ -330,14 +329,14 @@ impl v2::AggrImpl for AggregateCountImplementation {
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         if !self.has_argument || Self::row_is_valid(input.columns, input.row) {
             input.state.get::<AggregateCountState>().count += 1;
         }
         Ok(())
     }
 
-    fn accumulate_row_count(&self, input: v2::AccumulateRowCountInput<'_>) -> Result<()> {
+    fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()> {
         if self.has_argument {
             return Err(ErrorCode::BadArguments("count(expr) expects column input"));
         }
@@ -345,7 +344,7 @@ impl v2::AggrImpl for AggregateCountImplementation {
         Ok(())
     }
 
-    fn accumulate_row_count_keys(&self, input: v2::AccumulateRowCountKeysInput<'_>) -> Result<()> {
+    fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
         if self.has_argument {
             return Err(ErrorCode::BadArguments("count(expr) expects column input"));
         }
@@ -355,7 +354,7 @@ impl v2::AggrImpl for AggregateCountImplementation {
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for state in input.states.iter() {
             let state = state.get::<AggregateCountState>();
             input.builders[0].push(ScalarRef::Number(NumberScalar::UInt64(state.count)));
@@ -363,7 +362,7 @@ impl v2::AggrImpl for AggregateCountImplementation {
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -378,13 +377,13 @@ impl v2::AggrImpl for AggregateCountImplementation {
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input.state.get::<AggregateCountState>().count +=
             input.rhs.get::<AggregateCountState>().count;
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         input.builder.push(ScalarRef::Number(NumberScalar::UInt64(
             input.state.get::<AggregateCountState>().count,
         )));

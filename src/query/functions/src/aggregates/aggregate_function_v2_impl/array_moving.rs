@@ -45,48 +45,48 @@ use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::extract_number_param;
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct ArrayMovingBuilder;
 
 impl ArrayMovingBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::avg_route().register(registry);
         Self::sum_route().register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: ArrayMovingBuilder::register,
     }
 }
 
 impl ArrayMovingBuilder {
-    fn array_moving_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::one_of(vec![
-            v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any_numeric()]),
-            v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::exact(
+    fn array_moving_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::one_of(vec![
+            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()]),
+            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(
                 DataType::Null,
             )]),
         ])
     }
 
-    const GROUP_ARRAY_MOVING_AVG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const GROUP_ARRAY_MOVING_AVG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns moving average values as an array",
         definition: "group_array_moving_avg([window])(expr)",
         example: "select group_array_moving_avg(2)(number) from numbers(10)",
     };
 
-    const GROUP_ARRAY_MOVING_SUM_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const GROUP_ARRAY_MOVING_SUM_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns moving sum values as an array",
         definition: "group_array_moving_sum([window])(expr)",
@@ -135,8 +135,8 @@ where
     I: ValueType,
     S: ValueType,
 {
-    pub fn state_description(serialized_type: DataType) -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    pub fn state_description(serialized_type: DataType) -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<Self>())],
             vec![StateSerdeItem::DataType(serialized_type)],
         )
@@ -230,8 +230,8 @@ where T: Decimal
 impl<T> AggregateDecimalArrayMovingState<T>
 where T: Decimal
 {
-    pub fn state_description(serialized_type: DataType) -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    pub fn state_description(serialized_type: DataType) -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<Self>())],
             vec![StateSerdeItem::DataType(serialized_type)],
         )
@@ -361,7 +361,7 @@ impl<State> AggregateArrayMovingImplementation<State> {
     }
 }
 
-impl<I, S> v2::AggrImpl
+impl<I, S> AggrImpl
     for AggregateArrayMovingImplementation<AggregateNumberArrayMovingState<I, S>>
 where
     I: ValueType + AccessType + ArgType,
@@ -373,7 +373,7 @@ where
         state.write(AggregateNumberArrayMovingState::<I, S>::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateNumberArrayMovingState<I, S>>();
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
@@ -409,7 +409,7 @@ where
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
             for state in input.states.iter() {
@@ -451,7 +451,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateNumberArrayMovingState<I, S>>();
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
@@ -475,7 +475,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for state in input.states.iter() {
             state
                 .get::<AggregateNumberArrayMovingState<I, S>>()
@@ -484,7 +484,7 @@ where
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -496,7 +496,7 @@ where
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input
             .state
             .get::<AggregateNumberArrayMovingState<I, S>>()
@@ -504,7 +504,7 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateNumberArrayMovingState<I, S>>();
         let window_size = self.info.window_size.unwrap_or(state.values.len());
         match self.info.kind {
@@ -515,7 +515,7 @@ where
         Ok(())
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateNumberArrayMovingState<I, S>>();
         let window_size = self.info.window_size.unwrap_or(state.values.len());
         match self.info.kind {
@@ -532,14 +532,14 @@ where
     }
 }
 
-impl<T> v2::AggrImpl for AggregateArrayMovingImplementation<AggregateDecimalArrayMovingState<T>>
+impl<T> AggrImpl for AggregateArrayMovingImplementation<AggregateDecimalArrayMovingState<T>>
 where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
 {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(AggregateDecimalArrayMovingState::<T>::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateDecimalArrayMovingState<T>>();
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
@@ -575,7 +575,7 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
             for state in input.states.iter() {
@@ -617,7 +617,7 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateDecimalArrayMovingState<T>>();
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
@@ -641,7 +641,7 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for state in input.states.iter() {
             state
                 .get::<AggregateDecimalArrayMovingState<T>>()
@@ -650,7 +650,7 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -662,7 +662,7 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input
             .state
             .get::<AggregateDecimalArrayMovingState<T>>()
@@ -670,7 +670,7 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateDecimalArrayMovingState<T>>();
         let window_size = self.info.window_size.unwrap_or(state.values.len());
         match self.info.kind {
@@ -683,7 +683,7 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
         Ok(())
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateDecimalArrayMovingState<T>>();
         let window_size = self.info.window_size.unwrap_or(state.values.len());
         match self.info.kind {
@@ -703,54 +703,54 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
 }
 
 impl ArrayMovingBuilder {
-    fn avg_route() -> v2::DirectNameRoute {
+    fn avg_route() -> DirectNameRoute {
         let arguments = Self::array_moving_arguments();
         let features = Self::GROUP_ARRAY_MOVING_AVG_FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["group_array_moving_avg"],
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::Keep,
+            NullPolicy::Keep,
         )
-        .then(v2::MergeRoute::new(false, ArrayMovingBuilder::create_avg))
-        .then(v2::MergeRoute::new(true, ArrayMovingBuilder::create_avg))
-        .then(v2::PlainRoute::new(ArrayMovingBuilder::create_avg))
-        .then(v2::IfRoute::new(ArrayMovingBuilder::create_avg))
-        .then(v2::StateRoute::new(ArrayMovingBuilder::create_avg))
+        .then(MergeRoute::new(false, ArrayMovingBuilder::create_avg))
+        .then(MergeRoute::new(true, ArrayMovingBuilder::create_avg))
+        .then(PlainRoute::new(ArrayMovingBuilder::create_avg))
+        .then(IfRoute::new(ArrayMovingBuilder::create_avg))
+        .then(StateRoute::new(ArrayMovingBuilder::create_avg))
     }
 
-    fn sum_route() -> v2::DirectNameRoute {
+    fn sum_route() -> DirectNameRoute {
         let arguments = Self::array_moving_arguments();
         let features = Self::GROUP_ARRAY_MOVING_SUM_FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["group_array_moving_sum"],
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::Keep,
+            NullPolicy::Keep,
         )
-        .then(v2::MergeRoute::new(false, ArrayMovingBuilder::create_sum))
-        .then(v2::MergeRoute::new(true, ArrayMovingBuilder::create_sum))
-        .then(v2::PlainRoute::new(ArrayMovingBuilder::create_sum))
-        .then(v2::IfRoute::new(ArrayMovingBuilder::create_sum))
-        .then(v2::StateRoute::new(ArrayMovingBuilder::create_sum))
+        .then(MergeRoute::new(false, ArrayMovingBuilder::create_sum))
+        .then(MergeRoute::new(true, ArrayMovingBuilder::create_sum))
+        .then(PlainRoute::new(ArrayMovingBuilder::create_sum))
+        .then(IfRoute::new(ArrayMovingBuilder::create_sum))
+        .then(StateRoute::new(ArrayMovingBuilder::create_sum))
     }
 
     fn create_avg(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         Self::create(build, ArrayMovingKind::Avg)
     }
 
     fn create_sum(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         Self::create(build, ArrayMovingKind::Sum)
     }
 
     fn create(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
         kind: ArrayMovingKind,
-    ) -> Result<v2::AggregateFunctionRef> {
+    ) -> Result<AggregateFunctionRef> {
         if build.params().len() > 1 {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects at most one parameter",
@@ -789,10 +789,10 @@ impl ArrayMovingBuilder {
     }
 
     fn create_number<I, S>(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
         kind: ArrayMovingKind,
         window_size: Option<usize>,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         I: ValueType + AccessType + ArgType,
         S: ValueType + AccessType + ArgType,
@@ -817,11 +817,11 @@ impl ArrayMovingBuilder {
     }
 
     fn create_decimal<T>(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
         kind: ArrayMovingKind,
         input_size: DecimalSize,
         window_size: Option<usize>,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign,
     {
@@ -847,12 +847,12 @@ impl ArrayMovingBuilder {
     }
 
     fn create_instance<State>(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
         info: ArrayMovingInfo,
         serialized_type: DataType,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
-        AggregateArrayMovingImplementation<State>: v2::AggrImpl,
+        AggregateArrayMovingImplementation<State>: AggrImpl,
         State: ArrayMovingStateDescription,
     {
         let return_type = info.return_type.clone();
@@ -865,7 +865,7 @@ impl ArrayMovingBuilder {
 }
 
 trait ArrayMovingStateDescription {
-    fn state_description(serialized_type: DataType) -> v2::AggregateStateDescription;
+    fn state_description(serialized_type: DataType) -> AggregateStateDescription;
 }
 
 impl<I, S> ArrayMovingStateDescription for AggregateNumberArrayMovingState<I, S>
@@ -873,7 +873,7 @@ where
     I: ValueType,
     S: ValueType,
 {
-    fn state_description(serialized_type: DataType) -> v2::AggregateStateDescription {
+    fn state_description(serialized_type: DataType) -> AggregateStateDescription {
         AggregateNumberArrayMovingState::<I, S>::state_description(serialized_type)
     }
 }
@@ -881,7 +881,7 @@ where
 impl<T> ArrayMovingStateDescription for AggregateDecimalArrayMovingState<T>
 where T: Decimal
 {
-    fn state_description(serialized_type: DataType) -> v2::AggregateStateDescription {
+    fn state_description(serialized_type: DataType) -> AggregateStateDescription {
         AggregateDecimalArrayMovingState::<T>::state_description(serialized_type)
     }
 }

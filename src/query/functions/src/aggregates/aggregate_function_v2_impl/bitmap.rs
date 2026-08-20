@@ -54,14 +54,14 @@ use databend_common_io::prelude::BinaryWrite;
 use num_traits::AsPrimitive;
 
 use super::super::extract_number_param;
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
+use super::FunctionFactory;
+use super::adaptors::*;
 use crate::with_simple_no_number_mapped_type;
 
 struct BitmapBuilder;
 
 impl BitmapBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::construct_route().register(registry);
         Self::bitmap_route::<BITMAP_AND, BITMAP_COUNT>().register(registry);
         Self::bitmap_route::<BITMAP_NOT, BITMAP_COUNT>().register(registry);
@@ -75,120 +75,118 @@ impl BitmapBuilder {
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: BitmapBuilder::register,
     }
 }
 
 impl BitmapBuilder {
-    fn bitmap_numeric_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any_numeric()])
+    fn bitmap_numeric_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()])
     }
 
-    fn bitmap_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::exact(
-            DataType::Bitmap,
-        )])
+    fn bitmap_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::Bitmap)])
     }
 
-    fn bitmap_intersect_count_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![
-            v2::AggregateArgumentPattern::exact(DataType::Bitmap),
-            v2::AggregateArgumentPattern::any(),
+    fn bitmap_intersect_count_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![
+            AggregateArgumentPattern::exact(DataType::Bitmap),
+            AggregateArgumentPattern::any(),
         ])
     }
 
-    const BITMAP_CONSTRUCT_AGG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const BITMAP_CONSTRUCT_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "constructs a bitmap from unsigned integer values",
         definition: "bitmap_construct_agg(expr)",
         example: "select bitmap_construct_agg(number) from numbers(10)",
     };
 
-    const BITMAP_AND_COUNT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const BITMAP_AND_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "counts bits in the intersection of bitmap values",
         definition: "bitmap_and_count(bitmap)",
         example: "select bitmap_and_count(bitmap_col) from t",
     };
 
-    const BITMAP_NOT_COUNT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const BITMAP_NOT_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "counts bits after subtracting subsequent bitmap values from the first",
         definition: "bitmap_not_count(bitmap)",
         example: "select bitmap_not_count(bitmap_col) from t",
     };
 
-    const BITMAP_OR_COUNT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const BITMAP_OR_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "counts bits in the union of bitmap values",
         definition: "bitmap_or_count(bitmap)",
         example: "select bitmap_or_count(bitmap_col) from t",
     };
 
-    const BITMAP_XOR_COUNT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const BITMAP_XOR_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "counts bits in the xor of bitmap values",
         definition: "bitmap_xor_count(bitmap)",
         example: "select bitmap_xor_count(bitmap_col) from t",
     };
 
-    const BITMAP_UNION_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const BITMAP_UNION_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the union of bitmap values",
         definition: "bitmap_union(bitmap)",
         example: "select bitmap_union(bitmap_col) from t",
     };
 
-    const BITMAP_INTERSECT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const BITMAP_INTERSECT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the intersection of bitmap values",
         definition: "bitmap_intersect(bitmap)",
         example: "select bitmap_intersect(bitmap_col) from t",
     };
 
-    const BITMAP_XOR_AGG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const BITMAP_XOR_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the xor of bitmap values",
         definition: "bitmap_xor_agg(bitmap)",
         example: "select bitmap_xor_agg(bitmap_col) from t",
     };
 
-    const INTERSECT_COUNT_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const INTERSECT_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "counts bits in the intersection of filtered bitmap values",
         definition: "intersect_count(params...)(bitmap, expr)",
         example: "select intersect_count(1, 2)(bitmap_col, key) from t",
     };
 
-    fn bitmap_features<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> v2::FunctionFeatures {
+    fn bitmap_features<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> FunctionFeatures {
         match (OP_TYPE, RESULT_TYPE) {
             (BITMAP_AND, BITMAP_COUNT) => Self::BITMAP_AND_COUNT_FEATURES,
             (BITMAP_NOT, BITMAP_COUNT) => Self::BITMAP_NOT_COUNT_FEATURES,
@@ -265,11 +263,10 @@ pub struct AggregateBitmapState {
 }
 
 impl AggregateBitmapState {
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 
@@ -453,7 +450,7 @@ impl<OP, R> Default for AggregateBitmapImplementation<OP, R> {
     }
 }
 
-impl<OP, R> v2::AggrImpl for AggregateBitmapImplementation<OP, R>
+impl<OP, R> AggrImpl for AggregateBitmapImplementation<OP, R>
 where
     OP: BitmapOperate,
     R: BitmapResult,
@@ -462,7 +459,7 @@ where
         state.write(AggregateBitmapState::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<BitmapType>().unwrap();
         let state = input.state.get::<AggregateBitmapState>();
         match input.validity {
@@ -482,7 +479,7 @@ where
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<BitmapType>().unwrap();
         for (row, state) in input.states.iter().enumerate() {
             state
@@ -492,7 +489,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<BitmapType>().unwrap();
         input
             .state
@@ -501,20 +498,20 @@ where
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         serialize_bitmap_states(input)
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         merge_serialized_bitmap_states::<OP>(input)
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         merge_bitmap_states::<OP>(input);
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         R::push_result(input.state.get::<AggregateBitmapState>(), input.builder)
     }
 
@@ -553,7 +550,7 @@ where T: AccessType
     }
 }
 
-impl<T> v2::AggrImpl for AggregateBitmapIntersectCountImplementation<T>
+impl<T> AggrImpl for AggregateBitmapIntersectCountImplementation<T>
 where
     T: AccessType,
     T::Scalar: Send + Sync,
@@ -562,7 +559,7 @@ where
         state.write(AggregateBitmapState::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let bitmaps = input.columns[0].downcast::<BitmapType>().unwrap();
         let state = input.state.get::<AggregateBitmapState>();
         for row in 0..input.columns.num_rows() {
@@ -579,7 +576,7 @@ where
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let bitmaps = input.columns[0].downcast::<BitmapType>().unwrap();
         for (row, state) in input.states.iter().enumerate() {
             if self.filter_row(&input.columns[1], row) {
@@ -591,7 +588,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         if self.filter_row(&input.columns[1], input.row) {
             let bitmaps = input.columns[0].downcast::<BitmapType>().unwrap();
             input
@@ -602,20 +599,20 @@ where
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         serialize_bitmap_states(input)
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         merge_serialized_bitmap_states::<BitmapAndOp>(input)
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         merge_bitmap_states::<BitmapAndOp>(input);
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         BitmapCountResult::push_result(input.state.get::<AggregateBitmapState>(), input.builder)
     }
 
@@ -630,7 +627,7 @@ impl<N, R> Default for AggregateGroupBitmapImplementation<N, R> {
     }
 }
 
-impl<N, R> v2::AggrImpl for AggregateGroupBitmapImplementation<N, R>
+impl<N, R> AggrImpl for AggregateGroupBitmapImplementation<N, R>
 where
     N: Number + AsPrimitive<u64>,
     R: BitmapResult,
@@ -639,7 +636,7 @@ where
         state.write(AggregateBitmapState::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<NumberType<N>>().unwrap();
         let state = input.state.get::<AggregateBitmapState>();
         match input.validity {
@@ -657,7 +654,7 @@ where
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<NumberType<N>>().unwrap();
         for (row, state) in input.states.iter().enumerate() {
             state
@@ -667,7 +664,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<NumberType<N>>().unwrap();
         input
             .state
@@ -676,20 +673,20 @@ where
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         serialize_bitmap_states(input)
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         merge_serialized_bitmap_states::<BitmapOrOp>(input)
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         merge_bitmap_states::<BitmapOrOp>(input);
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         R::push_result(input.state.get::<AggregateBitmapState>(), input.builder)
     }
 
@@ -699,35 +696,35 @@ where
 }
 
 impl BitmapBuilder {
-    fn bitmap_route<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> v2::DirectNameRoute {
+    fn bitmap_route<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> DirectNameRoute {
         let arguments = Self::bitmap_arguments();
         let features = Self::bitmap_features::<OP_TYPE, RESULT_TYPE>();
-        let route = v2::DirectNameRoute::new(
+        let route = DirectNameRoute::new(
             Self::bitmap_names::<OP_TYPE, RESULT_TYPE>(),
             arguments,
             features,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
         .with_validator(Self::validate_bitmap_request)
-        .then(v2::MergeRoute::multi_arg(
+        .then(MergeRoute::multi_arg(
             false,
             Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
         ))
-        .then(v2::MergeRoute::multi_arg(
+        .then(MergeRoute::multi_arg(
             true,
             Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
         ))
-        .then(v2::PlainRoute::multi_arg(
+        .then(PlainRoute::multi_arg(
             Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
         ))
-        .then(v2::IfRoute::multi_arg(
+        .then(IfRoute::multi_arg(
             Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
         ))
-        .then(v2::StateRoute::multi_arg(
+        .then(StateRoute::multi_arg(
             Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
         ));
         if Self::bitmap_distinct_is_alias::<OP_TYPE, RESULT_TYPE>() {
-            route.then(v2::DistinctAliasRoute::multi_arg(
+            route.then(DistinctAliasRoute::multi_arg(
                 Self::create_bitmap::<OP_TYPE, RESULT_TYPE>,
             ))
         } else {
@@ -735,7 +732,7 @@ impl BitmapBuilder {
         }
     }
 
-    fn validate_bitmap_request(request: &v2::AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_bitmap_request(request: &AggregateFunctionRequest<'_>) -> Result<()> {
         if request.params.is_empty() {
             Ok(())
         } else {
@@ -747,8 +744,8 @@ impl BitmapBuilder {
     }
 
     fn create_bitmap<const OP_TYPE: u8, const RESULT_TYPE: u8>(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         let data_type = &build.args_type()[0];
         if data_type != &DataType::Bitmap {
             return Err(ErrorCode::BadDataValueType(format!(
@@ -768,57 +765,41 @@ impl BitmapBuilder {
         })
     }
 
-    fn construct_route() -> v2::DirectNameRoute {
+    fn construct_route() -> DirectNameRoute {
         let arguments = Self::bitmap_numeric_arguments();
         let features = Self::BITMAP_CONSTRUCT_AGG_FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["bitmap_construct_agg", "group_bitmap"],
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::ReturnsDefaultWhenOnlyNull,
+            NullPolicy::ReturnsDefaultWhenOnlyNull,
         )
-        .then(v2::MergeRoute::new(
-            false,
-            BitmapBuilder::create_group_bitmap,
-        ))
-        .then(v2::MergeRoute::new(
-            true,
-            BitmapBuilder::create_group_bitmap,
-        ))
-        .then(v2::PlainRoute::new(BitmapBuilder::create_group_bitmap))
-        .then(v2::IfRoute::new(BitmapBuilder::create_group_bitmap))
-        .then(v2::StateRoute::new(BitmapBuilder::create_group_bitmap))
-        .then(v2::DistinctAliasRoute::new(
-            BitmapBuilder::create_group_bitmap,
-        ))
+        .then(MergeRoute::new(false, BitmapBuilder::create_group_bitmap))
+        .then(MergeRoute::new(true, BitmapBuilder::create_group_bitmap))
+        .then(PlainRoute::new(BitmapBuilder::create_group_bitmap))
+        .then(IfRoute::new(BitmapBuilder::create_group_bitmap))
+        .then(StateRoute::new(BitmapBuilder::create_group_bitmap))
+        .then(DistinctAliasRoute::new(BitmapBuilder::create_group_bitmap))
     }
 
-    fn intersect_count_route() -> v2::DirectNameRoute {
-        v2::DirectNameRoute::new(
+    fn intersect_count_route() -> DirectNameRoute {
+        DirectNameRoute::new(
             &["intersect_count"],
             Self::bitmap_intersect_count_arguments(),
             Self::INTERSECT_COUNT_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::multi_arg(
-            false,
-            Self::create_intersect_count,
-        ))
-        .then(v2::MergeRoute::multi_arg(
-            true,
-            Self::create_intersect_count,
-        ))
-        .then(v2::PlainRoute::multi_arg(Self::create_intersect_count))
-        .then(v2::IfRoute::multi_arg(Self::create_intersect_count))
-        .then(v2::StateRoute::multi_arg(Self::create_intersect_count))
-        .then(v2::DistinctAliasRoute::multi_arg(
-            Self::create_intersect_count,
-        ))
+        .then(MergeRoute::multi_arg(false, Self::create_intersect_count))
+        .then(MergeRoute::multi_arg(true, Self::create_intersect_count))
+        .then(PlainRoute::multi_arg(Self::create_intersect_count))
+        .then(IfRoute::multi_arg(Self::create_intersect_count))
+        .then(StateRoute::multi_arg(Self::create_intersect_count))
+        .then(DistinctAliasRoute::multi_arg(Self::create_intersect_count))
     }
 
     fn create_intersect_count(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         if !(1..=32).contains(&build.params().len()) {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects between 1 and 32 parameters",
@@ -874,8 +855,8 @@ impl BitmapBuilder {
     }
 
     fn create_group_bitmap(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         if !build.params().is_empty() {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
@@ -906,10 +887,10 @@ impl BitmapBuilder {
     }
 
     fn create_nullable_instance<I, R>(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef>
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef>
     where
-        I: v2::AggrImpl + Default,
+        I: AggrImpl + Default,
         R: BitmapResult,
     {
         let return_type = R::return_type().wrap_nullable();
@@ -923,10 +904,10 @@ impl BitmapBuilder {
     }
 
     fn create_raw_instance<I, R>(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef>
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef>
     where
-        I: v2::AggrImpl + Default,
+        I: AggrImpl + Default,
         R: BitmapResult,
     {
         let implementation = I::default();
@@ -938,9 +919,9 @@ impl BitmapBuilder {
     }
 
     fn create_intersect_count_instance<T>(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
         filter_values: Vec<T::Scalar>,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         T: AccessType,
         T::Scalar: Send + Sync,
@@ -988,7 +969,7 @@ where N: Number {
     Ok(values)
 }
 
-fn serialize_bitmap_states(input: v2::SerializeInput<'_>) -> Result<()> {
+fn serialize_bitmap_states(input: SerializeInput<'_>) -> Result<()> {
     for state in input.states.iter() {
         state
             .get::<AggregateBitmapState>()
@@ -997,7 +978,7 @@ fn serialize_bitmap_states(input: v2::SerializeInput<'_>) -> Result<()> {
     Ok(())
 }
 
-fn merge_serialized_bitmap_states<OP>(input: v2::MergeSerializedInput<'_>) -> Result<()>
+fn merge_serialized_bitmap_states<OP>(input: MergeSerializedInput<'_>) -> Result<()>
 where OP: BitmapOperate {
     for (row, state) in input.states.iter().enumerate() {
         if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
@@ -1013,7 +994,7 @@ where OP: BitmapOperate {
     Ok(())
 }
 
-fn merge_bitmap_states<OP>(input: v2::MergeStatesInput<'_>)
+fn merge_bitmap_states<OP>(input: MergeStatesInput<'_>)
 where OP: BitmapOperate {
     input
         .state

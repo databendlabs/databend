@@ -25,12 +25,12 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::utils::column_merge_validity;
 
-use crate::aggregates::aggregate_function_v2_impl::adaptors_v2 as v2;
+use super::*;
 
 pub(crate) trait AggregateUnaryState<T>: Clone + Send + Sync + 'static
 where T: AccessType
 {
-    fn state_description(return_type: DataType) -> v2::AggregateStateDescription;
+    fn state_description(return_type: DataType) -> AggregateStateDescription;
 
     fn add(&mut self, value: Option<T::ScalarRef<'_>>);
 
@@ -55,7 +55,7 @@ impl<T, State> Default for AggregateUnaryStateImplementation<T, State> {
     }
 }
 
-impl<T, State> v2::AggrImpl for AggregateUnaryStateImplementation<T, State>
+impl<T, State> AggrImpl for AggregateUnaryStateImplementation<T, State>
 where
     T: AccessType,
     State: Default + AggregateUnaryState<T>,
@@ -64,7 +64,7 @@ where
         state.write(State::default);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let state = input.state.get::<State>();
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
@@ -76,7 +76,7 @@ where
         state.add_batch(column, validity.as_ref())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let entry = &input.columns[0];
         if entry.data_type().is_nullable() {
             let values = entry.downcast::<NullableType<T>>().unwrap();
@@ -93,7 +93,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let state = input.state.get::<State>();
         let entry = &input.columns[0];
         if entry.data_type().is_nullable() {
@@ -107,14 +107,14 @@ where
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for state in input.states.iter() {
             state.get::<State>().serialize(&mut input.builders[0])?;
         }
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -126,19 +126,19 @@ where
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input
             .state
             .get::<State>()
             .merge_owned(input.rhs.get::<State>())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = input.state.get::<State>();
         state.merge_result(input.builder)
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         let mut state = input.state.get::<State>().clone();
         state.merge_result(input.builder)
     }

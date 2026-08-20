@@ -41,51 +41,50 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
 use super::super::get_levels;
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct QuantileTDigestBuilder;
 
 impl QuantileTDigestBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &["quantile_tdigest"],
             QuantileTDigestBuilder::quantile_tdigest_arguments(),
             QuantileTDigestBuilder::QUANTILE_TDIGEST_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::unary(false, Self::create))
-        .then(v2::MergeRoute::unary(true, Self::create))
-        .then(v2::PlainRoute::unary(Self::create))
-        .then(v2::IfRoute::unary(Self::create))
-        .then(v2::StateRoute::unary(Self::create))
+        .then(MergeRoute::unary(false, Self::create))
+        .then(MergeRoute::unary(true, Self::create))
+        .then(PlainRoute::unary(Self::create))
+        .then(IfRoute::unary(Self::create))
+        .then(StateRoute::unary(Self::create))
         .register(registry);
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["median_tdigest"],
             QuantileTDigestBuilder::quantile_tdigest_arguments(),
             QuantileTDigestBuilder::MEDIAN_TDIGEST_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::unary(false, Self::create_median))
-        .then(v2::MergeRoute::unary(true, Self::create_median))
-        .then(v2::PlainRoute::unary(Self::create_median))
-        .then(v2::IfRoute::unary(Self::create_median))
-        .then(v2::StateRoute::unary(Self::create_median))
+        .then(MergeRoute::unary(false, Self::create_median))
+        .then(MergeRoute::unary(true, Self::create_median))
+        .then(PlainRoute::unary(Self::create_median))
+        .then(IfRoute::unary(Self::create_median))
+        .then(StateRoute::unary(Self::create_median))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: QuantileTDigestBuilder::register,
     }
 }
 
 impl QuantileTDigestBuilder {
     fn create_median(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         if !build.params().is_empty() {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
@@ -95,24 +94,24 @@ impl QuantileTDigestBuilder {
         Self::create(build)
     }
 
-    fn quantile_tdigest_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any_numeric()])
+    fn quantile_tdigest_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()])
     }
 
-    const QUANTILE_TDIGEST_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const QUANTILE_TDIGEST_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns an approximate quantile value using t-digest",
         definition: "quantile_tdigest(level)(expr)",
         example: "select quantile_tdigest(0.5)(number) from numbers(10)",
     };
 
-    const MEDIAN_TDIGEST_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const MEDIAN_TDIGEST_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "returns the approximate median input value using t-digest",
         definition: "median_tdigest(expr)",
@@ -148,8 +147,8 @@ struct Centroid {
 }
 
 impl AggregateQuantileTDigestState {
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<Self>())],
             vec![StateSerdeItem::Binary(None)],
         )
@@ -485,8 +484,8 @@ where for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 
 impl QuantileTDigestBuilder {
     fn create(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+    ) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
         let levels = get_levels(build.params())?;
@@ -512,9 +511,9 @@ impl QuantileTDigestBuilder {
     }
 
     fn create_typed<I>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
         levels: Vec<f64>,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>,
     {
@@ -530,10 +529,10 @@ impl QuantileTDigestBuilder {
     }
 
     fn create_result<I, R>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
         return_type: DataType,
         levels: Vec<f64>,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>,
         R: ValueType,

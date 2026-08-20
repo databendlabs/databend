@@ -41,10 +41,8 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
-use super::adaptors_v2::*;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 pub struct AggregateNumberSumState<R>
 where R: ArgType
@@ -85,7 +83,7 @@ impl SumBuilder {
         }
     }
 
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::sum_route().register(registry);
         Self::sum_distinct_route().register(registry);
         Self::sum0_route().register(registry);
@@ -93,60 +91,60 @@ impl SumBuilder {
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: SumBuilder::register,
     }
 }
 
 impl SumBuilder {
-    fn sum_route() -> v2::DirectNameRoute {
-        v2::DirectNameRoute::new(
+    fn sum_route() -> DirectNameRoute {
+        DirectNameRoute::new(
             &["sum"],
             Self::sum_arguments(),
             Self::SUM_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
         .then(
-            v2::MergeRoute::unary(false, Self::create)
+            MergeRoute::unary(false, Self::create)
                 .with_legacy_signature_resolver(Self::legacy_signatures),
         )
         .then(
-            v2::MergeRoute::unary(true, Self::create)
+            MergeRoute::unary(true, Self::create)
                 .with_legacy_signature_resolver(Self::legacy_signatures),
         )
-        .then(v2::PlainRoute::unary(Self::create))
-        .then(v2::IfRoute::unary(Self::create).with_features(Self::SUM_IF_FEATURES))
-        .then(v2::StateRoute::unary(Self::create).with_features(Self::STATE_FEATURES))
+        .then(PlainRoute::unary(Self::create))
+        .then(IfRoute::unary(Self::create).with_features(Self::SUM_IF_FEATURES))
+        .then(StateRoute::unary(Self::create).with_features(Self::STATE_FEATURES))
     }
 
-    fn sum0_route() -> v2::DirectNameRoute {
-        v2::DirectNameRoute::new(
+    fn sum0_route() -> DirectNameRoute {
+        DirectNameRoute::new(
             &["sum0", "sum_zero"],
             Self::sum_zero_arguments(),
             Self::SUM_ZERO_FEATURES,
-            v2::NullPolicy::ReturnsDefaultWhenOnlyNull,
+            NullPolicy::ReturnsDefaultWhenOnlyNull,
         )
         .then(
-            v2::MergeRoute::unary(false, Self::create_zero)
+            MergeRoute::unary(false, Self::create_zero)
                 .with_legacy_signature_resolver(Self::legacy_signatures),
         )
         .then(
-            v2::MergeRoute::unary(true, Self::create_zero)
+            MergeRoute::unary(true, Self::create_zero)
                 .with_legacy_signature_resolver(Self::legacy_signatures),
         )
-        .then(v2::PlainRoute::unary(Self::create_zero).with_validator(Self::validate_sum0_plain))
-        .then(v2::StateRoute::unary(Self::create_zero).with_features(Self::STATE_FEATURES))
-        .then(v2::DistinctRoute::unary(Self::create_zero))
+        .then(PlainRoute::unary(Self::create_zero).with_validator(Self::validate_sum0_plain))
+        .then(StateRoute::unary(Self::create_zero).with_features(Self::STATE_FEATURES))
+        .then(DistinctRoute::unary(Self::create_zero))
     }
 
-    fn sum_distinct_route() -> v2::DirectNameRoute {
-        v2::DirectNameRoute::new(
+    fn sum_distinct_route() -> DirectNameRoute {
+        DirectNameRoute::new(
             &["sum_distinct"],
             Self::sum_distinct_arguments(),
             Self::SUM_DISTINCT_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::PlainRoute::unary(Self::create_distinct))
+        .then(PlainRoute::unary(Self::create_distinct))
     }
 
     fn validate_sum0_plain(request: &AggregateFunctionRequest<'_>) -> Result<()> {
@@ -459,7 +457,7 @@ impl UnaryState<IntervalType, IntervalType> for AggregateIntervalSumState {
 
 impl SumBuilder {
     fn create(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
 
@@ -533,7 +531,7 @@ impl SumBuilder {
     }
 
     fn create_distinct(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
 
@@ -607,7 +605,7 @@ impl SumBuilder {
     }
 
     fn create_zero(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {
         if build.arg_type().remove_nullable() != NumberType::<u64>::data_type() {
             return Err(ErrorCode::InvalidArgument(format!(

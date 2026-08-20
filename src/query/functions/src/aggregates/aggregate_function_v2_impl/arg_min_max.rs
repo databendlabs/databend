@@ -42,9 +42,8 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::*;
+use super::FunctionFactory;
+use super::adaptors::*;
 use super::min_max_any::TYPE_MAX;
 use super::min_max_any::TYPE_MIN;
 use super::serialized_scalar_at;
@@ -52,38 +51,38 @@ use super::serialized_scalar_at;
 struct ArgMinMaxBuilder;
 
 impl ArgMinMaxBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &["arg_min"],
             ArgMinMaxBuilder::arg_min_max_arguments(),
             ArgMinMaxBuilder::ARG_MIN_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::multi_arg(false, Self::create::<TYPE_MIN>))
-        .then(v2::MergeRoute::multi_arg(true, Self::create::<TYPE_MIN>))
-        .then(v2::PlainRoute::multi_arg(Self::create::<TYPE_MIN>))
-        .then(v2::IfRoute::multi_arg(Self::create::<TYPE_MIN>))
-        .then(v2::StateRoute::multi_arg(Self::create::<TYPE_MIN>))
-        .then(v2::DistinctAliasRoute::multi_arg(Self::create::<TYPE_MIN>))
+        .then(MergeRoute::multi_arg(false, Self::create::<TYPE_MIN>))
+        .then(MergeRoute::multi_arg(true, Self::create::<TYPE_MIN>))
+        .then(PlainRoute::multi_arg(Self::create::<TYPE_MIN>))
+        .then(IfRoute::multi_arg(Self::create::<TYPE_MIN>))
+        .then(StateRoute::multi_arg(Self::create::<TYPE_MIN>))
+        .then(DistinctAliasRoute::multi_arg(Self::create::<TYPE_MIN>))
         .register(registry);
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["arg_max"],
             ArgMinMaxBuilder::arg_min_max_arguments(),
             ArgMinMaxBuilder::ARG_MAX_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::multi_arg(false, Self::create::<TYPE_MAX>))
-        .then(v2::MergeRoute::multi_arg(true, Self::create::<TYPE_MAX>))
-        .then(v2::PlainRoute::multi_arg(Self::create::<TYPE_MAX>))
-        .then(v2::IfRoute::multi_arg(Self::create::<TYPE_MAX>))
-        .then(v2::StateRoute::multi_arg(Self::create::<TYPE_MAX>))
-        .then(v2::DistinctAliasRoute::multi_arg(Self::create::<TYPE_MAX>))
+        .then(MergeRoute::multi_arg(false, Self::create::<TYPE_MAX>))
+        .then(MergeRoute::multi_arg(true, Self::create::<TYPE_MAX>))
+        .then(PlainRoute::multi_arg(Self::create::<TYPE_MAX>))
+        .then(IfRoute::multi_arg(Self::create::<TYPE_MAX>))
+        .then(StateRoute::multi_arg(Self::create::<TYPE_MAX>))
+        .then(DistinctAliasRoute::multi_arg(Self::create::<TYPE_MAX>))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: ArgMinMaxBuilder::register,
     }
 }
@@ -218,7 +217,7 @@ where
 
 impl ArgMinMaxBuilder {
     fn create<const CMP_TYPE: u8>(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
     ) -> Result<AggregateFunctionRef> {
         let arg_type = build.args_type()[0].clone();
         let value_type = build.args_type()[1].clone();
@@ -226,7 +225,7 @@ impl ArgMinMaxBuilder {
     }
 
     fn create_for_arg<const CMP_TYPE: u8>(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
         arg_type: DataType,
         value_type: DataType,
     ) -> Result<AggregateFunctionRef> {
@@ -260,7 +259,7 @@ impl ArgMinMaxBuilder {
     }
 
     fn create_for_value<A, const CMP_TYPE: u8>(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
         arg_type: DataType,
         value_type: DataType,
     ) -> Result<AggregateFunctionRef>
@@ -305,7 +304,7 @@ impl ArgMinMaxBuilder {
     }
 
     fn create_instance<A, V, const CMP_TYPE: u8>(
-        build: v2::MultiArgBuildContext<'_, impl v2::CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
         arg_type: DataType,
         value_type: DataType,
     ) -> Result<AggregateFunctionRef>

@@ -108,12 +108,12 @@ pub(super) type MultiArgBuildFn<C> =
 pub(super) type DirectBuildFn<C> =
     for<'a> fn(DirectBuildContext<'a, C>) -> Result<AggregateFunctionRef>;
 
-pub(crate) fn state_at<T>(state: AggrState<'_>, index: usize) -> &mut T
+fn state_at<T>(state: AggrState<'_>, index: usize) -> &mut T
 where T: Send + 'static {
     state.addr.next(state.loc[index].offset()).get::<T>()
 }
 
-pub(crate) fn write_state_at<T>(state: AggrState<'_>, index: usize, value: T)
+fn write_state_at<T>(state: AggrState<'_>, index: usize, value: T)
 where T: Send + 'static {
     state
         .addr
@@ -121,18 +121,14 @@ where T: Send + 'static {
         .write_state(value)
 }
 
-pub(crate) fn serialized_field_count(state: &BlockEntry) -> usize {
+fn serialized_field_count(state: &BlockEntry) -> usize {
     match state.data_type() {
         DataType::Tuple(fields) => fields.len(),
         _ => 1,
     }
 }
 
-pub(crate) fn project_serialized_fields(
-    state: &BlockEntry,
-    start: usize,
-    end: usize,
-) -> BlockEntry {
+fn project_serialized_fields(state: &BlockEntry, start: usize, end: usize) -> BlockEntry {
     debug_assert!(start < end);
     match state {
         BlockEntry::Column(Column::Tuple(fields)) => {
@@ -190,7 +186,7 @@ pub(crate) fn serialized_binary_at(state: &BlockEntry, row: usize, field: usize)
     }
 }
 
-pub(crate) fn combined_serialized_flag_filter(
+fn combined_serialized_flag_filter(
     state: &BlockEntry,
     filter: Option<&Bitmap>,
     field: usize,

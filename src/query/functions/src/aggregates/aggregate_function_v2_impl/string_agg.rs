@@ -36,41 +36,37 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
-use crate::aggregates::aggregate_function_v2_impl::adaptors_v2::UnaryAggregateImplementation;
-use crate::aggregates::aggregate_function_v2_impl::adaptors_v2::UnaryImpl;
-use crate::aggregates::aggregate_function_v2_impl::adaptors_v2::UnaryOrNull;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct StringAggBuilder;
 
 impl StringAggBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::route().register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: StringAggBuilder::register,
     }
 }
 
 impl StringAggBuilder {
-    fn string_agg_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::variadic(
-            vec![v2::AggregateArgumentPattern::any()],
-            v2::AggregateArgumentPattern::exact(DataType::String),
+    fn string_agg_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::variadic(
+            vec![AggregateArgumentPattern::any()],
+            AggregateArgumentPattern::exact(DataType::String),
             0,
             Some(1),
         )
     }
 
-    const STRING_AGG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const STRING_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Optional,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Optional,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "concatenates input values into a string",
         definition: "string_agg(expr[, delimiter])",
@@ -84,11 +80,10 @@ pub struct AggregateStringAggState {
 }
 
 impl AggregateStringAggState {
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::DataType(StringType::data_type())],
-        )
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(StringType::data_type()),
+        ])
         .with_manual_drop(true)
     }
 }
@@ -184,25 +179,23 @@ impl ToStringType for AnyType {
 }
 
 impl StringAggBuilder {
-    fn route() -> v2::DirectNameRoute {
+    fn route() -> DirectNameRoute {
         let arguments = Self::string_agg_arguments();
         let features = Self::STRING_AGG_FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["string_agg", "listagg", "group_concat"],
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::new(false, StringAggBuilder::create))
-        .then(v2::MergeRoute::new(true, StringAggBuilder::create))
-        .then(v2::PlainRoute::new(StringAggBuilder::create))
-        .then(v2::IfRoute::new(StringAggBuilder::create))
-        .then(v2::StateRoute::new(StringAggBuilder::create))
+        .then(MergeRoute::new(false, StringAggBuilder::create))
+        .then(MergeRoute::new(true, StringAggBuilder::create))
+        .then(PlainRoute::new(StringAggBuilder::create))
+        .then(IfRoute::new(StringAggBuilder::create))
+        .then(StateRoute::new(StringAggBuilder::create))
     }
 
-    fn create(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let value_type = build.args_type()[0].remove_nullable();
         let delimiter = if build.params().len() == 1 {
             build.params()[0].as_string().unwrap().clone()
@@ -242,9 +235,9 @@ impl StringAggBuilder {
     }
 
     fn create_instance<T>(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
+        build: DirectBuildContext<'_, impl CombinatorImpl>,
         delimiter: String,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         T: ToStringType + ValueType,
     {

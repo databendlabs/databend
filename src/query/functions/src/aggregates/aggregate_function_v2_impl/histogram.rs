@@ -45,49 +45,48 @@ use databend_common_expression::with_number_mapped_type;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct HistogramBuilder;
 
 impl HistogramBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &["histogram"],
             HistogramBuilder::histogram_arguments(),
             HistogramBuilder::HISTOGRAM_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::unary(false, HistogramBuilder::create))
-        .then(v2::MergeRoute::unary(true, HistogramBuilder::create))
-        .then(v2::PlainRoute::unary(HistogramBuilder::create))
-        .then(v2::IfRoute::unary(HistogramBuilder::create))
-        .then(v2::StateRoute::unary(HistogramBuilder::create))
+        .then(MergeRoute::unary(false, HistogramBuilder::create))
+        .then(MergeRoute::unary(true, HistogramBuilder::create))
+        .then(PlainRoute::unary(HistogramBuilder::create))
+        .then(IfRoute::unary(HistogramBuilder::create))
+        .then(StateRoute::unary(HistogramBuilder::create))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: HistogramBuilder::register,
     }
 }
 
 impl HistogramBuilder {
-    fn histogram_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::variadic(
-            vec![v2::AggregateArgumentPattern::any()],
-            v2::AggregateArgumentPattern::any(),
+    fn histogram_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::variadic(
+            vec![AggregateArgumentPattern::any()],
+            AggregateArgumentPattern::any(),
             0,
             Some(1),
         )
     }
 
-    const HISTOGRAM_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const HISTOGRAM_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "builds an equi-height histogram",
         definition: "histogram(expr[, buckets])",
@@ -126,11 +125,10 @@ where
     T: ValueType,
     T::Scalar: Ord + BorshSerialize + BorshDeserialize,
 {
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 
@@ -242,9 +240,7 @@ where
 }
 
 impl HistogramBuilder {
-    fn create(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
         let max_num_buckets = Self::get_max_num_buckets(build.params(), &display_name)?;
@@ -278,10 +274,10 @@ impl HistogramBuilder {
     }
 
     fn create_instance<T>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
         data_type: DataType,
         max_num_buckets: u64,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         T: AccessType + ValueType,
         T::Scalar: Ord + BorshSerialize + BorshDeserialize + Serialize + Display,

@@ -40,35 +40,35 @@ use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
+use super::FunctionFactory;
+use super::adaptors::*;
 
 struct JsonObjectAggBuilder;
 
 impl JsonObjectAggBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateFunctionRegistry) {
         Self::route().register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: JsonObjectAggBuilder::register,
     }
 }
 
 impl JsonObjectAggBuilder {
-    fn json_object_agg_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![
-            v2::AggregateArgumentPattern::exact(DataType::String),
-            v2::AggregateArgumentPattern::any(),
+    fn json_object_agg_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![
+            AggregateArgumentPattern::exact(DataType::String),
+            AggregateArgumentPattern::any(),
         ])
     }
 
-    const JSON_OBJECT_AGG_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const JSON_OBJECT_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "aggregates key-value pairs into a JSON object",
         definition: "json_object_agg(key, value)",
@@ -254,11 +254,10 @@ where
     V::Scalar: BorshSerialize + BorshDeserialize,
     State: BinaryScalarStateFunc<V>,
 {
-    fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<State>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+    fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<State>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 
@@ -280,7 +279,7 @@ where
     }
 }
 
-impl<V, State> v2::AggrImpl for AggregateJsonObjectAggImplementation<V, State>
+impl<V, State> AggrImpl for AggregateJsonObjectAggImplementation<V, State>
 where
     V: ValueType,
     V::Scalar: BorshSerialize + BorshDeserialize + Clone + Send + Sync,
@@ -290,14 +289,14 @@ where
         state.write(State::new);
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let state = input.state.get::<State>();
         let (key_column, val_column, validity) =
             Self::downcast_columns(input.columns, input.validity)?;
         state.add_batch(key_column, val_column, validity.as_ref())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let (key_column, val_column, validity) = Self::downcast_columns(input.columns, None)?;
         let key_column_iter = key_column.iter();
         let val_column_iter = val_column.iter();
@@ -323,7 +322,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let state = input.state.get::<State>();
         let (key_column, val_column, validity) = Self::downcast_columns(input.columns, None)?;
 
@@ -343,7 +342,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let binary_builder = input.builders[0].as_binary_mut().unwrap();
         for state in input.states.iter() {
             let state = state.get::<State>();
@@ -353,7 +352,7 @@ where
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
                 continue;
@@ -368,19 +367,19 @@ where
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input
             .state
             .get::<State>()
             .merge_owned(input.rhs.get::<State>())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = input.state.get::<State>();
         state.merge_result(input.builder)
     }
 
-    fn merge_result_read_only(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         let mut state = input.state.get::<State>().clone();
         state.merge_result(input.builder)
     }
@@ -391,24 +390,24 @@ where
 }
 
 impl JsonObjectAggBuilder {
-    fn route() -> v2::DirectNameRoute {
+    fn route() -> DirectNameRoute {
         let arguments = Self::json_object_agg_arguments();
         let features = Self::JSON_OBJECT_AGG_FEATURES;
-        v2::DirectNameRoute::new(
+        DirectNameRoute::new(
             &["json_object_agg"],
             arguments.clone(),
             features.clone(),
-            v2::NullPolicy::Keep,
+            NullPolicy::Keep,
         )
         .with_validator(Self::validate_request)
-        .then(v2::MergeRoute::new(false, JsonObjectAggBuilder::create))
-        .then(v2::MergeRoute::new(true, JsonObjectAggBuilder::create))
-        .then(v2::PlainRoute::new(JsonObjectAggBuilder::create))
-        .then(v2::IfRoute::new(JsonObjectAggBuilder::create))
-        .then(v2::StateRoute::new(JsonObjectAggBuilder::create))
+        .then(MergeRoute::new(false, JsonObjectAggBuilder::create))
+        .then(MergeRoute::new(true, JsonObjectAggBuilder::create))
+        .then(PlainRoute::new(JsonObjectAggBuilder::create))
+        .then(IfRoute::new(JsonObjectAggBuilder::create))
+        .then(StateRoute::new(JsonObjectAggBuilder::create))
     }
 
-    fn validate_request(request: &v2::AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_request(request: &AggregateFunctionRequest<'_>) -> Result<()> {
         if request.params.is_empty() {
             Ok(())
         } else {
@@ -419,9 +418,7 @@ impl JsonObjectAggBuilder {
         }
     }
 
-    fn create(
-        build: v2::DirectBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let key_type = build.args_type()[0].remove_nullable();
         if key_type != DataType::String {
             return Err(ErrorCode::BadDataValueType(format!(

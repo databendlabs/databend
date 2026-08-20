@@ -53,45 +53,44 @@ use rand::prelude::SliceRandom;
 use rand::rngs::SmallRng;
 use rand::thread_rng;
 
-use super::AggregateFunctionV2Factory;
-use super::adaptors_v2 as v2;
-use super::adaptors_v2::UnaryState;
+use super::FunctionFactory;
+use super::adaptors::*;
 use crate::with_simple_no_number_mapped_type;
 
 struct RangeBoundBuilder;
 
 impl RangeBoundBuilder {
-    fn register(registry: &mut v2::AggregateFunctionRegistry) {
-        v2::DirectNameRoute::new(
+    fn register(registry: &mut AggregateFunctionRegistry) {
+        DirectNameRoute::new(
             &["range_bound"],
             RangeBoundBuilder::range_bound_arguments(),
             RangeBoundBuilder::RANGE_BOUND_FEATURES,
-            v2::NullPolicy::Skip,
+            NullPolicy::Skip,
         )
-        .then(v2::MergeRoute::unary(false, RangeBoundBuilder::create))
-        .then(v2::MergeRoute::unary(true, RangeBoundBuilder::create))
-        .then(v2::PlainRoute::unary(RangeBoundBuilder::create))
-        .then(v2::IfRoute::unary(RangeBoundBuilder::create))
-        .then(v2::StateRoute::unary(RangeBoundBuilder::create))
+        .then(MergeRoute::unary(false, RangeBoundBuilder::create))
+        .then(MergeRoute::unary(true, RangeBoundBuilder::create))
+        .then(PlainRoute::unary(RangeBoundBuilder::create))
+        .then(IfRoute::unary(RangeBoundBuilder::create))
+        .then(StateRoute::unary(RangeBoundBuilder::create))
         .register(registry);
     }
 }
 
 inventory::submit! {
-    AggregateFunctionV2Factory {
+    FunctionFactory {
         register: RangeBoundBuilder::register,
     }
 }
 
 impl RangeBoundBuilder {
-    fn range_bound_arguments() -> v2::AggregateArgumentsPattern {
-        v2::AggregateArgumentsPattern::fixed(vec![v2::AggregateArgumentPattern::any()])
+    fn range_bound_arguments() -> AggregateArgumentsPattern {
+        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
     }
 
-    const RANGE_BOUND_FEATURES: v2::FunctionFeatures = v2::FunctionFeatures {
+    const RANGE_BOUND_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
-        sort_policy: v2::SortPolicy::Unsupported,
-        distinct_policy: v2::DistinctPolicy::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
         description: "calculates partition boundaries for a column",
         definition: "range_bound(partition_num, sample_size)(expr)",
@@ -128,11 +127,10 @@ where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
 {
-    pub fn state_description() -> v2::AggregateStateDescription {
-        v2::AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<Self>())],
-            vec![StateSerdeItem::Binary(None)],
-        )
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::Binary(None),
+        ])
         .with_manual_drop(true)
     }
 }
@@ -332,9 +330,7 @@ where
 }
 
 impl RangeBoundBuilder {
-    fn create(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
-    ) -> Result<v2::AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
         let function_info = Self::get_partitions(build.params(), &display_name, data_type.clone())?;
@@ -368,10 +364,10 @@ impl RangeBoundBuilder {
     }
 
     fn create_instance<T>(
-        build: v2::UnaryBuildContext<'_, impl v2::CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl CombinatorImpl>,
         return_type: DataType,
         function_info: RangeBoundData,
-    ) -> Result<v2::AggregateFunctionRef>
+    ) -> Result<AggregateFunctionRef>
     where
         T: AccessType + ReturnType,
         T::Scalar: Ord + BorshSerialize + BorshDeserialize,
