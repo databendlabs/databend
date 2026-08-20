@@ -60,6 +60,19 @@ async fn optimized_join(ctx: &std::sync::Arc<LiteTableContext>) -> Result<SExpr>
     Ok(*s_expr)
 }
 
+async fn optimized_nullable_mark_join(ctx: &std::sync::Arc<LiteTableContext>) -> Result<SExpr> {
+    let raw = ctx
+        .bind_sql(
+            "SELECT l.payload IN (SELECT r.payload FROM join_distribution_r AS r) \
+             FROM join_distribution_l AS l",
+        )
+        .await?;
+    let Plan::Query { s_expr, .. } = ctx.optimize_plan(raw).await? else {
+        unreachable!("mark join query should produce a query plan");
+    };
+    Ok(*s_expr)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_hash_join_child_distributions() -> Result<()> {
     let ctx = LiteTableContext::create().await?;
@@ -84,6 +97,13 @@ async fn test_hash_join_child_distributions() -> Result<()> {
     assert_eq!(shuffle_exchanges.node_to_node_key_counts, vec![2, 2]);
     assert_eq!(shuffle_exchanges.global_hash, 0);
     assert_eq!(shuffle_exchanges.broadcast, 0);
+
+    let mark_plan = optimized_nullable_mark_join(&ctx).await?;
+    let mut mark_exchanges = Exchanges::default();
+    collect_exchanges(&mark_plan, &mut mark_exchanges);
+    assert_eq!(mark_exchanges.node_to_node_key_counts, vec![1]);
+    assert_eq!(mark_exchanges.global_hash, 0);
+    assert_eq!(mark_exchanges.broadcast, 1);
 
     ctx.get_settings()
         .set_setting("enforce_shuffle_join".to_string(), "0".to_string())?;
