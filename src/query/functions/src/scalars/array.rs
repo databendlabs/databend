@@ -89,7 +89,7 @@ use jsonb::RawJsonb;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
-use crate::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use crate::aggregates::registry::AGGR_REGISTRY;
 
 const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 14] = &[
     ("array_avg", "avg"),

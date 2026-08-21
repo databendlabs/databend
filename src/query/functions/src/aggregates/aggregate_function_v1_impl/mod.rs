@@ -32,9 +32,9 @@ use databend_common_expression::aggregate_function_v1::AggregateFunction;
 use databend_common_expression::aggregate_function_v1::AggregateFunctionRef;
 use databend_common_expression::types::DataType;
 
-use super::aggregate_function_common::AggregateFunctionSortDesc;
-use super::aggregate_function_common::extract_number_param;
-use super::aggregate_function_common::get_levels;
+use super::common::AggregateFunctionSortDesc;
+use super::common::extract_number_param;
+use super::common::get_levels;
 
 trait StateSerde {
     fn serialize_type(info: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem>;

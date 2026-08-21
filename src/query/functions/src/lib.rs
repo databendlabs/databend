@@ -22,7 +22,7 @@ use ctor::ctor;
 use databend_common_expression::FunctionRegistry;
 use unicase::Ascii;
 
-use crate::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use crate::aggregates::registry::AGGR_REGISTRY;
 
 pub mod aggregates;
 mod cast_rules;

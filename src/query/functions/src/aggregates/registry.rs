@@ -16,10 +16,10 @@ use std::sync::LazyLock;
 
 pub use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRegistry;
 
-use super::aggregate_function_v2_impl;
+use super::function_impl;
 
 pub static AGGR_REGISTRY: LazyLock<AggregateFunctionRegistry> = LazyLock::new(|| {
     let mut registry = AggregateFunctionRegistry::empty();
-    aggregate_function_v2_impl::register_functions(&mut registry);
+    function_impl::register_functions(&mut registry);
     registry
 });

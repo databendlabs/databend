@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use aggregate_function_common::AggregateFunctionSortDesc;
-pub use aggregate_function_common::sort_descs_to_bound_order_by;
+pub use common::AggregateFunctionSortDesc;
+pub use common::sort_descs_to_bound_order_by;
 pub use aggregate_function_v1_impl::*;
-pub use aggregate_function_v2_registry::AGGR_REGISTRY;
+pub use registry::AGGR_REGISTRY;
 pub use databend_common_expression::aggregate::*;
 
-mod aggregate_function_common;
+mod common;
 mod aggregate_function_v1_impl;
-mod aggregate_function_v2_impl;
-pub mod aggregate_function_v2_registry;
+mod function_impl;
+pub mod registry;

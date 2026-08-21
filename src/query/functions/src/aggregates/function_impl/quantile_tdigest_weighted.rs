@@ -35,7 +35,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::super::aggregate_function_common::get_levels;
+use super::super::common::get_levels;
 use super::FunctionFactory;
 use super::adaptors::*;
 use super::quantile_tdigest::AggregateQuantileTDigestState;
