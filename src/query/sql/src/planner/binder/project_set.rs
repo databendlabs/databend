@@ -149,6 +149,7 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                     func_name: func.func_name.clone(),
                     params: func.params.clone(),
                     arguments: replaced_args,
+                    return_type: func.return_type.clone(),
                 }
                 .into();
 
@@ -166,7 +167,7 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                     return Ok(());
                 }
 
-                let data_type = normalize_srf_return_type(replaced_expr.data_type()?);
+                let data_type = normalize_srf_return_type(replaced_expr.data_type().into_owned());
                 let index = self
                     .metadata
                     .write()
@@ -328,7 +329,7 @@ pub fn find_replaced_set_returning_function(
     srf_info.srfs_map.get(srf_display_name).map(|i| {
         // This expression is already replaced.
         let scalar_item = &srf_info.srfs[*i];
-        let data_type = normalize_srf_return_type(scalar_item.scalar.data_type().unwrap());
+        let data_type = normalize_srf_return_type(scalar_item.scalar.data_type().into_owned());
         ColumnBindingBuilder::new(
             srf_display_name.to_string(),
             scalar_item.index,

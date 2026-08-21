@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
@@ -27,6 +29,7 @@ use crate::MetadataRef;
 use crate::Symbol;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
+use crate::plans::FunctionCall;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
@@ -104,15 +107,15 @@ impl SExprVisitor for SExprTypeValidator<'_> {
                     .zip(&union.output_indexes)
                 {
                     let left_type = match left_cast {
-                        Some(cast) => cast.data_type()?,
-                        None => self.metadata_type(*left)?,
+                        Some(cast) => cast.data_type(),
+                        None => Cow::Owned(self.metadata_type(*left)?),
                     };
                     let right_type = match right_cast {
-                        Some(cast) => cast.data_type()?,
-                        None => self.metadata_type(*right)?,
+                        Some(cast) => cast.data_type(),
+                        None => Cow::Owned(self.metadata_type(*right)?),
                     };
-                    self.validate_symbol_type(*output, &left_type, "union left output")?;
-                    self.validate_symbol_type(*output, &right_type, "union right output")?;
+                    self.validate_symbol_type(*output, left_type.as_ref(), "union left output")?;
+                    self.validate_symbol_type(*output, right_type.as_ref(), "union right output")?;
                 }
             }
             _ => {}
@@ -125,7 +128,11 @@ impl SExprVisitor for SExprTypeValidator<'_> {
 impl SExprTypeValidator<'_> {
     fn validate_items(&self, items: &[ScalarItem]) -> Result<()> {
         for item in items {
-            self.validate_symbol_type(item.index, &item.scalar.data_type()?, "scalar producer")?;
+            self.validate_symbol_type(
+                item.index,
+                item.scalar.data_type().as_ref(),
+                "scalar producer",
+            )?;
         }
         Ok(())
     }
@@ -192,9 +199,6 @@ impl SExprTypeValidator<'_> {
     }
 
     fn validate_scalar(&self, scalar: &ScalarExpr, symbol_types: SymbolTypeSource) -> Result<()> {
-        // Resolve the complete expression first, then validate all embedded
-        // symbol and aggregate declarations.
-        scalar.data_type()?;
         ScalarTypeValidator { symbol_types }.visit(scalar)
     }
 }
@@ -255,12 +259,23 @@ struct ScalarTypeValidator<'a> {
 }
 
 impl ScalarTypeValidator<'_> {
+    fn validate_function_call(&mut self, function: &FunctionCall) -> Result<()> {
+        let inferred = function.infer_return_type()?;
+        if inferred != *function.return_type {
+            return Err(ErrorCode::Internal(format!(
+                "SExpr function return type mismatch for {}: stored {:?}, inferred {inferred:?}",
+                function.func_name, function.return_type
+            )));
+        }
+        Ok(())
+    }
+
     fn validate_aggregate_function(&mut self, aggregate: &AggregateFunction) -> Result<()> {
         let argument_types = aggregate
             .args
             .iter()
-            .map(ScalarExpr::data_type)
-            .collect::<Result<Vec<_>>>()?;
+            .map(|argument| argument.data_type().into_owned())
+            .collect::<Vec<_>>();
         let sort_descs = aggregate
             .sort_descs
             .iter()
@@ -298,6 +313,15 @@ impl ScalarExprVisitor<'_> for ScalarTypeValidator<'_> {
 
         for expr in aggregate.exprs() {
             self.visit(expr)?;
+        }
+        Ok(())
+    }
+
+    fn visit_function_call(&mut self, function: &FunctionCall) -> Result<()> {
+        self.validate_function_call(function)?;
+
+        for argument in &function.arguments {
+            self.visit(argument)?;
         }
         Ok(())
     }

@@ -92,3 +92,17 @@ async fn test_decorrelate_correlated_alias_regressions() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_scalar_subquery_comparison_refreshes_return_type() -> Result<()> {
+    let case = SqlTestCase {
+        name: "scalar_subquery_comparison_refreshes_return_type",
+        description: "",
+        setup_sqls: &[],
+        sql: "SELECT 1 WHERE (SELECT a FROM (VALUES (0), (1)) t(a)) >= 0",
+    };
+    let ctx = setup_context(&case).await?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    ctx.optimize_plan(plan).await?;
+    Ok(())
+}

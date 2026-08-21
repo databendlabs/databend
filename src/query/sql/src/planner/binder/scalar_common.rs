@@ -219,6 +219,7 @@ mod tests {
             func_name: "and".to_string(),
             params: vec![],
             arguments: vec![lhs, rhs],
+            return_type: Box::new(DataType::Boolean),
         })
     }
 
@@ -243,6 +244,7 @@ mod tests {
                 and(bool_constant(true), bool_constant(true)),
                 bool_constant(false),
             ],
+            return_type: Box::new(DataType::Boolean),
         });
 
         assert_eq!(conjunctions(&expr).count(), 4);
@@ -347,11 +349,14 @@ fn fold_or_arguments(iter: impl Iterator<Item = ScalarExpr>) -> ScalarExpr {
         }
         .into(),
         |acc, arg| {
+            let return_type =
+                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&acc, &arg]);
             FunctionCall {
                 span: None,
                 func_name: "or".to_string(),
                 params: vec![],
                 arguments: vec![acc, arg],
+                return_type: Box::new(return_type),
             }
             .into()
         },

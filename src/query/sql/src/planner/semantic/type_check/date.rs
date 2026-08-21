@@ -387,8 +387,8 @@ impl<'a, A> TypeChecker<'a, A> {
         let (left_slice, right_slice) = args.split_at_mut(1);
         let left_expr = &mut left_slice[0];
         let right_expr = &mut right_slice[0];
-        let left_type = left_expr.data_type()?;
-        let right_type = right_expr.data_type()?;
+        let left_type = left_expr.data_type().into_owned();
+        let right_type = right_expr.data_type().into_owned();
         self.adjust_date_interval_operands(&op, left_expr, &left_type, right_expr, &right_type)
     }
 

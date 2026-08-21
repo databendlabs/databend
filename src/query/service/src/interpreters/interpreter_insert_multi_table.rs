@@ -26,6 +26,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnSet;
@@ -470,20 +471,24 @@ impl InsertMultiTableInterpreter {
 }
 
 fn and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
+    let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
     ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "and".to_string(),
         params: vec![],
         arguments: vec![left, right],
+        return_type: Box::new(return_type),
     })
 }
 
 fn not(expr: ScalarExpr) -> ScalarExpr {
+    let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&expr]);
     ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "not".to_string(),
         params: vec![],
         arguments: vec![expr],
+        return_type: Box::new(return_type),
     })
 }
 

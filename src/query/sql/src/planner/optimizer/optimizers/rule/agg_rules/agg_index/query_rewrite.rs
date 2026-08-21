@@ -129,8 +129,8 @@ impl AggIndexView {
                     let args_type = func
                         .args
                         .iter()
-                        .map(|arg| arg.data_type())
-                        .collect::<Result<Vec<_>>>()?;
+                        .map(|arg| arg.data_type().into_owned())
+                        .collect::<Vec<_>>();
                     let order_by = sort_descs_to_bound_order_by(
                         &func
                             .sort_descs
@@ -147,7 +147,7 @@ impl AggIndexView {
                     })?;
                     (func.state_data_type(), true)
                 }
-                None => (item.scalar.data_type().unwrap(), false),
+                None => (item.scalar.data_type().into_owned(), false),
             };
 
             let name = index.to_string();

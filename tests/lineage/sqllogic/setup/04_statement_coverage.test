@@ -35,6 +35,30 @@ statement ok
 INSERT INTO lineage_history_statements.insert_dst
 SELECT a, b FROM lineage_history_statements.src
 
+# Explicit materialized CTE outputs must resolve through the temporary table to the producer.
+statement ok
+CREATE TABLE lineage_history_statements.mcte_dst(x INT)
+
+statement ok
+INSERT INTO lineage_history_statements.mcte_dst
+WITH q(x, filter_col) AS MATERIALIZED (
+  SELECT a + b, c FROM lineage_history_statements.src
+)
+SELECT x FROM q WHERE filter_col > 0
+
+statement ok
+CREATE TABLE lineage_history_statements.mcte_tuple_src(t TUPLE(a INT, b INT))
+
+statement ok
+CREATE TABLE lineage_history_statements.mcte_tuple_dst(x INT)
+
+statement ok
+INSERT INTO lineage_history_statements.mcte_tuple_dst
+WITH q(t) AS MATERIALIZED (
+  SELECT t FROM lineage_history_statements.mcte_tuple_src
+)
+SELECT t.1 FROM q
+
 # EXPLAIN PIPELINE builds the inner DML pipeline without executing it, so it must not leak
 # captured inner lineage into the outer EXPLAIN query finish log.
 statement ok

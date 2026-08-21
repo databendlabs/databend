@@ -173,6 +173,7 @@ impl Binder {
         if bind_context.planning_agg_index
             || bind_context.planning_materialized_view_rewrite
             || !self.ctx.get_can_scan_from_agg_index()
+            || !self.enable_materialized_view_rewrite
         {
             return Ok(());
         }
@@ -374,7 +375,7 @@ impl Binder {
                 data_types.push(infer_schema_type(function.return_type.as_ref())?);
             }
             for item in &aggregate.group_items {
-                data_types.push(infer_schema_type(&item.scalar.data_type()?)?);
+                data_types.push(infer_schema_type(item.scalar.data_type().as_ref())?);
             }
             data_types
         } else {

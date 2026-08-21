@@ -193,7 +193,7 @@ impl Binder {
         for argument in arguments {
             let box (arg, mut arg_type) = type_checker.resolve(argument)?;
             if let ScalarExpr::SubqueryExpr(subquery) = &arg {
-                if subquery.typ == SubqueryType::Scalar && !arg.data_type()?.is_nullable() {
+                if subquery.typ == SubqueryType::Scalar && !arg.data_type().is_nullable() {
                     arg_type = arg_type.wrap_nullable();
                 }
             }

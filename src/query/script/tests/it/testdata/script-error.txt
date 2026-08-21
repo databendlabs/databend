@@ -93,6 +93,16 @@ error:
 
 
 ---------- Input ----------
+LET x := (SELECT :missing);
+---------- Output ----------
+error: 
+  --> SQL:1:18
+  |
+1 | LET x := (SELECT :missing);
+  |                  ^^^^^^^^ `missing` is not defined
+
+
+---------- Input ----------
 LET x := 1;
 FOR r IN x DO
     BREAK;
