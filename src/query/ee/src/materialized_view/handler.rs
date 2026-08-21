@@ -86,9 +86,8 @@ impl MaterializedViewHandler for RealMaterializedViewHandler {
                 ErrorCode::Internal("materialized view refresh requires QueryContext".to_string())
             })?;
 
-        // Refresh consumes one source checkpoint range and may run semantic compaction afterwards.
-        // Keep the same mandatory non-waiting lock across the complete lifecycle so concurrent
-        // refreshes cannot consume the same changes or race with compaction.
+        // Refresh consumes one source checkpoint range. Keep the same mandatory non-waiting lock
+        // across the complete lifecycle so concurrent refreshes cannot consume the same changes.
         let locked_table_id = table.get_id();
         let table_lock = LockManager::create_table_lock(table.get_table_info().clone())?;
         let _lock_guard = table_lock.try_lock(query_ctx.clone(), false).await?;

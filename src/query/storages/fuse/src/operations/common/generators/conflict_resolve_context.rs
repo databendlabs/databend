@@ -34,10 +34,11 @@ impl ConflictResolveContext {
         match self {
             ConflictResolveContext::None => 0,
             ConflictResolveContext::AppendOnly((merged, _)) => merged.merged_statistics.row_count,
-            ConflictResolveContext::ModifiedSegmentExistsInLatest(changes) => {
-                changes.merged_statistics.row_count + deleted_rows
-                    - changes.removed_statistics.row_count
-            }
+            ConflictResolveContext::ModifiedSegmentExistsInLatest(changes) => changes
+                .merged_statistics
+                .row_count
+                .saturating_add(deleted_rows)
+                .saturating_sub(changes.removed_statistics.row_count),
         }
     }
 
