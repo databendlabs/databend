@@ -16,4 +16,5 @@ mod fixed_rate_sampler;
 mod fixed_size_sampler;
 
 pub use fixed_rate_sampler::FixedRateSampler;
+pub use fixed_size_sampler::FixedSizeIndexSampler;
 pub use fixed_size_sampler::FixedSizeSampler;
