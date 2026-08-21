@@ -32,7 +32,6 @@ use databend_common_expression::aggregate_function_v1::AggregateFunction;
 use databend_common_expression::aggregate_function_v1::AggregateFunctionRef;
 use databend_common_expression::types::DataType;
 
-use super::common::AggregateFunctionSortDesc;
 use super::common::extract_number_param;
 use super::common::get_levels;
 

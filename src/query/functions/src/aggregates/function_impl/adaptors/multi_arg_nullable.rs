@@ -129,7 +129,6 @@ where I: AggrImpl
         self.inner.accumulate(AccumulateInput {
             state: Self::inner_state(input.state),
             columns: (&columns).into(),
-            order_by: input.order_by,
             validity: validity.as_ref(),
         })
     }
@@ -157,7 +156,6 @@ where I: AggrImpl
             self.inner.accumulate_keys(AccumulateKeysInput {
                 states: input.states.without_last_loc(),
                 columns,
-                order_by: input.order_by,
             })?;
             for state in input.states.iter() {
                 Self::mark_seen(state);
@@ -167,7 +165,6 @@ where I: AggrImpl
             self.inner.accumulate_keys(AccumulateKeysInput {
                 states: input.states,
                 columns,
-                order_by: input.order_by,
             })
         }
     }

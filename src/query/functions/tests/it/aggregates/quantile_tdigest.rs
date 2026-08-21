@@ -26,6 +26,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::aggregate::aggregate_function::*;
+use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
@@ -37,8 +38,6 @@ use databend_common_expression::types::OrderedFloat;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_functions::aggregates::sort_descs_to_bound_order_by;
 use goldenfile::Mint;
 
 use super::aggregate_case_support::eval_aggregate;
@@ -72,19 +71,18 @@ fn simulate_accumulate_matches_rows(
     params: Vec<databend_common_expression::Scalar>,
     entries: &[BlockEntry],
     rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) -> Result<(Column, DataType)> {
     let arguments = entries
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let order_by = sort_descs_to_bound_order_by(&sort_descs)?;
     let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &arguments,
         distinct: false,
-        order_by: &order_by,
+        order_by: &sort_descs,
     })?;
     let data_type = func.signature().return_type.clone();
     let states_layout = get_states_layout(std::slice::from_ref(&func))?;
@@ -107,7 +105,6 @@ fn simulate_accumulate_matches_rows(
         state: batch_state,
         columns: entries.into(),
         validity: None,
-        order_by: &[],
     })?;
     for row in 0..rows {
         func.accumulate_row(AccumulateRowInput {
@@ -486,19 +483,18 @@ fn simulate_accumulate_keys_matches_rows(
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) -> Result<(Column, DataType)> {
     let arguments = entries
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let order_by = sort_descs_to_bound_order_by(&sort_descs)?;
     let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &arguments,
         distinct: false,
-        order_by: &order_by,
+        order_by: &sort_descs,
     })?;
     let data_type = func.signature().return_type.clone();
     let states_layout = get_states_layout(std::slice::from_ref(&func))?;
@@ -540,7 +536,6 @@ fn simulate_accumulate_keys_matches_rows(
     func.accumulate_keys(AccumulateKeysInput {
         states: AggregateStateSet::new(&places, &loc),
         columns: entries.into(),
-        order_by: &[],
     })?;
 
     for row in 0..rows {
@@ -583,7 +578,7 @@ fn simulate_merge_last_row_into_left(
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) -> Result<(Column, DataType)> {
     assert!(rows > 1);
     simulate_v2_merge_split(name, params, entries, rows, sort_descs, rows - 1)
@@ -594,7 +589,7 @@ fn simulate_merge_empty_right(
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) -> Result<(Column, DataType)> {
     simulate_v2_merge_split(name, params, entries, rows, sort_descs, rows)
 }
@@ -604,7 +599,7 @@ fn simulate_merge_into_uncompressed_left(
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) -> Result<(Column, DataType)> {
     assert_eq!(rows, 3);
     simulate_v2_merge_split(name, params, entries, rows, sort_descs, 2)
@@ -615,7 +610,7 @@ fn simulate_v2_merge_split(
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
     right_start: usize,
 ) -> Result<(Column, DataType)> {
     if !sort_descs.is_empty() {

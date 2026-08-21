@@ -494,14 +494,12 @@ mod tests {
 
     fn direct_full_modifier_result(
         function: &AggregateFunctionRef,
-        order_by: &[AggregateRuntimeOrderByItem],
         entries: &[BlockEntry],
     ) -> Result<Column> {
         let owner = AggregateStateOwner::new(vec![function.clone()])?;
         function.accumulate(AccumulateInput {
             state: owner.state(0),
             columns: entries.into(),
-            order_by,
             validity: None,
         })?;
         let mut builder = ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
@@ -573,7 +571,6 @@ mod tests {
             function.accumulate(AccumulateInput {
                 state: source_owner.state(0),
                 columns: (&entries).into(),
-                order_by: &[],
                 validity: None,
             })?;
             let serialized_state = serialize_state(&function, &source_owner)?;
@@ -604,12 +601,11 @@ mod tests {
     #[test]
     fn test_legacy_adapter_runs_v2_function_through_old_state_framework() -> Result<()> {
         let drop_count = Arc::new(AtomicUsize::new(0));
-        let order_by = full_modifier_order_by();
-        let function = full_modifier_function(drop_count.clone(), order_by.clone());
+        let function = full_modifier_function(drop_count.clone(), full_modifier_order_by());
         let entries = full_modifier_entries();
-        let direct_result = direct_full_modifier_result(&function, &order_by, &entries)?;
+        let direct_result = direct_full_modifier_result(&function, &entries)?;
 
-        let legacy = AggregateFunctionV2LegacyAdapter::create(function.clone(), order_by);
+        let legacy = AggregateFunctionV2LegacyAdapter::create(function.clone());
         let legacy_functions: Vec<
             databend_common_expression::aggregate_function_v1::AggregateFunctionRef,
         > = vec![legacy.clone()];
@@ -666,8 +662,7 @@ mod tests {
     #[test]
     fn test_intrusive_modifiers_compose_as_concrete_implementations() -> Result<()> {
         let drop_count = Arc::new(AtomicUsize::new(0));
-        let order_by = full_modifier_order_by();
-        let function = full_modifier_function(drop_count.clone(), order_by.clone());
+        let function = full_modifier_function(drop_count.clone(), full_modifier_order_by());
 
         {
             let owner = AggregateStateOwner::new(vec![function.clone()])?;
@@ -676,7 +671,6 @@ mod tests {
             function.accumulate(AccumulateInput {
                 state: owner.state(0),
                 columns: (&entries).into(),
-                order_by: &order_by,
                 validity: None,
             })?;
 
@@ -704,7 +698,6 @@ mod tests {
             function.accumulate(AccumulateInput {
                 state: left.state(0),
                 columns: (&left_entries).into(),
-                order_by: &order_by,
                 validity: None,
             })?;
 
@@ -716,7 +709,6 @@ mod tests {
             function.accumulate(AccumulateInput {
                 state: right.state(0),
                 columns: (&right_entries).into(),
-                order_by: &order_by,
                 validity: None,
             })?;
 
@@ -749,7 +741,6 @@ mod tests {
             function.accumulate(AccumulateInput {
                 state: source_owner.state(0),
                 columns: (&entries).into(),
-                order_by: &order_by,
                 validity: None,
             })?;
             let serialized_state = serialize_state(&function, &source_owner)?;

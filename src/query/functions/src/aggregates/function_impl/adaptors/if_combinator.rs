@@ -146,7 +146,6 @@ where I: AggrImpl
         self.nested.accumulate(AccumulateInput {
             state: input.state,
             columns: (&args).into(),
-            order_by: input.order_by,
             validity: predicate.as_ref(),
         })
     }

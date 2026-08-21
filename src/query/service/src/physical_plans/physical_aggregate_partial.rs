@@ -27,7 +27,6 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::aggregates::sort_descs_to_bound_order_by;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::sorts::TransformRankLimitSort;
@@ -97,14 +96,13 @@ impl IPhysicalPlan for AggregatePartial {
                 continue;
             }
 
-            let order_by = sort_descs_to_bound_order_by(&desc.sig.sort_descs).unwrap();
             let func = registry
                 .resolve(AggregateFunctionRequest {
                     name: &desc.sig.name,
                     params: &desc.sig.params,
                     args_type: &desc.sig.args,
                     distinct: false,
-                    order_by: &order_by,
+                    order_by: &desc.sig.order_by,
                 })
                 .unwrap();
 

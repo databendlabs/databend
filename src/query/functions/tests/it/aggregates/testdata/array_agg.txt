@@ -109,7 +109,7 @@ evaluation (internal):
 
 
 ast: array_agg(a)
-sort_descs: [AggregateFunctionSortDesc { index: Offset(0), is_reuse_index: true, data_type: Number(Int64), nulls_first: false, asc: true }]
+sort_descs: [AggregateBoundOrderByItem { index: 0, source: Argument { index: 0 }, data_type: Number(Int64), asc: true, nulls_first: false }]
 evaluation (internal):
 +--------+--------------------------------------------------------------+
 | Column | Data                                                         |
@@ -150,7 +150,7 @@ evaluation (internal):
 
 
 ast: list(a)
-sort_descs: [AggregateFunctionSortDesc { index: Offset(0), is_reuse_index: true, data_type: Number(Int64), nulls_first: false, asc: true }]
+sort_descs: [AggregateBoundOrderByItem { index: 0, source: Argument { index: 0 }, data_type: Number(Int64), asc: true, nulls_first: false }]
 evaluation (internal):
 +--------+--------------------------------------------------------------+
 | Column | Data                                                         |

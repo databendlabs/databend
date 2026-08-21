@@ -178,7 +178,6 @@ impl<I> AggregateSortImplementation<I> {
         self.inner.accumulate(AccumulateInput {
             state: inner_state,
             columns: ProjectedBlock::project(&args, &block),
-            order_by: &[],
             validity: None,
         })?;
         Ok(inner_state)

@@ -317,7 +317,6 @@ fn eval_v2_state_merge_entry(
         state: owner.state(0),
         columns: (&entries).into(),
         validity: None,
-        order_by: &[],
     })?;
 
     let mut builder = ColumnBuilder::with_capacity(&return_type, 1);
@@ -429,7 +428,6 @@ fn test_v2_sum_merge_keys_skips_nullable_states() -> Result<()> {
     function.accumulate_keys(AccumulateKeysInput {
         states: AggregateStateSet::new(&places, first.state(0).loc),
         columns: (&entries).into(),
-        order_by: &[],
     })?;
 
     for (owner, expected) in [(&first, Some(3)), (&second, None)] {

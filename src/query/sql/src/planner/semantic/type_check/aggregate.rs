@@ -351,7 +351,6 @@ where A: TypeCheckAdapter
 
                 Ok(AggregateFunctionScalarSortDesc {
                     expr: scalar_expr,
-                    is_reuse_index: false,
                     nulls_first: order_by.nulls_first.unwrap_or(false),
                     asc: order_by.asc.unwrap_or(true),
                 })

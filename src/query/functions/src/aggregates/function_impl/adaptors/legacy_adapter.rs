@@ -27,15 +27,11 @@ use super::*;
 
 pub struct AggregateFunctionV2LegacyAdapter {
     function: AggregateFunctionRef,
-    order_by: Vec<AggregateRuntimeOrderByItem>,
 }
 
 impl AggregateFunctionV2LegacyAdapter {
-    pub fn create(
-        function: AggregateFunctionRef,
-        order_by: Vec<AggregateRuntimeOrderByItem>,
-    ) -> LegacyAggregateFunctionRef {
-        Arc::new(Self { function, order_by })
+    pub fn create(function: AggregateFunctionRef) -> LegacyAggregateFunctionRef {
+        Arc::new(Self { function })
     }
 }
 
@@ -75,7 +71,6 @@ impl LegacyAggregateFunction for AggregateFunctionV2LegacyAdapter {
         self.function.accumulate(AccumulateInput {
             state: place,
             columns,
-            order_by: &self.order_by,
             validity,
         })
     }
@@ -98,7 +93,6 @@ impl LegacyAggregateFunction for AggregateFunctionV2LegacyAdapter {
         self.function.accumulate_keys(AccumulateKeysInput {
             states: AggregateStateSet::new(&addrs[..input_rows], loc),
             columns,
-            order_by: &self.order_by,
         })
     }
 

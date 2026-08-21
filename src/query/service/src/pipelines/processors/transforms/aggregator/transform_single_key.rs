@@ -152,7 +152,6 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                         state: place,
                         columns,
                         validity: None,
-                        order_by: &[],
                     })?;
                 }
             }
