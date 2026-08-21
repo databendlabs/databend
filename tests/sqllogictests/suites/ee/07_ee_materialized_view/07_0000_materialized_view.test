@@ -387,9 +387,12 @@ query T
 select category from compact_group_mv order by category
 ----
 a
-a
 b
-b
+
+query I
+select sum(row_count) from fuse_block('test_materialized_view', 'compact_group_mv')
+----
+4
 
 statement ok
 optimize table compact_group_mv compact
