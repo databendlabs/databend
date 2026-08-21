@@ -15,6 +15,7 @@
 use databend_common_ast::Span;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
@@ -119,6 +120,7 @@ impl RewritePredicates {
                 func_name: "and_filters".to_string(),
                 params: vec![],
                 arguments: predicates.to_vec(),
+                return_type: Box::new(DataType::Boolean),
             }
             .into()
         };
@@ -237,18 +239,21 @@ impl<'a> VisitorMut<'a> for RewritePredicates {
                 span,
                 func_name,
                 arguments,
+                return_type,
                 ..
             }) => match func_name.as_str() {
                 "and" | "and_filters" => {
                     if func_name == "and" {
-                        *func_name = "and_filters".to_string()
+                        *func_name = "and_filters".to_string();
                     }
+                    *return_type = Box::new(DataType::Boolean);
                     self.rewrite_and(*span, arguments)?
                 }
                 "or" | "or_filters" => {
                     if func_name == "or" {
-                        *func_name = "or_filters".to_string()
+                        *func_name = "or_filters".to_string();
                     }
+                    *return_type = Box::new(DataType::Boolean);
                     self.rewrite_or(*span, arguments)?
                 }
                 "not" => {

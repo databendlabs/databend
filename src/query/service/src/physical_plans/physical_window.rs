@@ -523,20 +523,22 @@ impl PhysicalPlanBuilder {
             required.remove(&window.index);
         }
         for item in &window_group.scalar_items {
-            required.extend(item.scalar.used_columns());
+            item.scalar.collect_used_columns(&mut required);
             required.insert(item.index);
         }
         for window in &window_group.windows {
             for item in &window.arguments {
-                required.extend(item.scalar.used_columns());
+                item.scalar.collect_used_columns(&mut required);
                 required.insert(item.index);
             }
             for item in &window.partition_by {
-                required.extend(item.scalar.used_columns());
+                item.scalar.collect_used_columns(&mut required);
                 required.insert(item.index);
             }
             for item in &window.order_by {
-                required.extend(item.order_by_item.scalar.used_columns());
+                item.order_by_item
+                    .scalar
+                    .collect_used_columns(&mut required);
                 required.insert(item.order_by_item.index);
             }
         }
@@ -616,15 +618,17 @@ impl PhysicalPlanBuilder {
         // The scalar items in window function is not replaced yet.
         // The will be replaced in physical plan builder.
         window.arguments.iter().for_each(|item| {
-            required.extend(item.scalar.used_columns());
+            item.scalar.collect_used_columns(&mut required);
             required.insert(item.index);
         });
         window.partition_by.iter().for_each(|item| {
-            required.extend(item.scalar.used_columns());
+            item.scalar.collect_used_columns(&mut required);
             required.insert(item.index);
         });
         window.order_by.iter().for_each(|item| {
-            required.extend(item.order_by_item.scalar.used_columns());
+            item.order_by_item
+                .scalar
+                .collect_used_columns(&mut required);
             required.insert(item.order_by_item.index);
         });
 
@@ -793,8 +797,8 @@ impl PhysicalPlanBuilder {
                         args: agg
                             .args
                             .iter()
-                            .map(|s| s.data_type())
-                            .collect::<Result<_>>()?,
+                            .map(|s| s.data_type().into_owned())
+                            .collect(),
                         params: agg.params.clone(),
                         sort_descs: agg
                             .sort_descs

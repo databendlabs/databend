@@ -98,7 +98,7 @@ impl Binder {
                 &[],
             );
             let (condition, _) = scalar_binder.bind(&when_clause.condition)?;
-            if !matches!(condition.data_type()?.remove_nullable(), DataType::Boolean) {
+            if !matches!(condition.data_type().remove_nullable(), DataType::Boolean) {
                 return Err(ErrorCode::IllegalDataType(
                     "The condition in WHEN clause must be a boolean expression".to_string(),
                 ));

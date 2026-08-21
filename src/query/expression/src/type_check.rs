@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -432,6 +433,30 @@ pub fn check_function<Index: ColumnIndex>(
     };
 
     Err(ErrorCode::SemanticError(msg).set_span(span))
+}
+
+pub fn infer_function_return_type<T>(
+    span: Span,
+    name: &str,
+    params: &[Scalar],
+    argument_types: impl Iterator<Item = T>,
+    fn_registry: &FunctionRegistry,
+) -> Result<DataType>
+where
+    T: Borrow<DataType>,
+{
+    let arguments = argument_types
+        .enumerate()
+        .map(|(id, data_type)| {
+            Expr::ColumnRef(ColumnRef {
+                span,
+                id,
+                data_type: data_type.borrow().clone(),
+                display_name: id.to_string(),
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(check_function(span, name, params, &arguments, fn_registry)?.into_data_type())
 }
 
 fn format_function_signature<Index: ColumnIndex>(

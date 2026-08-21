@@ -93,7 +93,7 @@ impl RulePushDownRankLimitAggregate {
 
         let mut sort_items = Vec::new();
         for item in &agg_limit.group_items {
-            match item.scalar.data_type()?.remove_nullable() {
+            match item.scalar.data_type().remove_nullable() {
                 DataType::Null
                 | DataType::Boolean
                 | DataType::Number(_)

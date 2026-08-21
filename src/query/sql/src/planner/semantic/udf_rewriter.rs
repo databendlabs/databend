@@ -189,16 +189,17 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
                 column_ref.clone()
             } else {
                 let name = format!("{}_arg_{}", &udf.display_name, i);
+                let data_type = arg.data_type().into_owned();
                 let index = self
                     .metadata
                     .write()
-                    .add_derived_column(name.clone(), arg.data_type()?);
+                    .add_derived_column(name.clone(), data_type.clone());
 
                 // Generate a ColumnBinding for each argument of udf function
                 let column = ColumnBindingBuilder::new(
                     name,
                     index,
-                    Box::new(arg.data_type()?),
+                    Box::new(data_type),
                     Visibility::Visible,
                 )
                 .build();

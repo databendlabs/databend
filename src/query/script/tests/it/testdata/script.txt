@@ -868,3 +868,135 @@ BLOCK: ($0): ('OTHER')
 Some(Var(String("OTHER")))
 
 
+---------- Input ----------
+LET watermark_ts := (
+    SELECT COALESCE(
+        (SELECT w.last_completed_time
+         FROM task_run_sync_watermark AS w
+         WHERE w.id = 1),
+        7
+    )
+);
+RETURN watermark_ts;
+---------- IR -------------
+QUERY SELECT (SELECT COALESCE((SELECT w.last_completed_time FROM task_run_sync_watermark AS w WHERE w.id = 1), 7)), __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, watermark_ts(0)
+QUERY SELECT :0, __expr_result4(4)
+ITER __expr_result4(4), __expr_result_iter5(5)
+READ __expr_result_iter5(5), $0, __return_val3(3)
+RETURN __return_val3(3)
+---------- QUERY ---------
+QUERY: SELECT (SELECT COALESCE((SELECT w.last_completed_time FROM task_run_sync_watermark AS w WHERE w.id = 1), 7))
+BLOCK: ($0): (7)
+QUERY: SELECT 7
+BLOCK: ($0): (7)
+---------- Output ---------
+Some(Var(UInt64(7)))
+
+
+---------- Input ----------
+LET fallback := 7;
+LET watermark_ts := (
+    SELECT COALESCE(
+        (SELECT w.last_completed_time
+         FROM task_run_sync_watermark AS w
+         WHERE w.id = 1),
+        :fallback
+    )
+);
+RETURN watermark_ts;
+---------- IR -------------
+QUERY SELECT 7, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, fallback(0)
+QUERY SELECT (SELECT COALESCE((SELECT w.last_completed_time FROM task_run_sync_watermark AS w WHERE w.id = 1), :0)), __expr_result4(4)
+ITER __expr_result4(4), __expr_result_iter5(5)
+READ __expr_result_iter5(5), $0, watermark_ts(3)
+QUERY SELECT :3, __expr_result7(7)
+ITER __expr_result7(7), __expr_result_iter8(8)
+READ __expr_result_iter8(8), $0, __return_val6(6)
+RETURN __return_val6(6)
+---------- QUERY ---------
+QUERY: SELECT 7
+BLOCK: ($0): (7)
+QUERY: SELECT (SELECT COALESCE((SELECT w.last_completed_time FROM task_run_sync_watermark AS w WHERE w.id = 1), 7))
+BLOCK: ($0): (7)
+QUERY: SELECT 7
+BLOCK: ($0): (7)
+---------- Output ---------
+Some(Var(UInt64(7)))
+
+
+---------- Input ----------
+LET x := (SELECT number FROM numbers(3) AS t WHERE t.number = 1);
+RETURN x;
+---------- IR -------------
+QUERY SELECT (SELECT number FROM numbers(3) AS t WHERE t.number = 1), __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT :0, __expr_result4(4)
+ITER __expr_result4(4), __expr_result_iter5(5)
+READ __expr_result_iter5(5), $0, __return_val3(3)
+RETURN __return_val3(3)
+---------- QUERY ---------
+QUERY: SELECT (SELECT number FROM numbers(3) AS t WHERE t.number = 1)
+BLOCK: ($0): (1)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+---------- Output ---------
+Some(Var(UInt64(1)))
+
+
+---------- Input ----------
+LET x RESULTSET := SELECT * FROM numbers(3);
+FOR r IN x DO
+    LET y := (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1);
+    RETURN y;
+END FOR;
+---------- IR -------------
+QUERY SELECT * FROM numbers(3), x(0)
+ITER x(0), r(3)
+__LOOP1(1):
+JUMP_IF_ENDED r(3), __LOOP_END2(2)
+QUERY SELECT (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1), __expr_result5(5)
+ITER __expr_result5(5), __expr_result_iter6(6)
+READ __expr_result_iter6(6), $0, y(4)
+QUERY SELECT :4, __expr_result8(8)
+ITER __expr_result8(8), __expr_result_iter9(9)
+READ __expr_result_iter9(9), $0, __return_val7(7)
+RETURN __return_val7(7)
+NEXT r(3)
+GOTO __LOOP1(1)
+__LOOP_END2(2):
+---------- QUERY ---------
+QUERY: SELECT * FROM numbers(3)
+BLOCK: (number): (0), (1), (2)
+QUERY: SELECT (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1)
+BLOCK: ($0): (1)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+---------- Output ---------
+Some(Var(UInt64(1)))
+
+
+---------- Input ----------
+LET ok := EXISTS (SELECT * FROM numbers(1) AS t WHERE t.number = 0);
+RETURN ok;
+---------- IR -------------
+QUERY SELECT EXISTS (SELECT * FROM numbers(1) AS t WHERE t.number = 0), __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, ok(0)
+QUERY SELECT :0, __expr_result4(4)
+ITER __expr_result4(4), __expr_result_iter5(5)
+READ __expr_result_iter5(5), $0, __return_val3(3)
+RETURN __return_val3(3)
+---------- QUERY ---------
+QUERY: SELECT EXISTS (SELECT * FROM numbers(1) AS t WHERE t.number = 0)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT TRUE
+BLOCK: ($0): (TRUE)
+---------- Output ---------
+Some(Var(Boolean(true)))
+
+

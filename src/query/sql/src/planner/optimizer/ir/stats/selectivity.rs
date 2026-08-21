@@ -131,6 +131,7 @@ impl SelectivityEstimator {
                 func_name: "and_filters".to_string(),
                 params: vec![],
                 arguments: predicates.to_vec(),
+                return_type: Box::new(DataType::Boolean),
             }),
         };
         let expr = scalar_expr.as_expr()?;

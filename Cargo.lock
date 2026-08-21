@@ -4750,7 +4750,6 @@ version = "0.1.0"
 dependencies = [
  "databend-common-ast",
  "databend-common-exception",
- "derive-visitor",
  "fastrace",
  "goldenfile",
  "tokio",
