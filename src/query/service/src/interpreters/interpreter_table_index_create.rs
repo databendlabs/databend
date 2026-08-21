@@ -65,6 +65,7 @@ impl Interpreter for CreateTableIndexInterpreter {
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,
             ast::TableIndexType::Spatial => TableIndexType::Spatial,
+            ast::TableIndexType::Bloom => TableIndexType::Bloom,
         };
 
         let create_index_req = CreateTableIndexReq {

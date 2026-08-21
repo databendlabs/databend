@@ -37,8 +37,10 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
+use databend_common_storages_fuse::FUSE_OPT_KEY_INDEX_GRANULARITY;
 use databend_common_storages_fuse::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -89,6 +91,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_RECLUSTER_DEPTH);
     r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
+    r.insert(FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
@@ -121,6 +124,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(FUSE_OPT_KEY_INDEX_GRANULARITY);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
     r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
@@ -156,6 +160,7 @@ pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
         r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
         r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
         r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+        r.insert(FUSE_OPT_KEY_INDEX_GRANULARITY);
         r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
         r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
         r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
@@ -214,6 +219,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
     r.insert(FUSE_OPT_KEY_RECLUSTER_DEPTH);
     r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
+    r.insert(FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION);
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
@@ -222,6 +228,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(FUSE_OPT_KEY_INDEX_GRANULARITY);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
     r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
@@ -272,6 +279,24 @@ pub fn is_valid_row_per_block(
         if row_per_block > DEFAULT_BLOCK_ROW_COUNT as u64 {
             error!("{}", error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
+        }
+    }
+    Ok(())
+}
+
+pub fn is_valid_recluster_block_reduction(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION) {
+        let enabled = value.parse::<u32>().map_err(|e| {
+            ErrorCode::TableOptionInvalid(format!(
+                "Failed to parse value [{value}] for table option '{FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION}' as unsigned integer: {e}",
+            ))
+        })?;
+        if enabled > 1 {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "Invalid value of the table option [{FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION}]: {enabled}, it should be 0 or 1",
+            )));
         }
     }
     Ok(())
@@ -502,6 +527,36 @@ pub fn is_valid_data_page_bytes(
     Ok(())
 }
 
+pub fn is_valid_index_granularity(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    let granularity = options.get(FUSE_OPT_KEY_INDEX_GRANULARITY);
+    if let Some(val) = granularity {
+        let v = val.parse::<u32>().map_err(|_| {
+            ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_INDEX_GRANULARITY} must be an integer between 1 and {}, got: {val}",
+                u32::MAX
+            ))
+        })?;
+        if v == 0 {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_INDEX_GRANULARITY} must be between 1 and {}",
+                u32::MAX
+            )));
+        }
+    }
+    if granularity.is_some()
+        && options
+            .get(OPT_KEY_SEGMENT_FORMAT)
+            .is_some_and(|format| format.eq_ignore_ascii_case("column_oriented"))
+    {
+        return Err(ErrorCode::TableOptionInvalid(format!(
+            "{FUSE_OPT_KEY_INDEX_GRANULARITY} is not supported with column-oriented segments"
+        )));
+    }
+    Ok(())
+}
+
 fn is_valid_bool_opt(
     key: &str,
     options: &BTreeMap<String, String>,
@@ -510,4 +565,18 @@ fn is_valid_bool_opt(
         value.parse::<bool>()?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_materialized_view_accepts_index_granularity() {
+        assert!(is_valid_create_opt(
+            FUSE_OPT_KEY_INDEX_GRANULARITY,
+            &Engine::MaterializedView
+        ));
+        assert!(UNSET_TABLE_OPTIONS_WHITE_LIST.contains(FUSE_OPT_KEY_INDEX_GRANULARITY));
+    }
 }

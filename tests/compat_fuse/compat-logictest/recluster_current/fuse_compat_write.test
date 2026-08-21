@@ -1,0 +1,125 @@
+statement ok
+DROP DATABASE IF EXISTS compat_recluster_current
+
+statement ok
+CREATE DATABASE compat_recluster_current
+
+statement ok
+USE compat_recluster_current
+
+statement ok
+SET max_threads = 2
+
+statement ok
+CREATE TABLE horizontal_t(id int, value int, source string) CLUSTER BY(id) change_tracking = true row_per_block = 4 block_per_segment = 2
+
+statement ok
+CREATE TABLE vertical_t(id int, value int, source string) CLUSTER BY(id) change_tracking = true row_per_block = 4 block_per_segment = 2
+
+statement ok
+INSERT INTO horizontal_t VALUES (1,10,'initial'),(4,40,'initial'),(5,50,'initial'),(6,60,'initial'),(2,20,'initial'),(3,30,'initial')
+
+statement ok
+INSERT INTO vertical_t SELECT * FROM horizontal_t
+
+statement ok
+CREATE STREAM horizontal_s ON TABLE horizontal_t APPEND_ONLY = false
+
+statement ok
+CREATE STREAM vertical_s ON TABLE vertical_t APPEND_ONLY = false
+
+statement ok
+INSERT INTO horizontal_t VALUES (7,70,'insert'),(9,90,'insert')
+
+statement ok
+INSERT INTO horizontal_t VALUES (8,80,'insert'),(10,100,'insert')
+
+statement ok
+INSERT INTO vertical_t VALUES (7,70,'insert'),(9,90,'insert')
+
+statement ok
+INSERT INTO vertical_t VALUES (8,80,'insert'),(10,100,'insert')
+
+statement ok
+UPDATE horizontal_t SET value = value + 100, source = 'update' WHERE id IN (2,8)
+
+statement ok
+UPDATE vertical_t SET value = value + 100, source = 'update' WHERE id IN (2,8)
+
+statement ok
+CREATE TABLE merge_source(id int, value int, source string, action string)
+
+statement ok
+INSERT INTO merge_source VALUES (3,333,'merge-update','update'),(4,0,'merge-delete','delete'),(11,110,'merge-insert','insert')
+
+statement ok
+MERGE INTO horizontal_t AS t USING merge_source AS s ON t.id = s.id WHEN MATCHED AND s.action = 'delete' THEN DELETE WHEN MATCHED THEN UPDATE SET t.value = s.value, t.source = s.source WHEN NOT MATCHED THEN INSERT (id,value,source) VALUES (s.id,s.value,s.source)
+
+statement ok
+MERGE INTO vertical_t AS t USING merge_source AS s ON t.id = s.id WHEN MATCHED AND s.action = 'delete' THEN DELETE WHEN MATCHED THEN UPDATE SET t.value = s.value, t.source = s.source WHEN NOT MATCHED THEN INSERT (id,value,source) VALUES (s.id,s.value,s.source)
+
+statement ok
+SET recluster_method = 'horizontal'
+
+statement ok
+ALTER TABLE horizontal_t RECLUSTER FINAL
+
+statement ok
+SET recluster_method = 'vertical'
+
+statement ok
+ALTER TABLE vertical_t RECLUSTER FINAL
+
+query IIT
+SELECT id,value,source FROM horizontal_t ORDER BY id
+----
+1 10 initial
+2 120 update
+3 333 merge-update
+5 50 initial
+6 60 initial
+7 70 insert
+8 180 update
+9 90 insert
+10 100 insert
+11 110 merge-insert
+
+query IIT
+SELECT id,value,source FROM vertical_t ORDER BY id
+----
+1 10 initial
+2 120 update
+3 333 merge-update
+5 50 initial
+6 60 initial
+7 70 insert
+8 180 update
+9 90 insert
+10 100 insert
+11 110 merge-insert
+
+query II
+SELECT count(), sum(value) FROM horizontal_t
+----
+10 1123
+
+query II
+SELECT count(), sum(value) FROM vertical_t
+----
+10 1123
+
+query TBI rowsort
+SELECT change$action, change$is_update, count() FROM horizontal_s GROUP BY change$action, change$is_update
+----
+DELETE 0 1
+DELETE 1 2
+INSERT 0 5
+INSERT 1 2
+
+query TBI rowsort
+SELECT change$action, change$is_update, count() FROM vertical_s GROUP BY change$action, change$is_update
+----
+DELETE 0 1
+DELETE 1 2
+INSERT 0 5
+INSERT 1 2

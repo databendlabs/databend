@@ -199,6 +199,9 @@ pub struct BlockMeta {
     pub spatial_index_size: Option<u64>,
     pub spatial_index_location: Option<Location>,
     pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
+    /// Granule marks file layout. Old segments deserialize this as `None`.
+    #[serde(default)]
+    pub granule_index: Option<GranuleIndexLayout>,
     pub vector_stats: Option<StatisticsOfVectorColumns>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
@@ -206,6 +209,38 @@ pub struct BlockMeta {
 
     // block create_on
     pub create_on: Option<DateTime<Utc>>,
+}
+
+/// Byte range `[offset, offset + len)` within a marks file.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct BytesRange {
+    pub offset: u64,
+    pub len: u64,
+}
+
+/// Marks file location and column-chunk ranges.
+///
+/// Names are `m{i}` for cluster-key mins, `g_{column_id}` for data-page offsets, and
+/// `gbloom_{ver}_{off|len}_{column_id}` for Bloom payload ranges.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct GranuleIndexFileLayout {
+    pub location: Location,
+    pub size: u64,
+    pub columns: HashMap<String, Vec<BytesRange>>,
+}
+
+/// Per-block mins and offsets file layouts. `mins` is absent for offset-only indexes.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct GranuleIndexLayout {
+    pub granule_rows: u32,
+    pub mins: Option<GranuleIndexFileLayout>,
+    pub offsets: GranuleIndexFileLayout,
+}
+
+impl GranuleIndexLayout {
+    pub fn size(&self) -> u64 {
+        self.mins.as_ref().map_or(0, |mins| mins.size) + self.offsets.size
+    }
 }
 
 impl BlockMeta {
@@ -249,7 +284,11 @@ impl BlockMeta {
             spatial_index_size,
             spatial_index_location,
             spatial_stats,
+
+            granule_index: None,
+
             vector_stats: None,
+
             virtual_block_meta,
             compression,
             create_on,
@@ -384,7 +423,11 @@ impl BlockMeta {
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
+
+            granule_index: None,
+
             vector_stats: None,
+
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,
@@ -417,7 +460,11 @@ impl BlockMeta {
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
+
+            granule_index: None,
+
             vector_stats: None,
+
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,

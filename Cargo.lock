@@ -5061,6 +5061,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-pipeline-transforms",
+ "databend-common-settings",
  "databend-common-sql",
  "databend-common-statistics",
  "databend-common-storage",
@@ -6906,17 +6907,22 @@ name = "databend-storages-common-io"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "async-channel",
  "bytes",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-metrics",
+ "databend-storages-common-blocks",
+ "databend-storages-common-cache",
  "fastrace",
  "futures",
  "log",
  "opendal 0.54.1",
  "parquet 58.1.0",
+ "tempfile",
 ]
 
 [[package]]
@@ -13678,7 +13684,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "58.1.0"
-source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=bbbe79543#bbbe7954373500bffc51de3af33ae761266f898a"
+source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=5f3d97f0e9f813955c18af3306fe3d08b1006adc#5f3d97f0e9f813955c18af3306fe3d08b1006adc"
 dependencies = [
  "ahash 0.8.12",
  "arrow-array 58.1.0",

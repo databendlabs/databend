@@ -357,6 +357,27 @@ WHERE database = 'test_mv_ddl' AND name = 'test_mv'
 ----
 0
 
+# Branch-specific Fuse options must also remain valid through the dedicated MV syntax.
+statement ok
+ALTER MATERIALIZED VIEW test_mv SET OPTIONS (index_granularity = 2)
+
+query B
+SELECT table_option LIKE '%INDEX_GRANULARITY=''2''%'
+FROM system.tables
+WHERE database = 'test_mv_ddl' AND name = 'test_mv'
+----
+1
+
+statement ok
+ALTER MATERIALIZED VIEW test_mv UNSET OPTIONS (index_granularity)
+
+query B
+SELECT table_option LIKE '%INDEX_GRANULARITY=%'
+FROM system.tables
+WHERE database = 'test_mv_ddl' AND name = 'test_mv'
+----
+0
+
 # Physical layout: SET OPTIONS is only metadata until the next write. Refresh should honor
 # row_per_block when materializing storage. MV storage is not subject to ordinary compact-after-write.
 statement ok

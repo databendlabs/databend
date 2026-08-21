@@ -19,6 +19,7 @@ pub const FUSE_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
 pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 pub const FUSE_OPT_KEY_ROW_PER_PAGE: &str = "row_per_page";
 pub const FUSE_OPT_KEY_RECLUSTER_DEPTH: &str = "recluster_depth";
+pub const FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION: &str = "enable_recluster_block_reduction";
 pub const FUSE_OPT_KEY_FILE_SIZE: &str = "file_size";
 pub const FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS: &str = "data_retention_period_in_hours";
 pub const FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP: &str =
@@ -32,6 +33,10 @@ pub const FUSE_OPT_KEY_ATTACH_COLUMN_IDS: &str = "attach_column_ids";
 pub const FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY: &str = "enable_parquet_dictionary";
 pub const FUSE_OPT_KEY_DATA_PAGE_ROWS: &str = "data_page_rows";
 pub const FUSE_OPT_KEY_DATA_PAGE_BYTES: &str = "data_page_bytes";
+/// Rows per sparse-index granule. When set on a clustered table, the parquet writer flushes a
+/// page boundary every this-many rows and records a per-granule cluster-key min + page byte
+/// offsets, enabling read-time byte-range seeking to matching granules (ClickHouse-style).
+pub const FUSE_OPT_KEY_INDEX_GRANULARITY: &str = "index_granularity";
 /// Deprecated: kept only so old tables can unset this legacy option.
 pub const FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD: &str = "row_avg_depth_threshold";
 
@@ -50,6 +55,8 @@ pub const FUSE_TBL_AGG_INDEX_PREFIX: &str = "_i_a";
 pub const FUSE_TBL_INVERTED_INDEX_PREFIX: &str = "_i_i";
 pub const FUSE_TBL_VECTOR_INDEX_PREFIX: &str = "_i_v";
 pub const FUSE_TBL_SPATIAL_INDEX_PREFIX: &str = "_i_s";
+pub const FUSE_TBL_GRANULE_INDEX_PREFIX: &str = "_i_p";
+pub const FUSE_TBL_GRANULE_BLOOM_INDEX_PREFIX: &str = "_i_gb";
 pub const LEGACY_FUSE_TBL_REF_PREFIX: &str = "_ref";
 
 pub const DEFAULT_ROW_PER_PAGE: usize = 8192;

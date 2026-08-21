@@ -13,7 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use ahash::AHashMap;
@@ -21,9 +26,10 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
@@ -31,6 +37,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::UInt64Type;
 use databend_common_metrics::storage::*;
@@ -53,21 +60,18 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use log::info;
 use log::warn;
 use opendal::Operator;
-use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
+use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::WriteSettings;
 use crate::io::read::bloom::block_filter_reader::BloomBlockFilterReader;
-use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
-use crate::operations::common::MutationLogs;
-use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::read_block;
 use crate::operations::replace_into::meta::DeletionByColumn;
@@ -76,7 +80,7 @@ use crate::operations::replace_into::meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::DeletionAccumulator;
 use crate::operations::replace_into::mutator::row_hash_of_columns;
 
-struct AggregationContext {
+pub(crate) struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     block_slots_in_charge: Option<BlockSlotDescription>,
     // the fields specified in ON CONFLICT clause
@@ -95,88 +99,215 @@ struct AggregationContext {
     read_settings: ReadSettings,
     segment_reader: CompactSegmentInfoReader,
     block_builder: BlockBuilder,
-    io_request_semaphore: Arc<Semaphore>,
     // generate stream columns if necessary
     stream_ctx: Option<StreamContext>,
 
     block_meta_cache: Option<BlockMetaCache>,
 }
 
-// Apply MergeIntoOperations to segments
-pub struct ReplaceIntoOperationAggregator {
-    deletion_accumulator: DeletionAccumulator,
-    aggregation_ctx: Arc<AggregationContext>,
+struct ReplaceMutationBatch {
+    remaining: AtomicUsize,
+    started: Instant,
 }
 
-impl ReplaceIntoOperationAggregator {
-    #[allow(clippy::too_many_arguments)] // TODO fix this
+impl ReplaceMutationBatch {
+    fn new(tasks: usize, started: Instant) -> Arc<Self> {
+        Arc::new(Self {
+            remaining: AtomicUsize::new(tasks),
+            started,
+        })
+    }
+
+    pub(crate) fn complete(&self) {
+        if self.remaining.fetch_sub(1, Ordering::AcqRel) == 1 {
+            metrics_inc_replace_apply_deletion_time_ms(self.started.elapsed().as_millis() as u64);
+        }
+    }
+}
+
+pub(crate) struct ReplaceBlockMutationTask {
+    context: Arc<AggregationContext>,
+    index: BlockMetaIndex,
+    block_meta: Arc<BlockMeta>,
+    deleted_key_hashes: ahash::HashSet<UniqueKeyDigest>,
+    bloom_hashes: Vec<Vec<u64>>,
+    batch: Arc<ReplaceMutationBatch>,
+}
+
+impl Debug for ReplaceBlockMutationTask {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReplaceBlockMutationTask").finish()
+    }
+}
+
+local_block_meta_serde!(ReplaceBlockMutationTask);
+
+#[typetag::serde(name = "replace_block_mutation_task")]
+impl BlockMetaInfo for ReplaceBlockMutationTask {}
+
+pub(crate) enum PreparedReplaceMutation {
+    Log {
+        entry: MutationLogEntry,
+        logical_deleted_rows: u64,
+    },
+    Rewrite {
+        context: Arc<AggregationContext>,
+        index: BlockMetaIndex,
+        block: DataBlock,
+        origin_stats: Option<databend_storages_common_table_meta::meta::ClusterStatistics>,
+        original_rows: usize,
+        logical_deleted_rows: u64,
+    },
+}
+
+pub(crate) struct ReplaceBatchCompletion(Option<Arc<ReplaceMutationBatch>>);
+
+impl ReplaceBatchCompletion {
+    pub(crate) fn complete(mut self) {
+        if let Some(batch) = self.0.take() {
+            batch.complete();
+        }
+    }
+}
+
+impl ReplaceBlockMutationTask {
+    pub(crate) fn try_from(data: DataBlock) -> Result<Self> {
+        let meta = data
+            .get_owned_meta()
+            .ok_or_else(|| ErrorCode::Internal("replace block mutation task has no metadata"))?;
+        Self::downcast_from(meta).ok_or_else(|| {
+            ErrorCode::Internal("replace block mutation task metadata has unexpected type")
+        })
+    }
+
+    pub(crate) async fn prepare(
+        self,
+    ) -> Result<(Option<PreparedReplaceMutation>, ReplaceBatchCompletion)> {
+        let completion = ReplaceBatchCompletion(Some(self.batch));
+        let keys = (self.deleted_key_hashes, self.bloom_hashes);
+        let mutation = self
+            .context
+            .apply_deletion_to_data_block(self.index, &self.block_meta, &keys)
+            .await?;
+        Ok((mutation, completion))
+    }
+}
+
+impl PreparedReplaceMutation {
+    pub(crate) async fn finish(self) -> Result<(MutationLogEntry, u64)> {
+        match self {
+            Self::Log {
+                entry,
+                logical_deleted_rows,
+            } => Ok((entry, logical_deleted_rows)),
+            Self::Rewrite {
+                context,
+                index,
+                block,
+                origin_stats,
+                original_rows,
+                logical_deleted_rows,
+            } => {
+                let serialized = context.block_builder.build(block, |block, generator| {
+                    generator.gen_with_origin_stats(block, origin_stats.clone())
+                })?;
+                let extended_block_meta = match serialized {
+                    BlockSerialization::Pending(pending) => {
+                        BlockWriter::write_down(&context.block_builder.operator, pending).await?
+                    }
+                    BlockSerialization::Written(meta) => meta,
+                };
+                metrics_inc_replace_block_number_write(1);
+                metrics_inc_replace_row_number_write(extended_block_meta.block_meta.row_count);
+                metrics_inc_replace_replaced_blocks_rows(original_rows as u64);
+                Ok((
+                    MutationLogEntry::ReplacedBlock {
+                        index,
+                        block_meta: Arc::new(extended_block_meta),
+                    },
+                    logical_deleted_rows,
+                ))
+            }
+        }
+    }
+
+    pub(crate) fn needs_build(&self) -> bool {
+        matches!(self, Self::Rewrite { .. })
+    }
+}
+
+#[derive(Clone)]
+pub struct ReplaceIntoMutatorParams {
+    on_conflict_fields: Vec<OnConflictField>,
+    bloom_filter_column_indexes: Vec<FieldIndex>,
+    block_slots: Option<BlockSlotDescription>,
+    read_settings: ReadSettings,
+    block_builder: BlockBuilder,
+}
+
+impl ReplaceIntoMutatorParams {
     pub fn try_create(
-        ctx: Arc<dyn TableContext>,
+        block_builder: BlockBuilder,
         on_conflict_fields: Vec<OnConflictField>,
         bloom_filter_column_indexes: Vec<FieldIndex>,
-        segment_locations: Vec<(SegmentIndex, Location)>,
         block_slots: Option<BlockSlotDescription>,
-        table: &FuseTable,
-        read_settings: ReadSettings,
-        block_builder: BlockBuilder,
-        io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Self> {
+        let read_settings = ReadSettings::from_ctx(&block_builder.ctx)?;
+        Ok(Self {
+            on_conflict_fields,
+            bloom_filter_column_indexes,
+            block_slots,
+            read_settings,
+            block_builder,
+        })
+    }
+
+    fn into_aggregation_context(
+        self,
+        table: &FuseTable,
+        segment_locations: Vec<(SegmentIndex, Location)>,
+    ) -> Result<Arc<AggregationContext>> {
+        let ctx = self.block_builder.ctx.clone();
         let data_accessor = table.get_operator();
         let table_schema = table.schema_with_stream();
         let write_settings = table.get_write_settings();
-        let update_stream_columns = table.change_tracking_enabled();
 
-        let deletion_accumulator = DeletionAccumulator::default();
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), table_schema.clone());
+        let key_column_field_indexes: Vec<FieldIndex> = self
+            .on_conflict_fields
+            .iter()
+            .map(|field| field.field_index)
+            .collect();
+        let mut remain_column_field_ids = Vec::new();
+        for (index, field) in table_schema.fields().iter().enumerate() {
+            if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))) {
+                continue;
+            }
+            if !key_column_field_indexes.contains(&index) {
+                remain_column_field_ids.push(index);
+            }
+        }
 
-        // order matters, later the projection that used by block readers depends on the order
-        let key_column_field_indexes: Vec<FieldIndex> =
-            on_conflict_fields.iter().map(|i| i.field_index).collect();
-
-        let remain_column_field_ids: Vec<FieldIndex> = {
-            let all_field_indexes = table_schema
-                .fields()
-                .iter()
-                .enumerate()
-                .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
-                .map(|(i, _)| i)
-                .collect::<Vec<FieldIndex>>();
-
-            all_field_indexes
-                .into_iter()
-                .filter(|index| !key_column_field_indexes.contains(index))
-                .collect()
-        };
-
-        let key_column_reader = {
-            let projection = Projection::Columns(key_column_field_indexes);
-            BlockReader::create(
+        let key_column_reader = BlockReader::create(
+            ctx.clone(),
+            data_accessor.clone(),
+            table_schema.clone(),
+            Projection::Columns(key_column_field_indexes),
+            false,
+        )?;
+        let remain_column_reader = if remain_column_field_ids.is_empty() {
+            None
+        } else {
+            Some(BlockReader::create(
                 ctx.clone(),
                 data_accessor.clone(),
                 table_schema.clone(),
-                projection,
+                Projection::Columns(remain_column_field_ids.clone()),
                 false,
-            )
-        }?;
-
-        let remain_column_reader = {
-            if remain_column_field_ids.is_empty() {
-                None
-            } else {
-                let projection = Projection::Columns(remain_column_field_ids.clone());
-                let reader = BlockReader::create(
-                    ctx.clone(),
-                    data_accessor.clone(),
-                    table_schema.clone(),
-                    projection,
-                    false,
-                )?;
-                Some(reader)
-            }
+            )?)
         };
-
-        let stream_ctx = if update_stream_columns {
+        let stream_ctx = if table.change_tracking_enabled() {
             Some(StreamContext::try_create(
                 ctx.get_function_context()?,
                 table_schema,
@@ -188,25 +319,41 @@ impl ReplaceIntoOperationAggregator {
             None
         };
 
+        Ok(Arc::new(AggregationContext {
+            segment_locations: AHashMap::from_iter(segment_locations),
+            block_slots_in_charge: self.block_slots,
+            on_conflict_fields: self.on_conflict_fields,
+            bloom_filter_column_indexes: self.bloom_filter_column_indexes,
+            remain_column_field_ids,
+            key_column_reader,
+            remain_column_reader,
+            data_accessor,
+            write_settings,
+            read_settings: self.read_settings,
+            segment_reader,
+            block_builder: self.block_builder,
+            stream_ctx,
+            block_meta_cache: CacheManager::instance().get_block_meta_cache(),
+        }))
+    }
+}
+
+// Apply MergeIntoOperations to segments
+pub struct ReplaceIntoOperationAggregator {
+    deletion_accumulator: DeletionAccumulator,
+    aggregation_ctx: Arc<AggregationContext>,
+}
+
+impl ReplaceIntoOperationAggregator {
+    pub(crate) fn try_create(
+        table: &FuseTable,
+        params: ReplaceIntoMutatorParams,
+        segment_locations: Vec<(SegmentIndex, Location)>,
+    ) -> Result<Self> {
+        let aggregation_ctx = params.into_aggregation_context(table, segment_locations)?;
         Ok(Self {
-            deletion_accumulator,
-            aggregation_ctx: Arc::new(AggregationContext {
-                segment_locations: AHashMap::from_iter(segment_locations),
-                block_slots_in_charge: block_slots,
-                on_conflict_fields,
-                bloom_filter_column_indexes,
-                remain_column_field_ids,
-                key_column_reader,
-                remain_column_reader,
-                data_accessor,
-                write_settings,
-                read_settings,
-                segment_reader,
-                block_builder,
-                io_request_semaphore,
-                stream_ctx,
-                block_meta_cache: CacheManager::instance().get_block_meta_cache(),
-            }),
+            deletion_accumulator: DeletionAccumulator::default(),
+            aggregation_ctx,
         })
     }
 }
@@ -287,7 +434,7 @@ impl ReplaceIntoOperationAggregator {
 // apply the mutations and generate mutation log
 impl ReplaceIntoOperationAggregator {
     #[async_backtrace::framed]
-    pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
+    pub(crate) async fn prepare_tasks(&mut self) -> Result<VecDeque<DataBlock>> {
         let block_meta_cache = &self.aggregation_ctx.block_meta_cache;
 
         metrics_inc_replace_number_apply_deletion();
@@ -310,10 +457,8 @@ impl ReplaceIntoOperationAggregator {
         }
 
         let start = Instant::now();
-        let mut mutation_logs = Vec::new();
         let aggregation_ctx = &self.aggregation_ctx;
-        let io_runtime = GlobalIORuntime::instance();
-        let mut mutation_log_handlers = Vec::new();
+        let mut tasks = Vec::new();
         let mut num_rows_mutated = 0;
         for (segment_idx, block_deletion) in self.deletion_accumulator.deletions.drain() {
             let (segment_path, ver) = self
@@ -359,72 +504,61 @@ impl ReplaceIntoOperationAggregator {
                     }
                 };
 
-                let permit =
-                    acquire_task_permit(aggregation_ctx.io_request_semaphore.clone()).await?;
-
-                // let block_meta = segment_info.blocks[block_index].clone();
-                let aggregation_ctx = aggregation_ctx.clone();
                 num_rows_mutated += block_meta.row_count;
-                // self.aggregation_ctx.
-                let handle = io_runtime.spawn(async move {
-                    let mutation_log_entry = aggregation_ctx
-                        .apply_deletion_to_data_block(segment_idx, block_index, &block_meta, &keys)
-                        .await?;
-                    drop(permit);
-                    Ok::<_, ErrorCode>(mutation_log_entry)
-                });
-                mutation_log_handlers.push(handle)
+                tasks.push((
+                    BlockMetaIndex {
+                        segment_idx,
+                        block_idx: block_index,
+                    },
+                    block_meta,
+                    keys,
+                ));
             }
         }
         if num_rows_mutated > 0 {
             metrics_inc_replace_row_number_after_pruning(num_rows_mutated);
         }
 
-        let log_entries = futures::future::try_join_all(mutation_log_handlers)
-            .await
-            .map_err(|e| {
-                ErrorCode::Internal("unexpected, failed to join apply-deletion tasks.")
-                    .add_message_back(e.to_string())
-            })?;
-
-        let mut logical_deleted_rows = 0_u64;
-        for maybe_log_entry in log_entries {
-            let (maybe_log_entry, deleted_rows) = maybe_log_entry?;
-            logical_deleted_rows += deleted_rows;
-            if let Some(segment_mutation_log) = maybe_log_entry {
-                mutation_logs.push(segment_mutation_log);
-            }
+        if tasks.is_empty() {
+            metrics_inc_replace_apply_deletion_time_ms(start.elapsed().as_millis() as u64);
+            return Ok(VecDeque::new());
         }
 
-        metrics_inc_replace_apply_deletion_time_ms(start.elapsed().as_millis() as u64);
-
-        Ok(Some(MutationLogs {
-            entries: mutation_logs,
-            logical_updated_rows: 0,
-            logical_deleted_rows,
-        }))
+        let batch = ReplaceMutationBatch::new(tasks.len(), start);
+        Ok(tasks
+            .into_iter()
+            .map(|(index, block_meta, (deleted_key_hashes, bloom_hashes))| {
+                DataBlock::empty_with_meta(Box::new(ReplaceBlockMutationTask {
+                    context: self.aggregation_ctx.clone(),
+                    index,
+                    block_meta,
+                    deleted_key_hashes,
+                    bloom_hashes,
+                    batch: batch.clone(),
+                }))
+            })
+            .collect())
     }
 }
 
 impl AggregationContext {
     #[async_backtrace::framed]
     async fn apply_deletion_to_data_block(
-        &self,
-        segment_index: SegmentIndex,
-        block_index: BlockIndex,
+        self: &Arc<Self>,
+        index: BlockMetaIndex,
         block_meta: &BlockMeta,
         deleted_key_hashes: &(ahash::HashSet<UniqueKeyDigest>, Vec<Vec<u64>>),
-    ) -> Result<(Option<MutationLogEntry>, u64)> {
+    ) -> Result<Option<PreparedReplaceMutation>> {
         let (deleted_key_hashes, bloom_hashes) = deleted_key_hashes;
         info!(
             "apply delete to segment idx {}, block idx {}, num of deletion key hashes: {}",
-            segment_index,
-            block_index,
+            index.segment_idx,
+            index.block_idx,
             deleted_key_hashes.len()
         );
 
         if block_meta.row_count == 0 {
-            return Ok((None, 0));
+            return Ok(None);
         }
 
         // apply bloom filter pruning if possible
@@ -435,7 +569,7 @@ impl AggregationContext {
         if pruned {
             // skip this block
             metrics_inc_replace_block_number_bloom_pruned(1);
-            return Ok((None, 0));
+            return Ok(None);
         }
 
         let key_columns_data = read_block(
@@ -458,7 +592,7 @@ impl AggregationContext {
                 .ok_or_else(|| {
                     ErrorCode::Internal(format!(
                         "unexpected, block entry (index {}) not found. segment index {}, block index {}",
-                        on_conflict_field_index, segment_index, block_index
+                        on_conflict_field_index, index.segment_idx, index.block_idx
                     ))
                 })?
                 .value();
@@ -486,7 +620,7 @@ impl AggregationContext {
             info!("nothing deleted");
             metrics_inc_replace_block_of_zero_row_deleted(1);
             // nothing to be deleted
-            return Ok((None, 0));
+            return Ok(None);
         }
 
         // shortcut: whole block deletion
@@ -496,14 +630,10 @@ impl AggregationContext {
             metrics_inc_replace_deleted_blocks_rows(num_rows as u64);
             // whole block deletion
             // NOTE that if deletion marker is enabled, check the real meaning of `row_count`
-            let mutation = MutationLogEntry::DeletedBlock {
-                index: BlockMetaIndex {
-                    segment_idx: segment_index,
-                    block_idx: block_index,
-                },
-            };
-
-            return Ok((Some(mutation), delete_nums as u64));
+            return Ok(Some(PreparedReplaceMutation::Log {
+                entry: MutationLogEntry::DeletedBlock { index },
+                logical_deleted_rows: delete_nums as u64,
+            }));
         }
 
         let bitmap = bitmap.into();
@@ -551,45 +681,18 @@ impl AggregationContext {
                 Column::filter(&UInt64Type::from_data(row_ids), &bitmap).wrap_nullable(None);
             new_block.add_column(row_num);
 
-            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0)?;
+            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0, 0)?;
             new_block = stream_ctx.apply(new_block, &stream_meta)?;
         }
 
-        // serialization and compression is cpu intensive, send them to dedicated thread pool
-        // and wait (asyncly, which will NOT block the executor thread)
-        let block_builder = self.block_builder.clone();
-        let origin_stats = block_meta.cluster_stats.clone();
-        let serialized = GlobalIORuntime::instance()
-            .spawn(async move {
-                block_builder.build(new_block, |block, generator| {
-                    generator.gen_with_origin_stats(block, origin_stats.clone())
-                })
-            })
-            .await
-            .map_err(|e| {
-                ErrorCode::Internal(
-                    "unexpected, failed to join apply delete tasks for replace into.",
-                )
-                .add_message_back(e.to_string())
-            })??;
-
-        // persistent data
-        let extended_block_meta = BlockWriter::write_down(&self.data_accessor, serialized).await?;
-
-        metrics_inc_replace_block_number_write(1);
-        metrics_inc_replace_row_number_write(extended_block_meta.block_meta.row_count);
-        metrics_inc_replace_replaced_blocks_rows(num_rows as u64);
-
-        // generate log
-        let mutation = MutationLogEntry::ReplacedBlock {
-            index: BlockMetaIndex {
-                segment_idx: segment_index,
-                block_idx: block_index,
-            },
-            block_meta: Arc::new(extended_block_meta),
-        };
-
-        Ok((Some(mutation), delete_nums as u64))
+        Ok(Some(PreparedReplaceMutation::Rewrite {
+            context: self.clone(),
+            index,
+            block: new_block,
+            origin_stats: block_meta.cluster_stats.clone(),
+            original_rows: num_rows,
+            logical_deleted_rows: delete_nums as u64,
+        }))
     }
 
     fn overlapped(
@@ -794,10 +897,84 @@ mod tests {
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::Value;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::nullable::NullableColumn;
+    use databend_common_expression::types::number::Int32Type;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
 
     use super::*;
+
+    #[test]
+    fn test_deletion_accumulator_is_fragment_independent() {
+        let mut first = DeletionAccumulator::default();
+        let mut second = DeletionAccumulator::default();
+        // Different input blocks may carry the same candidate block. The accumulator must
+        // merge their keys and Bloom digests instead of making the result fragment-dependent.
+        let keys_a = ahash::HashSet::from_iter([1, 2]);
+        let keys_b = ahash::HashSet::from_iter([2, 3]);
+        let bloom_a = vec![vec![10, 20], vec![100, 200]];
+        let bloom_b = vec![vec![20, 30], vec![200, 300]];
+
+        first.add_block_deletion(4, 7, &keys_a, &bloom_a);
+        first.add_block_deletion(4, 7, &keys_b, &bloom_b);
+        second.add_block_deletion(4, 7, &keys_b, &bloom_b);
+        second.add_block_deletion(4, 7, &keys_a, &bloom_a);
+
+        assert_eq!(first.deletions[&4][&7].0, second.deletions[&4][&7].0);
+        assert_eq!(
+            first.deletions[&4][&7].0,
+            ahash::HashSet::from_iter([1, 2, 3])
+        );
+        for column in 0..2 {
+            let mut first_hashes = first.deletions[&4][&7].1[column].clone();
+            let mut second_hashes = second.deletions[&4][&7].1[column].clone();
+            first_hashes.sort_unstable();
+            second_hashes.sort_unstable();
+            assert_eq!(first_hashes, second_hashes);
+            assert_eq!(first_hashes.len(), 4);
+        }
+    }
+
+    #[test]
+    fn test_overlap_keeps_boundary_and_missing_statistics() {
+        let statistics = ColumnStatistics::new(
+            Scalar::Number(NumberScalar::Int32(10)),
+            Scalar::Number(NumberScalar::Int32(20)),
+            0,
+            0,
+            None,
+        );
+        let boundary = Scalar::Number(NumberScalar::Int32(20));
+        let outside = Scalar::Number(NumberScalar::Int32(21));
+
+        assert!(AggregationContext::check_overlapped_by_stats(
+            Some(&statistics),
+            &boundary,
+            &boundary,
+        ));
+        assert!(!AggregationContext::check_overlapped_by_stats(
+            Some(&statistics),
+            &outside,
+            &outside,
+        ));
+        assert!(AggregationContext::check_overlapped_by_stats(
+            None, &outside, &outside,
+        ));
+    }
+
+    #[test]
+    fn test_nullable_keys_are_not_deletion_candidates() -> Result<()> {
+        let nullable = NullableColumn::new_column(
+            Int32Type::from_data(vec![1_i32, 2_i32]),
+            [true, false].into_iter().collect(),
+        );
+        let value = Value::Column(nullable);
+        assert!(row_hash_of_columns(&[&value], 0)?.is_some());
+        assert!(row_hash_of_columns(&[&value], 1)?.is_none());
+        Ok(())
+    }
 
     #[test]
     fn test_check_overlap() -> Result<()> {

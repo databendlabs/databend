@@ -27,6 +27,7 @@ use log::debug;
 use crate::SegmentLocation;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
+use crate::operations::recluster::ReclusterCandidateKind;
 use crate::operations::recluster::ReclusterGroup;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterProperties;
@@ -203,7 +204,14 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 max_depth,
                 average_depth,
             };
-            candidates.push(task_candidate(group, score, &task_indices, blocks));
+            candidates.push(task_candidate(
+                properties,
+                ReclusterCandidateKind::Depth,
+                group,
+                score,
+                &task_indices,
+                blocks,
+            ));
         };
 
         let mut candidates = Vec::new();

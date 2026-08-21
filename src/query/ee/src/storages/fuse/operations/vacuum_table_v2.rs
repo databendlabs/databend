@@ -29,6 +29,9 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::io::granule_index::GranuleIndexSpec;
+use databend_common_storages_fuse::io::granule_index::build_granule_index_specs;
+use databend_common_storages_fuse::io::granule_index::collect_granule_index_payload_locations;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
@@ -187,17 +190,18 @@ pub async fn do_vacuum2(
         ))
         .await?;
     let inverted_indexes = &table_info.meta.indexes;
+    let granule_index_specs = build_granule_index_specs(inverted_indexes, &fuse_table.schema())?;
 
     let op = Files::create(ctx.clone(), fuse_table.get_operator());
     let mut files_to_gc = Vec::with_capacity(
-        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 2)
+        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 4)
             + stats_to_gc.len()
             + segments_to_gc.len()
             + snapshots_to_gc.len(),
     );
 
-    // order is important
-    // indexes should be removed before their blocks, because index locations to gc are generated from block locations.
+    // Order is important: indexes are removed before their blocks because their locations are
+    // generated from block locations.
     purge_block_chunks(
         &op,
         &ctx,
@@ -205,6 +209,7 @@ pub async fn do_vacuum2(
         &blocks_to_gc,
         &table_agg_index_ids,
         inverted_indexes,
+        &granule_index_specs,
         &mut files_to_gc,
         start,
     )
@@ -264,6 +269,7 @@ async fn purge_block_chunks(
     blocks_to_gc: &[String],
     table_agg_index_ids: &[u64],
     inverted_indexes: &BTreeMap<String, TableIndex>,
+    granule_index_specs: &[Arc<dyn GranuleIndexSpec>],
     files_to_gc: &mut Vec<String>,
     start: std::time::Instant,
 ) -> Result<()> {
@@ -280,8 +286,12 @@ async fn purge_block_chunks(
             return Err(err.with_context("failed to vacuum block chunk"));
         }
 
-        let indexes_to_gc =
-            collect_block_index_locations(block_chunk, table_agg_index_ids, inverted_indexes);
+        let indexes_to_gc = collect_block_index_locations(
+            block_chunk,
+            table_agg_index_ids,
+            inverted_indexes,
+            granule_index_specs,
+        );
         ctx.set_status_info(&format!(
             "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}/{}, blocks in chunk: {}, indexes_to_gc: {:?}",
             table_desc,
@@ -317,9 +327,11 @@ fn collect_block_index_locations(
     blocks_to_gc: &[String],
     table_agg_index_ids: &[u64],
     inverted_indexes: &BTreeMap<String, TableIndex>,
+    granule_index_specs: &[Arc<dyn GranuleIndexSpec>],
 ) -> Vec<String> {
     let mut indexes_to_gc = Vec::with_capacity(
-        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 1),
+        blocks_to_gc.len()
+            * (table_agg_index_ids.len() + inverted_indexes.len() + granule_index_specs.len() + 3),
     );
     for loc in blocks_to_gc {
         for index_id in table_agg_index_ids {
@@ -338,6 +350,13 @@ fn collect_block_index_locations(
                 ),
             );
         }
+        indexes_to_gc.extend(collect_granule_index_payload_locations(
+            granule_index_specs,
+            std::slice::from_ref(loc),
+        ));
+        indexes_to_gc.extend(
+            TableMetaLocationGenerator::gen_granule_index_locations_from_block_location(loc),
+        );
         indexes_to_gc
             .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
     }
@@ -421,7 +440,7 @@ mod tests {
             options: BTreeMap::new(),
         });
 
-        let indexes = collect_block_index_locations(&blocks, &[7], &inverted_indexes);
+        let indexes = collect_block_index_locations(&blocks, &[7], &inverted_indexes, &[]);
 
         assert_eq!(indexes, vec![
             TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&blocks[0], 7),
@@ -430,6 +449,11 @@ mod tests {
                 "idx",
                 "123456789",
             ),
+            TableMetaLocationGenerator::gen_granule_mins_location_from_block_location(&blocks[0]).0,
+            TableMetaLocationGenerator::gen_granule_offsets_location_from_block_location(
+                &blocks[0]
+            )
+            .0,
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[0]),
             TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&blocks[1], 7),
             TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
@@ -437,6 +461,11 @@ mod tests {
                 "idx",
                 "123456789",
             ),
+            TableMetaLocationGenerator::gen_granule_mins_location_from_block_location(&blocks[1]).0,
+            TableMetaLocationGenerator::gen_granule_offsets_location_from_block_location(
+                &blocks[1]
+            )
+            .0,
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[1]),
         ]);
     }

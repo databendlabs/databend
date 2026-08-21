@@ -1,0 +1,90 @@
+statement ok
+USE compat_granule_mixed
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+412 627600 2
+
+statement ok
+UPDATE gi_t SET source='current-update' WHERE (k IS NULL AND source='current-edge') OR (k>=1030 AND k<1035) OR (k>=2050 AND k<2055)
+
+# Delete only rows that predate the Stream offset, keeping change classification
+# deterministic (three ordinary deletes, eleven update pairs).
+statement ok
+DELETE FROM gi_t WHERE k IN (-2147483648,50,2147483647)
+
+statement ok
+SET recluster_method='vertical'
+
+statement ok
+ALTER TABLE gi_t RECLUSTER FINAL
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+409 627551 2
+
+query I
+SELECT count_if(source='current-update') FROM gi_t
+----
+11
+
+query III
+SELECT count_if(k=50),count_if(k=100),count_if(k=3100) FROM gi_t
+----
+0 4 1
+
+query T
+SELECT info:average_depth FROM clustering_information('compat_granule_mixed','gi_t')
+----
+1.0
+
+statement ok
+SET recluster_method='vertical'
+
+statement ok
+ALTER TABLE gi_sort_merge RECLUSTER FINAL
+
+query II
+SELECT count(),count(DISTINCT _block_name) FROM gi_sort_merge
+----
+16 1
+
+query I
+SELECT count_if(previous_k > k) FROM (SELECT k,lag(k) OVER (PARTITION BY _block_name ORDER BY _row_id) AS previous_k FROM gi_sort_merge)
+----
+0
+
+query IT rowsort
+SELECT k,payload FROM gi_sort_merge
+----
+0 o0
+1 c1
+2 c2
+2 o2
+3 c3
+3 o3
+4 c4
+5 c5
+5 o5
+6 c6
+6 o6
+7 c7
+7 o7
+8 c8
+8 o8
+9 o9
+
+query III
+SELECT count(),count_if(tag='c99'),count_if(tag='o250') FROM gi_bloom
+----
+301 1 1
+
+query TBI rowsort
+SELECT change$action,change$is_update,count() FROM gi_s GROUP BY change$action,change$is_update
+----
+DELETE 0 3
+DELETE 1 11
+INSERT 0 105
+INSERT 1 11

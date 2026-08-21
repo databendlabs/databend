@@ -25,6 +25,7 @@
 mod bloom_index;
 mod eliminate_cast;
 pub mod filters;
+mod granule_index;
 mod hnsw_index;
 mod index;
 mod index_common;
@@ -44,6 +45,7 @@ pub use bloom_index::BloomIndexType;
 pub use bloom_index::FilterEvalResult;
 pub use bloom_index::NgramArgs;
 pub use eliminate_cast::eliminate_cast;
+pub use granule_index::GranuleIndex;
 pub use hnsw_index::DistanceType;
 pub use hnsw_index::FixedLengthPriorityQueue;
 pub use hnsw_index::HNSWIndex;

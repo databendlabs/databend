@@ -2302,6 +2302,13 @@ impl Binder {
         let mut table_indexes = BTreeMap::new();
         for table_index_def in table_index_defs {
             let name = self.normalize_object_identifier(&table_index_def.index_name);
+            if matches!(table_index_def.index_type, AstTableIndexType::Bloom)
+                && !table_index_def.sync_creation
+            {
+                return Err(ErrorCode::UnsupportedIndex(
+                    "ASYNC BLOOM INDEX is not supported".to_string(),
+                ));
+            }
             if table_indexes.contains_key(&name) {
                 return Err(ErrorCode::BadArguments(format!(
                     "Duplicated index name: {}",
@@ -2344,6 +2351,15 @@ impl Binder {
                     let options =
                         self.validate_spatial_index_options(&table_index_def.index_options)?;
                     (TableIndexType::Spatial, column_ids, options)
+                }
+                AstTableIndexType::Bloom => {
+                    let column_ids = self.validate_bloom_index_columns(
+                        table_schema.clone(),
+                        &table_index_def.columns,
+                    )?;
+                    let options =
+                        self.validate_bloom_index_options(&table_index_def.index_options)?;
+                    (TableIndexType::Bloom, column_ids, options)
                 }
                 AstTableIndexType::Aggregating => unreachable!(),
             };

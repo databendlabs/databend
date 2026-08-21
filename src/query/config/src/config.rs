@@ -3333,6 +3333,14 @@ pub struct CacheConfig {
     )]
     pub disk_cache_virtual_column_meta_size: u64,
 
+    /// Max bytes of immutable granule index files cached in memory.
+    #[clap(
+        long = "cache-granule-index-file-bytes",
+        value_name = "VALUE",
+        default_value = "268435456"
+    )]
+    pub granule_index_file_bytes: u64,
+
     #[clap(
         long = "cache-table-prune-partitions-count",
         value_name = "VALUE",
@@ -3466,6 +3474,7 @@ impl Default for CacheConfig {
             spatial_index_filter_memory_ratio: 0,
             virtual_column_meta_count: 30000,
             disk_cache_virtual_column_meta_size: 0,
+            granule_index_file_bytes: 268435456,
             data_cache_storage: CacheStorageTypeConfig::None,
             table_data_cache_population_queue_size: 0,
             data_cache_in_memory_bytes: 0,

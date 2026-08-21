@@ -36,6 +36,7 @@ use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::is_uuid_v7;
+use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use futures_util::TryStreamExt;
 use log::info;
@@ -44,6 +45,7 @@ use opendal::Entry;
 use opendal::ErrorKind;
 use opendal::Operator;
 use opendal::Scheme;
+use uuid::Uuid;
 
 use crate::FuseTable;
 use crate::RetentionPolicy;
@@ -191,7 +193,76 @@ async fn is_gc_candidate_segment_block(
     Ok(last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
 }
 
+fn granule_payload_block_id(path: &str) -> Option<Uuid> {
+    try_extract_uuid_str_from_path(path)
+        .ok()
+        .and_then(|block_id| Uuid::parse_str(block_id).ok())
+}
+
 impl FuseTable {
+    /// List granule-index payloads whose block is no longer protected and whose object is old
+    /// enough to cross the caller's GC safety boundary.
+    ///
+    /// The granule Bloom layout is index-first, so this is intentionally one recursive sweep of
+    /// the table's `_i_gb` prefix rather than one LIST request per block.
+    pub async fn list_orphan_granule_index_payloads(
+        &self,
+        protected_block_locations: &HashSet<String>,
+        retention_time: DateTime<Utc>,
+    ) -> Result<Vec<String>> {
+        let protected_block_ids = protected_block_locations
+            .iter()
+            .map(|location| {
+                granule_payload_block_id(location).ok_or_else(|| {
+                    ErrorCode::StorageOther(format!(
+                        "Failed to extract protected block UUID from object key '{}'",
+                        location
+                    ))
+                })
+            })
+            .collect::<Result<HashSet<_>>>()?;
+        let prefix = self
+            .meta_location_generator()
+            .block_granule_bloom_index_prefix();
+        let op = self.get_operator_ref();
+        let mut lister = op.lister_with(&prefix).recursive(true).await?;
+        let mut orphan_payloads = Vec::new();
+
+        while let Some(entry) = lister.try_next().await? {
+            if !entry.metadata().is_file() {
+                continue;
+            }
+            let Some(block_id) = granule_payload_block_id(entry.path()) else {
+                warn!(
+                    "Skipping granule-index payload with an invalid block UUID: {}",
+                    entry.path()
+                );
+                continue;
+            };
+            if protected_block_ids.contains(&block_id) {
+                continue;
+            }
+            let modified = match entry.metadata().last_modified() {
+                Some(modified) => modified,
+                None => match op.stat(entry.path()).await?.last_modified() {
+                    Some(modified) => modified,
+                    None => {
+                        warn!(
+                            "Skipping granule-index payload without last_modified: {}",
+                            entry.path()
+                        );
+                        continue;
+                    }
+                },
+            };
+            if modified <= retention_time {
+                orphan_payloads.push(entry.path().to_string());
+            }
+        }
+
+        Ok(orphan_payloads)
+    }
+
     pub async fn vacuum_table(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -719,5 +790,30 @@ pub fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
         )
     } else {
         format!("{:?}", s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::granule_payload_block_id;
+
+    #[test]
+    fn test_granule_payload_block_id() {
+        let expected = uuid::Uuid::parse_str("0191114d30fd78b89fae8e5c88327725").unwrap();
+
+        assert_eq!(
+            granule_payload_block_id(
+                "1/2/_i_gb/idx/version/0191114d30fd78b89fae8e5c88327725_7.gbloom"
+            ),
+            Some(expected)
+        );
+        assert_eq!(
+            granule_payload_block_id("1/2/_b/g0191114d30fd78b89fae8e5c88327725_v2.parquet"),
+            Some(expected)
+        );
+        assert_eq!(
+            granule_payload_block_id("1/2/_i_gb/idx/version/not-a-uuid_7.gbloom"),
+            None
+        );
     }
 }
