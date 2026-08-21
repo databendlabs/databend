@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -257,10 +258,12 @@ impl IPhysicalPlan for Recluster {
                     cluster_stats_gen.extra_key_num,
                 )?;
 
+                let virtual_column_layout = task.virtual_column_layout.clone();
+                let query_ctx = builder.ctx.clone();
                 builder.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        let proc = TransformSerializeBlock::try_create(
-                            builder.ctx.clone(),
+                    move |transform_input_port, transform_output_port| {
+                        let mut proc = TransformSerializeBlock::try_create(
+                            query_ctx.clone(),
                             transform_input_port,
                             transform_output_port,
                             table,
@@ -268,6 +271,17 @@ impl IPhysicalPlan for Recluster {
                             MutationKind::Recluster,
                             self.table_meta_timestamps,
                         )?;
+                        if let Some(layout) = &virtual_column_layout {
+                            let mut block_builder = proc.get_block_builder();
+                            if let Some(virtual_builder) =
+                                block_builder.virtual_column_builder.take()
+                            {
+                                block_builder.virtual_column_builder = Some(
+                                    virtual_builder.with_adaptive_layout(Arc::new(layout.clone())),
+                                );
+                            }
+                            proc.set_block_builder(block_builder);
+                        }
                         proc.into_processor()
                     },
                 )

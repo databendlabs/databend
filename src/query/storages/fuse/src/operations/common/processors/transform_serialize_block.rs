@@ -36,12 +36,14 @@ use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::VirtualColumnLayout;
 use opendal::Operator;
 
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
+use crate::io::JsonPathStatisticsBuilder;
 use crate::io::SpatialIndexBuilder;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
@@ -79,6 +81,7 @@ pub struct TransformSerializeBlock {
     kind: MutationKind,
     pending_merge_hll: bool,
     pending_logical_change: (u64, u64),
+    pending_virtual_column_layout: Option<VirtualColumnLayout>,
 }
 
 impl TransformSerializeBlock {
@@ -169,11 +172,32 @@ impl TransformSerializeBlock {
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 
-        let virtual_column_builder = if table.enable_virtual_column() {
-            VirtualColumnBuilder::try_create(source_schema.clone()).ok()
-        } else {
-            None
-        };
+        // Recluster/compact/refresh materialize virtual columns and reuse the
+        // path frequencies collected by VirtualColumnBuilder. Other mutations
+        // only collect JSON path statistics.
+        let (virtual_column_builder, json_path_statistics_builder) =
+            if table.enable_virtual_column() {
+                match kind {
+                    MutationKind::Recluster | MutationKind::Compact | MutationKind::Refresh => (
+                        VirtualColumnBuilder::try_create(
+                            source_schema.clone(),
+                            table.virtual_column_layout_policy(),
+                        )
+                        .ok(),
+                        None,
+                    ),
+                    _ => (
+                        None,
+                        JsonPathStatisticsBuilder::try_create(
+                            source_schema.clone(),
+                            table.virtual_column_layout_policy(),
+                        )
+                        .ok(),
+                    ),
+                }
+            } else {
+                (None, None)
+            };
         let vector_index_builder = VectorIndexBuilder::try_create(
             &table.table_info.meta.indexes,
             source_schema.clone(),
@@ -209,6 +233,7 @@ impl TransformSerializeBlock {
             ngram_args,
             inverted_index_builders,
             virtual_column_builder,
+            json_path_statistics_builder,
             vector_index_builder,
             spatial_index_builder,
             table_meta_timestamps,
@@ -225,6 +250,7 @@ impl TransformSerializeBlock {
             kind,
             pending_merge_hll: false,
             pending_logical_change: (0, 0),
+            pending_virtual_column_layout: None,
         })
     }
 
@@ -241,6 +267,10 @@ impl TransformSerializeBlock {
 
     pub fn get_block_builder(&self) -> BlockBuilder {
         self.block_builder.clone()
+    }
+
+    pub fn set_block_builder(&mut self, block_builder: BlockBuilder) {
+        self.block_builder = block_builder;
     }
 
     fn mutation_logs(
@@ -334,6 +364,8 @@ impl Processor for TransformSerializeBlock {
                             serialize_block.logical_updated_rows,
                             serialize_block.logical_deleted_rows,
                         );
+                        self.pending_virtual_column_layout =
+                            serialize_block.virtual_column_layout.clone();
                         self.state = State::NeedSerialize {
                             block: input_data,
                             stats_type: serialize_block.stats_type,
@@ -389,14 +421,20 @@ impl Processor for TransformSerializeBlock {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
 
+                let mut block_builder = self.block_builder.clone();
+                if let Some(layout) = self.pending_virtual_column_layout.take()
+                    && let Some(builder) = block_builder.virtual_column_builder.take()
+                {
+                    block_builder.virtual_column_builder =
+                        Some(builder.with_adaptive_layout(Arc::new(layout)));
+                }
                 let serialized =
-                    self.block_builder
-                        .build(block, |block, generator| match &stats_type {
-                            ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
-                            ClusterStatsGenType::WithOrigin(origin_stats) => {
-                                generator.gen_with_origin_stats(block, origin_stats.clone())
-                            }
-                        })?;
+                    block_builder.build(block, |block, generator| match &stats_type {
+                        ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
+                        ClusterStatsGenType::WithOrigin(origin_stats) => {
+                            generator.gen_with_origin_stats(block, origin_stats.clone())
+                        }
+                    })?;
 
                 self.state = State::Serialized { serialized, index };
             }
@@ -418,7 +456,11 @@ impl Processor for TransformSerializeBlock {
                     &extended_block_meta.draft_virtual_block_meta
                 {
                     (extended_block_meta.block_meta.block_size
-                        + draft_virtual_block_meta.virtual_column_size) as usize
+                        + draft_virtual_block_meta
+                            .virtual_columns
+                            .as_ref()
+                            .map(|meta| meta.virtual_column_size)
+                            .unwrap_or_default()) as usize
                 } else {
                     extended_block_meta.block_meta.block_size as usize
                 };

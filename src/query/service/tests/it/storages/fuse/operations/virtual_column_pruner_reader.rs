@@ -83,13 +83,20 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         json_rows.len(),
     );
 
-    let mut builder = VirtualColumnBuilder::try_create(schema.clone())?;
+    let mut builder = VirtualColumnBuilder::try_create(schema.clone(), Default::default())?;
     builder.add_block(&block)?;
     let state = builder.finalize(&write_settings, &location)?;
     assert!(!state.data.is_empty());
 
     let dal = fuse_table.get_operator();
-    let virtual_location = state.draft_virtual_block_meta.virtual_location.0.clone();
+    let virtual_location = state
+        .draft_virtual_block_meta
+        .virtual_columns
+        .as_ref()
+        .unwrap()
+        .virtual_location
+        .0
+        .clone();
     dal.write(&virtual_location, state.data.clone()).await?;
 
     let mut column_id = schema.next_column_id();
@@ -132,14 +139,27 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
 
     let virtual_block_meta = VirtualBlockMeta {
         virtual_column_metas: HashMap::new(),
-        virtual_column_size: state.draft_virtual_block_meta.virtual_column_size,
-        virtual_location: state.draft_virtual_block_meta.virtual_location.clone(),
+        virtual_column_size: state
+            .draft_virtual_block_meta
+            .virtual_columns
+            .as_ref()
+            .unwrap()
+            .virtual_column_size,
+        virtual_location: state
+            .draft_virtual_block_meta
+            .virtual_columns
+            .as_ref()
+            .unwrap()
+            .virtual_location
+            .clone(),
+        path_statistics: Vec::new(),
+        virtual_columns_complete: false,
     };
 
     let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down.clone()))?
         .expect("virtual column pruner");
     let virtual_block_meta_index = pruner
-        .prune_virtual_columns(&Some(virtual_block_meta))
+        .prune_virtual_columns(&Some(virtual_block_meta), None)
         .await?
         .expect("virtual block meta index");
 
@@ -317,14 +337,14 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
 fn build_virtual_column_field(
     source_column_id: u32,
     source_name: &str,
-    column_id: u32,
+    query_column_id: u32,
     key_paths: OwnedKeyPaths,
 ) -> VirtualColumnField {
     let name = format_virtual_column_name(source_name, &key_paths);
     VirtualColumnField {
         source_column_id,
         source_name: source_name.to_string(),
-        column_id,
+        query_column_id,
         name,
         key_paths,
         cast_func_name: None,

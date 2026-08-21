@@ -28,6 +28,8 @@ use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_storages_common_table_meta::meta::VirtualPathSegment;
+use databend_storages_common_table_meta::meta::encode_virtual_path;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
 use jsonb::keypath::OwnedKeyPath;
@@ -709,7 +711,7 @@ where A: super::TypeCheckAdapter
         {
             return None;
         }
-        let key_name = Self::owned_keypaths_to_name(column_name, &owned_keypaths);
+        let key_name = Self::owned_keypaths_to_name(&owned_keypaths);
         let virtual_column_name = VirtualColumnName {
             table_index,
             source_column_id: column_id,
@@ -731,23 +733,19 @@ where A: super::TypeCheckAdapter
         )))
     }
 
-    fn owned_keypaths_to_name(column_name: &str, keypaths: &OwnedKeyPaths) -> String {
-        let mut name = column_name.to_string();
-        for path in &keypaths.paths {
-            name.push('[');
-            match path {
-                OwnedKeyPath::Index(idx) => {
-                    name.push_str(&idx.to_string());
-                }
-                OwnedKeyPath::QuotedName(field) | OwnedKeyPath::Name(field) => {
-                    name.push('\'');
-                    name.push_str(field.as_ref());
-                    name.push('\'');
-                }
-            }
-            name.push(']');
-        }
-        name
+    fn owned_keypaths_to_name(keypaths: &OwnedKeyPaths) -> String {
+        encode_virtual_path(
+            &keypaths
+                .paths
+                .iter()
+                .map(|path| match path {
+                    OwnedKeyPath::Index(idx) => VirtualPathSegment::Index(*idx),
+                    OwnedKeyPath::QuotedName(field) | OwnedKeyPath::Name(field) => {
+                        VirtualPathSegment::Name(field.to_string())
+                    }
+                })
+                .collect::<Vec<_>>(),
+        )
     }
 
     // Rewrite variant map access as `get_by_keypath` function

@@ -32,17 +32,25 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualColumnPathStatistics;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+use databend_storages_common_table_meta::meta::VirtualColumnPath;
+use databend_storages_common_table_meta::meta::VirtualColumnPathCount;
+use databend_storages_common_table_meta::meta::VirtualColumnPathStatistics;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::encoded_path_from_bracket_name;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 
 #[derive(Default)]
 pub struct RowOrientedSegmentBuilder {
     pub blocks_metas: Vec<Arc<BlockMeta>>,
+    pub virtual_schema: Option<VirtualSegmentSchema>,
+    pub virtual_paths: Vec<VirtualColumnPath>,
 }
 
 impl SegmentBuilder for RowOrientedSegmentBuilder {
@@ -56,17 +64,60 @@ impl SegmentBuilder for RowOrientedSegmentBuilder {
         Ok(())
     }
 
+    fn set_virtual_metadata(
+        &mut self,
+        virtual_schema: Option<VirtualSegmentSchema>,
+        virtual_paths: Vec<VirtualColumnPath>,
+    ) {
+        self.virtual_schema = virtual_schema;
+        self.virtual_paths = virtual_paths;
+    }
+
     fn build(
         &mut self,
         thresholds: BlockThresholds,
         cluster_key_info: Option<&ClusterKeyInfo>,
         additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self::Segment> {
-        let builder = std::mem::take(self);
+        let mut builder = std::mem::take(self);
         let mut stat =
             super::reduce_block_metas(&builder.blocks_metas, thresholds, cluster_key_info)?;
         stat.additional_stats_meta = additional_stats_meta;
-        Ok(SegmentInfo::new(builder.blocks_metas, stat))
+        let input_schema = builder.virtual_schema.clone().or_else(|| {
+            (!builder.virtual_paths.is_empty()).then(|| {
+                let mut schema = VirtualSegmentSchema::from_pending_paths(
+                    builder
+                        .virtual_paths
+                        .iter()
+                        .map(|path| (path.source_column_id, path.path.clone(), None)),
+                    true,
+                );
+                for column in &mut schema.column_paths {
+                    column.path_statistics_complete = builder
+                        .blocks_metas
+                        .iter()
+                        .filter_map(|block| block.virtual_block_meta.as_ref())
+                        .filter_map(|meta| {
+                            meta.path_statistics
+                                .iter()
+                                .find(|stats| stats.source_column_id == column.source_column_id)
+                        })
+                        .all(|stats| stats.path_statistics_complete);
+                }
+                schema
+            })
+        });
+        let input_schemas = vec![input_schema; builder.blocks_metas.len()];
+        let virtual_schema =
+            super::rebuild_virtual_segment_meta(&mut builder.blocks_metas, &input_schemas)?;
+        let mut segment = SegmentInfo::new(builder.blocks_metas, stat);
+        if virtual_schema
+            .as_ref()
+            .is_some_and(|schema| !schema.is_empty())
+        {
+            segment.summary.virtual_segment_schema = virtual_schema;
+        }
+        Ok(segment)
     }
 
     fn new(_table_schema: TableSchemaRef, _block_per_segment: usize) -> Self {
@@ -79,6 +130,9 @@ pub struct VirtualColumnAccumulator {
     virtual_fields: BTreeMap<(ColumnId, String), usize>,
     virtual_schema: VirtualDataSchema,
     number_of_blocks: u64,
+    segment_field_indexes: BTreeMap<usize, ()>,
+    segment_path_indexes: BTreeMap<VirtualColumnPath, u32>,
+    segment_paths: Vec<VirtualColumnPath>,
 }
 
 impl VirtualColumnAccumulator {
@@ -114,6 +168,9 @@ impl VirtualColumnAccumulator {
             virtual_fields,
             virtual_schema,
             number_of_blocks: 0,
+            segment_field_indexes: BTreeMap::new(),
+            segment_path_indexes: BTreeMap::new(),
+            segment_paths: Vec::new(),
         })
     }
 
@@ -130,6 +187,7 @@ impl VirtualColumnAccumulator {
             );
 
             let column_id = if let Some(field_idx) = self.virtual_fields.get(&key) {
+                self.segment_field_indexes.insert(*field_idx, ());
                 let virtual_field =
                     unsafe { self.virtual_schema.fields.get_unchecked_mut(*field_idx) };
                 if !virtual_field
@@ -145,8 +203,9 @@ impl VirtualColumnAccumulator {
                 if self.virtual_schema.is_full() {
                     continue;
                 }
-                self.virtual_fields
-                    .insert(key, self.virtual_schema.num_fields());
+                let field_idx = self.virtual_schema.num_fields();
+                self.virtual_fields.insert(key, field_idx);
+                self.segment_field_indexes.insert(field_idx, ());
 
                 let new_virtual_field = VirtualDataField {
                     name: draft_virtual_column_meta.name.clone(),
@@ -161,6 +220,80 @@ impl VirtualColumnAccumulator {
         self.number_of_blocks += 1;
 
         virtual_column_metas
+    }
+
+    pub fn add_path_statistics(
+        &mut self,
+        draft_statistics: &[DraftVirtualColumnPathStatistics],
+    ) -> Vec<VirtualColumnPathStatistics> {
+        let mut path_statistics = Vec::new();
+        for source in draft_statistics {
+            let mut paths = Vec::with_capacity(source.paths.len());
+            for path in &source.paths {
+                let key = VirtualColumnPath {
+                    source_column_id: source.source_column_id,
+                    path: path.path.clone(),
+                };
+                let path_index = if let Some(path_index) = self.segment_path_indexes.get(&key) {
+                    *path_index
+                } else {
+                    let path_index = self
+                        .segment_paths
+                        .iter()
+                        .filter(|item| item.source_column_id == source.source_column_id)
+                        .count() as u32;
+                    self.segment_path_indexes.insert(key.clone(), path_index);
+                    self.segment_paths.push(key);
+                    path_index
+                };
+                paths.push(VirtualColumnPathCount {
+                    path_index,
+                    value_count: path.value_count,
+                });
+            }
+            if !paths.is_empty() {
+                path_statistics.push(VirtualColumnPathStatistics {
+                    source_column_id: source.source_column_id,
+                    path_statistics_complete: source.path_statistics_complete,
+                    paths,
+                });
+            }
+        }
+        path_statistics
+    }
+
+    pub fn take_segment_metadata(
+        &mut self,
+    ) -> (Option<VirtualSegmentSchema>, Vec<VirtualColumnPath>) {
+        let legacy_fields = std::mem::take(&mut self.segment_field_indexes)
+            .into_keys()
+            .filter_map(|index| self.virtual_schema.fields.get(index).cloned())
+            .collect::<Vec<_>>();
+        let paths = std::mem::take(&mut self.segment_paths);
+        self.segment_path_indexes.clear();
+
+        let schema = VirtualSegmentSchema::from_pending_paths(
+            paths.iter().map(|path| {
+                let column = legacy_fields.iter().find(|field| {
+                    field.source_column_id == path.source_column_id
+                        && encoded_path_from_bracket_name(&field.name).as_deref()
+                            == Some(path.path.as_str())
+                });
+                (
+                    path.source_column_id,
+                    path.path.clone(),
+                    column.map(|field| (field.column_id, field.data_types.clone())),
+                )
+            }),
+            true,
+        );
+        let schema = (!schema.is_empty()).then_some(schema);
+        (schema, paths)
+    }
+
+    pub fn take_segment_paths(&mut self) -> Vec<VirtualColumnPath> {
+        self.segment_path_indexes.clear();
+        std::mem::take(&mut self.segment_paths)
     }
 
     pub fn build_virtual_schema(self) -> Option<VirtualDataSchema> {

@@ -165,7 +165,7 @@ pub struct DataSchema {
     pub(crate) metadata: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, FrozenAPI)]
 pub enum VariantDataType {
     Jsonb,
     Boolean,
@@ -181,7 +181,7 @@ pub enum VariantDataType {
     Interval,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, FrozenAPI)]
 pub struct VirtualDataField {
     pub name: String,
     pub data_types: Vec<VariantDataType>,
@@ -193,7 +193,7 @@ fn uninit_virtual_column_id() -> ColumnId {
     VIRTUAL_COLUMN_ID_START
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, FrozenAPI)]
 pub struct VirtualDataSchema {
     pub fields: Vec<VirtualDataField>,
     pub metadata: BTreeMap<String, String>,

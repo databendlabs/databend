@@ -142,6 +142,8 @@ use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_PATHS;
+use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
@@ -153,6 +155,7 @@ use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
+use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
@@ -446,6 +449,15 @@ impl FuseTable {
 
     pub fn enable_virtual_column(&self) -> bool {
         self.get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
+    }
+
+    pub fn virtual_column_layout_policy(&self) -> VirtualColumnLayoutPolicy {
+        VirtualColumnLayoutPolicy {
+            max_direct_paths_per_source: self
+                .get_option(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_PATHS, 1024usize),
+            max_path_statistics_per_source: self
+                .get_option(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS, 10000usize),
+        }
     }
 
     pub fn parse_storage_prefix_from_table_info(table_info: &TableInfo) -> Result<String> {

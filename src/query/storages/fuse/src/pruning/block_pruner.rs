@@ -28,6 +28,7 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use futures_util::future;
 use log::debug;
 use tokio::sync::OwnedSemaphorePermit;
@@ -51,6 +52,7 @@ impl BlockPruner {
         &self,
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
+        virtual_segment_schema: Option<VirtualSegmentSchema>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Apply internal column pruning.
         let block_meta_indexes = self.internal_column_pruning(&block_metas);
@@ -62,11 +64,23 @@ impl BlockPruner {
             || self.pruning_ctx.virtual_column_pruner.is_some()
         {
             // async pruning with bloom index, inverted index or virtual columns.
-            self.block_pruning(segment_location, block_metas, block_meta_indexes, None)
-                .await
+            self.block_pruning(
+                segment_location,
+                block_metas,
+                block_meta_indexes,
+                None,
+                virtual_segment_schema,
+            )
+            .await
         } else {
             // sync pruning without a bloom index, inverted index and virtual columns.
-            self.block_pruning_sync(segment_location, block_metas, block_meta_indexes, None)
+            self.block_pruning_sync(
+                segment_location,
+                block_metas,
+                block_meta_indexes,
+                None,
+                virtual_segment_schema,
+            )
         }
     }
 
@@ -108,6 +122,7 @@ impl BlockPruner {
                             block_meta.clone(),
                             block_meta.row_count,
                             true,
+                            None,
                         )
                         .await?;
 
@@ -172,6 +187,7 @@ impl BlockPruner {
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
         runtime_stats_pruner: Option<Arc<RuntimeStatsPruner>>,
+        virtual_segment_schema: Option<VirtualSegmentSchema>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
@@ -231,6 +247,7 @@ impl BlockPruner {
                 if prune_result.keep {
                     // not pruned by block zone map index,
                     let pruning_ctx = pruning_ctx.clone();
+                    let virtual_segment_schema = virtual_segment_schema.clone();
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
@@ -240,6 +257,7 @@ impl BlockPruner {
                                 block_meta,
                                 row_count,
                                 false,
+                                virtual_segment_schema,
                             )
                             .await
                         })
@@ -311,6 +329,7 @@ impl BlockPruner {
         block_meta: Arc<BlockMeta>,
         row_count: u64,
         limit_before_bloom: bool,
+        virtual_segment_schema: Option<VirtualSegmentSchema>,
     ) -> Result<BlockPruneResult> {
         if !prune_result.keep {
             return Ok(prune_result);
@@ -422,7 +441,10 @@ impl BlockPruner {
         if prune_result.keep {
             if let Some(virtual_column_pruner) = virtual_column_pruner {
                 prune_result.virtual_block_meta = virtual_column_pruner
-                    .prune_virtual_columns(&block_meta.virtual_block_meta)
+                    .prune_virtual_columns(
+                        &block_meta.virtual_block_meta,
+                        virtual_segment_schema.as_ref(),
+                    )
                     .await?;
             }
         }
@@ -436,6 +458,7 @@ impl BlockPruner {
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
         runtime_stats_pruner: Option<Arc<RuntimeStatsPruner>>,
+        _virtual_segment_schema: Option<VirtualSegmentSchema>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();

@@ -75,6 +75,7 @@ impl AsyncAccumulatingTransform for AsyncBlockPruneTransform {
                         meta.block_metas,
                         block_meta_indexes,
                         runtime_stats_pruner,
+                        meta.virtual_segment_schema,
                     )
                     .await?;
 

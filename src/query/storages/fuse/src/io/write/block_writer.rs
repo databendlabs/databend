@@ -51,6 +51,8 @@ use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualColumnPathStatistics;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -64,6 +66,7 @@ use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
+use crate::io::write::JsonPathStatisticsBuilder;
 use crate::io::write::SpatialIndexBuilder;
 use crate::io::write::SpatialIndexState;
 use crate::io::write::VectorIndexBuilder;
@@ -130,6 +133,7 @@ pub struct BlockSerialization {
     pub bloom_index_state: Option<BloomIndexState>,
     pub inverted_index_states: Vec<InvertedIndexState>,
     pub virtual_column_state: Option<VirtualColumnState>,
+    pub path_statistics: Option<Vec<DraftVirtualColumnPathStatistics>>,
     pub vector_index_state: Option<VectorIndexState>,
     pub spatial_index_state: Option<SpatialIndexState>,
     pub column_hlls: Option<BlockHLLState>,
@@ -154,6 +158,7 @@ pub struct BlockBuilder {
     pub ngram_args: Vec<NgramArgs>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
+    pub json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
     pub vector_index_builder: Option<VectorIndexBuilder>,
     pub spatial_index_builder: Option<SpatialIndexBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
@@ -261,6 +266,17 @@ impl BlockBuilder {
             } else {
                 None
             };
+        let path_statistics = if virtual_column_state.is_some() {
+            virtual_column_state
+                .as_ref()
+                .and_then(|state| state.draft_virtual_block_meta.path_statistics.clone())
+        } else if let Some(ref statistics_builder) = self.json_path_statistics_builder {
+            let mut statistics_builder = statistics_builder.clone();
+            statistics_builder.add_block(&data_block)?;
+            Some(statistics_builder.finalize())
+        } else {
+            None
+        };
 
         let row_count = data_block.num_rows() as u64;
         let col_stats = gen_columns_statistics(
@@ -330,6 +346,7 @@ impl BlockBuilder {
             bloom_index_state,
             inverted_index_states,
             virtual_column_state,
+            path_statistics,
             vector_index_state,
             spatial_index_state,
             column_hlls,
@@ -351,24 +368,25 @@ impl BlockWriter {
         let column_top_n = serialized.column_top_n;
         let block_location = block_meta.location.0.clone();
 
-        let extended_block_meta =
-            if let Some(virtual_column_state) = &serialized.virtual_column_state {
-                ExtendedBlockMeta {
-                    block_meta,
-                    draft_virtual_block_meta: Some(
-                        virtual_column_state.draft_virtual_block_meta.clone(),
-                    ),
-                    column_hlls,
-                    column_top_n,
-                }
-            } else {
-                ExtendedBlockMeta {
-                    block_meta,
-                    draft_virtual_block_meta: None,
-                    column_hlls,
-                    column_top_n,
-                }
-            };
+        let draft_virtual_block_meta = match (
+            serialized
+                .virtual_column_state
+                .as_ref()
+                .and_then(|state| state.draft_virtual_block_meta.virtual_columns.clone()),
+            serialized.path_statistics.clone(),
+        ) {
+            (None, None) => None,
+            (virtual_columns, path_statistics) => Some(DraftVirtualBlockMeta {
+                virtual_columns,
+                path_statistics,
+            }),
+        };
+        let extended_block_meta = ExtendedBlockMeta {
+            block_meta,
+            draft_virtual_block_meta,
+            column_hlls,
+            column_top_n,
+        };
 
         Self::write_down_data_block(dal, serialized.block_raw_data, &block_location).await?;
         Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
@@ -472,22 +490,19 @@ impl BlockWriter {
         virtual_column_state: Option<VirtualColumnState>,
     ) -> Result<()> {
         if let Some(virtual_column_state) = virtual_column_state {
-            if virtual_column_state
+            let Some(virtual_columns) = &virtual_column_state
                 .draft_virtual_block_meta
-                .virtual_column_size
-                == 0
-            {
+                .virtual_columns
+            else {
+                return Ok(());
+            };
+            if virtual_columns.virtual_column_size == 0 {
                 return Ok(());
             }
             let start = Instant::now();
 
-            let index_size = virtual_column_state
-                .draft_virtual_block_meta
-                .virtual_column_size;
-            let location = &virtual_column_state
-                .draft_virtual_block_meta
-                .virtual_location
-                .0;
+            let index_size = virtual_columns.virtual_column_size;
+            let location = &virtual_columns.virtual_location.0;
             write_data(virtual_column_state.data, dal, location).await?;
             metrics_inc_block_virtual_column_write_nums(1);
             metrics_inc_block_virtual_column_write_bytes(index_size);

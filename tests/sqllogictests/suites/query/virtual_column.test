@@ -125,6 +125,9 @@ create table t2(id int, val json) storage_format = 'parquet' enable_virtual_colu
 statement ok
 insert into t2 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'), (3, '3')
 
+statement ok
+optimize table t2 compact
+
 query TTTITT
 show virtual columns from t2
 ----
@@ -279,6 +282,9 @@ INSERT INTO tweets (id, data) VALUES
 (7, '{"id":7, "create": "1/12", "text": "d", "user": {"id": 3}, "replies": 0, "geo": {"lat": 2.7}}'),
 (8, '{"id":8, "create": "1/13", "text": "x", "user": {"id": 3}, "replies": 1, "geo": {"lat": 3.5}}');
 
+statement ok
+optimize table tweets compact
+
 query TTTITT
 show virtual columns where table='tweets';
 ----
@@ -305,6 +311,9 @@ statement ok
 INSERT INTO tweets (id, data) VALUES
 (9, '{"id":9, "create": "2/14", "text": "y", "user": {"id": 5}, "replies": 5, "geo": {"lat": 4.2}, "likes": 25, "tags": ["good", "popular"]}'),
 (10, '{"id":10, "create": "2/15", "text": "z", "user": {"id": 7}, "replies": 7, "geo": {"lat": 5.0}, "likes": 10, "tags": ["new", "interesting"]}');
+
+statement ok
+optimize table tweets compact
 
 query TTTITT
 show virtual columns where table='tweets';
@@ -703,6 +712,9 @@ INSERT INTO test_stream (id, data1, data2) VALUES
 (9, '{"name": "Richard", "age": 33, "address": {"city": "Austin", "district": "Downtown"}}', '{"scores": [91, 87, 93], "hobbies": ["hiking", "cycling"]}'),
 (10, '{"name": "Lisa", "age": 26, "address": {"city": "Chicago", "district": "River North"}}', '{"scores": [83, 81, 89], "hobbies": ["gaming", "reading"]}');
 
+statement ok
+optimize table test_stream compact
+
 query ??????
 show virtual columns from test_stream;
 ----
@@ -753,6 +765,9 @@ INSERT INTO test2 (id, data1, data2) VALUES
 (8, '{"name": "Jennifer", "age": 29, "address": {"city": "San Francisco", "district": "Marina"}}', '{"product_id": 108, "price": "10.8"}'),
 (9, '{"name": "Richard", "age": 33, "address": {"city": "Austin"}}', '{"product_id": "109", "price": "10.9"}'),
 (10, '{"name": "Lisa", "age": 26, "address": {"city": "Chicago"}}', '{"price": "10.10"}');
+
+statement ok
+optimize table test2 compact
 
 query ??????
 show virtual columns from test2;

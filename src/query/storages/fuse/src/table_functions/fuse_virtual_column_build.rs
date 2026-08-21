@@ -132,7 +132,8 @@ impl SimpleArgFunc for FuseVirtualColumnBuild {
         let (source_schema, projection) = variant_projection(table)?;
         let block = read_block_location(ctx, table, &args.block_location, projection).await?;
 
-        let mut builder = VirtualColumnBuilder::try_create(source_schema)?;
+        let mut builder =
+            VirtualColumnBuilder::try_create(source_schema, table.virtual_column_layout_policy())?;
         builder.add_block(&block)?;
         let state = builder.finalize(
             &table.get_write_settings(),

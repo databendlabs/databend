@@ -372,6 +372,7 @@ fn build_test_segment_info(
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 

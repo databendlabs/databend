@@ -25,6 +25,7 @@ fuse_vacuum_drop_aggregating_index
 fuse_vacuum_drop_inverted_index
 fuse_vacuum_temporary_table
 fuse_virtual_column
+fuse_virtual_column_block_meta
 fuse_virtual_column_build
 
 query T

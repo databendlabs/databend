@@ -286,18 +286,34 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             }
 
             if let Some(draft_virtual_block_meta) = extended_block_meta.draft_virtual_block_meta {
+                let draft_path_statistics =
+                    draft_virtual_block_meta.path_statistics.unwrap_or_default();
                 let mut block_meta = extended_block_meta.block_meta.clone();
                 if let Some(ref mut virtual_column_accumulator) = self.virtual_column_accumulator {
-                    // generate ColumnId for virtual columns.
-                    let virtual_column_metas = virtual_column_accumulator
-                        .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
-
-                    let virtual_block_meta = VirtualBlockMeta {
-                        virtual_column_metas,
-                        virtual_column_size: draft_virtual_block_meta.virtual_column_size,
-                        virtual_location: draft_virtual_block_meta.virtual_location.clone(),
-                    };
-                    block_meta.virtual_block_meta = Some(virtual_block_meta);
+                    let path_statistics =
+                        virtual_column_accumulator.add_path_statistics(&draft_path_statistics);
+                    let virtual_columns = draft_virtual_block_meta.virtual_columns;
+                    if virtual_columns.is_some() || !path_statistics.is_empty() {
+                        let (virtual_column_metas, virtual_column_size, virtual_location) =
+                            if let Some(virtual_columns) = virtual_columns {
+                                (
+                                    virtual_column_accumulator.add_virtual_column_metas(
+                                        &virtual_columns.virtual_column_metas,
+                                    ),
+                                    virtual_columns.virtual_column_size,
+                                    virtual_columns.virtual_location,
+                                )
+                            } else {
+                                (HashMap::new(), 0, (String::new(), 0))
+                            };
+                        block_meta.virtual_block_meta = Some(VirtualBlockMeta {
+                            virtual_column_metas,
+                            virtual_column_size,
+                            virtual_location,
+                            path_statistics,
+                            virtual_columns_complete: true,
+                        });
+                    }
                 }
 
                 self.segment_builder.add_block(block_meta)?;
@@ -361,6 +377,16 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 }
                 let mut top_n = std::mem::take(&mut self.top_n);
                 top_n.retain(|_, column_top_n| !column_top_n.values.is_empty());
+
+                if !self.is_column_oriented
+                    && let Some(ref mut virtual_column_accumulator) =
+                        self.virtual_column_accumulator
+                {
+                    let (virtual_schema, virtual_paths) =
+                        virtual_column_accumulator.take_segment_metadata();
+                    self.segment_builder
+                        .set_virtual_metadata(virtual_schema, virtual_paths);
+                }
 
                 let segment_info = self.segment_builder.build(
                     self.thresholds,

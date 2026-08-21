@@ -20,6 +20,7 @@ pub mod reducers;
 mod spatial_stats;
 mod table_statistics;
 mod traverse;
+mod virtual_segment_meta;
 
 pub use accumulator::ColumnHLLAccumulator;
 pub use accumulator::RowOrientedSegmentBuilder;
@@ -61,3 +62,4 @@ pub use spatial_stats::SpatialStatsBuilder;
 pub use table_statistics::TableStatsGenerator;
 pub(crate) use table_statistics::stamp_table_statistics_with_snapshot_predecessor;
 pub use traverse::traverse_values_dfs;
+pub use virtual_segment_meta::rebuild_virtual_segment_meta;

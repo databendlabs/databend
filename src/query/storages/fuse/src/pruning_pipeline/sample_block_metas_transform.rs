@@ -57,6 +57,7 @@ impl BlockMetaAccumulatingTransform<BlockMetasMeta> for SampleBlockMetasTransfor
         Ok(Some(DataBlock::empty_with_meta(BlockMetasMeta::create(
             sample_block_metas,
             data.segment_location,
+            data.virtual_segment_schema,
         ))))
     }
 }

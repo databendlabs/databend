@@ -141,6 +141,67 @@ impl VirtualColumnMeta {
     }
 }
 
+/// A canonical JSON path stored once in a segment.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, FrozenAPI)]
+pub struct VirtualColumnPath {
+    pub source_column_id: ColumnId,
+    /// Canonical JSON path, e.g. `user.name`, `users[0].id`.
+    pub path: String,
+}
+
+/// A stable virtual-column layout selected for one compaction or recluster task.
+/// Paths listed here are materialized as dedicated columns; all other observed
+/// paths are written to shared columns.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq, FrozenAPI)]
+pub struct VirtualColumnLayout {
+    pub direct_paths: Vec<VirtualColumnPath>,
+}
+
+impl VirtualColumnLayout {
+    pub fn contains(&self, source_column_id: ColumnId, path: &str) -> bool {
+        self.direct_paths
+            .iter()
+            .any(|item| item.source_column_id == source_column_id && item.path == path)
+    }
+}
+
+/// One observed JSON path frequency in a block, relative to a source variant column.
+/// `path_index` is the local index of `path` in `VirtualSegmentSchema::column_paths`
+/// for that source.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct VirtualColumnPathCount {
+    pub path_index: u32,
+    pub value_count: u64,
+}
+
+/// Path frequencies for one source variant column in a block. Grouped so
+/// `source_column_id` is stored once.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct VirtualColumnPathStatistics {
+    pub source_column_id: ColumnId,
+    #[serde(default)]
+    pub path_statistics_complete: bool,
+    pub paths: Vec<VirtualColumnPathCount>,
+}
+
+/// One observed JSON path and its frequency, relative to a source variant column.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct DraftVirtualPathCount {
+    pub path: String,
+    pub value_count: u64,
+}
+
+/// Path frequencies for one source variant column, before segment-local path ids
+/// are assigned. Grouped so `source_column_id` is stored once.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct DraftVirtualColumnPathStatistics {
+    pub source_column_id: ColumnId,
+    /// Whether `paths` contains every observed path for this source column.
+    #[serde(default)]
+    pub path_statistics_complete: bool,
+    pub paths: Vec<DraftVirtualPathCount>,
+}
+
 /// The block meta of virtual columns.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
 pub struct VirtualBlockMeta {
@@ -150,6 +211,13 @@ pub struct VirtualBlockMeta {
     pub virtual_column_size: u64,
     /// The file location of virtual columns.
     pub virtual_location: Location,
+    /// Frequencies of all supported JSON paths observed in this block.
+    #[serde(default)]
+    pub path_statistics: Vec<VirtualColumnPathStatistics>,
+    /// Whether absence from `virtual_column_metas` proves that a column from the
+    /// segment virtual schema is absent in this block. Old metadata defaults to false.
+    #[serde(default)]
+    pub virtual_columns_complete: bool,
 }
 
 /// The draft column meta of virtual columns, virtual ColumnId is not set.
@@ -161,15 +229,24 @@ pub struct DraftVirtualColumnMeta {
     pub column_meta: VirtualColumnMeta,
 }
 
-/// The draft block meta of virtual columns.
+/// Draft metadata for a generated virtual-column sidecar.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
-pub struct DraftVirtualBlockMeta {
-    /// The draft virtual oclumn metas, virtual ColumnId needs to be set.
+pub struct DraftVirtualColumnBlockMeta {
+    /// The draft virtual column metas; segment-local virtual ColumnIds are not assigned yet.
     pub virtual_column_metas: Vec<DraftVirtualColumnMeta>,
     /// The file size of virtual columns.
     pub virtual_column_size: u64,
     /// The file location of virtual columns.
     pub virtual_location: Location,
+}
+
+/// Independent optional payloads produced while writing a block.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct DraftVirtualBlockMeta {
+    #[serde(default)]
+    pub virtual_columns: Option<DraftVirtualColumnBlockMeta>,
+    #[serde(default)]
+    pub path_statistics: Option<Vec<DraftVirtualColumnPathStatistics>>,
 }
 
 /// Meta information of a block
