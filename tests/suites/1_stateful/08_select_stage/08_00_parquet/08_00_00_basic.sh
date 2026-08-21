@@ -41,6 +41,11 @@ echo "create stage s4 FILE_FORMAT = (type = PARQUET);" | bendsql_connect_root
 echo "copy into @s4 from t2;" | bendsql_connect_root | cut -d$'\t' -f1,2
 echo "select * from @s4;" | bendsql_connect_root
 
+echo '--- small parquet file should stream multiple blocks'
+echo 'remove @s4;' | bendsql_connect_root
+echo "copy into @s4 from (select number a from numbers(131073)) file_format=(type=parquet) single=true;" | bendsql_connect_root | cut -d$'\t' -f1
+echo "select /*+ set_var(parquet_fast_read_bytes=1073741824) set_var(max_block_size=65536) */ count(), min(a), max(a) from @s4;" | bendsql_connect_root
+
 ## generate large parquet files will cause timeout, we comment it now
 echo '--- large parquet file should be worked on parallel by rowgroups'
 echo 'remove @s4;' | bendsql_connect_root
