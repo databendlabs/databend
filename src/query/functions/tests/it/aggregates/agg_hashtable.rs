@@ -16,6 +16,7 @@ use std::alloc::Layout;
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -43,9 +44,7 @@ use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::i256;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::aggregates::aggregate_function_v1_impl::DecimalSumState;
 use itertools::Itertools;
 
 fn resolve_agg(name: &str, arg_type: DataType) -> AggregateFunctionRef {
@@ -181,8 +180,6 @@ fn test_agg_hashtable() {
 fn test_layout() {
     let decimal_type = DataType::Decimal(DecimalSize::new_unchecked(20, 2));
     let aggrs = resolve_agg("sum", decimal_type);
-    type S = DecimalSumState<false, i128>;
-    type M = DecimalSumState<false, i256>;
 
     let states_layout = get_states_layout(std::slice::from_ref(&aggrs)).unwrap();
 
@@ -190,15 +187,8 @@ fn test_layout() {
         states_layout.layout,
         Layout::from_size_align(17, 8).unwrap()
     );
-    assert_eq!(Layout::new::<S>(), Layout::from_size_align(16, 8).unwrap());
-    assert_eq!(Layout::new::<M>(), Layout::from_size_align(32, 8).unwrap());
-    assert_eq!(
-        Layout::new::<i128>(),
-        Layout::from_size_align(16, 16).unwrap()
-    );
-
-    assert_eq!(
-        Layout::new::<i128>(),
-        Layout::from_size_align(16, 16).unwrap()
-    );
+    let [AggrStateType::Custom(state_layout), AggrStateType::Bool] = aggrs.state().fields() else {
+        panic!("unexpected state description: {:?}", aggrs.state().fields());
+    };
+    assert_eq!(*state_layout, Layout::from_size_align(16, 8).unwrap());
 }
