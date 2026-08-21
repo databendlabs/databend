@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -82,14 +81,10 @@ impl SubqueryDecorrelatorOptimizer {
 
     fn remap_secure_predicates(
         secure_preds: &mut [ScalarExpr],
-        column_mapping: &HashMap<Symbol, Symbol>,
+        derived_columns: &DerivedColumnScope,
     ) -> Result<()> {
         for pred in secure_preds.iter_mut() {
-            for old_col in pred.used_columns() {
-                if let Some(&new_col) = column_mapping.get(&old_col) {
-                    pred.replace_column(old_col, new_col)?;
-                }
-            }
+            pred.replace_columns(|old| Ok(derived_columns.resolve_or_self(old)))?;
         }
         Ok(())
     }
@@ -453,12 +448,13 @@ impl SubqueryDecorrelatorOptimizer {
                     .iter()
                     .map(|condition| {
                         let mut new_condition = condition.clone();
-                        for col in condition.used_columns() {
+                        new_condition.replace_columns(|col| {
                             if correlated_columns.contains(&col) {
-                                let new_col = derived_columns.must_resolve(col)?;
-                                new_condition.replace_column(col, new_col)?;
+                                derived_columns.must_resolve(col)
+                            } else {
+                                Ok(col)
                             }
-                        }
+                        })?;
                         Ok(new_condition)
                     })
                     .collect()
@@ -1077,7 +1073,7 @@ impl SubqueryDecorrelatorOptimizer {
                     return Ok((old, expr));
                 };
                 if let Some(expr) = &mut expr {
-                    expr.replace_column(old, new)?;
+                    expr.replace_columns(|column| Ok(if column == old { new } else { column }))?;
                 };
                 Ok((new, expr))
             })
@@ -1186,25 +1182,26 @@ impl SubqueryDecorrelatorOptimizer {
             RelOperator::Limit(limit) => limit.clone().into(),
             RelOperator::Sort(sort) => {
                 let mut sort = sort.clone();
-                for old in sort.used_columns() {
-                    sort.replace_column(old, derived_columns.must_resolve(old)?);
-                }
+                sort.replace_columns(|old| derived_columns.must_resolve(old))?;
                 sort.into()
             }
             RelOperator::Filter(filter) => {
                 let mut filter = filter.clone();
                 for predicate in &mut filter.predicates {
-                    for old in predicate.used_columns() {
-                        predicate.replace_column(old, derived_columns.must_resolve(old)?)?;
-                    }
+                    predicate.replace_columns(|old| derived_columns.must_resolve(old))?;
                 }
                 filter.into()
             }
             RelOperator::Join(join) => {
                 let mut join = join.clone();
-                for old in join.used_columns()? {
-                    join.replace_column(old, derived_columns.must_resolve(old)?)?;
-                }
+                let marker_index = join.marker_index;
+                join.replace_columns(|old| {
+                    if marker_index == Some(old) {
+                        Ok(old)
+                    } else {
+                        derived_columns.must_resolve(old)
+                    }
+                })?;
                 if let Some(mark) = &mut join.marker_index {
                     let mut metadata = self.metadata.write();
                     let column_entry = metadata.column(*mark);
@@ -1301,7 +1298,7 @@ impl SubqueryDecorrelatorOptimizer {
         // new derived column IDs. Without this, RAP predicates would reference
         // stale column symbols after decorrelation.
         if let Some(secure_preds) = &mut new_scan.secure_predicates {
-            Self::remap_secure_predicates(secure_preds, &derived_columns.snapshot())?;
+            Self::remap_secure_predicates(secure_preds, derived_columns)?;
         }
 
         Ok(new_scan.into())
@@ -1351,12 +1348,7 @@ impl SubqueryDecorrelatorOptimizer {
                     return Ok((old, expr));
                 };
                 if let Some(expr) = &mut expr {
-                    for used_column in expr.used_columns() {
-                        expr.replace_column(
-                            used_column,
-                            derived_columns.must_resolve(used_column)?,
-                        )?;
-                    }
+                    expr.replace_columns(|column| derived_columns.must_resolve(column))?;
                 }
                 Ok((new, expr))
             })
@@ -1369,12 +1361,7 @@ impl SubqueryDecorrelatorOptimizer {
                     return Ok((old, expr));
                 };
                 if let Some(expr) = &mut expr {
-                    for used_column in expr.used_columns() {
-                        expr.replace_column(
-                            used_column,
-                            derived_columns.must_resolve(used_column)?,
-                        )?;
-                    }
+                    expr.replace_columns(|column| derived_columns.must_resolve(column))?;
                 }
                 Ok((new, expr))
             })
@@ -1435,9 +1422,7 @@ impl SubqueryDecorrelatorOptimizer {
                 })
             }
             _ => {
-                for old in scalar.used_columns() {
-                    scalar.replace_column(old, derived_columns.must_resolve(old)?)?;
-                }
+                scalar.replace_columns(|old| derived_columns.must_resolve(old))?;
                 let column_entry = metadata.column(index);
                 let name = column_entry.name();
                 let data_type = column_entry.data_type();
