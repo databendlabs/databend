@@ -18,6 +18,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_ast::Span;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::Symbol;
 use crate::optimizer::Optimizer;
@@ -88,22 +89,28 @@ fn flatten_conjuncts(predicate: &ScalarExpr) -> Vec<ScalarExpr> {
 
 fn build_conjunction(predicates: Vec<ScalarExpr>) -> Option<ScalarExpr> {
     predicates.into_iter().reduce(|acc, predicate| {
+        let return_type =
+            ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&acc, &predicate]);
         ScalarExpr::FunctionCall(FunctionCall {
             span: Span::None,
             func_name: "and".to_string(),
             params: vec![],
             arguments: vec![acc, predicate],
+            return_type: Box::new(return_type),
         })
     })
 }
 
 fn build_disjunction(predicates: Vec<ScalarExpr>) -> Option<ScalarExpr> {
     predicates.into_iter().reduce(|acc, predicate| {
+        let return_type =
+            ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&acc, &predicate]);
         ScalarExpr::FunctionCall(FunctionCall {
             span: Span::None,
             func_name: "or".to_string(),
             params: vec![],
             arguments: vec![acc, predicate],
+            return_type: Box::new(return_type),
         })
     })
 }
@@ -209,11 +216,16 @@ impl CTEFilterPushdownOptimizer {
                     filter.predicates.iter().skip(1).fold(
                         filter.predicates[0].clone(),
                         |acc, pred| {
+                            let return_type =
+                                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                                    &acc, pred,
+                                ]);
                             ScalarExpr::FunctionCall(FunctionCall {
                                 span: Span::None,
                                 func_name: "and".to_string(),
                                 params: vec![],
                                 arguments: vec![acc, pred.clone()],
+                                return_type: Box::new(return_type),
                             })
                         },
                     )
@@ -353,6 +365,7 @@ mod tests {
                 }
                 .into(),
             ],
+            return_type: Box::new(DataType::Boolean),
         })
     }
 
@@ -372,6 +385,7 @@ mod tests {
                 bound_column(left_index, left_table_index, left_name),
                 bound_column(right_index, right_table_index, right_name),
             ],
+            return_type: Box::new(DataType::Boolean),
         })
     }
 
@@ -384,6 +398,7 @@ mod tests {
                     func_name: "and".to_string(),
                     params: vec![],
                     arguments: vec![acc, arg],
+                    return_type: Box::new(DataType::Boolean),
                 })
             })
             .unwrap()
@@ -398,6 +413,7 @@ mod tests {
                     func_name: "or".to_string(),
                     params: vec![],
                     arguments: vec![acc, arg],
+                    return_type: Box::new(DataType::Boolean),
                 })
             })
             .unwrap()

@@ -823,8 +823,9 @@ impl PhysicalPlanBuilder {
             // Prepare runtime filter expression
             let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
 
-            let build_table_index = if right_condition.used_columns().len() == 1 {
-                let column_idx = *right_condition.used_columns().iter().next().unwrap();
+            let right_used_columns = right_condition.used_columns();
+            let build_table_index = if right_used_columns.len() == 1 {
+                let column_idx = *right_used_columns.iter().next().unwrap();
                 if matches!(
                     self.metadata.read().column(column_idx),
                     ColumnEntry::BaseTableColumn(_)
@@ -1462,6 +1463,7 @@ mod tests {
                 func_name: "gt".to_string(),
                 params: vec![],
                 arguments: vec![column(0), column(1)],
+                return_type: Box::new(DataType::Boolean),
             })],
             ..Default::default()
         };

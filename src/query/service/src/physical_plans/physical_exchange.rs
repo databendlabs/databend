@@ -104,7 +104,7 @@ impl PhysicalPlanBuilder {
         | databend_common_sql::plans::Exchange::GlobalHash(exprs) = exchange
         {
             for expr in exprs {
-                required.extend(expr.used_columns());
+                expr.collect_used_columns(&mut required);
             }
         }
 

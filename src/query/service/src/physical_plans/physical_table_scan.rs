@@ -324,7 +324,7 @@ impl PhysicalPlanBuilder {
             // on tenant_id would fail when the query only selects id.
             if let Some(secure_preds) = &scan.secure_predicates {
                 for pred in secure_preds {
-                    used = used.union(&pred.used_columns()).cloned().collect();
+                    pred.collect_used_columns(&mut used);
                 }
             }
 
@@ -770,6 +770,7 @@ impl PhysicalPlanBuilder {
                             func_name: "and_filters".to_string(),
                             params: vec![],
                             arguments: vec![lhs, rhs],
+                            return_type: Box::new(DataType::Boolean),
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
@@ -972,11 +973,14 @@ impl PhysicalPlanBuilder {
         let output_schema = projection.project_schema(&agg.schema);
 
         let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
+            let return_type =
+                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&lhs, &rhs]);
             ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: "and".to_string(),
                 params: vec![],
                 arguments: vec![lhs, rhs],
+                return_type: Box::new(return_type),
             })
         });
         let filter = predicate

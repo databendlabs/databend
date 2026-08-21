@@ -15,10 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
+use databend_common_expression::type_check::infer_function_return_type;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::number::NumberDataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::ColumnSet;
@@ -1227,6 +1229,15 @@ impl EagerAnalysis {
             unreachable!()
         };
 
+        let new_scalar_type = new_scalar.data_type();
+        let count_type = DataType::Number(NumberDataType::UInt64);
+        let return_type = infer_function_return_type(
+            None,
+            "multiply",
+            &[],
+            [new_scalar_type.as_ref(), &count_type].into_iter(),
+            &BUILTIN_FUNCTIONS,
+        )?;
         let multiplied_scalar = ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "multiply".to_string(),
@@ -1249,6 +1260,7 @@ impl EagerAnalysis {
                     &DataType::Number(NumberDataType::UInt64),
                 ),
             ],
+            return_type: Box::new(return_type),
         });
         let multiplied_scalar = if matches!(
             aggregate_function.return_type.remove_nullable(),
@@ -1258,7 +1270,7 @@ impl EagerAnalysis {
         } else {
             multiplied_scalar
         };
-        let multiplied_type = multiplied_scalar.data_type()?;
+        let multiplied_type = multiplied_scalar.data_type().into_owned();
         let new_index = metadata.write().add_derived_column(
             format!("{} * _eager_count", aggregate_function.display_name),
             multiplied_type.clone(),

@@ -276,6 +276,9 @@ impl CollectStatisticsOptimizer {
                                 func_name: "rand".to_string(),
                                 params: vec![],
                                 arguments: vec![],
+                                return_type: Box::new(DataType::Number(
+                                    databend_common_expression::types::NumberDataType::Float64,
+                                )),
                             });
                             let filter = ScalarExpr::FunctionCall(FunctionCall {
                                 span: None,
@@ -290,6 +293,7 @@ impl CollectStatisticsOptimizer {
                                         ))),
                                     }),
                                 ],
+                                return_type: Box::new(DataType::Boolean),
                             });
                             s_expr = SExpr::create_unary(
                                 Arc::new(

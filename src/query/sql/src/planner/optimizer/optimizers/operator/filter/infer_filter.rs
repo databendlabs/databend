@@ -84,6 +84,10 @@ impl<'a> InferFilterOptimizer<'a> {
                     if right != func.arguments[1] {
                         func.arguments[1] = right;
                     }
+                    *func.return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                        &func.arguments[0],
+                        &func.arguments[1],
+                    ]);
                 }
             }
         }
@@ -112,7 +116,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         {
                             let (is_adjusted, constant) = adjust_scalar(
                                 constant.value.clone(),
-                                func.arguments[0].data_type()?,
+                                func.arguments[0].data_type().as_ref(),
                             );
                             if is_adjusted {
                                 self.add_expr_predicate(&func.arguments[0], Predicate {
@@ -128,7 +132,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         {
                             let (is_adjusted, constant) = adjust_scalar(
                                 constant.value.clone(),
-                                func.arguments[1].data_type()?,
+                                func.arguments[1].data_type().as_ref(),
                             );
                             if is_adjusted {
                                 self.add_expr_predicate(&func.arguments[1], Predicate {
@@ -185,13 +189,9 @@ impl<'a> InferFilterOptimizer<'a> {
     }
 
     pub fn add_equal_expr(&mut self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
-        let Ok(left_ty) = left.data_type() else {
-            return false;
-        };
-        let Ok(right_ty) = right.data_type() else {
-            return false;
-        };
-        if !common_super_type_with_conversion(left_ty, right_ty)
+        let left_ty = left.data_type();
+        let right_ty = right.data_type();
+        if !common_super_type_with_conversion(left_ty.as_ref(), right_ty.as_ref())
             .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
         {
             return false;
@@ -252,16 +252,16 @@ impl<'a> InferFilterOptimizer<'a> {
         mut right: Predicate,
     ) -> Result<(MergeResult, Predicate)> {
         // Handle data type compatibility
-        let left_data_type = ScalarExpr::ConstantExpr(left.constant.clone()).data_type()?;
-        let right_data_type = ScalarExpr::ConstantExpr(right.constant.clone()).data_type()?;
+        let left_data_type = left.constant.value.as_ref().infer_data_type();
+        let right_data_type = right.constant.value.as_ref().infer_data_type();
         if left_data_type != right_data_type {
             let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
             let common_data_type = common_super_type(left_data_type, right_data_type, cast_rules);
             if let Some(data_type) = common_data_type {
                 let (left_is_adjusted, left_constant) =
-                    adjust_scalar(left.constant.value.clone(), data_type.clone());
+                    adjust_scalar(left.constant.value.clone(), &data_type);
                 let (right_is_adjusted, right_constant) =
-                    adjust_scalar(right.constant.value.clone(), data_type.clone());
+                    adjust_scalar(right.constant.value.clone(), &data_type);
                 if left_is_adjusted && right_is_adjusted {
                     left.constant = left_constant;
                     right.constant = right_constant;
@@ -689,6 +689,7 @@ impl<'a> InferFilterOptimizer<'a> {
             let parent_index = Self::find(&mut parents, *index);
             let parent_predicates = &self.expr_predicates[parent_index];
             for predicate in parent_predicates.iter() {
+                let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [expr]);
                 result.push(ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
                     func_name: String::from(predicate.op.to_func_name()),
@@ -697,6 +698,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         expr.clone(),
                         ScalarExpr::ConstantExpr(predicate.constant.clone()),
                     ],
+                    return_type: Box::new(return_type),
                 }));
             }
         }
@@ -711,6 +713,11 @@ impl<'a> InferFilterOptimizer<'a> {
                     let equal_indexes_len = equal_indexes.len();
                     for i in 0..equal_indexes_len {
                         for j in i + 1..equal_indexes_len {
+                            let return_type =
+                                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                                    &self.exprs[equal_indexes[i]],
+                                    &self.exprs[equal_indexes[j]],
+                                ]);
                             result.push(ScalarExpr::FunctionCall(FunctionCall {
                                 span: None,
                                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
@@ -719,6 +726,7 @@ impl<'a> InferFilterOptimizer<'a> {
                                     self.exprs[equal_indexes[i]].clone(),
                                     self.exprs[equal_indexes[j]].clone(),
                                 ],
+                                return_type: Box::new(return_type),
                             }));
                         }
                     }
@@ -782,6 +790,13 @@ impl<'a> InferFilterOptimizer<'a> {
                     }
                 }
             }
+
+            fn visit_function_call(&mut self, function: &mut FunctionCall) -> Result<()> {
+                for argument in &mut function.arguments {
+                    self.visit(argument)?;
+                }
+                function.refresh_return_type()
+            }
         }
 
         let mut replace = ReplaceScalarExpr {
@@ -795,8 +810,7 @@ impl<'a> InferFilterOptimizer<'a> {
         for predicate in predicates {
             replace.reset();
             let mut new_predicate = predicate.clone();
-            replace.visit(&mut new_predicate).unwrap();
-            if !replace.can_replace {
+            if replace.visit(&mut new_predicate).is_err() || !replace.can_replace {
                 result_predicates.push(predicate);
                 continue;
             }
@@ -825,7 +839,7 @@ impl<'a> InferFilterOptimizer<'a> {
                 continue;
             }
 
-            if new_predicate != predicate && new_predicate.data_type().is_ok() {
+            if new_predicate != predicate {
                 result_predicates.push(new_predicate);
             }
 
@@ -863,7 +877,7 @@ impl<'a> JoinProperty<'a> {
     }
 }
 
-pub fn adjust_scalar(scalar: Scalar, data_type: DataType) -> (bool, ConstantExpr) {
+pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExpr) {
     match data_type {
         DataType::Number(NumberDataType::UInt8)
         | DataType::Nullable(box DataType::Number(NumberDataType::UInt8)) => {
