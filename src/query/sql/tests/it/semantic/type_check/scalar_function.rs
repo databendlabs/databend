@@ -15,6 +15,12 @@ async fn test_type_check_scalar_function_rules() -> Result<()> {
             setup_sqls: &[],
             sql: "to_decimal(number, number)",
         },
+        SqlTestCase {
+            name: "identity_cast_preserves_complete_argument",
+            description: "An eliminated identity cast must not remap an inner function argument onto the original call.",
+            setup_sqls: &[],
+            sql: "to_int64(100000000 + ((854435761::UInt64 * number + 123456789) % 900000000))",
+        },
     ];
 
     run_type_check_cases("scalar_function.txt", &cases).await
