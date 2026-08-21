@@ -10,8 +10,8 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
-use super::aggregate_function_v2_support::assert_v2_matches_legacy;
+use super::aggregate_case_support::eval_aggregate;
+use super::aggregate_function_v2_support::assert_v2_direct_matches_serialized;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -96,7 +96,7 @@ fn run_count_distinct_cases(file: &mut impl Write, simulator: impl AggregationSi
 fn test_count_distinct() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("count_distinct.txt").unwrap();
-    run_count_distinct_cases(file, eval_legacy_aggregate);
+    run_count_distinct_cases(file, eval_aggregate);
 }
 
 #[test]
@@ -114,5 +114,5 @@ fn test_v2_count_distinct_suffix_names_are_case_insensitive() -> Result<()> {
     );
     let entries = [values.into()];
 
-    assert_v2_matches_legacy("COUNT_DISTINCT", &entries, 5)
+    assert_v2_direct_matches_serialized("COUNT_DISTINCT", &entries, 5)
 }

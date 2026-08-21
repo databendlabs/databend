@@ -14,7 +14,7 @@ use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use goldenfile::Mint;
 
 use super::aggregate_case_fixtures as fixtures;
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_function_v2_support::eval_v2_aggr;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
@@ -144,9 +144,6 @@ fn run_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulat
     );
     write_aggregate_expr_case(file, "array_agg(a)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "array_agg_state(x_null)", columns, simulator, vec![]);
-    // Do not add `array_agg_if(..., event1)` here until the legacy batch path
-    // is fixed: legacy `array_agg` ignores the external validity passed by the
-    // `_if` combinator, while the row path filters before calling `array_agg`.
     write_aggregate_expr_case(file, "array_agg(a)", columns, simulator, vec![
         AggregateFunctionSortDesc {
             index: SymbolOrOffset::Offset(0),
@@ -220,7 +217,7 @@ fn run_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulat
 fn test_array_agg() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("array_agg.txt").unwrap();
-    run_array_agg_cases(file, eval_legacy_aggregate);
+    run_array_agg_cases(file, eval_aggregate);
 }
 
 #[test]

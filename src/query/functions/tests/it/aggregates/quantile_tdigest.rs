@@ -41,9 +41,9 @@ use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::aggregates::sort_descs_to_bound_order_by;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::eval_legacy_aggregate_for_test;
+use super::aggregate_simulation_support::eval_aggregate_for_test;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
 
@@ -133,7 +133,7 @@ fn simulate_accumulate_matches_rows(
 
     assert_eq!(batch_column, rows_column);
 
-    let batch_roundtrip = eval_legacy_aggregate_for_test(
+    let batch_roundtrip = eval_aggregate_for_test(
         name,
         params.clone(),
         entries,
@@ -143,7 +143,7 @@ fn simulate_accumulate_matches_rows(
         sort_descs.clone(),
     )?;
     let rows_roundtrip =
-        eval_legacy_aggregate_for_test(name, params, entries, rows, true, true, sort_descs)?;
+        eval_aggregate_for_test(name, params, entries, rows, true, true, sort_descs)?;
     assert_eq!(batch_roundtrip.0, batch_column);
     assert_eq!(rows_roundtrip.0, rows_column);
 
@@ -155,28 +155,25 @@ fn test_quantile_tdigest_edge_cases() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("quantile_tdigest.txt").unwrap();
 
-    test_tdigest_empty_input(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_singleton_input(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_min_max_endpoints(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_weighted_min_max_endpoints(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_weighted_interior_interpolation(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_median_names(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_singleton_boundaries(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_weighted_merged_centroid(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_weighted_zero_weight(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_weighted_tail_boundary(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_merge_empty_right(file, simulate_merge_empty_right_and_v2);
-    test_tdigest_weighted_nan_input(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_weighted_zero_weight_nan(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_weighted_merge_nan_only_right(file, simulate_merge_last_row_into_left_and_v2);
-    test_tdigest_nan_input(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_merge_nan_only_right(file, simulate_merge_last_row_into_left_and_v2);
-    test_tdigest_merge_with_uncompressed_left(file, simulate_merge_into_uncompressed_left_and_v2);
-    test_tdigest_group_by_nan_input(file, simulate_accumulate_keys_matches_rows_and_legacy);
-    test_tdigest_weighted_group_by_nan_input(
-        file,
-        simulate_accumulate_keys_matches_rows_and_legacy,
-    );
+    test_tdigest_empty_input(file, simulate_accumulate_matches_rows);
+    test_tdigest_singleton_input(file, simulate_accumulate_matches_rows);
+    test_tdigest_min_max_endpoints(file, simulate_accumulate_matches_rows);
+    test_tdigest_weighted_min_max_endpoints(file, simulate_accumulate_matches_rows);
+    test_tdigest_weighted_interior_interpolation(file, simulate_accumulate_matches_rows);
+    test_tdigest_median_names(file, simulate_accumulate_matches_rows);
+    test_tdigest_singleton_boundaries(file, simulate_accumulate_matches_rows);
+    test_tdigest_weighted_merged_centroid(file, simulate_accumulate_matches_rows);
+    test_tdigest_weighted_zero_weight(file, simulate_accumulate_matches_rows);
+    test_tdigest_weighted_tail_boundary(file, simulate_accumulate_matches_rows);
+    test_tdigest_merge_empty_right(file, simulate_merge_empty_right);
+    test_tdigest_weighted_nan_input(file, simulate_accumulate_matches_rows);
+    test_tdigest_weighted_zero_weight_nan(file, simulate_accumulate_matches_rows);
+    test_tdigest_weighted_merge_nan_only_right(file, simulate_merge_last_row_into_left);
+    test_tdigest_nan_input(file, simulate_accumulate_matches_rows);
+    test_tdigest_merge_nan_only_right(file, simulate_merge_last_row_into_left);
+    test_tdigest_merge_with_uncompressed_left(file, simulate_merge_into_uncompressed_left);
+    test_tdigest_group_by_nan_input(file, simulate_accumulate_keys_matches_rows);
+    test_tdigest_weighted_group_by_nan_input(file, simulate_accumulate_keys_matches_rows);
 }
 
 fn test_tdigest_empty_input(file: &mut impl Write, simulator: impl AggregationSimulator) {
@@ -581,56 +578,7 @@ fn simulate_accumulate_keys_matches_rows(
     Ok((keys_column, data_type))
 }
 
-fn simulate_accumulate_matches_rows_and_legacy(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-) -> Result<(Column, DataType)> {
-    let args_type = entries
-        .iter()
-        .map(BlockEntry::data_type)
-        .collect::<Vec<_>>();
-    let legacy =
-        simulate_accumulate_matches_rows(name, params.clone(), entries, rows, sort_descs.clone())?;
-    let standard = eval_legacy_aggregate(name, params, entries, rows, sort_descs)?;
-
-    assert_eq!(
-        standard, legacy,
-        "legacy accumulate result mismatch for {name}({args_type:?})"
-    );
-    Ok(legacy)
-}
-
-fn simulate_accumulate_keys_matches_rows_and_legacy(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-) -> Result<(Column, DataType)> {
-    let args_type = entries
-        .iter()
-        .map(BlockEntry::data_type)
-        .collect::<Vec<_>>();
-    let legacy = simulate_accumulate_keys_matches_rows(
-        name,
-        params.clone(),
-        entries,
-        rows,
-        sort_descs.clone(),
-    )?;
-    let standard = simulate_two_groups_group_by(name, params, entries, rows, sort_descs)?;
-
-    assert_eq!(
-        standard, legacy,
-        "legacy group-by result mismatch for {name}({args_type:?})"
-    );
-    Ok(legacy)
-}
-
-fn simulate_merge_last_row_into_left_and_v2(
+fn simulate_merge_last_row_into_left(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
@@ -638,20 +586,20 @@ fn simulate_merge_last_row_into_left_and_v2(
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
     assert!(rows > 1);
-    simulate_merge_split_and_v2(name, params, entries, rows, sort_descs, rows - 1)
+    simulate_v2_merge_split(name, params, entries, rows, sort_descs, rows - 1)
 }
 
-fn simulate_merge_empty_right_and_v2(
+fn simulate_merge_empty_right(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    simulate_merge_split_and_v2(name, params, entries, rows, sort_descs, rows)
+    simulate_v2_merge_split(name, params, entries, rows, sort_descs, rows)
 }
 
-fn simulate_merge_into_uncompressed_left_and_v2(
+fn simulate_merge_into_uncompressed_left(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
@@ -659,36 +607,7 @@ fn simulate_merge_into_uncompressed_left_and_v2(
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
     assert_eq!(rows, 3);
-    simulate_merge_split_and_v2(name, params, entries, rows, sort_descs, 2)
-}
-
-fn simulate_merge_split_and_v2(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-    right_start: usize,
-) -> Result<(Column, DataType)> {
-    let args_type = entries
-        .iter()
-        .map(BlockEntry::data_type)
-        .collect::<Vec<_>>();
-    let legacy = simulate_merge_split(
-        name,
-        params.clone(),
-        entries,
-        rows,
-        sort_descs.clone(),
-        right_start,
-    )?;
-    let v2 = simulate_v2_merge_split(name, params, entries, rows, sort_descs, right_start)?;
-
-    assert_eq!(
-        v2, legacy,
-        "v2 merge-state result mismatch for {name}({args_type:?})"
-    );
-    Ok(legacy)
+    simulate_v2_merge_split(name, params, entries, rows, sort_descs, 2)
 }
 
 fn simulate_v2_merge_split(
@@ -742,70 +661,6 @@ fn simulate_v2_merge_split(
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
     function.merge_result(MergeResultInput {
         state: left.state(0),
-        builder: &mut builder,
-    })?;
-    Ok((builder.build(), data_type))
-}
-
-fn simulate_merge_split(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-    right_start: usize,
-) -> Result<(Column, DataType)> {
-    let arguments = entries
-        .iter()
-        .map(BlockEntry::data_type)
-        .collect::<Vec<_>>();
-    let order_by = sort_descs_to_bound_order_by(&sort_descs)?;
-    let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
-        name,
-        params: &params,
-        args_type: &arguments,
-        distinct: false,
-        order_by: &order_by,
-    })?;
-    let data_type = func.signature().return_type.clone();
-    let states_layout = get_states_layout(std::slice::from_ref(&func))?;
-    let loc = states_layout.states_loc[0].clone();
-
-    let arena = Bump::new();
-    let left_addr: StateAddr = arena.alloc_layout(states_layout.layout).into();
-    let right_addr: StateAddr = arena.alloc_layout(states_layout.layout).into();
-    let left = AggrState::new(left_addr, &loc);
-    let right = AggrState::new(right_addr, &loc);
-    func.init_state(left);
-    func.init_state(right);
-    let _drop_guard = StateDropGuard {
-        func: func.clone(),
-        loc: loc.clone(),
-        addrs: vec![left_addr, right_addr],
-    };
-
-    for row in 0..right_start {
-        func.accumulate_row(AccumulateRowInput {
-            state: left,
-            columns: entries.into(),
-            row,
-        })?;
-    }
-    for row in right_start..rows {
-        func.accumulate_row(AccumulateRowInput {
-            state: right,
-            columns: entries.into(),
-            row,
-        })?;
-    }
-    func.merge_states(MergeStatesInput {
-        state: left,
-        rhs: right,
-    })?;
-
-    let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
-    func.merge_result(MergeResultInput {
-        state: left,
         builder: &mut builder,
     })?;
     Ok((builder.build(), data_type))
@@ -871,7 +726,7 @@ fn run_quantile_tdigest_general(file: &mut impl Write, simulator: impl Aggregati
 fn test_quantile_tdigest_general_cases() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("quantile_tdigest_general.txt").unwrap();
-    run_quantile_tdigest_general(file, eval_legacy_aggregate);
+    run_quantile_tdigest_general(file, eval_aggregate);
 }
 
 #[test]
@@ -971,7 +826,7 @@ fn test_quantile_tdigest_weighted_general_cases() {
     let file = &mut mint
         .new_goldenfile("quantile_tdigest_weighted_general.txt")
         .unwrap();
-    run_quantile_tdigest_weighted_general(file, eval_legacy_aggregate);
+    run_quantile_tdigest_weighted_general(file, eval_aggregate);
 }
 
 #[test]

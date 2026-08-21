@@ -7,7 +7,7 @@ use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::UInt64Type;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_function_v2_support::assert_single_float_close;
 use super::aggregate_function_v2_support::eval_v2_aggr;
 use super::aggregate_simulation_support::AggregationSimulator;
@@ -52,7 +52,7 @@ fn run_kurtosis_cases(file: &mut impl Write, simulator: impl AggregationSimulato
 fn test_kurtosis() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("kurtosis.txt").unwrap();
-    run_kurtosis_cases(file, eval_legacy_aggregate);
+    run_kurtosis_cases(file, eval_aggregate);
 }
 
 #[test]

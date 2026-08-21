@@ -42,7 +42,6 @@ use databend_common_functions::aggregates::sort_descs_to_bound_order_by;
 use itertools::Itertools;
 
 use super::super::scalars::parser;
-use super::aggregate_function_v2_support::assert_two_groups_group_by_v2_matches_legacy_result;
 
 pub(super) trait AggregationSimulator = Fn(
         &str,
@@ -286,14 +285,10 @@ pub(super) fn simulate_two_groups_group_by(
         builder: &mut builder,
     })?;
 
-    let res = (builder.build(), data_type);
-    assert_two_groups_group_by_v2_matches_legacy_result(
-        name, params, entries, rows, sort_descs, &res,
-    )?;
-    Ok(res)
+    Ok((builder.build(), data_type))
 }
 
-pub(super) fn eval_legacy_aggregate_for_test(
+pub(super) fn eval_aggregate_for_test(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],

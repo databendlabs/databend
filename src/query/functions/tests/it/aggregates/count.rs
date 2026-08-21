@@ -6,8 +6,8 @@ use databend_common_expression::FromData;
 use databend_common_expression::types::BooleanType;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate_without_each_row;
-use super::aggregate_function_v2_support::assert_v2_matches_legacy;
+use super::aggregate_case_support::eval_aggregate;
+use super::aggregate_function_v2_support::assert_v2_direct_matches_serialized;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -74,7 +74,7 @@ fn run_count_cases(file: &mut impl Write, simulator: impl AggregationSimulator) 
 fn test_count() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("count.txt").unwrap();
-    run_count_cases(file, eval_legacy_aggregate_without_each_row);
+    run_count_cases(file, eval_aggregate);
 }
 
 #[test]
@@ -89,5 +89,5 @@ fn test_v2_count_if_suffix_names_are_case_insensitive() -> Result<()> {
     let conditions: BlockEntry =
         BooleanType::from_data(vec![true, false, true, true, false]).into();
 
-    assert_v2_matches_legacy("COUNT_IF", std::slice::from_ref(&conditions), 5)
+    assert_v2_direct_matches_serialized("COUNT_IF", std::slice::from_ref(&conditions), 5)
 }

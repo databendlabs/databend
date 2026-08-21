@@ -27,10 +27,10 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
-use super::aggregate_function_v2_support::assert_v2_matches_legacy;
-use super::aggregate_function_v2_support::assert_v2_read_only_matches_legacy;
-use super::aggregate_function_v2_support::assert_v2_serialized_read_only_matches_legacy;
+use super::aggregate_case_support::eval_aggregate;
+use super::aggregate_function_v2_support::assert_v2_direct_matches_serialized;
+use super::aggregate_function_v2_support::assert_v2_read_only_matches_final_result;
+use super::aggregate_function_v2_support::assert_v2_serialized_read_only_matches_final_result;
 use super::aggregate_function_v2_support::eval_v2_aggr;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
@@ -160,10 +160,6 @@ fn run_sum_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
         simulator,
         vec![],
     );
-    // Do not add `sum_if(b, false)` or `sum_if(b, NULL)` to this legacy-backed
-    // golden until the old row path is fixed. Legacy batch returns NULL for an
-    // always-false predicate, but legacy per-row marks the nullable result flag
-    // before nested `_if` rejects the row and returns nullable 0.
     write_aggregate_expr_case(file, "sum0(NULL)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "sum0(b)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "sum0_state(x_null)", columns, simulator, vec![]);
@@ -185,7 +181,7 @@ fn run_sum_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
 fn test_sum() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("sum.txt").unwrap();
-    run_sum_cases(file, eval_legacy_aggregate);
+    run_sum_cases(file, eval_aggregate);
 }
 
 #[test]
@@ -210,12 +206,12 @@ fn test_v2_sum_zero_uint64_matches_expected_sum() -> Result<()> {
 }
 
 #[test]
-fn test_v2_sum_if_null_condition_matches_legacy_sum_if() -> Result<()> {
+fn test_v2_sum_if_null_condition_roundtrips() -> Result<()> {
     let entries = [
         UInt64Type::from_data(vec![10, 20, 30]).into(),
         BlockEntry::new_const_column(DataType::Null, Scalar::Null, 3),
     ];
-    assert_v2_matches_legacy("sum_if", &entries, 3)
+    assert_v2_direct_matches_serialized("sum_if", &entries, 3)
 }
 
 #[test]
@@ -245,7 +241,7 @@ fn test_v2_sum_if_suffix_names_are_case_insensitive() -> Result<()> {
     let conditions = BooleanType::from_data(vec![true, false, true, true, false]);
     let entries = [values.into(), conditions.into()];
 
-    assert_v2_matches_legacy("SUM_IF", &entries, 5)
+    assert_v2_direct_matches_serialized("SUM_IF", &entries, 5)
 }
 
 #[test]
@@ -256,11 +252,11 @@ fn test_v2_sum_suffix_names_are_case_insensitive() -> Result<()> {
     );
     let entries = [values.into()];
 
-    assert_v2_matches_legacy("Sum_State", &entries, 5)
+    assert_v2_direct_matches_serialized("Sum_State", &entries, 5)
 }
 
 #[test]
-fn test_v2_sum_decorator_read_only_finalization_matches_legacy() -> Result<()> {
+fn test_v2_sum_decorator_read_only_finalization_preserves_result() -> Result<()> {
     let values = NullableColumn::new_column(
         UInt64Type::from_data(vec![10, 20, 10, 40, 20]),
         Bitmap::from([true, false, true, true, true]),
@@ -271,15 +267,24 @@ fn test_v2_sum_decorator_read_only_finalization_matches_legacy() -> Result<()> {
         BooleanType::from_data(vec![true, false, true, true, false]).into();
     let if_entries = [if_values, conditions];
 
-    assert_v2_read_only_matches_legacy("sum_if", vec![], &if_entries, 5)?;
-    assert_v2_read_only_matches_legacy("sum_distinct", vec![], std::slice::from_ref(&values), 5)?;
-    assert_v2_read_only_matches_legacy("sum_state", vec![], std::slice::from_ref(&values), 5)?;
-    assert_v2_serialized_read_only_matches_legacy("sum_if", vec![], &if_entries, 5)?;
-    assert_v2_serialized_read_only_matches_legacy(
+    assert_v2_read_only_matches_final_result("sum_if", vec![], &if_entries, 5)?;
+    assert_v2_read_only_matches_final_result(
         "sum_distinct",
         vec![],
         std::slice::from_ref(&values),
         5,
+    )?;
+    assert_v2_read_only_matches_final_result(
+        "sum_state",
+        vec![],
+        std::slice::from_ref(&values),
+        5,
+    )?;
+    assert_v2_serialized_read_only_matches_final_result("sum_if", vec![], &if_entries)?;
+    assert_v2_serialized_read_only_matches_final_result(
+        "sum_distinct",
+        vec![],
+        std::slice::from_ref(&values),
     )
 }
 

@@ -1,4 +1,3 @@
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -6,15 +5,10 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
-use databend_common_expression::Symbol;
-use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-
-use super::aggregate_simulation_support::eval_legacy_aggregate_for_test;
 
 pub(super) fn state_serde_data_type(item: &StateSerdeItem) -> DataType {
     match item {
@@ -122,189 +116,21 @@ fn eval_v2_aggr_with_params_and_sort(
     Ok((builder.build(), data_type))
 }
 
-pub(super) fn eval_v2_aggr_for_test(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-    with_serialize: bool,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-) -> Result<(Column, DataType)> {
-    let order_by = order_by_from_sort_descs(&sort_descs)?;
-    eval_v2_aggr_with_params_and_sort(name, &params, entries, rows, with_serialize, &order_by)
-}
-
-pub(super) fn assert_v2_aggr_matches_legacy_result(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-    legacy: &(Column, DataType),
-) -> Result<()> {
-    let args_type = entries
-        .iter()
-        .map(BlockEntry::data_type)
-        .collect::<Vec<_>>();
-    let direct = eval_v2_aggr_for_test(
-        name,
-        params.clone(),
-        entries,
-        rows,
-        false,
-        sort_descs.clone(),
-    )?;
-    let serialized = eval_v2_aggr_for_test(name, params, entries, rows, true, sort_descs)?;
-
-    assert_eq!(
-        direct, *legacy,
-        "direct v2 result mismatch for {name}({args_type:?})"
-    );
-    assert_eq!(
-        serialized, *legacy,
-        "serialized v2 result mismatch for {name}({args_type:?})"
-    );
-    Ok(())
-}
-
-pub(super) fn assert_two_groups_group_by_v2_matches_legacy_result(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-    legacy: &(Column, DataType),
-) -> Result<()> {
-    let args_type = entries
-        .iter()
-        .map(BlockEntry::data_type)
-        .collect::<Vec<_>>();
-    let v2 = simulate_two_groups_group_by_v2(name, params, entries, rows, sort_descs)?;
-
-    assert_eq!(
-        v2, *legacy,
-        "group-by v2 result mismatch for {name}({args_type:?})"
-    );
-    Ok(())
-}
-
-pub(super) fn simulate_two_groups_group_by_v2(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-) -> Result<(Column, DataType)> {
-    let args_type = entries
-        .iter()
-        .map(BlockEntry::data_type)
-        .collect::<Vec<_>>();
-    let order_by = order_by_from_sort_descs(&sort_descs)?;
-    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
-        name,
-        params: &params,
-        args_type: &args_type,
-        distinct: false,
-        order_by: &order_by,
-    })?;
-    let data_type = function.signature().return_type.clone();
-
-    let group1 = AggregateStateOwner::new(vec![function.clone()])?;
-    let group2 = AggregateStateOwner::new(vec![function.clone()])?;
-
-    if entries.is_empty() {
-        let group1_rows = rows.div_ceil(2);
-        let group2_rows = rows / 2;
-        function.accumulate_row_count(AccumulateRowCountInput {
-            state: group1.state(0),
-            rows: group1_rows,
-        })?;
-        function.accumulate_row_count(AccumulateRowCountInput {
-            state: group2.state(0),
-            rows: group2_rows,
-        })?;
-    } else {
-        for row in 0..rows {
-            let state = if row % 2 == 0 {
-                group1.state(0)
-            } else {
-                group2.state(0)
-            };
-            function.accumulate_row(AccumulateRowInput {
-                state,
-                columns: entries.into(),
-                row,
-            })?;
-        }
-    }
-
-    let mut builder = ColumnBuilder::with_capacity(&data_type, 2);
-    function.merge_result(MergeResultInput {
-        state: group1.state(0),
-        builder: &mut builder,
-    })?;
-    function.merge_result(MergeResultInput {
-        state: group2.state(0),
-        builder: &mut builder,
-    })?;
-
-    Ok((builder.build(), data_type))
-}
-
-fn order_by_from_sort_descs(
-    sort_descs: &[AggregateFunctionSortDesc],
-) -> Result<Vec<AggregateBoundOrderByItem>> {
-    sort_descs
-        .iter()
-        .map(|desc| {
-            let index = match desc.index {
-                SymbolOrOffset::Symbol(symbol) => symbol.as_usize(),
-                SymbolOrOffset::Offset(offset) => offset,
-            };
-            if !desc.is_reuse_index {
-                return Err(ErrorCode::Unimplemented(
-                    "v2 aggregate test evaluator only supports reused sort descriptors",
-                ));
-            }
-            Ok(AggregateBoundOrderByItem {
-                symbol: Symbol::new(index),
-                source: AggregateBoundOrderBySource::Argument { index },
-                data_type: desc.data_type.clone(),
-                asc: desc.asc,
-                nulls_first: desc.nulls_first,
-            })
-        })
-        .collect()
-}
-
-pub(super) fn assert_v2_matches_legacy(
+pub(super) fn assert_v2_direct_matches_serialized(
     name: &str,
     entries: &[BlockEntry],
     rows: usize,
 ) -> Result<()> {
-    assert_v2_matches_legacy_with_params(name, vec![], entries, rows)
-}
-
-fn assert_v2_matches_legacy_with_params(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-) -> Result<()> {
-    let legacy =
-        eval_legacy_aggregate_for_test(name, params.clone(), entries, rows, false, true, vec![])?;
-    let direct_v2 = eval_v2_aggr_with_params(name, &params, entries, rows, false)?;
-    let serialized_v2 = eval_v2_aggr_with_params(name, &params, entries, rows, true)?;
-
-    assert_eq!(direct_v2, legacy, "direct v2 result mismatch for {name}");
+    let direct = eval_v2_aggr(name, entries, rows, false)?;
+    let serialized = eval_v2_aggr(name, entries, rows, true)?;
     assert_eq!(
-        serialized_v2, legacy,
+        direct, serialized,
         "serialized v2 result mismatch for {name}"
     );
     Ok(())
 }
 
-pub(super) fn assert_v2_read_only_matches_legacy(
+pub(super) fn assert_v2_read_only_matches_final_result(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
@@ -352,24 +178,17 @@ pub(super) fn assert_v2_read_only_matches_legacy(
 
     let read_only = (read_only_builder.build(), data_type.clone());
     let final_result = (final_builder.build(), data_type);
-    let legacy = eval_legacy_aggregate_for_test(name, params, entries, rows, false, true, vec![])?;
-
     assert_eq!(
-        read_only, legacy,
-        "read-only v2 result mismatch for {name}({args_type:?})"
-    );
-    assert_eq!(
-        final_result, legacy,
+        read_only, final_result,
         "final v2 result mismatch after read-only finalize for {name}({args_type:?})"
     );
     Ok(())
 }
 
-pub(super) fn assert_v2_serialized_read_only_matches_legacy(
+pub(super) fn assert_v2_serialized_read_only_matches_final_result(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
-    rows: usize,
 ) -> Result<()> {
     let args_type = entries
         .iter()
@@ -423,18 +242,22 @@ pub(super) fn assert_v2_serialized_read_only_matches_legacy(
         filter: None,
     })?;
 
-    let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
+    let mut read_only_builder = ColumnBuilder::with_capacity(&data_type, 1);
     function.merge_result_read_only(MergeResultInput {
         state: serialized_owner.state(0),
-        builder: &mut builder,
+        builder: &mut read_only_builder,
     })?;
 
-    let read_only = (builder.build(), data_type);
-    let legacy = eval_legacy_aggregate_for_test(name, params, entries, rows, false, true, vec![])?;
+    let mut final_builder = ColumnBuilder::with_capacity(&data_type, 1);
+    function.merge_result(MergeResultInput {
+        state: serialized_owner.state(0),
+        builder: &mut final_builder,
+    })?;
 
     assert_eq!(
-        read_only, legacy,
-        "serialized read-only v2 result mismatch for {name}({args_type:?})"
+        read_only_builder.build(),
+        final_builder.build(),
+        "final serialized v2 result mismatch after read-only finalize for {name}({args_type:?})"
     );
     Ok(())
 }

@@ -3,7 +3,7 @@ use std::io::Write;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -260,7 +260,7 @@ fn run_window_funnel_cases(file: &mut impl Write, simulator: impl AggregationSim
 fn test_window_funnel() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("window_funnel.txt").unwrap();
-    run_window_funnel_cases(file, eval_legacy_aggregate);
+    run_window_funnel_cases(file, eval_aggregate);
 }
 
 #[test]

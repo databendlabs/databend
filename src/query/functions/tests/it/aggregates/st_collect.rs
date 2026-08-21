@@ -3,7 +3,7 @@ use std::io::Write;
 use goldenfile::Mint;
 
 use super::aggregate_case_fixtures as fixtures;
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
 
@@ -134,12 +134,12 @@ fn run_st_collect_cases(file: &mut impl Write, simulator: impl AggregationSimula
 fn test_st_collect() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("st_collect.txt").unwrap();
-    run_st_collect_cases(file, eval_legacy_aggregate);
+    run_st_collect_cases(file, eval_aggregate);
 }
 
 #[test]
 fn test_st_collect_group_by_golden_preserves_single_group_order() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("st_collect_group_by.txt").unwrap();
-    run_st_collect_cases(file, eval_legacy_aggregate);
+    run_st_collect_cases(file, eval_aggregate);
 }

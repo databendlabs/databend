@@ -5,7 +5,7 @@ use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -81,7 +81,7 @@ fn run_quantile_disc_cases(file: &mut impl Write, simulator: impl AggregationSim
 fn test_quantile_disc() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("quantile_disc.txt").unwrap();
-    run_quantile_disc_cases(file, eval_legacy_aggregate);
+    run_quantile_disc_cases(file, eval_aggregate);
 }
 
 #[test]

@@ -12,7 +12,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::number::F64;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_function_v2_support::eval_v2_aggr;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
@@ -90,7 +90,7 @@ fn run_avg_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
 fn test_avg() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("avg.txt").unwrap();
-    run_avg_cases(file, eval_legacy_aggregate);
+    run_avg_cases(file, eval_aggregate);
 }
 
 #[test]

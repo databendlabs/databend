@@ -12,7 +12,7 @@ use databend_common_expression::types::TimestampType;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -109,7 +109,7 @@ fn run_string_agg_cases(file: &mut impl Write, simulator: impl AggregationSimula
 fn test_string_agg() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("string_agg.txt").unwrap();
-    run_string_agg_cases(file, eval_legacy_aggregate);
+    run_string_agg_cases(file, eval_aggregate);
 }
 
 #[test]

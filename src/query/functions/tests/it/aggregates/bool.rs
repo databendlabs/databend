@@ -3,7 +3,7 @@ use std::io::Write;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -50,7 +50,7 @@ fn run_bool_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
 fn test_bool() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("bool.txt").unwrap();
-    run_bool_cases(file, eval_legacy_aggregate);
+    run_bool_cases(file, eval_aggregate);
 }
 
 #[test]
