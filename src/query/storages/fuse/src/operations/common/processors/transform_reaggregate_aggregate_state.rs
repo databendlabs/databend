@@ -65,7 +65,8 @@ impl TransformReaggregateAggregateStateBlock {
         let mut group_types = Vec::new();
 
         for (idx, field) in table_schema.fields().iter().enumerate() {
-            match field.data_type().remove_nullable() {
+            let data_type = field.data_type();
+            match data_type.remove_nullable() {
                 TableDataType::AggregateState {
                     function_name,
                     params,
@@ -81,9 +82,9 @@ impl TransformReaggregateAggregateStateBlock {
                     state_indices.push(idx);
                     functions.push(function);
                 }
-                data_type => {
+                _ => {
                     group_indices.push(idx);
-                    group_types.push(DataType::from(&data_type));
+                    group_types.push(DataType::from(data_type));
                 }
             }
         }
@@ -279,6 +280,29 @@ mod tests {
         let output = transform.transform(input)?;
         assert_eq!(output.num_rows(), 2);
         assert_eq!(output.num_columns(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn nullable_group_schema_preserves_group_type() -> Result<()> {
+        let schema = TableSchema::new(vec![TableField::new(
+            "category",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+        )]);
+        let mut transform = TransformReaggregateAggregateStateBlock::try_create(&schema)?
+            .expect("nullable group schema should build a reaggregate transform");
+        let input = DataBlock::new_from_columns(vec![StringType::from_opt_data(vec![
+            Some("a"),
+            Some("a"),
+            None,
+            None,
+        ])]);
+        let output = transform.transform(input)?;
+        assert_eq!(output.num_rows(), 2);
+        assert_eq!(
+            output.get_by_offset(0).data_type(),
+            DataType::Nullable(Box::new(DataType::String))
+        );
         Ok(())
     }
 }
