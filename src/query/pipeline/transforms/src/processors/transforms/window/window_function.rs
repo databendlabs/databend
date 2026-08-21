@@ -24,7 +24,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
 use databend_common_expression::SymbolOrOffset;
-use databend_common_expression::aggregate::aggregate_function as v2;
 use databend_common_expression::aggregate::aggregate_function::AccumulateRowInput;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
 use databend_common_expression::aggregate::aggregate_function::MergeResultInput;

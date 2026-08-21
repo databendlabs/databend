@@ -70,26 +70,6 @@ impl ArrayMovingBuilder {
             AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::Null)]),
         ])
     }
-
-    const GROUP_ARRAY_MOVING_AVG_FEATURES: FunctionFeatures = FunctionFeatures {
-        is_decomposable: true,
-        sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns moving average values as an array",
-        definition: "group_array_moving_avg([window])(expr)",
-        example: "select group_array_moving_avg(2)(number) from numbers(10)",
-    };
-
-    const GROUP_ARRAY_MOVING_SUM_FEATURES: FunctionFeatures = FunctionFeatures {
-        is_decomposable: true,
-        sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns moving sum values as an array",
-        definition: "group_array_moving_sum([window])(expr)",
-        example: "select group_array_moving_sum(2)(number) from numbers(10)",
-    };
 }
 
 #[derive(Clone, Copy)]
@@ -700,11 +680,19 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
 impl ArrayMovingBuilder {
     fn avg_route() -> DirectNameRoute {
         let arguments = Self::array_moving_arguments();
-        let features = Self::GROUP_ARRAY_MOVING_AVG_FEATURES;
+        let features = FunctionFeatures {
+            is_decomposable: true,
+            sort_policy: SortPolicy::Unsupported,
+            distinct_policy: DistinctPolicy::Unsupported,
+            category: "Aggregate",
+            description: "returns moving average values as an array",
+            definition: "group_array_moving_avg([window])(expr)",
+            example: "select group_array_moving_avg(2)(number) from numbers(10)",
+        };
         DirectNameRoute::new(
             &["group_array_moving_avg"],
             arguments.clone(),
-            features.clone(),
+            features,
             NullPolicy::Keep,
         )
         .then(MergeRoute::new(false, ArrayMovingBuilder::create_avg))
@@ -716,11 +704,19 @@ impl ArrayMovingBuilder {
 
     fn sum_route() -> DirectNameRoute {
         let arguments = Self::array_moving_arguments();
-        let features = Self::GROUP_ARRAY_MOVING_SUM_FEATURES;
+        let features = FunctionFeatures {
+            is_decomposable: true,
+            sort_policy: SortPolicy::Unsupported,
+            distinct_policy: DistinctPolicy::Unsupported,
+            category: "Aggregate",
+            description: "returns moving sum values as an array",
+            definition: "group_array_moving_sum([window])(expr)",
+            example: "select group_array_moving_sum(2)(number) from numbers(10)",
+        };
         DirectNameRoute::new(
             &["group_array_moving_sum"],
             arguments.clone(),
-            features.clone(),
+            features,
             NullPolicy::Keep,
         )
         .then(MergeRoute::new(false, ArrayMovingBuilder::create_sum))

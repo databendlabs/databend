@@ -1655,8 +1655,8 @@ mod tests {
     ) -> Result<TransformWindow> {
         let agg = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
             name: "sum",
-            params: &vec![],
-            args_type: &vec![arg_type],
+            params: &[],
+            args_type: &[arg_type],
             distinct: false,
             order_by: &[],
         })?;
@@ -1683,8 +1683,8 @@ mod tests {
     ) -> Result<TransformWindow> {
         let agg = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
             name: "sum",
-            params: &vec![],
-            args_type: &vec![arg_type],
+            params: &[],
+            args_type: &[arg_type],
             distinct: false,
             order_by: &[],
         })?;
@@ -2540,8 +2540,8 @@ mod tests {
     ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
         let agg = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
             name: "sum",
-            params: &vec![],
-            args_type: &vec![DataType::Number(NumberDataType::Int32)],
+            params: &[],
+            args_type: &[DataType::Number(NumberDataType::Int32)],
             distinct: false,
             order_by: &[],
         })?;

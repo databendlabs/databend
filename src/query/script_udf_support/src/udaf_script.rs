@@ -28,9 +28,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -163,8 +161,7 @@ impl fmt::Display for AggregateUdfScript {
 impl AggregateUdfScript {
     fn merge_one(&self, state: AggrState<'_>, data: &mut &[u8]) -> Result<()> {
         let current = state.get::<UdfAggState>();
-        let rhs = UdfAggState::deserialize(data)
-            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        let rhs = UdfAggState::deserialize(data).map_err(|e| ErrorCode::Internal(e.to_string()))?;
         let states = arrow_select::concat::concat(&[&current.0, &rhs.0])?;
         let merged_state = self
             .runtime
@@ -430,15 +427,6 @@ enum UDAFRuntime {
 }
 
 impl UDAFRuntime {
-    fn name(&self) -> &str {
-        match self {
-            UDAFRuntime::JavaScript(pool) => &pool.builder.name,
-            #[cfg(feature = "python-udf")]
-            UDAFRuntime::Python(info) => &info.builder.name,
-            _ => unimplemented!(),
-        }
-    }
-
     fn return_type(&self) -> DataType {
         match self {
             UDAFRuntime::JavaScript(pool) => pool.builder.output_type.clone(),

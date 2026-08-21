@@ -26,6 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;

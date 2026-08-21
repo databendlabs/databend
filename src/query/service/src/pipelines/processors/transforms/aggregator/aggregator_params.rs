@@ -20,8 +20,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::aggregate::aggregate_function as v2;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
+use databend_common_expression::aggregate::aggregate_function::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::StatesLayout;
 use databend_common_sql::IndexType;
@@ -58,7 +58,7 @@ impl AggregatorParams {
         max_block_bytes: usize,
     ) -> Result<Arc<AggregatorParams>> {
         let states_layout = if !agg_funcs.is_empty() {
-            Some(v2::get_states_layout(agg_funcs)?.into())
+            Some(get_states_layout(agg_funcs)?)
         } else {
             None
         };
