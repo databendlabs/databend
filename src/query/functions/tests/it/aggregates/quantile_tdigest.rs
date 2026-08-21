@@ -36,9 +36,9 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::OrderedFloat;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::UInt64Type;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
+use databend_common_functions::aggregates::sort_descs_to_bound_order_by;
 use goldenfile::Mint;
 
 use super::aggregate_case_support::eval_legacy_aggregate;

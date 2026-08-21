@@ -36,7 +36,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::ValueType;
 
-use super::super::extract_number_param;
+use super::super::aggregate_function_common::extract_number_param;
 use super::FunctionFactory;
 use super::adaptors::*;
 

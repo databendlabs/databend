@@ -33,7 +33,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by;
+use databend_common_functions::aggregates::sort_descs_to_bound_order_by;
 use databend_common_sql::executor::physical_plans::window::LagLeadDefault;
 use databend_common_sql::executor::physical_plans::window::WindowFunction;
 

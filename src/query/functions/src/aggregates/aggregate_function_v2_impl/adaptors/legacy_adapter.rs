@@ -18,11 +18,12 @@ use std::sync::Arc;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateLoc;
+use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::StateAddr;
+use databend_common_expression::aggregate_function_v1::AggregateFunction as LegacyAggregateFunction;
+use databend_common_expression::aggregate_function_v1::AggregateFunctionRef as LegacyAggregateFunctionRef;
 
 use super::*;
-use crate::aggregates::AggrStateRegistry;
-use crate::aggregates::aggregate_function_v1::AggregateFunction as LegacyAggregateFunction;
 
 pub struct AggregateFunctionV2LegacyAdapter {
     function: AggregateFunctionRef,
@@ -33,7 +34,7 @@ impl AggregateFunctionV2LegacyAdapter {
     pub fn create(
         function: AggregateFunctionRef,
         order_by: Vec<AggregateRuntimeOrderByItem>,
-    ) -> crate::aggregates::AggregateFunctionRef {
+    ) -> LegacyAggregateFunctionRef {
         Arc::new(Self { function, order_by })
     }
 }

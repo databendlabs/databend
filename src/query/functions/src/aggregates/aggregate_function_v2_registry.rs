@@ -14,14 +14,8 @@
 
 use std::sync::LazyLock;
 
-use databend_common_exception::Result;
-use databend_common_expression::Symbol;
-use databend_common_expression::SymbolOrOffset;
 pub use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRegistry;
-use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
-use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 
-use super::AggregateFunctionSortDesc;
 use super::aggregate_function_v2_impl;
 
 pub static AGGR_REGISTRY: LazyLock<AggregateFunctionRegistry> = LazyLock::new(|| {
@@ -29,36 +23,3 @@ pub static AGGR_REGISTRY: LazyLock<AggregateFunctionRegistry> = LazyLock::new(||
     aggregate_function_v2_impl::register_functions(&mut registry);
     registry
 });
-
-pub fn sort_descs_to_bound_order_by(
-    sort_descs: &[AggregateFunctionSortDesc],
-) -> Result<Vec<AggregateBoundOrderByItem>> {
-    sort_descs
-        .iter()
-        .map(|desc| {
-            let (symbol, source) = match desc.index {
-                SymbolOrOffset::Symbol(symbol) if desc.is_reuse_index => {
-                    (symbol, AggregateBoundOrderBySource::Argument {
-                        index: symbol.as_usize(),
-                    })
-                }
-                SymbolOrOffset::Offset(offset) if desc.is_reuse_index => {
-                    (Symbol::new(offset), AggregateBoundOrderBySource::Argument {
-                        index: offset,
-                    })
-                }
-                SymbolOrOffset::Symbol(symbol) => (symbol, AggregateBoundOrderBySource::Derived),
-                SymbolOrOffset::Offset(offset) => {
-                    (Symbol::new(offset), AggregateBoundOrderBySource::Derived)
-                }
-            };
-            Ok(AggregateBoundOrderByItem {
-                symbol,
-                source,
-                data_type: desc.data_type.clone(),
-                asc: desc.asc,
-                nulls_first: desc.nulls_first,
-            })
-        })
-        .collect()
-}

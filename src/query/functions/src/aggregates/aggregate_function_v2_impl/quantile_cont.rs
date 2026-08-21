@@ -42,7 +42,7 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::super::get_levels;
+use super::super::aggregate_function_common::get_levels;
 use super::FunctionFactory;
 use super::adaptors::*;
 

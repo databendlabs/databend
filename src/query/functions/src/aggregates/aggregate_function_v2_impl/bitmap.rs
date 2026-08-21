@@ -53,7 +53,7 @@ use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::BinaryWrite;
 use num_traits::AsPrimitive;
 
-use super::super::extract_number_param;
+use super::super::aggregate_function_common::extract_number_param;
 use super::FunctionFactory;
 use super::adaptors::*;
 use crate::with_simple_no_number_mapped_type;

@@ -40,7 +40,7 @@ use databend_common_expression::types::UInt8Type;
 use databend_common_expression::with_integer_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::super::extract_number_param;
+use super::super::aggregate_function_common::extract_number_param;
 use super::FunctionFactory;
 use super::adaptors::*;
 

@@ -215,6 +215,7 @@ mod tests {
     use databend_common_expression::ScalarRef;
     use databend_common_expression::aggregate::AggrStateType;
     use databend_common_expression::aggregate::StateAddr;
+    use databend_common_expression::get_states_layout;
     use databend_common_expression::types::ArgType;
     use databend_common_expression::types::BooleanType;
     use databend_common_expression::types::NumberScalar;
@@ -609,8 +610,10 @@ mod tests {
         let direct_result = direct_full_modifier_result(&function, &order_by, &entries)?;
 
         let legacy = AggregateFunctionV2LegacyAdapter::create(function.clone(), order_by);
-        let legacy_functions: Vec<crate::aggregates::AggregateFunctionRef> = vec![legacy.clone()];
-        let layout = crate::aggregates::get_states_layout(&legacy_functions)?;
+        let legacy_functions: Vec<
+            databend_common_expression::aggregate_function_v1::AggregateFunctionRef,
+        > = vec![legacy.clone()];
+        let layout = get_states_layout(&legacy_functions)?;
         let loc = &layout.states_loc[0];
 
         let result_arena = Bump::new();
