@@ -68,7 +68,6 @@ fn eval_v2_aggr_with_params_and_sort(
             state: owner.state(0),
             columns: entries.into(),
             validity: None,
-            order_by: &[],
         })?;
     }
 
@@ -160,7 +159,6 @@ pub(super) fn assert_v2_read_only_matches_final_result(
             state: owner.state(0),
             columns: entries.into(),
             validity: None,
-            order_by: &[],
         })?;
     }
 
@@ -208,7 +206,6 @@ pub(super) fn assert_v2_serialized_read_only_matches_final_result(
         state: owner.state(0),
         columns: entries.into(),
         validity: None,
-        order_by: &[],
     })?;
 
     let serialized_types = function

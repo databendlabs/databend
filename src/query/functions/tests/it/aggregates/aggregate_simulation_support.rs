@@ -32,13 +32,12 @@ use databend_common_expression::StatesLayout;
 use databend_common_expression::Value;
 use databend_common_expression::aggregate::aggregate_function as v2;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+pub use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_functions::aggregates::sort_descs_to_bound_order_by;
 use itertools::Itertools;
 
 use super::super::scalars::parser;
@@ -48,7 +47,7 @@ pub(super) trait AggregationSimulator = Fn(
         Vec<Scalar>,
         &[BlockEntry],
         usize,
-        Vec<AggregateFunctionSortDesc>,
+        Vec<AggregateBoundOrderByItem>,
     ) -> databend_common_exception::Result<(Column, DataType)>
     + Copy;
 
@@ -58,7 +57,7 @@ pub(super) fn write_aggregate_expr_case(
     text: &str,
     entries: &[(&str, BlockEntry)],
     simulator: impl AggregationSimulator,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) {
     let raw_expr = parser::parse_raw_expr(
         text,
@@ -234,16 +233,15 @@ pub(super) fn simulate_two_groups_group_by(
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) -> databend_common_exception::Result<(Column, DataType)> {
     let arguments: Vec<DataType> = entries.iter().map(|c| c.data_type()).collect();
-    let order_by = sort_descs_to_bound_order_by(&sort_descs)?;
     let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &arguments,
         distinct: false,
-        order_by: &order_by,
+        order_by: &sort_descs,
     })?;
     let data_type = func.signature().return_type.clone();
     let states_layout = v2::get_states_layout(std::slice::from_ref(&func))?;
@@ -271,7 +269,6 @@ pub(super) fn simulate_two_groups_group_by(
         func.accumulate_keys(v2::AccumulateKeysInput {
             states: v2::AggregateStateSet::new(&places, &loc),
             columns: entries.into(),
-            order_by: &[],
         })?;
     }
 
@@ -295,19 +292,18 @@ pub(super) fn eval_aggregate_for_test(
     rows: usize,
     each_row: bool,
     with_serialize: bool,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) -> Result<(Column, DataType)> {
     let arguments = entries
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let order_by = sort_descs_to_bound_order_by(&sort_descs)?;
     let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params: &params,
         args_type: &arguments,
         distinct: false,
-        order_by: &order_by,
+        order_by: &sort_descs,
     })?;
     let data_type = func.signature().return_type.clone();
 
@@ -329,7 +325,6 @@ pub(super) fn eval_aggregate_for_test(
             state,
             columns: entries.into(),
             validity: None,
-            order_by: &[],
         })?;
     }
 

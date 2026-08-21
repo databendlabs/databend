@@ -20,12 +20,9 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Constant;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_expression::Symbol;
-use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::aggregate_function::AccumulateInput;
 use databend_common_expression::aggregate_function::AccumulateRowCountInput;
 use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
-use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_expression::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::aggregate_function::AggregateStateOwner;
 use databend_common_expression::aggregate_function::MergeResultInput;
@@ -37,60 +34,17 @@ use databend_common_expression::types::Number;
 use super::registry::AGGR_REGISTRY;
 use crate::BUILTIN_FUNCTIONS;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
-pub struct AggregateFunctionSortDesc {
-    pub index: SymbolOrOffset,
-    pub is_reuse_index: bool,
-    pub data_type: DataType,
-    pub nulls_first: bool,
-    pub asc: bool,
-}
-
-pub fn sort_descs_to_bound_order_by(
-    sort_descs: &[AggregateFunctionSortDesc],
-) -> Result<Vec<AggregateBoundOrderByItem>> {
-    sort_descs
-        .iter()
-        .map(|desc| {
-            let (symbol, source) = match desc.index {
-                SymbolOrOffset::Symbol(symbol) if desc.is_reuse_index => {
-                    (symbol, AggregateBoundOrderBySource::Argument {
-                        index: symbol.as_usize(),
-                    })
-                }
-                SymbolOrOffset::Offset(offset) if desc.is_reuse_index => {
-                    (Symbol::new(offset), AggregateBoundOrderBySource::Argument {
-                        index: offset,
-                    })
-                }
-                SymbolOrOffset::Symbol(symbol) => (symbol, AggregateBoundOrderBySource::Derived),
-                SymbolOrOffset::Offset(offset) => {
-                    (Symbol::new(offset), AggregateBoundOrderBySource::Derived)
-                }
-            };
-            Ok(AggregateBoundOrderByItem {
-                symbol,
-                source,
-                data_type: desc.data_type.clone(),
-                asc: desc.asc,
-                nulls_first: desc.nulls_first,
-            })
-        })
-        .collect()
-}
-
 pub fn eval_aggr(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    order_by: Vec<AggregateBoundOrderByItem>,
 ) -> Result<(Column, DataType)> {
     let args_type = entries
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let order_by = sort_descs_to_bound_order_by(&sort_descs)?;
     let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
         name,
         params: &params,
@@ -111,7 +65,6 @@ pub fn eval_aggr(
             state: owner.state(0),
             columns: entries.into(),
             validity: None,
-            order_by: &[],
         })?;
     }
 

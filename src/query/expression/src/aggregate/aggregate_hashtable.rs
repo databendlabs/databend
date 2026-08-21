@@ -267,7 +267,6 @@ impl AggregateHashTable {
                     func.accumulate_keys(AccumulateKeysInput {
                         states: AggregateStateSet::new(state_places, loc),
                         columns: *params,
-                        order_by: &[],
                     })?;
                 }
             } else {

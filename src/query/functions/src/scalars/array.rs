@@ -1265,7 +1265,6 @@ impl<'a> ArrayAggEvaluator<'a> {
             state,
             columns: entries.into(),
             validity: None,
-            order_by: &[],
         })?;
         self.func
             .merge_result(MergeResultInput { state, builder })?;

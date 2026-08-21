@@ -38,8 +38,6 @@ use crate::Symbol;
 use crate::types::DataType;
 
 pub type AggregateFunctionRef = Arc<dyn FunctionInstance>;
-pub type AggregateFunctionBuildFn =
-    fn(AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateFunctionSignature {
@@ -51,16 +49,16 @@ pub struct AggregateFunctionSignature {
     pub return_type: DataType,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateBoundOrderByItem {
-    pub symbol: Symbol,
+    pub index: Symbol,
     pub source: AggregateBoundOrderBySource,
     pub data_type: DataType,
     pub asc: bool,
     pub nulls_first: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AggregateBoundOrderBySource {
     Argument { index: usize },
     Derived,
@@ -419,13 +417,11 @@ pub struct AccumulateInput<'a> {
     pub state: AggrState<'a>,
     pub columns: ProjectedBlock<'a>,
     pub validity: Option<&'a Bitmap>,
-    pub order_by: &'a [AggregateRuntimeOrderByItem],
 }
 
 pub struct AccumulateKeysInput<'a> {
     pub states: AggregateStateSet<'a>,
     pub columns: ProjectedBlock<'a>,
-    pub order_by: &'a [AggregateRuntimeOrderByItem],
 }
 
 pub struct AccumulateRowInput<'a> {

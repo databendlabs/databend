@@ -137,7 +137,6 @@ where I: AggrImpl
             return self.nested.accumulate(AccumulateInput {
                 state: self.nested_state(input.state),
                 columns: (&columns).into(),
-                order_by: input.order_by,
                 validity: validity.as_ref(),
             });
         }
@@ -171,7 +170,6 @@ where I: AggrImpl
             return self.nested.accumulate_keys(AccumulateKeysInput {
                 states: self.nested_states(input.states),
                 columns,
-                order_by: input.order_by,
             });
         }
         self.nested.accumulate_keys(input)

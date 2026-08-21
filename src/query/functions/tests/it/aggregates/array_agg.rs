@@ -3,14 +3,15 @@ use std::io::Write;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
-use databend_common_expression::SymbolOrOffset;
+use databend_common_expression::Symbol;
+use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
+use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayColumn;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use goldenfile::Mint;
 
 use super::aggregate_case_fixtures as fixtures;
@@ -145,9 +146,9 @@ fn run_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulat
     write_aggregate_expr_case(file, "array_agg(a)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "array_agg_state(x_null)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "array_agg(a)", columns, simulator, vec![
-        AggregateFunctionSortDesc {
-            index: SymbolOrOffset::Offset(0),
-            is_reuse_index: true,
+        AggregateBoundOrderByItem {
+            index: Symbol::new(0),
+            source: AggregateBoundOrderBySource::Argument { index: 0 },
             data_type: columns[0].1.data_type(),
             nulls_first: false,
             asc: true,
@@ -157,9 +158,9 @@ fn run_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulat
     write_aggregate_expr_case(file, "array_agg(x_null)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "array_agg(all_null)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "list(a)", columns, simulator, vec![
-        AggregateFunctionSortDesc {
-            index: SymbolOrOffset::Offset(0),
-            is_reuse_index: true,
+        AggregateBoundOrderByItem {
+            index: Symbol::new(0),
+            source: AggregateBoundOrderBySource::Argument { index: 0 },
             data_type: columns[0].1.data_type(),
             nulls_first: false,
             asc: true,

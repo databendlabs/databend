@@ -20,7 +20,6 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::aggregates::sort_descs_to_bound_order_by;
 
 use super::SExpr;
 use super::SExprVisitor;
@@ -276,18 +275,14 @@ impl ScalarTypeValidator<'_> {
             .iter()
             .map(|argument| argument.data_type().into_owned())
             .collect::<Vec<_>>();
-        let sort_descs = aggregate
-            .sort_descs
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<Vec<_>>>()?;
+        let order_by = aggregate.bound_order_by()?;
         let inferred = AGGR_REGISTRY
             .resolve(AggregateFunctionRequest {
                 name: &aggregate.func_name,
                 params: &aggregate.params.clone(),
                 args_type: &argument_types,
                 distinct: false,
-                order_by: &sort_descs_to_bound_order_by(&sort_descs)?,
+                order_by: &order_by,
             })?
             .signature()
             .return_type

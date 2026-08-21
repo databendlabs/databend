@@ -23,17 +23,15 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
-use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::aggregate::aggregate_function::AccumulateRowInput;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
+use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_expression::aggregate_function::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_functions::aggregates::sort_descs_to_bound_order_by;
 use databend_common_sql::executor::physical_plans::window::LagLeadDefault;
 use databend_common_sql::executor::physical_plans::window::WindowFunction;
 
@@ -201,46 +199,24 @@ impl WindowFunctionInfo {
     pub fn try_create(window: &WindowFunction, schema: &DataSchema) -> Result<Self> {
         Ok(match window {
             WindowFunction::Aggregate(agg) => {
-                let input_len = agg.arg_indices.len() + agg.sort_desc_indices.len();
-                let mut arg_indexes = Vec::with_capacity(input_len);
+                let input_len = agg.arg_indices.len() + agg.sig.order_by.len();
                 let mut args = Vec::with_capacity(input_len);
 
                 for p in agg.arg_indices.iter() {
                     args.push(schema.index_of(&p.to_string())?);
-                    arg_indexes.push(*p);
                 }
-                for (i, desc) in agg.sig.sort_descs.iter().enumerate() {
-                    let sort_index = desc.index.as_symbol().unwrap();
-                    // sort_desc will reuse existing columns, so only need to insert new columns.
-                    if agg.sig.sort_descs[i].is_reuse_index && arg_indexes.contains(&sort_index) {
-                        continue;
+                for item in &agg.sig.order_by {
+                    if matches!(item.source, AggregateBoundOrderBySource::Derived) {
+                        args.push(schema.index_of(&item.index.to_string())?);
                     }
-                    args.push(schema.index_of(&sort_index.to_string())?);
-                    arg_indexes.push(sort_index);
                 }
 
-                let remapping_sort_descs = agg
-                    .sig
-                    .sort_descs
-                    .iter()
-                    .map(|desc| {
-                        let sort_index = desc.index.as_symbol().unwrap();
-                        let offset = arg_indexes.iter().position(|i| *i == sort_index).unwrap();
-                        AggregateFunctionSortDesc {
-                            index: SymbolOrOffset::Offset(offset),
-                            is_reuse_index: desc.is_reuse_index,
-                            data_type: desc.data_type.clone(),
-                            nulls_first: desc.nulls_first,
-                            asc: desc.asc,
-                        }
-                    })
-                    .collect::<Vec<_>>();
                 let agg_func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
                     name: agg.sig.name.as_str(),
                     params: &agg.sig.params.clone(),
                     args_type: &agg.sig.args.clone(),
                     distinct: false,
-                    order_by: &sort_descs_to_bound_order_by(&remapping_sort_descs)?,
+                    order_by: &agg.sig.order_by,
                 })?;
                 Self::Aggregate(agg_func, args)
             }

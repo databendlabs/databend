@@ -9,7 +9,7 @@ evaluation (internal):
 
 
 ast: string_agg(s)
-sort_descs: [AggregateFunctionSortDesc { index: Offset(0), is_reuse_index: true, data_type: String, nulls_first: false, asc: false }]
+sort_descs: [AggregateBoundOrderByItem { index: 0, source: Argument { index: 0 }, data_type: String, asc: false, nulls_first: false }]
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------+
 | Column | Data                                                                            |
@@ -140,7 +140,7 @@ evaluation (internal):
 
 
 ast: group_concat(s)
-sort_descs: [AggregateFunctionSortDesc { index: Offset(0), is_reuse_index: true, data_type: String, nulls_first: false, asc: false }]
+sort_descs: [AggregateBoundOrderByItem { index: 0, source: Argument { index: 0 }, data_type: String, asc: false, nulls_first: false }]
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------+
 | Column | Data                                                                            |

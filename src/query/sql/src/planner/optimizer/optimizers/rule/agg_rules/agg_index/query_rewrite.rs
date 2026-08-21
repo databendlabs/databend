@@ -23,7 +23,6 @@ use databend_common_expression::aggregate::aggregate_function::AggregateFunction
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::aggregates::sort_descs_to_bound_order_by;
 use log::info;
 
 use super::super::view_rewrite::QueryInfo;
@@ -131,13 +130,7 @@ impl AggIndexView {
                         .iter()
                         .map(|arg| arg.data_type().into_owned())
                         .collect::<Vec<_>>();
-                    let order_by = sort_descs_to_bound_order_by(
-                        &func
-                            .sort_descs
-                            .iter()
-                            .map(|desc| desc.try_into())
-                            .collect::<Result<Vec<_>>>()?,
-                    )?;
+                    let order_by = func.bound_order_by()?;
                     let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
                         name: &func.func_name,
                         params: &func.params,
