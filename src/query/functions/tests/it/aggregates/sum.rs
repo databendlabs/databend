@@ -24,7 +24,7 @@ use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use goldenfile::Mint;
 
 use super::aggregate_case_support::eval_legacy_aggregate;

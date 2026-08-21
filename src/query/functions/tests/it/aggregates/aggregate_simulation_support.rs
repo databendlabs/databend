@@ -31,12 +31,14 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::StatesLayout;
 use databend_common_expression::Value;
 use databend_common_expression::aggregate::aggregate_function as v2;
+use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by;
 use itertools::Itertools;
 
 use super::super::scalars::parser;
@@ -236,16 +238,14 @@ pub(super) fn simulate_two_groups_group_by(
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> databend_common_exception::Result<(Column, DataType)> {
     let arguments: Vec<DataType> = entries.iter().map(|c| c.data_type()).collect();
-    let order_by = databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by(&sort_descs)?;
-    let func = AGGR_REGISTRY.resolve(
-        databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
-            name,
-            params: &params,
-            args_type: &arguments,
-            distinct: false,
-            order_by: &order_by,
-        },
-    )?;
+    let order_by = sort_descs_to_bound_order_by(&sort_descs)?;
+    let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        name,
+        params: &params,
+        args_type: &arguments,
+        distinct: false,
+        order_by: &order_by,
+    })?;
     let data_type = func.signature().return_type.clone();
     let states_layout = v2::get_states_layout(std::slice::from_ref(&func))?;
     let loc = states_layout.states_loc[0].clone();
@@ -306,16 +306,14 @@ pub(super) fn eval_legacy_aggregate_for_test(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let order_by = databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by(&sort_descs)?;
-    let func = AGGR_REGISTRY.resolve(
-        databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
-            name,
-            params: &params,
-            args_type: &arguments,
-            distinct: false,
-            order_by: &order_by,
-        },
-    )?;
+    let order_by = sort_descs_to_bound_order_by(&sort_descs)?;
+    let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        name,
+        params: &params,
+        args_type: &arguments,
+        distinct: false,
+        order_by: &order_by,
+    })?;
     let data_type = func.signature().return_type.clone();
 
     let eval = EvalAggr::new(func.clone());

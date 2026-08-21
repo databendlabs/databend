@@ -27,7 +27,7 @@ use databend_common_ast::visit::Visitor;
 use databend_common_ast::visit::Walk;
 use databend_common_base::runtime::block_on;
 use databend_common_exception::Result;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_users::UserApiProvider;

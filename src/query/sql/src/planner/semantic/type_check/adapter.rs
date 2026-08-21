@@ -29,7 +29,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;

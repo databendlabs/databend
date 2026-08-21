@@ -19,9 +19,11 @@ use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by;
 use log::info;
 
 use super::super::view_rewrite::QueryInfo;
@@ -129,21 +131,20 @@ impl AggIndexView {
                         .iter()
                         .map(|arg| arg.data_type())
                         .collect::<Result<Vec<_>>>()?;
-                    let order_by = databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by(
+                    let order_by = sort_descs_to_bound_order_by(
                         &func
                             .sort_descs
                             .iter()
                             .map(|desc| desc.try_into())
                             .collect::<Result<Vec<_>>>()?,
                     )?;
-                    let func = AGGR_REGISTRY
-                        .resolve(databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
-                            name: &func.func_name,
-                            params: &func.params,
-                            args_type: &args_type,
-                            distinct: false,
-                            order_by: &order_by,
-                        })?;
+                    let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+                        name: &func.func_name,
+                        params: &func.params,
+                        args_type: &args_type,
+                        distinct: false,
+                        order_by: &order_by,
+                    })?;
                     (func.state_data_type(), true)
                 }
                 None => (item.scalar.data_type().unwrap(), false),

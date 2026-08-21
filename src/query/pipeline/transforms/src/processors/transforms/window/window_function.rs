@@ -26,12 +26,14 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::aggregate::aggregate_function::AccumulateRowInput;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
+use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
 use databend_common_expression::aggregate_function::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by;
 use databend_common_sql::executor::physical_plans::window::LagLeadDefault;
 use databend_common_sql::executor::physical_plans::window::WindowFunction;
 
@@ -233,13 +235,13 @@ impl WindowFunctionInfo {
                         }
                     })
                     .collect::<Vec<_>>();
-                let agg_func = AGGR_REGISTRY.resolve(databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest {
-            name: agg.sig.name.as_str(),
-            params: &agg.sig.params.clone(),
-            args_type: &agg.sig.args.clone(),
-            distinct: false,
-            order_by: &databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by(&remapping_sort_descs)?,
-        })?;
+                let agg_func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+                    name: agg.sig.name.as_str(),
+                    params: &agg.sig.params.clone(),
+                    args_type: &agg.sig.args.clone(),
+                    distinct: false,
+                    order_by: &sort_descs_to_bound_order_by(&remapping_sort_descs)?,
+                })?;
                 Self::Aggregate(agg_func, args)
             }
             WindowFunction::RowNumber => Self::RowNumber,

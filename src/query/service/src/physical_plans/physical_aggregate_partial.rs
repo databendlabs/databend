@@ -26,7 +26,7 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::TransformPipelineHelper;

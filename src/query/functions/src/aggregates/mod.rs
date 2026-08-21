@@ -17,6 +17,7 @@ use std::any::Any;
 use adaptors::*;
 pub use aggregate_count::AggregateCountFunction;
 pub use aggregate_function_factory::*;
+pub use aggregate_function_v2_registry::AGGR_REGISTRY;
 use aggregate_null_result::AggregateNullResultFunction;
 use aggregate_quantile_cont::QuantileData;
 pub use aggregate_sum::*;

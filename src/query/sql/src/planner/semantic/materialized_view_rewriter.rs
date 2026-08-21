@@ -46,7 +46,7 @@ use databend_common_exception::Result;
 use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_expression::FunctionKind;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 
 use crate::MetadataRef;

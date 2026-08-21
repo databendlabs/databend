@@ -12,7 +12,7 @@ use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 
 use super::aggregate_simulation_support::eval_legacy_aggregate_for_test;
 

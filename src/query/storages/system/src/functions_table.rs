@@ -26,7 +26,7 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::utils::FromData;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;

@@ -20,8 +20,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
 use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by;
 use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::plans::UDFType;
@@ -93,12 +94,12 @@ impl PipelineBuilder {
 
                 match &agg_func.sig.udaf {
                     None => AGGR_REGISTRY.resolve(AggregateFunctionRequest {
-            name: agg_func.sig.name.as_str(),
-            params: &agg_func.sig.params.clone(),
-            args_type: &agg_func.sig.args.clone(),
-            distinct: false,
-            order_by: &databend_common_functions::aggregates::aggregate_function_v2_registry::sort_descs_to_bound_order_by(&remapping_sort_descs)?,
-        }),
+                        name: agg_func.sig.name.as_str(),
+                        params: &agg_func.sig.params.clone(),
+                        args_type: &agg_func.sig.args.clone(),
+                        distinct: false,
+                        order_by: &sort_descs_to_bound_order_by(&remapping_sort_descs)?,
+                    }),
                     Some((UDFType::Script(code), state_fields)) => create_udaf_script_function(
                         code,
                         agg_func.sig.name.clone(),

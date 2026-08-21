@@ -1621,7 +1621,7 @@ mod tests {
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
-    use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+    use databend_common_functions::aggregates::AGGR_REGISTRY;
     use databend_common_pipeline::core::Event;
     use databend_common_pipeline::core::InputPort;
     use databend_common_pipeline::core::OutputPort;

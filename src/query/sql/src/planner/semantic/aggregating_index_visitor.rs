@@ -32,7 +32,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::FunctionKind;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
 use derive_visitor::VisitorMut;

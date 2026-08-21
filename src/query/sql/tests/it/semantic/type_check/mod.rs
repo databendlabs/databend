@@ -29,7 +29,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_functions::aggregates::aggregate_function_v2_registry::AGGR_REGISTRY;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
