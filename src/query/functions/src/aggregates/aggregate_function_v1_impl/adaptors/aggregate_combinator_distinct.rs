@@ -37,6 +37,7 @@ use super::AggregateCountFunction;
 use super::AggregateFunction;
 use super::AggregateFunctionCreator;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::CombinatorDescription;
 use super::StateAddr;
@@ -48,7 +49,6 @@ use super::aggregate_distinct_state::AggregateDistinctTimestampState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
 use super::aggregate_distinct_state::DistinctStateFunc;
 use super::assert_variadic_arguments;
-use crate::aggregates::AggregateFunctionFeatures;
 
 #[derive(Clone)]
 pub struct AggregateDistinctCombinator<State> {

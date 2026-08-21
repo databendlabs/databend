@@ -45,7 +45,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::i256;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::aggregates::DecimalSumState;
+use databend_common_functions::aggregates::aggregate_function_v1_impl::DecimalSumState;
 use itertools::Itertools;
 
 fn resolve_agg(name: &str, arg_type: DataType) -> AggregateFunctionRef {
