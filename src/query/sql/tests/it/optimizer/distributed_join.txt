@@ -1,0 +1,175 @@
+=== small_serial_build_is_broadcast ===
+description: A small scalar aggregate on the build side should be broadcast without merging the distributed probe.
+sql: SELECT b.k, s.max_k
+FROM big_table AS b
+LEFT JOIN (SELECT max(k) AS max_k FROM small_table) AS s
+ON b.k = s.max_k
+raw_plan:
+EvalScalar
+├── scalars: [big_table.k (#0) AS (#0), max(k) (#2) AS (#2)]
+└── Join(Left)
+    ├── build keys: [max(k) (#2)]
+    ├── probe keys: [big_table.k (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [max(k) (#2) AS (#2)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: []
+    │       ├── aggregate functions: [max(small_table.k (#1)) AS (#2)]
+    │       └── EvalScalar
+    │           ├── scalars: [small_table.k (#1) AS (#1)]
+    │           └── Scan
+    │               ├── table: default.small_table (#1)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── Scan
+        ├── table: default.big_table (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Exchange(Merge)
+└── Join(Left)
+    ├── build keys: [max(k) (#2)]
+    ├── probe keys: [big_table.k (#0)]
+    ├── other filters: []
+    ├── Exchange(Broadcast)
+    │   └── Aggregate(Final)
+    │       ├── group items: []
+    │       ├── aggregate functions: [max(small_table.k (#1)) AS (#2)]
+    │       └── Exchange(Merge)
+    │           └── Aggregate(Partial)
+    │               ├── group items: []
+    │               ├── aggregate functions: [max(small_table.k (#1)) AS (#2)]
+    │               └── Scan
+    │                   ├── table: default.small_table (#1)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Scan
+        ├── table: default.big_table (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== cross_join_small_serial_build_is_broadcast ===
+description: A small scalar aggregate should also be broadcast for a cross join without merging the distributed probe.
+sql: SELECT b.k, s.max_k
+FROM big_table AS b
+CROSS JOIN (SELECT max(k) AS max_k FROM small_table) AS s
+raw_plan:
+EvalScalar
+├── scalars: [big_table.k (#0) AS (#0), max(k) (#2) AS (#2)]
+└── Join(Cross)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [max(k) (#2) AS (#2)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: []
+    │       ├── aggregate functions: [max(small_table.k (#1)) AS (#2)]
+    │       └── EvalScalar
+    │           ├── scalars: [small_table.k (#1) AS (#1)]
+    │           └── Scan
+    │               ├── table: default.small_table (#1)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── Scan
+        ├── table: default.big_table (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Exchange(Merge)
+└── Join(Cross)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: []
+    ├── Exchange(Broadcast)
+    │   └── Aggregate(Final)
+    │       ├── group items: []
+    │       ├── aggregate functions: [max(small_table.k (#1)) AS (#2)]
+    │       └── Exchange(Merge)
+    │           └── Aggregate(Partial)
+    │               ├── group items: []
+    │               ├── aggregate functions: [max(small_table.k (#1)) AS (#2)]
+    │               └── Scan
+    │                   ├── table: default.small_table (#1)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Scan
+        ├── table: default.big_table (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== large_serial_build_remains_serial ===
+description: A Serial build that is not smaller than the probe should not be broadcast unconditionally.
+sql: SELECT b.k, s.k
+FROM big_table AS b
+LEFT JOIN (
+    SELECT k, row_number() OVER () AS row_num
+    FROM small_table
+) AS s
+ON b.k = s.k
+raw_plan:
+EvalScalar
+├── scalars: [big_table.k (#0) AS (#0), small_table.k (#1) AS (#1)]
+└── Join(Left)
+    ├── build keys: [small_table.k (#1)]
+    ├── probe keys: [big_table.k (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [CAST(row_number() OVER () (#2) AS UInt64 NULL) AS (#3)]
+    │   └── EvalScalar
+    │       ├── scalars: [small_table.k (#1) AS (#1), row_number() OVER () (#2) AS (#2)]
+    │       └── Window
+    │           ├── aggregate function: row_number
+    │           ├── partition items: []
+    │           ├── order by items: []
+    │           ├── frame: [Range: Preceding(None) ~ Following(None)]
+    │           └── Scan
+    │               ├── table: default.small_table (#1)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── Scan
+        ├── table: default.big_table (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Join(Left)
+├── build keys: [small_table.k (#1)]
+├── probe keys: [big_table.k (#0)]
+├── other filters: []
+├── EvalScalar
+│   ├── scalars: [small_table.k (#1) AS (#1), row_number() OVER () (#2) AS (#2), CAST(row_number() OVER () (#2) AS UInt64 NULL) AS (#3)]
+│   └── Window
+│       ├── aggregate function: row_number
+│       ├── partition items: []
+│       ├── order by items: []
+│       ├── frame: [Range: Preceding(None) ~ Following(None)]
+│       └── Exchange(Merge)
+│           └── Scan
+│               ├── table: default.small_table (#1)
+│               ├── filters: []
+│               ├── order by: []
+│               └── limit: NONE
+└── Exchange(Merge)
+    └── Scan
+        ├── table: default.big_table (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
