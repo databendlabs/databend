@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Reverse;
+use std::cmp::Ordering;
 use std::collections::VecDeque;
+use std::future::Future;
 
 use databend_common_exception::Result;
 use databend_common_expression::ChunkIndex;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataBlockVec;
+use databend_common_expression::types::DataType;
+use futures::future::Either;
 
 use super::Rows;
 use super::algorithm::*;
@@ -116,6 +119,106 @@ impl BufferState {
     }
 }
 
+/// Owns both the sort cursors and the rows their items borrow from.
+///
+/// `cursors` must be declared before `rows` so it is dropped first.
+struct CursorStorage<A: SortAlgorithm> {
+    cursors: A,
+    rows: Box<[Option<A::Rows>]>,
+}
+
+impl<A: SortAlgorithm> CursorStorage<A> {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            cursors: A::with_capacity(capacity),
+            rows: (0..capacity)
+                .map(|_| None)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        }
+    }
+
+    #[inline(always)]
+    fn is_empty(&self) -> bool {
+        self.cursors.is_empty()
+    }
+
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.cursors.len()
+    }
+
+    #[inline(always)]
+    fn peek(&self) -> Option<&Cursor<A::Rows>> {
+        self.cursors.peek()
+    }
+
+    #[inline(always)]
+    fn peek_top2(&self) -> &Cursor<A::Rows> {
+        self.cursors.peek_top2()
+    }
+
+    fn rows(&self, stream_index: usize) -> &A::Rows {
+        self.rows[stream_index]
+            .as_ref()
+            .expect("cursor must have originating rows")
+    }
+
+    fn item_cmp(
+        &self,
+        stream_index: usize,
+        row_index: usize,
+        item: <A::Rows as Rows>::Item<'static>,
+    ) -> Ordering {
+        // Safety: the item is used only while its originating Rows is borrowed.
+        unsafe { self.rows(stream_index).row_stable(row_index).cmp(&item) }
+    }
+
+    fn push(&mut self, stream_index: usize, rows: A::Rows) {
+        debug_assert!(self.rows[stream_index].is_none());
+        self.rows[stream_index] = Some(rows);
+
+        let rows = self.rows[stream_index].as_ref().unwrap();
+        let num_rows = rows.len();
+        debug_assert!(num_rows > 0);
+        // Safety: Rows guarantees its items survive moving the Rows wrapper.
+        // CursorStorage keeps the originating Rows alive until this cursor is
+        // removed, and its field order drops all cursors before any rows.
+        let (current, last) = unsafe { (rows.row_stable(0), rows.row_stable(num_rows - 1)) };
+        let cursor = Cursor::new(stream_index, num_rows, current, last);
+        self.cursors.push(stream_index, cursor);
+    }
+
+    fn rebuild(&mut self) {
+        self.cursors.rebuild();
+    }
+
+    /// Advances the top cursor and returns its stream index when it is exhausted.
+    fn advance_top(&mut self, count: usize) -> Option<usize> {
+        let cursor = self.cursors.peek().unwrap();
+        let stream_index = cursor.input_index;
+        let row_index = cursor.row_index + count;
+        let num_rows = self.rows(stream_index).len();
+        debug_assert!(row_index <= num_rows);
+        // Safety: the originating Rows remains in this storage until after the
+        // cursor has been removed below.
+        let current = (row_index < num_rows)
+            .then(|| unsafe { self.rows(stream_index).row_stable(row_index) });
+
+        let mut peek_mut = self.cursors.peek_mut();
+        let cursor = &mut peek_mut;
+        cursor.advance(count, current);
+
+        if !cursor.is_finished() {
+            return None;
+        }
+
+        A::pop_mut(peek_mut);
+        self.rows[stream_index] = None;
+        Some(stream_index)
+    }
+}
+
 /// A merge sort operator to merge multiple sorted streams and output one sorted stream.
 pub struct Merger<A, S>
 where A: SortAlgorithm
@@ -125,7 +228,7 @@ where A: SortAlgorithm
     unsorted_streams: Vec<S>,
 
     pending_streams: VecDeque<usize>,
-    sorted_cursors: A,
+    cursor_storage: CursorStorage<A>,
     buffers: BufferState,
 }
 
@@ -136,13 +239,13 @@ where A: SortAlgorithm
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
 
-        let sorted_cursors = A::with_capacity(streams.len());
+        let cursor_storage = CursorStorage::with_capacity(streams.len());
         let pending_streams = (0..streams.len()).collect();
         let buffers = BufferState::new(streams.len());
 
         Self {
             unsorted_streams: streams,
-            sorted_cursors,
+            cursor_storage,
             batch_rows,
             limit,
             pending_streams,
@@ -152,7 +255,7 @@ where A: SortAlgorithm
 
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
-        (self.sorted_cursors.is_empty() && !self.has_pending_stream() && !self.buffers.has_output())
+        (self.cursor_storage.is_empty() && !self.has_pending_stream() && !self.buffers.has_output())
             || self.limit == Some(0)
     }
 
@@ -161,14 +264,14 @@ where A: SortAlgorithm
         !self.pending_streams.is_empty()
     }
 
-    /// To evaluate the current cursor, and update the top of the sorted_cursors if necessary.
-    /// This method can only be called when iterating the sorted_cursors.
+    /// To evaluate the current cursor, and update the top of the cursor storage if necessary.
+    /// This method can only be called when iterating the cursor storage.
     ///
     /// Return `true` if the batch is full (need to output).
     #[inline(always)]
     fn evaluate_cursor(&mut self) -> bool {
-        let cursor = if let Some(Reverse(cursor)) = self.sorted_cursors.peek() {
-            cursor
+        let cursor = if let Some(cursor) = self.cursor_storage.peek() {
+            *cursor
         } else {
             return false;
         };
@@ -177,19 +280,11 @@ where A: SortAlgorithm
         let buffer_index = self.buffers.stream_to_buffer[stream_index]
             .expect("cursor must point to active stream buffer");
         let start = cursor.row_index;
-        let count = self.evaluate_cursor_count(cursor);
+        let count = self.evaluate_cursor_count(&cursor);
 
         self.buffers.record_output_range(buffer_index, start, count);
 
-        // `self.sorted_cursors.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the sorted_cursors.
-        // The sorted_cursors will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-        let mut peek_mut = self.sorted_cursors.peek_mut();
-        let cursor = &mut peek_mut.0;
-        cursor.row_index += count;
-
-        if cursor.is_finished() {
-            // Pop the current `cursor`.
-            A::pop_mut(peek_mut);
+        if let Some(stream_index) = self.cursor_storage.advance_top(count) {
             self.buffers.detach(buffer_index, stream_index);
             self.pending_streams.push_back(stream_index);
         }
@@ -208,21 +303,25 @@ where A: SortAlgorithm
             .num_rows()
             .min(start + max_rows - self.buffers.output_len());
 
-        if self.sorted_cursors.len() == 1 || cursor.current() == cursor.last() {
+        if self.cursor_storage.len() == 1 || cursor.current() == cursor.last() {
             return row_index_limit - start;
         }
 
         if !A::SHOULD_PEEK_TOP2 {
-            let mut p = cursor.cursor_mut();
-            p.advance();
-            let item = &cursor.current();
-            while p.row_index < row_index_limit && p.current() == *item {
-                p.advance();
+            let mut row_index = start + 1;
+            let item = cursor.current();
+            while row_index < row_index_limit
+                && self
+                    .cursor_storage
+                    .item_cmp(cursor.input_index, row_index, item)
+                    == Ordering::Equal
+            {
+                row_index += 1;
             }
-            return p.row_index - start;
+            return row_index - start;
         }
 
-        let next_cursor = &self.sorted_cursors.peek_top2().0;
+        let next_cursor = self.cursor_storage.peek_top2();
         if cursor.last() <= next_cursor.current() {
             // Short Path:
             // If the last row of current block is smaller than the next cursor,
@@ -230,14 +329,18 @@ where A: SortAlgorithm
             return row_index_limit - start;
         }
 
-        let mut p = cursor.cursor_mut();
-        p.advance();
-        let item = &next_cursor.current();
-        while p.row_index < row_index_limit && p.current() <= *item {
+        let mut row_index = start + 1;
+        let item = next_cursor.current();
+        while row_index < row_index_limit
+            && self
+                .cursor_storage
+                .item_cmp(cursor.input_index, row_index, item)
+                != Ordering::Greater
+        {
             // If the cursor is equals or smaller than the next cursor, continue advance.
-            p.advance();
+            row_index += 1;
         }
-        p.row_index - start
+        row_index - start
     }
 
     fn build_output(&mut self) -> Result<DataBlock> {
@@ -271,12 +374,15 @@ where
             if let Some((block, col)) = input {
                 let rows = A::Rows::from_column(&col)?;
                 self.buffers.attach_stream_block(i, block)?;
-                let cursor = Cursor::new(i, rows);
-                self.sorted_cursors.push(i, Reverse(cursor));
+                self.cursor_storage.push(i, rows);
             }
         }
-        self.sorted_cursors.rebuild();
         self.pending_streams.extend(continue_pendings);
+        // `rebuild` is the mutation/read barrier: no cursor is observed while
+        // an input can still contribute an unresolved next block.
+        if self.pending_streams.is_empty() {
+            self.cursor_storage.rebuild();
+        }
         Ok(())
     }
 
@@ -296,7 +402,7 @@ where
         }
 
         // No pending streams now.
-        if self.sorted_cursors.is_empty() {
+        if self.cursor_storage.is_empty() {
             return if self.buffers.has_output() {
                 Ok(Some(self.build_output()?))
             } else {
@@ -322,7 +428,7 @@ where
     A: SortAlgorithm,
     S: AsyncSortedStream + Send,
 {
-    // This method can only be called when there is no data of the stream in the sorted_cursors.
+    // This method can only be called when there is no data of the stream in the cursor storage.
     pub async fn async_poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
         while let Some(i) = self.pending_streams.pop_front() {
@@ -335,12 +441,14 @@ where
             if let Some((block, col)) = input {
                 let rows = A::Rows::from_column(&col)?;
                 self.buffers.attach_stream_block(i, block)?;
-                let cursor = Cursor::new(i, rows);
-                self.sorted_cursors.push(i, Reverse(cursor));
+                self.cursor_storage.push(i, rows);
             }
         }
-        self.sorted_cursors.rebuild();
         self.pending_streams.extend(continue_pendings);
+        // Keep the same read barrier as the synchronous path.
+        if self.pending_streams.is_empty() {
+            self.cursor_storage.rebuild();
+        }
         Ok(())
     }
 
@@ -358,7 +466,7 @@ where
         }
 
         // No pending streams now.
-        if self.sorted_cursors.is_empty() {
+        if self.cursor_storage.is_empty() {
             return if self.buffers.has_output() {
                 Ok(Some(self.build_output()?))
             } else {
@@ -379,6 +487,139 @@ where
     }
 }
 
-pub type HeapMerger<R, S> = Merger<HeapSort<R>, S>;
+pub type LoserTreeMerger<R, S> = Merger<LoserTreeTop2Sort<R>, S>;
 
-pub type LoserTreeMerger<R, S> = Merger<LoserTreeSort<R>, S>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeAlgorithm {
+    Heap,
+    LoserTree,
+    LoserTreeTop2,
+}
+
+/// Runtime selection around fully monomorphized mergers.
+///
+/// Dispatch happens once per public merger operation. The cursor evaluation and
+/// loser-tree replay loops remain inside a concrete [`Merger<A, S>`], so they do
+/// not pay an enum branch per row or per replay.
+pub enum SelectedMerger<R: Rows, S> {
+    Heap(Merger<HeapSort<R>, S>),
+    LoserTree(Merger<LoserTreeSort<R>, S>),
+    LoserTreeTop2(Merger<LoserTreeTop2Sort<R>, S>),
+}
+
+impl<R: Rows, S> SelectedMerger<R, S> {
+    pub fn new(
+        algorithm: MergeAlgorithm,
+        streams: Vec<S>,
+        batch_rows: usize,
+        limit: Option<usize>,
+    ) -> Self {
+        match algorithm {
+            MergeAlgorithm::Heap => Self::Heap(Merger::new(streams, batch_rows, limit)),
+            MergeAlgorithm::LoserTree => Self::LoserTree(Merger::new(streams, batch_rows, limit)),
+            MergeAlgorithm::LoserTreeTop2 => {
+                Self::LoserTreeTop2(Merger::new(streams, batch_rows, limit))
+            }
+        }
+    }
+
+    pub fn new_auto(
+        streams: Vec<S>,
+        batch_rows: usize,
+        limit: Option<usize>,
+        enable_loser_tree: bool,
+    ) -> Self {
+        let algorithm = if !enable_loser_tree {
+            MergeAlgorithm::Heap
+        } else if streams.len() >= 16 {
+            MergeAlgorithm::LoserTree
+        } else if std::matches!(
+            R::data_type(),
+            DataType::Boolean
+                | DataType::Number(_)
+                | DataType::Decimal(_)
+                | DataType::Timestamp
+                | DataType::TimestampTz
+                | DataType::Date
+                | DataType::Interval
+                | DataType::Opaque(_)
+        ) {
+            MergeAlgorithm::Heap
+        } else {
+            MergeAlgorithm::LoserTreeTop2
+        };
+        Self::new(algorithm, streams, batch_rows, limit)
+    }
+
+    pub fn is_finished(&self) -> bool {
+        match self {
+            Self::Heap(merger) => merger.is_finished(),
+            Self::LoserTreeTop2(merger) => merger.is_finished(),
+            Self::LoserTree(merger) => merger.is_finished(),
+        }
+    }
+
+    pub fn has_pending_stream(&self) -> bool {
+        match self {
+            Self::Heap(merger) => merger.has_pending_stream(),
+            Self::LoserTreeTop2(merger) => merger.has_pending_stream(),
+            Self::LoserTree(merger) => merger.has_pending_stream(),
+        }
+    }
+
+    pub fn streams(self) -> Vec<S> {
+        match self {
+            Self::Heap(merger) => merger.streams(),
+            Self::LoserTreeTop2(merger) => merger.streams(),
+            Self::LoserTree(merger) => merger.streams(),
+        }
+    }
+}
+
+impl<R, S> SelectedMerger<R, S>
+where
+    R: Rows,
+    S: SortedStream + Send,
+{
+    pub fn poll_pending_stream(&mut self) -> Result<()> {
+        match self {
+            Self::Heap(merger) => merger.poll_pending_stream(),
+            Self::LoserTreeTop2(merger) => merger.poll_pending_stream(),
+            Self::LoserTree(merger) => merger.poll_pending_stream(),
+        }
+    }
+
+    pub fn next_block(&mut self) -> Result<Option<DataBlock>> {
+        match self {
+            Self::Heap(merger) => merger.next_block(),
+            Self::LoserTreeTop2(merger) => merger.next_block(),
+            Self::LoserTree(merger) => merger.next_block(),
+        }
+    }
+}
+
+impl<R, S> SelectedMerger<R, S>
+where
+    R: Rows,
+    S: AsyncSortedStream + Send,
+{
+    pub fn async_poll_pending_stream(&mut self) -> impl Future<Output = Result<()>> + Send + '_ {
+        match self {
+            Self::Heap(merger) => Either::Left(Either::Left(merger.async_poll_pending_stream())),
+            Self::LoserTreeTop2(merger) => {
+                Either::Left(Either::Right(merger.async_poll_pending_stream()))
+            }
+            Self::LoserTree(merger) => Either::Right(merger.async_poll_pending_stream()),
+        }
+    }
+
+    pub fn async_next_block(
+        &mut self,
+    ) -> impl Future<Output = Result<Option<DataBlock>>> + Send + '_ {
+        match self {
+            Self::Heap(merger) => Either::Left(Either::Left(merger.async_next_block())),
+            Self::LoserTreeTop2(merger) => Either::Left(Either::Right(merger.async_next_block())),
+            Self::LoserTree(merger) => Either::Right(merger.async_next_block()),
+        }
+    }
+}
