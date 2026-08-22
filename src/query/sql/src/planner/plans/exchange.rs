@@ -53,15 +53,15 @@ impl Operator for Exchange {
     }
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: match self {
-                Exchange::NodeToNodeHash(hash_keys) => {
-                    Distribution::NodeToNodeHash(hash_keys.clone())
-                }
-                Exchange::GlobalHash(hash_keys) => Distribution::GlobalHash(hash_keys.clone()),
-                Exchange::Broadcast => Distribution::Broadcast,
-                Exchange::Merge | Exchange::MergeSort => Distribution::Serial,
-            },
+        Ok(match self {
+            Exchange::NodeToNodeHash(hash_keys) => {
+                PhysicalProperty::new(Distribution::NodeToNodeHash(hash_keys.clone()))
+            }
+            Exchange::GlobalHash(hash_keys) => {
+                PhysicalProperty::new(Distribution::GlobalHash(hash_keys.clone()))
+            }
+            Exchange::Broadcast => PhysicalProperty::new(Distribution::Broadcast),
+            Exchange::Merge | Exchange::MergeSort => PhysicalProperty::gathered_serial(),
         })
     }
 

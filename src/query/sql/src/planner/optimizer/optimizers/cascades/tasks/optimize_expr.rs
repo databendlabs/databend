@@ -357,12 +357,19 @@ impl OptimizeExprTask {
         let should_enforce = {
             let mut should_enforce = true;
 
+            // A Serial subtree collected by a Merge exchange can be replicated
+            // from its root. Naturally Serial sources are not safe here because
+            // their producer fragment may run independently on every executor.
+            let can_broadcast_serial =
+                matches!(self.required_prop.distribution, Distribution::Broadcast)
+                    && physical_prop.is_gathered_serial();
             if optimizer.enforce_distribution()
                 && physical_prop.distribution == Distribution::Serial
                 && !matches!(
                     self.required_prop.distribution,
                     Distribution::Serial | Distribution::Any
                 )
+                && !can_broadcast_serial
             {
                 should_enforce = false;
             }

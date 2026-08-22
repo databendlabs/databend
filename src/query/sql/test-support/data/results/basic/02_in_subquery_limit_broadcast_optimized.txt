@@ -1,0 +1,26 @@
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [integers.i (#0) AS (#0), marker (#2) AS (#3)]
+    └── Join(LeftSemi)
+        ├── build keys: [integers.i (#1)]
+        ├── probe keys: [integers.i (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Limit
+        │       ├── limit: [10]
+        │       ├── offset: [0]
+        │       └── Exchange(Merge)
+        │           └── Limit
+        │               ├── limit: [10]
+        │               ├── offset: [0]
+        │               └── Scan
+        │                   ├── table: default.integers (#1)
+        │                   ├── filters: []
+        │                   ├── order by: []
+        │                   └── limit: 10
+        └── Scan
+            ├── table: default.integers (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+

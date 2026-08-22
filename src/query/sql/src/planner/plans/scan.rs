@@ -342,9 +342,7 @@ impl Operator for Scan {
     }
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Random,
-        })
+        Ok(PhysicalProperty::new(Distribution::Random))
     }
 
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {

@@ -262,22 +262,16 @@ impl Operator for Aggregate {
                 // by partial aggregation as the distribution key, which is not exactly the same with
                 // `Hash(group_items)`. Because of this we cannot leverage the distribution key to
                 // satisfy the required hash distribution from parent node. We should fix this in the future.
-                Ok(PhysicalProperty {
-                    distribution: Distribution::Random,
-                })
+                Ok(PhysicalProperty::new(Distribution::Random))
             }
 
             AggregateMode::Final => {
                 if self.group_items.is_empty() {
                     // Scalar aggregation
-                    Ok(PhysicalProperty {
-                        distribution: Distribution::Serial,
-                    })
+                    Ok(PhysicalProperty::new(Distribution::Serial))
                 } else {
                     // The distribution should have been derived by partial aggregation
-                    Ok(PhysicalProperty {
-                        distribution: input_physical_prop.distribution,
-                    })
+                    Ok(input_physical_prop)
                 }
             }
 

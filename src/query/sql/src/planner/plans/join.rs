@@ -809,49 +809,41 @@ impl Operator for Join {
         if probe_prop.distribution == Distribution::Serial
             || build_prop.distribution == Distribution::Serial
         {
-            return Ok(PhysicalProperty {
-                distribution: Distribution::Serial,
-            });
+            // Keep newly synthesized multi-input Serial plans out of the
+            // Serial-to-distributed path until mixed topologies are supported.
+            return Ok(PhysicalProperty::new(Distribution::Serial));
         }
 
         if !matches!(self.join_type, JoinType::Inner | JoinType::Asof) {
-            return Ok(PhysicalProperty {
-                distribution: Distribution::Random,
-            });
+            return Ok(PhysicalProperty::new(Distribution::Random));
         }
 
         let spatial_join_candidate = self.spatial_join_candidate(rel_expr)?;
 
         match (&probe_prop.distribution, &build_prop.distribution) {
             (Distribution::Broadcast, _) if spatial_join_candidate.is_some() => {
-                Ok(PhysicalProperty {
-                    distribution: build_prop.distribution.clone(),
-                })
+                Ok(PhysicalProperty::new(build_prop.distribution.clone()))
             }
 
             // If any side of the join is Broadcast, pass through the other side.
-            (_, Distribution::Broadcast) => Ok(PhysicalProperty {
-                distribution: probe_prop.distribution.clone(),
-            }),
+            (_, Distribution::Broadcast) => {
+                Ok(PhysicalProperty::new(probe_prop.distribution.clone()))
+            }
 
             // If both sides of the join are Hash, pass through the probe side.
             // Although the build side is also Hash, it is more efficient to
             // utilize the distribution on the probe side.
             // As soon as we support subset property, we can pass through both sides.
             (Distribution::NodeToNodeHash(_), Distribution::NodeToNodeHash(_)) => {
-                Ok(PhysicalProperty {
-                    distribution: probe_prop.distribution.clone(),
-                })
+                Ok(PhysicalProperty::new(probe_prop.distribution.clone()))
             }
 
-            (Distribution::GlobalHash(_), Distribution::GlobalHash(_)) => Ok(PhysicalProperty {
-                distribution: probe_prop.distribution.clone(),
-            }),
+            (Distribution::GlobalHash(_), Distribution::GlobalHash(_)) => {
+                Ok(PhysicalProperty::new(probe_prop.distribution.clone()))
+            }
 
             // Otherwise use random distribution.
-            _ => Ok(PhysicalProperty {
-                distribution: Distribution::Random,
-            }),
+            _ => Ok(PhysicalProperty::new(Distribution::Random)),
         }
     }
 

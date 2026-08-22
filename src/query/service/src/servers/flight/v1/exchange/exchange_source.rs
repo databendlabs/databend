@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
@@ -26,11 +27,14 @@ use databend_common_pipeline_transforms::processors::TransformDummy;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::GlobalExchangeParams;
 use super::exchange_params::MergeExchangeParams;
+use super::exchange_params::validate_broadcast_destinations;
 use super::exchange_source_reader::ExchangeSourceReader;
 use super::hash_send_source::HashSendSource;
 use crate::clusters::ClusterHelper;
+use crate::servers::flight::v1::exchange::BroadcastExchange;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::NetworkInboundChannelSet;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
 
@@ -93,6 +97,65 @@ pub fn via_exchange_source(
     injector.apply_merge_deserializer(params, pipeline)
 }
 
+/// Add a source-only receiver pipeline for a broadcast exchange whose source
+/// fragment is not scheduled on this executor.
+pub fn via_broadcast_exchange_source(
+    ctx: &Arc<QueryContext>,
+    query_id: &str,
+    schema: &DataSchemaRef,
+    exchange: &BroadcastExchange,
+    pipeline: &mut Pipeline,
+) -> Result<()> {
+    let executor_id = ctx.get_cluster().local_id();
+    let local_threads = validate_broadcast_destinations(
+        &exchange.id,
+        &executor_id,
+        &exchange.destination_ids,
+        &exchange.destination_channels,
+    )?
+    .num_threads;
+
+    let exchange_manager = DataExchangeManager::instance();
+    let channel_set = exchange_manager.get_or_create_exchange_channel_set(
+        query_id,
+        &exchange.id,
+        local_threads,
+    )?;
+    add_inbound_receiver_pipe(&channel_set, schema, pipeline);
+    Ok(())
+}
+
+fn add_inbound_receiver_pipe(
+    channel_set: &NetworkInboundChannelSet,
+    schema: &DataSchemaRef,
+    pipeline: &mut Pipeline,
+) {
+    let last_output_len = pipeline.output_len();
+    let num_receivers = channel_set.channels.len();
+    let mut items = Vec::with_capacity(last_output_len + num_receivers);
+
+    for _ in 0..last_output_len {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        items.push(PipeItem::create(
+            TransformDummy::create(input.clone(), output.clone()),
+            vec![input],
+            vec![output],
+        ));
+    }
+
+    let waker = pipeline.get_waker();
+    for idx in 0..num_receivers {
+        items.push(HashSendSource::create_item(
+            idx,
+            channel_set.create_receiver(idx, schema),
+            waker.clone(),
+        ));
+    }
+
+    pipeline.add_pipe(Pipe::create(last_output_len, items.len(), items));
+}
+
 /// Add HashSendSource receivers to the pipeline for hash exchange source-only path.
 /// Existing pipeline outputs pass through as DummyTransforms; remote InboundChannels
 /// are added as HashSendSource processors.
@@ -107,31 +170,6 @@ pub fn via_hash_exchange_source(
     let exchange_manager = DataExchangeManager::instance();
 
     let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
-    let waker = pipeline.get_waker();
-
-    let last_output_len = pipeline.output_len();
-    let num_receivers = channel_set.channels.len();
-    let mut items = Vec::with_capacity(last_output_len + num_receivers);
-
-    for _index in 0..last_output_len {
-        let input = InputPort::create();
-        let output = OutputPort::create();
-
-        items.push(PipeItem::create(
-            TransformDummy::create(input.clone(), output.clone()),
-            vec![input],
-            vec![output],
-        ));
-    }
-
-    for idx in 0..num_receivers {
-        items.push(HashSendSource::create_item(
-            idx,
-            channel_set.create_receiver(idx, &params.schema),
-            waker.clone(),
-        ));
-    }
-
-    pipeline.add_pipe(Pipe::create(last_output_len, items.len(), items));
+    add_inbound_receiver_pipe(&channel_set, &params.schema, pipeline);
     Ok(())
 }

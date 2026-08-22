@@ -1,0 +1,1 @@
+CREATE TABLE integers (i UInt64 NOT NULL)

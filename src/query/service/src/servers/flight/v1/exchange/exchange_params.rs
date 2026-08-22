@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -56,7 +57,90 @@ pub struct BroadcastExchangeParams {
     pub executor_id: String,
     pub schema: DataSchemaRef,
     pub exchange_id: String,
+    pub destination_ids: Vec<String>,
     pub destination_channels: Vec<(String, Vec<String>)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct BroadcastDestination {
+    pub index: usize,
+    pub num_threads: usize,
+}
+
+/// Validate the destination metadata shared by broadcast senders and
+/// remote-only receivers, and return the local destination's position.
+pub(super) fn validate_broadcast_destinations(
+    exchange_id: &str,
+    executor_id: &str,
+    destination_ids: &[String],
+    destination_channels: &[(String, Vec<String>)],
+) -> Result<BroadcastDestination> {
+    if destination_ids.is_empty() || destination_ids.len() != destination_channels.len() {
+        return Err(ErrorCode::Internal(format!(
+            "Broadcast exchange {} has {} destination IDs and {} channel groups",
+            exchange_id,
+            destination_ids.len(),
+            destination_channels.len()
+        )));
+    }
+
+    let mut seen_destinations = HashSet::with_capacity(destination_ids.len());
+    let mut seen_channels = HashSet::new();
+    let mut expected_threads = None;
+    let mut local_destination = None;
+
+    for (index, (destination_id, (channel_destination, channels))) in
+        destination_ids.iter().zip(destination_channels).enumerate()
+    {
+        if destination_id != channel_destination {
+            return Err(ErrorCode::Internal(format!(
+                "Broadcast exchange {} destination {} does not match channel destination {}",
+                exchange_id, destination_id, channel_destination
+            )));
+        }
+        if !seen_destinations.insert(destination_id) {
+            return Err(ErrorCode::Internal(format!(
+                "Broadcast exchange {} contains duplicate destination {}",
+                exchange_id, destination_id
+            )));
+        }
+        if channels.is_empty() {
+            return Err(ErrorCode::Internal(format!(
+                "Broadcast exchange {} destination {} has no channels",
+                exchange_id, destination_id
+            )));
+        }
+        if expected_threads
+            .replace(channels.len())
+            .is_some_and(|expected| expected != channels.len())
+        {
+            return Err(ErrorCode::Internal(format!(
+                "Broadcast exchange {} has inconsistent parallelism for destination {}",
+                exchange_id, destination_id
+            )));
+        }
+        for channel_id in channels {
+            if !seen_channels.insert(channel_id) {
+                return Err(ErrorCode::Internal(format!(
+                    "Broadcast exchange {} contains duplicate channel {}",
+                    exchange_id, channel_id
+                )));
+            }
+        }
+        if destination_id == executor_id {
+            local_destination = Some(BroadcastDestination {
+                index,
+                num_threads: channels.len(),
+            });
+        }
+    }
+
+    local_destination.ok_or_else(|| {
+        ErrorCode::Internal(format!(
+            "Executor {} is not a destination of broadcast exchange {}",
+            executor_id, exchange_id
+        ))
+    })
 }
 
 #[derive(Clone)]
@@ -263,5 +347,125 @@ impl ShuffleExchangeParams {
         }
 
         Ok(exchanges)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::Result;
+
+    use super::BroadcastDestination;
+    use super::validate_broadcast_destinations;
+
+    fn destinations() -> (Vec<String>, Vec<(String, Vec<String>)>) {
+        (vec!["node-a".to_string(), "node-b".to_string()], vec![
+            ("node-a".to_string(), vec![
+                "a-0".to_string(),
+                "a-1".to_string(),
+            ]),
+            ("node-b".to_string(), vec![
+                "b-0".to_string(),
+                "b-1".to_string(),
+            ]),
+        ])
+    }
+
+    #[test]
+    fn test_broadcast_destinations_validate_metadata() -> Result<()> {
+        let (destination_ids, destination_channels) = destinations();
+        assert_eq!(
+            validate_broadcast_destinations(
+                "exchange",
+                "node-b",
+                &destination_ids,
+                &destination_channels,
+            )?,
+            BroadcastDestination {
+                index: 1,
+                num_threads: 2,
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_broadcast_destinations_reject_invalid_metadata() {
+        let (destination_ids, destination_channels) = destinations();
+        let error = validate_broadcast_destinations(
+            "exchange",
+            "node-c",
+            &destination_ids,
+            &destination_channels,
+        )
+        .expect_err("the local executor must be a broadcast destination");
+        assert!(error.to_string().contains("node-c is not a destination"));
+
+        let error = validate_broadcast_destinations(
+            "exchange",
+            "node-a",
+            &destination_ids[..1],
+            &destination_channels,
+        )
+        .expect_err("destination IDs and channels must have the same length");
+        assert!(
+            error
+                .to_string()
+                .contains("1 destination IDs and 2 channel groups")
+        );
+
+        let mut mismatched_channels = destination_channels.clone();
+        mismatched_channels[1].0 = "node-c".to_string();
+        let error = validate_broadcast_destinations(
+            "exchange",
+            "node-a",
+            &destination_ids,
+            &mismatched_channels,
+        )
+        .expect_err("destination IDs must match channel destinations");
+        assert!(
+            error
+                .to_string()
+                .contains("does not match channel destination")
+        );
+
+        let duplicate_ids = vec!["node-a".to_string(), "node-a".to_string()];
+        let duplicate_channels = vec![
+            ("node-a".to_string(), vec!["a-0".to_string()]),
+            ("node-a".to_string(), vec!["a-1".to_string()]),
+        ];
+        let error = validate_broadcast_destinations(
+            "exchange",
+            "node-a",
+            &duplicate_ids,
+            &duplicate_channels,
+        )
+        .expect_err("duplicate destinations must be rejected");
+        assert!(error.to_string().contains("duplicate destination node-a"));
+
+        let mut inconsistent_channels = destination_channels.clone();
+        inconsistent_channels[1].1.pop();
+        let error = validate_broadcast_destinations(
+            "exchange",
+            "node-a",
+            &destination_ids,
+            &inconsistent_channels,
+        )
+        .expect_err("all destinations must use the same parallelism");
+        assert!(error.to_string().contains("inconsistent parallelism"));
+
+        let mut empty_channels = destination_channels;
+        empty_channels[0].1.clear();
+        let error = validate_broadcast_destinations(
+            "exchange",
+            "node-a",
+            &destination_ids,
+            &empty_channels,
+        )
+        .expect_err("every destination must have at least one channel");
+        assert!(
+            error
+                .to_string()
+                .contains("destination node-a has no channels")
+        );
     }
 }

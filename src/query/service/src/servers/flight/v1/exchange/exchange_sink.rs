@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
@@ -36,6 +37,7 @@ use super::serde::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::network::OutboundChannel;
+use crate::servers::flight::v1::network::PingPongExchange;
 use crate::servers::flight::v1::network::RemoteChannel;
 use crate::servers::flight::v1::network::RoundRobinChannel;
 use crate::servers::flight::v1::network::create_local_channels;
@@ -221,22 +223,13 @@ pub(super) fn build_broadcast_outbound_channels(
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
 
-    let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
-
-    let mut exchanges_seq = Vec::with_capacity(exchanges.len());
-
-    for (target_id, threads) in &params.destination_channels {
-        if target_id != &params.executor_id {
-            let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "PingPongExchange not found for target {}",
-                    target_id
-                ))
-            })?;
-            assert_eq!(threads.len(), exchange.num_threads);
-            exchanges_seq.push(exchange);
-        }
-    }
+    let exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
+    let exchanges_seq = take_broadcast_remote_exchanges(
+        exchange_id,
+        &params.executor_id,
+        &params.destination_channels,
+        exchanges,
+    )?;
 
     // Create shared ExchangeSinkBuffer: one RemoteInstance per PingPong, N channels each
     let config = ExchangeBufferConfig::default();
@@ -270,6 +263,50 @@ pub(super) fn build_broadcast_outbound_channels(
     }
 
     Ok(channels)
+}
+
+fn take_broadcast_remote_exchanges(
+    exchange_id: &str,
+    executor_id: &str,
+    destination_channels: &[(String, Vec<String>)],
+    mut exchanges: HashMap<String, PingPongExchange>,
+) -> Result<Vec<PingPongExchange>> {
+    let mut exchanges_seq = Vec::with_capacity(exchanges.len());
+
+    for (target_id, threads) in destination_channels {
+        if target_id == executor_id {
+            continue;
+        }
+
+        let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "PingPongExchange not found for target {}",
+                target_id
+            ))
+        })?;
+        if threads.len() != exchange.num_threads {
+            return Err(ErrorCode::Internal(format!(
+                "Broadcast exchange {} target {} has {} channels, but the connection has {}",
+                exchange_id,
+                target_id,
+                threads.len(),
+                exchange.num_threads
+            )));
+        }
+        exchanges_seq.push(exchange);
+    }
+
+    if !exchanges.is_empty() {
+        let mut unexpected_targets = exchanges.into_keys().collect::<Vec<_>>();
+        unexpected_targets.sort();
+        return Err(ErrorCode::Internal(format!(
+            "Broadcast exchange {} has unexpected connection targets: {}",
+            exchange_id,
+            unexpected_targets.join(", ")
+        )));
+    }
+
+    Ok(exchanges_seq)
 }
 
 /// Build per-thread OutboundChannels for hash exchange.
@@ -328,4 +365,69 @@ pub(super) fn build_hash_outbound_channels(
     }
 
     Ok(channels)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use arrow_flight::FlightData;
+    use tonic::Status;
+
+    use super::take_broadcast_remote_exchanges;
+    use crate::servers::flight::v1::network::PingPongExchange;
+
+    fn ping_pong_exchange(num_threads: usize, remote: &str) -> PingPongExchange {
+        let (send_tx, _send_rx) = async_channel::bounded(1);
+        PingPongExchange::from_stream(
+            num_threads,
+            send_tx,
+            futures::stream::empty::<std::result::Result<FlightData, Status>>(),
+            "node-a",
+            remote,
+        )
+    }
+
+    #[test]
+    fn test_broadcast_sender_rejects_unexpected_connection_target() {
+        let destinations = vec![
+            ("node-a".to_string(), vec!["a-0".to_string()]),
+            ("node-b".to_string(), vec!["b-0".to_string()]),
+        ];
+        let exchanges = HashMap::from([
+            ("node-b".to_string(), ping_pong_exchange(1, "node-b")),
+            ("node-c".to_string(), ping_pong_exchange(1, "node-c")),
+        ]);
+
+        let error =
+            match take_broadcast_remote_exchanges("exchange", "node-a", &destinations, exchanges) {
+                Ok(_) => panic!("an unexpected connection target must fail"),
+                Err(error) => error,
+            };
+        assert!(
+            error
+                .to_string()
+                .contains("unexpected connection targets: node-c")
+        );
+    }
+
+    #[test]
+    fn test_broadcast_sender_rejects_connection_parallelism_mismatch() {
+        let destinations = vec![
+            ("node-a".to_string(), vec!["a-0".to_string()]),
+            ("node-b".to_string(), vec!["b-0".to_string()]),
+        ];
+        let exchanges = HashMap::from([("node-b".to_string(), ping_pong_exchange(2, "node-b"))]);
+
+        let error =
+            match take_broadcast_remote_exchanges("exchange", "node-a", &destinations, exchanges) {
+                Ok(_) => panic!("connection and plan parallelism must match"),
+                Err(error) => error,
+            };
+        assert!(
+            error
+                .to_string()
+                .contains("has 1 channels, but the connection has 2")
+        );
+    }
 }
