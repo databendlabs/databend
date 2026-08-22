@@ -25,6 +25,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::DataType;
 
 use crate::ColumnBindingBuilder;
 use crate::ScalarExpr;
@@ -127,10 +128,12 @@ impl StreamContext {
                         func_name: "is_not_null".to_string(),
                         params: vec![],
                         arguments: vec![origin_stream_column_scalar_expr.clone()],
+                        return_type: Box::new(DataType::Boolean),
                     }),
                     origin_stream_column_scalar_expr,
                     current_stream_column_scalar_expr,
                 ],
+                return_type: Box::new(stream_column.data_type()),
             });
 
             exprs.push(new_stream_column_scalar_expr.as_field_index_expr()?);

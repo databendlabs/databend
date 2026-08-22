@@ -953,6 +953,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_materialized_view_rewrite", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables rewriting queries to scan matching materialized views.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_compact_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables compact after write(copy/insert/replace-into/merge-into), need more memory.",
@@ -1142,6 +1149,13 @@ impl DefaultSettings {
                 ("enable_table_snapshot_stats", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable analyze table statistics for snapshots",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_table_schema_refresh", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh table schemas from storage when listing system.tables, system.columns, or system.statistics, and refresh system.tables statistics. This reflects changes invisible to the meta server (currently only read-only ATTACH tables). Disabled by default; refreshing an ATTACH table may require multiple storage requests.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

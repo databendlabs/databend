@@ -126,6 +126,10 @@ impl Binder {
             .get_settings()
             .get_enable_query_result_cache()
             .unwrap_or_default();
+        let enable_materialized_view_rewrite = ctx
+            .get_settings()
+            .get_enable_materialized_view_rewrite()
+            .unwrap_or(true);
         Binder {
             ctx,
             dialect,
@@ -137,7 +141,7 @@ impl Binder {
             m_cte_table_name: HashMap::new(),
             pre_resolved_tables: HashMap::new(),
             enable_result_cache,
-            enable_materialized_view_rewrite: true,
+            enable_materialized_view_rewrite,
             subquery_executor: None,
         }
     }

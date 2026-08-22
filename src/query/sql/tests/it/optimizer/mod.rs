@@ -30,6 +30,7 @@ mod push_down_filter_project_set;
 mod selectivity;
 mod selectivity_smoke;
 mod stat_derivation;
+mod type_consistency;
 mod union_all;
 
 fn table_statistics(rows: u64) -> TableStatistics {

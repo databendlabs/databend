@@ -581,8 +581,8 @@ impl Join {
             };
             estimator.apply_condition(
                 columns,
-                condition.left.data_type()?,
-                condition.right.data_type()?,
+                condition.left.data_type().as_ref(),
+                condition.right.data_type().as_ref(),
                 condition.is_null_equal,
                 &mut left_join_keys,
                 &mut right_join_keys,
@@ -689,17 +689,22 @@ impl Join {
     }
 
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
+        self.replace_columns(|column| Ok(if column == old { new } else { column }))
+    }
+
+    pub fn replace_columns<F>(&mut self, mut replace: F) -> Result<()>
+    where F: FnMut(Symbol) -> Result<Symbol> {
         for condition in &mut self.equi_conditions {
-            condition.left.replace_column(old, new)?;
-            condition.right.replace_column(old, new)?;
+            condition.left.replace_columns(&mut replace)?;
+            condition.right.replace_columns(&mut replace)?;
         }
 
         for condition in &mut self.non_equi_conditions {
-            condition.replace_column(old, new)?;
+            condition.replace_columns(&mut replace)?;
         }
 
-        if self.marker_index == Some(old) {
-            self.marker_index = Some(new)
+        if let Some(marker_index) = &mut self.marker_index {
+            *marker_index = replace(*marker_index)?;
         }
 
         self.build_side_cache_info = None;
@@ -1177,12 +1182,17 @@ mod tests {
         })
     }
 
-    fn function_call(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
+    fn function_call(
+        func_name: &str,
+        arguments: Vec<ScalarExpr>,
+        return_type: DataType,
+    ) -> ScalarExpr {
         ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: func_name.to_string(),
             params: vec![],
             arguments,
+            return_type: Box::new(return_type),
         })
     }
 
@@ -1211,8 +1221,8 @@ mod tests {
             .expect("test condition should be a single-column join key");
         estimator.apply_condition(
             columns,
-            condition.left.data_type()?,
-            condition.right.data_type()?,
+            condition.left.data_type().as_ref(),
+            condition.right.data_type().as_ref(),
             condition.is_null_equal,
             &mut left_statistics.column_stats,
             &mut right_statistics.column_stats,
@@ -1224,10 +1234,11 @@ mod tests {
         let right_distribution =
             Distribution::GlobalHash(vec![column(2, DataType::Number(NumberDataType::Int32))]);
         let join = Join {
-            non_equi_conditions: vec![function_call("st_intersects", vec![
-                column(0, DataType::Geometry),
-                column(1, DataType::Geometry),
-            ])],
+            non_equi_conditions: vec![function_call(
+                "st_intersects",
+                vec![column(0, DataType::Geometry), column(1, DataType::Geometry)],
+                DataType::Boolean,
+            )],
             join_type: JoinType::Inner,
             ..Default::default()
         };
@@ -1249,10 +1260,11 @@ mod tests {
     #[test]
     fn test_spatial_join_same_side_predicate_does_not_preserve_left_broadcast() -> Result<()> {
         let join = Join {
-            non_equi_conditions: vec![function_call("st_intersects", vec![
-                column(0, DataType::Geometry),
-                column(1, DataType::Geometry),
-            ])],
+            non_equi_conditions: vec![function_call(
+                "st_intersects",
+                vec![column(0, DataType::Geometry), column(1, DataType::Geometry)],
+                DataType::Boolean,
+            )],
             join_type: JoinType::Inner,
             ..Default::default()
         };
@@ -1733,13 +1745,17 @@ mod tests {
         };
         let estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
-            function_call("coalesce", vec![
-                column(0, DataType::Number(NumberDataType::Int32)),
-                ScalarExpr::ConstantExpr(ConstantExpr {
-                    span: None,
-                    value: Scalar::Number(NumberScalar::Int32(0)),
-                }),
-            ]),
+            function_call(
+                "coalesce",
+                vec![
+                    column(0, DataType::Number(NumberDataType::Int32)),
+                    ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
+                        value: Scalar::Number(NumberScalar::Int32(0)),
+                    }),
+                ],
+                DataType::Number(NumberDataType::Int32),
+            ),
             column(1, DataType::Number(NumberDataType::Int32)),
             false,
         );

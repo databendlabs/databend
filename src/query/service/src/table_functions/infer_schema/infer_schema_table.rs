@@ -308,8 +308,8 @@ impl Table for InferSchemaTable {
                     algo = Some(new_algo);
                 }
                 if algo.is_some() {
-                    pipeline.try_add_accumulating_transformer(|| {
-                        Decompressor::try_create(load_ctx.clone(), algo)
+                    pipeline.add_transform(|input, output| {
+                        Decompressor::create(input, output, load_ctx.clone(), algo)
                     })?;
                 }
                 pipeline.add_accumulating_transformer(|| {

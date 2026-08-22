@@ -14,6 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 use itertools::Itertools;
 
 use crate::binder::into_conjunctions;
@@ -115,6 +116,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
                 func_name: "and_filters".to_string(),
                 params: vec![],
                 arguments: args.into_iter().map(normalize_predicate_scalar).collect(),
+                return_type: Box::new(DataType::Boolean),
             })
         }
         PredicateScalar::Or(args) => {
@@ -124,6 +126,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
                 func_name: "or_filters".to_string(),
                 params: vec![],
                 arguments: args.into_iter().map(normalize_predicate_scalar).collect(),
+                return_type: Box::new(DataType::Boolean),
             })
         }
         PredicateScalar::Other(expr) => *expr,
@@ -157,6 +160,7 @@ mod tests {
             func_name: func_name.to_string(),
             params: vec![],
             arguments: vec![lhs, rhs],
+            return_type: Box::new(DataType::Boolean),
         })
     }
 

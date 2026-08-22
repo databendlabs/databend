@@ -2113,6 +2113,7 @@ mod tests {
             func_name: "plus".to_string(),
             params: vec![],
             arguments: vec![left, right],
+            return_type: Box::new(int_data_type()),
         }
         .into()
     }
