@@ -32,15 +32,16 @@ use super::exchange_sorting::ExchangeSorting;
 use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use super::hash_send_sink::HashSendSink;
+use super::outbound_send_channels::SharedOutboundChannels;
 use super::serde::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::network::BlockOutboundConfig;
+use crate::servers::flight::v1::network::BlockOutboundSet;
 use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::RemoteChannel;
-use crate::servers::flight::v1::network::RoundRobinChannel;
+use crate::servers::flight::v1::network::RemoteOutboundChannel;
+use crate::servers::flight::v1::network::RoundRobinOutboundChannel;
 use crate::servers::flight::v1::network::create_local_channels;
-use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
-use crate::servers::flight::v1::network::outbound_buffer::ExchangeSinkBuffer;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
@@ -162,6 +163,7 @@ impl ExchangeSink {
 
         let local_outbound = create_local_channels(&channel_set);
         let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
+        remote_outbound.install_failure_handler(pipeline);
 
         let scatter = Arc::new(HashFlightScatter::try_create(
             ctx.get_function_context()?,
@@ -211,42 +213,38 @@ impl ExchangeSorting for SinkExchangeSorting {
     }
 }
 
-/// Build OutboundChannels for broadcast exchange using PingPongExchange.
+/// Build outbound channels for a broadcast exchange.
 pub(super) fn build_broadcast_outbound_channels(
     params: &BroadcastExchangeParams,
     local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
-) -> Result<Vec<Arc<dyn OutboundChannel>>> {
+) -> Result<SharedOutboundChannels> {
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
 
-    let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
+    let mut block_outbounds = exchange_manager.take_block_outbounds(query_id, exchange_id)?;
 
-    let mut exchanges_seq = Vec::with_capacity(exchanges.len());
+    let mut remote_outbounds = Vec::with_capacity(block_outbounds.len());
 
-    for (target_id, threads) in &params.destination_channels {
+    for (target_id, _threads) in &params.destination_channels {
         if target_id != &params.executor_id {
-            let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "PingPongExchange not found for target {}",
-                    target_id
-                ))
+            let outbound = block_outbounds.remove(target_id.as_str()).ok_or_else(|| {
+                ErrorCode::Internal(format!("block outbound not found for target {}", target_id))
             })?;
-            assert_eq!(threads.len(), exchange.num_threads);
-            exchanges_seq.push(exchange);
+            remote_outbounds.push(outbound);
         }
     }
 
-    // Create shared ExchangeSinkBuffer: one RemoteInstance per PingPong, N channels each
-    let config = ExchangeBufferConfig::default();
-    let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
-        exchanges_seq,
+    let config = BlockOutboundConfig::default();
+    let shared_outbounds = Arc::new(BlockOutboundSet::create_with_producers(
+        remote_outbounds,
+        local_outbound_channels.len(),
         config,
         &GlobalIORuntime::instance(),
-    )?);
+    ));
 
-    let local_channel = RoundRobinChannel::create(local_outbound_channels);
+    let local_channel = RoundRobinOutboundChannel::create(local_outbound_channels);
     let mut remote_idx = 0;
     let mut channels = vec![];
     for (target_id, threads) in &params.destination_channels {
@@ -257,19 +255,19 @@ pub(super) fn build_broadcast_outbound_channels(
 
         let mut remote_channels = Vec::with_capacity(threads.len());
         for thread_idx in 0..threads.len() {
-            remote_channels.push(RemoteChannel::create(
+            remote_channels.push(RemoteOutboundChannel::create(
                 remote_idx,
                 thread_idx,
-                shared_buffer.clone(),
+                shared_outbounds.clone(),
                 compression,
             )?);
         }
 
-        channels.push(RoundRobinChannel::create(remote_channels));
+        channels.push(RoundRobinOutboundChannel::create(remote_channels));
         remote_idx += 1;
     }
 
-    Ok(channels)
+    Ok(SharedOutboundChannels::create(channels, shared_outbounds))
 }
 
 /// Build per-thread OutboundChannels for hash exchange.
@@ -277,34 +275,31 @@ pub(super) fn build_hash_outbound_channels(
     params: &GlobalExchangeParams,
     mut local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
-) -> Result<Vec<Arc<dyn OutboundChannel>>> {
+) -> Result<SharedOutboundChannels> {
     let num_threads = local_outbound_channels.len();
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
-    let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
+    let mut block_outbounds = exchange_manager.take_block_outbounds(query_id, exchange_id)?;
 
-    let mut exchanges_seq = Vec::with_capacity(exchanges.len());
+    let mut remote_outbounds = Vec::with_capacity(block_outbounds.len());
 
-    for (target_id, threads) in &params.destination_channels {
+    for (target_id, _threads) in &params.destination_channels {
         if target_id != &params.executor_id {
-            let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "PingPongExchange not found for target {}",
-                    target_id
-                ))
+            let outbound = block_outbounds.remove(target_id.as_str()).ok_or_else(|| {
+                ErrorCode::Internal(format!("block outbound not found for target {}", target_id))
             })?;
-            assert_eq!(threads.len(), exchange.num_threads);
-            exchanges_seq.push(exchange);
+            remote_outbounds.push(outbound);
         }
     }
 
-    let config = ExchangeBufferConfig::default();
-    let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
-        exchanges_seq,
+    let config = BlockOutboundConfig::default();
+    let shared_outbounds = Arc::new(BlockOutboundSet::create_with_producers(
+        remote_outbounds,
+        num_threads,
         config,
         &GlobalIORuntime::instance(),
-    )?);
+    ));
 
     let mut remote_idx = 0;
     let mut channels = Vec::with_capacity(params.destination_channels.len() * num_threads);
@@ -316,10 +311,10 @@ pub(super) fn build_hash_outbound_channels(
         }
 
         for t_idx in 0..threads.len() {
-            channels.push(RemoteChannel::create(
+            channels.push(RemoteOutboundChannel::create(
                 remote_idx,
                 t_idx,
-                shared_buffer.clone(),
+                shared_outbounds.clone(),
                 compression,
             )?);
         }
@@ -327,5 +322,5 @@ pub(super) fn build_hash_outbound_channels(
         remote_idx += 1;
     }
 
-    Ok(channels)
+    Ok(SharedOutboundChannels::create(channels, shared_outbounds))
 }

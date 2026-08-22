@@ -1,0 +1,200 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: databend-flight-no-retry
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meta
+  namespace: databend-flight-no-retry
+spec:
+  selector:
+    app: databend-meta
+  ports:
+    - name: grpc
+      port: 9191
+      targetPort: 9191
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: databend-meta
+  namespace: databend-flight-no-retry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: databend-meta
+  template:
+    metadata:
+      labels:
+        app: databend-meta
+    spec:
+      containers:
+        - name: meta
+          image: databend-query-flight-no-retry-chaos:ci
+          imagePullPolicy: Never
+          command: ["/databend-meta"]
+          args:
+            - --single
+            - --admin-api-address
+            - "0.0.0.0:28002"
+            - --grpc-api-address
+            - "0.0.0.0:9191"
+            - --grpc-api-advertise-host
+            - "$(POD_IP)"
+            - --raft-listen-host
+            - "0.0.0.0"
+            - --raft-advertise-host
+            - "$(POD_IP)"
+            - --raft-api-port
+            - "28004"
+            - --raft-dir
+            - /var/lib/databend-meta
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: ADMIN_API_ADDRESS
+              value: "$(POD_IP):28002"
+            - name: METASRV_GRPC_API_ADDRESS
+              value: "$(POD_IP):9191"
+            - name: KVSRV_API_PORT
+              value: "28004"
+            - name: KVSRV_LISTEN_HOST
+              value: "$(POD_IP)"
+            - name: KVSRV_ADVERTISE_HOST
+              value: "$(POD_IP)"
+            - name: KVSRV_ID
+              value: "1"
+            - name: KVSRV_RAFT_DIR
+              value: /var/lib/databend-meta
+            - name: LOG_STDERR_ON
+              value: "true"
+          readinessProbe:
+            tcpSocket:
+              port: 9191
+            initialDelaySeconds: 2
+            periodSeconds: 2
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: query-config
+  namespace: databend-flight-no-retry
+data:
+  query.toml: |
+    [query]
+    max_active_sessions = 64
+    flight_api_address = "0.0.0.0:9090"
+    admin_api_address = "0.0.0.0:8080"
+    metric_api_address = "0.0.0.0:7070"
+    mysql_handler_host = "0.0.0.0"
+    mysql_handler_port = 3307
+    http_handler_host = "0.0.0.0"
+    http_handler_port = 8000
+    tenant_id = "test_tenant"
+    cluster_id = "flight_no_retry_cluster"
+    warehouse_id = "flight_no_retry_warehouse"
+    table_engine_memory_enabled = true
+
+    [[query.users]]
+    name = "root"
+    auth_type = "no_password"
+
+    [log]
+    [log.stderr]
+    on = true
+    level = "INFO"
+    format = "text"
+
+    [meta]
+    endpoints = ["meta.databend-flight-no-retry.svc.cluster.local:9191"]
+    username = "root"
+    password = "root"
+
+    [storage]
+    type = "fs"
+    [storage.fs]
+    data_path = "/var/lib/databend"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: query-headless
+  namespace: databend-flight-no-retry
+spec:
+  clusterIP: None
+  selector:
+    app: databend-query
+  ports:
+    - name: mysql
+      port: 3307
+    - name: flight
+      port: 9090
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: databend-query
+  namespace: databend-flight-no-retry
+spec:
+  serviceName: query-headless
+  podManagementPolicy: Parallel
+  replicas: 3
+  selector:
+    matchLabels:
+      app: databend-query
+  template:
+    metadata:
+      labels:
+        app: databend-query
+    spec:
+      # The net-admin sidecar injects network faults and signals the query process.
+      shareProcessNamespace: true
+      # Query exits if Meta is unavailable during startup. Preserve previous.log for
+      # injected crashes instead of filling it with an unrelated startup failure.
+      initContainers:
+        - name: wait-for-meta
+          image: nicolaka/netshoot:v0.14
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - until nc -z -w 1 meta.databend-flight-no-retry.svc.cluster.local 9191; do sleep 1; done
+      containers:
+        - name: query
+          image: databend-query-flight-no-retry-chaos:ci
+          imagePullPolicy: Never
+          command: ["/databend-query"]
+          args:
+            - -c
+            - /etc/databend/query.toml
+            - --internal-enable-sandbox-tenant
+          volumeMounts:
+            - name: query-config
+              mountPath: /etc/databend
+            - name: data
+              mountPath: /var/lib/databend
+          readinessProbe:
+            tcpSocket:
+              port: 3307
+            initialDelaySeconds: 3
+            periodSeconds: 2
+        - name: net-admin
+          image: nicolaka/netshoot:v0.14
+          imagePullPolicy: IfNotPresent
+          command: ["sleep", "infinity"]
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+      volumes:
+        - name: query-config
+          configMap:
+            name: query-config
+        - name: data
+          hostPath:
+            path: /var/lib/databend-flight-no-retry/data
+            type: DirectoryOrCreate

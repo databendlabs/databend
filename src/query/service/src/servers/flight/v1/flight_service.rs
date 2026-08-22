@@ -36,7 +36,6 @@ use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::stream;
 use tokio_stream::Stream;
-use tokio_stream::StreamExt;
 use tonic::Request;
 use tonic::Response as RawResponse;
 use tonic::Status;
@@ -154,31 +153,19 @@ impl FlightService for DatabendQueryFlightService {
             Status::invalid_argument(format!("Failed to parse DoExchangeParams: {}", e))
         })?;
 
-        let sender = DataExchangeManager::instance().handle_do_exchange(
+        let attachment = DataExchangeManager::instance().handle_do_exchange(
             &params.query_id,
             &params.exchange_id,
+            &params.source_id,
             params.num_threads,
+            std::time::Duration::from_secs(params.receiver_lease_secs),
         )?;
 
-        let mut stream = req.into_inner();
+        let stream = req.into_inner();
         let (tx, rx) = async_channel::bounded(1);
 
         GlobalIORuntime::instance().spawn(async move {
-            while let Some(result) = stream.next().await {
-                let Ok(flight_data) = result else {
-                    break;
-                };
-
-                if sender.add_data(flight_data).await.is_err() {
-                    break; // Receiver closed
-                }
-
-                // Send pong (empty response signals readiness for next ping)
-                if let Err(_cause) = tx.try_send(Ok(FlightData::default())) {
-                    break;
-                }
-            }
-            // sender is dropped here → closes sub-queues, notifies processors
+            attachment.serve(stream, tx).await;
         });
 
         Ok(RawResponse::new(Box::pin(rx)))

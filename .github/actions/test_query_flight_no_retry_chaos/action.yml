@@ -1,0 +1,29 @@
+name: "Test Flight Without Retries"
+description: "Verify do_exchange behavior with the default retry policy disabled"
+
+inputs:
+  target:
+    description: "Rust target used by the Linux build job"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        category: full
+        artifacts: meta,query
+
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+
+    - name: Install MySQL client
+      shell: bash
+      run: python -m pip install mysql-connector-python==26.7.0
+
+    - name: Run Flight no-retry chaos tests
+      shell: bash
+      run: ./scripts/ci/query-flight-no-retry-chaos/run.sh
