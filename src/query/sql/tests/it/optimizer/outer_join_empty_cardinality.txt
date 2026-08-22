@@ -1,0 +1,164 @@
+=== commute_proven_empty_probe_to_build ===
+description: When both LEFT JOIN inputs estimate to zero, commute the proven-empty probe input to the hash-build side.
+sql: SELECT p.k, e.k
+FROM proven_empty AS p
+LEFT JOIN estimated_empty AS e ON p.k = e.k
+raw_plan:
+EvalScalar
+├── scalars: [proven_empty.k (#0) AS (#0), estimated_empty.k (#1) AS (#1)]
+├── output columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+├── outer columns: []
+├── used columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+├── cardinality: 0.000
+├── precise cardinality: N/A
+├── statistics
+└── Join(Left)
+    ├── build keys: [estimated_empty.k (#1)]
+    ├── probe keys: [proven_empty.k (#0)]
+    ├── other filters: []
+    ├── output columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+    ├── outer columns: []
+    ├── used columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    ├── Scan
+    │   ├── table: default.estimated_empty (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   ├── limit: NONE
+    │   ├── output columns: [estimated_empty.k (#1)]
+    │   ├── outer columns: []
+    │   ├── used columns: [estimated_empty.k (#1)]
+    │   ├── cardinality: 0.000
+    │   ├── precise cardinality: N/A
+    │   └── statistics
+    └── Scan
+        ├── table: default.proven_empty (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [proven_empty.k (#0)]
+        ├── outer columns: []
+        ├── used columns: [proven_empty.k (#0)]
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
+        └── statistics
+
+optimized_plan:
+Join(Right)
+├── build keys: [proven_empty.k (#0)]
+├── probe keys: [estimated_empty.k (#1)]
+├── other filters: []
+├── output columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+├── outer columns: []
+├── used columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+├── cardinality: 0.000
+├── precise cardinality: 0
+├── statistics
+├── Scan
+│   ├── table: default.proven_empty (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   ├── limit: NONE
+│   ├── output columns: [proven_empty.k (#0)]
+│   ├── outer columns: []
+│   ├── used columns: [proven_empty.k (#0)]
+│   ├── cardinality: 0.000
+│   ├── precise cardinality: 0
+│   └── statistics
+└── Scan
+    ├── table: default.estimated_empty (#1)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [estimated_empty.k (#1)]
+    ├── outer columns: []
+    ├── used columns: [estimated_empty.k (#1)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    └── statistics
+
+
+=== keep_proven_empty_build_side ===
+description: When the proven-empty input is already the hash-build side, keep the LEFT JOIN orientation.
+sql: SELECT e.k, p.k
+FROM estimated_empty AS e
+LEFT JOIN proven_empty AS p ON e.k = p.k
+raw_plan:
+EvalScalar
+├── scalars: [estimated_empty.k (#0) AS (#0), proven_empty.k (#1) AS (#1)]
+├── output columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+├── outer columns: []
+├── used columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+├── cardinality: 0.000
+├── precise cardinality: N/A
+├── statistics
+└── Join(Left)
+    ├── build keys: [proven_empty.k (#1)]
+    ├── probe keys: [estimated_empty.k (#0)]
+    ├── other filters: []
+    ├── output columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+    ├── outer columns: []
+    ├── used columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    ├── Scan
+    │   ├── table: default.proven_empty (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   ├── limit: NONE
+    │   ├── output columns: [proven_empty.k (#1)]
+    │   ├── outer columns: []
+    │   ├── used columns: [proven_empty.k (#1)]
+    │   ├── cardinality: 0.000
+    │   ├── precise cardinality: N/A
+    │   └── statistics
+    └── Scan
+        ├── table: default.estimated_empty (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [estimated_empty.k (#0)]
+        ├── outer columns: []
+        ├── used columns: [estimated_empty.k (#0)]
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
+        └── statistics
+
+optimized_plan:
+Join(Left)
+├── build keys: [proven_empty.k (#1)]
+├── probe keys: [estimated_empty.k (#0)]
+├── other filters: []
+├── output columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+├── outer columns: []
+├── used columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+├── cardinality: 0.000
+├── precise cardinality: N/A
+├── statistics
+├── Scan
+│   ├── table: default.proven_empty (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   ├── limit: NONE
+│   ├── output columns: [proven_empty.k (#1)]
+│   ├── outer columns: []
+│   ├── used columns: [proven_empty.k (#1)]
+│   ├── cardinality: 0.000
+│   ├── precise cardinality: 0
+│   └── statistics
+└── Scan
+    ├── table: default.estimated_empty (#0)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [estimated_empty.k (#0)]
+    ├── outer columns: []
+    ├── used columns: [estimated_empty.k (#0)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    └── statistics
+
+

@@ -68,6 +68,7 @@ pub struct SelectivityEstimator {
     top_n: TopNSet,
     count_min_sketch: CountMinSketchSet,
     overrides: ColumnStatSet,
+    proven_empty: bool,
 }
 
 impl SelectivityEstimator {
@@ -78,6 +79,7 @@ impl SelectivityEstimator {
             top_n: TopNSet::new(),
             count_min_sketch: CountMinSketchSet::new(),
             overrides: ColumnStatSet::new(),
+            proven_empty: cardinality == StatCardinality::Exact(0),
         }
     }
 
@@ -89,6 +91,13 @@ impl SelectivityEstimator {
     pub fn with_count_min_sketch(mut self, count_min_sketch: CountMinSketchSet) -> Self {
         self.count_min_sketch = count_min_sketch;
         self
+    }
+
+    /// Returns true when the predicates deterministically produce no rows.
+    ///
+    /// This is deliberately stronger than an estimated cardinality of zero.
+    pub fn is_proven_empty(&self) -> bool {
+        self.proven_empty
     }
 
     fn merged_column_stats(&self) -> ColumnStatSet {
@@ -135,9 +144,16 @@ impl SelectivityEstimator {
             }),
         };
         let expr = scalar_expr.as_expr()?;
-        let input_domains = self.build_input_domains(&expr)?;
-        let (expr, output_domain) =
-            ConstantFolder::fold_with_domain(&expr, &input_domains, &func_ctx, &BUILTIN_FUNCTIONS);
+        let (expr, output_domain) = if contains_modulo(&scalar_expr) {
+            // Modulo domain folding can infer an empty range through lossy
+            // mixed-integer reasoning, including signed MIN % -1 edge semantics.
+            // Keep it in the numeric estimation path instead of treating its
+            // derived domain as a logical proof.
+            (expr, None)
+        } else {
+            let input_domains = self.build_constraint_domains(&expr)?;
+            ConstantFolder::fold_with_domain(&expr, &input_domains, &func_ctx, &BUILTIN_FUNCTIONS)
+        };
 
         // ConstantFolder owns expression/domain reasoning: boolean shortcuts and
         // contradictions visible from input column domains. It can still leave
@@ -147,6 +163,7 @@ impl SelectivityEstimator {
             return match constant_filter_truthiness(&constant.scalar) {
                 Some(true) => Ok(self.cardinality.value()),
                 Some(false) => {
+                    self.proven_empty = true;
                     self.clear_column_stats_for_empty_result();
                     Ok(0.0)
                 }
@@ -167,6 +184,10 @@ impl SelectivityEstimator {
             }) => !domain.has_true,
             _ => false,
         }) {
+            // These domains contain only type constraints and exact all-null
+            // facts, so an expression with no true result is deterministically
+            // false for every input row.
+            self.proven_empty = true;
             self.clear_column_stats_for_empty_result();
             return Ok(0.0);
         }
@@ -195,20 +216,19 @@ impl SelectivityEstimator {
         Ok(output_cardinality)
     }
 
-    fn build_input_domains(
+    fn build_constraint_domains(
         &self,
         expr: &Expr<ColumnBinding>,
     ) -> Result<HashMap<ColumnBinding, Domain>> {
         expr.column_refs()
             .into_iter()
             .map(|(binding, data_type)| {
-                let Some(column_stat) = self.column_stats.get(&binding.index) else {
-                    return Ok((binding, Domain::full(&data_type)));
-                };
-
                 if matches!(data_type, DataType::Nullable(_))
                     && let StatCardinality::Exact(cardinality) = self.cardinality
-                    && column_stat.null_count == StatCount::Exact(cardinality)
+                    && self
+                        .column_stats
+                        .get(&binding.index)
+                        .is_some_and(|stat| stat.null_count == StatCount::Exact(cardinality))
                 {
                     return Ok((
                         binding,
@@ -219,35 +239,7 @@ impl SelectivityEstimator {
                     ));
                 }
 
-                if !matches!(
-                    data_type.remove_nullable(),
-                    DataType::Boolean
-                        | DataType::String
-                        | DataType::Number(_)
-                        | DataType::Decimal(_)
-                        | DataType::Date
-                        | DataType::Timestamp
-                ) {
-                    return Ok((binding, Domain::full(&data_type)));
-                }
-
-                match Domain::from_datum(
-                    &data_type,
-                    column_stat.min.clone(),
-                    column_stat.max.clone(),
-                    column_stat.null_count.upper() > 0.0,
-                ) {
-                    Ok(domain) => Ok((binding, domain)),
-                    Err(msg) => {
-                        log::warn!(
-                            data_type:?,
-                            column_stat:?,
-                            msg;
-                            "Failed to build input domain"
-                        );
-                        Ok((binding, Domain::full(&data_type)))
-                    }
-                }
+                Ok((binding, Domain::full(&data_type)))
             })
             .collect()
     }
@@ -271,6 +263,7 @@ impl SelectivityEstimator {
             Selectivity::Unknown => DEFAULT_SELECTIVITY,
             Selectivity::LowerBound => UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND,
             Selectivity::Zero => {
+                self.proven_empty = true;
                 self.clear_column_stats_for_empty_result();
                 return 0.0;
             }
@@ -405,6 +398,16 @@ fn constant_filter_truthiness(scalar: &Scalar) -> Option<bool> {
     }
 }
 
+fn contains_modulo(expr: &ScalarExpr) -> bool {
+    match expr {
+        ScalarExpr::FunctionCall(function) => {
+            function.func_name == "modulo" || function.arguments.iter().any(contains_modulo)
+        }
+        ScalarExpr::CastExpr(cast) => contains_modulo(&cast.argument),
+        _ => false,
+    }
+}
+
 // SelectivityVisitor consumes the expression after ConstantFolder has applied
 // expression/domain reasoning. Deterministic predicate truth, boolean
 // short-circuiting, and contradictions visible from input domains should already
@@ -465,6 +468,13 @@ impl ValueConstraintState {
         if !column_stats.contains_key(&index) {
             return Ok(());
         }
+        if matches!(constraint, ValueConstraint::Range { .. })
+            && constraint.is_disjoint_from(&column_stats[&index])?
+        {
+            // A range that misses stored bounds may match newer data. Do not
+            // materialize the stale contradiction into output statistics.
+            return Ok(());
+        }
         let mut constraints = self.pending.get(&index).cloned().unwrap_or_default();
         constraints.push(constraint);
         self.pending.insert(index, constraints);
@@ -502,6 +512,12 @@ type ExprCall = databend_common_expression::FunctionCall<ColumnBinding>;
 
 impl Selectivity {
     fn checked_estimate(value: f64) -> Result<Self> {
+        // Column distributions are estimates and may lag behind appended data.
+        // Reserve exact zero for expression-local facts and exact constraints;
+        // a statistics-derived zero falls back to the unknown-filter heuristic.
+        if value == 0.0 {
+            return Ok(Selectivity::Unknown);
+        }
         if value.is_finite() && (0.0..=1.0).contains(&value) {
             return Ok(Selectivity::N(value));
         }
@@ -681,6 +697,8 @@ impl SelectivityVisitor<'_> {
                 let Some(const_datum) = constant.scalar.clone().to_datum() else {
                     return self.derive_function_selectivity(func);
                 };
+                let constraint = ValueConstraint::from_comparison(op, const_datum.clone());
+                let disjoint_from_stored_range = constraint.is_disjoint_from(column_stat)?;
 
                 let distorted_range = matches!(
                     op,
@@ -690,17 +708,17 @@ impl SelectivityVisitor<'_> {
                     .as_ref()
                     .is_some_and(|histogram| histogram.is_range_distorted());
                 if matches!(self.constraint_context, ConstraintContext::And) {
-                    self.constraints.add(
-                        self.column_stats,
-                        column_index,
-                        ValueConstraint::from_comparison(op, const_datum.clone()),
-                    )?;
+                    self.constraints
+                        .add(self.column_stats, column_index, constraint)?;
                     if let Some(selectivity) = self.derive_frequency_equality_selectivity(
                         column_index,
                         op,
                         &constant.scalar,
                     )? {
                         return Ok(selectivity);
+                    }
+                    if disjoint_from_stored_range {
+                        return Ok(Selectivity::Unknown);
                     }
                     if distorted_range {
                         return Ok(Selectivity::LowerBound);

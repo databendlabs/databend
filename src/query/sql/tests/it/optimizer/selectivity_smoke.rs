@@ -52,6 +52,8 @@ use databend_common_statistics::Datum;
 use databend_common_statistics::F64;
 use proptest::prelude::*;
 
+const DEFAULT_UNKNOWN_SELECTIVITY: f64 = 0.2;
+
 fn column_binding(name: &str, index: usize, data_type: DataType) -> ColumnBinding {
     ColumnBindingBuilder::new(
         name.to_string(),
@@ -114,6 +116,254 @@ fn zero_cardinality_comparison_selectivity_is_finite() {
 
     assert_eq!(estimated_rows, 0.0);
     assert!(estimated_rows.is_finite());
+    assert!(!estimator.is_proven_empty());
+    assert_eq!(
+        estimator.column_stats()[&Symbol::new(0)].ndv,
+        NdvEstimate::exact(0.0)
+    );
+}
+
+#[test]
+fn estimated_zero_selectivity_is_not_proven_empty() {
+    let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(5),
+        ndv: NdvEstimate::exact(6.0),
+        null_count: StatCount::estimate(8.0, 8.0),
+        histogram: None,
+    })]);
+    let expr = function_expr("is_not_null", vec![column_expr(
+        "a",
+        0,
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+    )]);
+
+    let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::exact(8));
+    let estimated_rows = estimator
+        .apply(&[expr])
+        .expect("all-null estimate should use the unknown fallback");
+
+    assert_eq!(estimated_rows, 8.0 * DEFAULT_UNKNOWN_SELECTIVITY);
+    assert!(!estimator.is_proven_empty());
+    assert!(estimator.column_stats()[&Symbol::new(0)].ndv.upper > 0.0);
+}
+
+#[test]
+fn exact_all_null_selectivity_is_proven_empty() {
+    let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(5),
+        ndv: NdvEstimate::exact(6.0),
+        null_count: StatCount::exact(8),
+        histogram: None,
+    })]);
+    let expr = function_expr("is_not_null", vec![column_expr(
+        "a",
+        0,
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+    )]);
+
+    let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::exact(8));
+    let estimated_rows = estimator
+        .apply(&[expr])
+        .expect("exact all-null input should prove an empty filter");
+
+    assert_eq!(estimated_rows, 0.0);
+    assert!(estimator.is_proven_empty());
+    assert_eq!(
+        estimator.column_stats()[&Symbol::new(0)].ndv,
+        NdvEstimate::exact(0.0)
+    );
+}
+
+#[test]
+fn constant_filter_truthiness_tracks_proven_empty() {
+    for (scalar, expected_rows, proven_empty) in [
+        (Scalar::Number(NumberScalar::UInt8(1)), 10.0, false),
+        (Scalar::Number(NumberScalar::Int8(-1)), 10.0, false),
+        (Scalar::Number(NumberScalar::UInt8(0)), 0.0, true),
+        (Scalar::Boolean(true), 10.0, false),
+        (Scalar::Boolean(false), 0.0, true),
+        (Scalar::Null, 0.0, true),
+    ] {
+        let mut estimator =
+            SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::estimate(10.0));
+        let estimated_rows = estimator
+            .apply(&[constant_expr(scalar)])
+            .expect("constant predicate should estimate");
+
+        assert_eq!(estimated_rows, expected_rows);
+        assert_eq!(estimator.is_proven_empty(), proven_empty);
+    }
+}
+
+#[test]
+fn stale_range_statistics_are_not_proven_empty() {
+    let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(5),
+        ndv: NdvEstimate::exact(6.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    let expr = comparison_expr(
+        "gt",
+        column_expr("a", 0, DataType::Number(NumberDataType::UInt64)),
+        constant_expr(Scalar::Number(NumberScalar::UInt64(10))),
+    );
+
+    let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(100.0));
+    let estimated_rows = estimator
+        .apply(&[expr])
+        .expect("stale range should use an unknown selectivity");
+
+    assert_eq!(estimated_rows, 100.0 * DEFAULT_UNKNOWN_SELECTIVITY);
+    assert!(!estimator.is_proven_empty());
+    assert!(estimator.column_stats()[&Symbol::new(0)].ndv.upper > 0.0);
+}
+
+#[test]
+fn selective_equality_survives_stale_range_in_conjunction() {
+    let range_column = Symbol::new(0);
+    let equality_column = Symbol::new(1);
+    let column_stats = ColumnStatSet::from_iter([
+        (range_column, ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(5),
+            ndv: NdvEstimate::exact(6.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+        (equality_column, ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(99),
+            ndv: NdvEstimate::exact(100.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+    ]);
+    let stale_range = comparison_expr(
+        "gt",
+        column_expr("range_value", 0, DataType::Number(NumberDataType::UInt64)),
+        constant_expr(Scalar::Number(NumberScalar::UInt64(10))),
+    );
+    let selective_equality = comparison_expr(
+        "eq",
+        column_expr(
+            "selective_value",
+            1,
+            DataType::Number(NumberDataType::UInt64),
+        ),
+        constant_expr(Scalar::Number(NumberScalar::UInt64(42))),
+    );
+    let mut stale_range_only =
+        SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(100.0));
+    let mut conjunction = SelectivityEstimator::new(column_stats, StatCardinality::estimate(100.0));
+
+    let stale_range_rows = stale_range_only
+        .apply(std::slice::from_ref(&stale_range))
+        .expect("stale range should estimate");
+    let conjunction_rows = conjunction
+        .apply(&[stale_range, selective_equality])
+        .expect("conjunction should estimate");
+
+    assert_eq!(stale_range_rows, 100.0 * DEFAULT_UNKNOWN_SELECTIVITY);
+    assert_eq!(conjunction_rows, 1.0);
+    assert!(conjunction_rows < stale_range_rows);
+    assert!(!conjunction.is_proven_empty());
+}
+
+#[test]
+fn modulo_with_negative_divisor_is_not_proven_empty() {
+    let mut estimator = SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::exact(10));
+    let predicate = int64_modulo_equality_expr(Symbol::new(0), -2, 0);
+
+    assert!(estimator.apply(&[predicate]).unwrap() > 0.0);
+    assert!(!estimator.is_proven_empty());
+}
+
+#[test]
+fn modulo_large_integer_comparison_does_not_lose_precision() {
+    let mut estimator = SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::exact(1));
+    let predicate = int64_modulo_equality_expr(Symbol::new(0), i64::MIN, i64::MAX);
+
+    assert!(estimator.apply(&[predicate]).unwrap() > 0.0);
+    assert!(!estimator.is_proven_empty());
+}
+
+#[test]
+fn modulo_mixed_integer_signedness_is_not_proven_empty() {
+    let mut estimator = SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::exact(1));
+    let predicate = number_modulo_equality_expr(
+        Symbol::new(0),
+        NumberDataType::UInt64,
+        NumberScalar::Int8(-2),
+        NumberDataType::Int8,
+        NumberScalar::UInt8(255),
+        NumberDataType::UInt8,
+    );
+
+    assert!(estimator.apply(&[predicate]).unwrap() > 0.0);
+    assert!(!estimator.is_proven_empty());
+}
+
+#[test]
+fn modulo_out_of_range_remainders_are_not_proven_empty() {
+    for (divisor, remainder) in [(-1, -1), (-2, -2), (-2, 2), (2, -2), (2, 2)] {
+        let mut estimator =
+            SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::exact(10));
+        let predicate = int64_modulo_equality_expr(Symbol::new(0), divisor, remainder);
+
+        assert!(estimator.apply(&[predicate]).unwrap() > 0.0);
+        assert!(!estimator.is_proven_empty());
+    }
+}
+
+fn int64_modulo_equality_expr(column_index: Symbol, divisor: i64, remainder: i64) -> ScalarExpr {
+    number_modulo_equality_expr(
+        column_index,
+        NumberDataType::Int64,
+        NumberScalar::Int64(divisor),
+        NumberDataType::Int64,
+        NumberScalar::Int64(remainder),
+        NumberDataType::Int64,
+    )
+}
+
+fn number_modulo_equality_expr(
+    column_index: Symbol,
+    column_type: NumberDataType,
+    divisor: NumberScalar,
+    divisor_type: NumberDataType,
+    remainder: NumberScalar,
+    remainder_type: NumberDataType,
+) -> ScalarExpr {
+    let modulo = function_expr("modulo", vec![
+        column_expr(
+            "number",
+            column_index.as_usize(),
+            DataType::Number(column_type),
+        ),
+        ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                span: None,
+                value: Scalar::Number(divisor),
+            },
+            DataType::Number(divisor_type),
+        ),
+    ]);
+
+    comparison_expr(
+        "eq",
+        modulo,
+        ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                span: None,
+                value: Scalar::Number(remainder),
+            },
+            DataType::Number(remainder_type),
+        ),
+    )
 }
 
 #[test]
