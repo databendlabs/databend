@@ -507,3 +507,92 @@ drop table t2
 
 statement ok
 set prefer_broadcast_join = 1
+
+statement ok
+set enforce_shuffle_join = 1
+
+statement ok
+create or replace table node_shuffle_l(
+    k1 int not null,
+    k2 string not null,
+    payload string not null
+)
+
+statement ok
+create or replace table node_shuffle_r(
+    k1 int,
+    k2 string not null,
+    payload string not null
+)
+
+statement ok
+insert into node_shuffle_l values
+    (1, 'a', 'left-1'),
+    (2, 'b', 'left-2'),
+    (3, 'c', 'left-3')
+
+statement ok
+insert into node_shuffle_r values
+    (1, 'a', 'right-1'),
+    (NULL, 'b', 'right-null'),
+    (2, 'x', 'right-2'),
+    (4, 'd', 'right-4')
+
+query TT
+select l.payload, r.payload
+from node_shuffle_l as l
+inner join node_shuffle_r as r on l.k1 = r.k1 and l.k2 = r.k2
+order by l.k1
+----
+left-1 right-1
+
+query TT
+select l.payload, r.payload
+from node_shuffle_l as l
+left join node_shuffle_r as r on l.k1 = r.k1 and l.k2 = r.k2
+order by l.k1
+----
+left-1 right-1
+left-2 NULL
+left-3 NULL
+
+query T
+select l.payload
+from node_shuffle_l as l
+where exists (
+    select 1 from node_shuffle_r as r where l.k1 = r.k1 and l.k2 = r.k2
+)
+order by l.k1
+----
+left-1
+
+query T
+select l.payload
+from node_shuffle_l as l
+where not exists (
+    select 1 from node_shuffle_r as r where l.k1 = r.k1 and l.k2 = r.k2
+)
+order by l.k1
+----
+left-2
+left-3
+
+query ITB
+select l.k1, l.k2, l.k1 in (
+    select r.k1 from node_shuffle_r as r where l.k2 = r.k2
+)
+from node_shuffle_l as l
+order by l.k1
+----
+1 a 1
+2 b NULL
+3 c 0
+
+statement ok
+drop table node_shuffle_l
+
+statement ok
+drop table node_shuffle_r
+
+statement ok
+unset enforce_shuffle_join

@@ -627,6 +627,18 @@ impl Join {
             .any(|condition| condition.is_null_equal)
     }
 
+    fn nullable_mark_join_broadcast_child(&self) -> Option<usize> {
+        if self.equi_conditions.len() != 1 || !self.has_null_equi_condition() {
+            return None;
+        }
+
+        match self.join_type {
+            JoinType::LeftMark => Some(0),
+            JoinType::RightMark => Some(1),
+            _ => None,
+        }
+    }
+
     pub fn derive_join_stats(
         &self,
         left_stat_info: Arc<StatInfo>,
@@ -911,6 +923,13 @@ impl Operator for Join {
             return Ok(required);
         }
 
+        // Nullable mark joins must replicate the subquery side so every
+        // partition can observe NULLs when computing the marker value.
+        if self.nullable_mark_join_broadcast_child() == Some(child_index) {
+            required.distribution = Distribution::Broadcast;
+            return Ok(required);
+        }
+
         // Try to use broadcast join
         let settings = ctx.get_settings();
         if !matches!(
@@ -952,22 +971,35 @@ impl Operator for Join {
             }
         }
 
-        // Otherwise, use hash shuffle
-        if child_index == 0 {
-            let left_conditions = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.left.clone())
-                .collect();
-            required.distribution = Distribution::GlobalHash(left_conditions);
+        // Otherwise, use hash shuffle. Reuse an existing matching global hash
+        // distribution on either side instead of reshuffling it node-to-node.
+        let left_conditions: Vec<_> = self
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.left.clone())
+            .collect();
+        let right_conditions: Vec<_> = self
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.right.clone())
+            .collect();
+        let reuse_global_hash =
+            matches_global_hash_distribution(&probe_physical_prop.distribution, &left_conditions)
+                || matches_global_hash_distribution(
+                    &build_physical_prop.distribution,
+                    &right_conditions,
+                );
+
+        let keys = if child_index == 0 {
+            left_conditions
         } else {
-            let right_conditions = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.right.clone())
-                .collect();
-            required.distribution = Distribution::GlobalHash(right_conditions);
-        }
+            right_conditions
+        };
+        required.distribution = if reuse_global_hash {
+            global_hash_join_distribution(keys)
+        } else {
+            hash_join_distribution(keys)
+        };
 
         Ok(required)
     }
@@ -1026,24 +1058,29 @@ impl Operator for Join {
         }
 
         // For mark join with nullable eq comparison, ensure to use broadcast for subquery side
-        if self.join_type.is_mark_join()
-            && self.equi_conditions.len() == 1
-            && self.has_null_equi_condition()
-        {
+        if let Some(broadcast_child) = self.nullable_mark_join_broadcast_child() {
             // subquery as left probe side
-            if matches!(self.join_type, JoinType::LeftMark) {
+            if broadcast_child == 0 {
                 let conditions = self
                     .equi_conditions
                     .iter()
                     .map(|condition| condition.right.clone())
-                    .collect();
+                    .collect::<Vec<_>>();
 
                 children_required.push(vec![
                     RequiredProperty {
                         distribution: Distribution::Broadcast,
                     },
                     RequiredProperty {
-                        distribution: Distribution::GlobalHash(conditions),
+                        distribution: hash_join_distribution(conditions.clone()),
+                    },
+                ]);
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                    RequiredProperty {
+                        distribution: global_hash_join_distribution(conditions),
                     },
                 ]);
             } else {
@@ -1052,11 +1089,19 @@ impl Operator for Join {
                     .equi_conditions
                     .iter()
                     .map(|condition| condition.left.clone())
-                    .collect();
+                    .collect::<Vec<_>>();
 
                 children_required.push(vec![
                     RequiredProperty {
-                        distribution: Distribution::GlobalHash(conditions),
+                        distribution: hash_join_distribution(conditions.clone()),
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                ]);
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: global_hash_join_distribution(conditions),
                     },
                     RequiredProperty {
                         distribution: Distribution::Broadcast,
@@ -1083,10 +1128,18 @@ impl Operator for Join {
             if !left_keys.is_empty() {
                 children_required.push(vec![
                     RequiredProperty {
-                        distribution: Distribution::GlobalHash(left_keys),
+                        distribution: hash_join_distribution(left_keys.clone()),
                     },
                     RequiredProperty {
-                        distribution: Distribution::GlobalHash(right_keys),
+                        distribution: hash_join_distribution(right_keys.clone()),
+                    },
+                ]);
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: global_hash_join_distribution(left_keys),
+                    },
+                    RequiredProperty {
+                        distribution: global_hash_join_distribution(right_keys),
                     },
                 ]);
             }
@@ -1136,6 +1189,21 @@ impl Operator for Join {
 
         Ok(children_required)
     }
+}
+
+fn hash_join_distribution(keys: Vec<ScalarExpr>) -> Distribution {
+    Distribution::NodeToNodeHash(keys)
+}
+
+fn global_hash_join_distribution(keys: Vec<ScalarExpr>) -> Distribution {
+    Distribution::GlobalHash(keys)
+}
+
+fn matches_global_hash_distribution(distribution: &Distribution, keys: &[ScalarExpr]) -> bool {
+    matches!(
+        distribution,
+        Distribution::GlobalHash(actual) if actual.as_slice() == keys
+    )
 }
 
 #[cfg(test)]
@@ -1227,6 +1295,39 @@ mod tests {
             &mut left_statistics.column_stats,
             &mut right_statistics.column_stats,
         )
+    }
+
+    #[test]
+    fn test_hash_join_uses_node_to_node_shuffle() {
+        let keys = vec![
+            column(0, DataType::Number(NumberDataType::UInt64)),
+            column(1, DataType::Number(NumberDataType::UInt64)),
+        ];
+
+        let Distribution::NodeToNodeHash(actual) = hash_join_distribution(keys.clone()) else {
+            panic!("hash joins should use node-to-node shuffle");
+        };
+        assert_eq!(actual, keys);
+    }
+
+    #[test]
+    fn test_matching_global_hash_distribution() {
+        let first_key = column(0, DataType::Number(NumberDataType::UInt64));
+        let second_key = column(1, DataType::Number(NumberDataType::UInt64));
+        let keys = vec![first_key.clone(), second_key.clone()];
+
+        assert!(matches_global_hash_distribution(
+            &Distribution::GlobalHash(keys.clone()),
+            &keys,
+        ));
+        assert!(!matches_global_hash_distribution(
+            &Distribution::GlobalHash(vec![second_key, first_key]),
+            &keys,
+        ));
+        assert!(!matches_global_hash_distribution(
+            &Distribution::NodeToNodeHash(keys.clone()),
+            &keys,
+        ));
     }
 
     #[test]
