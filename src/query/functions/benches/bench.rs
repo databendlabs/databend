@@ -196,6 +196,16 @@ mod bitmap {
         });
     }
 
+    #[divan::bench(args = [1000, 65535])]
+    fn bitmap_not_count(bencher: divan::Bencher, rows: usize) {
+        let column = build_bitmap_column(rows as u64, 125);
+        let entry = column.into();
+
+        bencher.bench(|| {
+            eval_bitmap_result(&entry, rows, "bitmap_not_count");
+        });
+    }
+
     #[divan::bench(args = [100_000, 1_000_000])]
     fn bitmap_intersect_empty(bencher: divan::Bencher, rows: usize) {
         let column = build_disjoint_bitmap_column(rows as u64);
@@ -322,6 +332,9 @@ mod bitmap_scalar {
     use databend_common_expression_test_support as parser;
     use databend_common_functions::BUILTIN_FUNCTIONS;
     use databend_common_io::HybridBitmap;
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn serialize_bitmap(bitmap: &HybridBitmap) -> Vec<u8> {
         let mut data = Vec::new();
@@ -486,39 +499,198 @@ mod bitmap_scalar {
         bencher.bench(|| eval_block(&expr, &block));
     }
 
-    #[divan::bench]
-    fn bitmap_and_large_large(bencher: divan::Bencher) {
-        let a = large_bitmap();
-        let b = overlap_large_bitmap();
+    fn bitmap_workload(lhs_n: u32, rhs_n: u32, shared: u32) -> (HybridBitmap, HybridBitmap) {
+        let lhs_only = lhs_n - shared;
+        let rhs_only = rhs_n - shared;
+        let mut rng = SmallRng::seed_from_u64(42);
+
+        fn fill(bm: &mut HybridBitmap, prefix: u32, rng: &mut SmallRng) {
+            let card = rng.gen_range(100..=10000);
+            for _ in 0..card {
+                bm.insert((prefix as u64) << 32 | rng.r#gen::<u32>() as u64);
+            }
+        }
+
+        let mut lhs = HybridBitmap::new();
+        let mut rhs = HybridBitmap::new();
+        for p in 0..shared {
+            fill(&mut lhs, p, &mut rng);
+            fill(&mut rhs, p, &mut rng);
+        }
+        for i in 0..lhs_only {
+            fill(&mut lhs, shared + i, &mut rng);
+        }
+        for i in 0..rhs_only {
+            fill(&mut rhs, shared + lhs_only + i, &mut rng);
+        }
+        (lhs, rhs)
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum BitmapLargeCase {
+        OrHighOverlap,
+        OrLowOverlap,
+        OrLhsLarger,
+        OrRhsLarger,
+        AndHighOverlap,
+        AndLowOverlap,
+        AndLhsLarger,
+        AndRhsLarger,
+        XorHighOverlap,
+        XorLowOverlap,
+        XorLhsLarger,
+        XorRhsLarger,
+        NotHighOverlap,
+        NotLowOverlap,
+        NotLhsLarger,
+        NotRhsLarger,
+    }
+
+    impl BitmapLargeCase {
+        const ALL: &[BitmapLargeCase] = &[
+            BitmapLargeCase::OrHighOverlap,
+            BitmapLargeCase::OrLowOverlap,
+            BitmapLargeCase::OrLhsLarger,
+            BitmapLargeCase::OrRhsLarger,
+            BitmapLargeCase::AndHighOverlap,
+            BitmapLargeCase::AndLowOverlap,
+            BitmapLargeCase::AndLhsLarger,
+            BitmapLargeCase::AndRhsLarger,
+            BitmapLargeCase::XorHighOverlap,
+            BitmapLargeCase::XorLowOverlap,
+            BitmapLargeCase::XorLhsLarger,
+            BitmapLargeCase::XorRhsLarger,
+            BitmapLargeCase::NotHighOverlap,
+            BitmapLargeCase::NotLowOverlap,
+            BitmapLargeCase::NotLhsLarger,
+            BitmapLargeCase::NotRhsLarger,
+        ];
+
+        fn sql(self) -> &'static str {
+            match self {
+                BitmapLargeCase::OrHighOverlap
+                | BitmapLargeCase::OrLowOverlap
+                | BitmapLargeCase::OrLhsLarger
+                | BitmapLargeCase::OrRhsLarger => "bitmap_or(a, b)",
+                BitmapLargeCase::AndHighOverlap
+                | BitmapLargeCase::AndLowOverlap
+                | BitmapLargeCase::AndLhsLarger
+                | BitmapLargeCase::AndRhsLarger => "bitmap_and(a, b)",
+                BitmapLargeCase::XorHighOverlap
+                | BitmapLargeCase::XorLowOverlap
+                | BitmapLargeCase::XorLhsLarger
+                | BitmapLargeCase::XorRhsLarger => "bitmap_xor(a, b)",
+                BitmapLargeCase::NotHighOverlap
+                | BitmapLargeCase::NotLowOverlap
+                | BitmapLargeCase::NotLhsLarger
+                | BitmapLargeCase::NotRhsLarger => "bitmap_not(a, b)",
+            }
+        }
+
+        fn shape(self) -> (u32, u32, u32) {
+            match self {
+                BitmapLargeCase::OrHighOverlap
+                | BitmapLargeCase::AndHighOverlap
+                | BitmapLargeCase::XorHighOverlap
+                | BitmapLargeCase::NotHighOverlap => (64, 64, 56),
+                BitmapLargeCase::OrLowOverlap
+                | BitmapLargeCase::AndLowOverlap
+                | BitmapLargeCase::XorLowOverlap
+                | BitmapLargeCase::NotLowOverlap => (64, 64, 8),
+                BitmapLargeCase::OrLhsLarger
+                | BitmapLargeCase::AndLhsLarger
+                | BitmapLargeCase::XorLhsLarger
+                | BitmapLargeCase::NotLhsLarger => (256, 32, 32),
+                BitmapLargeCase::OrRhsLarger
+                | BitmapLargeCase::AndRhsLarger
+                | BitmapLargeCase::XorRhsLarger
+                | BitmapLargeCase::NotRhsLarger => (32, 256, 32),
+            }
+        }
+    }
+
+    #[divan::bench(args = BitmapLargeCase::ALL)]
+    fn bitmap_op_large(bencher: divan::Bencher, case: BitmapLargeCase) {
+        let (l, r, s) = case.shape();
+        let (a, b) = bitmap_workload(l, r, s);
         let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
-        let expr = build_expr("bitmap_and(a, b)", C2);
+        let expr = build_expr(case.sql(), C2);
         bencher.bench(|| eval_block(&expr, &block));
     }
 
-    #[divan::bench]
-    fn bitmap_and_small_small(bencher: divan::Bencher) {
-        let a = small_bitmap();
-        let b = overlap_small_bitmap();
-        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
-        let expr = build_expr("bitmap_and(a, b)", C2);
-        bencher.bench(|| eval_block(&expr, &block));
+    #[derive(Clone, Copy, Debug)]
+    enum BitmapMixedCase {
+        OrLargeSmall,
+        OrSmallLarge,
+        OrSmallSmall,
+        AndLargeSmall,
+        AndSmallLarge,
+        AndSmallSmall,
+        XorLargeSmall,
+        XorSmallLarge,
+        XorSmallSmall,
+        NotLargeSmall,
+        NotSmallLarge,
+        NotSmallSmall,
     }
 
-    #[divan::bench]
-    fn bitmap_and_large_small(bencher: divan::Bencher) {
-        let a = large_bitmap();
-        let b = small_bitmap();
-        let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
-        let expr = build_expr("bitmap_and(a, b)", C2);
-        bencher.bench(|| eval_block(&expr, &block));
+    impl BitmapMixedCase {
+        const ALL: &[BitmapMixedCase] = &[
+            BitmapMixedCase::OrLargeSmall,
+            BitmapMixedCase::OrSmallLarge,
+            BitmapMixedCase::OrSmallSmall,
+            BitmapMixedCase::AndLargeSmall,
+            BitmapMixedCase::AndSmallLarge,
+            BitmapMixedCase::AndSmallSmall,
+            BitmapMixedCase::XorLargeSmall,
+            BitmapMixedCase::XorSmallLarge,
+            BitmapMixedCase::XorSmallSmall,
+            BitmapMixedCase::NotLargeSmall,
+            BitmapMixedCase::NotSmallLarge,
+            BitmapMixedCase::NotSmallSmall,
+        ];
+
+        fn sql(self) -> &'static str {
+            match self {
+                BitmapMixedCase::OrLargeSmall
+                | BitmapMixedCase::OrSmallLarge
+                | BitmapMixedCase::OrSmallSmall => "bitmap_or(a, b)",
+                BitmapMixedCase::AndLargeSmall
+                | BitmapMixedCase::AndSmallLarge
+                | BitmapMixedCase::AndSmallSmall => "bitmap_and(a, b)",
+                BitmapMixedCase::XorLargeSmall
+                | BitmapMixedCase::XorSmallLarge
+                | BitmapMixedCase::XorSmallSmall => "bitmap_xor(a, b)",
+                BitmapMixedCase::NotLargeSmall
+                | BitmapMixedCase::NotSmallLarge
+                | BitmapMixedCase::NotSmallSmall => "bitmap_not(a, b)",
+            }
+        }
+
+        fn pair(self) -> (HybridBitmap, HybridBitmap) {
+            let (small, large) = (small_bitmap(), large_bitmap());
+            match self {
+                BitmapMixedCase::OrLargeSmall
+                | BitmapMixedCase::AndLargeSmall
+                | BitmapMixedCase::XorLargeSmall
+                | BitmapMixedCase::NotLargeSmall => (large, small),
+                BitmapMixedCase::OrSmallLarge
+                | BitmapMixedCase::AndSmallLarge
+                | BitmapMixedCase::XorSmallLarge
+                | BitmapMixedCase::NotSmallLarge => (small, large),
+                BitmapMixedCase::OrSmallSmall
+                | BitmapMixedCase::AndSmallSmall
+                | BitmapMixedCase::XorSmallSmall
+                | BitmapMixedCase::NotSmallSmall => (small_bitmap(), overlap_small_bitmap()),
+            }
+        }
     }
 
-    #[divan::bench]
-    fn bitmap_and_small_large(bencher: divan::Bencher) {
-        let a = small_bitmap();
-        let b = large_bitmap();
+    #[divan::bench(args = BitmapMixedCase::ALL)]
+    fn bitmap_op_mixed(bencher: divan::Bencher, case: BitmapMixedCase) {
+        let (a, b) = case.pair();
         let block = DataBlock::new(vec![bitmap_entry(&a), bitmap_entry(&b)], 1);
-        let expr = build_expr("bitmap_and(a, b)", C2);
+        let expr = build_expr(case.sql(), C2);
         bencher.bench(|| eval_block(&expr, &block));
     }
 
