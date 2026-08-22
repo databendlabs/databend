@@ -121,13 +121,16 @@ impl IPhysicalPlan for Recluster {
                 // the pressure; otherwise fail fast instead of risking an OOM kill.
                 if !builder.ctx.get_enable_sort_spill() {
                     let max_memory_usage = settings.get_max_memory_usage()? as usize;
-                    let global_used = GLOBAL_MEM_STAT.get_memory_usage();
-                    let memory_budget = max_memory_usage.saturating_sub(global_used) * 30 / 100;
-                    if task.total_bytes > memory_budget {
-                        return Err(ErrorCode::MemoryExceedsLimit(format!(
-                            "Not enough memory to execute recluster task on this node: task_bytes = {}, global_used = {}, max_memory_usage = {}.",
-                            task.total_bytes, global_used, max_memory_usage
-                        )));
+                    // `max_memory_usage == 0` means memory usage is unlimited.
+                    if max_memory_usage != 0 {
+                        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
+                        let memory_budget = max_memory_usage.saturating_sub(global_used) * 30 / 100;
+                        if task.total_bytes > memory_budget {
+                            return Err(ErrorCode::MemoryExceedsLimit(format!(
+                                "Not enough memory to execute recluster task on this node: task_bytes = {}, global_used = {}, max_memory_usage = {}.",
+                                task.total_bytes, global_used, max_memory_usage
+                            )));
+                        }
                     }
                 }
                 let recluster_block_nums = task.parts.len();

@@ -160,7 +160,10 @@ fn recluster_memory_threshold(ctx: &dyn TableContext) -> Result<usize> {
     let settings = ctx.get_settings();
     let recluster_block_size = settings.get_recluster_block_size()? as usize;
     let max_memory_usage = settings.get_max_memory_usage()? as usize;
-    debug_assert_ne!(max_memory_usage, 0);
+    // `max_memory_usage == 0` means memory usage is unlimited.
+    if max_memory_usage == 0 {
+        return Ok(recluster_block_size);
+    }
     let global_memory_usage = GLOBAL_MEM_STAT.get_memory_usage();
     let query_memory_usage = ctx.get_nodes_memory_usage();
     // The tighter view wins: the larger of the two usages.
