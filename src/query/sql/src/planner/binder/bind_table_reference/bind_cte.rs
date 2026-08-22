@@ -209,7 +209,7 @@ impl Binder {
                 cte_name: Some(cte_name.to_string()),
                 cte_map: prev_cte_map,
             },
-            suppress_session_branch: parent.suppress_session_branch,
+            suppress_wap_branch: parent.suppress_wap_branch,
             binding_views: parent.binding_views.clone(),
             ..Default::default()
         };

@@ -38,7 +38,6 @@ use sha2::Sha256;
 
 use crate::NameResolutionContext;
 use crate::Planner;
-use crate::binder::session_branch::applicable_session_branch_for_table;
 use crate::normalize_identifier;
 use crate::plans::Plan;
 
@@ -78,7 +77,6 @@ impl Planner {
             ctx: self.ctx.clone(),
             schema_snapshots: vec![],
             name_resolution_ctx,
-            session_branch: self.ctx.get_settings().get_session_branch().ok().flatten(),
             cache_miss: false,
         };
         stmt.drive(&mut visitor);
@@ -156,7 +154,6 @@ struct TableRefVisitor {
     ctx: Arc<dyn TableContext>,
     schema_snapshots: Vec<(u64, TableSchemaRef, String)>,
     name_resolution_ctx: NameResolutionContext,
-    session_branch: Option<String>,
     cache_miss: bool,
 }
 
@@ -205,19 +202,10 @@ impl TableRefVisitor {
             let catalog_name = normalize_identifier(&catalog, &self.name_resolution_ctx).name;
             let database_name = normalize_identifier(&database, &self.name_resolution_ctx).name;
             let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
-            let branch = table
+            let target_branch = table
                 .branch
                 .as_ref()
                 .map(|v| normalize_identifier(v, &self.name_resolution_ctx).name);
-            let target_branch = branch.or_else(|| {
-                applicable_session_branch_for_table(
-                    self.ctx.as_ref(),
-                    self.session_branch.clone(),
-                    &catalog_name,
-                    &database_name,
-                    &table_name,
-                )
-            });
 
             databend_common_base::runtime::block_on(async move {
                 if let Ok(table_meta) = self

@@ -1224,8 +1224,8 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_table_ref")? != 0)
     }
 
-    pub fn get_session_branch(&self) -> Result<Option<String>> {
-        let branch = self.try_get_string("session_branch")?;
+    pub fn get_wap_branch(&self) -> Result<Option<String>> {
+        let branch = self.try_get_string("wap_branch")?;
         if branch.is_empty() {
             Ok(None)
         } else {

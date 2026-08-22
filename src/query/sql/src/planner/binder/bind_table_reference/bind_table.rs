@@ -168,18 +168,16 @@ impl Binder {
             } else {
                 table_name.clone()
             };
-            // Persisted definitions ignore `session_branch`; explicit branches win.
-            let suppress_session_branch = bind_context.should_suppress_session_branch();
-            match self.resolve_read_table_with_session_branch(
+            match self.resolve_data_source(
+                &self.ctx,
                 &catalog,
                 &database,
                 &table_name,
-                branch_name.clone(),
+                branch_name.as_deref(),
                 navigation.as_ref(),
                 max_batch_size,
-                suppress_session_branch,
             ) {
-                Ok(resolved) => (resolved.table, resolved.branch),
+                Ok(table) => (table, branch_name.clone()),
                 Err(e) => {
                     let mut parent = bind_context.parent.as_mut();
                     loop {

@@ -55,7 +55,7 @@ impl AnalyzeTableInterpreter {
         sql: String,
         force_disable_distributed_optimization: bool,
     ) -> Result<(PhysicalPlan, BindContext)> {
-        let mut planner = Planner::new_without_session_branch(self.ctx.clone());
+        let mut planner = Planner::new_without_wap_branch(self.ctx.clone());
         let extras = planner.parse_sql(&sql)?;
         let plan = planner
             .plan_stmt(&extras.statement, force_disable_distributed_optimization)

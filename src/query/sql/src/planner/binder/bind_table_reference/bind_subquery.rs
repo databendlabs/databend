@@ -44,7 +44,7 @@ impl Binder {
                 .set_cte_context_and_name(bind_context.cte_context.clone());
             // Preserve session branch suppression while using the outer parent's scope.
             new_bind_context.binding_views = bind_context.binding_views.clone();
-            new_bind_context.suppress_session_branch = bind_context.suppress_session_branch;
+            new_bind_context.suppress_wap_branch = bind_context.suppress_wap_branch;
             self.bind_query(&mut new_bind_context, subquery)?
         };
 

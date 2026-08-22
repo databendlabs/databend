@@ -197,9 +197,9 @@ pub struct BindContext {
     /// It's used to avoid infinite loop.
     pub planning_agg_index: bool,
 
-    /// If true, table refs in this scope ignore `session_branch`.
-    /// Used while replaying persisted definitions against base tables.
-    pub suppress_session_branch: bool,
+    /// If true, generated DML targets in this scope ignore `wap_branch`.
+    /// Used when internal SQL must target the table selected by its parent operation.
+    pub suppress_wap_branch: bool,
 
     pub window_definitions: DashMap<String, WindowSpec>,
 }
@@ -280,14 +280,14 @@ impl BindContext {
             expr_context: ExprContext::default(),
             group_by_column_first: false,
             planning_agg_index: false,
-            suppress_session_branch: false,
+            suppress_wap_branch: false,
             window_definitions: DashMap::new(),
         }
     }
 
-    /// Returns whether table refs in this context should ignore `session_branch`.
-    pub(super) fn should_suppress_session_branch(&self) -> bool {
-        self.suppress_session_branch || !self.binding_views.is_empty() || self.planning_agg_index
+    /// Returns whether table refs in this context should ignore `wap_branch`.
+    pub(super) fn should_suppress_wap_branch(&self) -> bool {
+        self.suppress_wap_branch || !self.binding_views.is_empty() || self.planning_agg_index
     }
 
     pub fn depth(&self) -> usize {
@@ -334,7 +334,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             group_by_column_first: parent.group_by_column_first,
             planning_agg_index: false,
-            suppress_session_branch: parent.suppress_session_branch,
+            suppress_wap_branch: parent.suppress_wap_branch,
             window_definitions: DashMap::new(),
         })
     }
@@ -347,7 +347,7 @@ impl BindContext {
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
         // Keep session branch suppression across `replace()` (used by bind_join).
-        bind_context.suppress_session_branch = self.suppress_session_branch;
+        bind_context.suppress_wap_branch = self.suppress_wap_branch;
         bind_context.group_by_column_first = self.group_by_column_first;
         bind_context
     }

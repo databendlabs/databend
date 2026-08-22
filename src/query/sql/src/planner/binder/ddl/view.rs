@@ -29,7 +29,6 @@ use crate::BindContext;
 use crate::SelectBuilder;
 use crate::ViewRewriter;
 use crate::binder::Binder;
-use crate::binder::session_branch::warn_session_branch_ignored;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::AlterViewPlan;
 use crate::plans::CreateViewPlan;
@@ -52,7 +51,6 @@ impl Binder {
             columns,
             query,
         } = stmt;
-        warn_session_branch_ignored(self.ctx.as_ref(), "CREATE VIEW")?;
         let mut query = *query.clone();
         let tenant = self.ctx.get_tenant();
         let (catalog, database, view_name) =
@@ -92,7 +90,6 @@ impl Binder {
             query,
         } = stmt;
 
-        warn_session_branch_ignored(self.ctx.as_ref(), "ALTER VIEW")?;
         let mut query = *query.clone();
         let tenant = self.ctx.get_tenant();
         let (catalog, database, view_name) =

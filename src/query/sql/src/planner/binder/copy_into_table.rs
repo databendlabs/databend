@@ -95,7 +95,7 @@ impl Binder {
                         stmt,
                         location,
                         false,
-                        bind_context.suppress_session_branch,
+                        bind_context.suppress_wap_branch,
                     )
                     .await?;
 
@@ -120,12 +120,7 @@ impl Binder {
                     max_column_position.has_name_ref,
                 );
                 let plan = self
-                    .bind_copy_into_table_common(
-                        stmt,
-                        from,
-                        true,
-                        bind_context.suppress_session_branch,
-                    )
+                    .bind_copy_into_table_common(stmt, from, true, bind_context.suppress_wap_branch)
                     .await?;
 
                 let alias = alias_name.as_ref().map(|name| TableAlias {
@@ -164,7 +159,7 @@ impl Binder {
         stmt: &CopyIntoTableStmt,
         location: &FileLocation,
         is_transform: bool,
-        suppress_session_branch: bool,
+        suppress_wap_branch: bool,
     ) -> Result<CopyIntoTablePlan> {
         let table_identifier = TableIdentifier::new_with_ref(self, &stmt.table, &None);
         let (catalog_name, database_name, table_name, branch_name) = (
@@ -176,12 +171,12 @@ impl Binder {
 
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
-        let branch_name = self.resolve_write_branch_with_session_branch(
+        let branch_name = self.resolve_wap_target_branch(
             &catalog_name,
             &database_name,
             &table_name,
             branch_name,
-            suppress_session_branch,
+            suppress_wap_branch,
         )?;
         let table = self
             .ctx

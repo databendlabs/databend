@@ -1,0 +1,393 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+SET enable_experimental_table_ref = 1
+
+statement ok
+DROP DATABASE IF EXISTS test_wap_branch
+
+statement ok
+CREATE DATABASE test_wap_branch
+
+statement ok
+USE test_wap_branch
+
+statement ok
+CREATE TABLE src(id INT, val STRING)
+
+statement ok
+INSERT INTO src VALUES (1, 'base_1'), (2, 'base_2')
+
+statement ok
+ALTER TABLE src CREATE BRANCH dev
+
+statement ok
+INSERT INTO src/dev VALUES (9, 'branch_9')
+
+statement ok
+CREATE TABLE tgt(id INT, val STRING)
+
+statement ok
+INSERT INTO tgt VALUES (1, 'target_1'), (10, 'target_10')
+
+statement ok
+ALTER TABLE tgt CREATE BRANCH dev
+
+statement ok
+ALTER TABLE tgt CREATE BRANCH other
+
+statement ok
+SET wap_branch = 'dev'
+
+## Like Iceberg WAP, wap_branch does not affect reads. Branch reads are explicit.
+query IT
+SELECT * FROM src ORDER BY id
+----
+1 base_1
+2 base_2
+
+query IT
+SELECT * FROM src/dev ORDER BY id
+----
+1 base_1
+2 base_2
+9 branch_9
+
+## INSERT routes only its target to the session branch. Its source reads base.
+statement ok
+INSERT INTO tgt SELECT * FROM src WHERE id = 2
+
+query IT
+SELECT * FROM tgt ORDER BY id
+----
+1 target_1
+10 target_10
+
+query IT
+SELECT * FROM tgt/dev ORDER BY id
+----
+1 target_1
+2 base_2
+10 target_10
+
+## UPDATE and DELETE route their target table to the session branch.
+statement ok
+UPDATE tgt SET val = 'updated' WHERE id = 1
+
+statement ok
+DELETE FROM tgt WHERE id = 10
+
+query IT
+SELECT * FROM tgt/dev ORDER BY id
+----
+1 updated
+2 base_2
+
+## MERGE routes the target to the session branch while its source still reads base.
+statement ok
+MERGE INTO tgt AS t
+USING src AS s
+ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET val = s.val
+WHEN NOT MATCHED THEN INSERT (id, val) VALUES (s.id, s.val)
+
+query IT
+SELECT * FROM tgt/dev ORDER BY id
+----
+1 base_1
+2 base_2
+
+## Explicit DML branches take precedence over wap_branch.
+statement ok
+INSERT INTO tgt/other VALUES (3, 'explicit_other')
+
+query IT
+SELECT * FROM tgt/other ORDER BY id
+----
+1 target_1
+3 explicit_other
+10 target_10
+
+## REPLACE and INSERT OVERWRITE also route their targets.
+statement ok
+UNSET wap_branch
+
+statement ok
+CREATE TABLE replace_t(id INT, val STRING)
+
+statement ok
+INSERT INTO replace_t VALUES (1, 'base_1'), (2, 'base_2')
+
+statement ok
+ALTER TABLE replace_t CREATE BRANCH dev
+
+statement ok
+SET wap_branch = 'dev'
+
+statement ok
+REPLACE INTO replace_t ON(id) VALUES (1, 'replaced'), (3, 'inserted')
+
+query IT
+SELECT * FROM replace_t ORDER BY id
+----
+1 base_1
+2 base_2
+
+query IT
+SELECT * FROM replace_t/dev ORDER BY id
+----
+1 replaced
+2 base_2
+3 inserted
+
+statement ok
+UNSET wap_branch
+
+statement ok
+CREATE TABLE overwrite_t(id INT)
+
+statement ok
+INSERT INTO overwrite_t VALUES (1), (2)
+
+statement ok
+ALTER TABLE overwrite_t CREATE BRANCH dev
+
+statement ok
+SET wap_branch = 'dev'
+
+statement ok
+INSERT OVERWRITE overwrite_t VALUES (8), (9)
+
+query I
+SELECT * FROM overwrite_t ORDER BY id
+----
+1
+2
+
+query I
+SELECT * FROM overwrite_t/dev ORDER BY id
+----
+8
+9
+
+## Every target of a multi-table insert inherits wap_branch independently.
+statement ok
+CREATE TABLE multi_a(id INT)
+
+statement ok
+CREATE TABLE multi_b(id INT)
+
+statement ok
+ALTER TABLE multi_a CREATE BRANCH dev
+
+statement ok
+ALTER TABLE multi_b CREATE BRANCH dev
+
+statement ok
+INSERT ALL
+  INTO multi_a
+  INTO multi_b
+SELECT id FROM src
+
+query I
+SELECT * FROM multi_a ORDER BY id
+----
+
+query I
+SELECT * FROM multi_a/dev ORDER BY id
+----
+1
+2
+
+query I
+SELECT * FROM multi_b/dev ORDER BY id
+----
+1
+2
+
+## COPY INTO <table> is a DML target and inherits wap_branch.
+statement ok
+CREATE TABLE copy_t(id INT, val STRING)
+
+statement ok
+ALTER TABLE copy_t CREATE BRANCH dev
+
+statement ok
+DROP STAGE IF EXISTS wap_branch_stage
+
+statement ok
+CREATE STAGE wap_branch_stage
+
+statement ok
+REMOVE @wap_branch_stage PATTERN='.*'
+
+statement ok
+COPY INTO @wap_branch_stage FROM (SELECT 7, 'copy') FILE_FORMAT=(TYPE=CSV)
+
+statement ok
+COPY INTO copy_t FROM @wap_branch_stage FILE_FORMAT=(TYPE=CSV) PURGE=true
+
+query I
+SELECT count() FROM copy_t
+----
+0
+
+query IT
+SELECT * FROM copy_t/dev
+----
+7 copy
+
+## DDL, schema/metadata statements, and maintenance ignore wap_branch.
+statement ok
+UNSET wap_branch
+
+statement ok
+CREATE TABLE schema_t(a INT, b STRING)
+
+statement ok
+INSERT INTO schema_t VALUES (1, 'base')
+
+statement ok
+ALTER TABLE schema_t CREATE BRANCH dev
+
+statement ok
+ALTER TABLE schema_t/dev ADD COLUMN c INT
+
+statement ok
+INSERT INTO schema_t/dev VALUES (2, 'branch', 2)
+
+statement ok
+SET wap_branch = 'nonexistent'
+
+query IT
+SELECT * FROM schema_t
+----
+1 base
+
+query TTTTT
+DESCRIBE schema_t
+----
+a INT YES NULL (empty)
+b VARCHAR YES NULL (empty)
+
+query TTTT??
+SHOW COLUMNS FROM schema_t
+----
+a int YES (empty) NULL NULL
+b varchar(16382) YES (empty) NULL NULL
+
+statement ok
+CREATE TABLE like_t LIKE schema_t
+
+query TTTTT
+DESCRIBE like_t
+----
+a INT YES NULL (empty)
+b VARCHAR YES NULL (empty)
+
+statement ok
+CREATE TABLE ctas_t AS SELECT * FROM schema_t
+
+query IT
+SELECT * FROM ctas_t
+----
+1 base
+
+statement ok
+CREATE VIEW base_view AS SELECT * FROM schema_t
+
+query IT
+SELECT * FROM base_view
+----
+1 base
+
+statement ok
+ALTER TABLE schema_t ADD COLUMN d INT DEFAULT 4
+
+query ITI
+SELECT * FROM schema_t
+----
+1 base 4
+
+## OPTIMIZE does not try to resolve the nonexistent session branch.
+statement ok
+OPTIMIZE TABLE schema_t COMPACT
+
+## TRUNCATE is maintenance, not DML: an unqualified target is the base table.
+statement ok
+UNSET wap_branch
+
+statement ok
+CREATE TABLE trunc_t(id INT)
+
+statement ok
+INSERT INTO trunc_t VALUES (1)
+
+statement ok
+ALTER TABLE trunc_t CREATE BRANCH dev
+
+statement ok
+INSERT INTO trunc_t/dev VALUES (2)
+
+statement ok
+SET wap_branch = 'dev'
+
+statement ok
+TRUNCATE TABLE trunc_t
+
+query I
+SELECT count() FROM trunc_t
+----
+0
+
+query I
+SELECT count() FROM trunc_t/dev
+----
+2
+
+## An explicit branch remains valid for maintenance.
+statement ok
+TRUNCATE TABLE trunc_t/dev
+
+query I
+SELECT count() FROM trunc_t/dev
+----
+0
+
+## A missing session branch is strict for DML targets only.
+statement ok
+SET wap_branch = 'nonexistent'
+
+statement error .*Unknown branch 'nonexistent'.*
+INSERT INTO tgt VALUES (99, 'fail')
+
+statement error .*Unknown branch 'nonexistent'.*
+UPDATE tgt SET val = 'fail' WHERE id = 1
+
+## Reads still use base and never silently switch to or validate wap_branch.
+query IT
+SELECT * FROM tgt ORDER BY id
+----
+1 target_1
+10 target_10
+
+statement ok
+UNSET wap_branch
+
+statement ok
+DROP STAGE IF EXISTS wap_branch_stage
+
+statement ok
+DROP DATABASE test_wap_branch

@@ -1675,9 +1675,9 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("session_branch", DefaultSettingValue {
+                ("wap_branch", DefaultSettingValue {
                     value: UserSettingValue::String("".to_string()),
-                    desc: "Branch used for eligible unqualified table reads and writes in this session. Missing branches cause an error. Empty string disables.",
+                    desc: "Write-Audit-Publish branch for eligible unqualified DML target tables, like Iceberg's spark.wap.branch. Reads and non-DML statements use the base table unless a branch is explicit. Missing branches cause an error. Empty string disables.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Session,
                     range: None,

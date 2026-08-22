@@ -140,14 +140,14 @@ impl Binder {
         self
     }
 
-    /// Suppress `session_branch` while binding persisted-definition SQL.
+    /// Suppress `wap_branch` for generated DML targets while binding SQL.
     /// Seeds the root `BindContext`; explicit `table/branch` references still win.
-    pub async fn bind_with_suppress_session_branch(
+    pub async fn bind_with_suppress_wap_branch(
         self,
         stmt: &Statement,
-        suppress_session_branch: bool,
+        suppress_wap_branch: bool,
     ) -> Result<Plan> {
-        self.bind_inner(stmt, suppress_session_branch).await
+        self.bind_inner(stmt, suppress_wap_branch).await
     }
 
     #[async_backtrace::framed]
@@ -156,12 +156,12 @@ impl Binder {
         self.bind_inner(stmt, false).await
     }
 
-    async fn bind_inner(mut self, stmt: &Statement, suppress_session_branch: bool) -> Result<Plan> {
+    async fn bind_inner(mut self, stmt: &Statement, suppress_wap_branch: bool) -> Result<Plan> {
         let start = Instant::now();
         self.ctx
             .set_status_info("[SQL-BINDER] Binding SQL statement");
         let mut bind_context = BindContext::new();
-        bind_context.suppress_session_branch = suppress_session_branch;
+        bind_context.suppress_wap_branch = suppress_wap_branch;
         let plan = self.bind_statement(&mut bind_context, stmt).await?;
         self.bind_query_index(&mut bind_context, &plan).await?;
         self.ctx.set_status_info(&format!(

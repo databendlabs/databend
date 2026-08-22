@@ -160,7 +160,7 @@ impl StatisticsTable {
             VIEW_ENGINE => {
                 let fields = if let Some(query) = table.options().get(QUERY) {
                     // Replay stored view SQL against base tables.
-                    let mut planner = Planner::new_without_session_branch(ctx.clone());
+                    let mut planner = Planner::new_without_wap_branch(ctx.clone());
                     match planner.plan_sql(query).await {
                         Ok((plan, _)) => infer_table_schema(&plan.schema())?.fields().clone(),
                         Err(e) => {

@@ -61,7 +61,7 @@ const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 pub struct Planner {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) query_executor: Option<Arc<dyn QueryExecutor>>,
-    pub(crate) suppress_session_branch: bool,
+    pub(crate) suppress_wap_branch: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -75,15 +75,15 @@ impl Planner {
         Planner {
             ctx,
             query_executor: None,
-            suppress_session_branch: false,
+            suppress_wap_branch: false,
         }
     }
 
-    /// Create a planner that ignores `session_branch` for unqualified tables.
+    /// Create a planner whose generated DML targets ignore `wap_branch`.
     /// Explicit `table/branch` references are still honored.
-    pub fn new_without_session_branch(ctx: Arc<dyn TableContext>) -> Self {
+    pub fn new_without_wap_branch(ctx: Arc<dyn TableContext>) -> Self {
         let mut planner = Self::new(ctx);
-        planner.suppress_session_branch = true;
+        planner.suppress_wap_branch = true;
         planner
     }
 
@@ -94,7 +94,7 @@ impl Planner {
         Planner {
             ctx,
             query_executor: Some(query_executor),
-            suppress_session_branch: false,
+            suppress_wap_branch: false,
         }
     }
 
@@ -261,9 +261,9 @@ impl Planner {
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
         let mut enable_planner_cache = self.ctx.get_settings().get_enable_planner_cache()?;
-        // Persisted-definition replay must bypass planner cache because cached plans
-        // may already have resolved table refs through `session_branch`.
-        if self.suppress_session_branch {
+        // Internal SQL planning bypasses the cache because a cached DML plan may have
+        // resolved its target through `wap_branch`.
+        if self.suppress_wap_branch {
             enable_planner_cache = false;
         }
         let planner_cache_key = if enable_planner_cache {
@@ -302,7 +302,7 @@ impl Planner {
         // must attach before bind, because ParquetRSTable::create used it.
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
         let plan = binder
-            .bind_with_suppress_session_branch(stmt, self.suppress_session_branch)
+            .bind_with_suppress_wap_branch(stmt, self.suppress_wap_branch)
             .await?;
         // attach again to avoid the query kind is overwritten by the subquery
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
