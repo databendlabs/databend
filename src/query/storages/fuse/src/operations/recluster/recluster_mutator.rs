@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ReclusterParts;
@@ -48,6 +49,7 @@ use fastrace::Span;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
 use log::debug;
+use log::info;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
@@ -149,6 +151,39 @@ pub struct ReclusterMutator {
     strategy: Arc<dyn ReclusterStrategy>,
 }
 
+/// Caps the selected block bytes of one recluster task.
+///
+/// Takes the tighter of the node-global (`GLOBAL_MEM_STAT`) and query-local
+/// remaining-memory views; logs when pressure shrinks the task below the
+/// nominal `recluster_block_size`.
+fn recluster_memory_threshold(ctx: &dyn TableContext) -> Result<usize> {
+    let settings = ctx.get_settings();
+    let recluster_block_size = settings.get_recluster_block_size()? as usize;
+    let max_memory_usage = settings.get_max_memory_usage()? as usize;
+    debug_assert_ne!(max_memory_usage, 0);
+    let global_memory_usage = GLOBAL_MEM_STAT.get_memory_usage();
+    let query_memory_usage = ctx.get_nodes_memory_usage();
+    // The tighter view wins: the larger of the two usages.
+    let memory_usage = global_memory_usage.max(query_memory_usage);
+    let memory_budget = max_memory_usage.saturating_sub(memory_usage) * 30 / 100;
+    if memory_budget == 0 {
+        return Err(ErrorCode::MemoryExceedsLimit(format!(
+            "Not enough memory for recluster: max_memory_usage = {}, global_used = {}, query_used = {}.",
+            max_memory_usage, global_memory_usage, query_memory_usage
+        )));
+    }
+    // Actual block sizes are checked during task selection.
+    let memory_threshold = recluster_block_size.min(memory_budget);
+    // Log only when pressure actually shrinks the task.
+    if memory_threshold < recluster_block_size {
+        info!(
+            "recluster: memory pressure shrinks task threshold: max_memory_usage = {}, global_used = {}, query_used = {}, threshold = {}.",
+            max_memory_usage, global_memory_usage, query_memory_usage, memory_threshold
+        );
+    }
+    Ok(memory_threshold)
+}
+
 impl ReclusterMutator {
     /// Build a recluster mutator from table metadata and current snapshot state.
     pub fn try_create(
@@ -176,26 +211,10 @@ impl ReclusterMutator {
                 }
             }) as f64;
 
-        let settings = ctx.get_settings();
-        let recluster_block_size = settings.get_recluster_block_size()? as usize;
-        let max_memory_usage = settings.get_max_memory_usage()? as usize;
-        let memory_threshold = if max_memory_usage == 0 {
-            recluster_block_size
-        } else {
-            let memory_usage = ctx.get_nodes_memory_usage();
-            let memory_budget = max_memory_usage.saturating_sub(memory_usage) * 30 / 100;
-            if memory_budget == 0 {
-                return Err(ErrorCode::MemoryExceedsLimit(format!(
-                    "Not enough memory for recluster: max_memory_usage = {}, used = {}.",
-                    max_memory_usage, memory_usage
-                )));
-            }
-            // Actual block sizes are checked during task selection.
-            recluster_block_size.min(memory_budget)
-        };
+        let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
-        if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
+        if !cluster.is_empty() && ctx.get_settings().get_enable_distributed_recluster()? {
             max_tasks = cluster.nodes.len();
         }
 
