@@ -27,7 +27,6 @@ use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
@@ -37,7 +36,6 @@ use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::stream::FuturesUnordered;
@@ -50,6 +48,7 @@ use super::fuse_rows_fetcher::RowsFetchMetadata;
 use super::fuse_rows_fetcher::RowsFetcher;
 use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
+use crate::FuseColumnGroupPartInfo;
 use crate::FuseTable;
 use crate::io::BlockReader;
 use crate::io::CompactSegmentInfoReader;
@@ -93,10 +92,9 @@ pub struct RowsFetchMetadataImpl {
     // block_bytes after projection
     pub block_bytes: usize,
 
-    pub location: String,
     pub nums_rows: usize,
     pub compression: Compression,
-    pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub column_groups: Vec<FuseColumnGroupPartInfo>,
 }
 
 impl RowsFetchMetadata for RowsFetchMetadataImpl {
@@ -328,12 +326,7 @@ impl ParquetRowsFetcher {
                     .await
                     .expect("row-fetch io semaphore never closed");
                 let chunk = reader
-                    .read_columns_data_by_merge_io(
-                        &settings,
-                        &metadata.location,
-                        &metadata.columns_meta,
-                        &None,
-                    )
+                    .read_column_groups_data_by_merge_io(&settings, &metadata.column_groups, &None)
                     .await?;
 
                 Ok((
@@ -363,20 +356,24 @@ impl ParquetRowsFetcher {
             let compression_ratio = block_meta.block_size as f64 / block_meta.file_size as f64;
             let mut block_bytes = 0;
             let mut average_bytes = 0;
-            for (column_id, column_meta) in &fuse_part.columns_meta {
-                if let Some(columns_stat) = &fuse_part.columns_stat {
-                    if let Some(column_stat) = columns_stat.get(column_id) {
-                        average_bytes += column_stat.in_memory_size as usize / fuse_part.nums_rows;
-                        block_bytes += column_stat.in_memory_size as usize;
+            for group in &fuse_part.column_groups {
+                for (column_id, column_meta) in &group.columns_meta {
+                    if let Some(columns_stat) = &fuse_part.columns_stat {
+                        if let Some(column_stat) = columns_stat.get(column_id) {
+                            average_bytes +=
+                                column_stat.in_memory_size as usize / fuse_part.nums_rows;
+                            block_bytes += column_stat.in_memory_size as usize;
 
-                        continue;
+                            continue;
+                        }
                     }
-                }
 
-                let compressed_size = column_meta.read_bytes(&None);
-                let estimate_memory_size = (compressed_size as f64 * compression_ratio) as usize;
-                block_bytes += estimate_memory_size;
-                average_bytes += estimate_memory_size / fuse_part.nums_rows;
+                    let compressed_size = column_meta.read_bytes(&None);
+                    let estimate_memory_size =
+                        (compressed_size as f64 * compression_ratio) as usize;
+                    block_bytes += estimate_memory_size;
+                    average_bytes += estimate_memory_size / fuse_part.nums_rows;
+                }
             }
 
             metadata.push(RowsFetchMetadataImpl {
@@ -384,8 +381,7 @@ impl ParquetRowsFetcher {
                 block_bytes,
                 nums_rows: fuse_part.nums_rows,
                 compression: fuse_part.compression,
-                location: fuse_part.location.clone(),
-                columns_meta: fuse_part.columns_meta.clone(),
+                column_groups: fuse_part.column_groups.clone(),
             });
         }
 
@@ -398,12 +394,11 @@ impl ParquetRowsFetcher {
         chunk: BlockReadResult,
     ) -> Result<DataBlock> {
         let columns_chunks = chunk.columns_chunks()?;
-        reader.deserialize_parquet_chunks(
+        reader.deserialize_column_groups(
             metadata.nums_rows,
-            &metadata.columns_meta,
+            &metadata.column_groups,
             columns_chunks,
             &metadata.compression,
-            &metadata.location,
             None,
         )
     }
