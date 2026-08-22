@@ -415,6 +415,7 @@ impl DPhpyOptimizer {
 
         Arc::new(StatInfo {
             cardinality: producer_stat_info.cardinality,
+            max_cardinality: producer_stat_info.max_cardinality,
             statistics: Statistics {
                 precise_cardinality: producer_stat_info.statistics.precise_cardinality,
                 column_stats,

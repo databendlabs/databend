@@ -63,8 +63,18 @@ impl<T: Value> TypedHistogram<T> {
         }
 
         let histogram = (!output_buckets.is_empty()).then(|| {
+            let accuracy = self.accuracy
+                && other.accuracy
+                && output_buckets
+                    .iter()
+                    .all(TypedHistogramBucket::is_singleton_value);
             T::into_histogram(TypedHistogram {
-                accuracy: self.accuracy && other.accuracy,
+                // Range overlap derives distinct counts from coverage
+                // estimates. A point overlap between exact input buckets is
+                // the one exception: the observed boundary value is known to
+                // exist on both sides and contributes exactly one distinct
+                // value. Repeated point buckets are deduplicated by `ndv()`.
+                accuracy,
                 row_scale: 1.0,
                 buckets: output_buckets,
                 avg_spacing: self.avg_spacing.or(other.avg_spacing),

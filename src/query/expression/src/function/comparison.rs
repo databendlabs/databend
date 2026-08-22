@@ -392,6 +392,7 @@ mod tests {
             })
         );
         assert_eq!(uncertain.ndv, NdvEstimate::exact(2.0));
+        assert_eq!(uncertain.ndv.lower, 0.0);
     }
 
     #[test]

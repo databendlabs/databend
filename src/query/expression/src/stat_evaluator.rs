@@ -80,9 +80,12 @@ impl<'a> StatEvaluator<'a> {
             }) => Ok(Some({
                 let domain = scalar.as_ref().domain(data_type);
                 let (ndv, null_count) = if scalar.is_null() {
-                    (NdvEstimate::exact(0.0), self.cardinality.as_null_count())
+                    (
+                        NdvEstimate::proven_exact(0.0),
+                        self.cardinality.as_null_count(),
+                    )
                 } else {
-                    (NdvEstimate::exact(1.0), StatCount::exact(0))
+                    (NdvEstimate::proven_exact(1.0), StatCount::exact(0))
                 };
                 CowStat::Owned(ReturnStat {
                     domain,

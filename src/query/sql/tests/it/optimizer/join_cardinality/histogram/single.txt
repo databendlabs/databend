@@ -8,7 +8,7 @@ right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
 query         : left_single_from_scalar_projection
 sql           : SELECT (SELECT l.k FROM l WHERE l.k = r.k) FROM r
 join          : LEFT SINGLE cardinality=26.000
-stat          : r.k (#0) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+stat          : r.k (#0) min=1, max=5, ndv=4.000 (upper=26.000), null=0.000, histogram=none
 stat          : l.k (#2) min=1, max=5, ndv=1.438 (upper=1.800), null=0.000, histogram=none
 
 case          : right_single_from_optimizer_commute
@@ -19,6 +19,6 @@ query         : right_single_from_scalar_projection
 sql           : SELECT (SELECT l.k FROM l WHERE l.k = r.k) FROM r
 optimizer     : full optimizer
 join          : RIGHT SINGLE cardinality=9.000
-stat          : r.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#0) min=1, max=5, ndv=3.000 (upper=9.000), null=0.000, histogram=none
 stat          : l.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 

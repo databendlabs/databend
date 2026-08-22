@@ -1,0 +1,53 @@
+name: "broadcast_guard_underestimated_build"
+description: "A severely underestimated derived join must not become an automatic broadcast build"
+
+tables:
+  guard_probe: regressions/broadcast_guard_probe.sql
+  guard_large: regressions/broadcast_guard_large.sql
+  guard_tiny: regressions/broadcast_guard_tiny.sql
+
+node_num: 3
+
+sql: |
+  SETTINGS (disable_join_reorder = 1)
+  SELECT count(*)
+  FROM guard_probe AS p
+  JOIN (
+    SELECT l.k
+    FROM guard_large AS l
+    JOIN guard_tiny AS t ON l.k = t.k
+  ) AS risky ON p.k = risky.k;
+
+table_statistics:
+  guard_probe:
+    num_rows: 1000000000
+    data_size: 8000000000
+    number_of_blocks: 1000
+    number_of_segments: 10
+  guard_large:
+    num_rows: 200000000
+    data_size: 1600000000
+    number_of_blocks: 200
+    number_of_segments: 2
+  guard_tiny:
+    num_rows: 50000
+    data_size: 400000
+    number_of_blocks: 1
+    number_of_segments: 1
+
+column_statistics:
+  guard_probe.k:
+    min: 1
+    max: 500000000
+    ndv: 500000000
+    null_count: 0
+  guard_large.k:
+    min: 1
+    max: 100000000
+    ndv: 100000000
+    null_count: 0
+  guard_tiny.k:
+    min: 1
+    max: 50000
+    ndv: 50000
+    null_count: 0

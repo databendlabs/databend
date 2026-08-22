@@ -93,6 +93,7 @@ impl Operator for ExpressionScan {
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
             cardinality: self.values.len() as f64,
+            max_cardinality: self.values.len() as f64,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),

@@ -287,6 +287,7 @@ impl Operator for EvalScalar {
 
         Ok(Arc::new(StatInfo {
             cardinality: input.cardinality,
+            max_cardinality: input.max_cardinality,
             statistics: Statistics {
                 precise_cardinality: input.statistics.precise_cardinality,
                 column_stats,
@@ -377,6 +378,7 @@ mod tests {
             None,
             Some(Arc::new(StatInfo {
                 cardinality: 10.0,
+                max_cardinality: 10.0,
                 statistics: Statistics {
                     precise_cardinality: Some(10),
                     column_stats,
@@ -393,6 +395,7 @@ mod tests {
     fn test_identity_projection_reuses_input_stats() {
         let input_stats = Arc::new(StatInfo {
             cardinality: 10.0,
+            max_cardinality: 10.0,
             statistics: Statistics {
                 precise_cardinality: Some(10),
                 column_stats: HashMap::from([(Symbol::new(0), column_stat(1, 3, 3.0))]),
@@ -454,7 +457,7 @@ mod tests {
             (constant.min.clone(), constant.max.clone()),
             (Datum::Int(7), Datum::Int(7))
         );
-        assert_eq!(constant.ndv, NdvEstimate::exact(1.0));
+        assert_eq!(constant.ndv, NdvEstimate::proven_exact(1.0));
         assert_eq!(constant.null_count, StatCount::exact(0));
     }
 

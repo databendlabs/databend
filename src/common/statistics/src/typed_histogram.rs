@@ -28,14 +28,15 @@ use crate::estimate_distinct_count_after_row_scale;
 #[derive(Clone, PartialEq)]
 pub struct TypedHistogram<T> {
     /// Whether bucket `num_distinct` values still come directly from ANALYZE
-    /// and may be used as exact NDV facts for the remaining bucket set.
+    /// and may be combined into an exact NDV after shared boundaries are
+    /// deduplicated.
     ///
     /// Histograms synthesized from NDV/min-max bounds mark this flag `false`.
     /// Row scaling by an independent selectivity also marks it `false`: scaling
     /// is a row-mass alignment after a filter whose surviving values are
     /// unknown, so bucket distinct counts can no longer be exact. Range clipping
-    /// and join overlap keep the input accuracy because they do not by
-    /// themselves perform that unknown-value alignment.
+    /// Whole-bucket range restriction keeps the input accuracy. Partial bucket
+    /// clipping and join overlap use estimates and clear it.
     pub accuracy: bool,
     /// A histogram-level row multiplier used to align row mass with the current
     /// cardinality without rewriting bucket distinct estimates.
@@ -84,14 +85,15 @@ impl<T> TypedHistogram<T> {
             * self.row_scale
     }
 
-    pub fn ndv(&self) -> NdvEstimate {
+    pub fn ndv(&self) -> NdvEstimate
+    where T: Value {
         let possible_distinct = self
             .buckets
             .iter()
             .map(|bucket| bucket.num_distinct)
             .sum::<f64>();
-        if self.accuracy {
-            return NdvEstimate::exact(possible_distinct);
+        if let Some(exact_distinct) = self.exact_distinct_count() {
+            return NdvEstimate::proven_exact(exact_distinct);
         }
 
         let expected_distinct = self
@@ -104,6 +106,47 @@ impl<T> TypedHistogram<T> {
             expected_distinct.min(possible_distinct).min(num_values),
             possible_distinct.min(num_values),
         )
+    }
+
+    /// Combine exact row-order tile NDVs into a global NDV.
+    ///
+    /// Equal values are contiguous in the sorted ANALYZE input, so adjacent
+    /// closed buckets can share only their common boundary value. Subtracting
+    /// one for every equal boundary deduplicates values that span any number
+    /// of consecutive tiles. Unexpected overlap or non-count bucket data is
+    /// not proof-grade and falls back to an ordinary point estimate.
+    fn exact_distinct_count(&self) -> Option<f64>
+    where T: Value {
+        if !self.accuracy || self.row_scale != 1.0 {
+            return None;
+        }
+
+        let mut distinct = 0.0;
+        let mut previous_upper = None;
+        for bucket in &self.buckets {
+            if !bucket.num_values.is_finite()
+                || !bucket.num_distinct.is_finite()
+                || bucket.num_values < 1.0
+                || bucket.num_distinct < 1.0
+                || bucket.num_distinct > bucket.num_values
+                || bucket.num_values.fract() != 0.0
+                || bucket.num_distinct.fract() != 0.0
+                || T::compare(&bucket.lower_bound, &bucket.upper_bound) == Ordering::Greater
+            {
+                return None;
+            }
+
+            distinct += bucket.num_distinct;
+            if let Some(previous_upper) = previous_upper {
+                match T::compare(previous_upper, &bucket.lower_bound) {
+                    Ordering::Greater => return None,
+                    Ordering::Equal => distinct -= 1.0,
+                    Ordering::Less => {}
+                }
+            }
+            previous_upper = Some(&bucket.upper_bound);
+        }
+        Some(distinct)
     }
 
     pub fn scale_counts(&mut self, selectivity: f64) {
@@ -867,6 +910,34 @@ mod tests {
         assert_eq!(histogram.num_values(), 25.0);
         assert_eq!(histogram.buckets[0].num_distinct, 10.0);
         assert_eq!(histogram.ndv(), NdvEstimate::new(9.436864852905273, 10.0));
+    }
+
+    #[test]
+    fn test_exact_histogram_ndv_deduplicates_shared_tile_boundaries() {
+        let histogram = TypedHistogram::new(
+            vec![
+                TypedHistogramBucket::new(7_u64, 7_u64, 10.0, 1.0),
+                TypedHistogramBucket::new(7_u64, 7_u64, 10.0, 1.0),
+                TypedHistogramBucket::new(7_u64, 7_u64, 10.0, 1.0),
+            ],
+            true,
+        );
+
+        assert_eq!(histogram.ndv(), NdvEstimate::proven_exact(1.0));
+    }
+
+    #[test]
+    fn test_overlapping_histogram_ranges_do_not_create_ndv_proof() {
+        let histogram = TypedHistogram::new(
+            vec![
+                TypedHistogramBucket::new(1_u64, 5_u64, 5.0, 5.0),
+                TypedHistogramBucket::new(4_u64, 8_u64, 5.0, 5.0),
+            ],
+            true,
+        );
+
+        assert_eq!(histogram.ndv(), NdvEstimate::exact(10.0));
+        assert_eq!(histogram.ndv().lower, 0.0);
     }
 
     #[test]

@@ -264,7 +264,11 @@ fn derive_scan_ndv(ndv: Option<u64>, null_count: u64, num_rows: Option<u64>) -> 
         .unwrap_or(u64::MAX as f64);
 
     match ndv {
-        Some(ndv) => NdvEstimate::exact(ndv as f64),
+        // Storage NDVs are estimates: block statistics use approximate NDV and
+        // table-level reduction can sum overlapping per-block values. Preserve
+        // the estimate for costing, but do not give it a proof-grade lower
+        // bound. The non-NULL row count remains a conservative upper bound.
+        Some(ndv) => NdvEstimate::new((ndv as f64).min(max_non_null_count), max_non_null_count),
         None => NdvEstimate::upper_bound(max_non_null_count),
     }
 }
@@ -428,6 +432,12 @@ impl Operator for Scan {
             (Some(precise_cardinality), None) => precise_cardinality as f64,
             (_, _) => 0.0,
         };
+        // Prewhere, sampling, and secure predicates may reduce the expected
+        // cardinality, but they do not prove a tighter bound than the source
+        // snapshot row count.
+        let max_cardinality = num_rows
+            .map(|num_rows| num_rows as f64)
+            .unwrap_or(f64::INFINITY);
 
         // If prewhere is not none, we can't get precise cardinality
         let precise_cardinality = if self.prewhere.is_none() && self.sample.is_none() {
@@ -459,6 +469,7 @@ impl Operator for Scan {
             };
             return Ok(Arc::new(StatInfo {
                 cardinality,
+                max_cardinality,
                 statistics: OpStatistics {
                     precise_cardinality: None,
                     column_stats: Default::default(),
@@ -470,6 +481,7 @@ impl Operator for Scan {
 
         Ok(Arc::new(StatInfo {
             cardinality,
+            max_cardinality,
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
@@ -605,5 +617,28 @@ mod tests {
         assert_eq!(sampled_stats.statistics.precise_cardinality, None);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_scan_without_row_count_keeps_unknown_risk_bound() -> Result<()> {
+        let scan = Scan::default();
+        let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
+        let rel_expr = RelExpr::with_s_expr(&s_expr);
+
+        let stats = scan.derive_stats(&rel_expr)?;
+
+        assert_eq!(stats.cardinality, 0.0);
+        assert_eq!(stats.statistics.precise_cardinality, None);
+        assert_eq!(stats.max_cardinality, f64::INFINITY);
+        Ok(())
+    }
+
+    #[test]
+    fn test_storage_ndv_does_not_create_trusted_lower_bound() {
+        let ndv = derive_scan_ndv(Some(100), 10, Some(100));
+
+        assert_eq!(ndv.lower, 0.0);
+        assert_eq!(ndv.expected, Some(90.0));
+        assert_eq!(ndv.upper, 90.0);
     }
 }

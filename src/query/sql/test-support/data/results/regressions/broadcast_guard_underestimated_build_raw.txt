@@ -1,0 +1,31 @@
+EvalScalar
+├── scalars: [COUNT(*) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#3)]
+    └── Join(Inner)
+        ├── build keys: [guard_large.k (#1)]
+        ├── probe keys: [guard_probe.k (#0)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [guard_large.k (#1) AS (#1)]
+        │   └── Join(Inner)
+        │       ├── build keys: [guard_tiny.k (#2)]
+        │       ├── probe keys: [guard_large.k (#1)]
+        │       ├── other filters: []
+        │       ├── Scan
+        │       │   ├── table: default.guard_tiny (#2)
+        │       │   ├── filters: []
+        │       │   ├── order by: []
+        │       │   └── limit: NONE
+        │       └── Scan
+        │           ├── table: default.guard_large (#1)
+        │           ├── filters: []
+        │           ├── order by: []
+        │           └── limit: NONE
+        └── Scan
+            ├── table: default.guard_probe (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+

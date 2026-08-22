@@ -23,6 +23,10 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SortItem;
 
+// An estimate that understates the largest relevant input by more than three
+// orders of magnitude is too uncertain for cardinality-sensitive join choices.
+pub(crate) const MAX_CARDINALITY_UNDERESTIMATION_RATIO: f64 = 1_000.0;
+
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RequiredProperty {
     pub distribution: Distribution,
@@ -51,12 +55,56 @@ pub struct Statistics {
     pub count_min_sketch: CountMinSketchSet,
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct StatInfo {
-    // TODO(leiysky): introduce upper bound of cardinality to
-    // reduce error in estimation.
     pub cardinality: f64,
+    /// A conservative risk bound for the rows that may reach this subtree's
+    /// output. It is deliberately separate from the expected cardinality used
+    /// by the cost model.
+    pub max_cardinality: f64,
     pub statistics: Statistics,
+}
+
+impl Default for StatInfo {
+    fn default() -> Self {
+        Self {
+            cardinality: 0.0,
+            max_cardinality: f64::INFINITY,
+            statistics: Statistics::default(),
+        }
+    }
+}
+
+impl StatInfo {
+    /// Returns the usable risk upper bound, keeping it no smaller than the
+    /// expected cardinality and treating invalid values as unknown.
+    pub(crate) fn cardinality_upper_bound(&self) -> f64 {
+        if !self.cardinality.is_finite()
+            || self.cardinality < 0.0
+            || self.max_cardinality.is_nan()
+            || self.max_cardinality < 0.0
+        {
+            return f64::INFINITY;
+        }
+        self.max_cardinality.max(self.cardinality)
+    }
+
+    pub(crate) fn cardinality_is_severely_underestimated(&self) -> bool {
+        let cardinality = self.cardinality;
+        let max_cardinality = self.cardinality_upper_bound();
+
+        cardinality.is_finite()
+            && cardinality >= 0.0
+            && !max_cardinality.is_nan()
+            && max_cardinality >= 0.0
+            && if max_cardinality.is_infinite() {
+                true
+            } else if cardinality == 0.0 {
+                max_cardinality > 0.0
+            } else {
+                max_cardinality / cardinality > MAX_CARDINALITY_UNDERESTIMATION_RATIO
+            }
+    }
 }
 
 #[derive(Default, Clone, Debug)]

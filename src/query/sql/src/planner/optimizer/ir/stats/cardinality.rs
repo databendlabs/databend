@@ -20,6 +20,7 @@ use crate::optimizer::ir::StatInfo;
 pub(crate) fn cap_stat_info_by_rows(mut stat_info: StatInfo, limit: usize) -> StatInfo {
     let input_cardinality = stat_info.cardinality;
     let limit = limit as f64;
+    stat_info.max_cardinality = stat_info.max_cardinality.max(input_cardinality).min(limit);
     if limit == 0.0 {
         stat_info.cardinality = 0.0;
         stat_info.statistics.precise_cardinality =
@@ -76,6 +77,7 @@ mod tests {
     fn stat_info(cardinality: f64, precise_cardinality: Option<u64>) -> StatInfo {
         StatInfo {
             cardinality,
+            max_cardinality: cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
@@ -118,8 +120,20 @@ mod tests {
 
         assert_eq!(capped.cardinality, 10.0);
         assert_eq!(capped.statistics.precise_cardinality, Some(10));
-        assert_eq!(column_stat.ndv, NdvEstimate::exact(10.0));
+        assert_eq!(column_stat.ndv, NdvEstimate::new(10.0, 10.0));
+        assert_eq!(column_stat.ndv.lower, 0.0);
         assert_eq!(column_stat.null_count, StatCount::estimate(2.0, 10.0));
         assert!(column_stat.histogram.is_none());
+    }
+
+    #[test]
+    fn test_cap_stat_info_reduces_risk_bound_even_when_expected_rows_fit() {
+        let mut input = stat_info(10.0, None);
+        input.max_cardinality = 1_000.0;
+
+        let capped = cap_stat_info_by_rows(input, 20);
+
+        assert_eq!(capped.cardinality, 10.0);
+        assert_eq!(capped.max_cardinality, 20.0);
     }
 }

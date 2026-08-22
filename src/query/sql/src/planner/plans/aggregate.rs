@@ -153,6 +153,7 @@ impl Aggregate {
         if self.group_items.is_empty() {
             return Ok(Arc::new(StatInfo {
                 cardinality: 1.0,
+                max_cardinality: 1.0,
                 statistics: Statistics {
                     precise_cardinality: Some(1),
                     column_stats: column_stats.clone(),
@@ -170,8 +171,12 @@ impl Aggregate {
                 None => true,
             })
         {
+            let cardinality = (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0);
             return Ok(Arc::new(StatInfo {
-                cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0),
+                cardinality,
+                // A grouped aggregate emits at most one row per input row.
+                // The fallback ratio is only an expectation, not a bound.
+                max_cardinality: stat_info.cardinality_upper_bound(),
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
@@ -209,7 +214,8 @@ impl Aggregate {
         for item in self.group_items.iter() {
             let item_stat = column_stats.get_mut(&item.index).unwrap();
             if self.group_items.len() == 1 {
-                item_stat.ndv = item_stat.ndv.reduce(cardinality);
+                // A single grouping key retains every distinct input value.
+                item_stat.ndv = item_stat.ndv.reduce_preserving_lower(cardinality);
             }
 
             let Some(histogram) = &mut item_stat.histogram else {
@@ -228,6 +234,9 @@ impl Aggregate {
 
         Ok(Arc::new(StatInfo {
             cardinality,
+            // Expected group NDVs (and their correlation adjustment) do not
+            // prove an upper bound on the number of groups.
+            max_cardinality: stat_info.cardinality_upper_bound(),
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
@@ -412,5 +421,68 @@ impl Operator for Aggregate {
         }
 
         Ok(children_required)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_expression::Scalar;
+    use databend_common_expression::stat_distribution::NdvEstimate;
+    use databend_common_expression::stat_distribution::StatCount;
+    use databend_common_statistics::Datum;
+
+    use super::*;
+    use crate::optimizer::ir::ColumnStat;
+    use crate::plans::ConstantExpr;
+
+    fn grouped_aggregate() -> Aggregate {
+        Aggregate {
+            group_items: vec![ScalarItem {
+                scalar: ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Number(1_u64.into()),
+                }),
+                index: Symbol::new(0),
+            }],
+            ..Default::default()
+        }
+    }
+
+    fn input_stat(column_stats: HashMap<Symbol, ColumnStat>) -> Arc<StatInfo> {
+        Arc::new(StatInfo {
+            cardinality: 20_000_000.0,
+            max_cardinality: 200_000_000.0,
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats,
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
+            },
+        })
+    }
+
+    #[test]
+    fn test_grouped_aggregate_estimates_do_not_tighten_risk_bound() -> Result<()> {
+        let aggregate = grouped_aggregate();
+
+        let fallback = aggregate.derive_agg_stats(input_stat(HashMap::new()))?;
+        assert!(fallback.cardinality < 200_000_000.0);
+        assert_eq!(fallback.max_cardinality, 200_000_000.0);
+
+        let estimated_ndv = aggregate.derive_agg_stats(input_stat(HashMap::from([(
+            Symbol::new(0),
+            ColumnStat {
+                min: Datum::UInt(1),
+                max: Datum::UInt(200_000_000),
+                ndv: NdvEstimate::new(20_000_000.0, 200_000_000.0),
+                null_count: StatCount::exact(0),
+                histogram: None,
+            },
+        )])))?;
+        assert_eq!(estimated_ndv.cardinality, 20_000_000.0);
+        assert_eq!(estimated_ndv.max_cardinality, 200_000_000.0);
+        Ok(())
     }
 }

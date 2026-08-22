@@ -82,13 +82,13 @@ Exchange
                                     ├── probe keys: [a.a0k (#7), a.a0n (#10)]
                                     ├── keys is null equal: [false, false]
                                     ├── filters: [b.a2c (#52) <= a.a0d (#0), b.a2k (#61) > a.a0d (#0)]
-                                    ├── build join filters:
+                                    ├── build join filters(distributed):
                                     │   ├── filter id:0, build key:b.a0k (#48), probe targets:[a.a0k (#7)@scan0], filter type:bloom,inlist,min_max
                                     │   └── filter id:1, build key:b.a0n (#50), probe targets:[a.a0n (#10)@scan0], filter type:bloom,inlist,min_max
                                     ├── estimated rows: 59019257.39
                                     ├── Exchange(Build)
                                     │   ├── output columns: [b.a0k (#48), b.a0n (#50), b.a2c (#52), b.a2k (#61)]
-                                    │   ├── exchange type: Broadcast
+                                    │   ├── exchange type: Hash(b.a0k (#48), b.a0n (#50))
                                     │   └── TableScan
                                     │       ├── table: default.default.a1z
                                     │       ├── scan id: 1
@@ -99,15 +99,18 @@ Exchange
                                     │       ├── partitions scanned: 0
                                     │       ├── push downs: [filters: [is_true(a1z.a2t (#70) = '624100')], limit: NONE]
                                     │       └── estimated rows: 11373457.90
-                                    └── TableScan(Probe)
-                                        ├── table: default.default.a0c
-                                        ├── scan id: 0
-                                        ├── output columns: [a0d (#0), a0k (#7), a0l (#8), a0m (#9), a0n (#10)]
-                                        ├── read rows: 0
-                                        ├── read size: 0
-                                        ├── partitions total: 0
-                                        ├── partitions scanned: 0
-                                        ├── push downs: [filters: [a0c.a0d (#0) >= '20240526' and a0c.a0d (#0) <= '20250525'], limit: NONE]
-                                        ├── apply join filters: [#3, #2, #0, #1]
-                                        └── estimated rows: 62086049.42
+                                    └── Exchange(Probe)
+                                        ├── output columns: [a.a0d (#0), a.a0k (#7), a.a0l (#8), a.a0m (#9), a.a0n (#10)]
+                                        ├── exchange type: Hash(a.a0k (#7), a.a0n (#10))
+                                        └── TableScan
+                                            ├── table: default.default.a0c
+                                            ├── scan id: 0
+                                            ├── output columns: [a0d (#0), a0k (#7), a0l (#8), a0m (#9), a0n (#10)]
+                                            ├── read rows: 0
+                                            ├── read size: 0
+                                            ├── partitions total: 0
+                                            ├── partitions scanned: 0
+                                            ├── push downs: [filters: [a0c.a0d (#0) >= '20240526' and a0c.a0d (#0) <= '20250525'], limit: NONE]
+                                            ├── apply join filters: [#3, #2, #0, #1]
+                                            └── estimated rows: 62086049.42
 

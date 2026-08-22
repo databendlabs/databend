@@ -1,6 +1,8 @@
 name: "Q01"
 description: "TPC-DS Query 1 optimizer test"
 
+node_num: 2
+
 sql: |
   WITH customer_total_return
      AS (SELECT sr_customer_sk     AS ctr_customer_sk,

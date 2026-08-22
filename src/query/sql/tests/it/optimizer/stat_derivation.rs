@@ -33,6 +33,8 @@ use databend_common_sql::optimizer::optimizers::rule::RuleID;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOp;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::ScalarExpr;
 use databend_common_statistics::Datum;
 
 use crate::framework::LiteTableContext;
@@ -87,6 +89,24 @@ fn find_operator(expr: &SExpr, operator: RelOp) -> Option<&SExpr> {
     }
     expr.children()
         .find_map(|child| find_operator(child, operator.clone()))
+}
+
+fn find_plus_eval_scalar(expr: &SExpr) -> Option<(&SExpr, Symbol, Symbol)> {
+    if let RelOperator::EvalScalar(eval) = expr.plan() {
+        for item in &eval.items {
+            if matches!(
+                &item.scalar,
+                ScalarExpr::FunctionCall(call) if call.func_name == "plus"
+            ) {
+                let mut input_columns = item.scalar.used_columns().into_iter();
+                let input = input_columns.next()?;
+                if input_columns.next().is_none() {
+                    return Some((expr, item.index, input));
+                }
+            }
+        }
+    }
+    expr.children().find_map(find_plus_eval_scalar)
 }
 
 fn column_label(metadata: &Metadata, column: Symbol) -> String {
@@ -232,5 +252,43 @@ async fn test_sort_and_window_statistics_golden() -> Result<()> {
     for case in &cases {
         write_case(&mut file, case).await?;
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_lossy_numeric_promotion_drops_ndv_proof() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    let raw_plan = ctx
+        .bind_sql(
+            "SELECT valueset.k + CAST(0 AS DOUBLE) AS k \
+             FROM ( \
+                 SELECT CAST(9007199254740992 AS BIGINT UNSIGNED) AS k \
+                 UNION ALL \
+                 SELECT CAST(9007199254740993 AS BIGINT UNSIGNED) AS k \
+             ) AS valueset",
+        )
+        .await?;
+    let Plan::Query {
+        s_expr, metadata, ..
+    } = raw_plan
+    else {
+        return Err(ErrorCode::Internal("expected query plan"));
+    };
+
+    let opt_ctx = OptimizerContext::new(ctx, metadata);
+    let mut collector = CollectStatisticsOptimizer::new(opt_ctx);
+    let s_expr = collector.optimize(&s_expr).await?;
+    let (eval, output_column, input_column) = find_plus_eval_scalar(&s_expr)
+        .ok_or_else(|| ErrorCode::Internal("cannot find the plus EvalScalar"))?;
+
+    let input = RelExpr::with_s_expr(eval.child(0)?).derive_cardinality()?;
+    let input_ndv = &input.statistics.column_stats[&input_column].ndv;
+    assert_eq!(input_ndv.lower, 2.0);
+
+    let output = RelExpr::with_s_expr(eval).derive_cardinality()?;
+    let output_ndv = &output.statistics.column_stats[&output_column].ndv;
+    assert_eq!(output_ndv.lower, 0.0);
+    assert_eq!(output_ndv.expected, Some(2.0));
+    assert_eq!(output_ndv.upper, 2.0);
     Ok(())
 }
