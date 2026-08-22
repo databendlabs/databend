@@ -70,6 +70,10 @@ goldenfile = { workspace = true }
 name = "bench"
 harness = false
 
+[[bench]]
+name = "flight_scatter_hash"
+harness = false
+
 [lints]
 workspace = true
 
