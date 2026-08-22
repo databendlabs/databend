@@ -17,7 +17,6 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
@@ -25,9 +24,11 @@ use databend_common_expression::ProbeState;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_common_expression::aggregate_function::AggregateFunctionRef;
+use databend_common_expression::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::Pipeline;
@@ -58,7 +59,6 @@ impl TransformReaggregateAggregateStateBlock {
             return Ok(None);
         }
 
-        let factory = AggregateFunctionFactory::instance();
         let mut state_indices = Vec::new();
         let mut group_indices = Vec::new();
         let mut functions = Vec::new();
@@ -73,12 +73,18 @@ impl TransformReaggregateAggregateStateBlock {
                     argument_types,
                     ..
                 } => {
-                    let function = factory.get(
-                        &function_name,
-                        params.into_iter().map(Scalar::from).collect(),
-                        argument_types.iter().map(DataType::from).collect(),
-                        vec![],
-                    )?;
+                    let params = &params.into_iter().map(Scalar::from).collect::<Vec<_>>();
+                    let args_type = &argument_types
+                        .iter()
+                        .map(DataType::from)
+                        .collect::<Vec<_>>();
+                    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+                        name: &function_name,
+                        params,
+                        args_type,
+                        distinct: false,
+                        order_by: &[],
+                    })?;
                     state_indices.push(idx);
                     functions.push(function);
                 }

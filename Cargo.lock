@@ -5042,6 +5042,7 @@ dependencies = [
  "async-channel",
  "async-trait",
  "backoff",
+ "bumpalo",
  "bytes",
  "chrono",
  "databend-common-ast",
