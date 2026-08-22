@@ -249,6 +249,21 @@ FROM get_lineage('lineage_history_statements.insert_stage_dst.a', 'COLUMN', 'UPS
 ----
 0
 
+# System and information_schema describe runtime metadata rather than business datasets, so INSERT,
+# CTAS, CREATE VIEW, and View refresh do not persist them as source endpoints.
+query I
+SELECT count(*)
+FROM system_history.lineage_history
+WHERE source_database IN ('system', 'information_schema')
+  AND target_database = 'lineage_history_statements'
+  AND target_name IN (
+    'system_source_dst',
+    'information_schema_source_dst',
+    'system_source_view'
+  )
+----
+0
+
 statement ok
 DROP DATABASE lineage_history_statements
 

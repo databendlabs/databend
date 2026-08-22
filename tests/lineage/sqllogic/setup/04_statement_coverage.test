@@ -145,6 +145,22 @@ statement ok
 INSERT INTO lineage_history_statements.insert_select_stage_dst
 SELECT a, b FROM @lineage_history_statements_stage
 
+# Built-in metadata sources are intentionally omitted from persisted lineage.
+statement ok
+CREATE TABLE lineage_history_statements.system_source_dst(x UInt8)
+
+statement ok
+INSERT INTO lineage_history_statements.system_source_dst
+SELECT dummy FROM system.one
+
+statement ok
+CREATE TABLE lineage_history_statements.information_schema_source_dst AS
+SELECT table_name FROM information_schema.views
+
+statement ok
+CREATE VIEW lineage_history_statements.system_source_view AS
+SELECT dummy FROM system.one
+
 # INSERT FROM Stage uses the COPY plan path and purges input files, so keep it last.
 statement ok
 CREATE TABLE lineage_history_statements.insert_stage_dst(a INT, b INT)
