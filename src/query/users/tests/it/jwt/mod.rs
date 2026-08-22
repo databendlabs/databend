@@ -14,3 +14,4 @@
 
 mod authenticator;
 mod jwk;
+mod key_pair;
