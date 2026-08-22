@@ -17,11 +17,11 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use itertools::Itertools;
 
-use super::AggregateFunctionRef;
 use super::BATCH_SIZE;
 use super::PayloadFlushState;
 use super::StatesLayout;
-use super::get_states_layout;
+use super::aggregate_function::AggregateFunctionRef;
+use super::aggregate_function::get_states_layout;
 use super::payload::Payload;
 use super::payload::PayloadTransferBatch;
 use super::payload::PayloadTransferStateOffsets;

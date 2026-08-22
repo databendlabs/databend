@@ -1,12 +1,22 @@
 use std::io::Write;
 
+use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::FromData;
-use databend_common_expression::SymbolOrOffset;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
+use databend_common_expression::Symbol;
+use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
+use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ArrayColumn;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::Buffer;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::UInt64Type;
 use goldenfile::Mint;
 
 use super::aggregate_case_fixtures as fixtures;
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
+use super::aggregate_function_v2_support::eval_v2_aggr;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -135,13 +145,10 @@ fn run_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulat
     );
     write_aggregate_expr_case(file, "array_agg(a)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "array_agg_state(x_null)", columns, simulator, vec![]);
-    // Do not add `array_agg_if(..., event1)` here until the legacy batch path
-    // is fixed: legacy `array_agg` ignores the external validity passed by the
-    // `_if` combinator, while the row path filters before calling `array_agg`.
     write_aggregate_expr_case(file, "array_agg(a)", columns, simulator, vec![
-        AggregateFunctionSortDesc {
-            index: SymbolOrOffset::Offset(0),
-            is_reuse_index: true,
+        AggregateBoundOrderByItem {
+            index: Symbol::new(0),
+            source: AggregateBoundOrderBySource::Argument { index: 0 },
             data_type: columns[0].1.data_type(),
             nulls_first: false,
             asc: true,
@@ -151,9 +158,9 @@ fn run_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulat
     write_aggregate_expr_case(file, "array_agg(x_null)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "array_agg(all_null)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "list(a)", columns, simulator, vec![
-        AggregateFunctionSortDesc {
-            index: SymbolOrOffset::Offset(0),
-            is_reuse_index: true,
+        AggregateBoundOrderByItem {
+            index: Symbol::new(0),
+            source: AggregateBoundOrderBySource::Argument { index: 0 },
             data_type: columns[0].1.data_type(),
             nulls_first: false,
             asc: true,
@@ -211,7 +218,7 @@ fn run_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulat
 fn test_array_agg() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("array_agg.txt").unwrap();
-    run_array_agg_cases(file, eval_legacy_aggregate);
+    run_array_agg_cases(file, eval_aggregate);
 }
 
 #[test]
@@ -219,4 +226,26 @@ fn test_array_agg_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("array_agg_group_by.txt").unwrap();
     run_array_agg_cases(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_v2_array_agg_if_applies_predicate() -> Result<()> {
+    let entries = [
+        UInt64Type::from_data(vec![1, 2, 3, 4]).into(),
+        BooleanType::from_data(vec![true, false, false, false]).into(),
+    ];
+    let return_type = DataType::Array(Box::new(UInt64Type::data_type()));
+    let expected = (
+        Column::Array(Box::new(
+            ArrayColumn::<UInt64Type>::new(Buffer::from(vec![1u64]), Buffer::from(vec![0, 1]))
+                .upcast(&return_type),
+        )),
+        return_type,
+    );
+
+    let direct_v2 = eval_v2_aggr("array_agg_if", &entries, 4, false)?;
+    let serialized_v2 = eval_v2_aggr("array_agg_if", &entries, 4, true)?;
+    assert_eq!(direct_v2, expected);
+    assert_eq!(serialized_v2, expected);
+    Ok(())
 }

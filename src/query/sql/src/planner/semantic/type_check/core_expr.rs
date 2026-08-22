@@ -20,9 +20,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use smallvec::smallvec;
 
 use super::CoreDisplayExprArg;
@@ -51,19 +52,19 @@ impl<'a> CoreExprArena<'a> {
         Self {
             nodes: Vec::new(),
             week_start,
-            aggregate_function_factory: AggregateFunctionFactory::instance(),
+            aggregate_function_registry: &AGGR_REGISTRY,
             in_lambda_function: false,
         }
     }
 
-    pub(super) fn with_aggregate_function_factory(
+    pub(super) fn with_aggregate_function_registry(
         week_start: u64,
-        aggregate_function_factory: &'static AggregateFunctionFactory,
+        aggregate_function_registry: &'static AggregateFunctionRegistry,
     ) -> Self {
         Self {
             nodes: Vec::new(),
             week_start,
-            aggregate_function_factory,
+            aggregate_function_registry,
             in_lambda_function: false,
         }
     }
@@ -366,7 +367,7 @@ impl<'a> CoreExprArena<'a> {
             return Ok(expr);
         }
 
-        if func.filter.is_some() && !self.aggregate_function_factory.contains(&func_name) {
+        if func.filter.is_some() && !self.aggregate_function_registry.contains(&func_name) {
             return Err(ErrorCode::SemanticError(
                 "FILTER clause is only supported for aggregate functions",
             )
@@ -375,7 +376,7 @@ impl<'a> CoreExprArena<'a> {
 
         if func.distinct
             && !func.order_by.is_empty()
-            && self.aggregate_function_factory.contains(&func_name)
+            && self.aggregate_function_registry.contains(&func_name)
         {
             return Err(
                 ErrorCode::SyntaxException("DISTINCT aggregate ORDER BY is not supported")
@@ -388,7 +389,7 @@ impl<'a> CoreExprArena<'a> {
             span,
             &func_name,
             func.window.is_some(),
-            self.aggregate_function_factory.contains(&func_name),
+            self.aggregate_function_registry.contains(&func_name),
         )?;
 
         if let Some(expr) =

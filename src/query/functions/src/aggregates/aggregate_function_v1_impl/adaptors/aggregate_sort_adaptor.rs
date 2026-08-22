@@ -26,8 +26,6 @@ use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
-use databend_common_expression::AggregateFunction;
-use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -42,6 +40,8 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use itertools::Itertools;
 
+use super::AggregateFunction;
+use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::SerializeInfo;
 use super::StateSerde;

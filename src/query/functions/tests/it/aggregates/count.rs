@@ -1,9 +1,13 @@
 use std::io::Write;
 
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::FromData;
+use databend_common_expression::types::BooleanType;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate_without_each_row;
+use super::aggregate_case_support::eval_aggregate;
+use super::aggregate_function_v2_support::assert_v2_direct_matches_serialized;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -45,6 +49,10 @@ fn run_count_cases(file: &mut impl Write, simulator: impl AggregationSimulator) 
             )
             .into(),
         ),
+        (
+            "cond",
+            BooleanType::from_data(vec![true, true, false, true]).into(),
+        ),
     ];
     let columns = columns.as_slice();
 
@@ -58,13 +66,15 @@ fn run_count_cases(file: &mut impl Write, simulator: impl AggregationSimulator) 
     write_aggregate_expr_case(file, "count_state(NULL)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "sum0(x_null)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "count(all_null)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count_if(cond)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count_if(a, cond)", columns, simulator, vec![]);
 }
 
 #[test]
 fn test_count() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("count.txt").unwrap();
-    run_count_cases(file, eval_legacy_aggregate_without_each_row);
+    run_count_cases(file, eval_aggregate);
 }
 
 #[test]
@@ -72,4 +82,12 @@ fn test_count_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("count_group_by.txt").unwrap();
     run_count_cases(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_v2_count_if_suffix_names_are_case_insensitive() -> Result<()> {
+    let conditions: BlockEntry =
+        BooleanType::from_data(vec![true, false, true, true, false]).into();
+
+    assert_v2_direct_matches_serialized("COUNT_IF", std::slice::from_ref(&conditions), 5)
 }

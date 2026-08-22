@@ -32,7 +32,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::FunctionKind;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
 use derive_visitor::VisitorMut;
@@ -241,7 +241,7 @@ impl AggregatingIndexChecker {
 
         let name = name.name.to_lowercase();
         let func_name = name.as_str();
-        if AggregateFunctionFactory::instance().contains(func_name) {
+        if AGGR_REGISTRY.contains(func_name) {
             self.has_agg_function = true;
             // is agg func but not support now.
             if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&func_name)

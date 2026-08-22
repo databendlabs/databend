@@ -24,16 +24,11 @@ use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Constant;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::F64;
-use databend_common_expression::types::Number;
 use databend_common_expression::types::PairType;
 use databend_common_expression::types::TernaryType;
 use databend_common_expression::types::UnaryType;
@@ -45,7 +40,6 @@ use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::StatesLayout;
 use super::get_states_layout;
-use crate::BUILTIN_FUNCTIONS;
 
 pub(super) fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
@@ -190,51 +184,6 @@ pub fn eval_aggr(
 #[inline]
 pub(super) fn borsh_partial_deserialize<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
     Ok(T::deserialize(slice)?)
-}
-
-pub(super) fn extract_number_param<T: Number>(param: Scalar) -> Result<T> {
-    check_number::<T, usize>(
-        None,
-        &FunctionContext::default(),
-        &Constant {
-            span: None,
-            data_type: param.as_ref().infer_data_type(),
-            scalar: param,
-        }
-        .into(),
-        &BUILTIN_FUNCTIONS,
-    )
-}
-
-pub(super) fn get_levels(params: &[Scalar]) -> Result<Vec<f64>> {
-    let levels = match params {
-        [] => vec![0.5f64],
-        [param] => {
-            let level = extract_number_param::<F64>(param.clone())?.0;
-            if !(0.0..=1.0).contains(&level) {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "level range between [0, 1], got: {:?}",
-                    level
-                )));
-            }
-            vec![level]
-        }
-        params => {
-            let mut levels = Vec::with_capacity(params.len());
-            for param in params {
-                let level = extract_number_param::<F64>(param.clone())?.0;
-                if !(0.0..=1.0).contains(&level) {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "level range between [0, 1], got: {:?} in levels",
-                        level
-                    )));
-                }
-                levels.push(level);
-            }
-            levels
-        }
-    };
-    Ok(levels)
 }
 
 pub(super) fn batch_serialize1<A, S, F>(

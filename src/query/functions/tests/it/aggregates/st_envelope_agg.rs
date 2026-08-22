@@ -3,7 +3,7 @@ use std::io::Write;
 use goldenfile::Mint;
 
 use super::aggregate_case_fixtures as fixtures;
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -64,7 +64,7 @@ fn run_st_envelope_agg_cases(file: &mut impl Write, simulator: impl AggregationS
 fn test_st_envelope_agg() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("st_envelope_agg.txt").unwrap();
-    run_st_envelope_agg_cases(file, eval_legacy_aggregate);
+    run_st_envelope_agg_cases(file, eval_aggregate);
 }
 
 #[test]

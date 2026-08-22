@@ -1,10 +1,16 @@
 use std::io::Write;
 
+use databend_common_exception::Result;
 use databend_common_expression::FromData;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::number::F64;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
+use super::aggregate_function_v2_support::eval_v2_aggr;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -76,7 +82,7 @@ fn run_stddev_cases(file: &mut impl Write, simulator: impl AggregationSimulator)
 fn test_stddev() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("stddev.txt").unwrap();
-    run_stddev_cases(file, eval_legacy_aggregate);
+    run_stddev_cases(file, eval_aggregate);
 }
 
 #[test]
@@ -84,4 +90,32 @@ fn test_stddev_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("stddev_group_by.txt").unwrap();
     run_stddev_cases(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_v2_stddev_pop_matches_expected_stddev_pop() -> Result<()> {
+    let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
+    let direct_v2 = eval_v2_aggr("stddev_pop", &entries, 4, false)?;
+    let serialized_v2 = eval_v2_aggr("stddev_pop", &entries, 4, true)?;
+
+    assert_eq!(
+        unsafe { direct_v2.0.index_unchecked(0) },
+        ScalarRef::Number(NumberScalar::Float64(F64::from(1.25_f64.sqrt())))
+    );
+    assert_eq!(serialized_v2, direct_v2);
+    Ok(())
+}
+
+#[test]
+fn test_v2_stddev_samp_matches_expected_stddev_samp() -> Result<()> {
+    let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
+    let direct_v2 = eval_v2_aggr("stddev_samp", &entries, 4, false)?;
+    let serialized_v2 = eval_v2_aggr("stddev_samp", &entries, 4, true)?;
+
+    assert_eq!(
+        unsafe { direct_v2.0.index_unchecked(0) },
+        ScalarRef::Number(NumberScalar::Float64(F64::from((5.0_f64 / 3.0).sqrt())))
+    );
+    assert_eq!(serialized_v2, direct_v2);
+    Ok(())
 }

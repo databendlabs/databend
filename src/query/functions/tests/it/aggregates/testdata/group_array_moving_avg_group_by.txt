@@ -8,7 +8,7 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------+
 
 
-error: AggregateArrayMovingAvgFunction does not support type 'String'
+error: Unsupported AggregateFunction signature: group_array_moving_avg([String])
 
 ast: group_array_moving_avg(NULL)
 evaluation (internal):

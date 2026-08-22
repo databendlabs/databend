@@ -17,7 +17,6 @@ use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateLoc;
-use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
@@ -33,6 +32,7 @@ use num_traits::AsPrimitive;
 
 use super::AggrState;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::SerializeInfo;
 use super::StateSerde;

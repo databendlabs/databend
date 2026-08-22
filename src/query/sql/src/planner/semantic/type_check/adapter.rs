@@ -27,8 +27,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
@@ -120,7 +121,7 @@ impl FullTypeCheckAdapterDependencies {
 
         Self {
             async_runtime_handle: current_async_runtime_handle,
-            aggregate_function_factory: AggregateFunctionFactory::instance(),
+            aggregate_function_registry: &AGGR_REGISTRY,
             license_manager: LicenseManagerSwitch::instance(),
             catalog_manager: CatalogManager::instance(),
             user_api_provider: UserApiProvider::instance(),
@@ -142,8 +143,8 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         self.ctx.get_settings()
     }
 
-    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
-        self.dependencies.aggregate_function_factory
+    fn aggregate_function_registry(&self) -> &'static AggregateFunctionRegistry {
+        self.dependencies.aggregate_function_registry
     }
 
     fn udf_adapter(&self) -> Result<Self::UdfAdapter> {

@@ -85,9 +85,9 @@ where A: TypeCheckAdapter
     }
 
     pub(super) fn core_expr_arena(&self) -> CoreExprArena<'a> {
-        CoreExprArena::with_aggregate_function_factory(
+        CoreExprArena::with_aggregate_function_registry(
             self.func_ctx.week_start as u64,
-            self.adapter.aggregate_function_factory(),
+            self.adapter.aggregate_function_registry(),
         )
     }
 

@@ -1,7 +1,9 @@
 use std::io::Write;
 
 use databend_common_expression::FromData;
-use databend_common_expression::SymbolOrOffset;
+use databend_common_expression::Symbol;
+use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
+use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal64Type;
@@ -9,10 +11,9 @@ use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -61,9 +62,9 @@ fn run_string_agg_cases(file: &mut impl Write, simulator: impl AggregationSimula
 
     write_aggregate_expr_case(file, "string_agg(s)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "string_agg(s)", columns, simulator, vec![
-        AggregateFunctionSortDesc {
-            index: SymbolOrOffset::Offset(0),
-            is_reuse_index: true,
+        AggregateBoundOrderByItem {
+            index: Symbol::new(0),
+            source: AggregateBoundOrderBySource::Argument { index: 0 },
             data_type: columns[0].1.data_type(),
             nulls_first: false,
             asc: false,
@@ -88,9 +89,9 @@ fn run_string_agg_cases(file: &mut impl Write, simulator: impl AggregationSimula
     write_aggregate_expr_case(file, "string_agg(NULL, '|')", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "string_agg(s_null, '-')", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "group_concat(s)", columns, simulator, vec![
-        AggregateFunctionSortDesc {
-            index: SymbolOrOffset::Offset(0),
-            is_reuse_index: true,
+        AggregateBoundOrderByItem {
+            index: Symbol::new(0),
+            source: AggregateBoundOrderBySource::Argument { index: 0 },
             data_type: columns[0].1.data_type(),
             nulls_first: false,
             asc: false,
@@ -109,7 +110,7 @@ fn run_string_agg_cases(file: &mut impl Write, simulator: impl AggregationSimula
 fn test_string_agg() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("string_agg.txt").unwrap();
-    run_string_agg_cases(file, eval_legacy_aggregate);
+    run_string_agg_cases(file, eval_aggregate);
 }
 
 #[test]
