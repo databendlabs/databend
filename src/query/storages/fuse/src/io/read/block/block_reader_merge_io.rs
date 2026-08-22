@@ -19,18 +19,18 @@ use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_storages_common_cache::ColumnData;
-use databend_storages_common_cache::SizedColumnArray;
+use databend_storages_common_cache::TableDataCacheEntry;
 use databend_storages_common_io::MergeIOReadResult;
 use enum_as_inner::EnumAsInner;
 use opendal::Buffer;
 
 type CachedColumnData = Vec<(ColumnId, Arc<ColumnData>)>;
-type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
+type CachedColumnArray = Vec<(ColumnId, Arc<TableDataCacheEntry>)>;
 
 #[derive(EnumAsInner, Clone)]
 pub enum DataItem<'a> {
     RawData(Buffer),
-    ColumnArray(&'a Arc<SizedColumnArray>),
+    ColumnArray(&'a Arc<TableDataCacheEntry>),
 }
 
 pub struct BlockReadResult {
