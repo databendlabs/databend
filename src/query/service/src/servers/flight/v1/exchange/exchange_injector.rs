@@ -14,110 +14,39 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_settings::FlightCompression;
 
-use super::exchange_params::MergeExchangeParams;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeSorting;
+use crate::servers::flight::v1::exchange::GlobalShuffleExchange;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::exchange::serde::TransformExchangeDeserializer;
-use crate::servers::flight::v1::exchange::serde::TransformExchangeSerializer;
 use crate::servers::flight::v1::exchange::serde::TransformScatterExchangeSerializer;
-use crate::servers::flight::v1::scatter::BroadcastFlightScatter;
+use crate::servers::flight::v1::network::DefaultExchangeDataCodec;
+use crate::servers::flight::v1::network::ExchangeDataCodec;
+use crate::servers::flight::v1::partition::PartitionStream;
+use crate::servers::flight::v1::partition::create_hash_partition_streams;
 use crate::servers::flight::v1::scatter::FlightScatter;
-use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 
 pub trait ExchangeInjector: Send + Sync + 'static {
-    fn flight_scatter(
-        &self,
-        ctx: &Arc<QueryContext>,
-        exchange: &DataExchange,
-    ) -> Result<Arc<Box<dyn FlightScatter>>>;
-
-    fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>>;
-
-    fn apply_merge_serializer(
-        &self,
-        params: &MergeExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()>;
-
-    fn apply_shuffle_serializer(
-        &self,
-        params: &ShuffleExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()>;
-
-    fn apply_merge_deserializer(
-        &self,
-        params: &MergeExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()>;
-
-    fn apply_shuffle_deserializer(
-        &self,
-        params: &ShuffleExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()>;
-}
-
-pub struct DefaultExchangeInjector;
-
-impl DefaultExchangeInjector {
-    pub fn create() -> Arc<dyn ExchangeInjector> {
-        Arc::new(DefaultExchangeInjector {})
-    }
-}
-
-impl ExchangeInjector for DefaultExchangeInjector {
-    fn flight_scatter(
-        &self,
-        ctx: &Arc<QueryContext>,
-        exchange: &DataExchange,
-    ) -> Result<Arc<Box<dyn FlightScatter>>> {
-        Ok(Arc::new(match exchange {
-            DataExchange::Merge(_) => unreachable!(),
-            DataExchange::GlobalShuffleExchange(_) => unreachable!(),
-            DataExchange::Broadcast(exchange) => Box::new(BroadcastFlightScatter::try_create(
-                exchange.destination_ids.len(),
-            )?),
-            DataExchange::NodeToNodeExchange(exchange) => {
-                let local_id = &ctx.get_cluster().local_id;
-                let local_pos = exchange
-                    .destination_ids
-                    .iter()
-                    .position(|x| x == local_id)
-                    .unwrap();
-                HashFlightScatter::try_create(
-                    ctx.get_function_context()?,
-                    exchange.shuffle_keys.clone(),
-                    exchange.destination_ids.len(),
-                    local_pos,
-                )?
-            }
-        }))
-    }
-
     fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>> {
         None
     }
 
-    fn apply_merge_serializer(
+    fn flight_scatter(
         &self,
-        params: &MergeExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            TransformExchangeSerializer::create(input, output, params, compression)
-        })
+        _ctx: &Arc<QueryContext>,
+        _exchange: &DataExchange,
+    ) -> Result<Arc<dyn FlightScatter>> {
+        Err(ErrorCode::Internal(
+            "This exchange injector does not support node shuffle",
+        ))
     }
 
     fn apply_shuffle_serializer(
@@ -131,20 +60,6 @@ impl ExchangeInjector for DefaultExchangeInjector {
         })
     }
 
-    fn apply_merge_deserializer(
-        &self,
-        params: &MergeExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            Ok(TransformExchangeDeserializer::create(
-                input,
-                output,
-                &params.schema,
-            ))
-        })
-    }
-
     fn apply_shuffle_deserializer(
         &self,
         params: &ShuffleExchangeParams,
@@ -157,5 +72,64 @@ impl ExchangeInjector for DefaultExchangeInjector {
                 &params.schema,
             ))
         })
+    }
+
+    fn exchange_data_codec(&self) -> Arc<dyn ExchangeDataCodec> {
+        DefaultExchangeDataCodec::create()
+    }
+
+    fn partition_streams(
+        &self,
+        _ctx: &Arc<QueryContext>,
+        _exchange: &GlobalShuffleExchange,
+        _streams: usize,
+        _rows_threshold: usize,
+        _bytes_threshold: usize,
+    ) -> Result<Vec<Box<dyn PartitionStream>>> {
+        Err(ErrorCode::Internal(
+            "This exchange injector does not support global shuffle",
+        ))
+    }
+}
+
+pub struct DefaultExchangeInjector;
+
+impl DefaultExchangeInjector {
+    pub fn create() -> Arc<dyn ExchangeInjector> {
+        Arc::new(DefaultExchangeInjector {})
+    }
+}
+
+impl ExchangeInjector for DefaultExchangeInjector {
+    fn partition_streams(
+        &self,
+        ctx: &Arc<QueryContext>,
+        exchange: &GlobalShuffleExchange,
+        streams: usize,
+        rows_threshold: usize,
+        bytes_threshold: usize,
+    ) -> Result<Vec<Box<dyn PartitionStream>>> {
+        let local_id = &ctx.get_cluster().local_id;
+        let mut local_pos = 0;
+        for (destination, channels) in &exchange.destination_channels {
+            if destination == local_id {
+                break;
+            }
+            local_pos += channels.len();
+        }
+        let partitions = exchange
+            .destination_channels
+            .iter()
+            .map(|(_, channels)| channels.len())
+            .sum();
+        create_hash_partition_streams(
+            ctx.get_function_context()?,
+            exchange.shuffle_keys.clone(),
+            partitions,
+            local_pos,
+            streams,
+            rows_threshold,
+            bytes_threshold,
+        )
     }
 }

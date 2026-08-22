@@ -345,7 +345,7 @@ impl PhysicalPlanBuilder {
                 child_required[0] = left_required;
                 child_required[1] = right_required;
             }
-            RelOperator::Exchange(databend_common_sql::plans::Exchange::NodeToNodeHash(exprs)) => {
+            RelOperator::Exchange(databend_common_sql::plans::Exchange::GlobalHash(exprs)) => {
                 let req = &mut child_required[0];
                 for expr in exprs {
                     expr.collect_used_columns(req);

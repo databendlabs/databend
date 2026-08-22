@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_catalog::cluster_info::Cluster;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_meta_client::types::NodeInfo;
@@ -47,6 +48,7 @@ use crate::schedulers::PlanFragment;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::servers::flight::v1::exchange::BroadcastExchange;
 use crate::servers::flight::v1::exchange::DataExchange;
+use crate::servers::flight::v1::exchange::GlobalShuffleExchange;
 use crate::servers::flight::v1::exchange::MergeExchange;
 use crate::servers::flight::v1::exchange::NodeToNodeExchange;
 use crate::sessions::QueryContext;
@@ -224,7 +226,6 @@ impl FragmentDeriveHandle {
             FragmentKind::Init => None,
             FragmentKind::Normal => {
                 let destination_ids = get_executors(cluster);
-
                 let mut destination_channels = Vec::with_capacity(destination_ids.len());
 
                 for destination in &destination_ids {
@@ -240,21 +241,31 @@ impl FragmentDeriveHandle {
                 }))
             }
             FragmentKind::GlobalShuffle => {
-                let destination_ids = get_executors(cluster.clone());
-
+                let destination_ids = get_executors(cluster);
                 let mut destination_channels = Vec::with_capacity(destination_ids.len());
 
-                for destination in &destination_ids {
-                    let channels = (0..num_threads).map(|_| GlobalUniq::unique()).collect();
+                let nodes = destination_ids.len();
+                let default_channel_count = if exchange_sink.allow_adjust_parallelism {
+                    num_threads
+                } else {
+                    1
+                };
+                let channel_counts = destination_channel_counts(
+                    nodes,
+                    default_channel_count,
+                    exchange_sink.destination_parallelism,
+                )?;
+                for (destination, channel_count) in
+                    destination_ids.iter().zip(channel_counts.into_iter())
+                {
+                    let channels = (0..channel_count).map(|_| GlobalUniq::unique()).collect();
                     destination_channels.push((destination.clone(), channels));
                 }
 
-                Some(DataExchange::GlobalShuffleExchange(NodeToNodeExchange {
+                Some(DataExchange::GlobalShuffleExchange(GlobalShuffleExchange {
                     id: GlobalUniq::unique(),
-                    destination_ids,
                     destination_channels,
                     shuffle_keys: exchange_sink.keys.clone(),
-                    allow_adjust_parallelism: exchange_sink.allow_adjust_parallelism,
                 }))
             }
             FragmentKind::Merge => Some(MergeExchange::create(
@@ -268,6 +279,33 @@ impl FragmentDeriveHandle {
             )),
         })
     }
+}
+
+fn destination_channel_counts(
+    nodes: usize,
+    default_per_node: usize,
+    requested_total: Option<usize>,
+) -> Result<Vec<usize>> {
+    if nodes == 0 {
+        return Err(ErrorCode::Internal(
+            "Cannot create an exchange without destination nodes",
+        ));
+    }
+
+    let Some(total) = requested_total else {
+        return Ok(vec![default_per_node; nodes]);
+    };
+    if total < nodes {
+        return Err(ErrorCode::Internal(format!(
+            "Exchange destination parallelism {total} is smaller than node count {nodes}",
+        )));
+    }
+
+    let base = total / nodes;
+    let remainder = total % nodes;
+    Ok((0..nodes)
+        .map(|node_index| base + usize::from(node_index < remainder))
+        .collect())
 }
 
 impl DeriveHandle for FragmentDeriveHandle {
@@ -300,6 +338,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 destination_fragment_id: usize::MAX,
                 ignore_exchange: exchange.ignore_exchange,
                 allow_adjust_parallelism: exchange.allow_adjust_parallelism,
+                destination_parallelism: exchange.destination_parallelism,
                 meta: PhysicalPlanMeta::with_plan_id("ExchangeSink", plan_id),
             });
 
@@ -408,5 +447,18 @@ impl PhysicalPlanVisitor for FragmentTypeVisitor {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::destination_channel_counts;
+
+    #[test]
+    fn test_requested_exchange_parallelism_is_distributed_across_nodes() {
+        assert_eq!(destination_channel_counts(3, 8, Some(32)).unwrap(), vec![
+            11, 11, 10
+        ]);
+        assert_eq!(destination_channel_counts(2, 8, None).unwrap(), vec![8, 8]);
     }
 }

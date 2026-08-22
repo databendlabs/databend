@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::basic::create_resize_item;
 use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::Pipeline;
@@ -25,34 +26,76 @@ use super::broadcast_send_transform::BroadcastSendTransform;
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::GlobalExchangeParams;
-use super::exchange_sink_writer::create_writer_item;
 use super::exchange_source::via_exchange_source;
 use super::exchange_source_reader::create_reader_item;
 use super::exchange_transform_shuffle::exchange_shuffle;
-use super::hash_send_transform::HashSendTransform;
-use crate::servers::flight::v1::exchange::BroadcastRecvTransform;
+use super::partition_send_transform::PartitionSendTransform;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::exchange::exchange_sink::build_broadcast_outbound_channels;
-use crate::servers::flight::v1::exchange::exchange_sink::build_hash_outbound_channels;
+use crate::servers::flight::v1::exchange::exchange_sink::build_global_shuffle_outbound_channels;
+use crate::servers::flight::v1::exchange::exchange_sink_writer::create_writer_item;
+use crate::servers::flight::v1::network::NetworkInboundChannelSet;
 use crate::servers::flight::v1::network::create_local_channels;
-use crate::servers::flight::v1::scatter::HashFlightScatter;
+use crate::servers::flight::v1::partition::PartitionStream;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 
 pub struct ExchangeTransform;
 
 impl ExchangeTransform {
+    pub fn local_shuffle(
+        pipeline: &mut Pipeline,
+        schema: &DataSchemaRef,
+        partition_streams: Vec<Box<dyn PartitionStream>>,
+        parallelism: usize,
+    ) -> Result<()> {
+        if partition_streams.len() != parallelism {
+            return Err(databend_common_exception::ErrorCode::Internal(format!(
+                "Local shuffle expected {parallelism} partition streams, got {}",
+                partition_streams.len()
+            )));
+        }
+        pipeline.resize(parallelism, false)?;
+
+        let channel_set = NetworkInboundChannelSet::new(parallelism);
+        let channels = create_local_channels(&channel_set);
+        let waker = pipeline.get_waker();
+
+        let mut send_items = Vec::with_capacity(parallelism);
+        for (worker_id, partition_stream) in partition_streams.into_iter().enumerate() {
+            send_items.push(PartitionSendTransform::create_item(
+                worker_id,
+                worker_id,
+                partition_stream,
+                channels.clone(),
+                waker.clone(),
+            ));
+        }
+        pipeline.add_pipe(Pipe::create(parallelism, parallelism, send_items));
+
+        let mut recv_items = Vec::with_capacity(parallelism);
+        for worker_id in 0..parallelism {
+            recv_items.push(ExchangeRecvTransform::create_item(
+                worker_id,
+                channel_set.create_receiver(worker_id, schema),
+                waker.clone(),
+            ));
+        }
+        pipeline.add_pipe(Pipe::create(parallelism, parallelism, recv_items));
+        Ok(())
+    }
+
     pub fn via(
         ctx: &Arc<QueryContext>,
-        params: &ExchangeParams,
+        params: &mut ExchangeParams,
         pipeline: &mut Pipeline,
         injector: Arc<dyn ExchangeInjector>,
     ) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => {
-                via_exchange_source(ctx.clone(), params, injector, pipeline)
+                via_exchange_source(ctx.clone(), params, pipeline)
             }
             ExchangeParams::BroadcastExchange(params) => {
                 Self::broadcast_exchange(ctx, pipeline, params)
@@ -61,7 +104,7 @@ impl ExchangeTransform {
                 Self::node_shuffle(ctx, pipeline, injector, params)
             }
             ExchangeParams::GlobalShuffleExchange(params) => {
-                Self::hash_exchange(ctx, pipeline, params)
+                Self::global_shuffle(ctx, pipeline, params)
             }
         }
     }
@@ -74,11 +117,8 @@ impl ExchangeTransform {
     ) -> Result<()> {
         exchange_shuffle(ctx, params, pipeline)?;
 
-        // exchange writer sink and resize and exchange reader
         let len = params.destination_ids.len();
-        let local_pipe = if params.allow_adjust_parallelism
-            && params.exchange_injector.exchange_sorting().is_none()
-        {
+        let local_pipe = if params.allow_adjust_parallelism {
             ctx.get_settings().get_max_threads()? as usize
         } else {
             1
@@ -90,15 +130,14 @@ impl ExchangeTransform {
         let flight_senders = exchange_manager.get_flight_sender(&exchange_params)?;
 
         for (destination_id, sender) in flight_senders {
-            items.push(match destination_id == params.executor_id {
-                true => {
-                    if local_pipe == 1 {
-                        create_dummy_item()
-                    } else {
-                        create_resize_item(1, local_pipe)
-                    }
+            items.push(if destination_id == params.executor_id {
+                if local_pipe == 1 {
+                    create_dummy_item()
+                } else {
+                    create_resize_item(1, local_pipe)
                 }
-                false => create_writer_item(sender, false),
+            } else {
+                create_writer_item(sender, false)
             });
         }
 
@@ -109,15 +148,82 @@ impl ExchangeTransform {
             items.push(create_reader_item(receiver));
         }
 
-        let new_outputs = local_pipe + nodes_source;
-        pipeline.add_pipe(Pipe::create(len, new_outputs, items));
+        pipeline.add_pipe(Pipe::create(len, local_pipe + nodes_source, items));
 
-        if params.exchange_injector.exchange_sorting().is_none() && params.allow_adjust_parallelism
-        {
+        if params.allow_adjust_parallelism {
             pipeline.try_resize(ctx.get_settings().get_max_threads()? as usize)?;
         }
 
         injector.apply_shuffle_deserializer(params, pipeline)
+    }
+
+    fn global_shuffle(
+        ctx: &Arc<QueryContext>,
+        pipeline: &mut Pipeline,
+        params: &mut GlobalExchangeParams,
+    ) -> Result<()> {
+        let mut local_pos = 0;
+        let mut local_threads = None;
+        for (destination, channels) in &params.destination_channels {
+            if destination == &params.executor_id {
+                local_threads = Some(channels.len());
+                break;
+            }
+            local_pos += channels.len();
+        }
+        let local_threads = local_threads.ok_or_else(|| {
+            databend_common_exception::ErrorCode::Internal(
+                "Global shuffle has no local destination",
+            )
+        })?;
+
+        pipeline.resize(local_threads, false)?;
+
+        let exchange_manager = DataExchangeManager::instance();
+        let channel_set = exchange_manager.get_or_create_exchange_channel_set(
+            &params.query_id,
+            &params.exchange_id,
+            local_threads,
+        )?;
+        if channel_set.channels.len() != local_threads {
+            return Err(databend_common_exception::ErrorCode::Internal(format!(
+                "Global shuffle channel count mismatch: expected {local_threads}, got {}",
+                channel_set.channels.len()
+            )));
+        }
+
+        let compression = ctx.get_settings().get_query_flight_compression()?;
+        let local_outbound = create_local_channels(&channel_set);
+        let channels = build_global_shuffle_outbound_channels(params, local_outbound, compression)?;
+        let waker = pipeline.get_waker();
+
+        let mut send_items = Vec::with_capacity(local_threads);
+        let partition_streams = params.take_partition_streams(local_threads)?;
+        for (worker_id, partition_stream) in partition_streams.into_iter().enumerate() {
+            send_items.push(PartitionSendTransform::create_item(
+                worker_id,
+                local_pos + worker_id,
+                partition_stream,
+                channels.clone(),
+                waker.clone(),
+            ));
+        }
+        pipeline.add_pipe(Pipe::create(local_threads, local_threads, send_items));
+
+        let mut recv_items = Vec::with_capacity(local_threads);
+        for worker_id in 0..local_threads {
+            recv_items.push(ExchangeRecvTransform::create_item(
+                worker_id,
+                channel_set.create_receiver_with_codec(
+                    worker_id,
+                    &params.schema,
+                    params.codec.clone(),
+                ),
+                waker.clone(),
+            ));
+        }
+        pipeline.add_pipe(Pipe::create(local_threads, local_threads, recv_items));
+        Ok(())
     }
 
     fn broadcast_exchange(
@@ -163,79 +269,6 @@ impl ExchangeTransform {
                 local_pos,
                 channels.clone(),
                 waker.clone(),
-            ));
-        }
-
-        pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
-
-        let mut items = Vec::with_capacity(local_threads);
-        for idx in 0..channel_set.channels.len() {
-            items.push(BroadcastRecvTransform::create_item(
-                idx,
-                channel_set.create_receiver(idx, &params.schema),
-                waker.clone(),
-            ));
-        }
-
-        pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
-        Ok(())
-    }
-
-    fn hash_exchange(
-        ctx: &Arc<QueryContext>,
-        pipeline: &mut Pipeline,
-        params: &GlobalExchangeParams,
-    ) -> Result<()> {
-        let mut local_pos = 0;
-        let mut local_threads = 0;
-
-        for (dest, threads) in params.destination_channels.iter() {
-            if dest == &params.executor_id {
-                local_threads = threads.len();
-                break;
-            }
-
-            local_pos += threads.len();
-        }
-
-        let waker = pipeline.get_waker();
-        let compression = ctx.get_settings().get_query_flight_compression()?;
-        let rows_threshold = ctx.get_settings().get_hash_shuffle_rows_threshold()?;
-        let bytes_threshold = ctx.get_settings().get_hash_shuffle_bytes_threshold()?;
-
-        pipeline.resize(local_threads, false)?;
-
-        let query_id = &params.query_id;
-        let exchange_id = &params.exchange_id;
-        let exchange_manager = DataExchangeManager::instance();
-
-        let channel_set = exchange_manager.get_or_create_exchange_channel_set(
-            query_id,
-            exchange_id,
-            local_threads,
-        )?;
-        assert_eq!(channel_set.channels.len(), local_threads);
-
-        let local_outbound = create_local_channels(&channel_set);
-        let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
-
-        let scatter = Arc::new(HashFlightScatter::try_create(
-            ctx.get_function_context()?,
-            params.shuffle_keys.clone(),
-            remote_outbound.len(),
-            local_pos,
-        )?);
-
-        let mut items = Vec::with_capacity(local_threads);
-        for idx in 0..local_threads {
-            items.push(HashSendTransform::create_item(
-                idx,
-                local_pos + idx,
-                scatter.clone(),
-                remote_outbound.clone(),
-                waker.clone(),
-                rows_threshold,
-                bytes_threshold,
             ));
         }
 

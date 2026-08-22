@@ -119,6 +119,7 @@ fn wrap_with_merge_exchange(input: PhysicalPlan) -> PhysicalPlan {
         kind: FragmentKind::Merge,
         keys: vec![],
         allow_adjust_parallelism: true,
+        destination_parallelism: None,
         ignore_exchange: false,
         meta: PhysicalPlanMeta::new("Exchange"),
     })
@@ -135,6 +136,7 @@ fn wrap_with_global_shuffle(input: PhysicalPlan) -> PhysicalPlan {
             display_name: "partition_key".to_string(),
         }],
         allow_adjust_parallelism: true,
+        destination_parallelism: None,
         ignore_exchange: false,
         meta: PhysicalPlanMeta::new("Exchange"),
     })

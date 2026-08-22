@@ -30,7 +30,6 @@ pub enum Exchange {
     Broadcast,
     Merge,
     MergeSort, // For distributed sort
-    NodeToNodeHash(Vec<ScalarExpr>),
     GlobalHash(Vec<ScalarExpr>),
 }
 
@@ -41,9 +40,7 @@ impl Operator for Exchange {
 
     fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         match self {
-            Exchange::NodeToNodeHash(hash_keys) | Exchange::GlobalHash(hash_keys) => {
-                Box::new(hash_keys.iter())
-            }
+            Exchange::GlobalHash(hash_keys) => Box::new(hash_keys.iter()),
             _ => Box::new(std::iter::empty()),
         }
     }
@@ -55,9 +52,6 @@ impl Operator for Exchange {
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: match self {
-                Exchange::NodeToNodeHash(hash_keys) => {
-                    Distribution::NodeToNodeHash(hash_keys.clone())
-                }
                 Exchange::GlobalHash(hash_keys) => Distribution::GlobalHash(hash_keys.clone()),
                 Exchange::Broadcast => Distribution::Broadcast,
                 Exchange::Merge | Exchange::MergeSort => Distribution::Serial,
