@@ -25,16 +25,20 @@ use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::servers::flight::v1::actions::ABORT_QUERY_ENV;
 use crate::servers::flight::v1::actions::GET_RUNNING_QUERY_DUMP;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::KILL_QUERY;
+use crate::servers::flight::v1::actions::PREPARE_QUERY_ENV;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
 use crate::servers::flight::v1::actions::SYSTEM_ACTION;
+use crate::servers::flight::v1::actions::abort_query_env::abort_query_env;
 use crate::servers::flight::v1::actions::get_running_query_dump::get_running_query_dump;
 use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
 use crate::servers::flight::v1::actions::init_query_env::init_query_env;
 use crate::servers::flight::v1::actions::init_query_fragments::init_query_fragments;
 use crate::servers::flight::v1::actions::kill_query::kill_query;
+use crate::servers::flight::v1::actions::prepare_query_env::prepare_query_env;
 use crate::servers::flight::v1::actions::set_priority::SET_PRIORITY;
 use crate::servers::flight::v1::actions::set_priority::set_priority;
 use crate::servers::flight::v1::actions::start_prepared_query::start_prepared_query;
@@ -138,6 +142,8 @@ impl FlightActions {
 
 pub fn flight_actions() -> FlightActions {
     FlightActions::create()
+        .action(ABORT_QUERY_ENV, abort_query_env)
+        .action(PREPARE_QUERY_ENV, prepare_query_env)
         .action(INIT_QUERY_ENV, init_query_env)
         .action(INIT_QUERY_FRAGMENTS, init_query_fragments)
         .action(START_PREPARED_QUERY, start_prepared_query)

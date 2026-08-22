@@ -12,17 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod flight_client;
-mod flight_service;
-pub(crate) mod keep_alive;
-mod request_getter;
-pub mod v1;
+use databend_common_exception::Result;
 
-pub use flight_client::DoExchangeParams;
-pub use flight_client::DoExchangeStream;
-pub use flight_client::FlightClient;
-pub(crate) use flight_client::FlightClientInfo;
-pub(crate) use flight_client::FlightOperation;
-pub use flight_client::FlightReceiver;
-pub use flight_client::FlightSender;
-pub use flight_service::FlightService;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::packets::ExchangeSession;
+
+pub static ABORT_QUERY_ENV: &str = "/actions/abort_query_env";
+
+pub async fn abort_query_env(session: ExchangeSession) -> Result<()> {
+    DataExchangeManager::instance()
+        .abort_query_env(&session.query_id, &session.exchange_session_id);
+    Ok(())
+}

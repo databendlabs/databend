@@ -560,6 +560,27 @@ jobs:
         with:
           name: test-ee-management-mode-linux
 
+  cluster_chaos:
+    needs: [info, build, check]
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 4c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/test_query_flight_reconnect_chaos
+        timeout-minutes: 40
+        with:
+          target: ${{ needs.info.outputs.target }}
+      - name: Upload failure artifacts
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cluster-chaos
+          path: .databend/query-flight-chaos
+
   sqllogic:
     needs: [build, check]
     uses: ./.github/workflows/reuse.sqllogic.yml

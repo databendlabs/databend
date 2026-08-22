@@ -42,10 +42,12 @@ use tonic::Response as RawResponse;
 use tonic::Status;
 use tonic::Streaming;
 
-use crate::servers::flight::request_builder::RequestGetter;
+use crate::servers::flight::request_getter::RequestGetter;
 use crate::servers::flight::v1::actions::FlightActions;
 use crate::servers::flight::v1::actions::flight_actions;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::network::DoExchangeRequest;
+use crate::servers::flight::v1::network::DoExchangeResponse;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -109,32 +111,10 @@ impl FlightService for DatabendQueryFlightService {
     type DoGetStream = FlightStream<FlightData>;
 
     #[async_backtrace::framed]
-    async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
-        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
-        let _guard = root.set_local_parent();
-
-        match request.get_metadata("x-type")?.as_str() {
-            "request_server_exchange" => {
-                let target = request.get_metadata("x-target")?;
-                let query_id = request.get_metadata("x-query-id")?;
-                Ok(RawResponse::new(Box::pin(
-                    DataExchangeManager::instance().handle_statistics_exchange(query_id, target)?,
-                )))
-            }
-            "exchange_fragment" => {
-                let query_id = request.get_metadata("x-query-id")?;
-                let channel_id = request.get_metadata("x-channel-id")?;
-
-                Ok(RawResponse::new(Box::pin(
-                    DataExchangeManager::instance()
-                        .handle_exchange_fragment(query_id, channel_id)?,
-                )))
-            }
-            exchange_type => Err(Status::unimplemented(format!(
-                "Unimplemented exchange type: {:?}",
-                exchange_type
-            ))),
-        }
+    async fn do_get(&self, _request: Request<Ticket>) -> Response<Self::DoGetStream> {
+        Err(Status::unimplemented(
+            "DatabendQuery uses do_exchange for query-node streams",
+        ))
     }
 
     type DoPutStream = FlightStream<PutResult>;
@@ -154,31 +134,71 @@ impl FlightService for DatabendQueryFlightService {
             Status::invalid_argument(format!("Failed to parse DoExchangeParams: {}", e))
         })?;
 
-        let sender = DataExchangeManager::instance().handle_do_exchange(
+        let inbound = DataExchangeManager::instance().handle_do_exchange(
             &params.query_id,
-            &params.exchange_id,
-            params.num_threads,
+            &params.exchange_session_id,
+            &params.source_id,
+            &params.stream,
         )?;
+
+        let Some(mut inbound) = inbound else {
+            let response = tokio_stream::once(Ok(DoExchangeResponse::receiver_closed().encode()));
+            return Ok(RawResponse::new(Box::pin(response)));
+        };
 
         let mut stream = req.into_inner();
         let (tx, rx) = async_channel::bounded(1);
 
         GlobalIORuntime::instance().spawn(async move {
-            while let Some(result) = stream.next().await {
-                let Ok(flight_data) = result else {
-                    break;
-                };
-
-                if sender.add_data(flight_data).await.is_err() {
-                    break; // Receiver closed
-                }
-
-                // Send pong (empty response signals readiness for next ping)
-                if let Err(_cause) = tx.try_send(Ok(FlightData::default())) {
-                    break;
+            loop {
+                match stream.next().await {
+                    None => {
+                        // A physical EOF is neither success nor immediate logical failure: it may
+                        // be the connection being replaced. Detach before awaiting the response
+                        // write so the reconnect lease starts even if that write is backpressured.
+                        inbound.disconnect();
+                        let _ = tx
+                            .send(Err(Status::unavailable(
+                                "do_exchange request stream ended before Finish",
+                            )))
+                            .await;
+                        break;
+                    }
+                    Some(Err(status)) => {
+                        inbound.disconnect();
+                        let _ = tx.send(Err(status)).await;
+                        break;
+                    }
+                    Some(Ok(flight_data)) => {
+                        // Malformed or out-of-order packets are logical failures, not replaceable
+                        // transport failures. Retrying them would replay the same invalid packet,
+                        // so fail the admitted source immediately instead of starting a lease.
+                        let request = match DoExchangeRequest::decode(flight_data) {
+                            Ok(request) => request,
+                            Err(cause) => {
+                                inbound.fail(cause.clone());
+                                let _ = tx.send(Err(cause.into())).await;
+                                break;
+                            }
+                        };
+                        match inbound.handle_request(request).await {
+                            Ok(response) => {
+                                let receiver_closed =
+                                    matches!(&response, DoExchangeResponse::ReceiverClosed);
+                                if tx.send(Ok(response.encode())).await.is_err() || receiver_closed
+                                {
+                                    break;
+                                }
+                            }
+                            Err(cause) => {
+                                inbound.fail(cause.clone());
+                                let _ = tx.send(Err(cause.into())).await;
+                                break;
+                            }
+                        }
+                    }
                 }
             }
-            // sender is dropped here → closes sub-queues, notifies processors
         });
 
         Ok(RawResponse::new(Box::pin(rx)))

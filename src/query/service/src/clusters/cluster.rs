@@ -76,8 +76,8 @@ use tokio::time::sleep as tokio_async_sleep;
 use tokio::time::sleep;
 
 use crate::servers::flight::FlightClient;
+use crate::servers::flight::FlightClientInfo;
 use crate::servers::flight::FlightOperation;
-use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::keep_alive::build_keep_alive_config;
 
 pub struct ClusterDiscovery {
@@ -1012,6 +1012,7 @@ pub async fn create_client(
         None
     };
     let keep_alive_config = build_keep_alive_config(keep_alive);
+    let info = FlightClientInfo::new(&config.query.node_id, remote_node_id);
 
     let channel = ConnectionFactory::create_rpc_channel(
         address.to_owned(),
@@ -1020,19 +1021,11 @@ pub async fn create_client(
         keep_alive_config,
     )
     .await
-    .map_err(|error| {
-        add_flight_error_context(
-            ErrorCode::from(error),
-            FlightOperation::Connect,
-            &config.query.node_id,
-            remote_node_id,
-        )
-    })?;
+    .map_err(|error| info.add_error_context(ErrorCode::from(error), FlightOperation::Connect))?;
 
-    Ok(FlightClient::new(
+    Ok(FlightClient::with_info(
         FlightServiceClient::new(channel),
-        &config.query.node_id,
-        remote_node_id,
+        info,
     ))
 }
 

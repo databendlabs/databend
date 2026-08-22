@@ -124,7 +124,9 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.lineitem
 
 #import data
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-python $CURDIR/prepare_duckdb_tpch_data.py 1
+if [ "${TPCH_SKIP_DATA_GENERATION:-0}" != "1" ]; then
+	python "$CURDIR/prepare_duckdb_tpch_data.py" 1
+fi
 ls -lh /tmp/tpch_1/*
 
 stmt "drop stage if exists s1"

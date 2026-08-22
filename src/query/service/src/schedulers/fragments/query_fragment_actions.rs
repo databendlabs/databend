@@ -23,6 +23,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_meta_client::types::NodeInfo;
+use uuid::Uuid;
 
 use crate::clusters::ClusterHelper;
 use crate::physical_plans::ExchangeSink;
@@ -30,6 +31,7 @@ use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanCast;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::packets::DataflowDiagramBuilder;
+use crate::servers::flight::v1::packets::ExchangeSession;
 use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
@@ -111,6 +113,7 @@ impl QueryFragmentActions {
 
 pub struct QueryFragmentsActions {
     ctx: Arc<QueryContext>,
+    exchange_session_id: String,
     pub fragments_actions: Vec<QueryFragmentActions>,
 }
 
@@ -118,8 +121,16 @@ impl QueryFragmentsActions {
     pub fn create(ctx: Arc<QueryContext>) -> QueryFragmentsActions {
         QueryFragmentsActions {
             ctx,
+            // query_id may be supplied by a client and reused across executions. This ID fences one
+            // distributed exchange lifecycle so its delayed RPCs or cleanup cannot affect a later
+            // execution with the same query_id.
+            exchange_session_id: Uuid::new_v4().to_string(),
             fragments_actions: Vec::new(),
         }
+    }
+
+    pub fn get_exchange_session_id(&self) -> &str {
+        &self.exchange_session_id
     }
 
     pub fn get_executors(&self) -> Vec<String> {
@@ -185,6 +196,7 @@ impl QueryFragmentsActions {
         for (executor, fragments) in self.get_executors_fragments() {
             query_fragments.insert(executor, QueryFragments {
                 query_id: self.ctx.get_id(),
+                exchange_session_id: self.exchange_session_id.clone(),
                 fragments,
             });
         }
@@ -202,6 +214,7 @@ impl QueryFragmentsActions {
         Ok(QueryEnv {
             workload_group,
             query_id: self.ctx.get_id(),
+            exchange_session_id: self.exchange_session_id.clone(),
             cluster: self.ctx.get_cluster(),
             settings: self.ctx.get_settings(),
 
@@ -217,12 +230,15 @@ impl QueryFragmentsActions {
         })
     }
 
-    pub fn prepared_query(&self) -> Result<HashMap<String, String>> {
+    pub fn prepared_query(&self) -> Result<HashMap<String, ExchangeSession>> {
         let nodes_info = Self::nodes_info(&self.ctx);
         let mut execute_partial_query_packets = HashMap::with_capacity(nodes_info.len());
 
         for node_id in nodes_info.keys() {
-            execute_partial_query_packets.insert(node_id.to_string(), self.ctx.get_id());
+            execute_partial_query_packets.insert(node_id.to_string(), ExchangeSession {
+                query_id: self.ctx.get_id(),
+                exchange_session_id: self.exchange_session_id.clone(),
+            });
         }
 
         Ok(execute_partial_query_packets)
@@ -233,25 +249,20 @@ impl QueryFragmentsActions {
         for fragment_actions in &self.fragments_actions {
             if let Some(exchange) = &fragment_actions.data_exchange {
                 let destinations = exchange.get_destinations();
-                let use_do_exchange = exchange.use_do_exchange();
+                let exchange_mode = exchange.exchange_mode();
 
                 for fragment_action in &fragment_actions.fragment_actions {
                     let source = fragment_action.executor.to_string();
 
                     for destination in &destinations {
-                        if use_do_exchange {
-                            let channels = exchange.get_channels(destination);
-                            builder.add_exchange_edge(
-                                &source,
-                                destination,
-                                exchange.get_id(),
-                                channels,
-                            )?;
-                        } else {
-                            for channel in exchange.get_channels(destination) {
-                                builder.add_data_edge(&source, destination, &channel)?;
-                            }
-                        }
+                        let channels = exchange.get_channels(destination);
+                        builder.add_exchange_edge(
+                            &source,
+                            destination,
+                            exchange.get_id(),
+                            channels,
+                            exchange_mode,
+                        )?;
                     }
                 }
             }

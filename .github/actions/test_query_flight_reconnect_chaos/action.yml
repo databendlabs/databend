@@ -1,0 +1,30 @@
+name: "Test Cluster Chaos"
+description: "Verify distributed query recovery under black-box cluster faults"
+inputs:
+  target:
+    description: "Rust target used by the Linux build job"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        category: full
+        artifacts: meta,query,sqllogictests
+
+    - uses: ./.github/actions/setup_bendsql
+
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+
+    - name: Install MySQL client
+      shell: bash
+      run: python -m pip install mysql-connector-python==26.7.0 duckdb
+
+    - name: Run cluster chaos tests
+      shell: bash
+      run: ./scripts/ci/query-flight-chaos/run.sh

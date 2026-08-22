@@ -1,0 +1,21 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: worker-to-coordinator
+  namespace: databend-chaos
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - databend-chaos
+    labelSelectors:
+      chaos-role: worker
+  direction: to
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - databend-chaos
+      labelSelectors:
+        chaos-role: coordinator
