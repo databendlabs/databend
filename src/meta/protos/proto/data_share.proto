@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2026 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,30 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-pub mod database;
-mod dictionary;
-mod dynamic_table;
-pub(crate) mod index;
-pub(crate) mod materialized_view;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod procedure;
-mod role;
-mod row_access_policy;
-mod sequence;
-mod share;
-mod stage;
-mod stream;
-pub mod table;
-mod tag;
-mod task;
-mod view;
-mod warehouse;
-mod worker;
-mod workload;
+syntax = "proto3";
+
+package databend_proto;
+
+message DataShareMeta {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string provider = 1;
+  string name = 2;
+  string created_on = 3;
+  optional string comment = 4;
+  repeated string accounts = 5;
+  optional DataShareDatabaseGrant database = 6;
+  map<uint64, DataShareTableGrant> tables = 7;
+  optional string connection = 8;
+}
+
+message DataShareDatabaseGrant {
+  uint64 database_id = 1;
+  string shared_on = 2;
+}
+
+message DataShareTableGrant {
+  string shared_on = 1;
+}

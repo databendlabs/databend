@@ -21,6 +21,7 @@ use std::io::Write;
 use anyhow::Context;
 use databend_common_meta_api::kv_pb_api::decode_pb;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
+use databend_common_meta_app::data_share::ShareId;
 use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_meta_app::principal::BUILTIN_ROLE_PUBLIC;
 use databend_common_meta_app::principal::GrantObject;
@@ -680,6 +681,10 @@ impl TenantDump {
                 let id = decode_json_u64(key, data)?;
                 self.add_share_id_keys(tenant, id, &mut out);
             }
+            ["__fd_data_share", _tenant, _name] => {
+                let id = decode_as::<ShareId>(key, data)?;
+                self.add_data_share_id_keys(*id, &mut out);
+            }
             ["__fd_index_by_id", index_id] => {
                 let index_id = parse_u64_segment(key, index_id)?;
                 let index_meta = decode_as::<IndexMeta>(key, data)?;
@@ -964,6 +969,10 @@ impl TenantDump {
         out.required(format!("__fd_share_id_to_name/{id}"));
     }
 
+    fn add_data_share_id_keys(&self, id: u64, out: &mut DependencyKeySet) {
+        out.required(format!("__fd_data_share_by_id/{id}"));
+    }
+
     fn has_database_primary_record(&self, db_id: u64) -> bool {
         self.key_to_state
             .contains_key(&format!("__fd_database_by_id/{db_id}"))
@@ -1172,6 +1181,7 @@ const TENANT_SCOPED_PREFIXES: &[&str] = &[
     "__fd_database",
     "__fd_datamask",
     "__fd_datamask_id_list",
+    "__fd_data_share",
     "__fd_db_id_list",
     "__fd_dictionaries",
     "__fd_file_formats",
@@ -1216,6 +1226,7 @@ const TENANT_SCOPED_PREFIXES: &[&str] = &[
 #[cfg(test)]
 mod tests {
     use databend_common_meta_api::kv_pb_api;
+    use databend_common_meta_app::data_share::DataShareMeta;
     use databend_common_meta_app::schema::DatabaseMeta;
     use databend_common_meta_app::schema::IndexNameIdentRaw;
     use databend_common_meta_app::schema::TableMeta;
@@ -1305,6 +1316,38 @@ mod tests {
         assert!(output.contains("__fd_database/tenant_a/default"));
         assert!(output.contains("__fd_table_by_id/101"));
         assert!(!output.contains("__fd_database/tenant_b/default"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_filter_data_share_graph_by_provider_tenant() -> anyhow::Result<()> {
+        let share_meta = DataShareMeta {
+            provider: "tenant_a".to_string(),
+            name: "sales".to_string(),
+            created_on: Default::default(),
+            comment: None,
+            accounts: Default::default(),
+            database: None,
+            tables: Default::default(),
+            connection: Some("share_conn".to_string()),
+        };
+        let input = vec![
+            generic_kv_line(
+                "__fd_data_share/tenant_a/sales",
+                encode_pb(&ShareId::new(7)),
+            ),
+            generic_kv_line("__fd_data_share_by_id/7", encode_pb(&share_meta)),
+        ];
+
+        let (provider_report, provider_output) = filter(input.clone(), "tenant_a")?;
+        assert_eq!(provider_report.kept_state_machine_lines, 2);
+        assert!(provider_output.contains("__fd_data_share/tenant_a/sales"));
+        assert!(provider_output.contains("__fd_data_share_by_id/7"));
+
+        let (other_report, other_output) = filter(input, "tenant_b")?;
+        assert_eq!(other_report.dropped_state_machine_lines, 2);
+        assert!(other_output.is_empty());
 
         Ok(())
     }

@@ -45,6 +45,7 @@ use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
 use databend_common_sql::binder::MutationType;
+use databend_common_sql::plans::AlterSharePlanAction;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::ModifyColumnAction;
@@ -52,6 +53,7 @@ use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
+use databend_common_sql::plans::ShareGrantObject;
 use databend_common_sql::plans::TagSetObject;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::RoleCacheManager;
@@ -70,6 +72,10 @@ use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
+use crate::share::ShareGrantDatabase;
+use crate::share::ShareGrantTable;
+use crate::share::ShareMgr;
+use crate::share::ShareRevokeTarget;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {
@@ -87,6 +93,95 @@ const SYSTEM_TABLE_FUNCTIONS: [&str; 2] = ["fuse_amend", "set_cache_capacity"];
 impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
         Box::new(PrivilegeAccess { ctx })
+    }
+
+    pub(crate) async fn validate_share_management_for_connection(
+        ctx: Arc<QueryContext>,
+        connection: Option<&str>,
+    ) -> Result<()> {
+        Self { ctx }
+            .validate_share_management_access(connection)
+            .await
+    }
+
+    pub(crate) async fn validate_share_revoke_target(
+        ctx: Arc<QueryContext>,
+        target: &ShareRevokeTarget,
+    ) -> Result<()> {
+        if !target.requires_object_privilege() {
+            return Ok(());
+        }
+
+        Self::validate_share_object_by_id(ctx, target.database_id(), target.table_id()).await
+    }
+
+    pub(crate) async fn validate_share_database_grant(
+        ctx: Arc<QueryContext>,
+        grant: &ShareGrantDatabase,
+    ) -> Result<()> {
+        Self::validate_share_object_by_id(ctx, grant.database_id, None).await
+    }
+
+    pub(crate) async fn validate_share_table_grant(
+        ctx: Arc<QueryContext>,
+        grant: &ShareGrantTable,
+    ) -> Result<()> {
+        Self::validate_share_object_by_id(ctx, grant.database_id, Some(grant.table_id)).await
+    }
+
+    async fn validate_share_object_by_id(
+        ctx: Arc<QueryContext>,
+        database_id: u64,
+        table_id: Option<u64>,
+    ) -> Result<()> {
+        let checker = Self { ctx };
+        let catalog = checker.ctx.get_default_catalog()?;
+        let catalog_name = catalog.name();
+        let (id_object, privilege) = match table_id {
+            Some(table_id) => (
+                GrantObject::TableById(catalog_name.clone(), database_id, table_id),
+                UserPrivilegeType::Select,
+            ),
+            None => (
+                GrantObject::DatabaseById(catalog_name.clone(), database_id),
+                UserPrivilegeType::Usage,
+            ),
+        };
+        match checker
+            .validate_access(&id_object, privilege, false, false)
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {}
+            Err(err) => return Err(err),
+        }
+
+        let database = catalog.get_db_name_by_id(database_id).await?;
+        match table_id {
+            Some(table_id) => {
+                let table = catalog
+                    .get_table_name_by_id(table_id)
+                    .await?
+                    .ok_or_else(|| {
+                        ErrorCode::UnknownTable(format!("Unknown table id '{}'", table_id))
+                    })?;
+                checker
+                    .validate_table_access(
+                        &catalog_name,
+                        &database,
+                        &table,
+                        UserPrivilegeType::Select,
+                        false,
+                        false,
+                    )
+                    .await
+            }
+            None => {
+                checker
+                    .validate_db_access(&catalog_name, &database, UserPrivilegeType::Usage, false)
+                    .await
+            }
+        }
     }
 
     // PrivilegeAccess checks the privilege by names, we'd need to convert the GrantObject to
@@ -807,6 +902,54 @@ impl PrivilegeAccess {
             false,
         )
         .await
+    }
+
+    async fn validate_share_management_access(&self, connection: Option<&str>) -> Result<()> {
+        self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant, false, false)
+            .await?;
+
+        if let Some(connection) = connection {
+            self.validate_connection_access(
+                connection.to_string(),
+                UserPrivilegeType::AccessConnection,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    async fn validate_share_object_access(&self, object: &ShareGrantObject) -> Result<()> {
+        let default_catalog_name = self.ctx.get_default_catalog()?.name();
+        match object {
+            ShareGrantObject::Database { database } => {
+                self.validate_db_access(
+                    &default_catalog_name,
+                    database,
+                    UserPrivilegeType::Usage,
+                    false,
+                )
+                .await
+            }
+            ShareGrantObject::Table { database, table } => {
+                let current_database;
+                let database = match database.as_deref() {
+                    Some(database) => database,
+                    None => {
+                        current_database = self.ctx.get_current_database();
+                        current_database.as_str()
+                    }
+                };
+                self.validate_table_access(
+                    &default_catalog_name,
+                    database,
+                    table,
+                    UserPrivilegeType::Select,
+                    false,
+                    false,
+                )
+                .await
+            }
+        }
     }
 
     async fn validate_tag_object_access(
@@ -1623,9 +1766,82 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ShowCreateDatabase(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Select, false).await?
             }
-            Plan::CreateDatabase(_) => {
+            Plan::CreateDatabase(_) | Plan::CreateDatabaseFromShare(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateDatabase, true, false)
                     .await?;
+            }
+            Plan::CreateShare(plan) => {
+                self.validate_share_management_access(None).await?;
+                let manager =
+                    ShareMgr::create(UserApiProvider::instance().get_meta_store_client());
+                let is_no_op = plan.create_option.if_not_exist()
+                    && manager.exists(&plan.tenant, &plan.name).await?;
+                if !is_no_op {
+                    if let Some(connection) = &plan.connection {
+                        self.validate_connection_access(
+                            connection.clone(),
+                            UserPrivilegeType::AccessConnection,
+                        )
+                        .await?;
+                    }
+                }
+            }
+            Plan::DropShare(_) => {
+                self.validate_share_management_access(None).await?;
+            }
+            Plan::AlterShare(plan) => {
+                self.validate_share_management_access(None).await?;
+                let manager =
+                    ShareMgr::create(UserApiProvider::instance().get_meta_store_client());
+                let is_no_op =
+                    plan.if_exists && !manager.exists(&plan.tenant, &plan.name).await?;
+                if !is_no_op {
+                    let connection = match &plan.action {
+                        AlterSharePlanAction::Set {
+                            connection: Some(connection),
+                            ..
+                        } => Some(connection.clone()),
+                        AlterSharePlanAction::AddAccounts { .. }
+                        | AlterSharePlanAction::Set {
+                            accounts: Some(_),
+                            connection: None,
+                            ..
+                        } => {
+                            manager
+                                .get_connection_name_if_exists(&plan.tenant, &plan.name)
+                                .await?
+                        }
+                        _ => None,
+                    };
+                    if let Some(connection) = connection {
+                        self.validate_connection_access(
+                            connection,
+                            UserPrivilegeType::AccessConnection,
+                        )
+                        .await?;
+                    }
+                }
+            }
+            Plan::ShowShares(_) | Plan::DescShare(_) => {}
+            Plan::GrantShare(plan) => {
+                self.validate_share_management_access(None).await?;
+                self.validate_share_object_access(&plan.object).await?;
+                if matches!(plan.object, ShareGrantObject::Table { .. }) {
+                    let manager = ShareMgr::create(
+                        UserApiProvider::instance().get_meta_store_client(),
+                    );
+                    let connection = manager
+                        .get_connection_name(&plan.tenant, &plan.share)
+                        .await?;
+                    self.validate_connection_access(
+                        connection,
+                        UserPrivilegeType::AccessConnection,
+                    )
+                    .await?;
+                }
+            }
+            Plan::RevokeShare(_) => {
+                self.validate_share_management_access(None).await?;
             }
             Plan::DropDatabase(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?;
