@@ -69,7 +69,7 @@ impl ParquetTopK {
     }
 }
 
-/// The information used for evalaute TopK.
+/// The information used to evaluate TopK.
 pub struct BuiltTopK {
     pub topk: Arc<ParquetTopK>,
     pub field: TableField,

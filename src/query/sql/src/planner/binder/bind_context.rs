@@ -197,6 +197,10 @@ pub struct BindContext {
     /// It's used to avoid infinite loop.
     pub planning_agg_index: bool,
 
+    /// If true, generated DML targets in this scope ignore `wap_branch`.
+    /// Used when internal SQL must target the table selected by its parent operation.
+    pub suppress_wap_branch: bool,
+
     pub window_definitions: DashMap<String, WindowSpec>,
 }
 
@@ -276,8 +280,14 @@ impl BindContext {
             expr_context: ExprContext::default(),
             group_by_column_first: false,
             planning_agg_index: false,
+            suppress_wap_branch: false,
             window_definitions: DashMap::new(),
         }
+    }
+
+    /// Returns whether table refs in this context should ignore `wap_branch`.
+    pub(super) fn should_suppress_wap_branch(&self) -> bool {
+        self.suppress_wap_branch || !self.binding_views.is_empty() || self.planning_agg_index
     }
 
     pub fn depth(&self) -> usize {
@@ -324,6 +334,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             group_by_column_first: parent.group_by_column_first,
             planning_agg_index: false,
+            suppress_wap_branch: parent.suppress_wap_branch,
             window_definitions: DashMap::new(),
         })
     }
@@ -335,6 +346,8 @@ impl BindContext {
         bind_context.cte_context = self.cte_context.clone();
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
+        // Keep session branch suppression across `replace()` (used by bind_join).
+        bind_context.suppress_wap_branch = self.suppress_wap_branch;
         bind_context.group_by_column_first = self.group_by_column_first;
         bind_context
     }

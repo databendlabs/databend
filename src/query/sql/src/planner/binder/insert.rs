@@ -119,6 +119,13 @@ impl Binder {
             table_identifier.branch_name(),
         );
 
+        let branch_name = self.resolve_wap_target_branch(
+            &catalog_name,
+            &database_name,
+            &table_name,
+            branch_name,
+            bind_context.suppress_wap_branch,
+        )?;
         let table = self
             .ctx
             .get_table_with_branch(

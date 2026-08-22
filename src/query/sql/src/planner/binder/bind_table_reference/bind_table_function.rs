@@ -177,6 +177,7 @@ impl Binder {
                     let mut visitor = UDFArgVisitor::new(&udtf.arg_types, &args_expr);
                     stmt.drive_mut(&mut visitor);
 
+                    let suppress_wap_branch = bind_context.should_suppress_wap_branch();
                     let binder = Binder::new(
                         self.ctx.clone(),
                         CatalogManager::instance(),
@@ -184,7 +185,9 @@ impl Binder {
                         self.metadata.clone(),
                     )
                     .with_subquery_executor(self.subquery_executor.clone());
-                    let plan = binder.bind(&stmt).await?;
+                    let plan = binder
+                        .bind_with_suppress_wap_branch(&stmt, suppress_wap_branch)
+                        .await?;
 
                     let Plan::Query {
                         s_expr,

@@ -30,6 +30,7 @@ use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table::quoted_table_reference;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -458,13 +459,17 @@ impl Table for StreamTable {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
+        branch_name: Option<&str>,
         with_options: &str,
     ) -> Result<String> {
         let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
-        let table_desc =
-            format!("{quote}{database_name}{quote}.{quote}{table_name}{quote}{with_options}");
+        let table_desc = format!(
+            "{}{}",
+            quoted_table_reference(database_name, table_name, branch_name, quote),
+            with_options
+        );
         fuse_table
             .get_changes_query(
                 ctx,

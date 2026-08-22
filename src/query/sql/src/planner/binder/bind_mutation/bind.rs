@@ -145,6 +145,20 @@ impl Binder {
             target_table_identifier.table_name_alias(),
         );
 
+        let branch_name = self.resolve_wap_target_branch(
+            &catalog_name,
+            &database_name,
+            &table_name,
+            branch_name,
+            bind_context.suppress_wap_branch,
+        )?;
+
+        // The mutation binders below re-resolve the target through its inner
+        // `TableReference`. Inject the effective branch so a `wap_branch`
+        // target never silently scans the base table.
+        let mut expression = expression;
+        expression.set_target_branch(branch_name.clone());
+
         // Add table lock before execution.
         let lock_guard = if strategy != MutationStrategy::NotMatchedOnly {
             self.ctx

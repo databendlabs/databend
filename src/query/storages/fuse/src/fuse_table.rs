@@ -42,6 +42,7 @@ use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table::is_temp_table_by_table_info;
+use databend_common_catalog::table::quoted_table_reference;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -1271,6 +1272,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
+        branch_name: Option<&str>,
         _with_options: &str,
     ) -> Result<String> {
         let db_tb_name = format!("'{}'.'{}'", database_name, table_name);
@@ -1288,14 +1290,9 @@ impl Table for FuseTable {
 
         self.check_changes_valid(&db_tb_name, *seq)?;
         let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
-        self.get_changes_query(
-            ctx,
-            mode,
-            location,
-            format!("{quote}{database_name}{quote}.{quote}{table_name}{quote} {desc}"),
-            *seq,
-        )
-        .await
+        let table_desc = quoted_table_reference(database_name, table_name, branch_name, quote);
+        self.get_changes_query(ctx, mode, location, format!("{table_desc} {desc}"), *seq)
+            .await
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {

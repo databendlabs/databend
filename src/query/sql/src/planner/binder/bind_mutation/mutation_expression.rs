@@ -15,7 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
 use databend_common_ast::ast::TableReference;
@@ -77,6 +79,23 @@ pub enum MutationExpression {
 }
 
 impl MutationExpression {
+    /// Inject the effective DML target branch into the inner target
+    /// `TableReference` when it carries no explicit branch. Mutation binders
+    /// re-resolve the target through this reference, so without the injection
+    /// a `wap_branch`-routed target would silently scan the base table.
+    pub fn set_target_branch(&mut self, branch: Option<String>) {
+        let target = match self {
+            MutationExpression::Merge { target, .. }
+            | MutationExpression::Update { target, .. }
+            | MutationExpression::Delete { target, .. } => target,
+        };
+        if let TableReference::Table { table, .. } = target {
+            if table.branch.is_none() {
+                table.branch = branch.map(|name| Identifier::from_name(Span::None, name));
+            }
+        }
+    }
+
     pub async fn bind(
         &self,
         binder: &mut Binder,

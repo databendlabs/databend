@@ -382,12 +382,13 @@ impl Binder {
         let DescribeTableStmt { table } = stmt;
 
         let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
-        let (catalog, database, table, branch) = (
+        let (catalog, database, table, explicit_branch) = (
             table_identifier.catalog_name(),
             table_identifier.database_name(),
             table_identifier.table_name(),
             table_identifier.branch_name(),
         );
+        let branch = explicit_branch;
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Field", DataType::String),
             DataField::new("Type", DataType::String),
@@ -442,9 +443,10 @@ impl Binder {
 
         if let ShowStatsTarget::Table { table, branch } = target {
             let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
-            let branch_name = branch
+            let explicit_branch = branch
                 .as_ref()
                 .map(|branch| normalize_identifier(branch, &self.name_resolution_ctx).name);
+            let branch_name = explicit_branch;
             self.ctx
                 .get_table_with_branch(
                     &catalog_name,
@@ -1488,7 +1490,7 @@ impl Binder {
             }))),
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;
-                if branch.is_some() && matches!(&point, NavigationPoint::TableTag(_)) {
+                if branch.is_some() && point.is_table_tag() {
                     return Err(ErrorCode::Unimplemented(format!(
                         "Unsupported TAG navigation on branch reference `{catalog}.{database}.{table}/{}`",
                         branch.as_ref().unwrap()
@@ -1604,7 +1606,11 @@ impl Binder {
                 } else {
                     None
                 };
-                if branch.is_some() && matches!(navigation, Some(NavigationPoint::TableTag(_))) {
+                if branch.is_some()
+                    && navigation
+                        .as_ref()
+                        .is_some_and(NavigationPoint::is_table_tag)
+                {
                     return Err(ErrorCode::Unimplemented(format!(
                         "Unsupported TAG navigation on branch reference `{catalog}.{database}.{table}/{}`",
                         branch.as_ref().unwrap()
@@ -1737,6 +1743,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_truncate_table(
         &mut self,
+        _bind_context: &BindContext,
         stmt: &TruncateTableStmt,
     ) -> Result<Plan> {
         let TruncateTableStmt {
@@ -1750,12 +1757,13 @@ impl Binder {
         let catalog = table_identifier.catalog_name();
         let database = table_identifier.database_name();
         let table = table_identifier.table_name();
+        let branch = table_identifier.branch_name();
 
         Ok(Plan::TruncateTable(Box::new(TruncateTablePlan {
             catalog,
             database,
             table,
-            branch: table_identifier.branch_name(),
+            branch,
         })))
     }
 
@@ -2395,7 +2403,8 @@ impl Binder {
 
                 if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
-                        let mut planner = Planner::new(self.ctx.clone());
+                        // Replay stored view SQL against base tables.
+                        let mut planner = Planner::new_without_wap_branch(self.ctx.clone());
                         let (plan, _) = planner.plan_sql(query).await?;
                         Ok(AnalyzeCreateTableResult {
                             schema: infer_table_schema(&plan.schema())?,
