@@ -14,6 +14,7 @@
 
 use std::any::Any;
 
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -113,6 +114,22 @@ impl IPhysicalPlan for Recluster {
                 let table = FuseTable::try_from_table(table.as_ref())?;
 
                 let task = &self.tasks[0];
+                let settings = builder.ctx.get_settings();
+                // Execution-time guard: planning-time admission runs on the
+                // coordinator and cannot see this node's live memory pressure.
+                // Oversized tasks are only tolerable when sort spill can absorb
+                // the pressure; otherwise fail fast instead of risking an OOM kill.
+                if !builder.ctx.get_enable_sort_spill() {
+                    let max_memory_usage = settings.get_max_memory_usage()? as usize;
+                    let global_used = GLOBAL_MEM_STAT.get_memory_usage();
+                    let memory_budget = max_memory_usage.saturating_sub(global_used) * 30 / 100;
+                    if task.total_bytes > memory_budget {
+                        return Err(ErrorCode::MemoryExceedsLimit(format!(
+                            "Not enough memory to execute recluster task on this node: task_bytes = {}, global_used = {}, max_memory_usage = {}.",
+                            task.total_bytes, global_used, max_memory_usage
+                        )));
+                    }
+                }
                 let recluster_block_nums = task.parts.len();
                 let block_thresholds = table.get_block_thresholds();
                 let table_info = table.get_table_info();
@@ -192,7 +209,6 @@ impl IPhysicalPlan for Recluster {
                     });
                 }
 
-                let settings = builder.ctx.get_settings();
                 let max_threads = settings.get_max_threads()? as usize;
 
                 let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
