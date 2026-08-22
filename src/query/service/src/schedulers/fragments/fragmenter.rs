@@ -116,13 +116,22 @@ impl Fragmenter {
 
         let edges = Self::collect_fragments_edge(fragments.values());
 
-        for (source, target) in edges {
-            let Some(fragment) = fragments.get_mut(&source) else {
+        for (source, target) in &edges {
+            let Some(fragment) = fragments.get_mut(source) else {
                 continue;
             };
 
             if let Some(exchange_sink) = ExchangeSink::from_mut_physical_plan(&mut fragment.plan) {
-                exchange_sink.destination_fragment_id = target;
+                exchange_sink.destination_fragment_id = *target;
+            }
+        }
+
+        for (source, target) in edges {
+            let Some(source_fragment) = fragments.get(&source).cloned() else {
+                continue;
+            };
+            if let Some(target_fragment) = fragments.get_mut(&target) {
+                target_fragment.source_fragments.push(source_fragment);
             }
         }
 
