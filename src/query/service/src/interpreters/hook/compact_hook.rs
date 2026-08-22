@@ -274,6 +274,9 @@ pub(crate) async fn compact_table(
                 &compact_target.database,
                 &compact_target.table,
             )?;
+            // Spill is disabled to keep this synchronous hook fast (spilling adds
+            // disk IO). Admission must then keep tasks inside the memory budget.
+            // TODO: remove once the async hook is enabled.
             ctx.set_enable_sort_spill(false);
             let target = if is_materialized_view_engine(table.engine()) {
                 MaintenanceTarget::MaterializedView {
