@@ -487,7 +487,7 @@ test-harness = "0.3.0"
 testcontainers = "0.23"
 testcontainers-modules = { version = "0.11.5", features = ["mysql", "redis"] }
 thiserror = { version = "1" }
-thrift = "0.17.0"
+thrift = "0.23.0"
 tikv-jemalloc-ctl = { version = "0.6.0", features = ["use_std", "stats"] }
 tikv-jemalloc-sys = "0.6.0"
 tokio = { version = "1.52.3", features = ["full"] }
