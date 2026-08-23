@@ -120,6 +120,7 @@ fn wrap_with_merge_exchange(input: PhysicalPlan) -> PhysicalPlan {
         keys: vec![],
         allow_adjust_parallelism: true,
         ignore_exchange: false,
+        source_on_coordinator: false,
         meta: PhysicalPlanMeta::new("Exchange"),
     })
 }
@@ -136,6 +137,7 @@ fn wrap_with_global_shuffle(input: PhysicalPlan) -> PhysicalPlan {
         }],
         allow_adjust_parallelism: true,
         ignore_exchange: false,
+        source_on_coordinator: false,
         meta: PhysicalPlanMeta::new("Exchange"),
     })
 }

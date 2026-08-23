@@ -305,6 +305,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 destination_fragment_id: usize::MAX,
                 ignore_exchange: exchange.ignore_exchange,
                 allow_adjust_parallelism: exchange.allow_adjust_parallelism,
+                source_on_coordinator: exchange.source_on_coordinator,
                 meta: PhysicalPlanMeta::with_plan_id("ExchangeSink", plan_id),
             });
 

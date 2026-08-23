@@ -89,16 +89,18 @@ impl PlanFragment {
         actions: &mut QueryFragmentsActions,
     ) -> Result<()> {
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
+        let source_on_coordinator = ExchangeSink::from_physical_plan(&self.plan)
+            .is_some_and(|exchange| exchange.source_on_coordinator);
 
-        match &self.fragment_type {
-            FragmentType::Root => {
+        match (source_on_coordinator, &self.fragment_type) {
+            (true, _) | (_, FragmentType::Root) => {
                 let action = QueryFragmentAction::create(
                     Fragmenter::get_local_executor(ctx),
                     self.plan.clone(),
                 );
                 fragment_actions.add_action(action);
             }
-            FragmentType::Intermediate => {
+            (_, FragmentType::Intermediate) => {
                 if self.has_merge_input {
                     // Only the coordinator can consume the merge input. Other shuffle
                     // destinations still need this fragment to receive remote data.
@@ -147,21 +149,21 @@ impl PlanFragment {
                     }
                 }
             }
-            FragmentType::Source => {
+            (_, FragmentType::Source) => {
                 // Redistribute partitions
                 self.redistribute_source_fragment(ctx, &mut fragment_actions)?;
             }
-            FragmentType::MutationSource => {
+            (_, FragmentType::MutationSource) => {
                 self.redistribute_mutation_source(ctx, &mut fragment_actions)?;
             }
-            FragmentType::ReplaceInto => {
+            (_, FragmentType::ReplaceInto) => {
                 // Redistribute partitions
                 self.redistribute_replace_into(ctx, &mut fragment_actions)?;
             }
-            FragmentType::Compact => {
+            (_, FragmentType::Compact) => {
                 self.redistribute_compact(ctx, &mut fragment_actions)?;
             }
-            FragmentType::Recluster => {
+            (_, FragmentType::Recluster) => {
                 self.redistribute_recluster(ctx, &mut fragment_actions)?;
             }
         }

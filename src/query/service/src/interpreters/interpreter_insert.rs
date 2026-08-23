@@ -125,6 +125,7 @@ fn wrap_paimon_write_distribution(
         keys: vec![key],
         allow_adjust_parallelism: false,
         ignore_exchange: false,
+        source_on_coordinator: false,
         meta: PhysicalPlanMeta::new("Exchange"),
     }))
 }
@@ -229,6 +230,7 @@ pub fn build_insert_select_physical_plan(
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
+                source_on_coordinator: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             }))
         } else {
@@ -384,6 +386,7 @@ impl InsertInterpreter {
             keys: hash_keys,
             ignore_exchange: false,
             allow_adjust_parallelism: true,
+            source_on_coordinator: false,
         });
         Ok((exchange, true))
     }

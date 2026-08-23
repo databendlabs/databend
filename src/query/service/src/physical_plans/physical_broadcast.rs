@@ -139,6 +139,7 @@ pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
         keys: vec![],
         allow_adjust_parallelism: true,
         ignore_exchange: false,
+        source_on_coordinator: false,
         meta: PhysicalPlanMeta::new("Exchange"),
     });
 

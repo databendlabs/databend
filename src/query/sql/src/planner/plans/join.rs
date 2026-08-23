@@ -1257,7 +1257,8 @@ impl Operator for Join {
         // keeps the probe distributed instead of propagating Serial to both sides.
         let has_only_non_equi_conditions =
             self.equi_conditions.is_empty() && !self.non_equi_conditions.is_empty();
-        if build_physical_prop.distribution == Distribution::Serial
+        if ctx.get_cluster().nodes.len() > 1
+            && build_physical_prop.distribution == Distribution::Serial
             && probe_physical_prop.distribution != Distribution::Serial
             && !has_only_non_equi_conditions
             && !matches!(

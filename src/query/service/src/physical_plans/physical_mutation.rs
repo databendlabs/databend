@@ -408,6 +408,7 @@ impl PhysicalPlanBuilder {
                     keys: vec![],
                     allow_adjust_parallelism: true,
                     ignore_exchange: false,
+                    source_on_coordinator: false,
                     meta: PhysicalPlanMeta::new("Exchange"),
                 });
             }
@@ -643,6 +644,7 @@ impl PhysicalPlanBuilder {
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
+                source_on_coordinator: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             });
         }
@@ -753,6 +755,7 @@ pub fn build_block_id_shuffle_exchange(
         keys: vec![block_id_shuffle_key.as_remote_expr()],
         allow_adjust_parallelism: true,
         ignore_exchange: false,
+        source_on_coordinator: false,
     }))
 }
 

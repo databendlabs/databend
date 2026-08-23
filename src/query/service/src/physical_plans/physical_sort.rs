@@ -507,6 +507,7 @@ impl PhysicalPlanBuilder {
             keys: vec![],
             ignore_exchange: false,
             allow_adjust_parallelism: false,
+            source_on_coordinator: false,
             meta: PhysicalPlanMeta::new("Exchange"),
         });
 

@@ -25,7 +25,7 @@ use databend_query::test_kits::ClusterDescriptor;
 use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_merge_dependent_fragment_runs_on_coordinator() -> anyhow::Result<()> {
+async fn test_coordinator_broadcast_source_runs_once() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let cluster = ClusterDescriptor::new()
         .with_node("coordinator", "127.0.0.1:19001")
@@ -39,20 +39,13 @@ async fn test_merge_dependent_fragment_runs_on_coordinator() -> anyhow::Result<(
         output_schema: DataSchemaRefExt::create(vec![]),
         meta: PhysicalPlanMeta::new("ConstantTableScan"),
     });
-    let merge = PhysicalPlan::new(Exchange {
-        input: scan,
-        kind: FragmentKind::Merge,
-        keys: vec![],
-        ignore_exchange: false,
-        allow_adjust_parallelism: true,
-        meta: PhysicalPlanMeta::new("Exchange"),
-    });
     let broadcast = PhysicalPlan::new(Exchange {
-        input: merge,
+        input: scan,
         kind: FragmentKind::Expansive,
         keys: vec![],
         ignore_exchange: false,
         allow_adjust_parallelism: true,
+        source_on_coordinator: true,
         meta: PhysicalPlanMeta::new("Exchange"),
     });
 

@@ -22,6 +22,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::optimizer::ir::Distribution;
+use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -39,6 +41,9 @@ pub struct Exchange {
     pub keys: Vec<RemoteExpr>,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
+    // A Broadcast over Serial input must have exactly one producer.
+    #[serde(default)]
+    pub source_on_coordinator: bool,
 }
 
 #[typetag::serde]
@@ -88,6 +93,7 @@ impl IPhysicalPlan for Exchange {
             keys: self.keys.clone(),
             ignore_exchange: self.ignore_exchange,
             allow_adjust_parallelism: self.allow_adjust_parallelism,
+            source_on_coordinator: self.source_on_coordinator,
         })
     }
 }
@@ -111,6 +117,12 @@ impl PhysicalPlanBuilder {
         // 2. Build physical plan.
         let input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
+        let source_on_coordinator =
+            matches!(exchange, databend_common_sql::plans::Exchange::Broadcast)
+                && RelExpr::with_s_expr(s_expr.child(0)?)
+                    .derive_physical_prop()?
+                    .distribution
+                    == Distribution::Serial;
         let mut keys = vec![];
         let mut allow_adjust_parallelism = true;
         let kind = match exchange {
@@ -147,6 +159,7 @@ impl PhysicalPlanBuilder {
             keys,
             allow_adjust_parallelism,
             ignore_exchange: false,
+            source_on_coordinator,
             meta: PhysicalPlanMeta::new("Exchange"),
         }))
     }
