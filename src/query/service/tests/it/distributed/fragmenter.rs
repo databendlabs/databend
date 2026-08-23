@@ -16,7 +16,10 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_query::physical_plans::ConstantTableScan;
 use databend_query::physical_plans::Exchange;
+use databend_query::physical_plans::ExchangeSink;
+use databend_query::physical_plans::ExchangeSource;
 use databend_query::physical_plans::PhysicalPlan;
+use databend_query::physical_plans::PhysicalPlanCast;
 use databend_query::physical_plans::PhysicalPlanMeta;
 use databend_query::schedulers::Fragmenter;
 use databend_query::schedulers::QueryFragmentsActions;
@@ -25,7 +28,7 @@ use databend_query::test_kits::ClusterDescriptor;
 use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_coordinator_broadcast_source_runs_once() -> anyhow::Result<()> {
+async fn test_coordinator_broadcast_source_keeps_worker_receiver() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let cluster = ClusterDescriptor::new()
         .with_node("coordinator", "127.0.0.1:19001")
@@ -39,8 +42,17 @@ async fn test_coordinator_broadcast_source_runs_once() -> anyhow::Result<()> {
         output_schema: DataSchemaRefExt::create(vec![]),
         meta: PhysicalPlanMeta::new("ConstantTableScan"),
     });
-    let broadcast = PhysicalPlan::new(Exchange {
+    let merge = PhysicalPlan::new(Exchange {
         input: scan,
+        kind: FragmentKind::Merge,
+        keys: vec![],
+        ignore_exchange: false,
+        allow_adjust_parallelism: true,
+        source_on_coordinator: false,
+        meta: PhysicalPlanMeta::new("Exchange"),
+    });
+    let broadcast = PhysicalPlan::new(Exchange {
+        input: merge,
         kind: FragmentKind::Expansive,
         keys: vec![],
         ignore_exchange: false,
@@ -54,18 +66,39 @@ async fn test_coordinator_broadcast_source_runs_once() -> anyhow::Result<()> {
         .iter()
         .find(|fragment| matches!(&fragment.exchange, Some(DataExchange::Broadcast(_))))
         .expect("broadcast fragment");
+    let broadcast_fragment_id = broadcast_fragment.fragment_id;
     let mut actions = QueryFragmentsActions::create(ctx.clone());
-    broadcast_fragment.get_actions(ctx.clone(), &mut actions)?;
+    for fragment in &fragments {
+        fragment.get_actions(ctx.clone(), &mut actions)?;
+    }
 
     let broadcast_actions = actions
         .fragments_actions
-        .first()
+        .iter()
+        .find(|actions| actions.fragment_id == broadcast_fragment_id)
         .expect("broadcast fragment actions");
-    assert_eq!(broadcast_actions.fragment_actions.len(), 1);
-    assert_eq!(
-        broadcast_actions.fragment_actions[0].executor,
-        "coordinator"
-    );
+    assert_eq!(broadcast_actions.fragment_actions.len(), 2);
+
+    let coordinator_action = broadcast_actions
+        .fragment_actions
+        .iter()
+        .find(|action| action.executor == "coordinator")
+        .expect("coordinator action");
+    let coordinator_sink = ExchangeSink::from_physical_plan(&coordinator_action.physical_plan)
+        .expect("coordinator exchange sink");
+    assert!(ExchangeSource::check_physical_plan(&coordinator_sink.input));
+
+    let worker_action = broadcast_actions
+        .fragment_actions
+        .iter()
+        .find(|action| action.executor == "worker")
+        .expect("worker action");
+    let worker_sink = ExchangeSink::from_physical_plan(&worker_action.physical_plan)
+        .expect("worker exchange sink");
+    let worker_input =
+        ConstantTableScan::from_physical_plan(&worker_sink.input).expect("worker receiver input");
+    assert_eq!(worker_input.num_rows, 0);
+    assert_eq!(worker_input.output_schema, worker_sink.schema);
 
     Ok(())
 }

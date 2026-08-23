@@ -1056,14 +1056,14 @@ impl Join {
 
     fn broadcast_build_is_preferred(ctx: &dyn TableContext, rel_expr: &RelExpr) -> Result<bool> {
         let settings = ctx.get_settings();
-        if ctx.get_cluster().is_empty() || settings.get_enforce_shuffle_join()? {
+        if settings.get_enforce_shuffle_join()? {
             return Ok(false);
         }
 
         let left_cardinality = rel_expr.derive_cardinality_child(0)?.cardinality;
         let right_cardinality = rel_expr.derive_cardinality_child(1)?.cardinality;
         let broadcast_join_threshold = if settings.get_prefer_broadcast_join()? {
-            (ctx.get_cluster().nodes.len() - 1) as f64
+            ctx.get_cluster().nodes.len().saturating_sub(1) as f64
         } else {
             // Use a very large value to prevent broadcast join.
             1000.0

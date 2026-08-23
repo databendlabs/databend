@@ -41,7 +41,8 @@ pub struct Exchange {
     pub keys: Vec<RemoteExpr>,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
-    // A Broadcast over Serial input must have exactly one producer.
+    // Compute a Serial input only on the coordinator while retaining a Broadcast receiver action
+    // on every executor.
     #[serde(default)]
     pub source_on_coordinator: bool,
 }

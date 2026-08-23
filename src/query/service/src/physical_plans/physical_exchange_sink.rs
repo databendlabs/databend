@@ -43,7 +43,7 @@ pub struct ExchangeSink {
     pub query_id: String,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
-    // Preserve the single-producer requirement after fragmenting the Exchange.
+    // Preserve the coordinator-only input requirement after fragmenting the Exchange.
     #[serde(default)]
     pub source_on_coordinator: bool,
 }
