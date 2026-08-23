@@ -569,3 +569,170 @@ fn bitmap_logic_operate(
     rb.serialize_into(&mut builder.data).unwrap();
     builder.commit_row();
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+    use std::ops::RangeInclusive;
+
+    use databend_common_expression::EvalContext;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::types::binary::BinaryColumnBuilder;
+    use databend_common_io::HybridBitmap;
+
+    use super::LogicOp;
+    use super::bitmap_logic_operate;
+
+    const BITMAP_SCALAR_OPS: [&str; 4] = ["bitmap_and", "bitmap_or", "bitmap_xor", "bitmap_not"];
+
+    fn serialized_bitmap(values: &[u64]) -> Vec<u8> {
+        let mut bitmap = HybridBitmap::new();
+        for value in values {
+            bitmap.insert(*value);
+        }
+        let mut data = Vec::new();
+        bitmap.serialize_into(&mut data).unwrap();
+        data
+    }
+
+    fn values_in_prefix(prefix: u64, range: RangeInclusive<u64>) -> Vec<u64> {
+        range.map(|value| (prefix << 32) + value).collect()
+    }
+
+    struct BitmapOperand {
+        name: &'static str,
+        values: Vec<u64>,
+    }
+
+    fn bitmap_operands() -> Vec<BitmapOperand> {
+        vec![
+            BitmapOperand {
+                name: "empty",
+                values: vec![],
+            },
+            BitmapOperand {
+                name: "small_32",
+                values: values_in_prefix(0, 0..=31),
+            },
+            BitmapOperand {
+                name: "multi_small_overlap",
+                values: vec![31, (1u64 << 32) + 1],
+            },
+            BitmapOperand {
+                name: "small_32_disjoint",
+                values: values_in_prefix(0, 100..=131),
+            },
+            BitmapOperand {
+                name: "large_33",
+                values: values_in_prefix(0, 0..=32),
+            },
+            BitmapOperand {
+                name: "large_array_4096",
+                values: values_in_prefix(0, 0..=4095),
+            },
+            BitmapOperand {
+                name: "large_bitmap_4097",
+                values: values_in_prefix(0, 0..=4096),
+            },
+            BitmapOperand {
+                name: "multi_large_mixed",
+                values: values_in_prefix(0, 0..=4096)
+                    .into_iter()
+                    .chain(values_in_prefix(1, 0..=31))
+                    .collect(),
+            },
+            BitmapOperand {
+                name: "multi_large_mixed_disjoint",
+                values: values_in_prefix(2, 0..=4096)
+                    .into_iter()
+                    .chain(values_in_prefix(3, 0..=31))
+                    .collect(),
+            },
+        ]
+    }
+
+    fn eval_scalar_bitmap(name: &str, lhs: &[u8], rhs: &[u8]) -> Result<Vec<u64>, String> {
+        let function_context = FunctionContext::default();
+        let mut context = EvalContext {
+            generics: &[],
+            num_rows: 1,
+            func_ctx: &function_context,
+            validity: None,
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+        let mut builder = BinaryColumnBuilder::with_capacity(1, 0);
+        let op = match name {
+            "bitmap_and" => LogicOp::And,
+            "bitmap_or" => LogicOp::Or,
+            "bitmap_xor" => LogicOp::Xor,
+            "bitmap_not" => LogicOp::Not,
+            _ => unreachable!(),
+        };
+        bitmap_logic_operate(lhs, rhs, &mut builder, &mut context, op);
+        if let Some((_, error)) = context.errors {
+            return Err(error);
+        }
+        let bitmap = builder.build_scalar();
+        Ok(databend_common_io::deserialize_bitmap(&bitmap)
+            .unwrap()
+            .into_iter()
+            .collect())
+    }
+
+    #[test]
+    fn test_fast_treemap_scalar_op_equals_set_op() {
+        let operands = bitmap_operands();
+        let pairs = operands
+            .iter()
+            .flat_map(|lhs| operands.iter().map(move |rhs| (lhs, rhs)))
+            .collect::<Vec<_>>();
+        for (lhs, rhs) in pairs {
+            for name in BITMAP_SCALAR_OPS {
+                let lhs_bitmap = serialized_bitmap(&lhs.values);
+                let rhs_bitmap = serialized_bitmap(&rhs.values);
+                let values =
+                    eval_scalar_bitmap(name, &lhs_bitmap, &rhs_bitmap).unwrap_or_else(|error| {
+                        panic!("{name} failed for case {}_{}: {error}", lhs.name, rhs.name)
+                    });
+                let lhs_set = lhs.values.iter().copied().collect::<BTreeSet<_>>();
+                let rhs_set = rhs.values.iter().copied().collect::<BTreeSet<_>>();
+                let expected: BTreeSet<_> = match name {
+                    "bitmap_and" => lhs_set.intersection(&rhs_set).copied().collect(),
+                    "bitmap_or" => lhs_set.union(&rhs_set).copied().collect(),
+                    "bitmap_xor" => lhs_set.symmetric_difference(&rhs_set).copied().collect(),
+                    "bitmap_not" => lhs_set.difference(&rhs_set).copied().collect(),
+                    _ => unreachable!(),
+                };
+                let expected = expected.into_iter().collect::<Vec<_>>();
+                assert_eq!(
+                    values, expected,
+                    "{name} failed for case {}_{}: lhs={:?}, rhs={:?}, expected={:?}, got={:?}",
+                    lhs.name, rhs.name, lhs.values, rhs.values, expected, values
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_fast_treemap_scalar_op_malformed_error_badbytes() {
+        let valid = serialized_bitmap(
+            &values_in_prefix(0, 0..=32)
+                .into_iter()
+                .chain(values_in_prefix(1, 0..=32))
+                .collect::<Vec<_>>(),
+        );
+
+        for name in BITMAP_SCALAR_OPS {
+            for (lhs, rhs) in [
+                (&[0xff][..], valid.as_slice()),
+                (valid.as_slice(), &[0xff][..]),
+            ] {
+                let error = eval_scalar_bitmap(name, lhs, rhs)
+                    .expect_err("should fail for malformed bitmap bytes");
+                assert!(error.contains("BadBytes"), "{name} raw error: {error}");
+            }
+        }
+    }
+}
