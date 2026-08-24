@@ -657,6 +657,14 @@ impl PrivilegeAccess {
             UserPrivilegeType::Alter,
         )?;
 
+        let table = self
+            .ctx
+            .get_table(catalog_name, db_name, table_name)
+            .await?;
+        if is_materialized_view_engine(table.engine()) {
+            return self.validate_mv_source_access(table.as_ref()).await;
+        }
+
         self.validate_table_index_alter_or_super_access(catalog_name, db_name, table_name)
             .await
     }
@@ -673,6 +681,14 @@ impl PrivilegeAccess {
             None,
             UserPrivilegeType::Drop,
         )?;
+
+        let table = self
+            .ctx
+            .get_table(catalog_name, db_name, table_name)
+            .await?;
+        if is_materialized_view_engine(table.engine()) {
+            return self.validate_mv_source_access(table.as_ref()).await;
+        }
 
         match self
             .validate_table_index_alter_or_super_access(catalog_name, db_name, table_name)
