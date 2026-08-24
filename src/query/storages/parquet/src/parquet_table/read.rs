@@ -100,9 +100,11 @@ impl ParquetTable {
             builder.build_row_group_reader(ParquetSourceType::StageTable, need_row_number)?,
         );
         let full_file_reader = if has_file_part {
-            Some(Arc::new(builder.build_full_reader(
+            let batch_size = ctx.get_settings().get_max_block_size()? as usize;
+            Some(Arc::new(builder.build_full_reader_with_batch_size(
                 ParquetSourceType::StageTable,
                 need_row_number,
+                batch_size,
             )?))
         } else {
             None
