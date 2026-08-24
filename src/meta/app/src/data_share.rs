@@ -20,6 +20,7 @@ use chrono::Utc;
 use databend_meta_client::kvapi;
 
 use crate::data_id::DataId;
+use crate::schema::EmptyProto;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::resource::TenantResource;
 
@@ -53,6 +54,27 @@ impl ShareIdIdent {
 
 impl kvapi::Key for ShareIdIdent {
     type ValueType = DataShareMeta;
+}
+
+/// `__fd_provider_table_share_ref/<table_id>/<share_id> -> EmptyProto`.
+///
+/// This reverse index makes sharing and security-policy changes mutually exclusive
+/// in one meta transaction. Table ids and share ids are globally unique.
+#[derive(Clone, Debug, Copy, Default, Eq, PartialEq, kvapi::StructKey)]
+#[structkey(prefix = "__fd_provider_table_share_ref")]
+pub struct ProviderTableShareRefIdent {
+    pub table_id: u64,
+    pub share_id: u64,
+}
+
+impl ProviderTableShareRefIdent {
+    pub fn new(table_id: u64, share_id: u64) -> Self {
+        Self { table_id, share_id }
+    }
+}
+
+impl kvapi::Key for ProviderTableShareRefIdent {
+    type ValueType = EmptyProto;
 }
 
 /// Metadata of a provider-owned data share.
@@ -108,6 +130,7 @@ pub struct DataShareTableGrant {
 mod tests {
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
+    use super::ProviderTableShareRefIdent;
     use super::ShareIdIdent;
     use super::ShareNameIdent;
     use crate::tenant::Tenant;
@@ -119,5 +142,9 @@ mod tests {
             "__fd_data_share/provider/sales",
         );
         assert_round_trip(ShareIdIdent::new(42), "__fd_data_share_by_id/42");
+        assert_round_trip(
+            ProviderTableShareRefIdent::new(101, 42),
+            "__fd_provider_table_share_ref/101/42",
+        );
     }
 }

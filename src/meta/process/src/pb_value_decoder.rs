@@ -98,6 +98,7 @@ pub fn decode_pb_value(key: &str, bytes: &[u8]) -> String {
         "__fd_db_id_list/"          => DbIdList,
         "__fd_data_share_by_id/"    => DataShareMeta,
         "__fd_data_share/"          => ShareId,
+        "__fd_provider_table_share_ref/" => EmptyProto,
 
         // schema - table
         "__fd_table_by_id/"         => TableMeta,
@@ -389,6 +390,15 @@ mod tests {
         assert_eq!(
             decode_pb_value("__fd_data_share/provider/sales", &buf),
             r#"DataId { type: "ShareNameIdent", id: 42 }"#
+        );
+    }
+
+    #[test]
+    fn test_decode_pb_value_provider_table_share_ref() {
+        let buf = encode_pb(&EmptyProto {});
+        assert_eq!(
+            decode_pb_value("__fd_provider_table_share_ref/101/42", &buf),
+            "EmptyProto"
         );
     }
 

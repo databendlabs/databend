@@ -971,6 +971,11 @@ impl TenantDump {
 
     fn add_data_share_id_keys(&self, id: u64, out: &mut DependencyKeySet) {
         out.required(format!("__fd_data_share_by_id/{id}"));
+        self.add_existing_keys_with_prefix(
+            "__fd_provider_table_share_ref/",
+            Some(&format!("/{id}")),
+            out,
+        );
     }
 
     fn has_database_primary_record(&self, db_id: u64) -> bool {
@@ -1228,6 +1233,7 @@ mod tests {
     use databend_common_meta_api::kv_pb_api;
     use databend_common_meta_app::data_share::DataShareMeta;
     use databend_common_meta_app::schema::DatabaseMeta;
+    use databend_common_meta_app::schema::EmptyProto;
     use databend_common_meta_app::schema::IndexNameIdentRaw;
     use databend_common_meta_app::schema::TableMeta;
     use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
@@ -1338,15 +1344,20 @@ mod tests {
                 encode_pb(&ShareId::new(7)),
             ),
             generic_kv_line("__fd_data_share_by_id/7", encode_pb(&share_meta)),
+            generic_kv_line(
+                "__fd_provider_table_share_ref/101/7",
+                encode_pb(&EmptyProto {}),
+            ),
         ];
 
         let (provider_report, provider_output) = filter(input.clone(), "tenant_a")?;
-        assert_eq!(provider_report.kept_state_machine_lines, 2);
+        assert_eq!(provider_report.kept_state_machine_lines, 3);
         assert!(provider_output.contains("__fd_data_share/tenant_a/sales"));
         assert!(provider_output.contains("__fd_data_share_by_id/7"));
+        assert!(provider_output.contains("__fd_provider_table_share_ref/101/7"));
 
         let (other_report, other_output) = filter(input, "tenant_b")?;
-        assert_eq!(other_report.dropped_state_machine_lines, 2);
+        assert_eq!(other_report.dropped_state_machine_lines, 3);
         assert!(other_output.is_empty());
 
         Ok(())
