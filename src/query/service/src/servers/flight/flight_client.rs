@@ -48,9 +48,39 @@ use crate::servers::flight::v1::packets::DataPacket;
 pub struct DoExchangeParams {
     pub query_id: String,
     pub exchange_id: String,
-    pub source_id: String,
     pub num_threads: usize,
-    pub receiver_lease_secs: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receiver_lease_secs: Option<u64>,
+}
+
+impl DoExchangeParams {
+    pub fn legacy(query_id: String, exchange_id: String, num_threads: usize) -> Self {
+        Self {
+            query_id,
+            exchange_id,
+            num_threads,
+            source_id: None,
+            receiver_lease_secs: None,
+        }
+    }
+
+    pub fn reconnectable(
+        query_id: String,
+        exchange_id: String,
+        source_id: String,
+        num_threads: usize,
+        receiver_lease_secs: u64,
+    ) -> Self {
+        Self {
+            query_id,
+            exchange_id,
+            num_threads,
+            source_id: Some(source_id),
+            receiver_lease_secs: Some(receiver_lease_secs),
+        }
+    }
 }
 
 pub struct FlightClient {
@@ -437,5 +467,19 @@ impl FlightExchange {
             },
             _ => unreachable!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DoExchangeParams;
+
+    #[test]
+    fn test_legacy_do_exchange_params_keep_existing_protocol() {
+        let params = DoExchangeParams::legacy("query".to_string(), "exchange".to_string(), 4);
+        let json = serde_json::to_value(params).unwrap();
+
+        assert!(json.get("source_id").is_none());
+        assert!(json.get("receiver_lease_secs").is_none());
     }
 }

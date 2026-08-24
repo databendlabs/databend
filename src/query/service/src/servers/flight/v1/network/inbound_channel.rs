@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use arrow_flight::FlightData;
 use arrow_flight::utils::flight_data_to_arrow_batch;
@@ -30,8 +31,10 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_io::prelude::BinaryRead;
 use databend_common_io::prelude::bincode_deserialize_from_stream;
 use parking_lot::Mutex;
+use tokio::sync::Semaphore;
 
 use super::inbound_quota::QueueItem;
+use super::inbound_quota::SubQueue;
 
 pub struct NetworkInboundChannel {
     pub sender: Sender<QueueItem>,
@@ -84,6 +87,67 @@ impl NetworkInboundChannelSet {
 
     pub fn create_receiver(&self, t_idx: usize, schema: &DataSchemaRef) -> Arc<dyn InboundChannel> {
         NetworkInboundReceiver::create(schema, self.channels[t_idx].clone())
+    }
+}
+
+pub struct NetworkInboundSender {
+    sub_queues: Vec<Arc<SubQueue>>,
+}
+
+impl NetworkInboundSender {
+    pub fn new(channel_set: &NetworkInboundChannelSet, max_bytes_per_connection: usize) -> Self {
+        let semaphore = Arc::new(Semaphore::new(max_bytes_per_connection));
+        let mut sub_queues = Vec::with_capacity(channel_set.channels.len());
+
+        for channel in channel_set.channels.iter() {
+            channel.sender_count.fetch_add(1, Ordering::AcqRel);
+            sub_queues.push(Arc::new(SubQueue {
+                max_bytes_per_connection,
+                sender: channel.sender.clone(),
+                receiver: channel.receiver.clone(),
+                semaphore: semaphore.clone(),
+                sender_count: channel.sender_count.clone(),
+            }));
+        }
+
+        Self { sub_queues }
+    }
+
+    pub async fn add_data(&self, data: FlightData) -> Result<(), ()> {
+        if is_batch(&data) {
+            return self.add_batch_data(data).await;
+        }
+
+        let tid = extract_tid(&data);
+        match self.sub_queues[tid].add_data(data).await {
+            Ok(()) => Ok(()),
+            Err(()) if self.all_receivers_closed() => Err(()),
+            Err(()) => Ok(()),
+        }
+    }
+
+    async fn add_batch_data(&self, data: FlightData) -> Result<(), ()> {
+        for item in split_batch_flight_data(data) {
+            let tid = extract_tid(&item);
+            if self.sub_queues[tid].add_data(item).await.is_err() && self.all_receivers_closed() {
+                return Err(());
+            }
+        }
+        Ok(())
+    }
+
+    fn all_receivers_closed(&self) -> bool {
+        self.sub_queues.iter().all(|queue| queue.sender.is_closed())
+    }
+}
+
+impl Drop for NetworkInboundSender {
+    fn drop(&mut self) {
+        for sub_queue in &self.sub_queues {
+            if sub_queue.sender_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                sub_queue.sender.close();
+            }
+        }
     }
 }
 

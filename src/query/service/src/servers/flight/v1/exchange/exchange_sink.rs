@@ -24,6 +24,8 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 
+use super::exchange_packet_sink::create_packet_writer_item;
+use super::exchange_packet_sink::install_packet_outbound_failure_handler;
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::GlobalExchangeParams;
@@ -38,8 +40,12 @@ use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::network::BlockOutboundConfig;
 use crate::servers::flight::v1::network::BlockOutboundSet;
+use crate::servers::flight::v1::network::ExchangeBufferConfig;
+use crate::servers::flight::v1::network::ExchangeSinkBuffer;
+use crate::servers::flight::v1::network::LegacyRemoteChannel;
 use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::RemoteOutboundChannel;
+use crate::servers::flight::v1::network::RoundRobinChannel;
 use crate::servers::flight::v1::network::RoundRobinOutboundChannel;
 use crate::servers::flight::v1::network::create_local_channels;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
@@ -89,16 +95,39 @@ impl ExchangeSink {
                 }
 
                 let exchange_manager = ctx.get_exchange_manager();
-                let senders = exchange_manager
-                    .get_flight_sender(&ExchangeParams::MergeExchange(params.clone()))?;
+                let enable_new_flight = ctx.get_settings().get_enable_experiment_new_flight()?;
 
-                let output = senders.len();
+                let items = if enable_new_flight {
+                    let mut pending = exchange_manager
+                        .take_block_outbounds(&params.query_id, &params.channel_id)?;
+                    let outbound = pending.remove(&params.destination_id).ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "block outbound not found for target {}",
+                            params.destination_id
+                        ))
+                    })?;
+                    let outbound = Arc::new(BlockOutboundSet::create_with_producers(
+                        vec![outbound],
+                        1,
+                        BlockOutboundConfig::default(),
+                        &GlobalIORuntime::instance(),
+                    ));
+                    install_packet_outbound_failure_handler(outbound.clone(), pipeline);
+                    vec![create_packet_writer_item(
+                        outbound,
+                        0,
+                        params.ignore_exchange,
+                    )]
+                } else {
+                    exchange_manager
+                        .get_flight_sender(&ExchangeParams::MergeExchange(params.clone()))?
+                        .into_iter()
+                        .map(|(_, sender)| create_writer_item(sender, params.ignore_exchange))
+                        .collect::<Vec<_>>()
+                };
+
+                let output = items.len();
                 pipeline.try_resize(output)?;
-
-                let items = senders
-                    .into_iter()
-                    .map(|(_, sender)| create_writer_item(sender, params.ignore_exchange))
-                    .collect::<Vec<_>>();
 
                 pipeline.add_pipe(Pipe::create(output, 0, items));
                 Ok(())
@@ -110,16 +139,19 @@ impl ExchangeSink {
                 exchange_shuffle(ctx, params, pipeline)?;
 
                 let exchange_manager = ctx.get_exchange_manager();
-                let senders = exchange_manager
-                    .get_flight_sender(&ExchangeParams::NodeShuffleExchange(params.clone()))?;
+                let enable_new_flight = ctx.get_settings().get_enable_experiment_new_flight()?;
 
                 // exchange writer sink
                 let len = pipeline.output_len();
-
-                let items = senders
-                    .into_iter()
-                    .map(|(_, sender)| create_writer_item(sender, false))
-                    .collect::<Vec<_>>();
+                let items = if enable_new_flight {
+                    build_node_shuffle_packet_sinks(ctx, params, pipeline, 1)?
+                } else {
+                    exchange_manager
+                        .get_flight_sender(&ExchangeParams::NodeShuffleExchange(params.clone()))?
+                        .into_iter()
+                        .map(|(_, sender)| create_writer_item(sender, false))
+                        .collect::<Vec<_>>()
+                };
 
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
@@ -148,6 +180,7 @@ impl ExchangeSink {
         }
 
         let compression = ctx.get_settings().get_query_flight_compression()?;
+        let enable_new_flight = ctx.get_settings().get_enable_experiment_new_flight()?;
         let rows_threshold = ctx.get_settings().get_hash_shuffle_rows_threshold()?;
         let bytes_threshold = ctx.get_settings().get_hash_shuffle_bytes_threshold()?;
         let waker = pipeline.get_waker();
@@ -162,7 +195,8 @@ impl ExchangeSink {
         assert_eq!(channel_set.channels.len(), local_threads);
 
         let local_outbound = create_local_channels(&channel_set);
-        let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
+        let remote_outbound =
+            build_hash_outbound_channels(params, local_outbound, compression, enable_new_flight)?;
         remote_outbound.install_failure_handler(pipeline);
 
         let scatter = Arc::new(HashFlightScatter::try_create(
@@ -187,6 +221,66 @@ impl ExchangeSink {
         pipeline.add_pipe(Pipe::create(local_threads, 0, items));
         Ok(())
     }
+}
+
+pub(super) fn build_node_shuffle_packet_sinks(
+    ctx: &Arc<QueryContext>,
+    params: &crate::servers::flight::v1::exchange::ShuffleExchangeParams,
+    pipeline: &mut Pipeline,
+    local_output_parallelism: usize,
+) -> Result<Vec<PipeItem>> {
+    let exchange_manager = ctx.get_exchange_manager();
+    let mut pending_outbounds = Vec::new();
+
+    for (destination, channels) in &params.destination_channels {
+        if destination == &params.executor_id {
+            continue;
+        }
+        let [channel] = channels.as_slice() else {
+            return Err(ErrorCode::Internal(format!(
+                "node shuffle target {} has {} channels, expected one",
+                destination,
+                channels.len()
+            )));
+        };
+        let mut pending =
+            exchange_manager.take_block_outbounds(&params.query_id, channel.as_str())?;
+        pending_outbounds.push(pending.remove(destination).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "block outbound not found for target {}",
+                destination
+            ))
+        })?);
+    }
+
+    let remote_count = pending_outbounds.len();
+    let outbound = Arc::new(BlockOutboundSet::create_with_producers(
+        pending_outbounds,
+        remote_count,
+        BlockOutboundConfig::default(),
+        &GlobalIORuntime::instance(),
+    ));
+    install_packet_outbound_failure_handler(outbound.clone(), pipeline);
+
+    let mut remote_index = 0;
+    let mut items = Vec::with_capacity(params.destination_channels.len());
+    for (destination, _) in &params.destination_channels {
+        if destination == &params.executor_id {
+            items.push(if local_output_parallelism == 1 {
+                databend_common_pipeline_transforms::processors::create_dummy_item()
+            } else {
+                databend_common_pipeline::basic::create_resize_item(1, local_output_parallelism)
+            });
+        } else {
+            items.push(create_packet_writer_item(
+                outbound.clone(),
+                remote_index,
+                false,
+            ));
+            remote_index += 1;
+        }
+    }
+    Ok(items)
 }
 
 struct SinkExchangeSorting;
@@ -218,10 +312,59 @@ pub(super) fn build_broadcast_outbound_channels(
     params: &BroadcastExchangeParams,
     local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
+    enable_new_flight: bool,
 ) -> Result<SharedOutboundChannels> {
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
+
+    if !enable_new_flight {
+        let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
+        let mut exchanges_seq = Vec::with_capacity(exchanges.len());
+
+        for (target_id, threads) in &params.destination_channels {
+            if target_id != &params.executor_id {
+                let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "PingPongExchange not found for target {}",
+                        target_id
+                    ))
+                })?;
+                assert_eq!(threads.len(), exchange.num_threads);
+                exchanges_seq.push(exchange);
+            }
+        }
+
+        let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
+            exchanges_seq,
+            ExchangeBufferConfig::default(),
+            &GlobalIORuntime::instance(),
+        )?);
+        let local_channel = RoundRobinChannel::create(local_outbound_channels);
+        let mut remote_idx = 0;
+        let mut channels = vec![];
+
+        for (target_id, threads) in &params.destination_channels {
+            if target_id == &params.executor_id {
+                channels.push(local_channel.clone());
+                continue;
+            }
+
+            let mut remote_channels = Vec::with_capacity(threads.len());
+            for thread_idx in 0..threads.len() {
+                remote_channels.push(LegacyRemoteChannel::create(
+                    remote_idx,
+                    thread_idx,
+                    shared_buffer.clone(),
+                    compression,
+                )?);
+            }
+            channels.push(RoundRobinChannel::create(remote_channels));
+            remote_idx += 1;
+        }
+
+        return Ok(SharedOutboundChannels::legacy(channels));
+    }
 
     let mut block_outbounds = exchange_manager.take_block_outbounds(query_id, exchange_id)?;
 
@@ -267,7 +410,10 @@ pub(super) fn build_broadcast_outbound_channels(
         remote_idx += 1;
     }
 
-    Ok(SharedOutboundChannels::create(channels, shared_outbounds))
+    Ok(SharedOutboundChannels::reconnectable(
+        channels,
+        shared_outbounds,
+    ))
 }
 
 /// Build per-thread OutboundChannels for hash exchange.
@@ -275,11 +421,57 @@ pub(super) fn build_hash_outbound_channels(
     params: &GlobalExchangeParams,
     mut local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
+    enable_new_flight: bool,
 ) -> Result<SharedOutboundChannels> {
     let num_threads = local_outbound_channels.len();
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
+    if !enable_new_flight {
+        let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
+        let mut exchanges_seq = Vec::with_capacity(exchanges.len());
+
+        for (target_id, threads) in &params.destination_channels {
+            if target_id != &params.executor_id {
+                let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "PingPongExchange not found for target {}",
+                        target_id
+                    ))
+                })?;
+                assert_eq!(threads.len(), exchange.num_threads);
+                exchanges_seq.push(exchange);
+            }
+        }
+
+        let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
+            exchanges_seq,
+            ExchangeBufferConfig::default(),
+            &GlobalIORuntime::instance(),
+        )?);
+        let mut remote_idx = 0;
+        let mut channels = Vec::with_capacity(params.destination_channels.len() * num_threads);
+
+        for (target_id, threads) in &params.destination_channels {
+            if target_id == &params.executor_id {
+                channels.extend(std::mem::take(&mut local_outbound_channels));
+                continue;
+            }
+
+            for t_idx in 0..threads.len() {
+                channels.push(LegacyRemoteChannel::create(
+                    remote_idx,
+                    t_idx,
+                    shared_buffer.clone(),
+                    compression,
+                )?);
+            }
+            remote_idx += 1;
+        }
+
+        return Ok(SharedOutboundChannels::legacy(channels));
+    }
+
     let mut block_outbounds = exchange_manager.take_block_outbounds(query_id, exchange_id)?;
 
     let mut remote_outbounds = Vec::with_capacity(block_outbounds.len());
@@ -322,5 +514,8 @@ pub(super) fn build_hash_outbound_channels(
         remote_idx += 1;
     }
 
-    Ok(SharedOutboundChannels::create(channels, shared_outbounds))
+    Ok(SharedOutboundChannels::reconnectable(
+        channels,
+        shared_outbounds,
+    ))
 }

@@ -16,8 +16,6 @@ use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 
 use arrow_flight::FlightData;
 use async_channel::Receiver;
@@ -62,11 +60,10 @@ struct PendingPacket {
     _permit: OwnedSemaphorePermit,
 }
 
-/// The sole request awaiting a response, retained for timeout tracking and reconnect replay.
+/// The sole request awaiting a response, retained for reconnect replay.
 struct InFlightPacket {
     encoded: FlightData,
     expected: ExpectedResponse,
-    sent_at: Instant,
     // A replacement transport consumes this budget; only logical progress installs a fresh one.
     reconnect_attempts_remaining: u64,
 }
@@ -74,18 +71,6 @@ struct InFlightPacket {
 enum ExpectedResponse {
     Ack(u64),
     ReceiverClosed,
-}
-
-impl InFlightPacket {
-    fn reset_timer(&mut self) {
-        self.sent_at = Instant::now();
-    }
-
-    fn deadline(&self, timeout: Duration) -> Option<tokio::time::Instant> {
-        self.sent_at
-            .checked_add(timeout)
-            .map(tokio::time::Instant::from_std)
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -324,19 +309,10 @@ impl OutboundDriver {
 
     async fn drive(&mut self) -> OutboundTerminal {
         loop {
-            let response_timeout = self.physical.response_timeout(self.logical.close.is_some());
-            let deadline = self
-                .logical
-                .in_flight
-                .as_ref()
-                .zip(response_timeout)
-                .and_then(|(packet, timeout)| packet.deadline(timeout));
-
             enum Event {
                 Cancelled,
                 Command(std::result::Result<OutboundCommand, async_channel::RecvError>),
                 Response(std::result::Result<FlightData, Status>),
-                ResponseTimeout,
             }
 
             let event = tokio::select! {
@@ -347,7 +323,6 @@ impl OutboundDriver {
                         "do_exchange response stream ended before a terminal packet",
                     )))
                 ),
-                _ = wait_for_deadline(deadline) => Event::ResponseTimeout,
             };
 
             match event {
@@ -376,17 +351,6 @@ impl OutboundDriver {
                     }
                 },
                 Event::Response(Err(status)) => {
-                    if let Err(cause) = self.reconnect_transport(status).await {
-                        return OutboundTerminal::Failed(cause);
-                    }
-                }
-                Event::ResponseTimeout => {
-                    let response_timeout = response_timeout
-                        .expect("response timeout event requires an in-flight deadline");
-                    let status = Status::deadline_exceeded(format!(
-                        "do_exchange response exceeded its {:?} deadline",
-                        response_timeout
-                    ));
                     if let Err(cause) = self.reconnect_transport(status).await {
                         return OutboundTerminal::Failed(cause);
                     }
@@ -493,7 +457,6 @@ impl OutboundDriver {
         self.logical.in_flight = Some(InFlightPacket {
             encoded,
             expected: ExpectedResponse::Ack(sequence),
-            sent_at: Instant::now(),
             reconnect_attempts_remaining: self.physical.reconnect.retry_times,
         });
     }
@@ -504,7 +467,6 @@ impl OutboundDriver {
         self.logical.in_flight = Some(InFlightPacket {
             encoded,
             expected: ExpectedResponse::ReceiverClosed,
-            sent_at: Instant::now(),
             reconnect_attempts_remaining: self.physical.reconnect.retry_times,
         });
     }
@@ -515,7 +477,6 @@ impl OutboundDriver {
         self.logical.in_flight = Some(InFlightPacket {
             encoded,
             expected: ExpectedResponse::ReceiverClosed,
-            sent_at: Instant::now(),
             reconnect_attempts_remaining: self.physical.reconnect.retry_times,
         });
     }
@@ -534,7 +495,6 @@ impl OutboundDriver {
             .await?;
         if let Some(packet) = &mut self.logical.in_flight {
             packet.reconnect_attempts_remaining -= attempts_used;
-            packet.reset_timer();
         }
         Ok(())
     }
@@ -564,12 +524,6 @@ impl PhysicalConnection {
         let (transport, _) = connection.establish(None, attempts).await?;
         connection.transport = Some(transport);
         Ok(connection)
-    }
-
-    fn response_timeout(&self, closing: bool) -> Option<Duration> {
-        // DATA preserves the original no-retry behavior while the stream is open. Once logical
-        // closure begins, every outstanding response is bounded even when reconnect is disabled.
-        (closing || self.reconnect.retry_times != 0).then_some(self.reconnect.timeout)
     }
 
     fn response_stream(&mut self) -> &mut FlightDataStream {
@@ -809,11 +763,4 @@ fn is_retryable_status(status: &Status) -> bool {
                 | tonic::Code::Internal
                 | tonic::Code::Unavailable
         )
-}
-
-async fn wait_for_deadline(deadline: Option<tokio::time::Instant>) {
-    match deadline {
-        Some(deadline) => tokio::time::sleep_until(deadline).await,
-        None => std::future::pending().await,
-    }
 }

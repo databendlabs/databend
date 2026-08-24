@@ -36,6 +36,7 @@ use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::stream;
 use tokio_stream::Stream;
+use tokio_stream::StreamExt;
 use tonic::Request;
 use tonic::Response as RawResponse;
 use tonic::Status;
@@ -153,20 +154,49 @@ impl FlightService for DatabendQueryFlightService {
             Status::invalid_argument(format!("Failed to parse DoExchangeParams: {}", e))
         })?;
 
-        let attachment = DataExchangeManager::instance().handle_do_exchange(
-            &params.query_id,
-            &params.exchange_id,
-            &params.source_id,
-            params.num_threads,
-            std::time::Duration::from_secs(params.receiver_lease_secs),
-        )?;
-
         let stream = req.into_inner();
         let (tx, rx) = async_channel::bounded(1);
 
-        GlobalIORuntime::instance().spawn(async move {
-            attachment.serve(stream, tx).await;
-        });
+        match (params.source_id.as_deref(), params.receiver_lease_secs) {
+            (Some(source_id), Some(receiver_lease_secs)) => {
+                let attachment = DataExchangeManager::instance().handle_do_exchange(
+                    &params.query_id,
+                    &params.exchange_id,
+                    source_id,
+                    params.num_threads,
+                    std::time::Duration::from_secs(receiver_lease_secs),
+                )?;
+                GlobalIORuntime::instance().spawn(async move {
+                    attachment.serve(stream, tx).await;
+                });
+            }
+            (None, None) => {
+                let sender = DataExchangeManager::instance().handle_legacy_do_exchange(
+                    &params.query_id,
+                    &params.exchange_id,
+                    params.num_threads,
+                )?;
+                GlobalIORuntime::instance().spawn(async move {
+                    let mut stream = stream;
+                    while let Some(result) = stream.next().await {
+                        let Ok(flight_data) = result else {
+                            break;
+                        };
+                        if sender.add_data(flight_data).await.is_err() {
+                            break;
+                        }
+                        if tx.try_send(Ok(FlightData::default())).is_err() {
+                            break;
+                        }
+                    }
+                });
+            }
+            _ => {
+                return Err(Status::invalid_argument(
+                    "source_id and receiver_lease_secs must be provided together",
+                ));
+            }
+        }
 
         Ok(RawResponse::new(Box::pin(rx)))
     }

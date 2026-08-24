@@ -17,6 +17,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use arrow_flight::FlightData;
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
 use log::warn;
@@ -42,6 +43,7 @@ pub struct NetworkInboundSource {
     /// fails the logical source and releases its inbound queues.
     reconnect_lease: Duration,
     source_label: String,
+    terminal_notified: WatchNotify,
 }
 
 struct InboundDestination {
@@ -107,6 +109,7 @@ impl NetworkInboundSource {
             }),
             reconnect_lease,
             source_label,
+            terminal_notified: WatchNotify::new(),
         }
     }
 
@@ -243,6 +246,7 @@ impl NetworkInboundSource {
             }
         };
         if installed {
+            self.terminal_notified.notify_waiters();
             self.release(&terminal);
         }
         terminal
@@ -393,7 +397,20 @@ impl NetworkInboundConnection {
             return;
         }
 
-        while let Some(result) = stream.next().await {
+        loop {
+            let result = tokio::select! {
+                result = stream.next() => result,
+                _ = self.source.terminal_notified.notified() => {
+                    if let Some(response) = self.source.terminal_response() {
+                        let _ = tx.send(Ok(response.encode())).await;
+                        return;
+                    }
+                    continue;
+                }
+            };
+            let Some(result) = result else {
+                return;
+            };
             let Ok(flight_data) = result else {
                 return;
             };
@@ -431,5 +448,38 @@ impl Drop for NetworkInboundSource {
         self.terminate(InboundTerminal::ReceiverFailed(ErrorCode::AbortedQuery(
             "do_exchange logical source dropped before reaching a terminal state",
         )));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_receiver_failure_wakes_idle_connection() {
+        let channels = NetworkInboundChannelSet::new(1);
+        let source = Arc::new(NetworkInboundSource::new(
+            &channels,
+            1024,
+            Duration::ZERO,
+            "test source".to_string(),
+        ));
+        let notified = source.terminal_notified.notified();
+        let cause = ErrorCode::AbortedQuery("query killed");
+
+        source.fail(cause.clone());
+        tokio::time::timeout(Duration::from_secs(1), notified)
+            .await
+            .expect("receiver failure must wake an idle response stream");
+
+        match source.terminal_response() {
+            Some(DoExchangeResponse::Fail(actual)) => {
+                assert_eq!(actual.code(), cause.code());
+                assert_eq!(actual.message(), cause.message());
+            }
+            _ => panic!("receiver failure must publish FAIL"),
+        }
     }
 }

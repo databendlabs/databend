@@ -37,17 +37,24 @@ type OutboundFinishHandle = SyncTaskHandle<'static, Result<()>>;
 #[derive(Clone)]
 pub(super) struct SharedOutboundChannels {
     channels: Vec<Arc<dyn OutboundChannel>>,
-    outbounds: Arc<BlockOutboundSet>,
+    outbounds: Option<Arc<BlockOutboundSet>>,
 }
 
 impl SharedOutboundChannels {
-    pub(super) fn create(
+    pub(super) fn legacy(channels: Vec<Arc<dyn OutboundChannel>>) -> Self {
+        Self {
+            channels,
+            outbounds: None,
+        }
+    }
+
+    pub(super) fn reconnectable(
         channels: Vec<Arc<dyn OutboundChannel>>,
         outbounds: Arc<BlockOutboundSet>,
     ) -> Self {
         Self {
             channels,
-            outbounds,
+            outbounds: Some(outbounds),
         }
     }
 
@@ -56,7 +63,9 @@ impl SharedOutboundChannels {
     }
 
     pub(super) fn install_failure_handler(&self, pipeline: &mut Pipeline) {
-        let outbounds = self.outbounds.clone();
+        let Some(outbounds) = self.outbounds.clone() else {
+            return;
+        };
         pipeline.lift_on_finished(basic_callback(move |info: &ExecutionInfo| {
             if let Err(cause) = &info.res {
                 let cause = cause.clone();
@@ -73,7 +82,7 @@ impl SharedOutboundChannels {
 
 pub(super) struct OutboundSendChannels {
     channels: Vec<Arc<dyn OutboundChannel>>,
-    outbounds: Arc<BlockOutboundSet>,
+    outbounds: Option<Arc<BlockOutboundSet>>,
     finished: bool,
     finish_handle: Option<OutboundFinishHandle>,
 }
@@ -141,13 +150,20 @@ impl OutboundSendChannels {
             return Ok(Poll::Ready(()));
         }
 
+        let Some(outbounds) = self.outbounds.clone() else {
+            for idx in 0..self.channels.len() {
+                self.close(idx);
+            }
+            self.finished = true;
+            return Ok(Poll::Ready(()));
+        };
+
         let mut handle = match self.finish_handle.take() {
             Some(handle) => handle,
             None => {
                 for idx in 0..self.channels.len() {
                     self.close(idx);
                 }
-                let outbounds = self.outbounds.clone();
                 tasks.spawn(
                     id,
                     Box::pin(async move { outbounds.finish_producer().await }),

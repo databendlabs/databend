@@ -29,6 +29,7 @@ use arrow_schema::Schema as ArrowSchema;
 use bytes::Bytes;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::BinaryWrite;
@@ -36,6 +37,7 @@ use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_settings::FlightCompression;
 
 use super::BlockOutboundSet;
+use super::ExchangeSinkBuffer;
 use super::SendOutcome;
 
 /// Outbound channel trait for sending data blocks.
@@ -148,6 +150,105 @@ pub fn serialize_block(
     }
 
     Ok(result)
+}
+
+pub struct LegacyRemoteChannel {
+    dest_idx: usize,
+    channel_id: usize,
+    buffer: Arc<ExchangeSinkBuffer>,
+    ipc_options: IpcWriteOptions,
+}
+
+impl LegacyRemoteChannel {
+    pub fn create(
+        dest_idx: usize,
+        channel_id: usize,
+        buffer: Arc<ExchangeSinkBuffer>,
+        compression: Option<FlightCompression>,
+    ) -> Result<Arc<dyn OutboundChannel>> {
+        Ok(Arc::new(Self {
+            dest_idx,
+            channel_id,
+            buffer,
+            ipc_options: make_ipc_options(compression)?,
+        }))
+    }
+}
+
+#[async_trait::async_trait]
+impl OutboundChannel for LegacyRemoteChannel {
+    fn close(&self) {}
+
+    fn is_closed(&self) -> bool {
+        self.buffer.is_closed(self.dest_idx)
+    }
+
+    async fn add_block(&self, block: DataBlock) -> Result<SendOutcome> {
+        Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
+        Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
+
+        let flight_data_list = serialize_block(block, &self.ipc_options, None)?;
+        let tid_prefix = (self.channel_id as u16).to_le_bytes();
+
+        for flight_data in flight_data_list {
+            let mut metadata = tid_prefix.to_vec();
+            metadata.extend_from_slice(&flight_data.app_metadata);
+            let flight_data = FlightData {
+                app_metadata: metadata.into(),
+                ..flight_data
+            };
+
+            if let Err(cause) = self
+                .buffer
+                .add_data(self.channel_id, self.dest_idx, flight_data)
+                .await
+            {
+                return if cause.code() == ErrorCode::ABORTED_QUERY {
+                    Ok(SendOutcome::ReceiverClosed)
+                } else {
+                    Err(cause)
+                };
+            }
+        }
+
+        Ok(SendOutcome::Accepted)
+    }
+}
+
+pub struct RoundRobinChannel {
+    channels: Vec<Arc<dyn OutboundChannel>>,
+    next_idx: AtomicUsize,
+}
+
+impl RoundRobinChannel {
+    pub fn create(channels: Vec<Arc<dyn OutboundChannel>>) -> Arc<dyn OutboundChannel> {
+        Arc::new(Self {
+            channels,
+            next_idx: AtomicUsize::new(0),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl OutboundChannel for RoundRobinChannel {
+    fn close(&self) {
+        for channel in &self.channels {
+            channel.close();
+        }
+    }
+
+    fn is_closed(&self) -> bool {
+        self.channels.iter().all(|channel| channel.is_closed())
+    }
+
+    async fn add_block(&self, block: DataBlock) -> Result<SendOutcome> {
+        if self.channels.is_empty() {
+            return Ok(SendOutcome::Accepted);
+        }
+
+        let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.channels.len();
+        self.channels[idx].add_block(block).await
+    }
 }
 
 pub struct RemoteOutboundChannel {
