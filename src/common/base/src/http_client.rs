@@ -51,10 +51,23 @@ static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> = LazyLock::new(|
     )
 });
 
-/// Global shared http client.
+/// Global shared HTTP client for OpenDAL storage transports.
 ///
-/// Please create your own http client if you want dedicated http connection pool.
+/// Please create your own HTTP client if you want a dedicated connection pool.
 pub static GLOBAL_HTTP_CLIENT: OnceLock<HttpClient> = OnceLock::new();
+
+/// Create an HTTP client builder that preserves storage response bytes.
+///
+/// Cargo features are unified across the dependency graph, so another crate can
+/// enable reqwest's content decoders for this client. OpenDAL must receive the
+/// encoded object bytes to keep range lengths and checksums valid.
+pub fn storage_http_client_builder() -> reqwest::ClientBuilder {
+    reqwest::ClientBuilder::new()
+        .no_gzip()
+        .no_brotli()
+        .no_zstd()
+        .no_deflate()
+}
 
 pub fn get_global_http_client(
     pool_max_idle_per_host: usize,
@@ -62,7 +75,7 @@ pub fn get_global_http_client(
     keepalive: u64,
 ) -> &'static HttpClient {
     GLOBAL_HTTP_CLIENT.get_or_init(move || {
-        let mut builder = reqwest::ClientBuilder::new();
+        let mut builder = storage_http_client_builder();
 
         // Disable http2 for better performance.
         builder = builder.http1_only();
@@ -114,12 +127,12 @@ impl Default for HttpClient {
 }
 
 impl HttpClient {
-    /// Create a new http client.
+    /// Create a general-purpose HTTP client.
     ///
-    /// # Notes
-    ///
-    /// This client is optimized for interact with storage services.
-    /// Please tune the settings if you want to use it for other purposes.
+    /// This client may transparently decode responses when reqwest content-decoder
+    /// features are enabled. Do not use it as an OpenDAL object-storage transport;
+    /// use [`storage_http_client_builder`] when the encoded response bytes must be
+    /// preserved.
     pub fn new() -> Self {
         let mut builder = reqwest::ClientBuilder::new();
 
@@ -161,5 +174,106 @@ impl HttpClient {
     /// Get the inner reqwest client.
     pub fn inner(&self) -> reqwest::Client {
         self.client.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use reqwest::header::CONTENT_ENCODING;
+    use reqwest::header::CONTENT_LENGTH;
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpListener;
+    use tokio::time::timeout;
+
+    use super::storage_http_client_builder;
+
+    // gzip of "raw storage object bytes\n"
+    const GZIP_BODY: &[u8] = &[
+        0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x2b, 0x4a, 0x2c, 0x57, 0x28,
+        0x2e, 0xc9, 0x2f, 0x4a, 0x4c, 0x4f, 0x55, 0xc8, 0x4f, 0xca, 0x4a, 0x4d, 0x2e, 0x51, 0x48,
+        0xaa, 0x2c, 0x49, 0x2d, 0xe6, 0x02, 0x00, 0xae, 0xc5, 0xf2, 0x24, 0x19, 0x00, 0x00, 0x00,
+    ];
+    const RAW_BODY: &[u8] = b"raw storage object bytes\n";
+
+    async fn serve_gzip_object() -> (std::net::SocketAddr, crate::runtime::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = crate::runtime::spawn(async move {
+            timeout(Duration::from_secs(5), async {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                let mut buf = [0; 1024];
+                loop {
+                    let n = stream.read(&mut buf).await.unwrap();
+                    assert!(n > 0);
+                    request.extend_from_slice(&buf[..n]);
+                    if request.windows(4).any(|w| w == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    GZIP_BODY.len()
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+                stream.write_all(GZIP_BODY).await.unwrap();
+                stream.flush().await.unwrap();
+                let _ = stream.shutdown().await;
+            })
+            .await
+            .expect("gzip fixture server timed out");
+        });
+        (address, server)
+    }
+
+    /// Negative control for [`test_storage_http_client_preserves_encoded_response`].
+    ///
+    /// A default reqwest client must decode the gzip body. If this test starts
+    /// failing because the body comes back encoded, `reqwest/gzip` is no longer
+    /// active in this crate's test graph (it comes in via the `reqwest`
+    /// dev-dependency), and the test below proves nothing.
+    #[tokio::test]
+    async fn test_default_http_client_decodes_encoded_response() {
+        let (address, server) = serve_gzip_object().await;
+        let url = format!("http://{address}/object.json.gz");
+
+        let decoded = reqwest::ClientBuilder::new()
+            .build()
+            .unwrap()
+            .get(&url)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(decoded.bytes().await.unwrap().as_ref(), RAW_BODY);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_storage_http_client_preserves_encoded_response() {
+        let (address, server) = serve_gzip_object().await;
+        let url = format!("http://{address}/object.json.gz");
+        let response = storage_http_client_builder()
+            .build()
+            .unwrap()
+            .get(&url)
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.headers()[CONTENT_ENCODING], "gzip");
+        assert_eq!(
+            response.headers()[CONTENT_LENGTH]
+                .to_str()
+                .unwrap()
+                .parse::<usize>()
+                .unwrap(),
+            GZIP_BODY.len()
+        );
+        assert_eq!(response.bytes().await.unwrap().as_ref(), GZIP_BODY);
+        server.await.unwrap();
     }
 }

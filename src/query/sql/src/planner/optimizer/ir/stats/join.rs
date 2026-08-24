@@ -82,8 +82,8 @@ impl JoinStatsEstimator {
     pub(crate) fn apply_condition(
         &mut self,
         columns: JoinConditionColumns,
-        left_type: DataType,
-        right_type: DataType,
+        left_type: &DataType,
+        right_type: &DataType,
         is_null_equal: bool,
         left_column_stats: &mut ColumnStatSet,
         right_column_stats: &mut ColumnStatSet,
@@ -169,8 +169,8 @@ pub(crate) struct JoinConditionColumns {
 }
 
 struct JoinConditionEstimation<'a> {
-    left_type: DataType,
-    right_type: DataType,
+    left_type: &'a DataType,
+    right_type: &'a DataType,
     left_col_stat: &'a ColumnStat,
     right_col_stat: &'a ColumnStat,
     left_cardinality: f64,
@@ -214,8 +214,8 @@ impl<'a> JoinConditionEstimation<'a> {
         let Some(kind) = mixed_numeric_stat_kind(
             self.left_col_stat,
             self.right_col_stat,
-            &self.left_type,
-            &self.right_type,
+            self.left_type,
+            self.right_type,
         )?
         else {
             return Ok(JoinConditionStats::Skip);

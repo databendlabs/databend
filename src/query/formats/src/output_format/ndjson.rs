@@ -57,7 +57,7 @@ impl<const STRINGS: bool, const COMPACT: bool> OutputFormat
     fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.num_rows();
 
-        let mut buf = Vec::with_capacity(block.memory_size());
+        let mut buf = Vec::with_capacity(block.estimate_block_size(block.num_columns()));
         let field_names: Vec<_> = self
             .schema
             .fields()

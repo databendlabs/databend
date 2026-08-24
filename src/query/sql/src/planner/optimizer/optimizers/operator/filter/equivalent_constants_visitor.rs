@@ -107,7 +107,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                     visitor.visit(expr)?;
                 }
                 let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) else {
-                    return Ok(());
+                    return func.refresh_return_type();
                 };
 
                 let (left, right) =
@@ -119,7 +119,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                     func.arguments[1] = right;
                 }
                 if !matches!(op, ComparisonOp::Equal) {
-                    return Ok(());
+                    return func.refresh_return_type();
                 }
 
                 match (func.arguments[0].clone(), func.arguments[1].clone()) {
@@ -160,7 +160,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                         if expr.used_columns().is_empty()
                             && common_super_type_with_conversion(
                                 column.column.data_type.as_ref(),
-                                expr.data_type()?,
+                                expr.data_type().as_ref(),
                             )
                             .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
                         {
@@ -171,6 +171,6 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                 }
             }
         }
-        Ok(())
+        func.refresh_return_type()
     }
 }

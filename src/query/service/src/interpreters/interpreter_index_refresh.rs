@@ -231,8 +231,8 @@ impl Interpreter for RefreshIndexInterpreter {
                         .items
                         .iter()
                         .map(|item| {
-                            let ty = item.scalar.data_type()?;
-                            Ok(DataField::new(&item.index.to_string(), ty))
+                            let ty = item.scalar.data_type();
+                            Ok(DataField::new(&item.index.to_string(), ty.into_owned()))
                         })
                         .collect::<Result<Vec<_>>>()?;
                     DataSchemaRefExt::create(fields)

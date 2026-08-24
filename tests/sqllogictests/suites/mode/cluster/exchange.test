@@ -229,6 +229,39 @@ Exchange
         ├── apply join filters: [#0]
         └── estimated rows: 2.00
 
+# The grand-total MaterializedCTE is scalar and ends in Merge exchange. The
+# post-Cascades MCTE optimizer redistributes it with a constant-key GlobalHash,
+# exercising Merge-input fragment scheduling on a real MCTE producer chain.
+statement ok
+set grouping_sets_to_union = 1;
+
+query III rowsort
+select number % 2 as a, number % 3 as b, sum(number)
+from numbers(6)
+group by rollup(a, b);
+----
+0 0 0
+0 1 4
+0 2 2
+0 NULL 6
+1 0 3
+1 1 1
+1 2 5
+1 NULL 9
+NULL NULL 15
+
+# Keep scalar aggregate semantics for an empty MCTE input while exercising the
+# same Merge-to-GlobalHash fragment topology.
+query III
+select number % 2 as a, number % 3 as b, count()
+from numbers(0)
+group by rollup(a, b);
+----
+NULL NULL 0
+
+statement ok
+unset grouping_sets_to_union;
+
 query T
 explain fragments select * from (select sum(number) as number from numbers(1) group by number) t, numbers(2) t1 where t.number = t1.number
 ----

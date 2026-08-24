@@ -74,7 +74,18 @@
 //! [bf-formulae]: http://tfk.mit.edu/pdf/bloom.pdf
 
 use core::simd::Simd;
-use core::simd::cmp::SimdPartialEq;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::__m256i;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::_mm256_mullo_epi32;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::_mm256_set1_epi32;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::_mm256_sllv_epi32;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::_mm256_srli_epi32;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::_mm256_testc_si256;
 use std::mem::size_of;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
@@ -141,9 +152,13 @@ impl Block {
 
     /// Returns true when every bit that is set in the result of mask is also set in the block.
     fn check(&self, hash: u32) -> bool {
-        let mask = Self::mask_simd(hash);
-        let block_vec = U32x8::from_array(self.0);
-        (block_vec & mask).simd_ne(U32x8::splat(0)).all()
+        for (slot, salt) in self.0.iter().zip(SALT) {
+            let bit_index = hash.wrapping_mul(salt) >> 27;
+            if slot & (1 << bit_index) == 0 {
+                return false;
+            }
+        }
+        true
     }
 
     #[inline(always)]
@@ -278,9 +293,44 @@ impl Sbbf {
     /// Check a batch of hashes. The callback is triggered for each matching hash index.
     pub fn check_hash_batch<F>(&self, hashes: &[u64], mut on_match: F)
     where F: FnMut(usize) {
+        #[cfg(target_arch = "x86_64")]
+        if std::arch::is_x86_feature_detected!("avx2") {
+            // SAFETY: AVX2 support was checked before entering the target-feature function.
+            unsafe { self.check_hash_batch_avx2(hashes, &mut on_match) };
+            return;
+        }
+
         for (idx, &hash) in hashes.iter().enumerate() {
             let block_index = self.hash_to_block_index(hash);
             if self.0[block_index].check(hash as u32) {
+                on_match(idx);
+            }
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx2")]
+    unsafe fn check_hash_batch_avx2<F>(&self, hashes: &[u64], on_match: &mut F)
+    where F: FnMut(usize) {
+        // SAFETY: the pointer covers all eight salt values and read_unaligned handles alignment.
+        let salts = unsafe { SALT.as_ptr().cast::<__m256i>().read_unaligned() };
+        let ones = _mm256_set1_epi32(1);
+
+        for (idx, &hash) in hashes.iter().enumerate() {
+            let block_index = self.hash_to_block_index(hash);
+            let hash = _mm256_set1_epi32(hash as u32 as i32);
+            let bit_indices = _mm256_srli_epi32::<27>(_mm256_mullo_epi32(hash, salts));
+            let mask = _mm256_sllv_epi32(ones, bit_indices);
+            // SAFETY: the pointer covers the complete block and read_unaligned handles alignment.
+            let block = unsafe {
+                self.0[block_index]
+                    .0
+                    .as_ptr()
+                    .cast::<__m256i>()
+                    .read_unaligned()
+            };
+
+            if _mm256_testc_si256(block, mask) != 0 {
                 on_match(idx);
             }
         }
@@ -410,6 +460,13 @@ impl SbbfAtomic {
 mod tests {
     use super::*;
 
+    fn mix_hash(mut value: u64) -> u64 {
+        value = value.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        value ^ (value >> 31)
+    }
+
     #[test]
     fn test_mask_set_quick_check() {
         for i in 0..1_000_000 {
@@ -444,6 +501,60 @@ mod tests {
         let mut matched = 0;
         sbbf.check_hash_batch(&hashes, |_| matched += 1);
         assert_eq!(matched, hashes.len());
+    }
+
+    #[test]
+    fn test_sbbf_batch_check_matches_scalar() {
+        let inserted = (0..10_000).map(mix_hash).collect::<Vec<_>>();
+        let mut sbbf = Sbbf::new_with_ndv_fpp(inserted.len() as u64, 0.01).unwrap();
+        sbbf.insert_hash_batch(&inserted);
+
+        let probes = (0..100_000)
+            .map(|index| {
+                if index % 4 == 0 {
+                    inserted[index % inserted.len()]
+                } else {
+                    mix_hash((index + 100_000) as u64)
+                }
+            })
+            .collect::<Vec<_>>();
+        let expected = probes
+            .iter()
+            .enumerate()
+            .filter_map(|(index, &hash)| sbbf.check_hash(hash).then_some(index))
+            .collect::<Vec<_>>();
+        let mut actual = Vec::new();
+        sbbf.check_hash_batch(&probes, |index| actual.push(index));
+
+        assert_eq!(actual, expected);
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn test_sbbf_avx2_check_matches_scalar() {
+        if !std::arch::is_x86_feature_detected!("avx2") {
+            return;
+        }
+
+        let mut populated = Block::ZERO;
+        for hash in (0..64).map(mix_hash) {
+            populated.insert(hash as u32);
+        }
+
+        for block in [Block::ZERO, Block([u32::MAX; 8]), populated] {
+            let sbbf = Sbbf(vec![block]);
+            let hashes = (0..100_000).map(mix_hash).collect::<Vec<_>>();
+            let expected = hashes
+                .iter()
+                .enumerate()
+                .filter_map(|(index, &hash)| sbbf.check_hash(hash).then_some(index))
+                .collect::<Vec<_>>();
+            let mut actual = Vec::new();
+            // SAFETY: AVX2 support was checked before calling the target-feature function.
+            unsafe { sbbf.check_hash_batch_avx2(&hashes, &mut |index| actual.push(index)) };
+
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]

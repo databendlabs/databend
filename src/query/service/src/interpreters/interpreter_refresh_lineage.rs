@@ -369,13 +369,9 @@ impl Interpreter for RefreshLineageInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if !GlobalConfig::instance()
-            .log
-            .history
-            .is_table_enabled("lineage_history")
-        {
+        if !GlobalConfig::instance().lineage.enabled() {
             return Err(ErrorCode::InvalidConfig(
-                "REFRESH LINEAGE requires lineage_history to be enabled".to_string(),
+                "REFRESH LINEAGE requires lineage to be enabled".to_string(),
             ));
         }
 

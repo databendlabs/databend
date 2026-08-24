@@ -220,6 +220,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_auto_fix_missing_bloom_index")? != 0)
     }
 
+    pub fn get_enable_table_schema_refresh(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_table_schema_refresh")? != 0)
+    }
+
     // Get max_block_size.
     pub fn get_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("max_block_size")
@@ -773,6 +777,10 @@ impl Settings {
 
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
+    }
+
+    pub fn get_enable_materialized_view_rewrite(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_materialized_view_rewrite")? != 0)
     }
 
     pub fn get_enable_compact_after_write(&self) -> Result<bool> {

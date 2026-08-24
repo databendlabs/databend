@@ -1,0 +1,165 @@
+=== merge_backed_scalar_producer_is_redistributed ===
+description: A scalar grouping-set MCTE backed by Merge should be redistributed after the final aggregate.
+sql: SELECT a, b, sum(v)
+FROM mcte_input
+GROUP BY ROLLUP(a, b)
+raw_plan:
+EvalScalar
+├── scalars: [mcte_input.a (#0) AS (#0), mcte_input.b (#1) AS (#1), sum(v) (#6) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: [mcte_input.a (#0) AS (#0), mcte_input.b (#1) AS (#1), _grouping_id (#5) AS (#5)]
+    ├── aggregate functions: [sum(mcte_input.v (#2)) AS (#6)]
+    └── EvalScalar
+        ├── scalars: [mcte_input.a (#0) AS (#0), mcte_input.b (#1) AS (#1), mcte_input.v (#2) AS (#2)]
+        └── Scan
+            ├── table: default.mcte_input (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+Exchange(Merge)
+└── Sequence(Sequence)
+    ├── MaterializedCTE
+    │   ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0_1
+    │   ├── ref_count: 3
+    │   ├── channel_size: Some(2)
+    │   └── Aggregate(Final)
+    │       ├── group items: [mcte_input.a (#0) AS (#0), mcte_input.b (#1) AS (#1)]
+    │       ├── aggregate functions: [sum(mcte_input.v (#2)) AS (#6)]
+    │       └── Aggregate(Partial)
+    │           ├── group items: [mcte_input.a (#0) AS (#0), mcte_input.b (#1) AS (#1)]
+    │           ├── aggregate functions: [sum(mcte_input.v (#2)) AS (#6)]
+    │           └── Exchange(Hash)
+    │               ├── Exchange(Hash): keys: [mcte_input.a (#0)]
+    │               └── Scan
+    │                   ├── table: default.mcte_input (#0)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Sequence(Sequence)
+        ├── MaterializedCTE
+        │   ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0
+        │   ├── ref_count: 1
+        │   ├── channel_size: Some(2)
+        │   └── Aggregate(Final)
+        │       ├── group items: [mcte_input.a (#0) AS (#0)]
+        │       ├── aggregate functions: [sum(sum(v) (#6)) AS (#6)]
+        │       └── Aggregate(Partial)
+        │           ├── group items: [mcte_input.a (#0) AS (#0)]
+        │           ├── aggregate functions: [sum(sum(v) (#6)) AS (#6)]
+        │           └── Exchange(Hash)
+        │               ├── Exchange(Hash): keys: [mcte_input.a (#0)]
+        │               └── MaterializedCTERef
+        │                   ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0_1
+        │                   ├── output columns: [sum(v) (#6), mcte_input.a (#0), mcte_input.b (#1)]
+        │                   └── column mapping: [mcte_input.a (#0) -> mcte_input.a (#0), mcte_input.b (#1) -> mcte_input.b (#1), sum(v) (#6) -> sum(v) (#6)]
+        └── Sequence(Sequence)
+            ├── MaterializedCTE
+            │   ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_empty
+            │   ├── ref_count: 1
+            │   ├── channel_size: Some(2)
+            │   └── Exchange(Hash)
+            │       ├── Exchange(Hash): keys: [0]
+            │       └── Aggregate(Final)
+            │           ├── group items: []
+            │           ├── aggregate functions: [sum(sum(v) (#6)) AS (#6)]
+            │           └── Exchange(Merge)
+            │               └── Aggregate(Partial)
+            │                   ├── group items: []
+            │                   ├── aggregate functions: [sum(sum(v) (#6)) AS (#6)]
+            │                   └── MaterializedCTERef
+            │                       ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0_1
+            │                       ├── output columns: [sum(v) (#6), mcte_input.a (#0), mcte_input.b (#1)]
+            │                       └── column mapping: [mcte_input.a (#0) -> mcte_input.a (#0), mcte_input.b (#1) -> mcte_input.b (#1), sum(v) (#6) -> sum(v) (#6)]
+            └── UnionAll
+                ├── output: [mcte_input.a (#0), mcte_input.b (#1), sum(v) (#6), _grouping_id (#5)]
+                ├── left: [mcte_input.a (#0), mcte_input.b (#1), sum(v) (#6), _grouping_id (#5)]
+                ├── right: [mcte_input.a (#0), mcte_input.b (#1), sum(v) (#6), _grouping_id (#5)]
+                ├── cte_scan_names: []
+                ├── logical_recursive_cte_id: None
+                ├── UnionAll
+                │   ├── output: [mcte_input.a (#0), mcte_input.b (#1), sum(v) (#6), _grouping_id (#5)]
+                │   ├── left: [mcte_input.a (#0), mcte_input.b (#1), sum(v) (#6), _grouping_id (#5)]
+                │   ├── right: [mcte_input.a (#0), mcte_input.b (#1), sum(v) (#6), _grouping_id (#5)]
+                │   ├── cte_scan_names: []
+                │   ├── logical_recursive_cte_id: None
+                │   ├── EvalScalar
+                │   │   ├── scalars: [CAST(mcte_input.a (#0) AS Int32 NULL) AS (#0), CAST(mcte_input.b (#1) AS Int32 NULL) AS (#1), 0 AS (#5), sum(v) (#6) AS (#6)]
+                │   │   └── MaterializedCTERef
+                │   │       ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0_1
+                │   │       ├── output columns: [sum(v) (#6), mcte_input.a (#0), mcte_input.b (#1)]
+                │   │       └── column mapping: [mcte_input.a (#0) -> mcte_input.a (#0), mcte_input.b (#1) -> mcte_input.b (#1), sum(v) (#6) -> sum(v) (#6)]
+                │   └── EvalScalar
+                │       ├── scalars: [CAST(mcte_input.a (#0) AS Int32 NULL) AS (#0), NULL AS (#1), 2 AS (#5), sum(v) (#6) AS (#6)]
+                │       └── MaterializedCTERef
+                │           ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0
+                │           ├── output columns: [sum(v) (#6), mcte_input.a (#0)]
+                │           └── column mapping: [mcte_input.a (#0) -> mcte_input.a (#0), sum(v) (#6) -> sum(v) (#6)]
+                └── EvalScalar
+                    ├── scalars: [NULL AS (#0), NULL AS (#1), 3 AS (#5), sum(v) (#6) AS (#6)]
+                    └── MaterializedCTERef
+                        ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_empty
+                        ├── output columns: [sum(v) (#6)]
+                        └── column mapping: [sum(v) (#6) -> sum(v) (#6)]
+
+
+=== dummy_scan_serial_producer_is_not_redistributed ===
+description: Seriality from DummyTableScan is not evidence of a Merge-backed MCTE producer.
+sql: WITH c AS (SELECT 1 AS x)
+SELECT * FROM c
+UNION ALL
+SELECT * FROM c
+raw_plan:
+Sequence(Sequence)
+├── MaterializedCTE
+│   ├── cte_name: __materialized_cte_0_c
+│   ├── ref_count: 0
+│   ├── channel_size: None
+│   └── EvalScalar
+│       ├── scalars: [1 AS (#0)]
+│       └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+└── UnionAll
+    ├── output: [x (#3)]
+    ├── left: [x (#1)]
+    ├── right: [x (#2)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── EvalScalar
+    │   ├── scalars: [x (#1) AS (#1)]
+    │   └── MaterializedCTERef
+    │       ├── cte_name: __materialized_cte_0_c
+    │       ├── output columns: [x (#1)]
+    │       └── column mapping: [x (#1) -> x (#0)]
+    └── EvalScalar
+        ├── scalars: [x (#2) AS (#2)]
+        └── MaterializedCTERef
+            ├── cte_name: __materialized_cte_0_c
+            ├── output columns: [x (#2)]
+            └── column mapping: [x (#2) -> x (#0)]
+
+optimized_plan:
+Sequence(Sequence)
+├── MaterializedCTE
+│   ├── cte_name: __materialized_cte_0_c
+│   ├── ref_count: 2
+│   ├── channel_size: None
+│   └── EvalScalar
+│       ├── scalars: [1 AS (#0)]
+│       └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+└── UnionAll
+    ├── output: [x (#3)]
+    ├── left: [x (#1)]
+    ├── right: [x (#2)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── MaterializedCTERef
+    │   ├── cte_name: __materialized_cte_0_c
+    │   ├── output columns: [x (#1)]
+    │   └── column mapping: [x (#1) -> x (#0)]
+    └── MaterializedCTERef
+        ├── cte_name: __materialized_cte_0_c
+        ├── output columns: [x (#2)]
+        └── column mapping: [x (#2) -> x (#0)]
+
+

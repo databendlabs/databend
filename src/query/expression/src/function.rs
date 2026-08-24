@@ -179,9 +179,9 @@ pub struct EvalContext<'a> {
     pub num_rows: usize,
 
     pub func_ctx: &'a FunctionContext,
-    /// Validity bitmap of outer nullable column. This is an optimization
-    /// to avoid recording errors on the NULL value which has a corresponding
-    /// default value in nullable's inner column.
+    /// Active rows propagated by nullable and conditional partial evaluation.
+    /// Functions evaluate all rows by default, but expensive functions may opt in to skipping
+    /// inactive rows with `PartialEvalPolicy::SkipInactiveRows`.
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
     pub suppress_error: bool,

@@ -302,8 +302,19 @@ ALTER TABLE test_mv CLUSTER BY (id)
 statement error 3905
 ALTER TABLE test_mv DROP CLUSTER KEY
 
-statement error 3905
+# Compact is storage maintenance and is allowed on materialized views.
+statement ok
 OPTIMIZE TABLE test_mv COMPACT
+
+statement ok
+OPTIMIZE TABLE test_mv COMPACT SEGMENT
+
+# Purge still uses TABLE syntax against a read-only MV and stays blocked.
+statement error 3905
+OPTIMIZE TABLE test_mv PURGE
+
+statement error 3905
+OPTIMIZE TABLE test_mv ALL
 
 # Dedicated MV maintenance reuses Fuse plans without opening TABLE syntax on MVs.
 statement ok

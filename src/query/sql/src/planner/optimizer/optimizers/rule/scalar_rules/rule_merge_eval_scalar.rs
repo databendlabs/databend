@@ -24,6 +24,7 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::EvalScalar;
+use crate::plans::FunctionCall;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -148,6 +149,13 @@ impl<'a> VisitorMut<'a> for TrivialComposer<'_> {
         }
         walk_expr_mut(self, expr)
     }
+
+    fn visit_function_call(&mut self, function: &'a mut FunctionCall) -> Result<()> {
+        for argument in &mut function.arguments {
+            self.visit(argument)?;
+        }
+        function.refresh_return_type()
+    }
 }
 
 impl Rule for RuleMergeEvalScalar {
@@ -198,19 +206,22 @@ mod tests {
     use crate::Visibility;
     use crate::plans::BoundColumnRef;
     use crate::plans::ConstantExpr;
-    use crate::plans::FunctionCall;
 
     fn int_type() -> DataType {
         DataType::Number(NumberDataType::Int64)
     }
 
     fn column(index: Symbol) -> ScalarExpr {
+        typed_column(index, int_type().wrap_nullable())
+    }
+
+    fn typed_column(index: Symbol, data_type: DataType) -> ScalarExpr {
         BoundColumnRef {
             span: None,
             column: ColumnBindingBuilder::new(
                 index.to_string(),
                 index,
-                Box::new(int_type().wrap_nullable()),
+                Box::new(data_type),
                 Visibility::Visible,
             )
             .build(),
@@ -280,6 +291,7 @@ mod tests {
                     func_name: "is_not_null".to_string(),
                     params: vec![],
                     arguments: vec![column(lower_index)],
+                    return_type: Box::new(DataType::Boolean),
                 }),
                 index: output_index,
             }],
@@ -298,6 +310,39 @@ mod tests {
     }
 
     #[test]
+    fn refreshes_function_type_after_composing_column_reference() -> Result<()> {
+        let input_index = Symbol::new(0);
+        let lower_index = Symbol::new(1);
+        let output_index = Symbol::new(2);
+        let input = [input_index].into_iter().collect();
+        let down = EvalScalar {
+            items: vec![ScalarItem {
+                scalar: typed_column(input_index, int_type()),
+                index: lower_index,
+            }],
+        };
+        let up = EvalScalar {
+            items: vec![ScalarItem {
+                scalar: ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "gte".to_string(),
+                    params: vec![],
+                    arguments: vec![column(lower_index), typed_column(input_index, int_type())],
+                    return_type: Box::new(DataType::Boolean.wrap_nullable()),
+                }),
+                index: output_index,
+            }],
+        };
+
+        let merged = try_merge_eval_scalars(&up, &down, &input)?.unwrap();
+        let ScalarExpr::FunctionCall(function) = &merged.items[0].scalar else {
+            panic!("expected the upper function to remain")
+        };
+        assert_eq!(function.return_type.as_ref(), &DataType::Boolean);
+        Ok(())
+    }
+
+    #[test]
     fn composes_constant_into_upper_expression() -> Result<()> {
         let input = ColumnSet::new();
         let lower_index = Symbol::new(1);
@@ -312,6 +357,7 @@ mod tests {
                     func_name: "is_not_null".to_string(),
                     params: vec![],
                     arguments: vec![column(lower_index)],
+                    return_type: Box::new(DataType::Boolean),
                 }),
                 index: output_index,
             }],
@@ -352,6 +398,7 @@ mod tests {
                     func_name: "is_not_null".to_string(),
                     params: vec![],
                     arguments: vec![column(input_index)],
+                    return_type: Box::new(DataType::Boolean),
                 }),
                 index: lower_index,
             }],

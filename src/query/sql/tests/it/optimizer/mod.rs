@@ -24,12 +24,14 @@ mod collect_statistics;
 mod decorrelate_correlated_aliases;
 mod eager_aggregation;
 mod join_cardinality;
+mod materialized_cte_distribution;
 mod normalize_scalar;
 mod outer_join_to_anti;
 mod push_down_filter_project_set;
 mod selectivity;
 mod selectivity_smoke;
 mod stat_derivation;
+mod type_consistency;
 mod union_all;
 
 fn table_statistics(rows: u64) -> TableStatistics {

@@ -39,6 +39,7 @@ use databend_common_storages_fuse::operations::CompactSource as FuseCompactSourc
 use databend_common_storages_fuse::operations::CompactTransform;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::CommitSink;
@@ -179,6 +180,11 @@ impl IPhysicalPlan for CompactSource {
                 stream_ctx.clone(),
             )
         });
+        add_aggregate_state_reaggregate_transform(
+            &mut builder.main_pipeline,
+            table.engine(),
+            table.schema().as_ref(),
+        )?;
 
         // sort
         let cluster_stats_gen = table.cluster_gen_for_append(
@@ -236,7 +242,7 @@ impl PhysicalPlanBuilder {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(catalog).await?;
         let tbl = catalog.get_table(&tenant, database, table).await?;
-        tbl.check_mutable()?;
+        tbl.check_mutable_or_materialized_view()?;
 
         let table_info = tbl.get_table_info().clone();
 

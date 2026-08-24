@@ -553,6 +553,7 @@ fn test_empty_or_arguments() -> anyhow::Result<()> {
         func_name: "or".to_string(),
         params: vec![],
         arguments: vec![],
+        return_type: Box::new(DataType::Boolean),
     });
 
     // Run the optimizer
@@ -600,6 +601,7 @@ fn test_single_or_argument() -> anyhow::Result<()> {
         func_name: "or".to_string(),
         params: vec![],
         arguments: vec![a],
+        return_type: Box::new(DataType::Boolean),
     });
 
     // Run the optimizer
@@ -823,6 +825,7 @@ fn test_normalize_predicate_scalar_boundary() -> anyhow::Result<()> {
         func_name: "and".to_string(),
         params: vec![],
         arguments: vec![a.clone()],
+        return_type: Box::new(DataType::Boolean),
     });
 
     // Run the optimizer

@@ -62,7 +62,6 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
-use crate::plans::SubqueryType;
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn cast(
@@ -310,19 +309,8 @@ where A: TypeCheckAdapter
         }
 
         if self.should_try_rewrite_variant_function(func_name) {
-            let mut arg_types = SmallVec::<[DataType; 4]>::with_capacity(scalars.len());
-            for scalar in &scalars {
-                let mut data_type = scalar.data_type()?;
-                if let ScalarExpr::SubqueryExpr(subquery) = scalar
-                    && subquery.typ == SubqueryType::Scalar
-                    && !data_type.is_nullable()
-                {
-                    data_type = data_type.wrap_nullable();
-                }
-                arg_types.push(data_type);
-            }
             if let Some(rewritten_variant_expr) =
-                self.try_rewrite_variant_function(span, func_name, &scalars, &arg_types)
+                self.try_rewrite_variant_function(span, func_name, &scalars)
             {
                 return rewritten_variant_expr;
             }
@@ -364,19 +352,8 @@ where A: TypeCheckAdapter
         }
 
         if self.should_try_rewrite_variant_function(func_name) {
-            let mut arg_types = Vec::with_capacity(scalars.len());
-            for scalar in &scalars {
-                let mut data_type = scalar.data_type()?;
-                if let ScalarExpr::SubqueryExpr(subquery) = scalar
-                    && subquery.typ == SubqueryType::Scalar
-                    && !data_type.is_nullable()
-                {
-                    data_type = data_type.wrap_nullable();
-                }
-                arg_types.push(data_type);
-            }
             if let Some(rewritten_variant_expr) =
-                self.try_rewrite_variant_function(span, func_name, &scalars, &arg_types)
+                self.try_rewrite_variant_function(span, func_name, &scalars)
             {
                 return rewritten_variant_expr;
             }
@@ -455,16 +432,16 @@ where A: TypeCheckAdapter
         let arg1 = &func.arguments[1];
         let (constant_arg_index, constant_arg) = match (arg0, arg1) {
             (ScalarExpr::ConstantExpr(_), _)
-                if arg1.data_type()?.remove_nullable() == DataType::Variant
+                if arg1.data_type().remove_nullable() == DataType::Variant
                     && !arg1.used_columns().is_empty()
-                    && arg0.data_type()? == DataType::String =>
+                    && arg0.data_type().as_ref() == &DataType::String =>
             {
                 (0, arg0)
             }
             (_, ScalarExpr::ConstantExpr(_))
-                if arg0.data_type()?.remove_nullable() == DataType::Variant
+                if arg0.data_type().remove_nullable() == DataType::Variant
                     && !arg0.used_columns().is_empty()
-                    && arg1.data_type()? == DataType::String =>
+                    && arg1.data_type().as_ref() == &DataType::String =>
             {
                 (1, arg1)
             }
@@ -478,6 +455,7 @@ where A: TypeCheckAdapter
             func_name: "to_variant".to_string(),
             params: vec![],
             arguments: vec![constant_arg.clone()],
+            return_type: Box::new(DataType::Variant),
         });
         let mut new_arguments = func.arguments.clone();
         new_arguments[constant_arg_index] = wrap_new_arg;
@@ -487,6 +465,7 @@ where A: TypeCheckAdapter
             func_name: func.func_name.clone(),
             params: func.params.clone(),
             arguments: new_arguments,
+            return_type: Box::new(data_type.clone()),
         });
 
         Ok(Box::new((new_func, data_type)))
@@ -519,7 +498,7 @@ where A: TypeCheckAdapter
         if ["round", "truncate"].contains(&func_name)
             && !args.is_empty()
             && params.is_empty()
-            && args[0].data_type()?.remove_nullable().is_decimal()
+            && args[0].data_type().remove_nullable().is_decimal()
         {
             let scale = if args.len() == 2 {
                 let scalar_expr = &arguments[1];
@@ -624,7 +603,7 @@ where A: TypeCheckAdapter
             };
 
             let (precision_index, scale_index) =
-                if args.len() > 1 && args[1].data_type()?.remove_nullable().is_string() {
+                if args.len() > 1 && args[1].data_type().remove_nullable().is_string() {
                     (2, 3)
                 } else {
                     (1, 2)
@@ -729,15 +708,17 @@ where A: TypeCheckAdapter
             folded_args.swap(0, 1);
         }
 
+        let return_type = expr.data_type().clone();
         Ok(Box::new((
             FunctionCall {
                 span,
                 params,
                 arguments: folded_args,
                 func_name: func_name.to_string(),
+                return_type: Box::new(return_type.clone()),
             }
             .into(),
-            expr.data_type().clone(),
+            return_type,
         )))
     }
 }
