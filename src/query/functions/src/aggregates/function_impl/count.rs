@@ -81,6 +81,7 @@ impl CountBuilder {
             Self::COUNT_FEATURES,
             NullPolicy::ReturnsDefaultWhenOnlyNull,
         )
+        .with_distinct_target("count_distinct")
         .then(
             MergeRoute::new(false, Self::create)
                 .with_legacy_signature_resolver(Self::legacy_signatures),

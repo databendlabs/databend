@@ -104,6 +104,7 @@ impl SumBuilder {
             Self::SUM_FEATURES,
             NullPolicy::Skip,
         )
+        .with_distinct_target("sum_distinct")
         .then(
             MergeRoute::unary(false, Self::create)
                 .with_legacy_signature_resolver(Self::legacy_signatures),

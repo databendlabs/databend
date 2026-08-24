@@ -428,43 +428,31 @@ where A: TypeCheckAdapter
             params
         };
 
-        // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
-        let (func_name, distinct) = if func_name.eq_ignore_ascii_case("count") && distinct {
-            ("count_distinct", false)
-        } else {
-            (func_name, distinct)
-        };
-
-        let func_name = if distinct {
-            format!("{func_name}_distinct")
-        } else {
-            func_name.to_string()
-        };
-
         let agg_func = AGGR_REGISTRY
             .resolve(AggregateFunctionRequest {
-                name: &func_name,
+                name: func_name,
                 params: &params.clone(),
                 args_type: &arg_types,
-                distinct: false,
+                distinct,
                 order_by: &[],
             })
             .map_err(|e| e.set_span(span))?;
+        let signature = agg_func.signature();
 
         let args = if remove_count_args { vec![] } else { arguments };
 
         let new_agg_func = AggregateFunction {
             span,
             display_name,
-            func_name,
-            distinct: false,
+            func_name: signature.name.clone(),
+            distinct: signature.distinct,
             params,
             args,
-            return_type: Box::new(agg_func.signature().return_type.clone()),
+            return_type: Box::new(signature.return_type.clone()),
             sort_descs,
         };
 
-        let data_type = agg_func.signature().return_type.clone();
+        let data_type = signature.return_type.clone();
 
         Ok((new_agg_func, data_type))
     }

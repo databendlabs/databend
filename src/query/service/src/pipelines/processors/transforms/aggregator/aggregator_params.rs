@@ -76,14 +76,6 @@ impl AggregatorParams {
         }))
     }
 
-    pub fn has_distinct_combinator(&self) -> bool {
-        self.aggregate_functions.iter().any(|f| {
-            f.signature().name.contains("distinct")
-                || f.features().distinct_policy
-                    == databend_common_expression::aggregate::aggregate_function::DistinctPolicy::Required
-        })
-    }
-
     pub fn empty_result_block(&self) -> DataBlock {
         let columns = self
             .aggregate_functions

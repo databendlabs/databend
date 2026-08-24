@@ -477,7 +477,7 @@ mod tests {
                 is_decomposable: false,
                 supports_filter: false,
                 sort_policy: SortPolicy::Required,
-                distinct_policy: DistinctPolicy::Required,
+                distinct_policy: DistinctPolicy::Unsupported,
                 ..Default::default()
             },
             full_modifier_state_description(),
@@ -557,7 +557,7 @@ mod tests {
                 return_type: UInt64Type::data_type(),
             },
             FunctionFeatures {
-                distinct_policy: DistinctPolicy::Required,
+                distinct_policy: DistinctPolicy::Unsupported,
                 ..Default::default()
             },
             distinct_sum_state_description(),

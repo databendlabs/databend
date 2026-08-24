@@ -300,12 +300,19 @@ pub enum SortPolicy {
     Required,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum DistinctPolicy {
     #[default]
     Unsupported,
-    Optional,
-    Required,
+    /// `DISTINCT` does not change this aggregate's result. Consume the
+    /// modifier and resolve the original function name.
+    Idempotent,
+    /// Resolve a semantic `DISTINCT` request through this explicitly named
+    /// aggregate function.
+    Redirect {
+        target: String,
+        aliases: Vec<(String, String)>,
+    },
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -760,13 +767,61 @@ impl AggregateFunctionRegistry {
     }
 
     pub fn resolve(&self, request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
-        let requested_name = request.name.to_lowercase();
-        let name = self.canonical_name(request.name);
+        let requested_name = request.name.to_ascii_lowercase();
+        let name = self.canonical_name(&requested_name);
         let descriptors = self.functions.get(&name).ok_or_else(|| {
             ErrorCode::UnknownAggregateFunction(format!(
                 "Unsupported AggregateFunction: {requested_name}"
             ))
         })?;
+
+        if request.distinct {
+            if descriptors.iter().any(|descriptor| {
+                descriptor.features().distinct_policy == DistinctPolicy::Idempotent
+            }) {
+                return self.resolve(AggregateFunctionRequest {
+                    name: requested_name.as_str(),
+                    params: request.params,
+                    args_type: request.args_type,
+                    distinct: false,
+                    order_by: request.order_by,
+                });
+            }
+
+            // The target owns the DISTINCT signature. Resolve the redirect
+            // before checking the source signature because they may accept
+            // different argument counts (for example, count and
+            // count_distinct).
+            let targets = descriptors
+                .iter()
+                .filter_map(|descriptor| {
+                    descriptor
+                        .features()
+                        .distinct_policy
+                        .target_for(&requested_name)
+                })
+                .collect::<BTreeSet<_>>();
+            let mut last_error = None;
+            for target in targets {
+                let redirected = AggregateFunctionRequest {
+                    name: target,
+                    params: request.params,
+                    args_type: request.args_type,
+                    distinct: false,
+                    order_by: request.order_by,
+                };
+                match self.resolve(redirected) {
+                    Ok(function) => return Ok(function),
+                    Err(error) => last_error = Some(error),
+                }
+            }
+            return Err(last_error.unwrap_or_else(|| {
+                ErrorCode::UnknownAggregateFunction(format!(
+                    "Unsupported AggregateFunction signature: {requested_name}({:?})",
+                    request.args_type
+                ))
+            }));
+        }
 
         if !descriptors.iter().any(|descriptor| {
             descriptor
@@ -787,19 +842,12 @@ impl AggregateFunctionRegistry {
             if !descriptor.features().sort_policy.accepts(request.order_by) {
                 continue;
             }
-            if !descriptor
-                .features()
-                .distinct_policy
-                .accepts(request.distinct)
-            {
-                continue;
-            }
 
             let request = AggregateFunctionRequest {
                 name: requested_name.as_str(),
                 params: request.params,
                 args_type: request.args_type,
-                distinct: request.distinct,
+                distinct: false,
                 order_by: request.order_by,
             };
             let builder = descriptor.builder.as_ref();
@@ -834,11 +882,34 @@ impl SortPolicy {
 }
 
 impl DistinctPolicy {
-    fn accepts(&self, distinct: bool) -> bool {
+    pub fn redirect(target: impl Into<String>) -> Self {
+        Self::Redirect {
+            target: target.into(),
+            aliases: Vec::new(),
+        }
+    }
+
+    pub fn redirect_with_aliases(
+        target: impl Into<String>,
+        aliases: impl IntoIterator<Item = (String, String)>,
+    ) -> Self {
+        Self::Redirect {
+            target: target.into(),
+            aliases: aliases.into_iter().collect(),
+        }
+    }
+
+    pub fn target_for(&self, requested_name: &str) -> Option<&str> {
         match self {
-            Self::Unsupported => !distinct,
-            Self::Optional => true,
-            Self::Required => distinct,
+            Self::Unsupported | Self::Idempotent => None,
+            Self::Redirect { target, aliases } => aliases
+                .iter()
+                .find_map(|(alias, target)| {
+                    alias
+                        .eq_ignore_ascii_case(requested_name)
+                        .then_some(target.as_str())
+                })
+                .or(Some(target.as_str())),
         }
     }
 }

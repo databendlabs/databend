@@ -54,6 +54,7 @@ pub(crate) struct DirectNameRoute {
     names: &'static [&'static str],
     arguments: AggregateArgumentsPattern,
     features: FunctionFeatures,
+    distinct_target: Option<String>,
     null_policy: NullPolicy,
     validate: Option<DirectRouteValidateFn>,
     routes: Vec<Box<dyn DirectRouteNode>>,
@@ -82,6 +83,14 @@ pub(crate) trait DirectRouteNode: Send + Sync {
         base.clone()
     }
 
+    fn distinct_target(&self, _base_name: &str) -> Option<String> {
+        None
+    }
+
+    fn distinct_is_idempotent(&self) -> bool {
+        false
+    }
+
     fn try_build(
         &self,
         context: &DirectRouteContext<'_, '_>,
@@ -100,6 +109,7 @@ impl DirectNameRoute {
             names,
             arguments,
             features,
+            distinct_target: None,
             null_policy,
             validate: None,
             routes: Vec::new(),
@@ -111,6 +121,11 @@ impl DirectNameRoute {
         self
     }
 
+    pub(crate) fn with_distinct_target(mut self, target: impl Into<String>) -> Self {
+        self.distinct_target = Some(target.into());
+        self
+    }
+
     pub(crate) fn then(mut self, next: impl DirectRouteNode + 'static) -> Self {
         self.routes.push(Box::new(next));
         self
@@ -119,6 +134,42 @@ impl DirectNameRoute {
     pub(crate) fn into_descriptors(self) -> Vec<AggregateFunctionDescriptor> {
         let route = Arc::new(self);
         let supports_filter = route.routes.iter().any(|node| node.suffix() == Some("if"));
+        let routed_distinct = route.routes.iter().find_map(|node| {
+            node.distinct_target(route.names[0]).map(|target| {
+                let aliases = route.names[1..]
+                    .iter()
+                    .filter_map(|alias| {
+                        node.distinct_target(alias)
+                            .map(|target| ((*alias).to_string(), target))
+                    })
+                    .collect::<Vec<_>>();
+                (target, aliases)
+            })
+        });
+        let distinct_is_idempotent = route
+            .routes
+            .iter()
+            .any(|node| node.distinct_is_idempotent());
+        assert!(
+            !distinct_is_idempotent || route.distinct_target.is_none() && routed_distinct.is_none(),
+            "conflicting DISTINCT policies for aggregate function {}",
+            route.names[0]
+        );
+        if let (Some(explicit), Some((routed, _))) = (&route.distinct_target, &routed_distinct) {
+            assert_eq!(
+                explicit, routed,
+                "conflicting DISTINCT targets for aggregate function {}",
+                route.names[0]
+            );
+        }
+        let distinct_policy = match (&route.distinct_target, routed_distinct) {
+            _ if distinct_is_idempotent => Some(DistinctPolicy::Idempotent),
+            (Some(target), _) => Some(DistinctPolicy::redirect(target.clone())),
+            (None, Some((target, aliases))) => {
+                Some(DistinctPolicy::redirect_with_aliases(target, aliases))
+            }
+            (None, None) => None,
+        };
         route
             .routes
             .iter()
@@ -132,6 +183,11 @@ impl DirectNameRoute {
                 let builder: Arc<dyn AggregateFunctionBuilder> = route.clone();
                 let mut features = node.features(&route.features);
                 features.supports_filter = suffix.is_none() && supports_filter;
+                if suffix.is_none()
+                    && let Some(policy) = &distinct_policy
+                {
+                    features.distinct_policy = policy.clone();
+                }
                 let mut descriptor = AggregateFunctionDescriptor::from_builder(name, builder)
                     .with_metadata(node.arguments(&route.arguments), features);
                 if !aliases.is_empty() {
@@ -737,6 +793,10 @@ impl DirectRouteNode for DistinctAliasRoute {
         Some("distinct")
     }
 
+    fn distinct_is_idempotent(&self) -> bool {
+        true
+    }
+
     fn try_build(
         &self,
         context: &DirectRouteContext<'_, '_>,
@@ -792,6 +852,10 @@ impl DirectRouteNode for DistinctRoute {
         Some("distinct")
     }
 
+    fn distinct_target(&self, base_name: &str) -> Option<String> {
+        Some(suffixed_name(base_name, self.suffix()))
+    }
+
     fn try_build(
         &self,
         context: &DirectRouteContext<'_, '_>,
@@ -838,6 +902,25 @@ mod tests {
     use databend_common_exception::ErrorCode;
 
     use super::*;
+
+    struct FixedResultBuilder {
+        arguments: AggregateArgumentsPattern,
+        features: FunctionFeatures,
+    }
+
+    impl AggregateFunctionBuilder for FixedResultBuilder {
+        fn arguments(&self) -> &AggregateArgumentsPattern {
+            &self.arguments
+        }
+
+        fn features(&self) -> &FunctionFeatures {
+            &self.features
+        }
+
+        fn build(&self, request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
+            try_create_null_argument_result_function(request, false)
+        }
+    }
 
     struct Miss {
         count: Arc<AtomicUsize>,
@@ -1061,6 +1144,42 @@ mod tests {
         for name in ["test_if", "test_alias_if", "test_state", "test_alias_state"] {
             assert!(!registry.descriptors(name)[0].features().supports_filter);
         }
+    }
+
+    #[test]
+    fn test_registry_redirects_distinct_without_name_route_or_suffix() {
+        let mut registry = AggregateFunctionRegistry::empty();
+        let arguments = AggregateArgumentsPattern::fixed(vec![]);
+        let builder = Arc::new(FixedResultBuilder {
+            arguments: arguments.clone(),
+            features: FunctionFeatures::default(),
+        });
+        registry.register(AggregateFunctionDescriptor::from_builder(
+            "deduplicated_test",
+            builder.clone(),
+        ));
+
+        let source_features = FunctionFeatures {
+            distinct_policy: DistinctPolicy::redirect("deduplicated_test"),
+            ..Default::default()
+        };
+        registry.register(
+            AggregateFunctionDescriptor::from_builder("test", builder)
+                .with_metadata(arguments, source_features),
+        );
+
+        let function = registry
+            .resolve(AggregateFunctionRequest {
+                name: "test",
+                params: &[],
+                args_type: &[],
+                distinct: true,
+                order_by: &[],
+            })
+            .unwrap();
+
+        assert_eq!(function.signature().name, "deduplicated_test");
+        assert!(!function.signature().distinct);
     }
 
     #[test]
