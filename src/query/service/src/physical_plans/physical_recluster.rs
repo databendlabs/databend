@@ -14,6 +14,7 @@
 
 use std::any::Any;
 
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -39,6 +40,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
+use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -112,6 +114,25 @@ impl IPhysicalPlan for Recluster {
                 let table = FuseTable::try_from_table(table.as_ref())?;
 
                 let task = &self.tasks[0];
+                let settings = builder.ctx.get_settings();
+                // Execution-time guard: planning-time admission runs on the
+                // coordinator and cannot see this node's live memory pressure.
+                // Oversized tasks are only tolerable when sort spill can absorb
+                // the pressure; otherwise fail fast instead of risking an OOM kill.
+                if !builder.ctx.get_enable_sort_spill() {
+                    let max_memory_usage = settings.get_max_memory_usage()? as usize;
+                    // `max_memory_usage == 0` means memory usage is unlimited.
+                    if max_memory_usage != 0 {
+                        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
+                        let memory_budget = max_memory_usage.saturating_sub(global_used) * 30 / 100;
+                        if task.total_bytes > memory_budget {
+                            return Err(ErrorCode::MemoryExceedsLimit(format!(
+                                "Not enough memory to execute recluster task on this node: task_bytes = {}, global_used = {}, max_memory_usage = {}.",
+                                task.total_bytes, global_used, max_memory_usage
+                            )));
+                        }
+                    }
+                }
                 let recluster_block_nums = task.parts.len();
                 let block_thresholds = table.get_block_thresholds();
                 let table_info = table.get_table_info();
@@ -191,7 +212,6 @@ impl IPhysicalPlan for Recluster {
                     });
                 }
 
-                let settings = builder.ctx.get_settings();
                 let max_threads = settings.get_max_threads()? as usize;
 
                 let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
@@ -255,6 +275,12 @@ impl IPhysicalPlan for Recluster {
                     compact_thresholds,
                     max_threads,
                     cluster_stats_gen.extra_key_num,
+                )?;
+
+                add_aggregate_state_reaggregate_transform(
+                    &mut builder.main_pipeline,
+                    table.engine(),
+                    table.schema().as_ref(),
                 )?;
 
                 builder.main_pipeline.add_transform(
