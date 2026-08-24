@@ -42,7 +42,6 @@ pub use transform_compact_block::*;
 pub use transform_compact_builder::*;
 pub use transform_dummy::*;
 pub use transform_hook::*;
-pub use transform_ordered_compact_builder::build_local_ordered_compact_pipeline;
-pub use transform_ordered_compact_builder::build_ordered_compact_pipeline;
+pub use transform_ordered_compact_builder::OrderedBlockCompactBuilder;
 pub use transform_pipeline_helper::TransformPipelineHelper;
 pub use transform_retry_async::*;

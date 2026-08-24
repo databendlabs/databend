@@ -29,11 +29,10 @@ use crate::types::StringColumn;
 use crate::with_decimal_type;
 use crate::with_number_type;
 
-/// Sorted range boundaries with type-specialized lookup for expression columns.
+/// Sorted range boundaries with type-specialized lower-bound lookup for expression columns.
 ///
-/// `lower_bound` counts boundaries strictly smaller than a value, while
-/// `upper_bound` counts boundaries smaller than or equal to it. Keeping both
-/// operations explicit avoids hiding range-boundary inclusion semantics at call sites.
+/// A lower bound counts boundaries strictly smaller than a value. Boundaries equal to the value
+/// therefore remain in the range that starts at that boundary.
 pub struct TypedRangeBounds {
     inner: Bounds,
 }
@@ -46,12 +45,6 @@ enum Bounds {
     Date(Vec<i32>),
     String(StringColumn),
     Scalar(Vec<Scalar>),
-}
-
-#[derive(Clone, Copy)]
-enum SearchSide {
-    Lower,
-    Upper,
 }
 
 impl TypedRangeBounds {
@@ -120,18 +113,9 @@ impl TypedRangeBounds {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
     /// Return the number of boundaries strictly smaller than `value`.
     pub fn lower_bound(&self, value: ScalarRef<'_>) -> u32 {
-        self.search(value, SearchSide::Lower)
-    }
-
-    /// Return the number of boundaries smaller than or equal to `value`.
-    pub fn upper_bound(&self, value: ScalarRef<'_>) -> u32 {
-        self.search(value, SearchSide::Upper)
+        self.search_range(value, 0..self.len())
     }
 
     /// Search one sorted subrange and return the rank relative to its start.
@@ -140,94 +124,23 @@ impl TypedRangeBounds {
             range.start <= range.end && range.end <= self.len(),
             "range boundary subrange is out of bounds"
         );
-        self.search_range(value, range, SearchSide::Lower)
-    }
-
-    /// Search one sorted subrange and return the rank relative to its start.
-    pub fn upper_bound_range(&self, value: ScalarRef<'_>, range: Range<usize>) -> u32 {
-        assert!(
-            range.start <= range.end && range.end <= self.len(),
-            "range boundary subrange is out of bounds"
-        );
-        self.search_range(value, range, SearchSide::Upper)
+        self.search_range(value, range)
     }
 
     /// Return lower-bound ranks for all rows, assigning `null_rank` to NULL values.
     pub fn lower_bound_column(&self, entry: &BlockEntry, null_rank: u32) -> Vec<u32> {
-        self.search_column(entry, null_rank, SearchSide::Lower)
-    }
-
-    /// Return upper-bound ranks for all rows, assigning `null_rank` to NULL values.
-    pub fn upper_bound_column(&self, entry: &BlockEntry, null_rank: u32) -> Vec<u32> {
-        self.search_column(entry, null_rank, SearchSide::Upper)
-    }
-
-    fn search(&self, value: ScalarRef<'_>, side: SearchSide) -> u32 {
-        self.search_range(value, 0..self.len(), side)
-    }
-
-    fn search_range(&self, value: ScalarRef<'_>, range: Range<usize>, side: SearchSide) -> u32 {
-        match &self.inner {
-            Bounds::Empty => 0,
-            Bounds::Number(bounds) => with_number_type!(|NUM_TYPE| match bounds {
-                NumberColumn::NUM_TYPE(bounds) => match value {
-                    ScalarRef::Number(NumberScalar::NUM_TYPE(value)) => {
-                        search(&bounds[range], &value, side)
-                    }
-                    _ => type_mismatch(),
-                },
-            }),
-            Bounds::Decimal(bounds) => with_decimal_type!(|DECIMAL_TYPE| match bounds {
-                DecimalColumn::DECIMAL_TYPE(bounds, size) => match value {
-                    ScalarRef::Decimal(DecimalScalar::DECIMAL_TYPE(value, other))
-                        if size == &other =>
-                    {
-                        search(&bounds[range], &value, side)
-                    }
-                    _ => type_mismatch(),
-                },
-            }),
-            Bounds::Timestamp(bounds) => match value {
-                ScalarRef::Timestamp(value) => search(&bounds[range], &value, side),
-                _ => type_mismatch(),
-            },
-            Bounds::Date(bounds) => match value {
-                ScalarRef::Date(value) => search(&bounds[range], &value, side),
-                _ => type_mismatch(),
-            },
-            Bounds::String(bounds) => match value {
-                ScalarRef::String(value) => search_indices(
-                    range,
-                    |index| unsafe { bounds.index_unchecked(index) },
-                    value,
-                    side,
-                ),
-                _ => type_mismatch(),
-            },
-            Bounds::Scalar(bounds) => match side {
-                SearchSide::Lower => {
-                    bounds[range].partition_point(|bound| bound.as_ref() < value) as u32
-                }
-                SearchSide::Upper => {
-                    bounds[range].partition_point(|bound| bound.as_ref() <= value) as u32
-                }
-            },
-        }
-    }
-
-    fn search_column(&self, entry: &BlockEntry, null_rank: u32, side: SearchSide) -> Vec<u32> {
         let rows = entry.len();
         if let BlockEntry::Const(value, _, _) = entry {
             let rank = if matches!(value, Scalar::Null) {
                 null_rank
             } else {
-                self.search(value.as_ref(), side)
+                self.lower_bound(value.as_ref())
             };
             return vec![rank; rows];
         }
         if let BlockEntry::Column(Column::Nullable(column)) = entry {
             let mut ranks =
-                self.search_column(&BlockEntry::Column(column.column.clone()), null_rank, side);
+                self.lower_bound_column(&BlockEntry::Column(column.column.clone()), null_rank);
             for (rank, valid) in ranks.iter_mut().zip(column.validity.iter()) {
                 if !valid {
                     *rank = null_rank;
@@ -241,8 +154,7 @@ impl TypedRangeBounds {
             (Bounds::Number(bounds), BlockEntry::Column(Column::Number(column))) => {
                 with_number_type!(|NUM_TYPE| match bounds {
                     NumberColumn::NUM_TYPE(bounds) => match column {
-                        NumberColumn::NUM_TYPE(column) =>
-                            search_values(column.iter(), bounds, side),
+                        NumberColumn::NUM_TYPE(column) => search_values(column.iter(), bounds),
                         _ => type_mismatch(),
                     },
                 })
@@ -251,17 +163,17 @@ impl TypedRangeBounds {
                 with_decimal_type!(|DECIMAL_TYPE| match bounds {
                     DecimalColumn::DECIMAL_TYPE(bounds, size) => match column {
                         DecimalColumn::DECIMAL_TYPE(column, other) if size == other => {
-                            search_values(column.iter(), bounds, side)
+                            search_values(column.iter(), bounds)
                         }
                         _ => type_mismatch(),
                     },
                 })
             }
             (Bounds::Timestamp(bounds), BlockEntry::Column(Column::Timestamp(column))) => {
-                search_values(column.iter(), bounds, side)
+                search_values(column.iter(), bounds)
             }
             (Bounds::Date(bounds), BlockEntry::Column(Column::Date(column))) => {
-                search_values(column.iter(), bounds, side)
+                search_values(column.iter(), bounds)
             }
             (Bounds::String(bounds), BlockEntry::Column(Column::String(column))) => column
                 .iter()
@@ -270,7 +182,6 @@ impl TypedRangeBounds {
                         0..bounds.len(),
                         |index| unsafe { bounds.index_unchecked(index) },
                         value,
-                        side,
                     )
                 })
                 .collect(),
@@ -281,10 +192,53 @@ impl TypedRangeBounds {
                     if matches!(value, ScalarRef::Null) {
                         null_rank
                     } else {
-                        self.search(value, side)
+                        self.lower_bound(value)
                     }
                 })
                 .collect(),
+        }
+    }
+
+    fn search_range(&self, value: ScalarRef<'_>, range: Range<usize>) -> u32 {
+        match &self.inner {
+            Bounds::Empty => 0,
+            Bounds::Number(bounds) => with_number_type!(|NUM_TYPE| match bounds {
+                NumberColumn::NUM_TYPE(bounds) => match value {
+                    ScalarRef::Number(NumberScalar::NUM_TYPE(value)) => {
+                        search(&bounds[range], &value)
+                    }
+                    _ => type_mismatch(),
+                },
+            }),
+            Bounds::Decimal(bounds) => with_decimal_type!(|DECIMAL_TYPE| match bounds {
+                DecimalColumn::DECIMAL_TYPE(bounds, size) => match value {
+                    ScalarRef::Decimal(DecimalScalar::DECIMAL_TYPE(value, other))
+                        if size == &other =>
+                    {
+                        search(&bounds[range], &value)
+                    }
+                    _ => type_mismatch(),
+                },
+            }),
+            Bounds::Timestamp(bounds) => match value {
+                ScalarRef::Timestamp(value) => search(&bounds[range], &value),
+                _ => type_mismatch(),
+            },
+            Bounds::Date(bounds) => match value {
+                ScalarRef::Date(value) => search(&bounds[range], &value),
+                _ => type_mismatch(),
+            },
+            Bounds::String(bounds) => match value {
+                ScalarRef::String(value) => search_indices(
+                    range,
+                    |index| unsafe { bounds.index_unchecked(index) },
+                    value,
+                ),
+                _ => type_mismatch(),
+            },
+            Bounds::Scalar(bounds) => {
+                bounds[range].partition_point(|bound| bound.as_ref() < value) as u32
+            }
         }
     }
 }
@@ -307,37 +261,25 @@ impl fmt::Debug for TypedRangeBounds {
     }
 }
 
-fn search_values<'a, T: Ord + 'a>(
-    values: impl Iterator<Item = &'a T>,
-    bounds: &[T],
-    side: SearchSide,
-) -> Vec<u32> {
-    values.map(|value| search(bounds, value, side)).collect()
+fn search_values<'a, T: Ord + 'a>(values: impl Iterator<Item = &'a T>, bounds: &[T]) -> Vec<u32> {
+    values.map(|value| search(bounds, value)).collect()
 }
 
-fn search<T: Ord>(bounds: &[T], value: &T, side: SearchSide) -> u32 {
-    match side {
-        SearchSide::Lower => bounds.partition_point(|bound| bound < value) as u32,
-        SearchSide::Upper => bounds.partition_point(|bound| bound <= value) as u32,
-    }
+fn search<T: Ord>(bounds: &[T], value: &T) -> u32 {
+    bounds.partition_point(|bound| bound < value) as u32
 }
 
 fn search_indices<'a, U: Ord + ?Sized + 'a>(
     range: Range<usize>,
     get: impl Fn(usize) -> &'a U,
     value: &U,
-    side: SearchSide,
 ) -> u32 {
     let start = range.start;
     let mut left = start;
     let mut right = range.end;
     while left < right {
         let mid = left + (right - left) / 2;
-        let before = match side {
-            SearchSide::Lower => get(mid) < value,
-            SearchSide::Upper => get(mid) <= value,
-        };
-        if before {
+        if get(mid) < value {
             left = mid + 1;
         } else {
             right = mid;
@@ -365,15 +307,14 @@ mod tests {
     use crate::types::StringType;
 
     #[test]
-    fn test_lower_upper_bound_and_empty() {
+    fn test_lower_bound_and_empty() {
         let bounds = TypedRangeBounds::from_scalars(vec![int(10), int(20), int(30)]);
         assert_eq!(bounds.lower_bound(int(20).as_ref()), 1);
-        assert_eq!(bounds.upper_bound(int(20).as_ref()), 2);
 
         let empty = TypedRangeBounds::from_scalars(Vec::new());
         let entry: BlockEntry = Int32Type::from_data(vec![1, 2, 3]).into();
-        assert!(empty.is_empty());
-        assert_eq!(empty.upper_bound_column(&entry, 9), vec![0, 0, 0]);
+        assert_eq!(empty.len(), 0);
+        assert_eq!(empty.lower_bound_column(&entry, 9), vec![0, 0, 0]);
     }
 
     #[test]
@@ -381,7 +322,7 @@ mod tests {
         let bounds = TypedRangeBounds::from_scalars(vec![int(10), int(20), int(30)]);
         let entry: BlockEntry =
             Int32Type::from_opt_data(vec![Some(5), Some(10), None, Some(25), Some(40)]).into();
-        assert_eq!(bounds.upper_bound_column(&entry, 7), vec![0, 1, 7, 2, 3]);
+        assert_eq!(bounds.lower_bound_column(&entry, 7), vec![0, 0, 7, 2, 3]);
     }
 
     #[test]
@@ -392,9 +333,8 @@ mod tests {
         ]);
         let entry: BlockEntry = StringType::from_data(vec!["a", "b", "c", "z"]).into();
         assert_eq!(bounds.lower_bound_column(&entry, 3), vec![0, 0, 1, 2]);
-        assert_eq!(bounds.upper_bound_column(&entry, 3), vec![0, 1, 1, 2]);
-        assert_eq!(bounds.upper_bound_range(ScalarRef::String("c"), 1..2), 0);
-        assert_eq!(bounds.upper_bound_range(ScalarRef::String("d"), 1..2), 1);
+        assert_eq!(bounds.lower_bound_range(ScalarRef::String("c"), 1..2), 0);
+        assert_eq!(bounds.lower_bound_range(ScalarRef::String("e"), 1..2), 1);
     }
 
     #[test]
@@ -406,7 +346,6 @@ mod tests {
             3,
         );
         assert_eq!(bounds.lower_bound_column(&entry, 9), vec![1, 1, 1]);
-        assert_eq!(bounds.upper_bound_column(&entry, 9), vec![2, 2, 2]);
     }
 
     #[test]
@@ -416,7 +355,7 @@ mod tests {
         let bounds = TypedRangeBounds::from_scalars(vec![scalar(100), scalar(200)]);
         let entry: BlockEntry =
             DecimalType::<i64>::from_data_with_size([50, 100, 250], Some(size)).into();
-        assert_eq!(bounds.upper_bound_column(&entry, 9), vec![0, 1, 2]);
+        assert_eq!(bounds.lower_bound_column(&entry, 9), vec![0, 0, 2]);
     }
 
     #[test]
@@ -434,7 +373,6 @@ mod tests {
     fn test_scalar_fallback() {
         let bounds =
             TypedRangeBounds::from_scalars(vec![Scalar::Binary(vec![1]), Scalar::Binary(vec![3])]);
-        assert_eq!(bounds.upper_bound(ScalarRef::Binary(&[1])), 1);
         assert_eq!(bounds.lower_bound(ScalarRef::Binary(&[3])), 1);
     }
 

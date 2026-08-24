@@ -48,18 +48,16 @@ impl<T, R: Rng> FixedSizeSampler<T, R> {
     ///
     /// `value_at` is evaluated only for rows entering the reservoir: every row during the initial
     /// fill, then only the rows selected by Algorithm L.
-    pub fn add_block<F>(&mut self, rows: usize, mut value_at: F) -> bool
+    pub fn add_block<F>(&mut self, rows: usize, mut value_at: F)
     where F: FnMut(usize) -> T {
         let start = self.rows_seen;
         let end = start.checked_add(rows).expect("sample row count overflow");
-        let mut changed = false;
         let mut row = 0;
 
         if self.samples.len() < self.k {
             let take = (self.k - self.samples.len()).min(rows);
             self.samples.extend((0..take).map(&mut value_at));
             row = take;
-            changed = take > 0;
 
             if self.samples.len() == self.k {
                 self.next_sample = (self.k - 1).checked_add(self.core.search());
@@ -74,26 +72,16 @@ impl<T, R: Rng> FixedSizeSampler<T, R> {
             row = sample_index - start;
             let slot = self.core.pos();
             self.samples[slot] = value_at(row);
-            changed = true;
 
             self.core.update_w();
             self.next_sample = sample_index.checked_add(self.core.search());
         }
 
         self.rows_seen = end;
-        changed
     }
 
     pub fn rows_seen(&self) -> usize {
         self.rows_seen
-    }
-
-    pub fn sample_size(&self) -> usize {
-        self.samples.len()
-    }
-
-    pub fn samples(&self) -> &[T] {
-        &self.samples
     }
 
     pub fn into_samples(self) -> Vec<T> {
@@ -170,7 +158,7 @@ mod tests {
     #[test]
     fn test_algorithm_l_known_sample() {
         let sampler = sample_in_blocks(&[100]);
-        assert_eq!(sampler.samples(), &[69, 49, 53, 83, 4, 72, 88, 38, 45, 27]);
+        assert_eq!(sampler.samples, [69, 49, 53, 83, 4, 72, 88, 38, 45, 27]);
         assert_eq!(sampler.rows_seen(), 100);
     }
 
@@ -208,7 +196,7 @@ mod tests {
                 }
 
                 assert_eq!(partitioned.rows_seen(), ROWS, "seed={seed}, k={k}");
-                assert_eq!(partitioned.samples(), expected, "seed={seed}, k={k}");
+                assert_eq!(partitioned.samples, expected, "seed={seed}, k={k}");
             }
         }
     }
@@ -217,15 +205,15 @@ mod tests {
     fn test_reservoir_capacity_is_strict() {
         let mut sampler = FixedSizeSampler::new(5, StdRng::seed_from_u64(11));
         sampler.add_block(10_000, |row| row);
-        assert_eq!(sampler.sample_size(), 5);
-        assert!(sampler.samples().iter().all(|value| *value < 10_000));
+        assert_eq!(sampler.samples.len(), 5);
+        assert!(sampler.samples.iter().all(|value| *value < 10_000));
     }
 
     #[test]
     fn test_input_smaller_than_reservoir_is_preserved() {
         let mut sampler = FixedSizeSampler::new(5, StdRng::seed_from_u64(11));
         sampler.add_block(3, |row| row);
-        assert_eq!(sampler.samples(), &[0, 1, 2]);
+        assert_eq!(sampler.samples, [0, 1, 2]);
         assert_eq!(sampler.rows_seen(), 3);
     }
 
@@ -237,7 +225,7 @@ mod tests {
             materialized.set(materialized.get() + 1);
             row
         });
-        assert_eq!(sampler.sample_size(), 5);
+        assert_eq!(sampler.samples.len(), 5);
         assert!(materialized.get() < 100);
     }
 }
