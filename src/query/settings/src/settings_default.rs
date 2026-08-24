@@ -1493,6 +1493,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=10)),
                 }),
+                ("enable_experiment_new_flight", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable the experimental reconnectable Flight data path.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("network_policy", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
                     desc: "Network policy for all users in the tenant",
