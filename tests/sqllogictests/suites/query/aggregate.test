@@ -116,8 +116,13 @@ settings(enable_decimal_sum_widening=1) select sum(a) filter (where a >= 0), typ
 
 # FILTER lowers to the _if combinator. Applying it to an aggregate that already
 # targets a combinator (sum_if) must be rejected rather than producing sum_if_if.
-statement error FILTER clause is not supported for aggregate combinator
+statement error FILTER clause is not supported for aggregate function
 select sum_if(number, number % 2 = 0) filter (where number > 0) from numbers(10);
+
+# FILTER support follows aggregate features, not whether the name is a base
+# aggregate. sum0 has no _if route.
+statement error FILTER clause is not supported for aggregate function
+select sum0(number) filter (where number > 0) from numbers(10);
 
 query RRT
 select avg(number * number),  avg( (number * number)::Decimal(39, 7) ), typeof(avg( (number * number)::Decimal(39, 7) )) from numbers(100);

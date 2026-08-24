@@ -219,6 +219,7 @@ impl GeographicBuilder {
 
     const ST_COLLECT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -229,6 +230,7 @@ impl GeographicBuilder {
 
     const ST_UNION_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -239,6 +241,7 @@ impl GeographicBuilder {
 
     const ST_INTERSECTION_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -249,6 +252,7 @@ impl GeographicBuilder {
 
     const ST_ENVELOPE_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",

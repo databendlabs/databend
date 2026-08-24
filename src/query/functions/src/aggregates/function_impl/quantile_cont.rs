@@ -102,6 +102,7 @@ impl QuantileContBuilder {
 
     const QUANTILE_CONT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -112,6 +113,7 @@ impl QuantileContBuilder {
 
     const MEDIAN_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",

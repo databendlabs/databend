@@ -1,9 +1,11 @@
 use std::io::Write;
 
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::Symbol;
 use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
 use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
+use databend_common_expression::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal64Type;
@@ -11,6 +13,7 @@ use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use goldenfile::Mint;
 
 use super::aggregate_case_support::eval_aggregate;
@@ -118,4 +121,25 @@ fn test_string_agg_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("string_agg_group_by.txt").unwrap();
     run_string_agg_cases(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_string_agg_registers_distinct_aliases() {
+    let params = [Scalar::String("|".to_string())];
+    for name in [
+        "string_agg_distinct",
+        "listagg_distinct",
+        "group_concat_distinct",
+    ] {
+        let function = AGGR_REGISTRY
+            .resolve(AggregateFunctionRequest {
+                name,
+                params: &params,
+                args_type: &[databend_common_expression::types::DataType::String],
+                distinct: false,
+                order_by: &[],
+            })
+            .unwrap();
+        assert_eq!(function.signature().name, name);
+    }
 }

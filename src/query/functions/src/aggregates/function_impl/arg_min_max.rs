@@ -97,6 +97,7 @@ impl ArgMinMaxBuilder {
 
     const ARG_MIN_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -107,6 +108,7 @@ impl ArgMinMaxBuilder {
 
     const ARG_MAX_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",

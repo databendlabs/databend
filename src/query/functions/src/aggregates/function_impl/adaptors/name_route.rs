@@ -118,6 +118,7 @@ impl DirectNameRoute {
 
     pub(crate) fn into_descriptors(self) -> Vec<AggregateFunctionDescriptor> {
         let route = Arc::new(self);
+        let supports_filter = route.routes.iter().any(|node| node.suffix() == Some("if"));
         route
             .routes
             .iter()
@@ -129,11 +130,10 @@ impl DirectNameRoute {
                     .map(|alias| suffixed_name(alias, suffix))
                     .collect::<Vec<_>>();
                 let builder: Arc<dyn AggregateFunctionBuilder> = route.clone();
+                let mut features = node.features(&route.features);
+                features.supports_filter = suffix.is_none() && supports_filter;
                 let mut descriptor = AggregateFunctionDescriptor::from_builder(name, builder)
-                    .with_metadata(
-                        node.arguments(&route.arguments),
-                        node.features(&route.features),
-                    );
+                    .with_metadata(node.arguments(&route.arguments), features);
                 if !aliases.is_empty() {
                     descriptor = descriptor.with_aliases(aliases);
                 }
@@ -672,7 +672,11 @@ impl DirectRouteNode for StateRoute {
                 .any(|data_type| matches!(data_type, DataType::Nullable(_)));
             StateCombinatorPlan {
                 strip_nullable_input,
-                nullable_input_result_flag: strip_nullable_input && !returns_default,
+                // The nested aggregate state already records whether it has
+                // seen a non-null value. Adding a second flag here would make
+                // `_state` incompatible with the nested state rebuilt by
+                // `_merge`.
+                nullable_input_result_flag: false,
             }
         };
         let features = self
@@ -764,6 +768,12 @@ pub(crate) struct DistinctRoute {
 }
 
 impl DistinctRoute {
+    pub(crate) fn new(build: DirectBuildFn<DistinctCombinator>) -> Self {
+        Self {
+            build: RouteBuild::Direct(build),
+        }
+    }
+
     pub(crate) fn unary(build: UnaryBuildFn<DistinctCombinator>) -> Self {
         Self {
             build: RouteBuild::Unary(build),
@@ -1002,10 +1012,12 @@ mod tests {
         assert_eq!(descriptors[0].aliases, ["test_alias"]);
         assert_eq!(descriptors[0].arguments(), &base_arguments);
         assert!(descriptors[0].features().is_decomposable);
+        assert!(descriptors[0].features().supports_filter);
         assert_eq!(descriptors[1].name, "test_if");
         assert_eq!(descriptors[1].aliases, ["test_alias_if"]);
         assert_eq!(descriptors[1].arguments(), &if_arguments);
         assert!(descriptors[1].features().is_decomposable);
+        assert!(!descriptors[1].features().supports_filter);
     }
 
     #[test]
@@ -1025,6 +1037,11 @@ mod tests {
             features: features.clone(),
         })
         .then(DescriptorNode {
+            suffix: Some("if"),
+            arguments: AggregateArgumentsPattern::if_condition(arguments.clone()),
+            features: features.clone(),
+        })
+        .then(DescriptorNode {
             suffix: Some("state"),
             arguments,
             features,
@@ -1033,9 +1050,17 @@ mod tests {
 
         assert!(registry.contains("test"));
         assert!(registry.contains("test_alias"));
+        assert!(registry.contains("test_if"));
+        assert!(registry.contains("test_alias_if"));
         assert!(registry.contains("test_state"));
         assert!(registry.contains("test_alias_state"));
         assert!(!registry.contains("test_distinct"));
+        for name in ["test", "test_alias"] {
+            assert!(registry.descriptors(name)[0].features().supports_filter);
+        }
+        for name in ["test_if", "test_alias_if", "test_state", "test_alias_state"] {
+            assert!(!registry.descriptors(name)[0].features().supports_filter);
+        }
     }
 
     #[test]

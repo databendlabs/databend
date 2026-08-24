@@ -67,6 +67,7 @@ impl JsonObjectAggBuilder {
 
     const JSON_OBJECT_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -429,10 +430,14 @@ impl JsonObjectAggBuilder {
         }
 
         type State = JsonObjectAggState<AnyType>;
+        let state = AggregateJsonObjectAggImplementation::<AnyType, State>::state_description();
         build.create(
-            DataType::Variant,
-            AggregateJsonObjectAggImplementation::<AnyType, State>::state_description(),
-            AggregateJsonObjectAggImplementation::<AnyType, State>::default(),
+            DataType::Variant.wrap_nullable(),
+            state.with_null_flag(),
+            AggregateMultiArgOrNullImplementation::new(AggregateJsonObjectAggImplementation::<
+                AnyType,
+                State,
+            >::default()),
         )
     }
 }

@@ -18,7 +18,6 @@ use std::marker::PhantomData;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
@@ -41,6 +40,7 @@ use simple_hll::HyperLogLog;
 
 use super::FunctionFactory;
 use super::adaptors::*;
+use crate::aggregates::common::extract_number_param;
 
 struct ApproxCountDistinctBuilder;
 
@@ -70,6 +70,7 @@ inventory::submit! {
 impl ApproxCountDistinctBuilder {
     const APPROX_COUNT_DISTINCT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -229,13 +230,6 @@ impl ApproxCountDistinctBuilder {
     }
 
     fn extract_f64_param(param: Scalar) -> Result<f64> {
-        let scalar = param.as_ref();
-        let ScalarRef::Number(value) = scalar else {
-            return Err(ErrorCode::BadDataValueType(format!(
-                "approx_count_distinct error rate must be numeric, got {:?}",
-                scalar.infer_data_type()
-            )));
-        };
-        Ok(value.to_f64().0)
+        Ok(extract_number_param::<databend_common_expression::types::F64>(param)?.0)
     }
 }

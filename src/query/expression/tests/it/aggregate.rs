@@ -154,6 +154,7 @@ impl FunctionInstance for TrackedHeapAggregateFunction {
     fn features(&self) -> &FunctionFeatures {
         static FEATURES: FunctionFeatures = FunctionFeatures {
             is_decomposable: false,
+            supports_filter: false,
             sort_policy: databend_common_expression::aggregate::aggregate_function::SortPolicy::Unsupported,
             distinct_policy: databend_common_expression::aggregate::aggregate_function::DistinctPolicy::Unsupported,
             category: "",

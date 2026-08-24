@@ -3,7 +3,11 @@ use std::io::Write;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::FromData;
+use databend_common_expression::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use goldenfile::Mint;
 
 use super::aggregate_case_support::eval_aggregate;
@@ -90,4 +94,23 @@ fn test_v2_count_if_suffix_names_are_case_insensitive() -> Result<()> {
         BooleanType::from_data(vec![true, false, true, true, false]).into();
 
     assert_v2_direct_matches_serialized("COUNT_IF", std::slice::from_ref(&conditions), 5)
+}
+
+#[test]
+fn test_v2_count_reports_argument_count_mismatch() {
+    let args_type = [
+        DataType::Number(NumberDataType::UInt8),
+        DataType::Number(NumberDataType::UInt8),
+    ];
+    let error = match AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        name: "count",
+        params: &[],
+        args_type: &args_type,
+        distinct: false,
+        order_by: &[],
+    }) {
+        Ok(_) => panic!("count with two arguments should fail"),
+        Err(error) => error,
+    };
+    assert_eq!(error.code(), 1028);
 }

@@ -82,6 +82,7 @@ impl StddevBuilder {
 
     const STDDEV_POP_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -92,6 +93,7 @@ impl StddevBuilder {
 
     const STDDEV_SAMP_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",

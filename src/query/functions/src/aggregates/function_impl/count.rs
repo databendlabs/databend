@@ -128,6 +128,7 @@ impl CountBuilder {
 
     const COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -138,6 +139,7 @@ impl CountBuilder {
 
     const COUNT_DISTINCT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -148,6 +150,7 @@ impl CountBuilder {
 
     const COUNT_IF_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -158,6 +161,7 @@ impl CountBuilder {
 
     const COUNT_STATE_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",

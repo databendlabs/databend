@@ -129,7 +129,14 @@ description: FILTER on an aggregate that already targets a combinator (sum_if) s
 sql: sum_if(number, flag) FILTER (WHERE flag)
 status: error
 code: 1065
-message: FILTER clause is not supported for aggregate combinator `sum_if`
+message: FILTER clause is not supported for aggregate function `sum_if`
+
+=== aggregate_without_if_route_filter_reports_unsupported ===
+description: FILTER should be rejected when the aggregate does not advertise support for the _if route.
+sql: sum0(number) FILTER (WHERE flag)
+status: error
+code: 1065
+message: FILTER clause is not supported for aggregate function `sum0`
 
 === distinct_aggregate_order_by_reports_unsupported ===
 description: Parser accepts DISTINCT aggregate ORDER BY, but execution semantics are not wired yet.

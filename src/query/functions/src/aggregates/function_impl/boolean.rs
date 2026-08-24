@@ -73,6 +73,7 @@ impl BooleanBuilder {
 
     const BOOL_AND_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -83,6 +84,7 @@ impl BooleanBuilder {
 
     const BOOL_OR_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",

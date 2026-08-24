@@ -85,6 +85,7 @@ impl MomentsBuilder {
 
     const SKEWNESS_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -95,6 +96,7 @@ impl MomentsBuilder {
 
     const KURTOSIS_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",

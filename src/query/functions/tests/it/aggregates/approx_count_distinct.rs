@@ -1,10 +1,13 @@
 use std::io::Write;
 
+use databend_common_exception::Result;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::*;
 use goldenfile::Mint;
 
 use super::aggregate_case_support::eval_aggregate;
+use super::aggregate_function_v2_support::eval_v2_aggr_with_params;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -102,4 +105,15 @@ fn test_approx_count_distinct_group_by() {
         .new_goldenfile("approx_count_distinct_group_by.txt")
         .unwrap();
     run_approx_count_distinct_cases(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_approx_count_distinct_accepts_decimal_error_rate() -> Result<()> {
+    let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
+    let params = [Scalar::Decimal(DecimalScalar::Decimal64(
+        2,
+        DecimalSize::new_unchecked(1, 1),
+    ))];
+    eval_v2_aggr_with_params("approx_count_distinct", &params, &entries, 4, false)?;
+    Ok(())
 }

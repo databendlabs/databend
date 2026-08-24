@@ -682,6 +682,7 @@ impl ArrayMovingBuilder {
         let arguments = Self::array_moving_arguments();
         let features = FunctionFeatures {
             is_decomposable: true,
+            supports_filter: false,
             sort_policy: SortPolicy::Unsupported,
             distinct_policy: DistinctPolicy::Unsupported,
             category: "Aggregate",
@@ -706,6 +707,7 @@ impl ArrayMovingBuilder {
         let arguments = Self::array_moving_arguments();
         let features = FunctionFeatures {
             is_decomposable: true,
+            supports_filter: false,
             sort_policy: SortPolicy::Unsupported,
             distinct_policy: DistinctPolicy::Unsupported,
             category: "Aggregate",

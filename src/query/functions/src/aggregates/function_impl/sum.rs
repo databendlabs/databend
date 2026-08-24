@@ -184,6 +184,7 @@ impl SumBuilder {
 
     const SUM_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -194,6 +195,7 @@ impl SumBuilder {
 
     const SUM_DISTINCT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -204,6 +206,7 @@ impl SumBuilder {
 
     const SUM_ZERO_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -214,6 +217,7 @@ impl SumBuilder {
 
     const SUM_IF_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -224,6 +228,7 @@ impl SumBuilder {
 
     const STATE_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",

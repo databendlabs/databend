@@ -311,6 +311,7 @@ pub enum DistinctPolicy {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FunctionFeatures {
     pub is_decomposable: bool,
+    pub supports_filter: bool,
     pub sort_policy: SortPolicy,
     pub distinct_policy: DistinctPolicy,
     pub category: &'static str,
@@ -752,11 +753,6 @@ impl AggregateFunctionRegistry {
         !self.descriptors(name).is_empty()
     }
 
-    pub fn contains_base(&self, name: &str) -> bool {
-        let name = name.to_lowercase();
-        self.functions.contains_key(&name)
-    }
-
     pub fn is_decomposable(&self, name: &str) -> bool {
         self.descriptors(name)
             .iter()
@@ -771,6 +767,17 @@ impl AggregateFunctionRegistry {
                 "Unsupported AggregateFunction: {requested_name}"
             ))
         })?;
+
+        if !descriptors.iter().any(|descriptor| {
+            descriptor
+                .arguments()
+                .accepts_arity(request.args_type.len())
+        }) {
+            return Err(ErrorCode::NumberArgumentsNotMatch(format!(
+                "Aggregate function {requested_name} does not accept {} arguments",
+                request.args_type.len()
+            )));
+        }
 
         let mut last_error = None;
         for descriptor in descriptors {

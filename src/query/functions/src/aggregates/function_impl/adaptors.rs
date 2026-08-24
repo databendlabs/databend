@@ -475,6 +475,7 @@ mod tests {
             },
             FunctionFeatures {
                 is_decomposable: false,
+                supports_filter: false,
                 sort_policy: SortPolicy::Required,
                 distinct_policy: DistinctPolicy::Required,
                 ..Default::default()

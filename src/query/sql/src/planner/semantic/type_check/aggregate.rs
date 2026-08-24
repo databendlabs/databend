@@ -107,12 +107,14 @@ impl<'a> CoreExprArena<'a> {
                         .set_span(span),
                 );
             }
-            // FILTER appends `_if`, but the factory only resolves one combinator
-            // suffix over a base aggregate. On a combinator call like `sum_if`
-            // this would yield `sum_if_if`, so reject it instead.
-            if !self.aggregate_function_registry.contains_base(&func_name) {
+            let supports_filter = self
+                .aggregate_function_registry
+                .descriptors(&func_name)
+                .iter()
+                .any(|descriptor| descriptor.features().supports_filter);
+            if !supports_filter {
                 return Err(ErrorCode::SemanticError(format!(
-                    "FILTER clause is not supported for aggregate combinator `{func_name}`"
+                    "FILTER clause is not supported for aggregate function `{func_name}`"
                 ))
                 .set_span(span));
             }
@@ -419,8 +421,8 @@ where A: TypeCheckAdapter
                 &BUILTIN_FUNCTIONS,
             )?;
 
-            let _ = arguments.pop();
-            let _ = arg_types.pop();
+            arguments.remove(1);
+            arg_types.remove(1);
             vec![Scalar::Number(NumberScalar::UInt64(max_num_buckets))]
         } else {
             params

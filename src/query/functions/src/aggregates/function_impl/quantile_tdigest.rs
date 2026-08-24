@@ -100,6 +100,7 @@ impl QuantileTDigestBuilder {
 
     const QUANTILE_TDIGEST_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -110,6 +111,7 @@ impl QuantileTDigestBuilder {
 
     const MEDIAN_TDIGEST_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",

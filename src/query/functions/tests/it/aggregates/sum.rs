@@ -354,6 +354,23 @@ fn test_v2_sum_merge_and_merge_state() -> Result<()> {
 }
 
 #[test]
+fn test_v2_sum_merge_nullable_state() -> Result<()> {
+    let entries = [UInt64Type::from_opt_data(vec![Some(1), None, Some(3)]).into()];
+    let state = eval_v2_aggr("sum_state", &entries, 3, false)?;
+    let DataType::AggregateState(metadata) = &state.1 else {
+        panic!("sum_state should return an AggregateState type");
+    };
+    assert_eq!(metadata.physical_type(), &state.0.data_type());
+
+    let merged = eval_v2_state_merge("sum_merge", &[], &state)?;
+    assert_eq!(
+        unsafe { merged.0.index_unchecked(0) },
+        ScalarRef::Number(NumberScalar::UInt64(4))
+    );
+    Ok(())
+}
+
+#[test]
 fn test_v2_sum_merge_null_state_and_const_state() -> Result<()> {
     let null_entries = [BlockEntry::new_const_column(
         DataType::Null,

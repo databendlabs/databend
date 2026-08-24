@@ -120,6 +120,12 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "sum_if(number, flag) FILTER (WHERE flag)",
         },
         SqlTestCase {
+            name: "aggregate_without_if_route_filter_reports_unsupported",
+            description: "FILTER should be rejected when the aggregate does not advertise support for the _if route.",
+            setup_sqls: &[],
+            sql: "sum0(number) FILTER (WHERE flag)",
+        },
+        SqlTestCase {
             name: "distinct_aggregate_order_by_reports_unsupported",
             description: "Parser accepts DISTINCT aggregate ORDER BY, but execution semantics are not wired yet.",
             setup_sqls: &[],
@@ -210,7 +216,7 @@ async fn test_aggregate_filter_uses_if_combinator() -> Result<()> {
         panic!("expected aggregate function");
     };
     assert_eq!(agg.func_name, "histogram_if");
-    assert_eq!(agg.args.len(), 3);
+    assert_eq!(agg.args.len(), 2);
     assert_eq!(agg.params, vec![Scalar::Number(NumberScalar::UInt64(2))]);
 
     Ok(())

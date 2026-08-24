@@ -98,6 +98,7 @@ impl BitmapBuilder {
 
     const BITMAP_CONSTRUCT_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -108,6 +109,7 @@ impl BitmapBuilder {
 
     const BITMAP_AND_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -118,6 +120,7 @@ impl BitmapBuilder {
 
     const BITMAP_NOT_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -128,6 +131,7 @@ impl BitmapBuilder {
 
     const BITMAP_OR_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -138,6 +142,7 @@ impl BitmapBuilder {
 
     const BITMAP_XOR_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -148,6 +153,7 @@ impl BitmapBuilder {
 
     const BITMAP_UNION_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -158,6 +164,7 @@ impl BitmapBuilder {
 
     const BITMAP_INTERSECT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -168,6 +175,7 @@ impl BitmapBuilder {
 
     const BITMAP_XOR_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -178,6 +186,7 @@ impl BitmapBuilder {
 
     const INTERSECT_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: true,
+        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -910,7 +919,15 @@ impl BitmapBuilder {
         I: AggrImpl + Default,
         R: BitmapResult,
     {
+        let has_nullable_input = build.args_type().iter().any(DataType::is_nullable_or_null);
         let implementation = I::default();
+        if has_nullable_input {
+            return build.create(
+                R::return_type(),
+                AggregateBitmapState::state_description(),
+                AggregateMultiArgSkipNullImplementation::new(implementation),
+            );
+        }
         build.create(
             R::return_type(),
             AggregateBitmapState::state_description(),

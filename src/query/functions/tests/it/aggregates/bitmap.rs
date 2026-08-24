@@ -1,6 +1,9 @@
 use std::io::Write;
 
+use databend_common_exception::Result;
 use databend_common_expression::FromData;
+use databend_common_expression::types::UInt64Type;
+use databend_common_functions::aggregates::eval_aggr;
 use goldenfile::Mint;
 
 use super::aggregate_case_fixtures as fixtures;
@@ -61,4 +64,11 @@ fn test_bitmap_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("bitmap_group_by.txt").unwrap();
     run_bitmap_cases(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_bitmap_construct_agg_accepts_nullable_input() -> Result<()> {
+    let entries = [UInt64Type::from_opt_data(vec![Some(1), None, Some(3)]).into()];
+    eval_aggr("bitmap_construct_agg", vec![], &entries, 3, vec![])?;
+    Ok(())
 }

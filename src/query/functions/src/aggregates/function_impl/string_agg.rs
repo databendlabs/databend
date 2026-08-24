@@ -65,6 +65,7 @@ impl StringAggBuilder {
 
     const STRING_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Optional,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
@@ -193,6 +194,7 @@ impl StringAggBuilder {
         .then(PlainRoute::new(StringAggBuilder::create))
         .then(IfRoute::new(StringAggBuilder::create))
         .then(StateRoute::new(StringAggBuilder::create))
+        .then(DistinctRoute::new(StringAggBuilder::create))
     }
 
     fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {

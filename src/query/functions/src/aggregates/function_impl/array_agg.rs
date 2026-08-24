@@ -67,6 +67,7 @@ impl ArrayAggBuilder {
 
     const ARRAY_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
         is_decomposable: false,
+        supports_filter: false,
         sort_policy: SortPolicy::Optional,
         distinct_policy: DistinctPolicy::Unsupported,
         category: "Aggregate",
