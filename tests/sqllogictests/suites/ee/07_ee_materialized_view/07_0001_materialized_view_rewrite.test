@@ -396,5 +396,37 @@ select id, amount from range_source where amount < 30
 2 11
 3 20
 
+# Disabling the rewrite setting keeps the query on the source table.
+statement ok
+set enable_materialized_view_rewrite = 0
+
+query T
+explain select a, b, c, sum(t), count(t)
+from source
+group by a, b, c
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.source<slt:ignore>
+
+query IITII rowsort
+select a, b, c, sum(t), count(t)
+from source
+group by a, b, c
+----
+1 10 other 300 2
+1 10 xxxxxxx 27 3
+2 20 other 70 1
+2 20 xxxxxxx 7 1
+3 30 xxxxxxx 8 1
+
+statement ok
+set enable_materialized_view_rewrite = 1
+
+query T
+explain select a, b, c, sum(t), count(t)
+from source
+group by a, b, c
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>
+
 statement ok
 drop database test_materialized_view_rewrite

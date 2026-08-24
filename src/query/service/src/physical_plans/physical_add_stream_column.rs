@@ -22,6 +22,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
@@ -211,10 +212,12 @@ impl AddStreamColumn {
                         func_name: "is_not_null".to_string(),
                         params: vec![],
                         arguments: vec![origin_stream_column_scalar_expr.clone()],
+                        return_type: Box::new(DataType::Boolean),
                     }),
                     origin_stream_column_scalar_expr,
                     current_stream_column_scalar_expr,
                 ],
+                return_type: Box::new(stream_column.data_type()),
             });
 
             exprs.push(

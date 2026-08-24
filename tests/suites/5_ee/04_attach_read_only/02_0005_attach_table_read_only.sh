@@ -49,6 +49,20 @@ echo "desc attach_read_only;" | bendsql_connect_root
 echo "expects one row, 3 columns"
 echo "select * from attach_read_only order by number;" | bendsql_connect_root
 
+echo "system.tables uses attach-time schema and statistics when refresh is disabled"
+echo "settings (enable_table_schema_refresh=0) select total_columns, num_rows from system.tables where database='default' and name='attach_read_only';" | bendsql_connect_root
+echo "system.tables refreshes schema and statistics when refresh is enabled"
+echo "settings (enable_table_schema_refresh=1) select total_columns, num_rows from system.tables where database='default' and name='attach_read_only';" | bendsql_connect_root
+echo "system.columns hides source-side added columns when refresh is disabled"
+echo "settings (enable_table_schema_refresh=0) select name from system.columns where database='default' and table='attach_read_only' order by name;" | bendsql_connect_root
+echo "system.columns reflects source-side added columns when refresh is enabled"
+echo "settings (enable_table_schema_refresh=1) select name from system.columns where database='default' and table='attach_read_only' order by name;" | bendsql_connect_root
+echo "information_schema.columns should reflect the added columns"
+echo "settings (enable_table_schema_refresh=1) select column_name from information_schema.columns where table_schema='default' and table_name='attach_read_only' order by column_name;" | bendsql_connect_root
+
+echo "refresh does NOT persist to meta server: disable refresh again, should still see frozen schema"
+echo "settings (enable_table_schema_refresh=0) select name from system.columns where database='default' and table='attach_read_only' order by name;" | bendsql_connect_root
+
 
 echo "alter table drop column"
 echo "alter table base drop column c1;" | bendsql_connect_root

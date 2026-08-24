@@ -587,3 +587,26 @@ body BEGIN RETURN a; END;
 
 statement ok
 DROP PROCEDURE test_desc_type_case(STRING, Int32);
+
+statement ok
+CREATE OR REPLACE PROCEDURE hdr() RETURNS INT NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    LET watermark_ts := (
+        SELECT COALESCE(
+            (SELECT w.number
+             FROM numbers(3) AS w
+             WHERE w.number = 1),
+            7
+        )
+    );
+    RETURN watermark_ts;
+END;
+$$;
+
+query I
+call PROCEDURE hdr();
+----
+1
+
+statement ok
+DROP PROCEDURE hdr();

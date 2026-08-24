@@ -43,6 +43,7 @@ pub use super::config::CacheStorageTypeConfig;
 use super::config::Config;
 pub use super::config::DiskCacheConfig;
 pub use super::config::DiskCacheKeyReloadPolicy;
+pub use super::config::LineageConfig;
 pub use super::config::MetaConfig;
 use super::config::QueryConfig as OuterQueryConfig;
 pub use super::config::TaskConfig;
@@ -56,6 +57,8 @@ use crate::BuiltInConfig;
 pub struct InnerConfig {
     // Query engine config.
     pub query: QueryConfig,
+
+    pub lineage: LineageConfig,
 
     pub log: LogConfig,
 
@@ -167,6 +170,7 @@ impl Debug for InnerConfig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("InnerConfig")
             .field("query", &self.query.sanitize())
+            .field("lineage", &self.lineage)
             .field("log", &self.log)
             .field("meta", &self.meta)
             .field("storage", &self.storage)

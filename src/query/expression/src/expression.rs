@@ -669,6 +669,16 @@ impl<Index: ColumnIndex> Expr<Index> {
         }
     }
 
+    pub fn into_data_type(self) -> DataType {
+        match self {
+            Expr::Constant(Constant { data_type, .. }) => data_type,
+            Expr::ColumnRef(ColumnRef { data_type, .. }) => data_type,
+            Expr::Cast(Cast { dest_type, .. }) => dest_type,
+            Expr::FunctionCall(FunctionCall { return_type, .. }) => return_type,
+            Expr::LambdaFunctionCall(LambdaFunctionCall { return_type, .. }) => return_type,
+        }
+    }
+
     pub fn data_type_remove_generics(&self) -> DataType {
         match self {
             Expr::Constant(Constant { data_type, .. }) => data_type.clone(),

@@ -4750,7 +4750,6 @@ version = "0.1.0"
 dependencies = [
  "databend-common-ast",
  "databend-common-exception",
- "derive-visitor",
  "fastrace",
  "goldenfile",
  "tokio",
@@ -5314,6 +5313,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "bstr",
+ "bytes",
  "chrono",
  "csv-core",
  "databend-common-ast",

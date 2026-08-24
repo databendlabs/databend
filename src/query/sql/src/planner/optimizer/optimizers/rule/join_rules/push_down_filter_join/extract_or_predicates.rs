@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use itertools::Itertools;
 
 use crate::ColumnSet;
@@ -149,6 +150,7 @@ fn make_and_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
         func_name: "and_filters".to_string(),
         params: vec![],
         arguments: scalars,
+        return_type: Box::new(DataType::Boolean),
     }
     .into()
 }
@@ -163,6 +165,7 @@ fn make_or_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
         func_name: "or_filters".to_string(),
         params: vec![],
         arguments: scalars,
+        return_type: Box::new(DataType::Boolean),
     }
     .into()
 }

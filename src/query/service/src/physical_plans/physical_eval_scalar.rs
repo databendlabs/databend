@@ -224,9 +224,7 @@ impl PhysicalPlanBuilder {
             // The item defines this output index. Only request the child column
             // when the defining expression itself references that index.
             required.remove(&s.index);
-            s.scalar.used_columns().iter().for_each(|c| {
-                required.insert(*c);
-            })
+            s.scalar.collect_used_columns(&mut required);
         }
         // 2. Build physical plan.
         if used.is_empty() {
@@ -395,12 +393,14 @@ impl PhysicalPlanBuilder {
                         }
                     }
 
-                    srf_item.scalar = ScalarExpr::FunctionCall(FunctionCall {
+                    let function = FunctionCall {
                         span: srf_func.span,
                         func_name: srf_func.func_name.clone(),
-                        params: visitor.params.into_iter().collect::<Vec<_>>(),
+                        params: visitor.params.into_iter().collect(),
                         arguments: srf_func.arguments.clone(),
-                    });
+                        return_type: srf_func.return_type.clone(),
+                    };
+                    srf_item.scalar = ScalarExpr::FunctionCall(function);
                 }
             }
         }

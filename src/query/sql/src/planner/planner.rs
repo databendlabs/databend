@@ -247,7 +247,9 @@ impl Planner {
         self.plan_stmt_with_materialized_view_rewrite(
             stmt,
             force_disable_distributed_optimization,
-            true,
+            self.ctx
+                .get_settings()
+                .get_enable_materialized_view_rewrite()?,
         )
         .await
     }

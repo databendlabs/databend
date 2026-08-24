@@ -157,12 +157,12 @@ where A: super::TypeCheckAdapter
         span: Span,
         func_name: &str,
         args: &[ScalarExpr],
-        arg_types: &[DataType],
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        if !self.should_try_rewrite_variant_function(func_name)
-            || arg_types.is_empty()
-            || arg_types[0].remove_nullable() != DataType::Variant
-        {
+        if !self.should_try_rewrite_variant_function(func_name) {
+            return None;
+        }
+        let first_arg_type = args.first()?.data_type();
+        if first_arg_type.remove_nullable() != DataType::Variant {
             return None;
         }
         if args.len() != 2 {
@@ -275,7 +275,7 @@ where A: super::TypeCheckAdapter
         paths: Vec<(CoreExprId, OwnedKeyPath)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let last_index = paths.len().saturating_sub(1);
-        let mut data_type = scalar.data_type()?;
+        let mut data_type = scalar.data_type().into_owned();
         for (index, (path, _)) in paths.into_iter().enumerate() {
             let box (path_scalar, _) = self.resolve_core(arena, path)?;
             let func_name = if string_result && index == last_index {
@@ -360,6 +360,12 @@ where A: super::TypeCheckAdapter
         data_type: &TableDataType,
         is_try: bool,
     ) -> ScalarExpr {
+        let scalar_is_nullable = scalar.data_type().is_nullable_or_null();
+        let return_type = if is_try || data_type.is_nullable() || scalar_is_nullable {
+            DataType::Nullable(Box::new(DataType::Variant))
+        } else {
+            DataType::Variant
+        };
         match data_type.remove_nullable() {
             TableDataType::Tuple {
                 fields_name,
@@ -375,11 +381,14 @@ where A: super::TypeCheckAdapter
                     }
                     .into();
 
+                    let field_return_type =
+                        ScalarExpr::passthrough_nullable_type(DataType::from(field_type), [scalar]);
                     let value = FunctionCall {
                         span,
                         params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
+                        return_type: Box::new(field_return_type),
                     }
                     .into();
 
@@ -403,6 +412,11 @@ where A: super::TypeCheckAdapter
                     params: vec![],
                     arguments: args,
                     func_name,
+                    return_type: Box::new(if is_try {
+                        DataType::Variant.wrap_nullable()
+                    } else {
+                        DataType::Variant
+                    }),
                 }
                 .into()
             }
@@ -417,6 +431,7 @@ where A: super::TypeCheckAdapter
                     params: vec![],
                     arguments: vec![scalar.clone()],
                     func_name,
+                    return_type: Box::new(return_type),
                 }
                 .into()
             }
@@ -498,29 +513,41 @@ where A: super::TypeCheckAdapter
                     _ => unreachable!(),
                 };
                 table_data_type = fields_type.get(idx).unwrap().clone();
+                let return_type =
+                    ScalarExpr::passthrough_nullable_type(DataType::from(&table_data_type), [
+                        &scalar,
+                    ]);
                 scalar = FunctionCall {
                     span: expr_span,
                     func_name: "get".to_string(),
                     params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                     arguments: vec![scalar.clone()],
+                    return_type: Box::new(return_type),
                 }
                 .into();
                 continue;
             }
             let box (path_scalar, _) = self.resolve_literal(span, &path_lit)?;
-            if let TableDataType::Array(inner_type) = table_data_type {
-                table_data_type = *inner_type;
-            }
+            table_data_type = match table_data_type {
+                TableDataType::Array(inner_type) => *inner_type,
+                TableDataType::Map(inner_type) => match inner_type.remove_nullable() {
+                    TableDataType::Tuple { fields_type, .. } => fields_type[1].clone(),
+                    _ => unreachable!("map inner type must be a tuple"),
+                },
+                TableDataType::EmptyArray | TableDataType::EmptyMap => TableDataType::Null,
+                data_type => data_type,
+            };
             table_data_type = table_data_type.wrap_nullable();
             scalar = FunctionCall {
                 span: path_scalar.span(),
                 func_name: "get".to_string(),
                 params: vec![],
                 arguments: vec![scalar.clone(), path_scalar],
+                return_type: Box::new(DataType::from(&table_data_type)),
             }
             .into();
         }
-        let return_type = scalar.data_type()?;
+        let return_type = scalar.data_type().into_owned();
         Ok(Box::new((scalar, return_type)))
     }
 
@@ -644,16 +671,21 @@ where A: super::TypeCheckAdapter
                 // inner column is not exist in view, desugar it into a `get` function.
                 let mut scalar: ScalarExpr = BoundColumnRef { span, column }.into();
                 while let Some((idx, table_data_type)) = index_with_types.pop_front() {
+                    let return_type =
+                        ScalarExpr::passthrough_nullable_type(DataType::from(&table_data_type), [
+                            &scalar,
+                        ]);
                     scalar = FunctionCall {
                         span,
                         params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
+                        return_type: Box::new(return_type),
                     }
                     .into();
                     scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
                 }
-                let return_type = scalar.data_type()?;
+                let return_type = scalar.data_type().into_owned();
                 Ok(Box::new((scalar, return_type)))
             }
         }
@@ -768,6 +800,7 @@ where A: super::TypeCheckAdapter
                 func_name: "get_by_keypath".to_string(),
                 params: vec![],
                 arguments: args,
+                return_type: Box::new(DataType::Nullable(Box::new(DataType::Variant))),
             }),
             DataType::Nullable(Box::new(DataType::Variant)),
         )))

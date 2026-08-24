@@ -377,6 +377,7 @@ impl SubqueryDecorrelatorOptimizer {
                 for arg in func.arguments.iter_mut() {
                     outer = self.try_rewrite_subquery(arg, outer, false)?;
                 }
+                func.refresh_return_type()?;
                 Ok(outer)
             }
             ScalarExpr::UDFCall(udf) => {
@@ -498,6 +499,7 @@ impl SubqueryDecorrelatorOptimizer {
                         func_name: "is_not_null".to_string(),
                         params: vec![],
                         arguments: vec![column_ref.clone()],
+                        return_type: Box::new(DataType::Boolean),
                     });
                     let cast_column_ref_to_uint64 = ScalarExpr::CastExpr(CastExpr {
                         span: subquery.span,
@@ -519,6 +521,9 @@ impl SubqueryDecorrelatorOptimizer {
                             func_name: "if".to_string(),
                             params: vec![],
                             arguments: vec![is_not_null, cast_column_ref_to_uint64, zero],
+                            return_type: Box::new(
+                                DataType::Number(NumberDataType::UInt64).wrap_nullable(),
+                            ),
                         })),
                         target_type: Box::new(
                             DataType::Number(NumberDataType::UInt64).wrap_nullable(),
@@ -536,7 +541,9 @@ impl SubqueryDecorrelatorOptimizer {
                             func_name: "is_true".to_string(),
                             params: vec![],
                             arguments: vec![column_ref],
+                            return_type: Box::new(DataType::Boolean),
                         })],
+                        return_type: Box::new(DataType::Boolean),
                     })
                 } else if subquery.typ == SubqueryType::Exists {
                     // null value will consider as false
@@ -545,6 +552,7 @@ impl SubqueryDecorrelatorOptimizer {
                         func_name: "is_true".to_string(),
                         params: vec![],
                         arguments: vec![column_ref],
+                        return_type: Box::new(DataType::Boolean),
                     })
                 } else {
                     column_ref
@@ -637,6 +645,7 @@ impl SubqueryDecorrelatorOptimizer {
                             value: Scalar::Number(NumberScalar::UInt64(1)),
                         }),
                     ],
+                    return_type: Box::new(DataType::Boolean),
                 };
 
                 let agg_s_expr = Arc::new(subquery_expr.build_unary(agg));
@@ -692,11 +701,12 @@ impl SubqueryDecorrelatorOptimizer {
                     .table_index(output_column.table_index)
                     .build(),
                 });
-                let left_condition = if left_condition_base.data_type()? == *subquery.data_type {
-                    left_condition_base
-                } else {
-                    wrap_cast(&left_condition_base, &subquery.data_type)
-                };
+                let left_condition =
+                    if left_condition_base.data_type().as_ref() == subquery.data_type.as_ref() {
+                        left_condition_base
+                    } else {
+                        wrap_cast(&left_condition_base, &subquery.data_type)
+                    };
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 let (right_condition, is_non_equi_condition) =
@@ -709,7 +719,7 @@ impl SubqueryDecorrelatorOptimizer {
                             subquery.span,
                             right_condition,
                             left_condition,
-                        ));
+                        )?);
                         (vec![], vec![], vec![other_condition])
                     };
                 // Add a marker column to save comparison result.
@@ -732,7 +742,7 @@ impl SubqueryDecorrelatorOptimizer {
                     .zip(right_conditions.iter())
                     .enumerate()
                 {
-                    if l.data_type()?.is_nullable() || r.data_type()?.is_nullable() {
+                    if l.data_type().is_nullable() || r.data_type().is_nullable() {
                         is_null_equal.push(i);
                     }
                 }

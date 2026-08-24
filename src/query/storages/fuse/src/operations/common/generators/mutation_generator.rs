@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -127,7 +128,8 @@ impl SnapshotGenerator for MutationGenerator {
                     if matches!(
                         self.mutation_kind,
                         MutationKind::Compact | MutationKind::Recluster
-                    ) {
+                    ) && !is_materialized_view_engine(&table_info.meta.engine)
+                    {
                         // for compaction, a basic but very important verification:
                         // the number of rows should be the same
                         assert_eq!(

@@ -208,10 +208,7 @@ pub fn log_lineage_object_deletion(ctx: &Arc<QueryContext>, object_id: u64) {
 }
 
 fn lineage_enabled() -> bool {
-    GlobalConfig::instance()
-        .log
-        .history
-        .is_table_enabled("lineage_history")
+    GlobalConfig::instance().lineage.enabled()
 }
 
 #[cfg(test)]
@@ -232,6 +229,9 @@ pub(crate) fn build_semantic_edges(lineage: QueryLineage) -> Vec<SemanticLineage
     for lineage_target in lineage.targets {
         let target = endpoint_from_relation(lineage.kind, false, &lineage_target.relation);
         for lineage_source in lineage_target.sources {
+            if is_ignored_system_source(&lineage_source.relation) {
+                continue;
+            }
             let source = endpoint_from_relation(lineage.kind, true, &lineage_source.relation);
             if source.lineage_key == target.lineage_key {
                 continue;
@@ -260,6 +260,14 @@ pub(crate) fn build_semantic_edges(lineage: QueryLineage) -> Vec<SemanticLineage
     }
 
     entries
+}
+
+fn is_ignored_system_source(relation: &QueryLineageRelation) -> bool {
+    relation.catalog_type == Some(CatalogType::Default)
+        && relation.catalog.eq_ignore_ascii_case("default")
+        && ["system", "information_schema"]
+            .iter()
+            .any(|database| relation.database.eq_ignore_ascii_case(database))
 }
 
 fn into_log_entry(edge: SemanticLineageEdge, process: LineageProcessMetadata) -> LineageLogEntry {
