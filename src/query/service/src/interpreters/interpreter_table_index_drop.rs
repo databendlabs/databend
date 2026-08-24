@@ -23,6 +23,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::DropTableIndexPlan;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_materialized_view_license;
 use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -66,10 +67,11 @@ impl Interpreter for DropTableIndexInterpreter {
             ast::TableIndexType::Spatial => TableIndexType::Spatial,
         };
 
-        if matches!(index_type, TableIndexType::Vector)
-            && let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await?
-        {
-            validate_drop_vector_index(&table_meta.data, &index_name)?;
+        if let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await? {
+            check_materialized_view_license(&self.ctx, &table_meta.data.engine)?;
+            if matches!(index_type, TableIndexType::Vector) {
+                validate_drop_vector_index(&table_meta.data, &index_name)?;
+            }
         }
 
         let drop_index_req = DropTableIndexReq {

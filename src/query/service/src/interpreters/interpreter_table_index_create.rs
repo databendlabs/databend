@@ -22,6 +22,7 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::CreateTableIndexPlan;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_materialized_view_license;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -55,6 +56,9 @@ impl Interpreter for CreateTableIndexInterpreter {
         let table_id = self.plan.table_id;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
+        if let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await? {
+            check_materialized_view_license(&self.ctx, &table_meta.data.engine)?;
+        }
         let index_type = match self.plan.index_type {
             ast::TableIndexType::Aggregating => {
                 return Err(ErrorCode::InvalidArgument(
