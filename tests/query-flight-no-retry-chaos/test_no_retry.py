@@ -272,6 +272,7 @@ def connect_mysql() -> Any:
 
 def assert_default_no_retry(connection: Any) -> None:
     expected_zero = {
+        "enable_experiment_new_flight",
         "flight_connection_max_retry_times",
         "flight_client_keep_alive_time_secs",
         "flight_client_keep_alive_interval_secs",
@@ -295,6 +296,14 @@ def assert_default_no_retry(connection: Any) -> None:
                 for name in sorted(settings)
             )
         )
+    finally:
+        cursor.close()
+
+
+def enable_new_flight(connection: Any) -> None:
+    cursor = connection.cursor()
+    try:
+        cursor.execute("SET enable_experiment_new_flight = 1")
     finally:
         cursor.close()
 
@@ -434,6 +443,7 @@ class NoRetryHarness:
         connection = connect_mysql()
         try:
             assert_default_no_retry(connection)
+            enable_new_flight(connection)
             task = QueryTask(connection, sql)
             task.start()
             identity = wait_for_query(self._control_cursor, marker, task)
@@ -460,6 +470,7 @@ class NoRetryHarness:
         cursor = None
         try:
             assert_default_no_retry(connection)
+            enable_new_flight(connection)
             cursor = connection.cursor()
             wait_for_cluster(cursor)
             cursor.execute("SELECT count(), sum(number) FROM numbers_mt(1000000)")
