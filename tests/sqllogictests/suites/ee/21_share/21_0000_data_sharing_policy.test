@@ -52,7 +52,7 @@ ALTER TABLE share_policy_db_e2e.row_secured DROP ROW ACCESS POLICY share_row_pol
 statement ok
 GRANT SELECT ON TABLE share_policy_db_e2e.row_secured TO SHARE share_policy_e2e
 
-statement ok
+statement error (?s).*Cannot attach a row access or masking policy to shared table.*
 ALTER TABLE share_policy_db_e2e.row_secured ADD ROW ACCESS POLICY share_row_policy_e2e ON (region)
 
 statement ok
@@ -67,8 +67,10 @@ DROP DATABASE IF EXISTS share_policy_consumer_db_e2e
 statement ok
 CREATE DATABASE share_policy_consumer_db_e2e FROM SHARE share_policy_provider_e2e.share_policy_e2e
 
-statement error (?s).*do not support provider row access or masking policies.*
-SELECT * FROM share_policy_consumer_db_e2e.row_secured
+query I
+SELECT count(*) FROM share_policy_consumer_db_e2e.row_secured
+----
+0
 
 statement ok
 set sandbox_tenant = 'share_policy_provider_e2e'
@@ -81,9 +83,6 @@ ALTER TABLE share_policy_db_e2e.mask_secured MODIFY COLUMN secret SET MASKING PO
 
 statement error (?s).*do not support provider row access or masking policies.*
 GRANT SELECT ON TABLE share_policy_db_e2e.mask_secured TO SHARE share_policy_e2e
-
-statement ok
-ALTER TABLE share_policy_db_e2e.row_secured DROP ROW ACCESS POLICY share_row_policy_e2e
 
 statement ok
 ALTER TABLE share_policy_db_e2e.mask_secured MODIFY COLUMN secret UNSET MASKING POLICY
