@@ -28,6 +28,8 @@
 //!   identities are recorded in `dispatched` ("whoever merges keeps the
 //!   books"). They cannot be recomputed later: a re-merge across prefetch
 //!   batches could produce a segment that was never dispatched downstream.
+//!   `read` consumes such identities; `discard` retires the ones no pending
+//!   upper range still needs.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -54,9 +56,9 @@ use crate::range_read::RangeReader;
 ///   must reuse these exact identities (identity rule R1), chunk membership
 ///   is recovered arithmetically via the grid.
 /// - `pending_reads`: how many times each range was prefetched and not yet
-///   read — prefetch twice, read twice. A consumed chunk stays parked while
-///   an unfinished read still overlaps it, so ranges sharing a boundary
-///   chunk never round-trip through the asynchronous cache admission.
+///   retired by `read` or `discard`. A consumed chunk stays parked while an
+///   unfinished use still overlaps it, so ranges sharing a boundary chunk
+///   never round-trip through the asynchronous cache admission.
 ///
 /// `populate` gates only the admission side: with it off, fetched chunks are
 /// never written to the disk cache, while lookups still serve existing
@@ -170,14 +172,15 @@ impl<R: RangeReader> DiskCacheRangeReader<R> {
         *self.pending_reads.entry(range.clone()).or_insert(0) += 1;
     }
 
-    /// One announced `read` of this range happened, if any was pending.
-    fn finish_pending_read(&mut self, range: &Range<u64>) {
-        if let Some(count) = self.pending_reads.get_mut(range) {
-            *count -= 1;
-            if *count == 0 {
-                self.pending_reads.remove(range);
-            }
+    fn finish_pending_use(&mut self, range: &Range<u64>) -> bool {
+        let Some(count) = self.pending_reads.get_mut(range) else {
+            return false;
+        };
+        *count -= 1;
+        if *count == 0 {
+            self.pending_reads.remove(range);
         }
+        true
     }
 
     /// Whether a pending read still needs bytes from this chunk. The scan
@@ -186,6 +189,43 @@ impl<R: RangeReader> DiskCacheRangeReader<R> {
         self.pending_reads
             .keys()
             .any(|range| range.start < chunk.end && chunk.start < range.end)
+    }
+
+    /// Retire downstream miss segments after this layer's deterministic chunk
+    /// split shows that no pending upper range still needs their bytes.
+    fn discard_unused_segments(&mut self) {
+        let mut unused = Vec::new();
+        for segment in &self.dispatched {
+            let mut needed = false;
+            for chunk in self.grid.chunks_of(segment) {
+                if !self.parked.contains_key(&chunk) && self.has_pending_read(&chunk) {
+                    needed = true;
+                    break;
+                }
+            }
+            if !needed {
+                unused.push(segment.clone());
+            }
+        }
+
+        for segment in unused {
+            self.dispatched.remove(&segment);
+            self.next.discard(segment);
+        }
+    }
+
+    fn remove_unused_parked(&mut self) {
+        let mut unused = Vec::new();
+        for chunk in self.parked.keys() {
+            if !self.has_pending_read(chunk) && self.covered_by_dispatched(chunk).is_none() {
+                unused.push(chunk.clone());
+            }
+        }
+        for chunk in unused {
+            if let Some(data) = self.parked.remove(&chunk) {
+                self.held_bytes = self.held_bytes.saturating_sub(data.len());
+            }
+        }
     }
 
     /// Merge misses into downstream segments, capped at `max_segment_size`.
@@ -332,7 +372,7 @@ impl<R: RangeReader> RangeReader for DiskCacheRangeReader<R> {
 
         // Count down this range's pending reads; chunks it shares with
         // other pending reads stay parked below.
-        self.finish_pending_read(&range);
+        self.finish_pending_use(&range);
 
         if range.end > self.grid.file_len() {
             return Err(ErrorCode::BadArguments(format!(
@@ -383,13 +423,24 @@ impl<R: RangeReader> RangeReader for DiskCacheRangeReader<R> {
             };
             parts.extend(data.slice(start..end));
         }
+        self.remove_unused_parked();
         Ok(Buffer::from(parts))
+    }
+
+    fn discard(&mut self, range: Range<u64>) {
+        if range.is_empty() || !self.finish_pending_use(&range) {
+            return;
+        }
+        self.discard_unused_segments();
+        self.remove_unused_parked();
     }
 }
 
 #[cfg(test)]
 #[allow(clippy::single_range_in_vec_init)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::Mutex;
     use std::time::Duration;
     use std::time::Instant;
 
@@ -475,6 +526,143 @@ mod tests {
             true,
         )
         .unwrap()
+    }
+
+    #[derive(Default)]
+    struct TailLog {
+        prefetched: Vec<Vec<Range<u64>>>,
+        read: Vec<Range<u64>>,
+        discarded: Vec<Range<u64>>,
+    }
+
+    struct RecordingTail {
+        content: Bytes,
+        log: Arc<Mutex<TailLog>>,
+    }
+
+    impl RangeReader for RecordingTail {
+        fn prefetch(&mut self, ranges: &[Range<u64>]) -> bool {
+            self.log.lock().unwrap().prefetched.push(ranges.to_vec());
+            true
+        }
+
+        fn discard(&mut self, range: Range<u64>) {
+            self.log.lock().unwrap().discarded.push(range);
+        }
+
+        fn read(&mut self, range: Range<u64>) -> Result<Buffer> {
+            self.log.lock().unwrap().read.push(range.clone());
+            Ok(Buffer::from(
+                self.content.slice(range.start as usize..range.end as usize),
+            ))
+        }
+    }
+
+    #[test]
+    fn test_discard_propagates_only_unused_merged_segment() {
+        let (_dir, cache) = new_cache_without_population();
+        let log = Arc::new(Mutex::new(TailLog::default()));
+        let tail = RecordingTail {
+            content: Bytes::from_static(CONTENT),
+            log: log.clone(),
+        };
+        let mut reader = DiskCacheRangeReader::new(
+            cache,
+            tail,
+            "discard".to_string(),
+            CONTENT.len() as u64,
+            4,
+            16,
+            usize::MAX,
+            false,
+        )
+        .unwrap();
+
+        assert!(reader.prefetch(&[0..6, 6..10]));
+        assert_eq!(log.lock().unwrap().prefetched, vec![vec![0..12]]);
+
+        reader.discard(0..6);
+        assert!(log.lock().unwrap().discarded.is_empty());
+        assert_eq!(reader.dispatched, HashSet::from([0..12]));
+
+        reader.discard(6..10);
+        assert_eq!(log.lock().unwrap().discarded, vec![0..12]);
+        assert!(reader.dispatched.is_empty());
+        assert!(reader.pending_reads.is_empty());
+        assert!(reader.parked.is_empty());
+        assert_eq!(reader.held_bytes, 0);
+    }
+
+    #[test]
+    fn test_discard_keeps_shared_segment_for_live_read() {
+        let (_dir, cache) = new_cache_without_population();
+        let log = Arc::new(Mutex::new(TailLog::default()));
+        let tail = RecordingTail {
+            content: Bytes::from_static(CONTENT),
+            log: log.clone(),
+        };
+        let mut reader = DiskCacheRangeReader::new(
+            cache,
+            tail,
+            "mixed-discard".to_string(),
+            CONTENT.len() as u64,
+            4,
+            16,
+            usize::MAX,
+            false,
+        )
+        .unwrap();
+
+        assert!(reader.prefetch(&[0..6, 6..10]));
+        reader.discard(0..6);
+        assert_eq!(
+            reader.read(6..10).unwrap().to_bytes().as_ref(),
+            &CONTENT[6..10]
+        );
+
+        let log = log.lock().unwrap();
+        assert_eq!(log.prefetched, vec![vec![0..12]]);
+        assert_eq!(log.read, vec![0..12]);
+        assert!(log.discarded.is_empty());
+        assert!(reader.dispatched.is_empty());
+        assert!(reader.pending_reads.is_empty());
+        assert!(reader.parked.is_empty());
+        assert_eq!(reader.held_bytes, 0);
+    }
+
+    #[test]
+    fn test_discard_releases_hits_without_touching_next_layer() {
+        let (_dir, cache) = new_cache_without_population();
+        seed(&cache, "hit-discard", 0..4, &CONTENT[0..4]);
+        seed(&cache, "hit-discard", 4..8, &CONTENT[4..8]);
+        let log = Arc::new(Mutex::new(TailLog::default()));
+        let tail = RecordingTail {
+            content: Bytes::from_static(CONTENT),
+            log: log.clone(),
+        };
+        let mut reader = DiskCacheRangeReader::new(
+            cache,
+            tail,
+            "hit-discard".to_string(),
+            CONTENT.len() as u64,
+            4,
+            16,
+            usize::MAX,
+            false,
+        )
+        .unwrap();
+
+        assert!(reader.prefetch(&[0..8]));
+        assert_eq!(reader.held_bytes, 8);
+        reader.discard(0..8);
+
+        let log = log.lock().unwrap();
+        assert_eq!(log.prefetched, vec![Vec::<Range<u64>>::new()]);
+        assert!(log.discarded.is_empty());
+        assert!(log.read.is_empty());
+        assert!(reader.pending_reads.is_empty());
+        assert!(reader.parked.is_empty());
+        assert_eq!(reader.held_bytes, 0);
     }
 
     #[test]

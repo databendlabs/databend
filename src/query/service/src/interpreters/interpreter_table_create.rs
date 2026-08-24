@@ -79,6 +79,7 @@ use crate::interpreters::common::table_option_validation::is_valid_analyze_histo
 use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_size;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
+use crate::interpreters::common::table_option_validation::is_valid_block_thresholds;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_type;
 use crate::interpreters::common::table_option_validation::is_valid_change_tracking;
@@ -93,7 +94,6 @@ use crate::interpreters::common::table_option_validation::is_valid_option_of_typ
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_block_reduction;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
-use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
@@ -551,7 +551,7 @@ impl CreateTableInterpreter {
         };
 
         is_valid_block_per_segment(&table_meta.options)?;
-        is_valid_row_per_block(&table_meta.options)?;
+        is_valid_block_thresholds(&table_meta.options)?;
         is_valid_recluster_depth(&table_meta.options)?;
         is_valid_recluster_block_reduction(&table_meta.options)?;
         // check bloom_index_columns.

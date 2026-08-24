@@ -150,17 +150,12 @@ impl VerticalReclusterSource {
                         source_meta.row_count
                     ))
                 })?;
-                let settings = self.ctx.get_settings();
                 let thresholds = self.table.get_block_thresholds();
-                let max_output_rows =
-                    (settings.get_max_block_size()? as usize).min(thresholds.max_rows_per_block);
-                let max_output_bytes =
-                    (settings.get_max_block_bytes()? as usize).min(thresholds.max_bytes_per_block);
                 let output_rows = output_rows_by_size(
                     source_rows,
                     self.task.total_bytes,
-                    max_output_rows,
-                    max_output_bytes,
+                    thresholds.max_rows_per_block,
+                    thresholds.max_bytes_per_block,
                 );
                 self.execute_sort_blocks(
                     schema,
@@ -416,12 +411,12 @@ impl VerticalReclusterSource {
             ));
         }
 
-        let max_output_bytes = self.table.get_block_thresholds().max_bytes_per_block;
+        let thresholds = self.table.get_block_thresholds();
         let output_rows = output_rows_by_size(
             total_rows,
             self.task.total_bytes,
-            total_rows,
-            max_output_bytes,
+            thresholds.max_rows_per_block,
+            thresholds.max_bytes_per_block,
         );
         let output_ranges = ranges(total_rows, output_rows);
 
@@ -1503,6 +1498,14 @@ mod tests {
     use super::*;
     use crate::io::FuseLowLevelBlockWriteOptions;
     use crate::io::WriteSettings;
+
+    #[test]
+    fn test_output_rows_by_size_allows_large_table_thresholds() {
+        assert_eq!(
+            output_rows_by_size(2_000_000, 512 * 1024 * 1024, 2_000_000, 1024 * 1024 * 1024,),
+            2_000_000
+        );
+    }
 
     #[test]
     fn test_output_rows_by_size_respects_row_and_byte_limits() {

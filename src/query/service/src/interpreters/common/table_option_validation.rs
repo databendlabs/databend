@@ -22,7 +22,6 @@ use chrono::Duration;
 use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::TableSchemaRef;
-use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_settings::Settings;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
@@ -268,17 +267,29 @@ pub fn is_valid_block_per_segment(
     Ok(())
 }
 
-pub fn is_valid_row_per_block(
+pub fn is_valid_block_thresholds(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
-    // check row_per_block can not be over 1000000.
-    if let Some(value) = options.get(FUSE_OPT_KEY_ROW_PER_BLOCK) {
-        let row_per_block = value.parse::<u64>()?;
-        let error_str = "invalid row_per_block option, can't be over 1000000";
-
-        if row_per_block > DEFAULT_BLOCK_ROW_COUNT as u64 {
-            error!("{}", error_str);
-            return Err(ErrorCode::TableOptionInvalid(error_str));
+    for option in [
+        FUSE_OPT_KEY_ROW_PER_BLOCK,
+        FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+        FUSE_OPT_KEY_FILE_SIZE,
+    ] {
+        let Some(raw) = options.get(option) else {
+            continue;
+        };
+        let value = raw.parse::<usize>().map_err(|error| {
+            ErrorCode::TableOptionInvalid(format!("invalid {option} option {raw}: {error}"))
+        })?;
+        if value == 0 {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "invalid {option} option, must be positive"
+            )));
+        }
+        if option == FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD && value > usize::MAX / 2 {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "invalid {option} option, value is too large"
+            )));
         }
     }
     Ok(())
@@ -570,6 +581,37 @@ fn is_valid_bool_opt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_block_threshold_options_accept_large_values() {
+        let options = BTreeMap::from([
+            (
+                FUSE_OPT_KEY_ROW_PER_BLOCK.to_string(),
+                "2000000".to_string(),
+            ),
+            (
+                FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD.to_string(),
+                (512usize * 1024 * 1024).to_string(),
+            ),
+            (
+                FUSE_OPT_KEY_FILE_SIZE.to_string(),
+                (64usize * 1024 * 1024).to_string(),
+            ),
+        ]);
+        assert!(is_valid_block_thresholds(&options).is_ok());
+    }
+
+    #[test]
+    fn test_block_threshold_options_reject_zero() {
+        for option in [
+            FUSE_OPT_KEY_ROW_PER_BLOCK,
+            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            FUSE_OPT_KEY_FILE_SIZE,
+        ] {
+            let options = BTreeMap::from([(option.to_string(), "0".to_string())]);
+            assert!(is_valid_block_thresholds(&options).is_err(), "{option}");
+        }
+    }
 
     #[test]
     fn test_materialized_view_accepts_index_granularity() {

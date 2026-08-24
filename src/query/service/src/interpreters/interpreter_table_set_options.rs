@@ -73,6 +73,7 @@ use crate::interpreters::common::table_option_validation::is_valid_analyze_histo
 use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_size;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
+use crate::interpreters::common::table_option_validation::is_valid_block_thresholds;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_type;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
@@ -85,7 +86,6 @@ use crate::interpreters::common::table_option_validation::is_valid_index_granula
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_block_reduction;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
-use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -121,8 +121,7 @@ impl Interpreter for SetOptionsInterpreter {
         let mut options_map = HashMap::new();
         // check block_per_segment
         is_valid_block_per_segment(&self.plan.set_options)?;
-        // check row_per_block
-        is_valid_row_per_block(&self.plan.set_options)?;
+        is_valid_block_thresholds(&self.plan.set_options)?;
         is_valid_recluster_depth(&self.plan.set_options)?;
         is_valid_recluster_block_reduction(&self.plan.set_options)?;
         // check data_retention_period

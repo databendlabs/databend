@@ -199,7 +199,12 @@ impl FuseBlockWriter {
             None => 0,
         };
         self.row_count >= self.properties.block_thresholds.min_rows_per_block
-            || self.block_size >= self.properties.block_thresholds.min_bytes_per_block * 2
+            || self.block_size
+                >= self
+                    .properties
+                    .block_thresholds
+                    .min_bytes_per_block
+                    .saturating_mul(2)
             || (file_size >= self.properties.block_thresholds.min_compressed_per_block
                 && self.block_size >= self.properties.block_thresholds.min_bytes_per_block)
     }

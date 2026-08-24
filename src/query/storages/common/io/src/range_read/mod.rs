@@ -34,29 +34,18 @@ pub use self::operator::OperatorRangeReader;
 
 /// One link in the ranged-read chain.
 ///
-/// Identity rule: ranges are exact-match keys between adjacent layers. A layer
-/// must `read` with the same ranges it forwarded via `prefetch`; deterministic
-/// splitting may be recomputed, only merge decisions need bookkeeping.
+/// A layer that changes range identities owns the mapping to the ranges it
+/// forwarded downstream.
 pub trait RangeReader: Send {
-    /// Side-effectful hint: try to load `ranges` ahead of time.
-    ///
-    /// Each accepted hint announces one future `read` of its range: hint a
-    /// range twice and both reads are served from the same prefetched data.
-    /// Every announced read must eventually happen (or the reader be
-    /// dropped); data for reads that never come stays held. A saturated
-    /// layer may silently drop hints; correctness is preserved because
-    /// `read` falls through on demand. Returns `false` when the chain is
-    /// saturated and the caller should pause feeding until some `read`s
-    /// complete. I/O errors raised
-    /// while hinting are attached to the affected range and reported by the
-    /// corresponding `read`. An empty slice is a legal capacity probe.
+    /// Hint future reads. Each accepted hint must be retired by `read`,
+    /// `discard`, or dropping the reader; duplicate hints announce duplicate
+    /// uses of the same fetch. Returns `false` when saturated.
     fn prefetch(&mut self, ranges: &[Range<u64>]) -> bool;
 
-    /// On-demand read: the only correctness contract.
-    ///
-    /// Returns immediately when the range is ready, blocks while it is in
-    /// flight, and fetches on the spot when it was never hinted (or the hint
-    /// was dropped).
+    /// Retire one accepted hint without waiting for storage I/O.
+    fn discard(&mut self, range: Range<u64>);
+
+    /// Read a range, fetching it on demand when no hint was accepted.
     fn read(&mut self, range: Range<u64>) -> Result<Buffer>;
 }
 

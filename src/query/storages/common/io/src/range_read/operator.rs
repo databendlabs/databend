@@ -27,6 +27,9 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::*;
+use futures::future::AbortHandle;
+use futures::future::AbortRegistration;
+use futures::future::Abortable;
 use opendal::Buffer;
 use opendal::Operator;
 
@@ -34,71 +37,27 @@ use crate::ReadSettings;
 use crate::range_read::RangeReader;
 
 struct FetchedData {
-    range: Range<u64>,
     data: Buffer,
     io_time: Duration,
     #[cfg(test)]
     io_thread: std::thread::ThreadId,
 }
 
-/// Dumb executor: receive a range, issue one ranged read, echo it back with
-/// its identity. Zero range math; stops on the first error or when either
-/// channel closes.
-async fn remote_fetch_worker(
-    op: Operator,
-    path: String,
-    req_rx: async_channel::Receiver<Range<u64>>,
-    data_tx: async_channel::Sender<Result<FetchedData>>,
-) {
-    let reader = match op.reader(&path).await {
-        Ok(reader) => reader,
-        Err(error) => {
-            let _ = data_tx.send(Err(error.into())).await;
-            return;
-        }
-    };
-    while let Ok(range) = req_rx.recv().await {
-        let start = Instant::now();
-        let result = reader.read(range.start..range.end).await;
-        let io_time = start.elapsed();
-        let message = match result {
-            Ok(data) => {
-                let expected = (range.end - range.start) as usize;
-                if data.len() == expected {
-                    Ok(FetchedData {
-                        range,
-                        data,
-                        io_time,
-                        #[cfg(test)]
-                        io_thread: std::thread::current().id(),
-                    })
-                } else {
-                    Err(ErrorCode::StorageOther(format!(
-                        "OpenDAL read for {path} returned {} bytes, expected {expected} for range {range:?}",
-                        data.len()
-                    )))
-                }
-            }
-            Err(error) => Err(error.into()),
-        };
-        let failed = message.is_err();
-        if data_tx.send(message).await.is_err() || failed {
-            return;
-        }
-    }
-}
+type FetchRequest = (
+    Range<u64>,
+    async_channel::Sender<Result<FetchedData>>,
+    AbortRegistration,
+);
 
 enum SequentialOutput {
     Empty,
     Slice { task: Range<u64>, sub: Range<usize> },
 }
 
-/// One prefetched range: `data` is `None` while the fetch is in flight;
-/// `pending_reads` counts accepted hints — each `read` consumes one and the
-/// entry is removed at zero, so hinting a range twice serves two reads from
-/// one fetch.
 struct PrefetchSlot {
     data: Option<Buffer>,
+    result_rx: async_channel::Receiver<Result<FetchedData>>,
+    abort_handle: AbortHandle,
     pending_reads: usize,
 }
 
@@ -114,8 +73,7 @@ struct PrefetchSlot {
 /// are converged once with [`RangeMerger`] (the shell merges, so the shell
 /// keeps the caller-to-task books) and results are returned in caller order.
 pub struct OperatorRangeReader {
-    req_tx: async_channel::Sender<Range<u64>>,
-    data_rx: async_channel::Receiver<Result<FetchedData>>,
+    req_tx: async_channel::Sender<FetchRequest>,
     prefetch_map: HashMap<Range<u64>, PrefetchSlot>,
     max_unconsumed: usize,
     poisoned: Option<ErrorCode>,
@@ -128,16 +86,61 @@ pub struct OperatorRangeReader {
 }
 
 impl OperatorRangeReader {
+    async fn remote_fetch_worker(
+        op: Operator,
+        path: String,
+        req_rx: async_channel::Receiver<FetchRequest>,
+    ) {
+        let reader = match op.reader(&path).await {
+            Ok(reader) => reader,
+            Err(error) => {
+                let error: ErrorCode = error.into();
+                while let Ok((_, result_tx, _)) = req_rx.recv().await {
+                    let _ = result_tx.try_send(Err(error.clone()));
+                }
+                return;
+            }
+        };
+
+        while let Ok((range, result_tx, abort_registration)) = req_rx.recv().await {
+            let start = Instant::now();
+            let result =
+                Abortable::new(reader.read(range.start..range.end), abort_registration).await;
+            let Ok(result) = result else {
+                continue;
+            };
+            let io_time = start.elapsed();
+            let message = match result {
+                Ok(data) => {
+                    let expected = (range.end - range.start) as usize;
+                    if data.len() == expected {
+                        Ok(FetchedData {
+                            data,
+                            io_time,
+                            #[cfg(test)]
+                            io_thread: std::thread::current().id(),
+                        })
+                    } else {
+                        Err(ErrorCode::StorageOther(format!(
+                            "OpenDAL read for {path} returned {} bytes, expected {expected} for range {range:?}",
+                            data.len()
+                        )))
+                    }
+                }
+                Err(error) => Err(error.into()),
+            };
+            let _ = result_tx.try_send(message);
+        }
+    }
+
     /// Create a bare chain tail. `max_unconsumed` bounds in-flight plus
     /// arrived-but-unread ranges; hints beyond it are dropped.
     pub fn new(op: Operator, path: String, max_unconsumed: usize) -> Self {
         let max_unconsumed = max_unconsumed.max(1);
         let (req_tx, req_rx) = async_channel::unbounded();
-        let (data_tx, data_rx) = async_channel::bounded(max_unconsumed);
-        GlobalIORuntime::instance().spawn(remote_fetch_worker(op, path, req_rx, data_tx));
+        drop(GlobalIORuntime::instance().spawn(Self::remote_fetch_worker(op, path, req_rx)));
         Self {
             req_tx,
-            data_rx,
             prefetch_map: HashMap::new(),
             max_unconsumed,
             poisoned: None,
@@ -256,40 +259,22 @@ impl OperatorRangeReader {
     /// Send one range to the fetch worker and account for it.
     /// Returns false when the worker is gone.
     fn dispatch(&mut self, range: &Range<u64>) -> bool {
-        metrics_inc_remote_io_seeks_after_merged(1);
-        metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
-        if self.req_tx.try_send(range.clone()).is_err() {
+        let (result_tx, result_rx) = async_channel::bounded(1);
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+        let request = (range.clone(), result_tx, abort_registration);
+        if self.req_tx.try_send(request).is_err() {
             return false;
         }
+
+        metrics_inc_remote_io_seeks_after_merged(1);
+        metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
         self.prefetch_map.insert(range.clone(), PrefetchSlot {
             data: None,
+            result_rx,
+            abort_handle,
             pending_reads: 1,
         });
         true
-    }
-
-    /// Block until the next fetched range arrives and file it into
-    /// `prefetch_map`. Poisons the reader on the first error.
-    fn drain_one(&mut self) -> Result<()> {
-        match self.data_rx.recv_blocking() {
-            Ok(Ok(fetched)) => {
-                metrics_inc_remote_io_read_milliseconds(fetched.io_time.as_millis() as u64);
-                if let Some(slot) = self.prefetch_map.get_mut(&fetched.range) {
-                    slot.data = Some(fetched.data);
-                }
-                Ok(())
-            }
-            Ok(Err(error)) => {
-                self.poisoned = Some(error.clone());
-                Err(error)
-            }
-            Err(_) => {
-                let error =
-                    ErrorCode::Internal("operator range reader fetch worker exited unexpectedly");
-                self.poisoned = Some(error.clone());
-                Err(error)
-            }
-        }
     }
 
     #[cfg(test)]
@@ -308,8 +293,6 @@ impl RangeReader for OperatorRangeReader {
                 continue;
             }
             if let Some(slot) = self.prefetch_map.get_mut(range) {
-                // A repeated hint announces one more read of the same
-                // fetch; it consumes no extra capacity and is never dropped.
                 slot.pending_reads += 1;
                 continue;
             }
@@ -336,52 +319,211 @@ impl RangeReader for OperatorRangeReader {
                 return Err(error);
             }
         }
-        loop {
-            let arrived = match self.prefetch_map.get(&range) {
-                Some(slot) => slot.data.is_some(),
-                None => unreachable!("dispatched above"),
-            };
-            if !arrived {
-                self.drain_one()?;
-                continue;
-            }
 
-            let Some(slot) = self.prefetch_map.get_mut(&range) else {
-                unreachable!("checked above")
-            };
-            slot.pending_reads -= 1;
-            if slot.pending_reads > 0 {
-                let Some(data) = slot.data.clone() else {
-                    unreachable!("checked above")
-                };
-                return Ok(data);
+        if self
+            .prefetch_map
+            .get(&range)
+            .is_some_and(|slot| slot.data.is_none())
+        {
+            let result_rx = self
+                .prefetch_map
+                .get(&range)
+                .expect("operator range was dispatched above")
+                .result_rx
+                .clone();
+            match result_rx.recv_blocking() {
+                Ok(Ok(fetched)) => {
+                    metrics_inc_remote_io_read_milliseconds(fetched.io_time.as_millis() as u64);
+                    self.prefetch_map
+                        .get_mut(&range)
+                        .expect("operator range cannot retire during read")
+                        .data = Some(fetched.data);
+                }
+                Ok(Err(error)) => {
+                    self.prefetch_map.remove(&range);
+                    self.poisoned = Some(error.clone());
+                    return Err(error);
+                }
+                Err(_) => {
+                    self.prefetch_map.remove(&range);
+                    let error =
+                        ErrorCode::Internal("operator range reader fetch task exited unexpectedly");
+                    self.poisoned = Some(error.clone());
+                    return Err(error);
+                }
             }
-            let Some(PrefetchSlot {
-                data: Some(data), ..
-            }) = self.prefetch_map.remove(&range)
-            else {
-                unreachable!("checked above")
-            };
-            return Ok(data);
         }
+
+        let slot = self
+            .prefetch_map
+            .get_mut(&range)
+            .expect("operator range was dispatched above");
+        slot.pending_reads -= 1;
+        if slot.pending_reads > 0 {
+            return Ok(slot
+                .data
+                .as_ref()
+                .expect("completed operator range has data")
+                .clone());
+        }
+
+        let slot = self
+            .prefetch_map
+            .remove(&range)
+            .expect("last operator range use owns its slot");
+        Ok(slot.data.expect("completed operator range has data"))
+    }
+
+    fn discard(&mut self, range: Range<u64>) {
+        let Some(slot) = self.prefetch_map.get_mut(&range) else {
+            return;
+        };
+        slot.pending_reads -= 1;
+        if slot.pending_reads != 0 {
+            return;
+        }
+
+        slot.abort_handle.abort();
+        self.prefetch_map.remove(&range);
     }
 }
 
 impl Drop for OperatorRangeReader {
     fn drop(&mut self) {
+        for slot in self.prefetch_map.values() {
+            slot.abort_handle.abort();
+        }
         self.req_tx.close();
-        self.data_rx.close();
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
     use std::thread;
     use std::time::Duration;
+
+    use bytes::Bytes;
+    use databend_common_base::runtime::Thread;
+    use opendal::OperatorBuilder;
+    use opendal::raw::Access;
+    use opendal::raw::AccessorInfo;
+    use opendal::raw::OpRead;
+    use opendal::raw::RpRead;
 
     use super::*;
     use crate::init_test_runtime;
     use crate::range_read::test_util::*;
+
+    #[derive(Debug)]
+    struct BlockingFirstReadAccessor {
+        content: Bytes,
+        calls: AtomicUsize,
+    }
+
+    impl BlockingFirstReadAccessor {
+        fn new(content: &'static [u8]) -> Self {
+            Self {
+                content: Bytes::from_static(content),
+                calls: AtomicUsize::new(0),
+            }
+        }
+
+        fn calls(&self) -> usize {
+            self.calls.load(Ordering::Acquire)
+        }
+    }
+
+    impl Access for BlockingFirstReadAccessor {
+        type Reader = Buffer;
+        type Writer = ();
+        type Lister = ();
+        type Deleter = ();
+
+        fn info(&self) -> std::sync::Arc<AccessorInfo> {
+            let info = AccessorInfo::default();
+            info.set_native_capability(opendal::Capability {
+                read: true,
+                ..Default::default()
+            });
+            info.into()
+        }
+
+        async fn read(&self, _path: &str, args: OpRead) -> opendal::Result<(RpRead, Self::Reader)> {
+            if self.calls.fetch_add(1, Ordering::AcqRel) == 0 {
+                futures::future::pending::<()>().await;
+            }
+            let range = args.range();
+            let start = range.offset() as usize;
+            let end = start + range.size().unwrap() as usize;
+            Ok((RpRead::new(), Buffer::from(self.content.slice(start..end))))
+        }
+    }
+
+    #[test]
+    fn test_discard_does_not_block_same_range_redispatch() {
+        init_test_runtime();
+        let accessor = std::sync::Arc::new(BlockingFirstReadAccessor::new(b"data"));
+        let op = OperatorBuilder::new(accessor.clone()).finish();
+        let mut reader = OperatorRangeReader::new(op, "cancel".to_string(), 1);
+
+        let range = 0..4;
+        assert!(!reader.prefetch(std::slice::from_ref(&range)));
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while accessor.calls() == 0 {
+            assert!(Instant::now() < deadline, "prefetch did not start");
+            thread::yield_now();
+        }
+
+        let (discarded_tx, discarded_rx) = std::sync::mpsc::sync_channel(1);
+        let discarded_range = range.clone();
+        let discard_thread = Thread::spawn(move || {
+            reader.discard(discarded_range);
+            discarded_tx.send(reader).unwrap();
+        });
+        let mut reader = discarded_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("discard waited for storage I/O");
+        discard_thread.join().unwrap();
+        assert_eq!(reader.unconsumed(), 0);
+
+        assert!(!reader.prefetch(std::slice::from_ref(&range)));
+        assert_eq!(
+            RangeReader::read(&mut reader, range)
+                .unwrap()
+                .to_bytes()
+                .as_ref(),
+            b"data"
+        );
+        assert_eq!(accessor.calls(), 2);
+    }
+
+    #[test]
+    fn test_discard_retires_one_duplicate_hint() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(b"data", false);
+        let mut reader = OperatorRangeReader::new(
+            recording_operator(accessor.clone()),
+            "duplicate-discard".to_string(),
+            1,
+        );
+
+        let range = 0..4;
+        assert!(!reader.prefetch(std::slice::from_ref(&range)));
+        assert!(!reader.prefetch(std::slice::from_ref(&range)));
+        reader.discard(range.clone());
+        assert_eq!(reader.unconsumed(), 1);
+        assert_eq!(
+            RangeReader::read(&mut reader, range)
+                .unwrap()
+                .to_bytes()
+                .as_ref(),
+            b"data"
+        );
+        assert_eq!(accessor.read_ranges(), vec![0..4]);
+        assert_eq!(reader.unconsumed(), 0);
+    }
 
     #[test]
     fn test_sequential_roundtrip_with_unordered_and_empty_ranges() {
@@ -601,7 +743,7 @@ mod tests {
     }
 
     #[test]
-    fn test_data_channel_stays_bounded_and_drop_cancels() {
+    fn test_slots_stay_bounded_and_drop_cancels() {
         init_test_runtime();
         let op = memory_operator();
         let path = "bounded".to_string();
@@ -615,12 +757,17 @@ mod tests {
         let ranges = (0..8).map(|i| i * 8..(i + 1) * 8).collect::<Vec<_>>();
         let reader = OperatorRangeReader::create(&settings(0, 8), op, path, &ranges, 1).unwrap();
         thread::sleep(Duration::from_millis(20));
-        assert!(reader.data_rx.len() <= reader.max_unconsumed);
+        assert!(reader.prefetch_map.len() <= reader.max_unconsumed);
+        assert!(
+            reader
+                .prefetch_map
+                .values()
+                .all(|slot| slot.result_rx.len() <= 1)
+        );
         drop(reader);
     }
 
     #[test]
-    #[allow(clippy::single_range_in_vec_init)]
     fn test_io_and_consumer_run_on_different_threads() {
         init_test_runtime();
         let op = memory_operator();
@@ -635,8 +782,16 @@ mod tests {
         let consumer = thread::current().id();
         let mut reader = OperatorRangeReader::new(op, path, 1);
         // The hint is accepted and exactly fills the capacity: saturated now.
-        assert!(!reader.prefetch(&[0..4]));
-        let fetched = reader.data_rx.recv_blocking().unwrap().unwrap();
+        let range = 0..4;
+        assert!(!reader.prefetch(std::slice::from_ref(&range)));
+        let fetched = reader
+            .prefetch_map
+            .get(&range)
+            .unwrap()
+            .result_rx
+            .recv_blocking()
+            .unwrap()
+            .unwrap();
         assert_ne!(fetched.io_thread, consumer);
     }
 

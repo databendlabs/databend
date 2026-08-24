@@ -264,7 +264,7 @@ impl IPhysicalPlan for Recluster {
                     None,
                     settings.get_enable_fixed_rows_sort()?,
                 )?
-                .with_block_size_hit(rows_per_block);
+                .with_block_size(rows_per_block);
                 if !skip_partial_sort {
                     let partial_sort_descs = sort_pipeline_builder.sort_column_desc();
                     builder.main_pipeline.add_transformer(move || {

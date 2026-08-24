@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::ops::Range;
 use std::sync::Arc;
 
+use arrow_array::Array;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
@@ -24,7 +25,11 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::metrics_inc_remote_io_read_bytes;
 use databend_common_metrics::storage::metrics_inc_remote_io_read_parts;
+use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheLockStats;
+use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::ColumnArrayCache;
+use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::OwnerMemory;
 use databend_storages_common_io::RangeReader;
@@ -304,6 +309,60 @@ impl GranuleColumnReader {
         })
     }
 
+    fn next_data_range(&self) -> Option<Range<u64>> {
+        if self.has_dictionary {
+            return None;
+        }
+        match self.outputs.front()? {
+            GranuleColumnOutput::Empty => None,
+            GranuleColumnOutput::Slice { range, sub } => {
+                Some(range.start + sub.start as u64..range.start + sub.end as u64)
+            }
+        }
+    }
+
+    fn discard_next(&mut self) -> Result<()> {
+        let output = self.outputs.pop_front().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "granule column {} has no remaining ranges",
+                self.column_id
+            ))
+        })?;
+        let GranuleColumnOutput::Slice { range, .. } = output else {
+            return Ok(());
+        };
+
+        if self
+            .current
+            .as_ref()
+            .is_some_and(|(current, _)| current == &range)
+        {
+            if !self.next_output_uses(&range) {
+                self.current = None;
+            }
+            return Ok(());
+        }
+        if self.next_output_uses(&range) {
+            return Ok(());
+        }
+
+        let expected = self.ranges.pop_front().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "granule column {} has no merged range for output",
+                self.column_id
+            ))
+        })?;
+        if expected != range {
+            return Err(ErrorCode::Internal(format!(
+                "granule column {} expected range {expected:?}, got {range:?}",
+                self.column_id
+            )));
+        }
+        self.prefetch_next();
+        self.reader.discard(expected);
+        Ok(())
+    }
+
     fn read_buffer(&mut self) -> Result<Buffer> {
         let output = match self.outputs.pop_front() {
             Some(output) => output,
@@ -372,10 +431,13 @@ impl GranuleColumnReader {
     }
 
     fn next_output_uses(&self, range: &Range<u64>) -> bool {
-        match self.outputs.front() {
-            Some(GranuleColumnOutput::Slice { range: next, .. }) => next == range,
-            _ => false,
-        }
+        self.outputs
+            .iter()
+            .find_map(|output| match output {
+                GranuleColumnOutput::Empty => None,
+                GranuleColumnOutput::Slice { range: next, .. } => Some(next == range),
+            })
+            .unwrap_or(false)
     }
 
     fn prefetch_next(&mut self) {
@@ -411,6 +473,7 @@ pub(crate) struct GranuleDataReader {
     location: String,
     ranges: VecDeque<Range<usize>>,
     column_readers: Vec<GranuleColumnReader>,
+    column_array_cache: Option<ColumnArrayCache>,
     granule_rows: usize,
     block_rows: usize,
 }
@@ -477,6 +540,7 @@ impl GranuleDataReader {
             location: part.location.clone(),
             ranges: ranges.into(),
             column_readers,
+            column_array_cache: CacheManager::instance().get_table_data_array_cache(),
             granule_rows: offsets.granule_rows(),
             block_rows: part.nums_rows,
         })
@@ -507,11 +571,33 @@ impl GranuleDataReader {
         metrics_inc_remote_io_read_parts(1);
         let mut chunks = Vec::with_capacity(self.column_readers.len());
         let mut column_offsets = HashMap::with_capacity(self.column_readers.len());
-        for (index, reader) in self.column_readers.iter_mut().enumerate() {
+        let mut cached_column_array = Vec::new();
+        let mut column_data_ranges = HashMap::new();
+        for reader in &mut self.column_readers {
+            let data_range = reader.next_data_range();
+            let cached = data_range.as_ref().and_then(|range| {
+                let len = range.end - range.start;
+                let key =
+                    TableDataCacheKey::new(&self.location, reader.column_id, range.start, len);
+                self.column_array_cache
+                    .get_sized(&key, len)
+                    .filter(|array| array.0.len() == row_range.len())
+            });
+            if let Some(cached) = cached {
+                Profile::record_usize_profile(ProfileStatisticsName::ScanBytesFromMemory, cached.1);
+                reader.discard_next()?;
+                cached_column_array.push((reader.column_id, cached));
+                continue;
+            }
+
             let buffer = reader.read_next()?;
+            let index = chunks.len();
             let len = buffer.len();
             chunks.push((index, buffer));
             column_offsets.insert(reader.column_id, (index, 0..len));
+            if let Some(range) = data_range {
+                column_data_ranges.insert(reader.column_id, range);
+            }
         }
 
         let result = MergeIOReadResult::create(
@@ -519,7 +605,12 @@ impl GranuleDataReader {
             column_offsets,
             self.location.clone(),
         );
-        let data = BlockReadResult::create_with_row_range(result, row_range);
+        let data = BlockReadResult::create_with_row_range(
+            result,
+            cached_column_array,
+            column_data_ranges,
+            row_range,
+        );
         Ok(Some(GranuleRangeRead {
             range: granule_range,
             data,
@@ -529,6 +620,12 @@ impl GranuleDataReader {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
+    use arrow_array::ArrayRef;
+    use arrow_array::Int32Array;
+    use databend_storages_common_cache::InMemoryLruCache;
+
     use super::*;
 
     const KIB: u64 = 1024;
@@ -540,6 +637,169 @@ mod tests {
             equivalent_bytes,
             chunk_align: 1,
         }
+    }
+
+    struct StubReader {
+        content: Arc<Vec<u8>>,
+        prefetches: Arc<Mutex<Vec<Vec<Range<u64>>>>>,
+        reads: Arc<Mutex<Vec<Range<u64>>>>,
+        discards: Arc<Mutex<Vec<Range<u64>>>>,
+    }
+
+    impl RangeReader for StubReader {
+        fn prefetch(&mut self, ranges: &[Range<u64>]) -> bool {
+            self.prefetches.lock().unwrap().push(ranges.to_vec());
+            true
+        }
+
+        fn discard(&mut self, range: Range<u64>) {
+            self.discards.lock().unwrap().push(range);
+        }
+
+        fn read(&mut self, range: Range<u64>) -> Result<Buffer> {
+            self.reads.lock().unwrap().push(range.clone());
+            Ok(Buffer::from(
+                self.content[range.start as usize..range.end as usize].to_vec(),
+            ))
+        }
+    }
+
+    #[test]
+    fn test_cached_outputs_discard_merged_range() {
+        let inputs = vec![0..100, 200..300];
+        let prefetches = Arc::new(Mutex::new(Vec::new()));
+        let reads = Arc::new(Mutex::new(Vec::new()));
+        let discards = Arc::new(Mutex::new(Vec::new()));
+        let mut reader = GranuleColumnReader::try_create(
+            0,
+            Box::new(StubReader {
+                content: Arc::new(vec![0; 300]),
+                prefetches: prefetches.clone(),
+                reads: reads.clone(),
+                discards: discards.clone(),
+            }),
+            &inputs,
+            false,
+            &policy(MIB),
+            1,
+        )
+        .unwrap();
+
+        assert_eq!(reader.next_data_range(), Some(0..100));
+        reader.discard_next().unwrap();
+        assert_eq!(reader.next_data_range(), Some(200..300));
+        reader.discard_next().unwrap();
+
+        assert_eq!(*prefetches.lock().unwrap(), vec![vec![0..300]]);
+        assert!(reads.lock().unwrap().is_empty());
+        assert_eq!(*discards.lock().unwrap(), vec![0..300]);
+    }
+
+    #[test]
+    fn test_discard_rolls_prefetch_window() {
+        let inputs = vec![0..100, 3 * MIB..3 * MIB + 100];
+        let prefetches = Arc::new(Mutex::new(Vec::new()));
+        let reads = Arc::new(Mutex::new(Vec::new()));
+        let discards = Arc::new(Mutex::new(Vec::new()));
+        let mut reader = GranuleColumnReader::try_create(
+            0,
+            Box::new(StubReader {
+                content: Arc::new(vec![0; (3 * MIB + 100) as usize]),
+                prefetches: prefetches.clone(),
+                reads,
+                discards: discards.clone(),
+            }),
+            &inputs,
+            false,
+            &policy(MIB),
+            1,
+        )
+        .unwrap();
+
+        reader.discard_next().unwrap();
+        reader.discard_next().unwrap();
+
+        assert_eq!(*prefetches.lock().unwrap(), vec![vec![0..100], vec![
+            3 * MIB..3 * MIB + 100
+        ]]);
+        assert_eq!(*discards.lock().unwrap(), inputs);
+    }
+
+    #[test]
+    fn test_mixed_outputs_read_merged_range() {
+        let inputs = vec![0..100, 200..300];
+        let content = Arc::new((0..300).map(|i| (i % 251) as u8).collect::<Vec<_>>());
+        let prefetches = Arc::new(Mutex::new(Vec::new()));
+        let reads = Arc::new(Mutex::new(Vec::new()));
+        let discards = Arc::new(Mutex::new(Vec::new()));
+        let mut reader = GranuleColumnReader::try_create(
+            0,
+            Box::new(StubReader {
+                content: content.clone(),
+                prefetches,
+                reads: reads.clone(),
+                discards: discards.clone(),
+            }),
+            &inputs,
+            false,
+            &policy(MIB),
+            1,
+        )
+        .unwrap();
+
+        reader.discard_next().unwrap();
+        assert_eq!(
+            reader.read_next().unwrap().to_bytes().as_ref(),
+            &content[200..300]
+        );
+
+        assert_eq!(*reads.lock().unwrap(), vec![0..300]);
+        assert!(discards.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_read_next_returns_cached_column_array() {
+        let prefetches = Arc::new(Mutex::new(Vec::new()));
+        let reads = Arc::new(Mutex::new(Vec::new()));
+        let discards = Arc::new(Mutex::new(Vec::new()));
+        let input = 0..100;
+        let column_reader = GranuleColumnReader::try_create(
+            0,
+            Box::new(StubReader {
+                content: Arc::new(vec![0; 100]),
+                prefetches,
+                reads: reads.clone(),
+                discards: discards.clone(),
+            }),
+            std::slice::from_ref(&input),
+            false,
+            &policy(MIB),
+            1,
+        )
+        .unwrap();
+        let cache = InMemoryLruCache::with_bytes_capacity("granule-test".to_string(), 1024);
+        let array: ArrayRef = Arc::new(Int32Array::from(vec![10, 20]));
+        let key = TableDataCacheKey::new("block", 0, 0, 100);
+        cache.insert(key.into(), (array.clone(), array.get_array_memory_size()));
+        let mut ranges = VecDeque::new();
+        ranges.push_back(0..1);
+        let mut reader = GranuleDataReader {
+            location: "block".to_string(),
+            ranges,
+            column_readers: vec![column_reader],
+            column_array_cache: Some(cache),
+            granule_rows: 2,
+            block_rows: 2,
+        };
+
+        let result = reader.read_next().unwrap().unwrap();
+        let chunks = result.data.columns_chunks().unwrap();
+        assert!(matches!(
+            chunks.get(&0),
+            Some(crate::io::DataItem::ColumnArray(cached)) if Arc::ptr_eq(&cached.0, &array)
+        ));
+        assert!(reads.lock().unwrap().is_empty());
+        assert_eq!(*discards.lock().unwrap(), vec![0..100]);
     }
 
     #[test]
