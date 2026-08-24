@@ -43,7 +43,6 @@ use crate::databases::DatabaseContext;
 use crate::meta_service_error;
 use crate::share::ShareMgr;
 use crate::share::ShareTableContext;
-use crate::share::ensure_provider_table_can_be_shared;
 use crate::share::resolve_share_storage_params;
 
 pub struct SharedTable {
@@ -64,8 +63,6 @@ impl SharedTable {
         table_context: &ShareTableContext,
         provider_info: TableInfo,
     ) -> Result<Arc<dyn Table>> {
-        ensure_provider_table_can_be_shared(&provider_info.meta)?;
-
         let provider_storage = provider_info
             .meta
             .storage_params
@@ -149,7 +146,6 @@ impl SharedTable {
                 "Shared provider table was dropped or recreated; retry the query",
             ));
         }
-        ensure_provider_table_can_be_shared(&current_meta.data)?;
 
         let provider_storage = current_meta
             .data
