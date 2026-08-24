@@ -19,8 +19,6 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
 
-use crate::optimizer::Optimizer;
-use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -31,31 +29,35 @@ use crate::plans::Exchange;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 
-pub struct MaterializedCTEDistributionOptimizer {
-    ctx: Arc<OptimizerContext>,
+/// Outcome of aligning materialized CTE placement with the distributed plan.
+pub enum MaterializedCTEDistribution {
+    Distributed(SExpr),
+    RequiresLocal,
 }
 
+pub struct MaterializedCTEDistributionOptimizer;
+
 impl MaterializedCTEDistributionOptimizer {
-    pub fn new(ctx: Arc<OptimizerContext>) -> Self {
-        Self { ctx }
+    pub const NAME: &'static str = "MaterializedCTEDistributionOptimizer";
+
+    pub fn create() -> Self {
+        Self
     }
 
-    pub fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut result = if self.ctx.get_enable_distributed_optimization() {
-            s_expr
-                .accept(&mut SerialProducerRedistributor)?
-                .unwrap_or_else(|| s_expr.clone())
-        } else {
-            s_expr.clone()
-        };
+    /// Resolve materialized CTE placement after distribution properties are
+    /// settled, but before Exchange-sensitive operators are split into stages.
+    pub fn optimize(&self, s_expr: &SExpr) -> Result<MaterializedCTEDistribution> {
+        let result = s_expr
+            .accept(&mut SerialProducerRedistributor)?
+            .unwrap_or_else(|| s_expr.clone());
 
         let mut finder = SerialSequenceFinder::default();
         result.accept(&mut finder)?;
         if finder.found {
-            result = result.accept(&mut ExchangeRemover)?.unwrap_or(result);
+            return Ok(MaterializedCTEDistribution::RequiresLocal);
         }
 
-        Ok(result)
+        Ok(MaterializedCTEDistribution::Distributed(result))
     }
 }
 
@@ -63,9 +65,9 @@ impl MaterializedCTEDistributionOptimizer {
 /// its CTE definition is serial because it consumes a Merge exchange,
 /// redistribute the result after that operator instead of forcing the entire
 /// query to run without Exchanges. Other serial sources, such as
-/// DummyTableScan, are not coordinator-only Merge consumers and must keep the
-/// existing serial fallback. Hashing by a constant preserves the producer's
-/// rows without broadcasting or changing scalar empty-input behavior.
+/// DummyTableScan, are not coordinator-only Merge consumers and require local
+/// re-planning. Hashing by a constant preserves the producer's rows without
+/// broadcasting or changing scalar empty-input behavior.
 struct SerialProducerRedistributor;
 
 impl SerialProducerRedistributor {
@@ -146,32 +148,5 @@ impl SExprVisitor for SerialSequenceFinder {
         }
 
         Ok(VisitAction::Continue)
-    }
-}
-
-struct ExchangeRemover;
-
-impl SExprVisitor for ExchangeRemover {
-    fn visit(&mut self, _expr: &SExpr) -> Result<VisitAction> {
-        Ok(VisitAction::Continue)
-    }
-
-    fn post_visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-        if matches!(expr.plan(), RelOperator::Exchange(_)) {
-            Ok(VisitAction::Replace(expr.unary_child().clone()))
-        } else {
-            Ok(VisitAction::Continue)
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl Optimizer for MaterializedCTEDistributionOptimizer {
-    fn name(&self) -> String {
-        "MaterializedCTEDistributionOptimizer".to_string()
-    }
-
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        self.optimize_sync(s_expr)
     }
 }
