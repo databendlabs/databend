@@ -274,7 +274,7 @@ impl Processor for TransformHashJoin {
                     self.probe_port.finish();
                     self.joined_port.finish();
 
-                    std::mem::swap(&mut FinishedJoin::create(), &mut self.join);
+                    self.join = FinishedJoin::create();
 
                     Stage::Finished
                 } else {
