@@ -20,6 +20,7 @@ CONNECTION_FAILURE_TIMEOUT = 30
 NODE_FAILURE_TIMEOUT = 90
 QUERY_STOP_STABILITY_WINDOW = 3
 PAUSE_DURATION = 3
+FLIGHT_RETRY_TIMES = 10
 POLL_INTERVAL = 0.1
 COORDINATOR = "databend-query-0"
 FAILED_WORKER = "databend-query-1"
@@ -271,24 +272,32 @@ def connect_mysql() -> Any:
 
 
 def assert_default_no_retry(connection: Any) -> None:
-    expected_zero = {
-        "enable_experiment_new_flight",
-        "flight_connection_max_retry_times",
-        "flight_client_keep_alive_time_secs",
-        "flight_client_keep_alive_interval_secs",
-        "flight_client_keep_alive_retries",
+    expected_defaults = {
+        "enable_experiment_new_flight": "0",
+        "flight_connection_max_retry_times": "0",
+        "flight_connection_retry_interval": "1",
+        "flight_client_keep_alive_time_secs": "0",
+        "flight_client_keep_alive_interval_secs": "0",
+        "flight_client_keep_alive_retries": "0",
     }
-    names = ", ".join(f"'{name}'" for name in sorted(expected_zero))
+    names = ", ".join(f"'{name}'" for name in sorted(expected_defaults))
     cursor = connection.cursor()
     try:
         cursor.execute(
             "SELECT name, value, `default` FROM system.settings "
             f"WHERE name IN ({names})"
         )
-        settings = {str(name): (str(value), str(default)) for name, value, default in cursor}
-        assert settings.keys() == expected_zero, settings
+        settings = {
+            str(name): (str(value), str(default)) for name, value, default in cursor
+        }
+        assert settings.keys() == expected_defaults.keys(), settings
         for name, (value, default) in settings.items():
-            assert value == "0" and default == "0", (name, value, default)
+            expected = expected_defaults[name]
+            assert value == expected and default == expected, (
+                name,
+                value,
+                default,
+            )
         chaos_log(
             "settings_verified "
             + " ".join(
@@ -300,10 +309,14 @@ def assert_default_no_retry(connection: Any) -> None:
         cursor.close()
 
 
-def enable_new_flight(connection: Any) -> None:
+def configure_new_flight(
+    connection: Any, *, retry_times: int = 0, retry_interval: int = 1
+) -> None:
     cursor = connection.cursor()
     try:
         cursor.execute("SET enable_experiment_new_flight = 1")
+        cursor.execute(f"SET flight_connection_max_retry_times = {retry_times}")
+        cursor.execute(f"SET flight_connection_retry_interval = {retry_interval}")
     finally:
         cursor.close()
 
@@ -357,7 +370,10 @@ def wait_for_query_to_stop(cursor: Any, query_id: str, timeout: float = 30) -> N
 # gRPC may multiplex a new logical do_exchange stream over an existing TCP
 # connection, so a new socket is not a valid readiness signal for this test.
 def wait_for_do_exchange(
-    namespace: str, query_id: str, task: QueryTask
+    namespace: str,
+    query_id: str,
+    task: QueryTask,
+    required_pods: int = len(QUERY_PODS),
 ) -> None:
     deadline = time.monotonic() + QUERY_START_TIMEOUT
     pending = set(QUERY_PODS)
@@ -388,10 +404,11 @@ def wait_for_do_exchange(
                 for line in output.replace("\0", "").splitlines()
             ):
                 pending.remove(pod)
-        if not pending:
+        observed = len(QUERY_PODS) - len(pending)
+        if observed >= required_pods:
             chaos_log(
                 f"logical_exchange_ready query_id={query_id} "
-                f"pods={','.join(QUERY_PODS)}"
+                f"observed_pods={observed} required_pods={required_pods}"
             )
             return
         if not task.is_running():
@@ -438,17 +455,33 @@ class NoRetryHarness:
         self._namespace = namespace
 
     def start_query(
-        self, sql: str, marker: str, *, require_exchange: bool = True
+        self,
+        sql: str,
+        marker: str,
+        *,
+        require_exchange: bool = True,
+        required_exchange_pods: int = len(QUERY_PODS),
+        retry_times: int = 0,
+        retry_interval: int = 1,
     ) -> RunningQuery:
         connection = connect_mysql()
         try:
             assert_default_no_retry(connection)
-            enable_new_flight(connection)
+            configure_new_flight(
+                connection,
+                retry_times=retry_times,
+                retry_interval=retry_interval,
+            )
             task = QueryTask(connection, sql)
             task.start()
             identity = wait_for_query(self._control_cursor, marker, task)
             if require_exchange:
-                wait_for_do_exchange(self._namespace, identity.query_id, task)
+                wait_for_do_exchange(
+                    self._namespace,
+                    identity.query_id,
+                    task,
+                    required_exchange_pods,
+                )
             chaos_log(
                 f"query_ready marker={marker} query_id={identity.query_id} "
                 f"connection_id={identity.connection_id}"
@@ -470,7 +503,7 @@ class NoRetryHarness:
         cursor = None
         try:
             assert_default_no_retry(connection)
-            enable_new_flight(connection)
+            configure_new_flight(connection)
             cursor = connection.cursor()
             wait_for_cluster(cursor)
             cursor.execute("SELECT count(), sum(number) FROM numbers_mt(1000000)")
@@ -484,6 +517,23 @@ class NoRetryHarness:
     @property
     def fault(self) -> ClusterFault:
         return self._fault
+
+    def reset_then_recover(self, running: RunningQuery) -> None:
+        try:
+            self._fault.reset_connections()
+            wait_for_reset_match(self._fault, running.task)
+            # Keep the RST rule long enough for the immediate reconnect attempt to
+            # fail, so the query must exercise retry backoff and replacement.
+            time.sleep(1)
+            if not running.task.is_running():
+                raise AssertionError(
+                    "query finished before the reconnect fault was recovered"
+                )
+        finally:
+            self._fault.clear_resets()
+        chaos_log(
+            f"fault_recovered type=tcp_reset query_id={running.identity.query_id}"
+        )
 
 
 # Full joins cannot use the broadcast strategy, so the small build side stays
@@ -500,9 +550,32 @@ def exact_join(marker: str, rows: int = 1000000000000) -> str:
     """
 
 
-def test_limit_early_stop(harness: NoRetryHarness) -> None:
-    chaos_log("scenario_start name=join_limit_early_stop")
-    marker = "flight_no_retry_limit_ci"
+def test_exact_join_reconnect(harness: NoRetryHarness) -> None:
+    chaos_log("scenario_start name=exact_join_reconnect")
+    marker = "flight_exact_join_reconnect_ci"
+    rows_count = 1000000000
+    modulus = 1000000
+    running = harness.start_query(
+        exact_join(marker, rows_count),
+        marker,
+        retry_times=FLIGHT_RETRY_TIMES,
+    )
+    try:
+        harness.reset_then_recover(running)
+        rows = running.task.rows()
+        assert len(rows) == 1, rows
+        assert int(rows[0][0]) == rows_count, rows
+        expected_sum = (rows_count // modulus) * modulus * (modulus - 1) // 2
+        assert int(rows[0][1]) == expected_sum, rows
+        harness.assert_stopped(running.identity)
+        chaos_log(f"scenario_pass name=exact_join_reconnect rows={rows_count}")
+    finally:
+        running.close()
+
+
+def test_limit_early_stop_after_reconnect(harness: NoRetryHarness) -> None:
+    chaos_log("scenario_start name=join_limit_early_stop_after_reconnect")
+    marker = "flight_limit_reconnect_ci"
     running = harness.start_query(
         f"""
         SELECT number
@@ -516,29 +589,38 @@ def test_limit_early_stop(harness: NoRetryHarness) -> None:
         LIMIT 10
         """,
         marker,
-        require_exchange=False,
+        required_exchange_pods=1,
+        retry_times=FLIGHT_RETRY_TIMES,
     )
     try:
+        harness.reset_then_recover(running)
         rows = running.task.rows()
         values = [int(row[0]) for row in rows]
         assert len(values) == 10, values
         assert len(set(values)) == 10, values
         assert all(value % 500000000 == 0 for value in values), values
-        harness.assert_stopped(running.identity)
-        chaos_log("scenario_pass name=join_limit_early_stop rows=10")
+        harness.assert_stopped(running.identity, delay=QUERY_STOP_STABILITY_WINDOW)
+        chaos_log("scenario_pass name=join_limit_early_stop_after_reconnect rows=10")
     finally:
         running.close()
 
 
-def test_kill_query(harness: NoRetryHarness) -> None:
-    chaos_log("scenario_start name=kill_query_during_join")
-    marker = "flight_no_retry_kill_ci"
-    running = harness.start_query(exact_join(marker), marker)
+def test_kill_query_during_reconnect(harness: NoRetryHarness) -> None:
+    chaos_log("scenario_start name=kill_query_during_reconnect")
+    marker = "flight_kill_during_reconnect_ci"
+    retry_interval = 5
+    running = harness.start_query(
+        exact_join(marker),
+        marker,
+        retry_times=FLIGHT_RETRY_TIMES,
+        retry_interval=retry_interval,
+    )
     kill_connection = None
     try:
         kill_connection = connect_mysql()
+        harness.reset_then_recover(running)
         chaos_log(
-            "fault_inject type=kill_query "
+            "fault_inject type=kill_query_during_retry_backoff "
             f"query_id={running.identity.query_id} "
             f"connection_id={running.identity.connection_id}"
         )
@@ -549,11 +631,9 @@ def test_kill_query(harness: NoRetryHarness) -> None:
         error = running.task.error(timeout=CONNECTION_FAILURE_TIMEOUT)
         kill_task.rows(timeout=CONNECTION_FAILURE_TIMEOUT)
         assert "AbortedQuery" in str(error), error
-        harness.assert_stopped(
-            running.identity, delay=QUERY_STOP_STABILITY_WINDOW
-        )
+        harness.assert_stopped(running.identity, delay=retry_interval + 2)
         harness.assert_healthy()
-        chaos_log(f"scenario_pass name=kill_query_during_join error={error}")
+        chaos_log(f"scenario_pass name=kill_query_during_reconnect error={error}")
     finally:
         if kill_connection is not None:
             kill_connection.close()
@@ -581,9 +661,7 @@ def test_tcp_reset_failure(harness: NoRetryHarness) -> None:
         finally:
             harness.fault.clear_resets()
             chaos_log("fault_recovered type=tcp_reset")
-        harness.assert_stopped(
-            running.identity, delay=QUERY_STOP_STABILITY_WINDOW
-        )
+        harness.assert_stopped(running.identity, delay=QUERY_STOP_STABILITY_WINDOW)
     finally:
         running.close()
     harness.assert_healthy()
@@ -607,9 +685,7 @@ def test_worker_crash_failure(harness: NoRetryHarness) -> None:
         chaos_log(
             f"query_failed type=sigkill elapsed_seconds={elapsed:.3f} error={error}"
         )
-        harness.assert_stopped(
-            running.identity, delay=QUERY_STOP_STABILITY_WINDOW
-        )
+        harness.assert_stopped(running.identity, delay=QUERY_STOP_STABILITY_WINDOW)
     finally:
         running.close()
     if restart_count is None:
@@ -679,8 +755,9 @@ def main() -> None:
         )
         assert_default_no_retry(control_connection)
         wait_for_cluster(control_cursor)
-        test_limit_early_stop(harness)
-        test_kill_query(harness)
+        test_exact_join_reconnect(harness)
+        test_limit_early_stop_after_reconnect(harness)
+        test_kill_query_during_reconnect(harness)
         test_tcp_reset_failure(harness)
         test_worker_crash_failure(harness)
         test_short_receiver_pause(harness)
