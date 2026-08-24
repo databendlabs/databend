@@ -135,6 +135,15 @@ impl TypedRangeBounds {
     }
 
     /// Search one sorted subrange and return the rank relative to its start.
+    pub fn lower_bound_range(&self, value: ScalarRef<'_>, range: Range<usize>) -> u32 {
+        assert!(
+            range.start <= range.end && range.end <= self.len(),
+            "range boundary subrange is out of bounds"
+        );
+        self.search_range(value, range, SearchSide::Lower)
+    }
+
+    /// Search one sorted subrange and return the rank relative to its start.
     pub fn upper_bound_range(&self, value: ScalarRef<'_>, range: Range<usize>) -> u32 {
         assert!(
             range.start <= range.end && range.end <= self.len(),

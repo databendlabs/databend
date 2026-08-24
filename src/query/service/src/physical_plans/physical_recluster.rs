@@ -48,7 +48,6 @@ use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::HilbertRangeExchange;
-use databend_common_storages_fuse::operations::HilbertRangeState;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
@@ -62,6 +61,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
+use crate::spillers::ReclusterSpiller;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Recluster {
@@ -243,30 +243,41 @@ impl IPhysicalPlan for Recluster {
                     let num_collectors = max_threads
                         .min(target_blocks)
                         .clamp(1, u8::MAX as usize + 1);
-                    let state = HilbertRangeState::create(
+                    let exchange = HilbertRangeExchange::create(
                         dimension_offsets,
                         task.total_rows,
                         worker_count,
                         num_collectors,
                     );
 
+                    // The barrier uses the complete sort spill policy, including the sort-spill
+                    // enable switch; the configured sort batch size controls each oldest-first
+                    // spill unit.
+                    let spiller = ReclusterSpiller::create(builder.ctx.clone())?;
+
                     // Every input stream samples locally, then all streams replay against one
                     // immutable task-local weighted range plan.
                     let worker_id = AtomicUsize::new(0);
-                    builder.main_pipeline.add_transform(|input, output| {
+                    let range_exchange = exchange.clone();
+                    builder.main_pipeline.add_transform(move |input, output| {
                         let id = worker_id.fetch_add(1, Ordering::Relaxed);
-                        Ok(ProcessorPtr::create(TransformHilbertCluster::create(
+                        let memory_settings = spiller.memory_settings().clone();
+                        Ok(ProcessorPtr::create(TransformHilbertCluster::<
+                            ReclusterSpiller,
+                        >::create(
                             input,
                             output,
-                            state.clone(),
+                            exchange.clone(),
                             id,
+                            spiller.clone(),
+                            memory_settings,
                         )))
                     })?;
 
                     builder.main_pipeline.try_resize(num_collectors)?;
                     builder
                         .main_pipeline
-                        .exchange(num_collectors, HilbertRangeExchange::create(state))?;
+                        .exchange(num_collectors, range_exchange)?;
 
                     // Each collector owns a disjoint Hilbert-key interval. Sort only inside that
                     // interval, then compact locally so every output block covers a continuous key

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod hilbert_range_exchange;
 mod multi_table_insert_commit;
 mod sink_commit;
 mod transform_block_writer;
@@ -25,14 +26,13 @@ mod transform_serialize_block;
 mod transform_serialize_segment;
 mod transform_vector_cluster;
 
+pub use hilbert_range_exchange::HilbertRangeExchange;
 pub use multi_table_insert_commit::CommitMultiTableInsert;
 pub use sink_commit::CommitSink;
 pub use sink_commit::is_auto_vacuum_enabled;
 pub use transform_block_writer::TransformBlockBuilder;
 pub use transform_block_writer::TransformBlockWriter;
 pub use transform_constraint_verify::TransformConstraintVerify;
-pub use transform_hilbert_cluster::HilbertRangeExchange;
-pub use transform_hilbert_cluster::HilbertRangeState;
 pub use transform_hilbert_cluster::TransformHilbertCluster;
 pub use transform_merge_commit_meta::TransformMergeCommitMeta;
 pub use transform_mutation_aggregator::TableMutationAggregator;
