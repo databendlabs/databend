@@ -37,11 +37,10 @@ use crate::expression::FunctionCall;
 use crate::expression::LambdaFunctionCall;
 use crate::property::Domain;
 use crate::type_check::check_function;
-use crate::type_check::get_simple_cast_function;
+use crate::type_check::resolve_cast_function;
 use crate::types::DataType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
-use crate::types::number::NumberScalar;
 
 const MAX_FUNCTION_ARGS_TO_FOLD: usize = 4096;
 
@@ -1222,12 +1221,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return Some(domain.clone());
         }
 
-        if let Some(cast_fn) = get_simple_cast_function(false, src_type, dest_type) {
-            if let Some(new_domain) =
-                self.calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
-            {
-                return new_domain;
-            }
+        if let Some(call) =
+            resolve_cast_function(span, false, src_type, dest_type, self.fn_registry)
+            && let Some(new_domain) = self.calculate_simple_cast(call, domain)
+        {
+            return new_domain;
         }
 
         match (src_type, dest_type) {
@@ -1307,12 +1305,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
-        if let Some(cast_fn) = get_simple_cast_function(true, src_type, inner_dest_type) {
-            if let Some(new_domain) =
-                self.calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
-            {
-                return new_domain;
-            }
+        if let Some(call) = resolve_cast_function(span, true, src_type, dest_type, self.fn_registry)
+            && let Some(new_domain) = self.calculate_simple_cast(call, domain)
+        {
+            return new_domain;
         }
 
         match (src_type, inner_dest_type) {
@@ -1379,34 +1375,8 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
     }
 
-    fn calculate_simple_cast(
-        &self,
-        span: Span,
-        src_type: &DataType,
-        dest_type: &DataType,
-        domain: &Domain,
-        cast_fn: &str,
-    ) -> Option<Option<Domain>> {
-        let expr = Expr::ColumnRef(ColumnRef {
-            span,
-            id: 0,
-            data_type: src_type.clone(),
-            display_name: String::new(),
-        });
-
-        let params = if let DataType::Decimal(ty) = dest_type {
-            vec![
-                Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
-                Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
-            ]
-        } else {
-            vec![]
-        };
-        let cast_expr = check_function(span, cast_fn, &params, &[expr], self.fn_registry).ok()?;
-
-        if cast_expr.data_type() != dest_type {
-            return None;
-        }
+    fn calculate_simple_cast(&self, call: FunctionCall, domain: &Domain) -> Option<Option<Domain>> {
+        let cast_expr = Expr::FunctionCall(call);
 
         let input_domains = [(0, domain.clone())].into_iter().collect();
         // The caller has already checked `can_evaluate_cast` for this source and destination type.

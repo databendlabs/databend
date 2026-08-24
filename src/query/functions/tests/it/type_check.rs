@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use databend_common_column::types::timestamp_tz;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Expr;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -26,6 +28,256 @@ use goldenfile::Mint;
 use jsonb::OwnedJsonb;
 
 use crate::scalars::run_ast;
+
+fn checked_function_to_cast(
+    name: &str,
+    params: &[Scalar],
+    argument_type: DataType,
+) -> Option<type_check::FunctionCallToCastResult> {
+    let argument = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: 0,
+        data_type: argument_type.clone(),
+        display_name: "arg".to_string(),
+    });
+    let checked = type_check::check_function(
+        None,
+        name,
+        params,
+        std::slice::from_ref(&argument),
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+    checked.as_function_call().and_then(|call| {
+        type_check::function_call_to_cast(
+            name,
+            params,
+            &argument_type,
+            &call.return_type,
+            &BUILTIN_FUNCTIONS,
+        )
+    })
+}
+
+#[test]
+fn test_function_call_to_cast_uses_resolved_cast_function() {
+    let cast = checked_function_to_cast("to_int64", &[], DataType::String).unwrap();
+    assert!(!cast.is_try);
+    assert_eq!(cast.dest_type, DataType::Number(NumberDataType::Int64));
+
+    let cast = checked_function_to_cast("try_to_int64", &[], DataType::String).unwrap();
+    assert!(cast.is_try);
+    assert_eq!(
+        cast.dest_type,
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)))
+    );
+
+    // Aliases are accepted because check_function resolves them to the same FunctionID.
+    assert!(checked_function_to_cast("date", &[], DataType::String).is_some());
+
+    let decimal_params = [
+        Scalar::Number(NumberScalar::Int64(10)),
+        Scalar::Number(NumberScalar::Int64(2)),
+    ];
+    let cast = checked_function_to_cast(
+        "to_numeric",
+        &decimal_params,
+        DataType::Number(NumberDataType::Int64),
+    )
+    .unwrap();
+    assert_eq!(
+        cast.dest_type,
+        DataType::Decimal(DecimalSize::new(10, 2).unwrap())
+    );
+
+    // Factory params must match those reconstructed by Expr::Cast.
+    let mismatched_decimal_params = [
+        Scalar::Number(NumberScalar::Int64(11)),
+        Scalar::Number(NumberScalar::Int64(2)),
+    ];
+    assert!(
+        type_check::function_call_to_cast(
+            "to_decimal",
+            &mismatched_decimal_params,
+            &DataType::Number(NumberDataType::Int64),
+            &DataType::Decimal(DecimalSize::new(10, 2).unwrap()),
+            &BUILTIN_FUNCTIONS,
+        )
+        .is_none()
+    );
+
+    // CAST(String AS Variant) executes parse_json, not to_variant.
+    assert!(checked_function_to_cast("parse_json", &[], DataType::String).is_some());
+    assert!(checked_function_to_cast("to_variant", &[], DataType::String).is_none());
+    assert!(
+        checked_function_to_cast("to_variant", &[], DataType::Number(NumberDataType::Int64))
+            .is_some()
+    );
+
+    // The same return type is insufficient: Cast dispatch must select the same canonical function.
+    assert!(checked_function_to_cast("length", &[], DataType::String).is_none());
+}
+
+#[test]
+fn test_nullable_function_call_to_cast_uses_complete_cast_resolution() {
+    let nullable = |ty| DataType::Nullable(Box::new(ty));
+    let decimal_params = [
+        Scalar::Number(NumberScalar::Int64(10)),
+        Scalar::Number(NumberScalar::Int64(2)),
+    ];
+
+    // Keep this table explicit: every function selected by Expr::Cast must prove that its checked
+    // nullable overload is also accepted by function_call_to_cast.
+    let cases = [
+        (
+            "to_boolean",
+            Some("try_to_boolean"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_binary",
+            Some("try_to_binary"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_string",
+            Some("try_to_string"),
+            vec![],
+            nullable(DataType::Number(NumberDataType::Int64)),
+        ),
+        (
+            "to_uint8",
+            Some("try_to_uint8"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_uint16",
+            Some("try_to_uint16"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_uint32",
+            Some("try_to_uint32"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_uint64",
+            Some("try_to_uint64"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_int8",
+            Some("try_to_int8"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_int16",
+            Some("try_to_int16"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_int32",
+            Some("try_to_int32"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_int64",
+            Some("try_to_int64"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_float32",
+            Some("try_to_float32"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_float64",
+            Some("try_to_float64"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_timestamp",
+            Some("try_to_timestamp"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_timestamp_tz",
+            Some("try_to_timestamp_tz"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_interval",
+            Some("try_to_interval"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_date",
+            Some("try_to_date"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_variant",
+            Some("try_to_variant"),
+            vec![],
+            nullable(DataType::Number(NumberDataType::Int64)),
+        ),
+        (
+            "to_decimal",
+            Some("try_to_decimal"),
+            decimal_params.to_vec(),
+            nullable(DataType::Number(NumberDataType::Int64)),
+        ),
+        ("to_bitmap", None, vec![], nullable(DataType::String)),
+        (
+            "to_geometry",
+            Some("try_to_geometry"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "to_geography",
+            Some("try_to_geography"),
+            vec![],
+            nullable(DataType::String),
+        ),
+        (
+            "parse_json",
+            Some("try_parse_json"),
+            vec![],
+            nullable(DataType::String),
+        ),
+    ];
+
+    for (name, try_name, params, argument_type) in cases {
+        assert!(
+            checked_function_to_cast(name, &params, argument_type.clone()).is_some(),
+            "{name}({argument_type}) must be rewritten from the function selected by Expr::Cast"
+        );
+
+        if let Some(try_name) = try_name {
+            assert!(
+                checked_function_to_cast(try_name, &params, argument_type.clone()).is_some(),
+                "{try_name}({argument_type}) must be rewritten from the function selected by TRY_CAST"
+            );
+        }
+    }
+}
 
 #[test]
 fn test_type_check() {
@@ -238,7 +490,7 @@ fn test_find_leveled_eq_filters() {
         let raw_expr = parse_raw_expr(text, &cols, &BUILTIN_FUNCTIONS);
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
-        let expr = type_check::rewrite_function_to_cast(expr);
+        let expr = type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS);
         let expr = expr
             .project_column_ref(|i| Ok(cols[*i].0.to_string()))
             .unwrap();

@@ -37,9 +37,9 @@ use crate::block::DataBlock;
 use crate::expr::*;
 use crate::expression::Expr;
 use crate::function::EvalContext;
-use crate::type_check::check_function;
+use crate::type_check::check_cast_function;
 use crate::type_check::format_function_argument_mismatch_hint;
-use crate::type_check::get_simple_cast_function;
+use crate::type_check::resolve_cast_function;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
@@ -511,19 +511,12 @@ impl<'a> Evaluator<'a> {
             return Ok(value);
         }
 
-        if let Some(cast_fn) = get_simple_cast_function(false, src_type, dest_type) {
-            if let Some(new_value) = self.run_simple_cast(
-                span,
-                src_type,
-                dest_type,
-                value.clone(),
-                &cast_fn,
-                validity.clone(),
-                expr_display,
-                options,
-            )? {
-                return Ok(new_value);
-            }
+        if let Some(call) =
+            resolve_cast_function(span, false, src_type, dest_type, self.fn_registry)
+        {
+            let new_value =
+                self.run_simple_cast(src_type, value, call, validity, expr_display, options)?;
+            return Ok(new_value);
         }
 
         let result = match (src_type, dest_type) {
@@ -551,22 +544,23 @@ impl<'a> Evaluator<'a> {
                 | DataType::Nullable(box DataType::Interval),
             ) => {
                 // allow cast variant to nullable types.
-                let inner_dest_ty = dest_type.remove_nullable();
+                let inner_dest_ty = dest_type.remove_nullable_ref();
                 let cast_fn = if inner_dest_ty.is_decimal() {
                     "to_decimal".to_owned()
                 } else {
                     format!("to_{}", inner_dest_ty.to_string().to_lowercase())
                 };
-                if let Some(new_value) = self.run_simple_cast(
-                    span,
-                    src_type,
-                    dest_type,
-                    value.clone(),
-                    &cast_fn,
-                    validity.clone(),
-                    expr_display,
-                    options,
-                )? {
+                if let Some(call) =
+                    check_cast_function(span, src_type, dest_type, &cast_fn, self.fn_registry)
+                {
+                    let new_value = self.run_simple_cast(
+                        src_type,
+                        value,
+                        call,
+                        validity,
+                        expr_display,
+                        options,
+                    )?;
                     Ok(new_value)
                 } else {
                     Err(ErrorCode::BadArguments(format!(
@@ -593,16 +587,21 @@ impl<'a> Evaluator<'a> {
                 } else {
                     format!("to_{}", dest_type.to_string().to_lowercase())
                 };
-                if let Some(new_value) = self.run_simple_cast(
+                if let Some(call) = check_cast_function(
                     span,
                     src_type,
                     &dest_type.wrap_nullable(),
-                    value.clone(),
                     &cast_fn,
-                    validity.clone(),
-                    expr_display,
-                    options,
-                )? {
+                    self.fn_registry,
+                ) {
+                    let new_value = self.run_simple_cast(
+                        src_type,
+                        value,
+                        call,
+                        validity,
+                        expr_display,
+                        options,
+                    )?;
                     let (new_value, has_null) = new_value.remove_nullable();
                     if has_null {
                         return Err(ErrorCode::BadArguments(format!(
@@ -1226,14 +1225,13 @@ impl<'a> Evaluator<'a> {
         let nullable_dest_type = dest_type.wrap_nullable();
         let inner_dest_type = &**nullable_dest_type.as_nullable().unwrap();
 
-        if let Some(cast_fn) = get_simple_cast_function(true, src_type, inner_dest_type) {
+        if let Some(call) = resolve_cast_function(span, true, src_type, dest_type, self.fn_registry)
+        {
             // `try_to_xxx` functions must not return errors, so we can safely call them without concerning validity.
-            if let Ok(Some(new_value)) = self.run_simple_cast(
-                span,
+            if let Ok(new_value) = self.run_simple_cast(
                 src_type,
-                dest_type,
                 value.clone(),
-                &cast_fn,
+                call,
                 None,
                 expr_display,
                 &mut EvaluateOptions::default(),
@@ -1633,46 +1631,13 @@ impl<'a> Evaluator<'a> {
 
     fn run_simple_cast(
         &self,
-        span: Span,
         src_type: &DataType,
-        dest_type: &DataType,
         value: Value<AnyType>,
-        cast_fn: &str,
+        call: FunctionCall,
         validity: Option<Bitmap>,
         expr_display: &impl Fn() -> String,
         options: &mut EvaluateOptions,
-    ) -> Result<Option<Value<AnyType>>> {
-        if src_type.remove_nullable() == dest_type.remove_nullable() {
-            return Ok(None);
-        }
-
-        let expr = ColumnRef {
-            span,
-            id: 0,
-            data_type: src_type.clone(),
-            display_name: String::new(),
-        };
-
-        let params = if let DataType::Decimal(ty) = dest_type.remove_nullable() {
-            vec![
-                Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
-                Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
-            ]
-        } else {
-            vec![]
-        };
-
-        let Ok(func_expr) =
-            check_function(span, cast_fn, &params, &[expr.into()], self.fn_registry)
-        else {
-            return Ok(None);
-        };
-
-        let call = func_expr.into_function_call().unwrap();
-        if call.return_type != *dest_type {
-            return Ok(None);
-        }
-
+    ) -> Result<Value<AnyType>> {
         let num_rows = validity
             .as_ref()
             .map(|validity| validity.len())
@@ -1696,7 +1661,7 @@ impl<'a> Evaluator<'a> {
             local_options.errors.take(),
             self.data_block.num_rows(),
         );
-        Ok(Some(result))
+        Ok(result)
     }
 
     // `if` is a special builtin function that could partially evaluate its arguments

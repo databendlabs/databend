@@ -640,7 +640,15 @@ where A: TypeCheckAdapter
         };
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-        let expr = type_check::rewrite_function_to_cast(expr);
+        if let [argument] = args.as_slice()
+            && expr == argument.as_expr()?
+        {
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                self.adapter.set_result_cache_uncacheable();
+            }
+            return Ok(Box::new((argument.clone(), expr.data_type().clone())));
+        }
+        let expr = type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS);
         let is_top_level_cast = matches!(&expr, expr::Expr::Cast(_));
 
         // Run constant folding for arguments of the scalar function.
