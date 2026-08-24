@@ -431,8 +431,11 @@ ALTER MATERIALIZED VIEW test_mv SET OPTIONS (foo = 1)
 statement error 1301
 ALTER MATERIALIZED VIEW test_mv SET OPTIONS (materialized_view_source_table_id = 1)
 
-statement error 1301
-ALTER MATERIALIZED VIEW test_mv SET OPTIONS (row_per_block = 1000001)
+statement ok
+ALTER MATERIALIZED VIEW test_mv SET OPTIONS (row_per_block = 2000000)
+
+statement ok
+ALTER MATERIALIZED VIEW test_mv UNSET OPTIONS (row_per_block)
 
 statement error 1301
 ALTER MATERIALIZED VIEW test_mv SET OPTIONS (transient = 'T')
@@ -633,8 +636,11 @@ SELECT row_count FROM fuse_block('test_mv_ddl', 'test_mv_create_options') ORDER 
 statement ok
 DROP MATERIALIZED VIEW test_mv_create_options
 
-statement error 1301
-CREATE MATERIALIZED VIEW test_mv_bad_option ROW_PER_BLOCK = 1000001 AS SELECT id FROM mv_base_t WHERE 1 = 1
+statement ok
+CREATE MATERIALIZED VIEW test_mv_large_block ROW_PER_BLOCK = 2000000 AS SELECT id FROM mv_base_t WHERE 1 = 1
+
+statement ok
+DROP MATERIALIZED VIEW test_mv_large_block
 
 statement error 1075
 CREATE MATERIALIZED VIEW test_mv_bad_compression COMPRESSION = 'bogus' AS SELECT id FROM mv_base_t WHERE 1 = 1
