@@ -72,10 +72,7 @@ use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
-use crate::share::ShareGrantDatabase;
-use crate::share::ShareGrantTable;
 use crate::share::ShareMgr;
-use crate::share::ShareRevokeTarget;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {
@@ -90,98 +87,73 @@ enum ObjectId {
 // table functions that need `Super` privilege
 const SYSTEM_TABLE_FUNCTIONS: [&str; 2] = ["fuse_amend", "set_cache_capacity"];
 
+pub(crate) async fn validate_share_management_for_connection(
+    ctx: Arc<QueryContext>,
+    connection: Option<&str>,
+) -> Result<()> {
+    PrivilegeAccess { ctx }
+        .validate_share_management_access(connection)
+        .await
+}
+
+pub(crate) async fn validate_share_object_by_id(
+    ctx: Arc<QueryContext>,
+    database_id: u64,
+    table_id: Option<u64>,
+) -> Result<()> {
+    let checker = PrivilegeAccess { ctx };
+    let catalog = checker.ctx.get_default_catalog()?;
+    let catalog_name = catalog.name();
+    let (id_object, privilege) = match table_id {
+        Some(table_id) => (
+            GrantObject::TableById(catalog_name.clone(), database_id, table_id),
+            UserPrivilegeType::Select,
+        ),
+        None => (
+            GrantObject::DatabaseById(catalog_name.clone(), database_id),
+            UserPrivilegeType::Usage,
+        ),
+    };
+    match checker
+        .validate_access(&id_object, privilege, false, false)
+        .await
+    {
+        Ok(()) => return Ok(()),
+        Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {}
+        Err(err) => return Err(err),
+    }
+
+    let database = catalog.get_db_name_by_id(database_id).await?;
+    match table_id {
+        Some(table_id) => {
+            let table = catalog
+                .get_table_name_by_id(table_id)
+                .await?
+                .ok_or_else(|| {
+                    ErrorCode::UnknownTable(format!("Unknown table id '{}'", table_id))
+                })?;
+            checker
+                .validate_table_access(
+                    &catalog_name,
+                    &database,
+                    &table,
+                    UserPrivilegeType::Select,
+                    false,
+                    false,
+                )
+                .await
+        }
+        None => {
+            checker
+                .validate_db_access(&catalog_name, &database, UserPrivilegeType::Usage, false)
+                .await
+        }
+    }
+}
+
 impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
         Box::new(PrivilegeAccess { ctx })
-    }
-
-    pub(crate) async fn validate_share_management_for_connection(
-        ctx: Arc<QueryContext>,
-        connection: Option<&str>,
-    ) -> Result<()> {
-        Self { ctx }
-            .validate_share_management_access(connection)
-            .await
-    }
-
-    pub(crate) async fn validate_share_revoke_target(
-        ctx: Arc<QueryContext>,
-        target: &ShareRevokeTarget,
-    ) -> Result<()> {
-        if !target.requires_object_privilege() {
-            return Ok(());
-        }
-
-        Self::validate_share_object_by_id(ctx, target.database_id(), target.table_id()).await
-    }
-
-    pub(crate) async fn validate_share_database_grant(
-        ctx: Arc<QueryContext>,
-        grant: &ShareGrantDatabase,
-    ) -> Result<()> {
-        Self::validate_share_object_by_id(ctx, grant.database_id, None).await
-    }
-
-    pub(crate) async fn validate_share_table_grant(
-        ctx: Arc<QueryContext>,
-        grant: &ShareGrantTable,
-    ) -> Result<()> {
-        Self::validate_share_object_by_id(ctx, grant.database_id, Some(grant.table_id)).await
-    }
-
-    async fn validate_share_object_by_id(
-        ctx: Arc<QueryContext>,
-        database_id: u64,
-        table_id: Option<u64>,
-    ) -> Result<()> {
-        let checker = Self { ctx };
-        let catalog = checker.ctx.get_default_catalog()?;
-        let catalog_name = catalog.name();
-        let (id_object, privilege) = match table_id {
-            Some(table_id) => (
-                GrantObject::TableById(catalog_name.clone(), database_id, table_id),
-                UserPrivilegeType::Select,
-            ),
-            None => (
-                GrantObject::DatabaseById(catalog_name.clone(), database_id),
-                UserPrivilegeType::Usage,
-            ),
-        };
-        match checker
-            .validate_access(&id_object, privilege, false, false)
-            .await
-        {
-            Ok(()) => return Ok(()),
-            Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {}
-            Err(err) => return Err(err),
-        }
-
-        let database = catalog.get_db_name_by_id(database_id).await?;
-        match table_id {
-            Some(table_id) => {
-                let table = catalog
-                    .get_table_name_by_id(table_id)
-                    .await?
-                    .ok_or_else(|| {
-                        ErrorCode::UnknownTable(format!("Unknown table id '{}'", table_id))
-                    })?;
-                checker
-                    .validate_table_access(
-                        &catalog_name,
-                        &database,
-                        &table,
-                        UserPrivilegeType::Select,
-                        false,
-                        false,
-                    )
-                    .await
-            }
-            None => {
-                checker
-                    .validate_db_access(&catalog_name, &database, UserPrivilegeType::Usage, false)
-                    .await
-            }
-        }
     }
 
     // PrivilegeAccess checks the privilege by names, we'd need to convert the GrantObject to
