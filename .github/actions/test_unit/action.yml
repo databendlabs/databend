@@ -14,7 +14,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
+        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE,RUST_MIN_STACK
 
     - shell: bash
       run: |
