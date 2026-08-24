@@ -44,7 +44,7 @@ pub trait Join: Send + Sync + 'static {
     }
 
     /// Whether probing can be skipped when the entire distributed build side is empty.
-    fn can_skip_probe(&self, _build_side_empty: bool) -> bool {
+    fn can_skip_probe(&self) -> bool {
         false
     }
 

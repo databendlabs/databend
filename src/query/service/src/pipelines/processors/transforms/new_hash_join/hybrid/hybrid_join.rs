@@ -239,16 +239,15 @@ impl Join for HybridHashJoin {
         self.state.has_spilled_once()
     }
 
-    fn can_skip_probe(&self, build_side_empty: bool) -> bool {
-        build_side_empty
-            && matches!(
-                self.join_type,
-                JoinType::Inner
-                    | JoinType::LeftSemi
-                    | JoinType::Right
-                    | JoinType::RightSemi
-                    | JoinType::RightAnti
-            )
+    fn can_skip_probe(&self) -> bool {
+        matches!(
+            self.join_type,
+            JoinType::Inner
+                | JoinType::LeftSemi
+                | JoinType::Right
+                | JoinType::RightSemi
+                | JoinType::RightAnti
+        )
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
