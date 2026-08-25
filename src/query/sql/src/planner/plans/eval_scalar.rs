@@ -57,7 +57,7 @@ impl ScalarItem {
         Ok(ColumnBindingBuilder::new(
             name,
             self.index,
-            Box::new(self.scalar.data_type()?),
+            Box::new(self.scalar.data_type().into_owned()),
             Visibility::Visible,
         )
         .build())
@@ -461,8 +461,9 @@ mod tests {
                     params: vec![],
                     arguments: vec![
                         column_with_type(0, nullable_int.clone()),
-                        typed_int_constant(10, nullable_int),
+                        typed_int_constant(10, nullable_int.clone()),
                     ],
+                    return_type: Box::new(nullable_int),
                 }),
                 index: Symbol::new(1),
             }],

@@ -69,6 +69,25 @@ impl Sort {
             unimplemented!()
         };
     }
+
+    pub fn replace_columns<F>(&mut self, mut replace: F) -> Result<()>
+    where F: FnMut(Symbol) -> Result<Symbol> {
+        for item in &mut self.items {
+            item.index = replace(item.index)?;
+        }
+
+        if let Some(projection) = &mut self.pre_projection {
+            for index in projection {
+                *index = replace(*index)?;
+            }
+        }
+
+        if self.window_partition.is_some() {
+            unimplemented!()
+        };
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

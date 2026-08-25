@@ -240,9 +240,10 @@ select count(*) from source
 ----
 0
 
-# Aggregate semantic compaction is driven only by state blocks appended since the last rebuild or
-# successful compact. Disable ordinary FUSE compact-after-write so each incremental aggregate
-# refresh contributes one observable state block.
+# Incremental aggregate refreshes append extra state rows. Compact then
+# re-aggregates each newly written physical block so equal group keys collapse.
+# Disable ordinary FUSE compact-after-write so each incremental refresh contributes
+# one observable state block before the explicit compact.
 statement ok
 set enable_compact_after_write = 0
 
@@ -250,7 +251,7 @@ statement ok
 create table compact_source (category string, amount int) change_tracking = true
 
 statement ok
-create materialized view compact_mv as
+create materialized view compact_mv (category, total_amount) cluster by (category) as
 select category, sum(amount) as total_amount
 from compact_source
 group by category
@@ -261,8 +262,8 @@ insert into compact_source values ('a', 1)
 statement ok
 refresh materialized view compact_mv
 
-# Accumulate some append debt, then force the aggregate Standard path to rebuild the MV. The
-# rebuild must reset that old debt because its INSERT OVERWRITE output is already globally merged.
+# A later UPDATE uses the aggregate Standard rebuild path. Its INSERT OVERWRITE is
+# already globally merged and is unrelated to compact/recluster maintenance.
 statement ok
 insert into compact_source values ('a', 1)
 
@@ -275,20 +276,20 @@ update compact_source set amount = 2
 statement ok
 refresh materialized view compact_mv
 
-# Accumulate 31 append-only state blocks after the rebuild. Together with the rebuilt baseline this
-# leaves 32 physical blocks, but the semantic compaction debt is still below its fixed threshold.
+# Accumulate several append-only state blocks after the rebuild. Without compact or
+# recluster, each refresh keeps its own physical block.
 query I
 execute immediate $$
 begin
-    for i in 1 to 31 do
+    for i in 1 to 4 do
         insert into compact_source values ('a', 1);
         refresh materialized view compact_mv;
     end for;
-    return 31;
+    return 4;
 end;
 $$
 ----
-31
+4
 
 query I
 select block_count
@@ -296,20 +297,17 @@ from fuse_snapshot('test_materialized_view', 'compact_mv')
 order by timestamp desc
 limit 1
 ----
-32
+5
 
 query TI
 select category, total_amount from compact_mv
 ----
-a 35
+a 8
 
-# The 32nd appended state block reaches the debt threshold. Semantic compaction merges all equal
-# groups with *_merge_state and overwrites the MV, reducing this single-group MV to one block.
+# Compact gathers small state blocks, then re-aggregates each newly written block
+# so this single-group MV collapses to one row.
 statement ok
-insert into compact_source values ('a', 1)
-
-statement ok
-refresh materialized view compact_mv
+optimize table compact_mv compact
 
 query I
 select block_count
@@ -322,15 +320,15 @@ limit 1
 query TI
 select category, total_amount from compact_mv
 ----
-a 36
+a 8
 
 query I
 select row_count from fuse_block('test_materialized_view', 'compact_mv')
 ----
 1
 
-# A successful compact resets the debt. One subsequent incremental refresh appends one new state
-# block and must not immediately rewrite the whole MV again merely because it compacted before.
+# A later incremental refresh still appends one new state block instead of rewriting
+# the whole MV.
 statement ok
 insert into compact_source values ('a', 1)
 
@@ -348,13 +346,81 @@ limit 1
 query TI
 select category, total_amount from compact_mv
 ----
-a 37
+a 9
 
 statement ok
 drop materialized view compact_mv
 
 statement ok
 drop table compact_source
+
+# GROUP BY without aggregate functions is still an aggregating MV: it has no
+# `_mv_source_row_id`, so compact must collapse duplicate group keys.
+statement ok
+create table compact_group_source (category string) change_tracking = true
+
+statement ok
+create materialized view compact_group_mv (category) cluster by (category) as
+select category from compact_group_source group by category
+
+statement ok
+insert into compact_group_source values ('a'), ('a'), ('b')
+
+statement ok
+refresh materialized view compact_group_mv
+
+statement ok
+insert into compact_group_source values ('a'), ('b')
+
+statement ok
+refresh materialized view compact_group_mv
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'compact_group_mv')
+order by timestamp desc
+limit 1
+----
+2
+
+query T
+select category from compact_group_mv order by category
+----
+a
+b
+
+query I
+select sum(row_count) from fuse_block('test_materialized_view', 'compact_group_mv')
+----
+4
+
+statement ok
+optimize table compact_group_mv compact
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'compact_group_mv')
+order by timestamp desc
+limit 1
+----
+1
+
+query T
+select category from compact_group_mv order by category
+----
+a
+b
+
+query I
+select row_count from fuse_block('test_materialized_view', 'compact_group_mv')
+----
+2
+
+statement ok
+drop materialized view compact_group_mv
+
+statement ok
+drop table compact_group_source
 
 statement ok
 unset enable_compact_after_write

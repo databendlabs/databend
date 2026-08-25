@@ -152,9 +152,10 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let used = filter.predicates.iter().fold(required.clone(), |acc, v| {
-            acc.union(&v.used_columns()).cloned().collect()
-        });
+        let mut used = required.clone();
+        for predicate in &filter.predicates {
+            predicate.collect_used_columns(&mut used);
+        }
 
         // 2. Build physical plan.
         let input = self.build(s_expr.child(0)?, used).await?;

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -125,11 +126,16 @@ impl PullUpFilterOptimizer {
         let mut join = join.clone();
         if left_need_pull_up && right_need_pull_up {
             for condition in std::mem::take(&mut join.equi_conditions) {
+                let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                    &condition.left,
+                    &condition.right,
+                ]);
                 let predicate = ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
                     func_name: "eq".to_string(),
                     params: vec![],
                     arguments: vec![condition.left, condition.right],
+                    return_type: Box::new(return_type),
                 });
                 self.predicates.push(predicate);
             }

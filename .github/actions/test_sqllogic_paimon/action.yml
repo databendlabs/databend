@@ -29,7 +29,17 @@ runs:
         done
         curl -sf http://127.0.0.1:9002/minio/health/live
         aws --endpoint-url http://127.0.0.1:9002 s3 mb s3://paimon
-        uv run --script tests/sqllogictests/scripts/prepare_paimon_fs_data.py
+        for attempt in 1 2 3; do
+          if uv run --script tests/sqllogictests/scripts/prepare_paimon_fs_data.py; then
+            break
+          fi
+          if [ "${attempt}" -eq 3 ]; then
+            echo "FAIL: prepare_paimon_fs_data.py failed after 3 attempts"
+            exit 1
+          fi
+          echo "WARN: prepare_paimon_fs_data.py failed (attempt ${attempt}/3), retrying..."
+          sleep $((attempt * 2))
+        done
         # paimon-rust 0.2.0 checks directory paths as exact S3 keys.
         for path in regression.db regression.db/{write_append,write_append_part,write_pk,write_pk_part}; do
           aws --endpoint-url http://127.0.0.1:9002 s3api put-object \

@@ -74,15 +74,23 @@ fn constant_expr(value: Scalar) -> ScalarExpr {
 }
 
 fn comparison_expr(func_name: &str, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-    function_expr(func_name, vec![left, right])
+    ScalarExpr::FunctionCall(ScalarFunctionCall {
+        span: None,
+        func_name: func_name.to_string(),
+        params: vec![],
+        arguments: vec![left, right],
+        return_type: Box::new(DataType::Boolean),
+    })
 }
 
 fn function_expr(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
+    let return_type = arguments[0].data_type().into_owned();
     ScalarExpr::FunctionCall(ScalarFunctionCall {
         span: None,
         func_name: func_name.to_string(),
         params: vec![],
         arguments,
+        return_type: Box::new(return_type),
     })
 }
 

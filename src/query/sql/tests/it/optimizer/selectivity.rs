@@ -15,11 +15,14 @@
 use std::io::Write;
 
 use databend_common_exception::Result;
+use databend_common_expression::ColumnRef as ExprColumnRef;
+use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
+use databend_common_expression::type_check;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -211,12 +214,22 @@ fn count_min_sketch_to_string(count_min_sketch: &CountMinSketchSet) -> String {
 }
 
 fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> ScalarExpr {
+    raw_expr_to_typed_scalar(raw_expr, columns).0
+}
+
+fn raw_expr_to_typed_scalar(
+    raw_expr: &RawExpr,
+    columns: &[(&str, DataType)],
+) -> (ScalarExpr, Expr) {
     match raw_expr {
-        RawExpr::Constant { scalar, .. } => ScalarExpr::ConstantExpr(ConstantExpr {
-            span: None,
-            value: scalar.clone(),
-        }),
-        RawExpr::ColumnRef { id, .. } => {
+        RawExpr::Constant { scalar, .. } => (
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                span: None,
+                value: scalar.clone(),
+            }),
+            type_check::check(raw_expr, &BUILTIN_FUNCTIONS).unwrap(),
+        ),
+        RawExpr::ColumnRef { span, id, .. } => {
             let index = *id;
             let (name, data_type) = &columns[index];
             let column = ColumnBindingBuilder::new(
@@ -226,30 +239,67 @@ fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> Scala
                 Visibility::Visible,
             )
             .build();
-            ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
+            (
+                ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
+                Expr::ColumnRef(ExprColumnRef {
+                    span: *span,
+                    id: index,
+                    data_type: data_type.clone(),
+                    display_name: name.to_string(),
+                }),
+            )
         }
         RawExpr::Cast {
+            span,
             expr,
             dest_type,
             is_try,
             ..
-        } => ScalarExpr::CastExpr(CastExpr {
-            span: None,
-            is_try: *is_try,
-            argument: Box::new(raw_expr_to_scalar(expr, columns)),
-            target_type: Box::new(dest_type.clone()),
-        }),
+        } => {
+            let (scalar, typed_expr) = raw_expr_to_typed_scalar(expr, columns);
+            let typed_expr =
+                type_check::check_cast(*span, *is_try, typed_expr, dest_type, &BUILTIN_FUNCTIONS)
+                    .unwrap();
+            (
+                ScalarExpr::CastExpr(CastExpr {
+                    span: None,
+                    is_try: *is_try,
+                    argument: Box::new(scalar),
+                    target_type: Box::new(dest_type.clone()),
+                }),
+                typed_expr,
+            )
+        }
         RawExpr::FunctionCall {
-            name, args, params, ..
-        } => ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: name.clone(),
-            params: params.clone(),
-            arguments: args
+            span,
+            name,
+            args,
+            params,
+        } => {
+            let (arguments, typed_arguments): (Vec<_>, Vec<_>) = args
                 .iter()
-                .map(|arg| raw_expr_to_scalar(arg, columns))
-                .collect(),
-        }),
+                .map(|arg| raw_expr_to_typed_scalar(arg, columns))
+                .unzip();
+            let typed_expr = type_check::check_function(
+                *span,
+                name,
+                params,
+                &typed_arguments,
+                &BUILTIN_FUNCTIONS,
+            )
+            .unwrap();
+            let return_type = typed_expr.data_type().clone();
+            (
+                ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: name.clone(),
+                    params: params.clone(),
+                    arguments,
+                    return_type: Box::new(return_type),
+                }),
+                typed_expr,
+            )
+        }
         RawExpr::LambdaFunctionCall { .. } => {
             unreachable!("lambda expressions are not used in tests")
         }
@@ -743,6 +793,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
                 DataType::Number(NumberDataType::UInt64),
             ),
         ],
+        return_type: Box::new(DataType::Boolean),
     });
     run_scalar_case_with_predicates(
         &mut file,
@@ -1001,6 +1052,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             func_name: op.to_func_name().to_string(),
             params: vec![],
             arguments: vec![float_column(), float_constant(value)],
+            return_type: Box::new(DataType::Boolean),
         })
     };
     let float_gte_15 = float_predicate(ComparisonOp::GTE, 15.0);

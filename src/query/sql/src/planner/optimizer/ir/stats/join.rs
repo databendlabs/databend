@@ -220,8 +220,8 @@ impl JoinStatsEstimator {
     pub(crate) fn apply_condition(
         &mut self,
         output_columns: Option<JoinConditionColumns>,
-        left_type: DataType,
-        right_type: DataType,
+        left_type: &DataType,
+        right_type: &DataType,
         left_col_stat: &ColumnStat,
         right_col_stat: &ColumnStat,
         is_null_equal: bool,
@@ -376,8 +376,8 @@ pub(crate) struct JoinConditionColumns {
 }
 
 struct JoinConditionEstimation<'a> {
-    left_type: DataType,
-    right_type: DataType,
+    left_type: &'a DataType,
+    right_type: &'a DataType,
     left_col_stat: &'a ColumnStat,
     right_col_stat: &'a ColumnStat,
     left_cardinality: f64,
@@ -667,8 +667,8 @@ mod tests {
         let right_stat = int_join_column_stat(0, 1, NdvEstimate::exact(2.0));
 
         let err = JoinConditionEstimation {
-            left_type: DataType::Number(NumberDataType::Int8),
-            right_type: DataType::Number(NumberDataType::Int8),
+            left_type: &DataType::Number(NumberDataType::Int8),
+            right_type: &DataType::Number(NumberDataType::Int8),
             left_col_stat: &left_stat,
             right_col_stat: &right_stat,
             left_cardinality: 2.0,
@@ -705,8 +705,8 @@ mod tests {
                 left: Symbol::new(0),
                 right: Symbol::new(1),
             }),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            &DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            &DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
             &left_stat,
             &right_stat,
             true,
@@ -760,8 +760,8 @@ mod tests {
                 left: Symbol::new(0),
                 right: Symbol::new(1),
             }),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            &DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            &DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
             &left_stat,
             &right_stat,
             true,
@@ -806,8 +806,8 @@ mod tests {
         };
 
         let estimation = JoinConditionEstimation {
-            left_type: DataType::Date,
-            right_type: DataType::Timestamp,
+            left_type: &DataType::Date,
+            right_type: &DataType::Timestamp,
             left_col_stat: &left_stat,
             right_col_stat: &right_stat,
             left_cardinality: 10.0,

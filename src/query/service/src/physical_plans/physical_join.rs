@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::binder::is_range_join_condition;
@@ -136,12 +137,10 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let mut others_required = join
-            .non_equi_conditions
-            .iter()
-            .fold(required.clone(), |acc, v| {
-                acc.union(&v.used_columns()).cloned().collect()
-            });
+        let mut others_required = required.clone();
+        for condition in &join.non_equi_conditions {
+            condition.collect_used_columns(&mut others_required);
+        }
         if let Some(cache_info) = &join.build_side_cache_info {
             for column in &cache_info.columns {
                 others_required.insert(*column);
@@ -149,26 +148,12 @@ impl PhysicalPlanBuilder {
         }
 
         // Include columns referenced in left conditions and right conditions.
-        let left_required: ColumnSet = join
-            .equi_conditions
-            .iter()
-            .fold(required.clone(), |acc, v| {
-                acc.union(&v.left.used_columns()).cloned().collect()
-            })
-            .union(&others_required)
-            .cloned()
-            .collect();
-        let right_required: ColumnSet = join
-            .equi_conditions
-            .iter()
-            .fold(required.clone(), |acc, v| {
-                acc.union(&v.right.used_columns()).cloned().collect()
-            })
-            .union(&others_required)
-            .cloned()
-            .collect();
-        let left_required: ColumnSet = left_required.union(&others_required).cloned().collect();
-        let right_required: ColumnSet = right_required.union(&others_required).cloned().collect();
+        let mut left_required = others_required.clone();
+        let mut right_required = others_required.clone();
+        for condition in &join.equi_conditions {
+            condition.left.collect_used_columns(&mut left_required);
+            condition.right.collect_used_columns(&mut right_required);
+        }
 
         // 2. Try Build physical spatial join plan.
         if let Some(candidate) = join.spatial_join.clone() {
@@ -222,11 +207,16 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .cloned()
                 .chain(join.equi_conditions.iter().cloned().map(|condition| {
+                    let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                        &condition.left,
+                        &condition.right,
+                    ]);
                     FunctionCall {
                         span: condition.left.span(),
                         func_name: "eq".to_string(),
                         params: vec![],
                         arguments: vec![condition.left, condition.right],
+                        return_type: Box::new(return_type),
                     }
                     .into()
                 }))

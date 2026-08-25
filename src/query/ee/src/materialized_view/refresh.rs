@@ -41,7 +41,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableDataType;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableIdent;
@@ -67,75 +66,17 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::StreamMode;
 use log::info;
-use log::warn;
-
-// Full-table semantic compaction is expensive, so wait until incremental aggregate refreshes
-// have appended enough state blocks.
-const AGGREGATE_MV_COMPACT_MIN_DELTA_BLOCKS: u64 = 32;
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum AggregateRefreshEffect {
-    None,
-    Rebuilt,
-    Appended,
-}
 
 enum RefreshStrategy {
     CheckpointOnly,
     Rebuild(Statement),
     Merge(Statement),
     Append(Statement),
-    AppendAggregate {
-        statement: Statement,
-        appended_blocks: u64,
-    },
-}
-
-impl RefreshStrategy {
-    fn aggregate_effect(&self, is_aggregating: bool) -> AggregateRefreshEffect {
-        if !is_aggregating {
-            return AggregateRefreshEffect::None;
-        }
-        match self {
-            RefreshStrategy::Rebuild(_) => AggregateRefreshEffect::Rebuilt,
-            RefreshStrategy::AppendAggregate { .. } => AggregateRefreshEffect::Appended,
-            RefreshStrategy::CheckpointOnly
-            | RefreshStrategy::Merge(_)
-            | RefreshStrategy::Append(_) => AggregateRefreshEffect::None,
-        }
-    }
-
-    fn statement(&self) -> Option<&Statement> {
-        match self {
-            RefreshStrategy::CheckpointOnly => None,
-            RefreshStrategy::Rebuild(statement)
-            | RefreshStrategy::Merge(statement)
-            | RefreshStrategy::Append(statement) => Some(statement),
-            RefreshStrategy::AppendAggregate { statement, .. } => Some(statement),
-        }
-    }
-
-    fn appended_blocks(&self) -> Option<u64> {
-        match self {
-            RefreshStrategy::AppendAggregate {
-                appended_blocks, ..
-            } => Some(*appended_blocks),
-            _ => None,
-        }
-    }
-
-    fn is_empty_aggregate_append(&self) -> bool {
-        matches!(self, RefreshStrategy::AppendAggregate {
-            appended_blocks: 0,
-            ..
-        })
-    }
 }
 
 pub struct MaterializedViewRefresh<'a> {
@@ -149,7 +90,6 @@ pub struct MaterializedViewRefresh<'a> {
     source_database: String,
     source_table_name: String,
     is_aggregating: bool,
-    previous_mv_block_count: u64,
     checkpoint: Option<(u64, Option<String>)>,
     source_seq: u64,
     end_snapshot: Option<String>,
@@ -315,11 +255,6 @@ impl<'a> MaterializedViewRefresh<'a> {
                 .check_changes_valid(&source_table.get_table_info().desc, *mv_source_seq)?;
         }
 
-        let previous_mv_block_count = mv_table
-            .read_table_snapshot()
-            .await?
-            .map(|snapshot| snapshot.summary.block_count)
-            .unwrap_or(0);
         Ok(Some(Self {
             mv_table,
             ctx,
@@ -331,7 +266,6 @@ impl<'a> MaterializedViewRefresh<'a> {
             source_database,
             source_table_name,
             is_aggregating,
-            previous_mv_block_count,
             checkpoint,
             source_seq,
             end_snapshot: source_snapshot_location,
@@ -393,97 +327,6 @@ impl<'a> MaterializedViewRefresh<'a> {
         self.ctx.evict_table_from_cache(catalog, database, table)?;
         self.ctx.attach_table(catalog, database, table, source);
         Ok(())
-    }
-
-    async fn compact_aggregate_states(&self, mv_table: &dyn Table) -> Result<bool> {
-        let catalog = self.ctx.get_catalog(&self.catalog).await?;
-        let fuse_table = FuseTable::try_from_table(mv_table)?;
-        let Some(_snapshot) = fuse_table.read_table_snapshot().await? else {
-            return Ok(false);
-        };
-
-        let physical_source_name = format!(
-            "_mv_compact_{}_{}",
-            mv_table.get_id(),
-            mv_table.get_table_info().ident.seq
-        );
-        let mut physical_source_info = mv_table.get_table_info().clone();
-        physical_source_info.name = physical_source_name.clone();
-        physical_source_info.desc = format!("'{}'.'{}'", self.database, physical_source_name);
-        // Build a query-local FUSE alias over the committed MV snapshot so compaction reads the
-        // persisted AggregateState columns directly. Keeping the MATERIALIZED VIEW engine would
-        // route the alias through bind_materialized_view(), which applies the logical read plan and
-        // finalizes states with *_merge before this compaction can preserve them with *_merge_state.
-        // This only changes the cloned TableInfo; the catalog entry remains a MATERIALIZED VIEW.
-        physical_source_info.meta.engine = "FUSE".to_string();
-        let physical_source = catalog.get_table_by_info(&physical_source_info)?;
-        self.attach_source(
-            &self.catalog,
-            &self.database,
-            &physical_source_name,
-            physical_source,
-        )?;
-
-        let mut state_targets = Vec::new();
-        let mut group_targets = Vec::new();
-        let mut saw_group = false;
-        for field in mv_table.schema().fields() {
-            let column = Identifier::from_name(None, field.name()).to_string();
-            match field.data_type().remove_nullable() {
-                TableDataType::AggregateState { function_name, .. } => {
-                    if saw_group {
-                        return Err(ErrorCode::InvalidMaterializedView(
-                            "aggregate state columns must precede GROUP BY columns in materialized view storage",
-                        ));
-                    }
-                    state_targets.push(format!(
-                        "{}_merge_state({column}) AS {column}",
-                        function_name
-                    ));
-                }
-                _ => {
-                    saw_group = true;
-                    group_targets.push(column);
-                }
-            }
-        }
-        if state_targets.is_empty() && group_targets.is_empty() {
-            return Ok(false);
-        }
-
-        let mut targets = state_targets;
-        targets.extend(group_targets.iter().cloned());
-        let source = format!(
-            "{}.{}.{}",
-            Identifier::from_name(None, &self.catalog),
-            Identifier::from_name(None, &self.database),
-            Identifier::from_name(None, &physical_source_name),
-        );
-        let mut sql = format!("SELECT {} FROM {source}", targets.join(", "));
-        if !group_targets.is_empty() {
-            sql.push_str(&format!(" GROUP BY {}", group_targets.join(", ")));
-        }
-        let query = parse_materialized_view_query(
-            &sql,
-            "invalid materialized view aggregate compact query",
-        )?;
-        self.execute_statement(&Statement::Insert(InsertStmt {
-            hints: None,
-            with: None,
-            table: TableRef {
-                catalog: Some(Identifier::from_name(None, &self.catalog)),
-                database: Some(Identifier::from_name(None, &self.database)),
-                table: Identifier::from_name(None, &self.view_name),
-                branch: None,
-            },
-            columns: vec![],
-            source: InsertSource::Select {
-                query: Box::new(query),
-            },
-            overwrite: true,
-        }))
-        .await?;
-        Ok(true)
     }
 
     async fn execute_statement(&self, statement: &Statement) -> Result<()> {
@@ -814,7 +657,7 @@ impl<'a> MaterializedViewRefresh<'a> {
         )?;
         Self::apply_changes_query(&mut query, changes_query.clone(), "INSERT")?;
         // 4. The first refresh consumes all tracked inserts with INSERT OVERWRITE. For aggregate MVs,
-        // this also establishes a globally merged baseline with no semantic compaction debt.
+        // this also establishes a globally merged baseline.
         if starts_from_empty_endpoint {
             return Ok(RefreshStrategy::Rebuild(self.target_insert(query, true)));
         }
@@ -827,113 +670,35 @@ impl<'a> MaterializedViewRefresh<'a> {
             ));
         }
 
-        // 6. AppendOnly changes can be appended directly. Aggregate appends persist additional state
-        // rows and are the only refresh strategy that accumulates semantic compaction debt.
-        let statement = self.target_insert(query, false);
-        if self.is_aggregating {
-            Ok(RefreshStrategy::AppendAggregate {
-                statement,
-                appended_blocks: 0,
-            })
-        } else {
-            Ok(RefreshStrategy::Append(statement))
+        // 6. AppendOnly changes can be appended directly. Duplicate group keys left by
+        // incremental aggregate appends are merged later when compact/recluster writes a new block.
+        Ok(RefreshStrategy::Append(self.target_insert(query, false)))
+    }
+
+    fn checkpoint_options(&self) -> HashMap<String, Option<String>> {
+        HashMap::from([
+            (
+                OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ.to_string(),
+                Some(self.source_seq.to_string()),
+            ),
+            (
+                OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION.to_string(),
+                self.end_snapshot.clone(),
+            ),
+        ])
+    }
+
+    async fn execute_refresh(&self) -> Result<()> {
+        let strategy = self.plan_refresh_strategy().await?;
+        if let Some(statement) = match &strategy {
+            RefreshStrategy::CheckpointOnly => None,
+            RefreshStrategy::Rebuild(statement)
+            | RefreshStrategy::Merge(statement)
+            | RefreshStrategy::Append(statement) => Some(statement),
+        } {
+            self.execute_statement(statement).await?;
         }
-    }
-
-    fn parse_compaction_debt(&self) -> Result<u64> {
-        self.mv_table
-            .options()
-            .get(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS)
-            .map(|value| value.parse::<u64>())
-            .transpose()
-            .map_err(|error| {
-                ErrorCode::InvalidMaterializedView(format!(
-                    "invalid aggregate MV compaction delta block count: {error}"
-                ))
-            })
-            .map(|value| value.unwrap_or(0))
-    }
-
-    async fn transaction_local_mv_block_count(&self) -> Result<u64> {
-        self.ctx
-            .evict_table_from_cache(&self.catalog, &self.database, &self.view_name)?;
-        let catalog = self.ctx.get_catalog(&self.catalog).await?;
-        let table = catalog
-            .get_table(&self.ctx.get_tenant(), &self.database, &self.view_name)
-            .await?;
-        FuseTable::try_from_table(table.as_ref())?
-            .read_table_snapshot()
-            .await
-            .map(|snapshot| {
-                snapshot
-                    .map(|snapshot| snapshot.summary.block_count)
-                    .unwrap_or(0)
-            })
-    }
-
-    async fn execute_planned_refresh(&self, strategy: &mut RefreshStrategy) -> Result<()> {
-        let Some(statement) = strategy.statement() else {
-            return Ok(());
-        };
-        self.execute_statement(statement).await?;
-        if let RefreshStrategy::AppendAggregate {
-            appended_blocks, ..
-        } = strategy
-        {
-            let current_mv_block_count = self.transaction_local_mv_block_count().await?;
-
-            *appended_blocks = current_mv_block_count.saturating_sub(self.previous_mv_block_count);
-        }
-        Ok(())
-    }
-
-    fn checkpoint_options(
-        &self,
-        strategy: &RefreshStrategy,
-        aggregate_effect: AggregateRefreshEffect,
-    ) -> Result<HashMap<String, Option<String>>> {
-        let compaction_debt = match aggregate_effect {
-            AggregateRefreshEffect::None => None,
-            AggregateRefreshEffect::Rebuilt => Some(0),
-            AggregateRefreshEffect::Appended => {
-                let appended_blocks = strategy.appended_blocks().ok_or_else(|| {
-                    ErrorCode::Internal("aggregate append refresh did not record appended blocks")
-                })?;
-                Some(
-                    self.parse_compaction_debt()?
-                        .saturating_add(appended_blocks),
-                )
-            }
-        };
-
-        let source_seq = (
-            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ.to_string(),
-            Some(self.source_seq.to_string()),
-        );
-        let source_snapshot = (
-            OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION.to_string(),
-            self.end_snapshot.clone(),
-        );
-
-        let options = match compaction_debt {
-            Some(delta_blocks) => HashMap::from([
-                source_seq,
-                source_snapshot,
-                (
-                    OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS.to_string(),
-                    Some(delta_blocks.to_string()),
-                ),
-            ]),
-            None => HashMap::from([source_seq, source_snapshot]),
-        };
-        Ok(options)
-    }
-
-    async fn execute_refresh(&self) -> Result<AggregateRefreshEffect> {
-        let mut strategy = self.plan_refresh_strategy().await?;
-        self.execute_planned_refresh(&mut strategy).await?;
-        let aggregate_effect = strategy.aggregate_effect(self.is_aggregating);
-        let checkpoint_options = self.checkpoint_options(&strategy, aggregate_effect)?;
+        let checkpoint_options = self.checkpoint_options();
 
         let txn_mgr = self.ctx.txn_mgr();
         let updated = txn_mgr
@@ -942,15 +707,6 @@ impl<'a> MaterializedViewRefresh<'a> {
         // An append-only source endpoint can advance while all changed rows are rejected by the
         // MV predicate. FUSE then legitimately skips the empty INSERT commit, so there is no table
         // mutation in the transaction buffer to decorate with checkpoint options.
-        if !updated
-            && aggregate_effect != AggregateRefreshEffect::None
-            && !strategy.is_empty_aggregate_append()
-        {
-            return Err(ErrorCode::Internal(format!(
-                "aggregate materialized view {}.{} refresh did not buffer its table mutation",
-                self.database, self.view_name
-            )));
-        }
         if !updated {
             let catalog = self.ctx.get_catalog(&self.catalog).await?;
             catalog
@@ -966,62 +722,6 @@ impl<'a> MaterializedViewRefresh<'a> {
                 .await?;
         }
         execute_commit_statement(self.ctx.clone()).await?;
-        Ok(aggregate_effect)
-    }
-
-    async fn compact_after_refresh(&self, aggregate_effect: AggregateRefreshEffect) -> Result<()> {
-        if aggregate_effect != AggregateRefreshEffect::Appended {
-            return Ok(());
-        }
-
-        self.ctx
-            .evict_table_from_cache(&self.catalog, &self.database, &self.view_name)?;
-        let catalog = self.ctx.get_catalog(&self.catalog).await?;
-        let table = catalog
-            .get_table(&self.ctx.get_tenant(), &self.database, &self.view_name)
-            .await?;
-        if table.get_id() != self.mv_table.get_id() {
-            return Ok(());
-        }
-        let delta_blocks = table
-            .options()
-            .get(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS)
-            .map(|value| value.parse::<u64>())
-            .transpose()
-            .map_err(|error| {
-                ErrorCode::InvalidMaterializedView(format!(
-                    "invalid aggregate MV compaction delta block count: {error}"
-                ))
-            })?
-            .unwrap_or(0);
-        if delta_blocks < AGGREGATE_MV_COMPACT_MIN_DELTA_BLOCKS
-            || !self.compact_aggregate_states(table.as_ref()).await?
-        {
-            return Ok(());
-        }
-
-        self.ctx
-            .evict_table_from_cache(&self.catalog, &self.database, &self.view_name)?;
-        let compacted_table = catalog
-            .get_table(&self.ctx.get_tenant(), &self.database, &self.view_name)
-            .await?;
-        if compacted_table.get_id() != self.mv_table.get_id() {
-            return Ok(());
-        }
-        catalog
-            .upsert_table_option(
-                &self.ctx.get_tenant(),
-                &self.database,
-                UpsertTableOptionReq {
-                    table_id: compacted_table.get_id(),
-                    seq: MatchSeq::Exact(compacted_table.get_table_info().ident.seq),
-                    options: HashMap::from([(
-                        OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS.to_string(),
-                        Some("0".to_string()),
-                    )]),
-                },
-            )
-            .await?;
         Ok(())
     }
 
@@ -1034,23 +734,11 @@ impl<'a> MaterializedViewRefresh<'a> {
         }
         txn_mgr.lock().begin();
 
-        let aggregate_effect = match self.execute_refresh().await {
-            Ok(effect) => effect,
-            Err(error) => {
-                // execute_commit_statement() clears the transaction itself once entered. This
-                // explicit clear covers planning and refresh failures before commit starts.
-                txn_mgr.lock().clear();
-                return Err(error);
-            }
-        };
-
-        // Refresh data, checkpoint, and debt are committed at this point. Semantic compaction is a
-        // separate best-effort maintenance phase and cannot invalidate the completed refresh.
-        if let Err(error) = self.compact_after_refresh(aggregate_effect).await {
-            warn!(
-                "materialized view {}.{} refresh succeeded but aggregate state compaction maintenance failed: {}",
-                self.database, self.view_name, error
-            );
+        if let Err(error) = self.execute_refresh().await {
+            // execute_commit_statement() clears the transaction itself once entered. This
+            // explicit clear covers planning and refresh failures before commit starts.
+            txn_mgr.lock().clear();
+            return Err(error);
         }
         Ok(())
     }

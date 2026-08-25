@@ -15,6 +15,13 @@
 2	70
 1	[1,2,3]
 2	{"k":"v"}
+--- small parquet file should stream multiple blocks
+131073
+131073	0	131072	0	131072	131073
+131073
+131073	0	131072	0	131072	131073
+0
+0
 --- large parquet file should be worked on parallel by rowgroups
 5000000
 parallel scan partitions: true
