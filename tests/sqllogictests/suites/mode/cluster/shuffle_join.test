@@ -517,19 +517,10 @@ create or replace table multi_key_scatter_probe(
     key_num_1 uint64 not null,
     key_num_2 uint64 not null,
     key_num_3 uint64 not null,
-
-statement ok
-set enforce_shuffle_join = 1
-
-create or replace table node_shuffle_l(
-    k1 int not null,
-    k2 string not null,
-
     payload string not null
 )
 
 statement ok
-<<<<<<< HEAD
 create or replace table multi_key_scatter_build(
     normalized_text_key string not null,
     raw_text_key string not null,
@@ -588,7 +579,15 @@ drop table multi_key_scatter_probe
 
 statement ok
 drop table multi_key_scatter_build
-=======
+
+statement ok
+create or replace table node_shuffle_l(
+    k1 int not null,
+    k2 string not null,
+    payload string not null
+)
+
+statement ok
 create or replace table node_shuffle_r(
     k1 int,
     k2 string not null,
@@ -604,7 +603,7 @@ insert into node_shuffle_l values
 statement ok
 insert into node_shuffle_r values
     (1, 'a', 'right-1'),
-    (NULL, 'z', 'right-null'),
+    (NULL, 'b', 'right-null'),
     (2, 'x', 'right-2'),
     (4, 'd', 'right-4')
 
@@ -655,7 +654,7 @@ from node_shuffle_l as l
 order by l.k1
 ----
 1 a 1
-2 b 0
+2 b NULL
 3 c 0
 
 query IB
@@ -672,7 +671,6 @@ drop table node_shuffle_l
 
 statement ok
 drop table node_shuffle_r
->>>>>>> 36a53e0c01 (fix(query): restore node shuffle for hash joins)
 
 statement ok
 unset enforce_shuffle_join

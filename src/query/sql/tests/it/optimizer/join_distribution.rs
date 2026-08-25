@@ -73,6 +73,23 @@ async fn optimized_nullable_mark_join(ctx: &std::sync::Arc<LiteTableContext>) ->
     Ok(*s_expr)
 }
 
+async fn optimized_correlated_nullable_mark_join(
+    ctx: &std::sync::Arc<LiteTableContext>,
+) -> Result<SExpr> {
+    let raw = ctx
+        .bind_sql(
+            "SELECT l.k1, l.k2, l.k1 IN (\
+                 SELECT r.k1 FROM join_distribution_r AS r WHERE l.k2 = r.k2\
+             ) \
+             FROM join_distribution_l AS l",
+        )
+        .await?;
+    let Plan::Query { s_expr, .. } = ctx.optimize_plan(raw).await? else {
+        unreachable!("correlated mark join query should produce a query plan");
+    };
+    Ok(*s_expr)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_hash_join_child_distributions() -> Result<()> {
     let ctx = LiteTableContext::create().await?;
@@ -84,7 +101,7 @@ async fn test_hash_join_child_distributions() -> Result<()> {
     )
     .await?;
     ctx.register_table_sql(
-        "CREATE TABLE join_distribution_r (k1 INT NOT NULL, k2 STRING NOT NULL, payload INT)",
+        "CREATE TABLE join_distribution_r (k1 INT, k2 STRING NOT NULL, payload INT)",
     )
     .await?;
 
@@ -104,6 +121,15 @@ async fn test_hash_join_child_distributions() -> Result<()> {
     assert_eq!(mark_exchanges.node_to_node_key_counts, vec![1]);
     assert_eq!(mark_exchanges.global_hash, 0);
     assert_eq!(mark_exchanges.broadcast, 1);
+
+    let correlated_mark_plan = optimized_correlated_nullable_mark_join(&ctx).await?;
+    let mut correlated_mark_exchanges = Exchanges::default();
+    collect_exchanges(&correlated_mark_plan, &mut correlated_mark_exchanges);
+    // Correlated Mark Join keeps nullable marker state in one join instance,
+    // so both inputs are merged instead of hash-shuffled or broadcast.
+    assert!(correlated_mark_exchanges.node_to_node_key_counts.is_empty());
+    assert_eq!(correlated_mark_exchanges.global_hash, 0);
+    assert_eq!(correlated_mark_exchanges.broadcast, 0);
 
     ctx.get_settings()
         .set_setting("enforce_shuffle_join".to_string(), "0".to_string())?;

@@ -639,6 +639,15 @@ impl Join {
         }
     }
 
+    fn correlated_nullable_mark_join_requires_serial(&self) -> bool {
+        self.from_correlated_subquery
+            && self
+                .non_equi_conditions
+                .iter()
+                .any(|condition| condition.data_type().is_nullable_or_null())
+            && matches!(self.join_type, JoinType::LeftMark | JoinType::RightMark)
+    }
+
     pub fn derive_join_stats(
         &self,
         left_stat_info: Arc<StatInfo>,
@@ -923,8 +932,17 @@ impl Operator for Join {
             return Ok(required);
         }
 
-        // Nullable mark joins must replicate the subquery side so every
-        // partition can observe NULLs when computing the marker value.
+        // Correlated mark joins evaluate their non-equi membership predicate
+        // after partitioning on the correlation keys. Keep them serial because
+        // marker NULL state is local to one hash-join instance and cannot be
+        // reconciled across distributed partitions.
+        if self.correlated_nullable_mark_join_requires_serial() {
+            required.distribution = Distribution::Serial;
+            return Ok(required);
+        }
+
+        // Nullable uncorrelated mark joins must replicate the subquery side so
+        // every partition can observe NULLs when computing the marker value.
         if self.nullable_mark_join_broadcast_child() == Some(child_index) {
             required.distribution = Distribution::Broadcast;
             return Ok(required);
@@ -1055,6 +1073,21 @@ impl Operator for Join {
                     },
                 ],
             ]);
+        }
+
+        // Correlated mark joins keep marker NULL state in one hash-join
+        // instance; distributing either side would require a reconciliation
+        // phase that does not exist today.
+        if self.correlated_nullable_mark_join_requires_serial() {
+            children_required.push(vec![
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+            ]);
+            return Ok(children_required);
         }
 
         // For mark join with nullable eq comparison, ensure to use broadcast for subquery side
