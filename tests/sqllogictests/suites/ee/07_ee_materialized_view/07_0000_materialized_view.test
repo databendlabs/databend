@@ -422,6 +422,82 @@ drop materialized view compact_group_mv
 statement ok
 drop table compact_group_source
 
+# Recluster merges duplicate group keys and must re-sort each re-aggregated
+# block before serialization: cluster statistics read the first and last rows
+# of a sorted block, and wrong bounds would let cluster-key filters prune
+# blocks that still contain live rows.
+statement ok
+create table recluster_source (category string, amount int) change_tracking = true
+
+statement ok
+create materialized view recluster_mv (category, total_amount) cluster by (category) as
+select category, sum(amount) as total_amount
+from recluster_source
+group by category
+
+statement ok
+insert into recluster_source values ('a', 1), ('b', 2), ('c', 3), ('d', 4), ('e', 5), ('f', 6)
+
+statement ok
+refresh materialized view recluster_mv
+
+statement ok
+insert into recluster_source values ('a', 10), ('b', 20), ('c', 30), ('d', 40), ('e', 50), ('f', 60)
+
+statement ok
+refresh materialized view recluster_mv
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'recluster_mv')
+order by timestamp desc
+limit 1
+----
+2
+
+statement ok
+alter materialized view recluster_mv recluster final
+
+query I
+select block_count
+from fuse_snapshot('test_materialized_view', 'recluster_mv')
+order by timestamp desc
+limit 1
+----
+1
+
+query I
+select row_count from fuse_block('test_materialized_view', 'recluster_mv')
+----
+6
+
+# Cluster-key point lookups reach the re-aggregated block through pruning.
+query TI
+select category, total_amount from recluster_mv where category = 'a'
+----
+a 11
+
+query TI
+select category, total_amount from recluster_mv where category = 'f'
+----
+f 66
+
+query TI
+select category, total_amount from recluster_mv order by category
+----
+a 11
+b 22
+c 33
+d 44
+e 55
+f 66
+
+statement ok
+drop materialized view recluster_mv
+
+statement ok
+drop table recluster_source
+
 statement ok
 unset enable_compact_after_write
 
