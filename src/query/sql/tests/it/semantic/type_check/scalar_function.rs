@@ -21,6 +21,12 @@ async fn test_type_check_scalar_function_rules() -> Result<()> {
             setup_sqls: &[],
             sql: "if(false, 1, number > 0, 2, 3)",
         },
+        SqlTestCase {
+            name: "partially_folded_if_with_nested_cast",
+            description: "A nested cast selected by constant folding must not be treated as a top-level cast rewrite.",
+            setup_sqls: &[],
+            sql: "if(true, CAST(number AS BIGINT), 0)",
+        },
     ];
 
     run_type_check_cases("scalar_function.txt", &cases).await

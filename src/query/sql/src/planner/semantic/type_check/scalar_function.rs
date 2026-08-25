@@ -632,6 +632,7 @@ where A: TypeCheckAdapter
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
         let expr = type_check::rewrite_function_to_cast(expr);
+        let is_top_level_cast = matches!(&expr, expr::Expr::Cast(_));
 
         // Run constant folding for arguments of the scalar function.
         // This will be helpful to simplify some constant expressions, especially
@@ -676,13 +677,16 @@ where A: TypeCheckAdapter
             Err(expr) => expr,
         };
 
-        if let expr::Expr::Cast(expr::Cast {
-            span,
-            is_try,
-            dest_type,
-            ..
-        }) = expr
-        {
+        if is_top_level_cast {
+            let expr::Expr::Cast(expr::Cast {
+                span,
+                is_try,
+                dest_type,
+                ..
+            }) = expr
+            else {
+                unreachable!("a partially folded top-level cast must remain a cast");
+            };
             assert_eq!(folded_args.len(), 1);
             return Ok(Box::new((
                 CastExpr {
