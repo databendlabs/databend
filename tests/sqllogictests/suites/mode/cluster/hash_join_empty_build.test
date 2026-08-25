@@ -1,0 +1,80 @@
+statement ok
+drop table if exists hash_join_empty_build;
+
+statement ok
+create table hash_join_empty_build(a UInt64);
+
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+set enforce_shuffle_join = 1;
+
+# An empty distributed INNER JOIN build side must finish every probe exchange
+# without scanning its input. Execution metrics before TableScan(Probe)'s table
+# name would show that at least one node consumed the numbers source.
+query T
+explain analyze
+select n.number
+from numbers(1000000) as n
+inner join hash_join_empty_build as e on n.number = e.a;
+----
+Exchange
+<slt:ignore>
+└── HashJoin
+<slt:ignore>
+    ├── join type: INNER
+<slt:ignore>
+    └── Exchange(Probe)
+<slt:ignore>
+        └── TableScan
+            ├── table: default.system.numbers
+<slt:ignore>
+
+statement ok
+set force_join_data_spill = 1;
+
+# Forced spill resets the in-memory build row count. The global logical row
+# count must remain zero and release all distributed probe exchanges.
+query T
+explain analyze
+select n.number
+from numbers(1000000) as n
+inner join hash_join_empty_build as e on n.number = e.a;
+----
+Exchange
+<slt:ignore>
+└── HashJoin
+<slt:ignore>
+    ├── join type: INNER
+<slt:ignore>
+    └── Exchange(Probe)
+<slt:ignore>
+        └── TableScan
+            ├── table: default.system.numbers
+<slt:ignore>
+
+# A non-empty build under the same spill and shuffle path must not inherit the
+# empty decision. This protects against resetting or losing the logical row
+# count while runtime-filter packets are globalized.
+statement ok
+insert into hash_join_empty_build values (42);
+
+query I
+select count()
+from numbers(1000000) as n
+inner join hash_join_empty_build as e on n.number = e.a;
+----
+1
+
+statement ok
+unset force_join_data_spill;
+
+statement ok
+unset enforce_shuffle_join;
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+drop table hash_join_empty_build;
