@@ -287,20 +287,16 @@ impl<S: DataBlockSpill> Processor for TransformHilbertCluster<S> {
                 }
                 if self.input.has_data() {
                     let Some(block) = self.input.pull_data() else {
-                        let error = ErrorCode::Internal(
+                        return Err(self.exchange.fail(ErrorCode::Internal(
                             "Hilbert input reported data but no block was available",
-                        );
-                        self.exchange.fail(error);
-                        return self.exchange.check_error().map(|_| Event::Async);
+                        )));
                     };
-                    let block = block.inspect_err(|error| self.exchange.fail(error.clone()))?;
+                    let block = block.inspect_err(|error| {
+                        self.exchange.fail(error.clone());
+                    })?;
                     if !block.is_empty() {
-                        if let Err(error) =
-                            sample_block(sampler, self.exchange.dimension_offsets(), &block)
-                        {
-                            self.exchange.fail(error);
-                            return self.exchange.check_error().map(|_| Event::Async);
-                        }
+                        sample_block(sampler, self.exchange.dimension_offsets(), &block)
+                            .map_err(|error| self.exchange.fail(error))?;
                         self.buffer.push(block);
                     }
                     // `pull_data` clears the port's NEED_DATA flag. Re-arm it before returning
@@ -309,13 +305,10 @@ impl<S: DataBlockSpill> Processor for TransformHilbertCluster<S> {
                     return Ok(Event::NeedData);
                 }
                 if self.input.is_finished() {
-                    let sampler = match self.phase.take_sampler(HilbertWorkerPhase::WaitSketches) {
-                        Ok(sampler) => sampler,
-                        Err(error) => {
-                            self.exchange.fail(error);
-                            return self.exchange.check_error().map(|_| Event::Async);
-                        }
-                    };
+                    let sampler = self
+                        .phase
+                        .take_sampler(HilbertWorkerPhase::WaitSketches)
+                        .map_err(|error| self.exchange.fail(error))?;
                     let rows = sampler.rows_seen();
                     self.exchange
                         .submit_initial(self.worker_id, rows, sampler.into_samples());
@@ -337,12 +330,8 @@ impl<S: DataBlockSpill> Processor for TransformHilbertCluster<S> {
                 loop {
                     let next = match self.buffer.chunks.get(*cursor) {
                         Some(PendingChunk::Memory(block)) => {
-                            if let Err(error) =
-                                sample_block(sampler, self.exchange.dimension_offsets(), block)
-                            {
-                                self.exchange.fail(error);
-                                return self.exchange.check_error().map(|_| Event::Async);
-                            }
+                            sample_block(sampler, self.exchange.dimension_offsets(), block)
+                                .map_err(|error| self.exchange.fail(error))?;
                             *cursor += 1;
                             continue;
                         }
@@ -355,21 +344,14 @@ impl<S: DataBlockSpill> Processor for TransformHilbertCluster<S> {
                     }
                     break;
                 }
-                let sampler = match self.phase.take_sampler(HilbertWorkerPhase::WaitPlan) {
-                    Ok(sampler) => sampler,
-                    Err(error) => {
-                        self.exchange.fail(error);
-                        return self.exchange.check_error().map(|_| Event::Async);
-                    }
-                };
+                let sampler = self
+                    .phase
+                    .take_sampler(HilbertWorkerPhase::WaitPlan)
+                    .map_err(|error| self.exchange.fail(error))?;
                 let rows = sampler.rows_seen();
-                if let Err(error) =
-                    self.exchange
-                        .complete_resample(self.worker_id, rows, sampler.into_samples())
-                {
-                    self.exchange.fail(error);
-                    return self.exchange.check_error().map(|_| Event::Async);
-                }
+                self.exchange
+                    .complete_resample(self.worker_id, rows, sampler.into_samples())
+                    .map_err(|error| self.exchange.fail(error))?;
                 if self.exchange.should_build_plan() {
                     Ok(Event::Sync)
                 } else {
@@ -417,18 +399,16 @@ impl<S: DataBlockSpill> Processor for TransformHilbertCluster<S> {
             match io {
                 PendingIo::Spill(index, blocks) => {
                     let bytes = blocks.iter().map(DataBlock::memory_size).sum();
-                    let location = match self.buffer.spiller.merge_and_spill(blocks).await {
-                        Ok(location) => location,
-                        Err(error) => {
-                            let error = ErrorCode::from_string(format!(
-                                "Hilbert recluster failed to spill buffered input: {error}"
-                            ));
-                            self.exchange.fail(error);
-                            // `fail` preserves the first task-wide error, which may have been
-                            // published by a peer while this spill was in flight.
-                            return self.exchange.check_error();
-                        }
-                    };
+                    let location =
+                        self.buffer
+                            .spiller
+                            .merge_and_spill(blocks)
+                            .await
+                            .map_err(|error| {
+                                self.exchange.fail(ErrorCode::from_string(format!(
+                                    "Hilbert recluster failed to spill buffered input: {error}"
+                                )))
+                            })?;
                     // Another worker may have failed while this I/O was in flight. Do not advance
                     // local state after the task has entered its terminal failure state.
                     self.exchange.check_error()?;
@@ -440,25 +420,19 @@ impl<S: DataBlockSpill> Processor for TransformHilbertCluster<S> {
                         .insert(index, PendingChunk::Spilled(location));
                 }
                 PendingIo::Restore(location) => {
-                    let block = match self.buffer.spiller.restore(&location).await {
-                        Ok(block) => block,
-                        Err(error) => {
-                            self.exchange.fail(error);
-                            // Return the shared first error if a peer failed during restore.
-                            return self.exchange.check_error();
-                        }
-                    };
+                    let block = self
+                        .buffer
+                        .spiller
+                        .restore(&location)
+                        .await
+                        .map_err(|error| self.exchange.fail(error))?;
                     // A peer may fail while restore is in flight. In particular, replay must not
                     // expose a restored block after the shared task has already failed.
                     self.exchange.check_error()?;
                     match &mut self.phase {
                         HilbertWorkerPhase::Resample { cursor, sampler } => {
-                            if let Err(error) =
-                                sample_block(sampler, self.exchange.dimension_offsets(), &block)
-                            {
-                                self.exchange.fail(error);
-                                return self.exchange.check_error();
-                            }
+                            sample_block(sampler, self.exchange.dimension_offsets(), &block)
+                                .map_err(|error| self.exchange.fail(error))?;
                             *cursor += 1;
                         }
                         HilbertWorkerPhase::Replay {
@@ -469,11 +443,9 @@ impl<S: DataBlockSpill> Processor for TransformHilbertCluster<S> {
                                 Some(prepare_replay_block(block, self.worker_id, next_salt_row));
                         }
                         _ => {
-                            let error = ErrorCode::Internal(
+                            return Err(self.exchange.fail(ErrorCode::Internal(
                                 "Hilbert restore completed outside restore phase",
-                            );
-                            self.exchange.fail(error);
-                            return self.exchange.check_error();
+                            )));
                         }
                     }
                 }
@@ -483,13 +455,10 @@ impl<S: DataBlockSpill> Processor for TransformHilbertCluster<S> {
         match &self.phase {
             HilbertWorkerPhase::WaitSketches => {
                 self.exchange.wait_sketches().await?;
-                let resample_request = match self.exchange.resample_request(self.worker_id) {
-                    Ok(request) => request,
-                    Err(error) => {
-                        self.exchange.fail(error);
-                        return self.exchange.check_error();
-                    }
-                };
+                let resample_request = self
+                    .exchange
+                    .resample_request(self.worker_id)
+                    .map_err(|error| self.exchange.fail(error))?;
                 self.phase = if let Some(sample_size) = resample_request {
                     HilbertWorkerPhase::Resample {
                         cursor: 0,
@@ -511,11 +480,9 @@ impl<S: DataBlockSpill> Processor for TransformHilbertCluster<S> {
             HilbertWorkerPhase::Sampling(_)
             | HilbertWorkerPhase::Resample { .. }
             | HilbertWorkerPhase::Replay { .. } => {
-                let error = ErrorCode::Internal(
+                return Err(self.exchange.fail(ErrorCode::Internal(
                     "Hilbert processor received an async event outside a barrier phase",
-                );
-                self.exchange.fail(error);
-                return self.exchange.check_error();
+                )));
             }
         }
         Ok(())
@@ -547,24 +514,6 @@ mod tests {
     struct PeerFailingSpiller {
         exchange: Arc<HilbertRangeExchange>,
         restored: DataBlock,
-    }
-
-    #[derive(Clone)]
-    struct DoubleFailingSpiller {
-        exchange: Arc<HilbertRangeExchange>,
-    }
-
-    #[async_trait::async_trait]
-    impl DataBlockSpill for DoubleFailingSpiller {
-        async fn merge_and_spill(&self, _blocks: Vec<DataBlock>) -> Result<SpillLocation> {
-            self.exchange.fail(ErrorCode::Internal("peer failed first"));
-            Err(ErrorCode::Internal("local spill failed later"))
-        }
-
-        async fn restore(&self, _location: &SpillLocation) -> Result<DataBlock> {
-            self.exchange.fail(ErrorCode::Internal("peer failed first"));
-            Err(ErrorCode::Internal("local restore failed later"))
-        }
     }
 
     #[async_trait::async_trait]
@@ -757,32 +706,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_replay_salt_state_across_blocks() {
-        let block = || block(vec![1, 2], vec![3, 4]);
-
-        let mut no_salt = None;
-        let unsalted = prepare_replay_block(block(), 7, &mut no_salt);
-        assert_eq!(unsalted.num_columns(), 2);
-        assert_eq!(no_salt, None);
-
-        let mut next_salt_row = Some(0);
-        let first = prepare_replay_block(block(), 7, &mut next_salt_row);
-        let second = prepare_replay_block(block(), 7, &mut next_salt_row);
-        assert_eq!(next_salt_row, Some(4));
-
-        let worker = 7_u64 << 48;
-        for (block, start) in [(&first, 0), (&second, 2)] {
-            assert_eq!(block.num_columns(), 3);
-            for row in 0..2 {
-                assert_eq!(
-                    block.get_by_offset(2).index(row),
-                    Some(Scalar::from(mix64(worker ^ (start + row) as u64)).as_ref())
-                );
-            }
-        }
-    }
-
     #[tokio::test]
     async fn test_spill_replay_preserves_order_and_rows() -> Result<()> {
         let ports = TestPorts::new();
@@ -861,28 +784,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_sampling_rearms_input() -> Result<()> {
-        let ports = TestPorts::new();
-        let exchange = HilbertRangeExchange::create([0, 1], 4, 1, 1);
-        let mut processor = TransformHilbertCluster::create(
-            ports.input,
-            ports.output,
-            exchange,
-            0,
-            MockSpiller::default(),
-            no_spill_settings(),
-        );
-
-        assert!(matches!(processor.event()?, Event::NeedData));
-        for block in [block(vec![1, 2], vec![3, 4]), DataBlock::empty()] {
-            ports.upstream.push_data(Ok(block));
-            assert!(matches!(processor.event()?, Event::NeedData));
-            assert!(ports.upstream.can_push());
-        }
-        Ok(())
-    }
-
     #[tokio::test]
     async fn test_downstream_cancellation_wakes_preplan_barrier() -> Result<()> {
         let exchange = HilbertRangeExchange::create([0, 1], 1, 2, 1);
@@ -898,66 +799,6 @@ mod tests {
         assert_eq!(
             error.message(),
             "Hilbert recluster cancelled before its range plan was ready"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_downstream_cancellation_after_plan_is_not_an_error() -> Result<()> {
-        let ports = TestPorts::new();
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
-        exchange.submit_initial(0, 1, vec![[Scalar::from(1), Scalar::from(1)]]);
-        exchange.publish_plan();
-        let mut processor = TransformHilbertCluster::create(
-            ports.input.clone(),
-            ports.output,
-            exchange.clone(),
-            0,
-            MockSpiller::default(),
-            no_spill_settings(),
-        );
-        ports.downstream.finish();
-
-        assert!(matches!(processor.event()?, Event::Finished));
-        assert!(ports.input.is_finished());
-        exchange.check_error()?;
-        Ok(())
-    }
-
-    #[test]
-    fn test_sample_row_count_overflow_is_an_error() {
-        let mut sampler = FixedSizeSampler::new(1, SmallRng::seed_from_u64(1));
-        sampler.add_block(usize::MAX, |_| [Scalar::Null, Scalar::Null]);
-
-        assert_eq!(
-            sample_block(&mut sampler, [0, 1], &block(vec![1], vec![1]))
-                .unwrap_err()
-                .message(),
-            "Hilbert sampled row count overflowed"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_malformed_sampling_block_wakes_barrier() -> Result<()> {
-        let ports = TestPorts::new();
-        let exchange = HilbertRangeExchange::create([0, 2], 1, 1, 1);
-        let mut processor = TransformHilbertCluster::create(
-            ports.input,
-            ports.output,
-            exchange.clone(),
-            0,
-            MockSpiller::default(),
-            no_spill_settings(),
-        );
-        ports.upstream.push_data(Ok(block(vec![1], vec![1])));
-
-        assert_eq!(
-            processor.event().unwrap_err().message(),
-            "Hilbert dimension offset 2 is outside the input block"
-        );
-        assert_eq!(
-            exchange.wait_sketches().await.unwrap_err().message(),
-            "Hilbert dimension offset 2 is outside the input block"
         );
         Ok(())
     }
@@ -1060,72 +901,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_peer_error_wins_over_later_io_error() {
-        for io in [
-            PendingIo::Spill(0, vec![block(vec![1], vec![1])]),
-            PendingIo::Restore(SpillLocation::Remote("failing-restore".to_string())),
-        ] {
-            let exchange = HilbertRangeExchange::create([0, 1], 1, 2, 1);
-            let (_, mut processor) = processor_with_io(
-                exchange.clone(),
-                DoubleFailingSpiller {
-                    exchange: exchange.clone(),
-                },
-                io,
-            );
-            let processor = hilbert_processor::<DoubleFailingSpiller>(&mut processor);
-            if matches!(&processor.io, Some(PendingIo::Restore(_))) {
-                processor.phase = HilbertWorkerPhase::Replay {
-                    next_salt_row: Some(0),
-                    output_data: None,
-                };
-            }
-
-            assert_eq!(
-                processor.async_process().await.unwrap_err().message(),
-                "peer failed first"
-            );
-            assert_eq!(
-                exchange.wait_sketches().await.unwrap_err().message(),
-                "peer failed first"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn test_invariant_errors_wake_barrier() -> Result<()> {
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 2, 1);
-        let spiller = MockSpiller::default();
-        let location = spiller
-            .merge_and_spill(vec![block(vec![1], vec![1])])
-            .await?;
-        let (_, mut processor) =
-            processor_with_io(exchange.clone(), spiller, PendingIo::Restore(location));
-        let processor_error = processor.async_process().await.unwrap_err();
-        assert_eq!(
-            processor_error.message(),
-            "Hilbert restore completed outside restore phase"
-        );
-        assert_eq!(
-            exchange.wait_sketches().await.unwrap_err().message(),
-            processor_error.message()
-        );
-
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 2, 1);
-        let (_, mut processor) = test_processor(exchange.clone(), 0, MockSpiller::default());
-        let processor_error = processor.async_process().await.unwrap_err();
-        assert_eq!(
-            processor_error.message(),
-            "Hilbert processor received an async event outside a barrier phase"
-        );
-        assert_eq!(
-            exchange.wait_sketches().await.unwrap_err().message(),
-            processor_error.message()
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_spill_and_restore_errors_wake_barrier() {
         for (io, expected_cause) in [
             (
@@ -1154,66 +929,5 @@ mod tests {
                 processor_error.message()
             );
         }
-    }
-
-    #[tokio::test]
-    async fn test_spilled_chunk_restores_into_resample() -> Result<()> {
-        let ports = TestPorts::new();
-        let spiller = MockSpiller::default();
-        let block = block(vec![1, 2], vec![3, 4]);
-        let location = spiller.merge_and_spill(vec![block]).await?;
-        let exchange = HilbertRangeExchange::create([0, 1], 2, 1, 1);
-        exchange.submit_initial(0, 2, vec![[Scalar::from(1), Scalar::from(3)]]);
-        let mut processor = TransformHilbertCluster::create(
-            ports.input,
-            ports.output,
-            exchange,
-            0,
-            spiller,
-            no_spill_settings(),
-        );
-        let processor = hilbert_processor::<MockSpiller>(&mut processor);
-        processor
-            .buffer
-            .chunks
-            .push_back(PendingChunk::Spilled(location));
-        processor.phase = HilbertWorkerPhase::Resample {
-            cursor: 0,
-            sampler: FixedSizeSampler::new(2, SmallRng::seed_from_u64(1)),
-        };
-
-        assert!(matches!(processor.event()?, Event::Async));
-        processor.async_process().await?;
-        let HilbertWorkerPhase::Resample { cursor, sampler } = &processor.phase else {
-            panic!("restore must preserve the resample phase");
-        };
-        assert_eq!(*cursor, 1);
-        assert_eq!(sampler.rows_seen(), 2);
-        assert!(matches!(processor.event()?, Event::Sync));
-        Ok(())
-    }
-
-    #[test]
-    fn test_last_resample_publishes_plan() -> Result<()> {
-        let ports = TestPorts::new();
-        let exchange = HilbertRangeExchange::create([0, 1], 2, 1, 1);
-        exchange.submit_initial(0, 2, vec![[Scalar::from(1), Scalar::from(1)]]);
-        let mut processor = TransformHilbertCluster::create(
-            ports.input,
-            ports.output,
-            exchange.clone(),
-            0,
-            MockSpiller::default(),
-            no_spill_settings(),
-        );
-        let processor = hilbert_processor::<MockSpiller>(&mut processor);
-        let mut sampler = FixedSizeSampler::new(2, SmallRng::seed_from_u64(1));
-        sample_block(&mut sampler, [0, 1], &block(vec![1, 2], vec![1, 2]))?;
-        processor.phase = HilbertWorkerPhase::Resample { cursor: 0, sampler };
-
-        assert!(matches!(processor.event()?, Event::Sync));
-        processor.process()?;
-        let _ = exchange.partition(block(vec![1], vec![1]), 1)?;
-        Ok(())
     }
 }

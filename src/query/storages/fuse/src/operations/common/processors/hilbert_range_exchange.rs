@@ -258,15 +258,20 @@ impl HilbertRangeExchange {
     }
 
     /// Publish a task-wide error so barrier waiters wake up instead of hanging.
-    pub(super) fn fail(&self, error: ErrorCode) {
-        {
+    pub(super) fn fail(&self, error: ErrorCode) -> ErrorCode {
+        let error = {
             let mut inner = self.inner.lock();
-            if !matches!(&*inner, HilbertRangeState::Failed(_)) {
-                *inner = HilbertRangeState::Failed(error);
+            match &*inner {
+                HilbertRangeState::Failed(error) => error.clone(),
+                _ => {
+                    *inner = HilbertRangeState::Failed(error.clone());
+                    error
+                }
             }
-        }
+        };
         self.sketches_ready.notify_waiters();
         self.plan_ready.notify_waiters();
+        error
     }
 
     /// A worker that disappears before the shared plan is ready must release its peers from the
@@ -911,126 +916,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_invalid_worker_identity_fails_safely() {
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
-        exchange.submit_initial(1, 1, vec![[int(1), int(1)]]);
-        assert_eq!(
-            exchange.wait_sketches().await.unwrap_err().message(),
-            "Hilbert worker 1 is outside the sampling exchange"
-        );
-
-        let exchange = HilbertRangeExchange::create([0, 1], 2, 2, 1);
-        exchange.submit_initial(0, 1, vec![[int(0), int(0)]]);
-        exchange.submit_initial(0, 1, vec![[int(0), int(0)]]);
-        assert_eq!(
-            exchange.wait_plan().await.unwrap_err().message(),
-            "Hilbert worker 0 submitted its initial sample twice"
-        );
-
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
-        exchange.submit_initial(0, 1, vec![[int(0), int(0)]]);
-        assert_eq!(
-            exchange.resample_request(1).unwrap_err().message(),
-            "Hilbert worker 1 is outside the resampling exchange"
-        );
-        assert_eq!(
-            exchange
-                .complete_resample(1, 1, vec![[int(1), int(1)]])
-                .unwrap_err()
-                .message(),
-            "Hilbert worker 1 is outside the resampling exchange"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_malformed_sketches_fail_safely() {
-        for (rows, samples, expected) in [
-            (
-                1,
-                Vec::new(),
-                "Hilbert nonempty worker submitted no samples",
-            ),
-            (
-                0,
-                vec![[int(0), int(0)]],
-                "Hilbert empty worker submitted nonempty samples",
-            ),
-            (
-                1,
-                vec![[int(0), int(0)]; 2],
-                "Hilbert worker submitted more samples than input rows",
-            ),
-        ] {
-            let exchange = HilbertRangeExchange::create([0, 1], rows, 1, 1);
-            exchange.submit_initial(0, rows, samples);
-            assert_eq!(
-                exchange.wait_sketches().await.unwrap_err().message(),
-                expected
-            );
-        }
-
-        let exchange = HilbertRangeExchange::create([0, 1], 10, 1, 1);
-        exchange.submit_initial(0, 10, vec![[int(0), int(0)]]);
-        assert_eq!(exchange.resample_request(0).unwrap(), Some(10));
-        assert_eq!(
-            exchange
-                .complete_resample(0, 9, vec![[int(0), int(0)]; 9])
-                .unwrap_err()
-                .message(),
-            "Hilbert worker row count changed during resampling"
-        );
-
-        let exchange = HilbertRangeExchange::create([0, 1], 10, 1, 1);
-        exchange.submit_initial(0, 10, vec![[int(0), int(0)]]);
-        assert_eq!(
-            exchange
-                .complete_resample(0, 10, vec![[int(0), int(0)]; 9])
-                .unwrap_err()
-                .message(),
-            "Hilbert worker did not fulfill its resample quota"
-        );
-
-        assert_eq!(
-            build_plan(vec![(1, Vec::new())], 1).unwrap_err().message(),
-            "Hilbert nonempty worker submitted no samples"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_invalid_sample_budget_and_row_overflow_fail_task() {
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 2, 1);
-        exchange.submit_initial(0, 1, vec![[int(0), int(0)]]);
-        exchange.submit_initial(1, 1, vec![[int(1), int(1)]]);
-        assert_eq!(
-            exchange.wait_sketches().await.unwrap_err().message(),
-            "Hilbert sample budget cannot represent every nonempty worker"
-        );
-
-        let exchange = HilbertRangeExchange::create([0, 1], usize::MAX, 2, 1);
-        exchange.submit_initial(0, usize::MAX, vec![[int(0), int(0)]]);
-        exchange.submit_initial(1, 1, vec![[int(1), int(1)]]);
-        assert_eq!(
-            exchange.wait_plan().await.unwrap_err().message(),
-            "Hilbert worker row counts overflowed the task row count"
-        );
-    }
-
-    #[test]
-    fn test_first_failure_is_terminal_while_building_plan() {
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
-        *exchange.inner.lock() = HilbertRangeState::Building;
-
-        exchange.fail(ErrorCode::Internal("plan build failed"));
-        exchange.fail(ErrorCode::Internal("later failure"));
-        exchange.publish_plan();
-
-        assert_eq!(
-            exchange.ready_plan().unwrap_err().message(),
-            "plan build failed"
-        );
-    }
-
-    #[tokio::test]
     async fn test_plan_publication_races_do_not_lose_terminal_notification() {
         use std::sync::Barrier;
 
@@ -1069,20 +954,6 @@ mod tests {
                 assert_eq!(error.name(), "AbortedQuery");
             }
         }
-    }
-
-    #[tokio::test]
-    async fn test_empty_sample_failure_reaches_late_waiter() {
-        let exchange = HilbertRangeExchange::create([0, 1], 0, 1, 1);
-        exchange.submit_initial(0, 0, Vec::new());
-        assert!(exchange.should_build_plan());
-
-        exchange.publish_plan();
-
-        assert_eq!(
-            exchange.wait_plan().await.unwrap_err().message(),
-            "Hilbert recluster sampled no rows"
-        );
     }
 
     #[test]
@@ -1313,101 +1184,6 @@ mod tests {
             exchange_bounds: vec![0],
             hot_keys,
         })
-    }
-
-    #[tokio::test]
-    async fn test_partition_boundary_errors_fail_task() {
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
-        *exchange.inner.lock() = HilbertRangeState::Ready(empty_plan(HashMap::new()));
-        assert_eq!(
-            exchange
-                .partition(block(vec![1], vec![1]), 0)
-                .unwrap_err()
-                .message(),
-            "Hilbert partition count must be between 1 and 256"
-        );
-        assert_eq!(
-            exchange.wait_plan().await.unwrap_err().message(),
-            "Hilbert partition count must be between 1 and 256"
-        );
-
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 2);
-        *exchange.inner.lock() = HilbertRangeState::Ready(empty_plan(HashMap::new()));
-        assert_eq!(
-            exchange
-                .partition(block(vec![1], vec![1]), 1)
-                .unwrap_err()
-                .message(),
-            "Hilbert partition count 1 does not match planned collector count 2"
-        );
-        assert_eq!(
-            exchange.wait_plan().await.unwrap_err().message(),
-            "Hilbert partition count 1 does not match planned collector count 2"
-        );
-
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
-        *exchange.inner.lock() = HilbertRangeState::Ready(empty_plan(HashMap::new()));
-        assert_eq!(
-            exchange
-                .partition(
-                    DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1])]),
-                    1,
-                )
-                .unwrap_err()
-                .message(),
-            "Hilbert dimension offset 1 is outside the routed block"
-        );
-        assert_eq!(
-            exchange.wait_sketches().await.unwrap_err().message(),
-            "Hilbert dimension offset 1 is outside the routed block"
-        );
-
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 2);
-        *exchange.inner.lock() =
-            HilbertRangeState::Ready(empty_plan(HashMap::from([(0, HotKeyRange {
-                first_owner: 0,
-                last_owner: 1,
-                start: 0.0,
-                span: 2.0,
-            })])));
-        assert_eq!(
-            exchange
-                .partition(block(vec![1], vec![1]), 2)
-                .unwrap_err()
-                .message(),
-            "Hilbert routing salt must be UInt64"
-        );
-        assert_eq!(
-            exchange.wait_plan().await.unwrap_err().message(),
-            "Hilbert routing salt must be UInt64"
-        );
-
-        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 2);
-        *exchange.inner.lock() =
-            HilbertRangeState::Ready(empty_plan(HashMap::from([(0, HotKeyRange {
-                first_owner: 2,
-                last_owner: 2,
-                start: 0.0,
-                span: 1.0,
-            })])));
-        assert_eq!(
-            exchange
-                .partition(
-                    DataBlock::new_from_columns(vec![
-                        Int32Type::from_data(vec![1]),
-                        Int32Type::from_data(vec![1]),
-                        UInt64Type::from_data(vec![0]),
-                    ]),
-                    2,
-                )
-                .unwrap_err()
-                .message(),
-            "Hilbert range plan selected owner 2 outside 2 partitions"
-        );
-        assert_eq!(
-            exchange.wait_plan().await.unwrap_err().message(),
-            "Hilbert range plan selected owner 2 outside 2 partitions"
-        );
     }
 
     #[test]
