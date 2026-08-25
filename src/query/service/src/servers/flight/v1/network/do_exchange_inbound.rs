@@ -17,6 +17,8 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use arrow_flight::FlightData;
+use async_channel::Receiver;
+use async_channel::Sender;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
@@ -36,7 +38,7 @@ use super::inbound_channel::split_batch_flight_data;
 use super::inbound_quota::SubQueue;
 
 pub struct NetworkInboundSource {
-    destinations: Vec<InboundDestination>,
+    delivery: InboundDelivery,
     next_sequence: tokio::sync::Mutex<u64>,
     lifecycle: Mutex<InboundLifecycle>,
     /// Grace period after the last physical attachment disconnects. Expiry without a replacement
@@ -44,6 +46,11 @@ pub struct NetworkInboundSource {
     reconnect_lease: Duration,
     source_label: String,
     terminal_notified: WatchNotify,
+}
+
+enum InboundDelivery {
+    Blocks(Vec<InboundDestination>),
+    Packets(Sender<Result<FlightData, ErrorCode>>),
 }
 
 struct InboundDestination {
@@ -100,7 +107,7 @@ impl NetworkInboundSource {
         }
 
         Self {
-            destinations,
+            delivery: InboundDelivery::Blocks(destinations),
             next_sequence: tokio::sync::Mutex::new(0),
             lifecycle: Mutex::new(InboundLifecycle {
                 terminal: None,
@@ -111,6 +118,29 @@ impl NetworkInboundSource {
             source_label,
             terminal_notified: WatchNotify::new(),
         }
+    }
+
+    pub fn new_packets(
+        queue_capacity: usize,
+        reconnect_lease: Duration,
+        source_label: String,
+    ) -> (Self, Receiver<Result<FlightData, ErrorCode>>) {
+        let (sender, receiver) = async_channel::bounded(queue_capacity);
+        (
+            Self {
+                delivery: InboundDelivery::Packets(sender),
+                next_sequence: tokio::sync::Mutex::new(0),
+                lifecycle: Mutex::new(InboundLifecycle {
+                    terminal: None,
+                    attachments: 0,
+                    generation: 0,
+                }),
+                reconnect_lease,
+                source_label,
+                terminal_notified: WatchNotify::new(),
+            },
+            receiver,
+        )
     }
 
     pub fn connect(
@@ -177,6 +207,13 @@ impl NetworkInboundSource {
     }
 
     async fn add_channel_data(&self, data: FlightData) -> Result<DeliveryOutcome, ErrorCode> {
+        if let InboundDelivery::Packets(sender) = &self.delivery {
+            return match sender.send(Ok(data)).await {
+                Ok(()) => Ok(DeliveryOutcome::Accepted),
+                Err(_) => Ok(DeliveryOutcome::AllReceiversClosed),
+            };
+        }
+
         if is_batch(&data) {
             for item in split_batch_flight_data(data) {
                 if matches!(
@@ -195,12 +232,15 @@ impl NetworkInboundSource {
         &self,
         data: FlightData,
     ) -> Result<DeliveryOutcome, ErrorCode> {
+        let InboundDelivery::Blocks(destinations) = &self.delivery else {
+            unreachable!("packet delivery is handled before block routing")
+        };
         let tid = extract_tid(&data);
-        let Some(destination) = self.destinations.get(tid) else {
+        let Some(destination) = destinations.get(tid) else {
             return Err(ErrorCode::BadBytes(format!(
                 "do_exchange thread id {} is out of range for {} channels",
                 tid,
-                self.destinations.len()
+                destinations.len()
             )));
         };
         match destination.queue.add_data(data).await {
@@ -225,9 +265,12 @@ impl NetworkInboundSource {
     }
 
     fn all_receivers_closed(&self) -> bool {
-        self.destinations
-            .iter()
-            .all(|destination| destination.queue.sender.is_closed())
+        match &self.delivery {
+            InboundDelivery::Blocks(destinations) => destinations
+                .iter()
+                .all(|destination| destination.queue.sender.is_closed()),
+            InboundDelivery::Packets(sender) => sender.is_closed(),
+        }
     }
 
     pub(crate) fn fail(&self, cause: ErrorCode) {
@@ -312,8 +355,18 @@ impl NetworkInboundSource {
                 self.source_label, cause
             );
         }
-        for destination in &self.destinations {
-            destination.release(terminal);
+        match &self.delivery {
+            InboundDelivery::Blocks(destinations) => {
+                for destination in destinations {
+                    destination.release(terminal);
+                }
+            }
+            InboundDelivery::Packets(sender) => {
+                if let Some(cause) = terminal.cause() {
+                    let _ = sender.force_send(Err(cause.clone()));
+                }
+                sender.close();
+            }
         }
     }
 
@@ -481,5 +534,89 @@ mod tests {
             }
             _ => panic!("receiver failure must publish FAIL"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_packet_delivery_deduplicates_replayed_data() {
+        let (source, receiver) =
+            NetworkInboundSource::new_packets(1, Duration::ZERO, "statistics".to_string());
+        let payload = FlightData {
+            data_body: vec![1, 2, 3].into(),
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            source.add_data(0, payload.clone()).await.unwrap(),
+            DoExchangeResponse::Ack { sequence: 0 }
+        ));
+        assert_eq!(receiver.recv().await.unwrap().unwrap(), payload);
+
+        assert!(matches!(
+            source.add_data(0, payload).await.unwrap(),
+            DoExchangeResponse::Ack { sequence: 0 }
+        ));
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(async_channel::TryRecvError::Empty)
+        ));
+
+        source.finish().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_packet_disconnect_without_retries_propagates_error() {
+        let runtime = Arc::new(Runtime::with_worker_threads(1, None).unwrap());
+        let (source, receiver) =
+            NetworkInboundSource::new_packets(1, Duration::ZERO, "statistics".to_string());
+        let source = Arc::new(source);
+        let connection = source.connect(
+            runtime,
+            ErrorCode::CannotConnectNode("statistics connection was lost"),
+        );
+
+        connection
+            .handle_request(DoExchangeRequest::Data {
+                sequence: 0,
+                payload: FlightData::default(),
+            })
+            .await
+            .unwrap();
+        drop(connection);
+
+        let received = receiver.recv().await.unwrap();
+        let error = received.expect_err("disconnect must replace queued data with an error");
+        assert_eq!(error.code(), ErrorCode::CANNOT_CONNECT_NODE);
+    }
+
+    #[tokio::test]
+    async fn test_packet_reconnect_invalidates_stale_lease() {
+        let runtime = Arc::new(Runtime::with_worker_threads(1, None).unwrap());
+        let (source, receiver) = NetworkInboundSource::new_packets(
+            1,
+            Duration::from_millis(100),
+            "statistics".to_string(),
+        );
+        let source = Arc::new(source);
+        let first = source.connect(
+            runtime.clone(),
+            ErrorCode::CannotConnectNode("first connection expired"),
+        );
+        drop(first);
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        let replacement = source.connect(
+            runtime,
+            ErrorCode::CannotConnectNode("replacement connection expired"),
+        );
+        tokio::time::sleep(Duration::from_millis(120)).await;
+
+        assert!(matches!(
+            replacement
+                .handle_request(DoExchangeRequest::Finish)
+                .await
+                .unwrap(),
+            DoExchangeResponse::ReceiverClosed
+        ));
+        assert!(receiver.recv().await.is_err());
     }
 }

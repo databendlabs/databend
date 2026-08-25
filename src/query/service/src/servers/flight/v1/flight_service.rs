@@ -157,8 +157,26 @@ impl FlightService for DatabendQueryFlightService {
         let stream = req.into_inner();
         let (tx, rx) = async_channel::bounded(1);
 
-        match (params.source_id.as_deref(), params.receiver_lease_secs) {
-            (Some(source_id), Some(receiver_lease_secs)) => {
+        match (
+            params.source_id.as_deref(),
+            params.receiver_lease_secs,
+            params.stream,
+        ) {
+            (
+                Some(source_id),
+                Some(receiver_lease_secs),
+                Some(crate::servers::flight::DoExchangeStream::Statistics),
+            ) => {
+                let attachment = DataExchangeManager::instance().handle_statistics_do_exchange(
+                    &params.query_id,
+                    source_id,
+                    std::time::Duration::from_secs(receiver_lease_secs),
+                )?;
+                GlobalIORuntime::instance().spawn(async move {
+                    attachment.serve(stream, tx).await;
+                });
+            }
+            (Some(source_id), Some(receiver_lease_secs), None) => {
                 let attachment = DataExchangeManager::instance().handle_do_exchange(
                     &params.query_id,
                     &params.exchange_id,
@@ -170,7 +188,7 @@ impl FlightService for DatabendQueryFlightService {
                     attachment.serve(stream, tx).await;
                 });
             }
-            (None, None) => {
+            (None, None, None) => {
                 let sender = DataExchangeManager::instance().handle_legacy_do_exchange(
                     &params.query_id,
                     &params.exchange_id,
@@ -193,7 +211,7 @@ impl FlightService for DatabendQueryFlightService {
             }
             _ => {
                 return Err(Status::invalid_argument(
-                    "source_id and receiver_lease_secs must be provided together",
+                    "source_id, receiver_lease_secs, and stream must describe a supported exchange",
                 ));
             }
         }

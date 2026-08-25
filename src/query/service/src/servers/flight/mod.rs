@@ -19,6 +19,7 @@ mod request_builder;
 pub mod v1;
 
 pub use flight_client::DoExchangeParams;
+pub(crate) use flight_client::DoExchangeStream;
 pub use flight_client::FlightClient;
 pub use flight_client::FlightExchange;
 pub(crate) use flight_client::FlightOperation;

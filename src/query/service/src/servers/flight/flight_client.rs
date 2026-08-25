@@ -21,6 +21,7 @@ use arrow_flight::Ticket;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
 use async_channel::Sender;
+use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,6 +32,7 @@ use futures::StreamExt;
 use futures_util::future::Either;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::sync::Semaphore;
 use tokio::time::Duration;
 use tonic::Request;
 use tonic::Status;
@@ -41,6 +43,9 @@ use tonic::transport::channel::Channel;
 
 use crate::pipelines::executor::WatchNotify;
 use crate::servers::flight::request_builder::RequestBuilder;
+use crate::servers::flight::v1::network::NetworkOutbound;
+use crate::servers::flight::v1::network::PendingNetworkOutbound;
+use crate::servers::flight::v1::network::SendOutcome;
 use crate::servers::flight::v1::packets::DataPacket;
 
 /// Parameters for a do_exchange RPC call, serialized as JSON in metadata.
@@ -53,6 +58,14 @@ pub struct DoExchangeParams {
     pub source_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_lease_secs: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream: Option<DoExchangeStream>,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DoExchangeStream {
+    Statistics,
 }
 
 impl DoExchangeParams {
@@ -63,6 +76,7 @@ impl DoExchangeParams {
             num_threads,
             source_id: None,
             receiver_lease_secs: None,
+            stream: None,
         }
     }
 
@@ -79,6 +93,22 @@ impl DoExchangeParams {
             num_threads,
             source_id: Some(source_id),
             receiver_lease_secs: Some(receiver_lease_secs),
+            stream: None,
+        }
+    }
+
+    pub fn reconnectable_statistics(
+        query_id: String,
+        source_id: String,
+        receiver_lease_secs: u64,
+    ) -> Self {
+        Self {
+            query_id,
+            exchange_id: String::new(),
+            num_threads: 1,
+            source_id: Some(source_id),
+            receiver_lease_secs: Some(receiver_lease_secs),
+            stream: Some(DoExchangeStream::Statistics),
         }
     }
 }
@@ -401,31 +431,80 @@ impl FlightReceiver {
 }
 
 pub struct FlightSender {
-    tx: Sender<std::result::Result<FlightData, Status>>,
+    inner: FlightSenderInner,
+}
+
+enum FlightSenderInner {
+    Legacy(Sender<std::result::Result<FlightData, Status>>),
+    Reconnectable(Arc<NetworkOutbound>),
 }
 
 impl FlightSender {
     pub fn create(tx: Sender<std::result::Result<FlightData, Status>>) -> FlightSender {
-        FlightSender { tx }
+        FlightSender {
+            inner: FlightSenderInner::Legacy(tx),
+        }
+    }
+
+    pub(crate) fn from_pending_outbound(
+        outbound: PendingNetworkOutbound,
+        runtime: &Runtime,
+    ) -> FlightSender {
+        let slots = Arc::new(Semaphore::new(8));
+        FlightSender {
+            inner: FlightSenderInner::Reconnectable(Arc::new(outbound.start(slots, None, runtime))),
+        }
     }
 
     pub fn is_closed(&self) -> bool {
-        self.tx.is_closed()
+        match &self.inner {
+            FlightSenderInner::Legacy(tx) => tx.is_closed(),
+            FlightSenderInner::Reconnectable(outbound) => outbound.is_closed(),
+        }
     }
 
     #[async_backtrace::framed]
     pub async fn send(&self, data: DataPacket) -> Result<()> {
-        if let Err(_cause) = self.tx.send(Ok(FlightData::try_from(data)?)).await {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the remote flight channel is closed.",
-            ));
+        let data = FlightData::try_from(data)?;
+        match &self.inner {
+            FlightSenderInner::Legacy(tx) => {
+                if tx.send(Ok(data)).await.is_err() {
+                    return Err(ErrorCode::AbortedQuery(
+                        "Aborted query, because the remote flight channel is closed.",
+                    ));
+                }
+            }
+            FlightSenderInner::Reconnectable(outbound) => {
+                if outbound.send(0, data).await? == SendOutcome::ReceiverClosed {
+                    return Err(ErrorCode::AbortedQuery(
+                        "Aborted query, because the remote flight channel is closed.",
+                    ));
+                }
+            }
         }
 
         Ok(())
     }
 
+    pub async fn finish(&self) -> Result<()> {
+        match &self.inner {
+            FlightSenderInner::Legacy(tx) => {
+                tx.close();
+                Ok(())
+            }
+            FlightSenderInner::Reconnectable(outbound) => outbound.finish().await,
+        }
+    }
+
     pub fn close(&self) {
-        self.tx.close();
+        match &self.inner {
+            FlightSenderInner::Legacy(tx) => {
+                tx.close();
+            }
+            FlightSenderInner::Reconnectable(outbound) => {
+                outbound.abort();
+            }
+        }
     }
 }
 
@@ -454,7 +533,7 @@ impl FlightExchange {
 
     pub fn convert_to_sender(self) -> FlightSender {
         match self {
-            FlightExchange::Sender(tx) => FlightSender { tx },
+            FlightExchange::Sender(tx) => FlightSender::create(tx),
             _ => unreachable!(),
         }
     }
@@ -481,5 +560,18 @@ mod tests {
 
         assert!(json.get("source_id").is_none());
         assert!(json.get("receiver_lease_secs").is_none());
+        assert!(json.get("stream").is_none());
+    }
+
+    #[test]
+    fn test_statistics_do_exchange_params_select_packet_stream() {
+        let params = DoExchangeParams::reconnectable_statistics(
+            "query".to_string(),
+            "source".to_string(),
+            10,
+        );
+        let json = serde_json::to_value(params).unwrap();
+
+        assert_eq!(json.get("stream").unwrap(), "statistics");
     }
 }
