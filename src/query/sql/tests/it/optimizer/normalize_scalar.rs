@@ -315,6 +315,12 @@ fn test_normalize_scalar_filter_rule_outcomes() -> Result<()> {
             expr_text: "a != 3 and true and a != 5",
         },
         Case {
+            name: "scan_keeps_simple_comparison",
+            description: "A scan predicate outside the target patterns should remain unchanged.",
+            target: Target::Scan,
+            expr_text: "a = 5",
+        },
+        Case {
             name: "scan_short_circuits_pushdown_or_chain",
             description: "Scan pushdown predicates should also short-circuit truthy OR operands.",
             target: Target::Scan,
