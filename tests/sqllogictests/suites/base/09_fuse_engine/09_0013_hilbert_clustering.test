@@ -96,8 +96,23 @@ INSERT INTO t_recluster VALUES (20, 80), (80, 20)
 statement ok
 INSERT INTO t_recluster VALUES (30, 70), (70, 30)
 
+statement ok
+INSERT INTO t_recluster VALUES (40, 60), (60, 40)
+
+statement ok
+INSERT INTO t_recluster VALUES (45, 55), (55, 45)
+
+statement ok
+INSERT INTO t_recluster VALUES (5, 95), (95, 5)
+
+statement ok
+INSERT INTO t_recluster VALUES (15, 85), (85, 15)
+
+statement ok
+INSERT INTO t_recluster VALUES (25, 75), (75, 25)
+
 query B
-SELECT info:max_depth::int > 1 FROM clustering_information('test_hilbert', 't_recluster')
+SELECT info:max_depth::int > 8 FROM clustering_information('test_hilbert', 't_recluster')
 ----
 1
 
@@ -107,7 +122,7 @@ ALTER TABLE t_recluster RECLUSTER FINAL
 query II
 SELECT count(), sum(b + c) FROM t_recluster
 ----
-8 800
+18 1800
 
 query B
 SELECT max(level) > 0 FROM clustering_statistics('test_hilbert', 't_recluster')
@@ -134,6 +149,21 @@ statement ok
 INSERT INTO t_partitioned_recluster VALUES (0, 30, 70), (0, 70, 30), (1, 30, 70), (1, 70, 30)
 
 statement ok
+INSERT INTO t_partitioned_recluster VALUES (0, 40, 60), (0, 60, 40), (1, 40, 60), (1, 60, 40)
+
+statement ok
+INSERT INTO t_partitioned_recluster VALUES (0, 45, 55), (0, 55, 45), (1, 45, 55), (1, 55, 45)
+
+statement ok
+INSERT INTO t_partitioned_recluster VALUES (0, 5, 95), (0, 95, 5), (1, 5, 95), (1, 95, 5)
+
+statement ok
+INSERT INTO t_partitioned_recluster VALUES (0, 15, 85), (0, 85, 15), (1, 15, 85), (1, 85, 15)
+
+statement ok
+INSERT INTO t_partitioned_recluster VALUES (0, 25, 75), (0, 75, 25), (1, 25, 75), (1, 75, 25)
+
+statement ok
 ALTER TABLE t_partitioned_recluster RECLUSTER FINAL
 
 query I
@@ -141,10 +171,15 @@ SELECT (segment_count < block_count)::INT FROM fuse_snapshot('test_hilbert', 't_
 ----
 1
 
+query B
+SELECT min(level) > 0 FROM clustering_statistics('test_hilbert', 't_partitioned_recluster')
+----
+1
+
 query II
 SELECT count(), count_if(p = 0) FROM t_partitioned_recluster
 ----
-16 8
+36 18
 
 # Physical small-block compaction takes precedence over the Hilbert depth gate: three overlapping
 # blocks are rewritten even though their depth is below recluster_depth.

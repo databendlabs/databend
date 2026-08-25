@@ -372,8 +372,8 @@ fn build_hilbert_layout_pipeline(
         None,
         builder.ctx.get_settings().get_enable_fixed_rows_sort()?,
     )?
-        .with_block_size_hit(rows_per_block)
-        .build_local_full_sort_pipeline(&mut builder.main_pipeline, false)?;
+    .with_block_size_hit(rows_per_block)
+    .build_local_full_sort_pipeline(&mut builder.main_pipeline, false)?;
 
     // The ordinary cluster statistics generator removes all trailing temporary columns before
     // serialization; include the task-local Hilbert sort key.
@@ -423,7 +423,7 @@ fn build_regular_layout_pipeline(
         None,
         builder.ctx.get_settings().get_enable_fixed_rows_sort()?,
     )?
-        .with_block_size_hit(rows_per_block);
+    .with_block_size_hit(rows_per_block);
     if !skip_partial_sort {
         let partial_sort_descs = sort_pipeline_builder.sort_column_desc();
         builder.main_pipeline.add_transformer(move || {

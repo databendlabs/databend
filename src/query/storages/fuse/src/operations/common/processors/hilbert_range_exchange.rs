@@ -27,6 +27,7 @@ use databend_common_expression::LUT;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TypedRangeBounds;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt32Type;
 use databend_common_pipeline::basic::Exchange;
@@ -52,6 +53,7 @@ const SAMPLE_OVERSUBSCRIPTION: usize = 2;
 const FINE_EFFECTIVE_SAMPLES_PER_RANGE: usize = 12;
 #[derive(Debug)]
 struct DimensionBounds {
+    data_type: Option<DataType>,
     coarse: TypedRangeBounds,
     fine: TypedRangeBounds,
     fine_offsets: Vec<u32>,
@@ -79,29 +81,39 @@ impl DimensionBounds {
         } else {
             (fine * ((1 << FINE_BITS) - 1) + range.len() as u32 / 2) / range.len() as u32
         };
-        (self.scale(coarse) << FINE_BITS) | fine as u16
-    }
-
-    fn scale(&self, rank: u32) -> u16 {
-        let coarse_rank = self.coarse.len() as u32;
-        if coarse_rank == 0 {
+        let coarse_ranges = self.coarse.len() as u32;
+        let coarse = if coarse_ranges == 0 {
             0
         } else {
-            ((rank * self.max_coarse_rank + coarse_rank / 2) / coarse_rank) as u16
-        }
+            ((coarse * self.max_coarse_rank + coarse_ranges / 2) / coarse_ranges) as u16
+        };
+        (coarse << FINE_BITS) | fine as u16
     }
 
-    fn encode_column(&self, entry: &BlockEntry) -> Vec<u16> {
+    fn encode_column(&self, entry: &BlockEntry) -> Result<Vec<u16>> {
+        if let Some(expected) = &self.data_type {
+            let scalar_null = matches!(entry, BlockEntry::Const(Scalar::Null, _, _));
+            let actual = entry.data_type().remove_nullable();
+            if !scalar_null && actual != *expected {
+                return Err(ErrorCode::Internal(format!(
+                    "Hilbert dimension type changed from {expected} to {actual}"
+                )));
+            }
+        }
         self.coarse
             .lower_bound_column(entry, u16::MAX as u32)
             .into_iter()
             .enumerate()
             .map(|(row, coarse)| {
                 if coarse == u16::MAX as u32 {
-                    u16::MAX
+                    Ok(u16::MAX)
                 } else {
-                    // SAFETY: the rank vector has exactly one entry per input row.
-                    self.encode_ranks(unsafe { entry.index_unchecked(row) }, coarse)
+                    let value = entry.index(row).ok_or_else(|| {
+                        ErrorCode::Internal(
+                            "Hilbert dimension rank exceeded the input column length",
+                        )
+                    })?;
+                    Ok(self.encode_ranks(value, coarse))
                 }
             })
             .collect()
@@ -109,11 +121,7 @@ impl DimensionBounds {
 }
 
 pub(super) type HilbertSample = [Scalar; HILBERT_CLUSTER_DIMENSIONS];
-
-struct LocalSketch {
-    rows: usize,
-    samples: Vec<HilbertSample>,
-}
+type LocalSketch = (usize, Vec<HilbertSample>);
 
 #[derive(Debug)]
 struct HotKeyRange {
@@ -137,13 +145,96 @@ struct HilbertRangePlan {
     hot_keys: HashMap<u32, HotKeyRange>,
 }
 
-struct HilbertRangeState {
-    sketches: Vec<Option<LocalSketch>>,
-    sample_targets: Vec<usize>,
-    pending_resamples: usize,
-    building_plan: bool,
-    plan: Option<Arc<HilbertRangePlan>>,
-    error: Option<ErrorCode>,
+enum HilbertRangeState {
+    Collecting(Vec<Option<LocalSketch>>),
+    Resampling {
+        sketches: Vec<LocalSketch>,
+        sample_targets: Vec<usize>,
+    },
+    Building,
+    Ready(Arc<HilbertRangePlan>),
+    Failed(ErrorCode),
+}
+
+impl HilbertRangeState {
+    fn can_build(&self) -> bool {
+        let Self::Resampling {
+            sketches,
+            sample_targets,
+        } = self
+        else {
+            return false;
+        };
+        sketches
+            .iter()
+            .zip(sample_targets)
+            .all(|((_, samples), target)| samples.len() >= *target)
+    }
+}
+
+fn validate_sketch(rows: usize, sample_count: usize) -> Result<()> {
+    if rows == 0 && sample_count != 0 {
+        return Err(ErrorCode::Internal(
+            "Hilbert empty worker submitted nonempty samples",
+        ));
+    }
+    if rows > 0 && sample_count == 0 {
+        return Err(ErrorCode::Internal(
+            "Hilbert nonempty worker submitted no samples",
+        ));
+    }
+    if sample_count > rows {
+        return Err(ErrorCode::Internal(
+            "Hilbert worker submitted more samples than input rows",
+        ));
+    }
+    Ok(())
+}
+
+fn allocate_sample_targets(rows: &[usize], target_sample_size: usize) -> Result<Vec<usize>> {
+    let total_rows = rows.iter().try_fold(0usize, |total, rows| {
+        total.checked_add(*rows).ok_or_else(|| {
+            ErrorCode::Internal("Hilbert worker row counts overflowed the task row count")
+        })
+    })?;
+    let target_samples = total_rows.min(target_sample_size);
+    let nonempty_workers = rows.iter().filter(|rows| **rows > 0).count();
+    if target_samples < nonempty_workers {
+        return Err(ErrorCode::Internal(
+            "Hilbert sample budget cannot represent every nonempty worker",
+        ));
+    }
+
+    let mut sample_targets = vec![0; rows.len()];
+    let mut assigned = 0;
+    let mut cumulative_rows = 0;
+    // Cumulative rounding keeps the quotas proportional and makes their sum exact.
+    for (worker_id, rows) in rows.iter().copied().enumerate() {
+        cumulative_rows += rows;
+        let cumulative_target = ((target_samples as u128 * cumulative_rows as u128)
+            / total_rows.max(1) as u128) as usize;
+        sample_targets[worker_id] = cumulative_target - assigned;
+        assigned = cumulative_target;
+    }
+    // Preserve representation for every nonempty worker without changing the exact budget.
+    for worker_id in 0..rows.len() {
+        if rows[worker_id] > 0 && sample_targets[worker_id] == 0 {
+            let donor = sample_targets
+                .iter()
+                .enumerate()
+                .filter(|(_, target)| **target > 1)
+                .max_by_key(|(_, target)| **target)
+                .map(|(worker_id, _)| worker_id)
+                .ok_or_else(|| {
+                    ErrorCode::Internal(
+                        "Hilbert sample budget cannot represent every nonempty worker",
+                    )
+                })?;
+            sample_targets[donor] -= 1;
+            sample_targets[worker_id] = 1;
+        }
+    }
+    Ok(sample_targets)
 }
 
 /// Task-local weighted samples and the immutable plan derived from them.
@@ -170,12 +261,37 @@ impl HilbertRangeExchange {
     pub(super) fn fail(&self, error: ErrorCode) {
         {
             let mut inner = self.inner.lock();
-            if inner.error.is_none() {
-                inner.error = Some(error);
+            if !matches!(&*inner, HilbertRangeState::Failed(_)) {
+                *inner = HilbertRangeState::Failed(error);
             }
         }
         self.sketches_ready.notify_waiters();
         self.plan_ready.notify_waiters();
+    }
+
+    /// A worker that disappears before the shared plan is ready must release its peers from the
+    /// barrier. Once the plan is ready, downstream cancellation is ordinary replay shutdown.
+    pub(super) fn cancel_before_plan(&self) {
+        let cancelled = {
+            let mut inner = self.inner.lock();
+            if matches!(
+                &*inner,
+                HilbertRangeState::Collecting(_)
+                    | HilbertRangeState::Resampling { .. }
+                    | HilbertRangeState::Building
+            ) {
+                *inner = HilbertRangeState::Failed(ErrorCode::AbortedQuery(
+                    "Hilbert recluster cancelled before its range plan was ready",
+                ));
+                true
+            } else {
+                false
+            }
+        };
+        if cancelled {
+            self.sketches_ready.notify_waiters();
+            self.plan_ready.notify_waiters();
+        }
     }
 
     pub fn create(
@@ -197,14 +313,9 @@ impl HilbertRangeExchange {
             target_sample_size: target_samples,
             local_sample_size,
             dimension_offsets,
-            inner: Mutex::new(HilbertRangeState {
-                sketches: (0..worker_count).map(|_| None).collect(),
-                sample_targets: vec![0; worker_count],
-                pending_resamples: 0,
-                building_plan: false,
-                plan: None,
-                error: None,
-            }),
+            inner: Mutex::new(HilbertRangeState::Collecting(
+                (0..worker_count).map(|_| None).collect(),
+            )),
             sketches_ready: WatchNotify::new(),
             plan_ready: WatchNotify::new(),
         })
@@ -216,80 +327,89 @@ impl HilbertRangeExchange {
         rows: usize,
         samples: Vec<HilbertSample>,
     ) {
-        let sketch = LocalSketch { rows, samples };
-        let sketches = {
-            let mut inner = self.inner.lock();
-            inner.sketches[worker_id] = Some(sketch);
-            if inner.sketches.iter().any(Option::is_none) {
+        let mut inner = self.inner.lock();
+        let HilbertRangeState::Collecting(sketches) = &mut *inner else {
+            return;
+        };
+        let Some(sketch) = sketches.get_mut(worker_id) else {
+            drop(inner);
+            self.fail(ErrorCode::Internal(format!(
+                "Hilbert worker {worker_id} is outside the sampling exchange"
+            )));
+            return;
+        };
+        if sketch.is_some() {
+            drop(inner);
+            self.fail(ErrorCode::Internal(format!(
+                "Hilbert worker {worker_id} submitted its initial sample twice"
+            )));
+            return;
+        }
+        if let Err(error) = validate_sketch(rows, samples.len()) {
+            drop(inner);
+            self.fail(error);
+            return;
+        }
+        *sketch = Some((rows, samples));
+        if sketches.iter().any(Option::is_none) {
+            return;
+        }
+
+        let rows = sketches
+            .iter()
+            .flatten()
+            .map(|(rows, _)| *rows)
+            .collect::<Vec<_>>();
+        // The final quota is a strict task-wide cap. Production task sizing provides at least one
+        // sample for every nonempty worker; reject inconsistent metadata instead of panicking.
+        let sample_targets = match allocate_sample_targets(&rows, self.target_sample_size) {
+            Ok(sample_targets) => sample_targets,
+            Err(error) => {
+                drop(inner);
+                self.fail(error);
                 return;
             }
-            inner
-                .sketches
-                .iter()
-                .map(|sketch| {
-                    let sketch = sketch.as_ref().unwrap();
-                    (sketch.rows, sketch.samples.len())
-                })
-                .collect::<Vec<_>>()
         };
 
-        let total_rows = sketches.iter().map(|(rows, _)| *rows).sum::<usize>();
-        // The final quota is a strict task-wide cap. Since every nonempty worker owns at least one
-        // input row, target_sample_size is sufficient to preserve one sample for each of them.
-        let target_samples = total_rows.min(self.target_sample_size);
-        let mut sample_targets = vec![0; sketches.len()];
-        let mut assigned = 0;
-        let mut cumulative_rows = 0;
-        // Cumulative rounding keeps the quotas proportional and makes their sum exact.
-        for (worker_id, (rows, _)) in sketches.iter().copied().enumerate() {
-            cumulative_rows += rows;
-            let cumulative_target = ((target_samples as u128 * cumulative_rows as u128)
-                / total_rows.max(1) as u128) as usize;
-            sample_targets[worker_id] = cumulative_target - assigned;
-            assigned = cumulative_target;
-        }
-        // Preserve representation for every nonempty worker without changing the exact budget.
-        for worker_id in 0..sketches.len() {
-            if sketches[worker_id].0 > 0 && sample_targets[worker_id] == 0 {
-                let donor = sample_targets
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, target)| **target > 1)
-                    .max_by_key(|(_, target)| **target)
-                    .map(|(worker_id, _)| worker_id)
-                    .expect("sample budget can represent every nonempty Hilbert worker");
-                sample_targets[donor] -= 1;
-                sample_targets[worker_id] = 1;
-            }
-        }
-
-        let mut inner = self.inner.lock();
-        for (worker_id, (_, sample_count)) in sketches.into_iter().enumerate() {
-            let desired = sample_targets[worker_id];
-            inner.sample_targets[worker_id] = desired;
-            if desired > sample_count {
-                inner.pending_resamples += 1;
-            }
-        }
+        let Some(sketches) = std::mem::take(sketches)
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+        else {
+            drop(inner);
+            self.fail(ErrorCode::Internal(
+                "Hilbert initial samples became incomplete while allocating quotas",
+            ));
+            return;
+        };
+        *inner = HilbertRangeState::Resampling {
+            sketches,
+            sample_targets,
+        };
         drop(inner);
         self.sketches_ready.notify_waiters();
     }
 
     pub(super) fn should_build_plan(&self) -> bool {
-        let inner = self.inner.lock();
-        inner.pending_resamples == 0
-            && !inner.building_plan
-            && inner.plan.is_none()
-            && inner.error.is_none()
+        self.inner.lock().can_build()
     }
 
-    pub(super) fn resample_request(&self, worker_id: usize) -> Option<usize> {
+    pub(super) fn resample_request(&self, worker_id: usize) -> Result<Option<usize>> {
         let inner = self.inner.lock();
-        let target = inner.sample_targets[worker_id];
-        (inner.sketches[worker_id]
-            .as_ref()
-            .is_some_and(|sketch| target > sketch.samples.len()))
-        .then_some(target)
+        let HilbertRangeState::Resampling {
+            sketches,
+            sample_targets,
+        } = &*inner
+        else {
+            return Ok(None);
+        };
+        let Some(((_, samples), target)) =
+            sketches.get(worker_id).zip(sample_targets.get(worker_id))
+        else {
+            return Err(ErrorCode::Internal(format!(
+                "Hilbert worker {worker_id} is outside the resampling exchange"
+            )));
+        };
+        Ok((*target > samples.len()).then_some(*target))
     }
 
     pub(super) fn complete_resample(
@@ -297,16 +417,42 @@ impl HilbertRangeExchange {
         worker_id: usize,
         rows: usize,
         samples: Vec<HilbertSample>,
-    ) {
+    ) -> Result<()> {
         let mut inner = self.inner.lock();
-        inner.sketches[worker_id] = Some(LocalSketch { rows, samples });
-        inner.pending_resamples -= 1;
+        let HilbertRangeState::Resampling {
+            sketches,
+            sample_targets,
+        } = &mut *inner
+        else {
+            return Ok(());
+        };
+        let Some((sketch, target)) = sketches
+            .get_mut(worker_id)
+            .zip(sample_targets.get(worker_id))
+        else {
+            return Err(ErrorCode::Internal(format!(
+                "Hilbert worker {worker_id} is outside the resampling exchange"
+            )));
+        };
+        if rows != sketch.0 {
+            return Err(ErrorCode::Internal(
+                "Hilbert worker row count changed during resampling",
+            ));
+        }
+        validate_sketch(rows, samples.len())?;
+        if samples.len() != *target {
+            return Err(ErrorCode::Internal(
+                "Hilbert worker did not fulfill its resample quota",
+            ));
+        }
+        *sketch = (rows, samples);
+        Ok(())
     }
 
     pub(super) fn check_error(&self) -> Result<()> {
-        match &self.inner.lock().error {
-            Some(error) => Err(error.clone()),
-            None => Ok(()),
+        match &*self.inner.lock() {
+            HilbertRangeState::Failed(error) => Err(error.clone()),
+            _ => Ok(()),
         }
     }
 
@@ -317,20 +463,23 @@ impl HilbertRangeExchange {
         self.check_error()
     }
 
+    fn ready_plan(&self) -> Result<Arc<HilbertRangePlan>> {
+        match &*self.inner.lock() {
+            HilbertRangeState::Ready(plan) => Ok(plan.clone()),
+            HilbertRangeState::Failed(error) => Err(error.clone()),
+            HilbertRangeState::Collecting(_)
+            | HilbertRangeState::Resampling { .. }
+            | HilbertRangeState::Building => {
+                Err(ErrorCode::Internal("Hilbert range plan is not ready"))
+            }
+        }
+    }
+
     pub(super) async fn wait_plan(&self) -> Result<bool> {
         if !self.plan_ready.has_notified() {
             self.plan_ready.notified().await;
         }
-        let inner = self.inner.lock();
-        if let Some(error) = &inner.error {
-            return Err(error.clone());
-        }
-        Ok(!inner
-            .plan
-            .as_ref()
-            .ok_or_else(|| ErrorCode::Internal("Hilbert range plan was not published"))?
-            .hot_keys
-            .is_empty())
+        Ok(!self.ready_plan()?.hot_keys.is_empty())
     }
 
     pub(super) fn publish_plan(&self) {
@@ -338,45 +487,45 @@ impl HilbertRangeExchange {
         // sample must not block other processors from observing the task state.
         let sketches = {
             let mut inner = self.inner.lock();
-            if inner.pending_resamples != 0
-                || inner.building_plan
-                || inner.plan.is_some()
-                || inner.error.is_some()
-            {
+            if !inner.can_build() {
                 return;
             }
-            inner.building_plan = true;
-            let worker_count = inner.sketches.len();
-            (0..worker_count)
-                .map(|worker_id| {
-                    (
-                        inner.sketches[worker_id]
-                            .take()
-                            .expect("every Hilbert worker submitted a sketch"),
-                        inner.sample_targets[worker_id],
-                        worker_id,
-                    )
-                })
+            let previous = std::mem::replace(&mut *inner, HilbertRangeState::Building);
+            let HilbertRangeState::Resampling {
+                sketches,
+                sample_targets,
+            } = previous
+            else {
+                *inner = previous;
+                return;
+            };
+            sketches
+                .into_iter()
+                .zip(sample_targets)
+                .enumerate()
+                .map(|(worker_id, (sketch, target))| (sketch, target, worker_id))
                 .collect::<Vec<_>>()
         };
         // Light workers are uniformly downsampled to their final quota. Heavy workers were
         // rescanned from the spill buffer with a reservoir sized exactly to their final quota.
         let sketches = sketches
             .into_iter()
-            .map(|(mut sketch, target, worker_id)| {
+            .map(|((rows, mut samples), target, worker_id)| {
                 let mut rng =
                     SmallRng::seed_from_u64(mix64(worker_id as u64 ^ 0xd1b5_4a32_d192_ed03));
-                sketch.samples.shuffle(&mut rng);
-                sketch.samples.truncate(target);
-                sketch
+                samples.shuffle(&mut rng);
+                samples.truncate(target);
+                (rows, samples)
             })
             .collect::<Vec<_>>();
         let result = build_plan(sketches, self.collector_count);
         let mut inner = self.inner.lock();
-        inner.building_plan = false;
-        match result {
-            Ok(plan) => inner.plan = Some(Arc::new(plan)),
-            Err(error) => inner.error = Some(error),
+        // Preserve a task-wide failure published while the sample was sorted outside the lock.
+        if matches!(&*inner, HilbertRangeState::Building) {
+            *inner = match result {
+                Ok(plan) => HilbertRangeState::Ready(Arc::new(plan)),
+                Err(error) => HilbertRangeState::Failed(error),
+            };
         }
         drop(inner);
         self.plan_ready.notify_waiters();
@@ -389,66 +538,130 @@ impl Exchange for HilbertRangeExchange {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     fn partition(&self, mut data: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
-        debug_assert!(n > 0 && n <= u8::MAX as usize + 1);
-        let plan = self
-            .inner
-            .lock()
-            .plan
-            .clone()
-            .expect("Hilbert range plan must be ready before routing rows");
-        let dimensions = self
-            .dimension_offsets
-            .map(|offset| data.get_by_offset(offset));
-        let x = plan.dimensions[0].encode_column(dimensions[0]);
-        let y = plan.dimensions[1].encode_column(dimensions[1]);
-        let routing_salt =
-            (!plan.hot_keys.is_empty()).then(|| data.get_by_offset(data.num_columns() - 1).clone());
-        let mut values = Vec::with_capacity(data.num_rows());
-        let mut owners = Vec::with_capacity(data.num_rows());
-        for row in 0..data.num_rows() {
-            let value = hilbert_value(x[row], y[row], u16::BITS);
-            let owner = if let Some(hot) = plan.hot_keys.get(&value) {
-                let salt = match routing_salt.as_ref().and_then(|entry| entry.index(row)) {
-                    Some(ScalarRef::Number(NumberScalar::UInt64(salt))) => salt,
-                    _ => return Err(ErrorCode::Internal("Hilbert routing salt must be UInt64")),
-                };
-                hot.owner(salt)
+        let result = (|| {
+            if n == 0 || n > u8::MAX as usize + 1 {
+                return Err(ErrorCode::Internal(
+                    "Hilbert partition count must be between 1 and 256",
+                ));
+            }
+            if n != self.collector_count {
+                return Err(ErrorCode::Internal(format!(
+                    "Hilbert partition count {n} does not match planned collector count {}",
+                    self.collector_count
+                )));
+            }
+            let plan = self.ready_plan()?;
+            let dimensions = self.dimension_offsets.map(|offset| {
+                data.columns().get(offset).ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Hilbert dimension offset {offset} is outside the routed block"
+                    ))
+                })
+            });
+            let [x, y] = dimensions;
+            let dimensions = [x?, y?];
+            if dimensions
+                .iter()
+                .any(|dimension| dimension.len() != data.num_rows())
+            {
+                return Err(ErrorCode::Internal(
+                    "Hilbert dimension column length does not match the routed block",
+                ));
+            }
+            let x = plan.dimensions[0].encode_column(dimensions[0])?;
+            let y = plan.dimensions[1].encode_column(dimensions[1])?;
+            if x.len() != data.num_rows() || y.len() != data.num_rows() {
+                return Err(ErrorCode::Internal(
+                    "Hilbert encoded dimension length does not match the routed block",
+                ));
+            }
+            let routing_salt = if plan.hot_keys.is_empty() {
+                None
             } else {
-                plan.exchange_bounds.partition_point(|bound| bound < &value)
+                let salt =
+                    data.columns().last().cloned().ok_or_else(|| {
+                        ErrorCode::Internal("Hilbert routing salt column is missing")
+                    })?;
+                if salt.len() != data.num_rows() {
+                    return Err(ErrorCode::Internal(
+                        "Hilbert routing salt length does not match the routed block",
+                    ));
+                }
+                Some(salt)
             };
-            values.push(value);
-            owners.push(owner.min(n - 1) as u8);
+            let mut values = Vec::with_capacity(data.num_rows());
+            let mut owners = Vec::with_capacity(data.num_rows());
+            for (row, (x, y)) in x.into_iter().zip(y).enumerate() {
+                let value = hilbert_value(x, y, u16::BITS);
+                let owner = if let Some(hot) = plan.hot_keys.get(&value) {
+                    let salt = match routing_salt.as_ref().and_then(|entry| entry.index(row)) {
+                        Some(ScalarRef::Number(NumberScalar::UInt64(salt))) => salt,
+                        _ => {
+                            return Err(ErrorCode::Internal("Hilbert routing salt must be UInt64"));
+                        }
+                    };
+                    hot.owner(salt)
+                } else {
+                    plan.exchange_bounds.partition_point(|bound| bound < &value)
+                };
+                if owner >= n {
+                    return Err(ErrorCode::Internal(format!(
+                        "Hilbert range plan selected owner {owner} outside {n} partitions"
+                    )));
+                }
+                values.push(value);
+                owners.push(owner as u8);
+            }
+            if routing_salt.is_some() {
+                data.pop_columns(1);
+            }
+            data.add_column(UInt32Type::from_data(values));
+            data.scatter(&owners, n)
+        })();
+        if let Err(error) = &result {
+            self.fail(error.clone());
         }
-        if routing_salt.is_some() {
-            data.pop_columns(1);
-        }
-        data.add_column(UInt32Type::from_data(values));
-        data.scatter(&owners, n)
+        result
     }
 }
 
 fn build_plan(sketches: Vec<LocalSketch>, collector_count: usize) -> Result<HilbertRangePlan> {
     let mut samples = Vec::new();
-    for sketch in sketches {
-        let sample_count = sketch.samples.len();
-        let weight = sketch.rows as f64 / sample_count.max(1) as f64;
-        samples.extend(
-            sketch
-                .samples
-                .into_iter()
-                .map(|coordinates| (coordinates, weight)),
-        );
+    for (rows, sketch) in sketches {
+        validate_sketch(rows, sketch.len())?;
+        if rows == 0 {
+            continue;
+        }
+        let weight = rows as f64 / sketch.len() as f64;
+        if !weight.is_finite() || weight <= 0.0 {
+            return Err(ErrorCode::Internal(
+                "Hilbert sample produced an invalid row weight",
+            ));
+        }
+        samples.extend(sketch.into_iter().map(|coordinates| (coordinates, weight)));
     }
     if samples.is_empty() {
         return Err(ErrorCode::Internal("Hilbert recluster sampled no rows"));
     }
 
-    let mut dimensions = from_fn(|dimension| {
+    let dimensions = from_fn(|dimension| {
         let mut values = samples
             .iter()
             .filter(|(coordinates, _)| !matches!(coordinates[dimension], Scalar::Null))
             .map(|(coordinates, weight)| (&coordinates[dimension], *weight))
             .collect::<Vec<_>>();
+        let data_type = values
+            .first()
+            .map(|(value, _)| value.as_ref().infer_data_type());
+        if let Some(expected) = &data_type
+            && values
+                .iter()
+                .any(|(value, _)| value.as_ref().infer_data_type() != *expected)
+        {
+            return Err(ErrorCode::Internal(format!(
+                "Hilbert dimension {dimension} samples have inconsistent data types"
+            )));
+        }
         values.sort_unstable_by(|(left, _), (right, _)| left.as_ref().cmp(&right.as_ref()));
 
         let coarse_range_limit = MAX_COARSE_RANGES.min(values.len());
@@ -472,18 +685,21 @@ fn build_plan(sketches: Vec<LocalSketch>, collector_count: usize) -> Result<Hilb
             start = end;
         }
 
-        DimensionBounds {
+        Ok(DimensionBounds {
+            data_type,
             coarse: TypedRangeBounds::from_scalars(coarse),
             fine: TypedRangeBounds::from_scalars(fine),
             fine_offsets,
             max_coarse_rank: 0,
-        }
+        })
     });
+    let [x, y] = dimensions;
+    let mut dimensions = [x?, y?];
     let max_coarse_rank = dimensions
         .iter()
         .map(|dimension| dimension.coarse.len())
         .max()
-        .unwrap() as u32;
+        .unwrap_or(0) as u32;
     // Stretch a low-cardinality dimension across the same coarse domain as the other dimension.
     // This changes scale only; it does not manufacture additional values or fine bounds.
     for dimension in &mut dimensions {
@@ -502,7 +718,7 @@ fn build_plan(sketches: Vec<LocalSketch>, collector_count: usize) -> Result<Hilb
         })
         .collect::<Vec<_>>();
     weighted_keys.sort_unstable_by_key(|(key, _)| *key);
-    let (exchange_bounds, hot_keys) = weighted_exchange_bounds(&weighted_keys, collector_count);
+    let (exchange_bounds, hot_keys) = weighted_exchange_bounds(&weighted_keys, collector_count)?;
 
     Ok(HilbertRangePlan {
         dimensions,
@@ -567,11 +783,24 @@ fn weighted_quantile_bounds(values: &[(&Scalar, f64)], range_limit: usize) -> Ve
 fn weighted_exchange_bounds(
     weighted_keys: &[(u32, f64)],
     collector_count: usize,
-) -> (Vec<u32>, HashMap<u32, HotKeyRange>) {
-    if collector_count <= 1 {
-        return (Vec::new(), HashMap::new());
+) -> Result<(Vec<u32>, HashMap<u32, HotKeyRange>)> {
+    if weighted_keys
+        .iter()
+        .any(|(_, weight)| !weight.is_finite() || *weight <= 0.0)
+    {
+        return Err(ErrorCode::Internal(
+            "Hilbert exchange received an invalid sample weight",
+        ));
     }
     let total_weight = weighted_keys.iter().map(|(_, weight)| *weight).sum::<f64>();
+    if !total_weight.is_finite() || total_weight <= 0.0 {
+        return Err(ErrorCode::Internal(
+            "Hilbert exchange received an invalid total sample weight",
+        ));
+    }
+    if collector_count <= 1 {
+        return Ok((Vec::new(), HashMap::new()));
+    }
     let target_weight = total_weight / collector_count as f64;
     let mut bounds = Vec::with_capacity(collector_count - 1);
     let mut hot_keys = HashMap::new();
@@ -606,7 +835,7 @@ fn weighted_exchange_bounds(
             bounds.push(key);
         }
     }
-    (bounds, hot_keys)
+    Ok((bounds, hot_keys))
 }
 
 fn hilbert_value(x: u16, y: u16, coordinate_bits: u32) -> u32 {
@@ -635,6 +864,7 @@ mod tests {
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::UInt64Type;
+    use rand::Rng;
 
     use super::*;
 
@@ -642,50 +872,282 @@ mod tests {
         Scalar::Number(NumberScalar::Int32(value))
     }
 
-    fn local_sketch(rows: usize, samples: Vec<HilbertSample>) -> LocalSketch {
-        LocalSketch { rows, samples }
+    fn block(x: Vec<i32>, y: Vec<i32>) -> DataBlock {
+        DataBlock::new_from_columns(vec![Int32Type::from_data(x), Int32Type::from_data(y)])
     }
 
     #[test]
     fn test_sample_budget_and_worker_quotas() {
-        let sampling_exchange = HilbertRangeExchange::create([0, 1], 1_000_000, 4, 2);
-        assert_eq!(sampling_exchange.target_sample_size, 100_000);
-        assert_eq!(sampling_exchange.local_sample_size, 50_000);
+        let task_rows = MAX_PLAN_SAMPLES * 10;
+        let sampling_exchange = HilbertRangeExchange::create([0, 1], task_rows, 4, 2);
+        assert_eq!(sampling_exchange.target_sample_size, MAX_PLAN_SAMPLES);
+        assert_eq!(sampling_exchange.local_sample_size, MAX_PLAN_SAMPLES / 2);
 
-        let exchange = HilbertRangeExchange::create([0, 1], 1_000_000, 2, 2);
-        exchange.submit_initial(0, 900_000, vec![[int(0), int(0)]; 100]);
-        exchange.submit_initial(1, 100_000, vec![[int(1), int(1)]; 100]);
-        assert_eq!(exchange.resample_request(0), Some(90_000));
-        assert_eq!(exchange.resample_request(1), Some(10_000));
+        let exchange = HilbertRangeExchange::create([0, 1], task_rows, 2, 2);
+        exchange.submit_initial(0, task_rows * 9 / 10, vec![[int(0), int(0)]; 100]);
+        assert!(!exchange.should_build_plan());
+        exchange.submit_initial(1, task_rows / 10, vec![[int(1), int(1)]; 100]);
         assert_eq!(
-            exchange.inner.lock().sample_targets.iter().sum::<usize>(),
-            100_000
+            exchange.resample_request(0).unwrap(),
+            Some(MAX_PLAN_SAMPLES * 9 / 10)
+        );
+        assert_eq!(
+            exchange.resample_request(1).unwrap(),
+            Some(MAX_PLAN_SAMPLES / 10)
         );
 
-        let exchange = HilbertRangeExchange::create([0, 1], 100_002, 3, 1);
+        let exchange = HilbertRangeExchange::create([0, 1], MAX_PLAN_SAMPLES + 2, 3, 1);
         for worker_id in 0..3 {
-            exchange.submit_initial(worker_id, [1, 1, 100_000][worker_id], vec![[
+            exchange.submit_initial(worker_id, [1, 1, MAX_PLAN_SAMPLES][worker_id], vec![[
                 int(worker_id as i32),
                 int(0),
             ]]);
         }
-        assert_eq!(exchange.inner.lock().sample_targets, vec![1, 1, 99_998]);
+        let inner = exchange.inner.lock();
+        let HilbertRangeState::Resampling { sample_targets, .. } = &*inner else {
+            panic!("all initial sketches must advance to resampling");
+        };
+        assert_eq!(sample_targets, &[1, 1, MAX_PLAN_SAMPLES - 2]);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_worker_identity_fails_safely() {
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
+        exchange.submit_initial(1, 1, vec![[int(1), int(1)]]);
+        assert_eq!(
+            exchange.wait_sketches().await.unwrap_err().message(),
+            "Hilbert worker 1 is outside the sampling exchange"
+        );
+
+        let exchange = HilbertRangeExchange::create([0, 1], 2, 2, 1);
+        exchange.submit_initial(0, 1, vec![[int(0), int(0)]]);
+        exchange.submit_initial(0, 1, vec![[int(0), int(0)]]);
+        assert_eq!(
+            exchange.wait_plan().await.unwrap_err().message(),
+            "Hilbert worker 0 submitted its initial sample twice"
+        );
+
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
+        exchange.submit_initial(0, 1, vec![[int(0), int(0)]]);
+        assert_eq!(
+            exchange.resample_request(1).unwrap_err().message(),
+            "Hilbert worker 1 is outside the resampling exchange"
+        );
+        assert_eq!(
+            exchange
+                .complete_resample(1, 1, vec![[int(1), int(1)]])
+                .unwrap_err()
+                .message(),
+            "Hilbert worker 1 is outside the resampling exchange"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_malformed_sketches_fail_safely() {
+        for (rows, samples, expected) in [
+            (
+                1,
+                Vec::new(),
+                "Hilbert nonempty worker submitted no samples",
+            ),
+            (
+                0,
+                vec![[int(0), int(0)]],
+                "Hilbert empty worker submitted nonempty samples",
+            ),
+            (
+                1,
+                vec![[int(0), int(0)]; 2],
+                "Hilbert worker submitted more samples than input rows",
+            ),
+        ] {
+            let exchange = HilbertRangeExchange::create([0, 1], rows, 1, 1);
+            exchange.submit_initial(0, rows, samples);
+            assert_eq!(
+                exchange.wait_sketches().await.unwrap_err().message(),
+                expected
+            );
+        }
+
+        let exchange = HilbertRangeExchange::create([0, 1], 10, 1, 1);
+        exchange.submit_initial(0, 10, vec![[int(0), int(0)]]);
+        assert_eq!(exchange.resample_request(0).unwrap(), Some(10));
+        assert_eq!(
+            exchange
+                .complete_resample(0, 9, vec![[int(0), int(0)]; 9])
+                .unwrap_err()
+                .message(),
+            "Hilbert worker row count changed during resampling"
+        );
+
+        let exchange = HilbertRangeExchange::create([0, 1], 10, 1, 1);
+        exchange.submit_initial(0, 10, vec![[int(0), int(0)]]);
+        assert_eq!(
+            exchange
+                .complete_resample(0, 10, vec![[int(0), int(0)]; 9])
+                .unwrap_err()
+                .message(),
+            "Hilbert worker did not fulfill its resample quota"
+        );
+
+        assert_eq!(
+            build_plan(vec![(1, Vec::new())], 1).unwrap_err().message(),
+            "Hilbert nonempty worker submitted no samples"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_invalid_sample_budget_and_row_overflow_fail_task() {
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 2, 1);
+        exchange.submit_initial(0, 1, vec![[int(0), int(0)]]);
+        exchange.submit_initial(1, 1, vec![[int(1), int(1)]]);
+        assert_eq!(
+            exchange.wait_sketches().await.unwrap_err().message(),
+            "Hilbert sample budget cannot represent every nonempty worker"
+        );
+
+        let exchange = HilbertRangeExchange::create([0, 1], usize::MAX, 2, 1);
+        exchange.submit_initial(0, usize::MAX, vec![[int(0), int(0)]]);
+        exchange.submit_initial(1, 1, vec![[int(1), int(1)]]);
+        assert_eq!(
+            exchange.wait_plan().await.unwrap_err().message(),
+            "Hilbert worker row counts overflowed the task row count"
+        );
+    }
+
+    #[test]
+    fn test_first_failure_is_terminal_while_building_plan() {
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
+        *exchange.inner.lock() = HilbertRangeState::Building;
+
+        exchange.fail(ErrorCode::Internal("plan build failed"));
+        exchange.fail(ErrorCode::Internal("later failure"));
+        exchange.publish_plan();
+
+        assert_eq!(
+            exchange.ready_plan().unwrap_err().message(),
+            "plan build failed"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_plan_publication_races_do_not_lose_terminal_notification() {
+        use std::sync::Barrier;
+
+        for iteration in 0..100 {
+            let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
+            exchange.submit_initial(0, 1, vec![[int(1), int(1)]]);
+            let barrier = Arc::new(Barrier::new(3));
+            std::thread::scope(|scope| {
+                let publish_exchange = exchange.clone();
+                let publish_barrier = barrier.clone();
+                scope.spawn(move || {
+                    publish_barrier.wait();
+                    publish_exchange.publish_plan();
+                });
+
+                let terminal_exchange = exchange.clone();
+                let terminal_barrier = barrier.clone();
+                scope.spawn(move || {
+                    terminal_barrier.wait();
+                    if iteration % 2 == 0 {
+                        terminal_exchange.fail(ErrorCode::Internal("concurrent terminal failure"));
+                    } else {
+                        terminal_exchange.cancel_before_plan();
+                    }
+                });
+                barrier.wait();
+            });
+
+            let result =
+                tokio::time::timeout(std::time::Duration::from_secs(1), exchange.wait_plan())
+                    .await
+                    .expect("plan waiter must not lose a concurrent terminal notification");
+            if iteration % 2 == 0 {
+                assert_eq!(result.unwrap_err().message(), "concurrent terminal failure");
+            } else if let Err(error) = result {
+                assert_eq!(error.name(), "AbortedQuery");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_empty_sample_failure_reaches_late_waiter() {
+        let exchange = HilbertRangeExchange::create([0, 1], 0, 1, 1);
+        exchange.submit_initial(0, 0, Vec::new());
+        assert!(exchange.should_build_plan());
+
+        exchange.publish_plan();
+
+        assert_eq!(
+            exchange.wait_plan().await.unwrap_err().message(),
+            "Hilbert recluster sampled no rows"
+        );
+    }
+
+    #[test]
+    fn test_empty_worker_does_not_block_nonempty_plan() -> Result<()> {
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 2, 1);
+        exchange.submit_initial(0, 0, Vec::new());
+        assert!(!exchange.should_build_plan());
+        exchange.submit_initial(1, 1, vec![[int(1), int(1)]]);
+        assert!(exchange.should_build_plan());
+
+        exchange.publish_plan();
+        let output = exchange.partition(block(vec![1], vec![1]), 1)?;
+        assert_eq!(output.len(), 1);
+        assert_eq!(output[0].num_rows(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_dimension_type_mismatches_fail_safely() {
+        assert_eq!(
+            build_plan(
+                vec![(2, vec![[int(1), int(1)], [
+                    Scalar::String("wrong type".to_string()),
+                    int(2)
+                ],],)],
+                1,
+            )
+            .unwrap_err()
+            .message(),
+            "Hilbert dimension 0 samples have inconsistent data types"
+        );
+
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
+        exchange.submit_initial(0, 1, vec![[int(1), int(1)]]);
+        exchange.publish_plan();
+        let input = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![1]),
+            UInt64Type::from_data(vec![1]),
+        ]);
+        let error = exchange.partition(input, 1).unwrap_err();
+        assert!(
+            error
+                .message()
+                .starts_with("Hilbert dimension type changed")
+        );
+        assert_eq!(
+            exchange.wait_plan().await.unwrap_err().message(),
+            error.message()
+        );
     }
 
     #[test]
     fn test_plan_bounds_and_encoding() {
-        let samples = (0..4096)
-            .map(|value| [int(value % 32), int(value)])
+        let samples = (0..MAX_COARSE_RANGES + 1)
+            .map(|value| [int((value % 32) as i32), int(value as i32)])
             .collect::<Vec<_>>();
-        let plan = build_plan(vec![local_sketch(samples.len(), samples)], 4).unwrap();
+        let plan = build_plan(vec![(samples.len(), samples)], 4).unwrap();
         let low_cardinality = &plan.dimensions[0];
         assert_eq!(low_cardinality.coarse.len(), 32);
         assert!(low_cardinality.coordinate(int(31).as_ref()) > 60_000);
 
         let weighted = build_plan(
             vec![
-                local_sketch(900, vec![[int(0), int(0)]; 10]),
-                local_sketch(100, vec![[int(100), int(100)]; 10]),
+                (900, vec![[int(0), int(0)]; 10]),
+                (100, vec![[int(100), int(100)]; 10]),
             ],
             2,
         )
@@ -697,11 +1159,13 @@ mod tests {
             dimension.coordinate(int(100).as_ref())
         );
 
-        let all_null =
-            build_plan(vec![local_sketch(1, vec![[Scalar::Null, Scalar::Null]])], 1).unwrap();
+        let all_null = build_plan(vec![(1, vec![[Scalar::Null, Scalar::Null]])], 1).unwrap();
         assert_eq!(all_null.dimensions[0].coordinate(ScalarRef::Null), u16::MAX);
 
         let dimension = DimensionBounds {
+            data_type: Some(DataType::Number(
+                databend_common_expression::types::NumberDataType::Int32,
+            )),
             coarse: TypedRangeBounds::from_scalars(vec![int(10), int(20), int(30)]),
             fine: TypedRangeBounds::from_scalars(vec![int(5), int(25)]),
             fine_offsets: vec![0, 1, 1, 2, 2],
@@ -709,7 +1173,7 @@ mod tests {
         };
         let entry: BlockEntry =
             Int32Type::from_opt_data(vec![Some(5), Some(10), None, Some(25), Some(40)]).into();
-        assert_eq!(dimension.encode_column(&entry), vec![
+        assert_eq!(dimension.encode_column(&entry).unwrap(), vec![
             0,
             15,
             u16::MAX,
@@ -719,39 +1183,128 @@ mod tests {
     }
 
     #[test]
+    fn test_randomized_plan_and_routing_invariants() -> Result<()> {
+        fn fingerprint(blocks: &[DataBlock]) -> Vec<Vec<Vec<Scalar>>> {
+            blocks
+                .iter()
+                .map(|block| {
+                    block
+                        .columns()
+                        .iter()
+                        .map(|entry| {
+                            (0..block.num_rows())
+                                .map(|row| entry.index(row).unwrap().to_owned())
+                                .collect()
+                        })
+                        .collect()
+                })
+                .collect()
+        }
+
+        let mut rng = SmallRng::seed_from_u64(0x6d5a_56da_b19c_4f2b);
+        for _case in 0..256 {
+            let worker_count = rng.gen_range(1..=6);
+            let collector_count = rng.gen_range(1..=8);
+            let mut sketches = Vec::with_capacity(worker_count);
+            let mut total_rows = 0usize;
+            for _worker in 0..worker_count {
+                let sample_count = rng.gen_range(1..=64);
+                let represented_rows = sample_count * rng.gen_range(1..=128);
+                total_rows += represented_rows;
+                let samples = (0..sample_count)
+                    .map(|_| {
+                        from_fn(|_| {
+                            if rng.gen_ratio(1, 8) {
+                                Scalar::Null
+                            } else {
+                                int(rng.gen_range(-32..=32))
+                            }
+                        })
+                    })
+                    .collect();
+                sketches.push((represented_rows, samples));
+            }
+
+            let plan = build_plan(sketches, collector_count)?;
+            for dimension in &plan.dimensions {
+                let coordinates = (-40..=40)
+                    .map(|value| dimension.coordinate(int(value).as_ref()))
+                    .collect::<Vec<_>>();
+                assert!(coordinates.windows(2).all(|pair| pair[0] <= pair[1]));
+                assert_eq!(dimension.coordinate(ScalarRef::Null), u16::MAX);
+            }
+            assert!(
+                plan.exchange_bounds
+                    .windows(2)
+                    .all(|pair| pair[0] <= pair[1])
+            );
+            assert!(plan.exchange_bounds.len() < collector_count);
+            for hot in plan.hot_keys.values() {
+                assert!(hot.first_owner <= hot.last_owner);
+                assert!(hot.last_owner < collector_count);
+                for salt in [0, 1, u64::MAX / 2, u64::MAX] {
+                    let owner = hot.owner(salt);
+                    assert!(owner >= hot.first_owner && owner <= hot.last_owner);
+                }
+            }
+
+            let hot_keys = !plan.hot_keys.is_empty();
+            let exchange =
+                HilbertRangeExchange::create([0, 1], total_rows, worker_count, collector_count);
+            *exchange.inner.lock() = HilbertRangeState::Ready(Arc::new(plan));
+            let x = (0..97).map(|_| rng.gen_range(-40..=40)).collect::<Vec<_>>();
+            let y = (0..97).map(|_| rng.gen_range(-40..=40)).collect::<Vec<_>>();
+            let input = if hot_keys {
+                DataBlock::new_from_columns(vec![
+                    Int32Type::from_data(x),
+                    Int32Type::from_data(y),
+                    UInt64Type::from_data(
+                        (0..97)
+                            .map(|_| rng.gen_range(u64::MIN..=u64::MAX))
+                            .collect(),
+                    ),
+                ])
+            } else {
+                block(x, y)
+            };
+            let first = exchange.partition(input.clone(), collector_count)?;
+            let second = exchange.partition(input, collector_count)?;
+            assert_eq!(fingerprint(&first), fingerprint(&second));
+            assert_eq!(first.iter().map(DataBlock::num_rows).sum::<usize>(), 97);
+        }
+        Ok(())
+    }
+
+    fn fine_range_count_for(values: &[Scalar], weight: impl Fn(usize) -> f64) -> usize {
+        fine_range_count(
+            &values
+                .iter()
+                .enumerate()
+                .map(|(index, value)| (value, weight(index)))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    #[test]
     fn test_fine_ranges_follow_effective_samples() {
         let values = (0..24).map(int).collect::<Vec<_>>();
-        assert_eq!(
-            fine_range_count(&values.iter().map(|value| (value, 1.0)).collect::<Vec<_>>()),
-            2
-        );
+        assert_eq!(fine_range_count_for(&values, |_| 1.0), 2);
 
         let values = (0..192).map(int).collect::<Vec<_>>();
+        assert_eq!(fine_range_count_for(&values, |_| 1.0), 16);
         assert_eq!(
-            fine_range_count(&values.iter().map(|value| (value, 1.0)).collect::<Vec<_>>()),
-            16
-        );
-        assert_eq!(
-            fine_range_count(
-                &values
-                    .iter()
-                    .enumerate()
-                    .map(|(index, value)| (value, if index == 0 { 10_000.0 } else { 1.0 }))
-                    .collect::<Vec<_>>()
-            ),
+            fine_range_count_for(&values, |index| if index == 0 { 10_000.0 } else { 1.0 }),
             1
         );
 
-        let duplicate = int(1);
-        assert_eq!(
-            fine_range_count(&(0..192).map(|_| (&duplicate, 1.0)).collect::<Vec<_>>()),
-            1
-        );
+        let duplicates = vec![int(1); 192];
+        assert_eq!(fine_range_count_for(&duplicates, |_| 1.0), 1);
     }
 
     fn empty_plan(hot_keys: HashMap<u32, HotKeyRange>) -> Arc<HilbertRangePlan> {
         Arc::new(HilbertRangePlan {
             dimensions: from_fn(|_| DimensionBounds {
+                data_type: None,
                 coarse: TypedRangeBounds::from_scalars(Vec::new()),
                 fine: TypedRangeBounds::from_scalars(Vec::new()),
                 fine_offsets: vec![0, 0],
@@ -762,26 +1315,133 @@ mod tests {
         })
     }
 
+    #[tokio::test]
+    async fn test_partition_boundary_errors_fail_task() {
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
+        *exchange.inner.lock() = HilbertRangeState::Ready(empty_plan(HashMap::new()));
+        assert_eq!(
+            exchange
+                .partition(block(vec![1], vec![1]), 0)
+                .unwrap_err()
+                .message(),
+            "Hilbert partition count must be between 1 and 256"
+        );
+        assert_eq!(
+            exchange.wait_plan().await.unwrap_err().message(),
+            "Hilbert partition count must be between 1 and 256"
+        );
+
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 2);
+        *exchange.inner.lock() = HilbertRangeState::Ready(empty_plan(HashMap::new()));
+        assert_eq!(
+            exchange
+                .partition(block(vec![1], vec![1]), 1)
+                .unwrap_err()
+                .message(),
+            "Hilbert partition count 1 does not match planned collector count 2"
+        );
+        assert_eq!(
+            exchange.wait_plan().await.unwrap_err().message(),
+            "Hilbert partition count 1 does not match planned collector count 2"
+        );
+
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
+        *exchange.inner.lock() = HilbertRangeState::Ready(empty_plan(HashMap::new()));
+        assert_eq!(
+            exchange
+                .partition(
+                    DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1])]),
+                    1,
+                )
+                .unwrap_err()
+                .message(),
+            "Hilbert dimension offset 1 is outside the routed block"
+        );
+        assert_eq!(
+            exchange.wait_sketches().await.unwrap_err().message(),
+            "Hilbert dimension offset 1 is outside the routed block"
+        );
+
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 2);
+        *exchange.inner.lock() =
+            HilbertRangeState::Ready(empty_plan(HashMap::from([(0, HotKeyRange {
+                first_owner: 0,
+                last_owner: 1,
+                start: 0.0,
+                span: 2.0,
+            })])));
+        assert_eq!(
+            exchange
+                .partition(block(vec![1], vec![1]), 2)
+                .unwrap_err()
+                .message(),
+            "Hilbert routing salt must be UInt64"
+        );
+        assert_eq!(
+            exchange.wait_plan().await.unwrap_err().message(),
+            "Hilbert routing salt must be UInt64"
+        );
+
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 2);
+        *exchange.inner.lock() =
+            HilbertRangeState::Ready(empty_plan(HashMap::from([(0, HotKeyRange {
+                first_owner: 2,
+                last_owner: 2,
+                start: 0.0,
+                span: 1.0,
+            })])));
+        assert_eq!(
+            exchange
+                .partition(
+                    DataBlock::new_from_columns(vec![
+                        Int32Type::from_data(vec![1]),
+                        Int32Type::from_data(vec![1]),
+                        UInt64Type::from_data(vec![0]),
+                    ]),
+                    2,
+                )
+                .unwrap_err()
+                .message(),
+            "Hilbert range plan selected owner 2 outside 2 partitions"
+        );
+        assert_eq!(
+            exchange.wait_plan().await.unwrap_err().message(),
+            "Hilbert range plan selected owner 2 outside 2 partitions"
+        );
+    }
+
+    #[test]
+    fn test_partition_rejects_unready_and_failed_plan() {
+        let input = || block(vec![1], vec![1]);
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
+        assert_eq!(
+            exchange.partition(input(), 1).unwrap_err().message(),
+            "Hilbert range plan is not ready"
+        );
+
+        let exchange = HilbertRangeExchange::create([0, 1], 1, 1, 1);
+        exchange.fail(ErrorCode::Internal("routing failed"));
+        assert_eq!(
+            exchange.partition(input(), 1).unwrap_err().message(),
+            "routing failed"
+        );
+    }
+
     #[test]
     fn test_exchange_uses_salt_only_for_hot_keys() -> Result<()> {
         let exchange = HilbertRangeExchange::create([0, 1], 2, 1, 2);
-        exchange.inner.lock().plan = Some(empty_plan(HashMap::new()));
-        let output = exchange.partition(
-            DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 2]),
-                Int32Type::from_data(vec![3, 4]),
-            ]),
-            2,
-        )?;
+        *exchange.inner.lock() = HilbertRangeState::Ready(empty_plan(HashMap::new()));
+        let output = exchange.partition(block(vec![1, 2], vec![3, 4]), 2)?;
         assert!(output.iter().all(|block| block.num_columns() == 3));
 
         let exchange = HilbertRangeExchange::create([0, 1], 4, 1, 2);
-        exchange.inner.lock().plan = Some(empty_plan(HashMap::from([(0, HotKeyRange {
-            first_owner: 0,
-            last_owner: 1,
-            start: 0.0,
-            span: 2.0,
-        })])));
+        *exchange.inner.lock() =
+            HilbertRangeState::Ready(empty_plan(HashMap::from([(0, HotKeyRange {
+                first_owner: 0,
+                last_owner: 1,
+                start: 0.0,
+                span: 2.0,
+            })])));
         let output = exchange.partition(
             DataBlock::new_from_columns(vec![
                 Int32Type::from_data(vec![1, 1, 1, 1]),
@@ -800,18 +1460,34 @@ mod tests {
 
     #[test]
     fn test_weighted_exchange_bounds_and_hot_keys() {
-        let (_, hot) = weighted_exchange_bounds(&vec![(7, 1.0); 100], 4);
+        let (_, hot) = weighted_exchange_bounds(&[(7, 1.0); 100], 4).unwrap();
         assert_eq!(hot[&7].last_owner - hot[&7].first_owner + 1, 4);
 
-        let (bounds, hot) = weighted_exchange_bounds(&[(1, 1.0), (2, 1.0), (3, 1.0), (4, 1.0)], 2);
+        let (bounds, hot) =
+            weighted_exchange_bounds(&[(1, 1.0), (2, 1.0), (3, 1.0), (4, 1.0)], 2).unwrap();
         assert_eq!(bounds, vec![2]);
         assert!(hot.is_empty());
 
         let mut keys = vec![(1, 1.0); 49];
-        keys.extend(vec![(2, 1.0); 2]);
-        keys.extend(vec![(3, 1.0); 49]);
-        let (bounds, hot) = weighted_exchange_bounds(&keys, 2);
+        keys.extend([(2, 1.0); 2]);
+        keys.extend([(3, 1.0); 49]);
+        let (bounds, hot) = weighted_exchange_bounds(&keys, 2).unwrap();
         assert_eq!(bounds, vec![2]);
         assert!(hot.contains_key(&2));
+
+        for weight in [0.0, f64::NAN, f64::INFINITY] {
+            assert_eq!(
+                weighted_exchange_bounds(&[(1, weight)], 2)
+                    .unwrap_err()
+                    .message(),
+                "Hilbert exchange received an invalid sample weight"
+            );
+        }
+        assert_eq!(
+            weighted_exchange_bounds(&[(1, f64::MAX), (2, f64::MAX)], 2)
+                .unwrap_err()
+                .message(),
+            "Hilbert exchange received an invalid total sample weight"
+        );
     }
 }
