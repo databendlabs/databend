@@ -119,7 +119,7 @@ fn unwrap_integer_to_string_cast<'a>(
         return Ok(None);
     }
 
-    let integer_type = integer_expr.data_type()?;
+    let integer_type = integer_expr.data_type();
     let DataType::Number(integer_type) = integer_type.remove_nullable() else {
         return Ok(None);
     };
@@ -127,7 +127,7 @@ fn unwrap_integer_to_string_cast<'a>(
         return Ok(None);
     }
 
-    let source_type = cast.argument.data_type()?;
+    let source_type = cast.argument.data_type();
     let DataType::Number(source_type) = source_type.remove_nullable() else {
         return Ok(None);
     };
