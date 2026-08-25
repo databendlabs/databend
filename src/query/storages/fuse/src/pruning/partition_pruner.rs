@@ -64,7 +64,7 @@ impl PartitionPruner {
             .into_iter()
             .map(|expr| {
                 ConstantFolder::fold(
-                    &expr.as_expr(&BUILTIN_FUNCTIONS),
+                    expr.as_expr(&BUILTIN_FUNCTIONS),
                     &func_ctx,
                     &BUILTIN_FUNCTIONS,
                 )
@@ -95,7 +95,7 @@ impl PartitionPruner {
         let filter = visit_expr(&self.filter, &mut visitor)
             .unwrap()
             .unwrap_or_else(|| self.filter.clone());
-        let (filter, _) = ConstantFolder::fold(&filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (filter, _) = ConstantFolder::fold(filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         !matches!(
             filter,
@@ -185,7 +185,7 @@ impl PartitionPredicateRewriter<'_> {
             return true;
         };
         let (equality, _) = ConstantFolder::fold_with_domain(
-            &equality,
+            equality,
             input_domains,
             self.func_ctx,
             &BUILTIN_FUNCTIONS,

@@ -241,7 +241,7 @@ pub fn can_filter_null(
         let columns = null_scalar_expr.columns_and_data_types(metadata);
         let expr = convert_scalar_expr_to_expr(null_scalar_expr, columns)?;
         let func_ctx = &FunctionContext::default();
-        let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+        let (expr, _) = ConstantFolder::fold(expr, func_ctx, &BUILTIN_FUNCTIONS);
         if expr.contains_column_ref() {
             return Ok(false);
         }

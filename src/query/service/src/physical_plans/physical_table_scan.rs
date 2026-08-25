@@ -453,7 +453,7 @@ impl PhysicalPlanBuilder {
                     .as_raw_expr()
                     .type_check(&metadata)?
                     .project_column_ref(|col| Ok(col.column_name.clone()))?;
-                let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (folded, _) = ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote = folded.as_remote_expr();
                 serialized.push(serde_json::to_string(&remote).map_err(|e| {
                     ErrorCode::Internal(format!(
@@ -568,7 +568,7 @@ impl PhysicalPlanBuilder {
                             })?;
                         let expr = cast_expr_to_non_null_boolean(expr)?;
                         let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                            ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                         Ok(expr.as_remote_expr())
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -781,7 +781,7 @@ impl PhysicalPlanBuilder {
                         .type_check(&metadata)?
                         .project_column_ref(|col| Ok(col.column_name.clone()))?,
                 )?;
-                let (filter, _) = ConstantFolder::fold(&filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (filter, _) = ConstantFolder::fold(filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = filter.as_remote_expr();
                 let virtual_column_ids =
                     self.build_prewhere_virtual_column_ids(&prewhere.prewhere_columns);
@@ -891,7 +891,7 @@ impl PhysicalPlanBuilder {
             .unwrap();
 
         let expr = cast_expr_to_non_null_boolean(expr)?;
-        let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (expr, _) = ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         let is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
         let inverted_filter =

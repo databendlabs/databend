@@ -558,7 +558,7 @@ where A: TypeCheckAdapter
             | CoreWindowFrameBound::Preceding(Some(expr)) => {
                 let box (expr, _) = self.resolve_core(arena, *expr)?;
                 let (expr, _) =
-                    ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    ConstantFolder::fold(expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 match expr.into_constant() {
                     Ok(expr::Constant { scalar, .. }) => Ok(Some(scalar)),
                     Err(expr) => Err(ErrorCode::SemanticError(
@@ -701,7 +701,7 @@ where A: TypeCheckAdapter
                 EExpr::Constant(_) => Some(check_number::<i64, _>(
                     off.span(),
                     &self.func_ctx,
-                    &off,
+                    off,
                     &BUILTIN_FUNCTIONS,
                 )?),
                 _ => {
@@ -800,7 +800,7 @@ where A: TypeCheckAdapter
                     EExpr::Constant(_) => check_number::<u64, _>(
                         n_expr.span(),
                         &self.func_ctx,
-                        &n_expr,
+                        n_expr,
                         &BUILTIN_FUNCTIONS,
                     )?,
                     _ => {
@@ -838,7 +838,7 @@ where A: TypeCheckAdapter
         let return_type = DataType::Number(NumberDataType::UInt64);
         let n = match n_expr {
             EExpr::Constant(_) => {
-                check_number::<u64, _>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?
+                check_number::<u64, _>(n_expr.span(), &self.func_ctx, n_expr, &BUILTIN_FUNCTIONS)?
             }
             _ => {
                 return Err(ErrorCode::InvalidArgument(

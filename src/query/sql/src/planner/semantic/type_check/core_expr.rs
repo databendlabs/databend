@@ -715,7 +715,7 @@ where A: TypeCheckAdapter
         for (display_name, param) in params {
             let box (scalar, _) = self.resolve_core(arena, *param)?;
             let expr = scalar.as_expr()?;
-            let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let (expr, _) = ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
             let constant = expr
                 .into_constant()
                 .map_err(|_| {

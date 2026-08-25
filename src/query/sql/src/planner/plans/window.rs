@@ -401,7 +401,7 @@ enum FoldedConstantStat {
 
 fn fold_constant_stat(expr: &ScalarExpr) -> Result<Option<FoldedConstantStat>> {
     let expr = expr.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
+    let (expr, _) = ConstantFolder::fold(expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
     let Ok(constant) = expr.into_constant() else {
         return Ok(None);
     };

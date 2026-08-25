@@ -67,7 +67,7 @@ impl InternalColumnPruner {
             input_domains.insert(col_name.to_string(), domain);
 
             let (folded_expr, _) = ConstantFolder::fold_with_domain(
-                &self.expr,
+                self.expr.clone(),
                 &input_domains,
                 &self.func_ctx,
                 &BUILTIN_FUNCTIONS,

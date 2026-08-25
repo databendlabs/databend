@@ -394,7 +394,7 @@ mod tests {
         input_domains.insert("column_a".to_string(), domain_value_2_10);
 
         let (folded_expr, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            filter_expr.clone(),
             &input_domains,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -413,7 +413,7 @@ mod tests {
         input_domains_false.insert("column_a".to_string(), domain_value_2_9);
 
         let (folded_expr_false, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            filter_expr,
             &input_domains_false,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -575,7 +575,7 @@ mod tests {
         input_domains.insert("column_b".to_string(), domain_value_500_600);
 
         let (folded_expr, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            filter_expr.clone(),
             &input_domains,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -598,7 +598,7 @@ mod tests {
         input_domains_no_intersect.insert("column_b".to_string(), domain_value_2000_3000);
 
         let (folded_expr_false, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            filter_expr,
             &input_domains_no_intersect,
             &func_ctx,
             &BUILTIN_FUNCTIONS,

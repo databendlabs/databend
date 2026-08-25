@@ -187,7 +187,7 @@ fn transform_expr(
                     let raw_expr = transform_expr(param, &[], builtin_functions);
                     let expr = type_check::check(&raw_expr, builtin_functions).unwrap();
                     let (expr, _) =
-                        ConstantFolder::fold(&expr, &FunctionContext::default(), builtin_functions);
+                        ConstantFolder::fold(expr, &FunctionContext::default(), builtin_functions);
                     expr.into_constant().unwrap().scalar
                 })
                 .collect(),

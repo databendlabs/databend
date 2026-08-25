@@ -123,7 +123,7 @@ fn try_fold_to_scalar(
     subquery_executor: &Option<Arc<dyn QueryExecutor>>,
 ) -> Result<Scalar> {
     let expr = scalar.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
+    let (expr, _) = ConstantFolder::fold(expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
 
     match expr.into_constant() {
         Ok(Constant { scalar, .. }) => Ok(scalar),

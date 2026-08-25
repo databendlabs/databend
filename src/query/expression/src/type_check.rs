@@ -233,16 +233,15 @@ pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType>
 pub fn check_string<Index: ColumnIndex>(
     span: Span,
     func_ctx: &FunctionContext,
-    expr: &Expr<Index>,
+    expr: Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<String> {
-    let origin_ty = expr.data_type();
-    let (expr, _) = if origin_ty != &DataType::String {
+    let (expr, _) = if expr.data_type() != &DataType::String {
         ConstantFolder::fold(
-            &Expr::Cast(Cast {
+            Expr::Cast(Cast {
                 span,
                 is_try: false,
-                expr: Box::new(expr.clone()),
+                expr: Box::new(expr),
                 dest_type: DataType::String,
             }),
             func_ctx,
@@ -256,7 +255,7 @@ pub fn check_string<Index: ColumnIndex>(
         Expr::Constant(Constant {
             scalar: Scalar::String(string),
             ..
-        }) => Ok(string.clone()),
+        }) => Ok(string),
         _ => Err(
             ErrorCode::from_string_no_backtrace("expected string literal".to_string())
                 .set_span(span),
@@ -267,16 +266,16 @@ pub fn check_string<Index: ColumnIndex>(
 pub fn check_number<T: Number, Index: ColumnIndex>(
     span: Span,
     func_ctx: &FunctionContext,
-    expr: &Expr<Index>,
+    expr: Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<T> {
-    let origin_ty = expr.data_type();
-    let (expr, _) = if origin_ty != &DataType::Number(T::data_type()) {
+    let origin_ty = expr.data_type().clone();
+    let (expr, _) = if origin_ty != DataType::Number(T::data_type()) {
         ConstantFolder::fold(
-            &Expr::Cast(Cast {
+            Expr::Cast(Cast {
                 span,
                 is_try: false,
-                expr: Box::new(expr.clone()),
+                expr: Box::new(expr),
                 dest_type: DataType::Number(T::data_type()),
             }),
             func_ctx,

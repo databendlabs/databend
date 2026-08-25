@@ -309,7 +309,7 @@ fn prune_by_statistics(
             input_domains.insert(name.to_string(), domain.clone());
 
             let (new_expr, _) = ConstantFolder::fold_with_domain(
-                filter,
+                filter.clone(),
                 &input_domains,
                 func_ctx,
                 &BUILTIN_FUNCTIONS,

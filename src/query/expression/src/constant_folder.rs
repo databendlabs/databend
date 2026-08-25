@@ -53,11 +53,11 @@ pub struct ConstantFolder<'a, Index: ColumnIndex> {
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     /// Fold a single expression, returning the new expression and the domain of the new expression.
     pub fn fold(
-        expr: &Expr<Index>,
+        expr: Expr<Index>,
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> (Expr<Index>, Option<Domain>) {
-        let input_domains = Self::full_input_domains(expr);
+        let input_domains = Self::full_input_domains(&expr);
 
         let folder = ConstantFolder {
             input_domains: &input_domains,
@@ -71,7 +71,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     /// Fold a single expression with columns' domain, and then return the new expression and the
     /// domain of the new expression.
     pub fn fold_with_domain(
-        expr: &Expr<Index>,
+        expr: Expr<Index>,
         input_domains: &'a HashMap<Index, Domain>,
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
@@ -97,52 +97,49 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
     /// Running `fold_once()` for only one time may not reach the simplest form of expression,
     /// therefore we need to call it repeatedly until the expression becomes stable.
-    fn fold_to_stable(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
+    fn fold_to_stable(&self, mut expr: Expr<Index>) -> (Expr<Index>, Option<Domain>) {
         const MAX_ITERATIONS: usize = 1024;
 
-        let mut old_expr = expr.clone();
-        let mut old_domain = None;
+        let mut domain = None;
         for _ in 0..MAX_ITERATIONS {
-            let (new_expr, new_domain) = self.fold_once(&old_expr);
-
-            if new_expr == old_expr {
+            let (new_expr, new_domain, changed) = self.fold_once(expr);
+            if !changed {
                 return (new_expr, new_domain);
             }
-            old_expr = new_expr;
-            old_domain = new_domain;
+            expr = new_expr;
+            domain = new_domain;
         }
 
         error!("maximum iterations reached while folding expression");
 
-        (old_expr, old_domain)
+        (expr, domain)
     }
 
     /// Fold expression by one step, specifically, by reducing expression by domain calculation and then
     /// folding the function calls whose all arguments are constants.
     #[recursive::recursive]
-    fn fold_once(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
-        let (new_expr, domain) = match expr {
-            Expr::Constant(Constant {
-                scalar, data_type, ..
-            }) => (expr.clone(), Some(scalar.as_ref().domain(data_type))),
-            Expr::ColumnRef(ColumnRef {
-                span,
-                id,
-                data_type,
-                ..
-            }) => {
-                let domain = &self.input_domains[id];
-                let expr = domain
-                    .as_singleton()
-                    .map(|scalar| {
+    fn fold_once(&self, expr: Expr<Index>) -> (Expr<Index>, Option<Domain>, bool) {
+        let data_type = expr.data_type().clone();
+        let (new_expr, domain, changed) = match expr {
+            Expr::Constant(constant) => {
+                let domain = constant.scalar.as_ref().domain(&constant.data_type);
+                (Expr::Constant(constant), Some(domain), false)
+            }
+            Expr::ColumnRef(column_ref) => {
+                let domain = &self.input_domains[&column_ref.id];
+                if let Some(scalar) = domain.as_singleton() {
+                    (
                         Expr::Constant(Constant {
-                            span: *span,
+                            span: column_ref.span,
                             scalar,
-                            data_type: data_type.clone(),
-                        })
-                    })
-                    .unwrap_or_else(|| expr.clone());
-                (expr, Some(domain.clone()))
+                            data_type: column_ref.data_type,
+                        }),
+                        Some(domain.clone()),
+                        true,
+                    )
+                } else {
+                    (Expr::ColumnRef(column_ref), Some(domain.clone()), false)
+                }
             }
             Expr::Cast(Cast {
                 span,
@@ -150,102 +147,95 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 expr,
                 dest_type,
             }) => {
-                let (inner_expr, inner_domain) = self.fold_once(expr);
+                let src_type = expr.data_type().clone();
+                let (inner_expr, inner_domain, inner_changed) = self.fold_once(*expr);
 
-                let new_domain = if *is_try {
+                let new_domain = if is_try {
                     inner_domain.and_then(|inner_domain| {
-                        self.calculate_try_cast(*span, expr.data_type(), dest_type, &inner_domain)
+                        self.calculate_try_cast(span, &src_type, &dest_type, &inner_domain)
                     })
                 } else {
                     inner_domain.and_then(|inner_domain| {
-                        self.calculate_cast(*span, expr.data_type(), dest_type, &inner_domain)
+                        self.calculate_cast(span, &src_type, &dest_type, &inner_domain)
                     })
                 };
 
+                let inner_is_constant = inner_expr.as_constant().is_some();
                 let cast_expr = Expr::Cast(Cast {
-                    span: *span,
-                    is_try: *is_try,
-                    expr: Box::new(inner_expr.clone()),
-                    dest_type: dest_type.clone(),
+                    span,
+                    is_try,
+                    expr: Box::new(inner_expr),
+                    dest_type,
                 });
 
-                if inner_expr.as_constant().is_some() {
-                    let block = DataBlock::empty_with_rows(1);
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let cast_expr = cast_expr.project_column_ref(|_| unreachable!()).unwrap();
-                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
-                        return (
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar,
-                                data_type: dest_type.clone(),
-                            }),
-                            None,
-                        );
-                    }
+                let (cast_expr, folded) = if inner_is_constant {
+                    self.try_fold_constant_expr(cast_expr)
+                } else {
+                    (cast_expr, false)
+                };
+                if folded {
+                    return (cast_expr, None, true);
                 }
 
-                (
-                    new_domain
-                        .as_ref()
-                        .and_then(Domain::as_singleton)
-                        .map(|scalar| {
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar,
-                                data_type: dest_type.clone(),
-                            })
-                        })
-                        .unwrap_or(cast_expr),
-                    new_domain,
-                )
+                if let Some(scalar) = new_domain.as_ref().and_then(Domain::as_singleton) {
+                    let span = cast_expr.span();
+                    let data_type = cast_expr.into_data_type();
+                    (
+                        Expr::Constant(Constant {
+                            span,
+                            scalar,
+                            data_type,
+                        }),
+                        new_domain,
+                        true,
+                    )
+                } else {
+                    (cast_expr, new_domain, inner_changed)
+                }
             }
-            Expr::FunctionCall(FunctionCall {
-                span,
-                id,
-                function,
-                generics,
-                args,
-                return_type,
-            }) if matches!(
-                function.signature.name.as_str(),
-                "and_filters" | "or_filters"
-            ) =>
+            Expr::FunctionCall(mut call)
+                if matches!(
+                    call.function.signature.name.as_str(),
+                    "and_filters" | "or_filters"
+                ) =>
             {
-                let is_or = function.signature.name.starts_with("or_");
+                let is_or = call.function.signature.name.starts_with("or_");
 
-                if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
-                    return (expr.clone(), None);
+                if call.args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                    return (Expr::FunctionCall(call), None, false);
                 }
 
-                let mut args_expr = Vec::new();
+                let mut changed = false;
+                let args = std::mem::take(&mut call.args);
+                let mut args_expr = Vec::with_capacity(args.len());
                 let mut result_domain = Some(BooleanDomain {
                     has_true: true,
                     has_false: true,
                 });
 
                 for arg in args {
-                    let (expr, domain) = self.fold_once(arg);
+                    let (arg, domain, arg_changed) = self.fold_once(arg);
+                    changed |= arg_changed;
                     // A temporary hack to make `and_filters` shortcut on false.
                     // TODO(andylokandy): make it a rule in the optimizer.
                     if let Expr::Constant(Constant {
                         scalar: Scalar::Boolean(result),
                         ..
-                    }) = &expr
+                    }) = &arg
                     {
                         if is_or == *result {
                             return (
                                 Expr::Constant(Constant {
-                                    span: *span,
+                                    span: call.span,
                                     scalar: Scalar::Boolean(is_or),
                                     data_type: DataType::Boolean,
                                 }),
                                 None,
+                                true,
                             );
                         }
                     }
-                    args_expr.push(expr);
+                    args_expr.push(arg);
 
                     result_domain = result_domain.zip(domain).map(|(func_domain, domain)| {
                         let (domain_has_true, domain_has_false) = match &domain {
@@ -288,11 +278,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         if is_or == result {
                             return (
                                 Expr::Constant(Constant {
-                                    span: *span,
+                                    span: call.span,
                                     scalar: Scalar::Boolean(result),
                                     data_type: DataType::Boolean,
                                 }),
                                 None,
+                                true,
                             );
                         }
                     }
@@ -306,11 +297,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         if is_mutually_exclusive {
                             return (
                                 Expr::Constant(Constant {
-                                    span: *span,
+                                    span: call.span,
                                     scalar: Scalar::Boolean(false),
                                     data_type: DataType::Boolean,
                                 }),
                                 None,
+                                true,
                             );
                         }
                     }
@@ -322,82 +314,57 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 {
                     return (
                         Expr::Constant(Constant {
-                            span: *span,
+                            span: call.span,
                             scalar,
                             data_type: DataType::Boolean,
                         }),
                         None,
+                        true,
                     );
                 }
 
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
-
-                let func_expr = Expr::FunctionCall(FunctionCall {
-                    span: *span,
-                    id: id.clone(),
-                    function: function.clone(),
-                    generics: generics.clone(),
-                    args: args_expr,
-                    return_type: return_type.clone(),
-                });
+                call.args = args_expr;
+                let func_expr = Expr::FunctionCall(call);
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty_with_rows(1);
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
-                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
-                        return (
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar,
-                                data_type: return_type.clone(),
-                            }),
-                            None,
-                        );
-                    }
+                    let (func_expr, folded) = self.try_fold_constant_expr(func_expr);
+                    return (
+                        func_expr,
+                        if folded {
+                            None
+                        } else {
+                            result_domain.map(Domain::Boolean)
+                        },
+                        changed || folded,
+                    );
                 }
 
-                (func_expr, result_domain.map(Domain::Boolean))
+                (func_expr, result_domain.map(Domain::Boolean), changed)
             }
-            Expr::FunctionCall(FunctionCall {
-                span,
-                id,
-                function,
-                generics,
-                args,
-                return_type,
-            }) => {
-                if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
-                    return (expr.clone(), None);
+            Expr::FunctionCall(mut call) => {
+                if call.args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                    return (Expr::FunctionCall(call), None, false);
                 }
 
-                let (mut args_expr, mut args_domain) = (
-                    Vec::with_capacity(args.len()),
-                    Some(Vec::with_capacity(args.len())),
-                );
+                let mut changed = false;
+                let args = std::mem::take(&mut call.args);
+                let mut args_expr = Vec::with_capacity(args.len());
+                let mut args_domain = Some(Vec::with_capacity(args.len()));
                 for arg in args {
-                    let (expr, domain) = self.fold_once(arg);
-                    args_expr.push(expr);
+                    let (arg, domain, arg_changed) = self.fold_once(arg);
+                    changed |= arg_changed;
+                    args_expr.push(arg);
                     args_domain = args_domain.zip(domain).map(|(mut domains, domain)| {
                         domains.push(domain);
                         domains
                     });
                 }
 
-                if function.signature.name == "if" {
+                if call.function.signature.name == "if" {
                     if args_expr.len() < 3 || args_expr.len().is_multiple_of(2) {
-                        return (
-                            Expr::FunctionCall(FunctionCall {
-                                span: *span,
-                                id: id.clone(),
-                                function: function.clone(),
-                                generics: generics.clone(),
-                                args: args_expr,
-                                return_type: return_type.clone(),
-                            }),
-                            None,
-                        );
+                        call.args = args_expr;
+                        return (Expr::FunctionCall(call), None, changed);
                     }
 
                     let mut simplified_args = Vec::with_capacity(args_expr.len());
@@ -406,7 +373,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         match args_expr[cond_idx].as_constant().map(|c| &c.scalar) {
                             Some(Scalar::Boolean(true)) => {
                                 if simplified_args.is_empty() {
-                                    return (args_expr[cond_idx + 1].clone(), None);
+                                    return (args_expr.remove(cond_idx + 1), None, true);
                                 }
                                 simplified_args.push(args_expr[cond_idx + 1].clone());
                                 found_true_branch = true;
@@ -421,20 +388,20 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     }
 
                     if simplified_args.is_empty() {
-                        return (args_expr.last().unwrap().clone(), None);
+                        return (args_expr.pop().unwrap(), None, true);
                     }
                     if !found_true_branch {
                         simplified_args.push(args_expr.last().unwrap().clone());
                     }
                     if simplified_args.len() != args_expr.len() {
                         if let Ok(func_expr) = check_function(
-                            *span,
+                            call.span,
                             "if",
-                            id.params(),
+                            call.id.params(),
                             &simplified_args,
                             self.fn_registry,
                         ) {
-                            return (func_expr, None);
+                            return (func_expr, None, true);
                         }
                     }
                 }
@@ -443,7 +410,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 let is_monotonicity = self
                     .fn_registry
                     .properties
-                    .get(&function.signature.name)
+                    .get(&call.function.signature.name)
                     .map(|p| {
                         args_expr.len() == 1
                             && (p.monotonicity
@@ -453,12 +420,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 let monotonicity_check = self
                     .fn_registry
                     .properties
-                    .get(&function.signature.name)
+                    .get(&call.function.signature.name)
                     .and_then(|p| p.monotonicity_check)
                     .filter(|_| args_expr.len() == 1);
 
                 // Check for mutually exclusive ranges in AND function
-                if function.signature.name == "and"
+                if call.function.signature.name == "and"
                     && args_expr.len() >= 2
                     && args_expr
                         .iter()
@@ -470,31 +437,24 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         if is_mutually_exclusive {
                             return (
                                 Expr::Constant(Constant {
-                                    span: *span,
+                                    span: call.span,
                                     scalar: Scalar::Boolean(false),
                                     data_type: DataType::Boolean,
                                 }),
                                 None,
+                                true,
                             );
                         }
                     }
                 }
 
-                let func_expr = Expr::FunctionCall(FunctionCall {
-                    span: *span,
-                    id: id.clone(),
-                    function: function.clone(),
-                    generics: generics.clone(),
-                    args: args_expr,
-                    return_type: return_type.clone(),
-                });
-
-                let (calc_domain, eval) = match &function.eval {
+                let (calc_domain, eval) = match &call.function.eval {
                     FunctionEval::Scalar {
                         calc_domain, eval, ..
                     } => (calc_domain, eval),
                     FunctionEval::SRF { .. } => {
-                        return (func_expr, None);
+                        call.args = args_expr;
+                        return (Expr::FunctionCall(call), None, changed);
                     }
                 };
 
@@ -508,7 +468,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     match (res, is_monotonic) {
                         (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
                             let domain = domains.first().unwrap();
-                            if args[0].data_type().is_nullable_or_null() {
+                            if args_expr[0].data_type().is_nullable_or_null() {
                                 return None;
                             }
 
@@ -519,7 +479,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                             {
                                 let mut ctx = EvalContext {
-                                    generics,
+                                    generics: &call.generics,
                                     num_rows: 2,
                                     validity: None,
                                     errors: None,
@@ -528,7 +488,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                     strict_eval: true,
                                 };
                                 let mut builder =
-                                    ColumnBuilder::with_capacity(args[0].data_type(), 2);
+                                    ColumnBuilder::with_capacity(args_expr[0].data_type(), 2);
                                 builder.push(min.as_ref());
                                 builder.push(max.as_ref());
 
@@ -544,13 +504,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                     let col = result.as_column().unwrap();
                                     let d = if ctx.has_error(0) || ctx.has_error(1) {
                                         let (full_min, full_max) =
-                                            Domain::full(return_type).to_minmax();
+                                            Domain::full(&call.return_type).to_minmax();
                                         if full_min.is_null() || full_max.is_null() {
                                             return None;
                                         }
 
                                         let mut builder =
-                                            ColumnBuilder::with_capacity(return_type, 2);
+                                            ColumnBuilder::with_capacity(&call.return_type, 2);
 
                                         for (i, (v, f)) in
                                             col.iter().zip([full_min, full_max].iter()).enumerate()
@@ -570,7 +530,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                             }
                         }
                         (FunctionDomain::MayThrow, _) => None,
-                        (FunctionDomain::Full, _) => Some(Domain::full(return_type)),
+                        (FunctionDomain::Full, _) => Some(Domain::full(&call.return_type)),
                         (FunctionDomain::Domain(domain), _) => Some(domain),
                     }
                 });
@@ -578,91 +538,87 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
                     return (
                         Expr::Constant(Constant {
-                            span: *span,
+                            span: call.span,
                             scalar,
-                            data_type: return_type.clone(),
+                            data_type: call.return_type,
                         }),
                         None,
+                        true,
                     );
                 }
+
+                let is_grouping = call.function.signature.name == "grouping";
+                call.args = args_expr;
+                let func_expr = Expr::FunctionCall(call);
 
                 // `grouping` is a placeholder before the aggregate rewriter rewrites it to
                 // `grouping<...>(_grouping_id)`. Folding it here can reach the dummy
                 // implementation and panic on invalid queries.
-                if function.signature.name == "grouping" {
-                    return (func_expr, func_domain);
+                if is_grouping {
+                    return (func_expr, func_domain, changed);
                 }
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty_with_rows(1);
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
-                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
-                        return (
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar,
-                                data_type: return_type.clone(),
-                            }),
-                            None,
-                        );
-                    }
+                    let (func_expr, folded) = self.try_fold_constant_expr(func_expr);
+                    return (
+                        func_expr,
+                        if folded { None } else { func_domain },
+                        changed || folded,
+                    );
                 }
 
-                (func_expr, func_domain)
+                (func_expr, func_domain, changed)
             }
-            Expr::LambdaFunctionCall(LambdaFunctionCall {
-                span,
-                name,
-                args,
-                lambda_expr,
-                lambda_display,
-                return_type,
-            }) => {
-                if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
-                    return (expr.clone(), None);
+            Expr::LambdaFunctionCall(mut call) => {
+                if call.args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                    return (Expr::LambdaFunctionCall(call), None, false);
                 }
 
+                let mut changed = false;
+                let args = std::mem::take(&mut call.args);
                 let mut args_expr = Vec::with_capacity(args.len());
                 for arg in args {
-                    let (expr, _) = self.fold_once(arg);
-                    args_expr.push(expr);
+                    let (arg, _, arg_changed) = self.fold_once(arg);
+                    changed |= arg_changed;
+                    args_expr.push(arg);
                 }
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
-
-                let func_expr = Expr::LambdaFunctionCall(LambdaFunctionCall {
-                    span: *span,
-                    name: name.clone(),
-                    args: args_expr,
-                    lambda_expr: lambda_expr.clone(),
-                    lambda_display: lambda_display.clone(),
-                    return_type: return_type.clone(),
-                });
+                call.args = args_expr;
+                let func_expr = Expr::LambdaFunctionCall(call);
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty_with_rows(1);
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
-                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
-                        return (
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar,
-                                data_type: return_type.clone(),
-                            }),
-                            None,
-                        );
-                    }
+                    let (func_expr, folded) = self.try_fold_constant_expr(func_expr);
+                    return (func_expr, None, changed || folded);
                 }
-                (func_expr, None)
+                (func_expr, None, changed)
             }
         };
 
-        debug_assert_eq!(expr.data_type(), new_expr.data_type());
+        debug_assert_eq!(&data_type, new_expr.data_type());
 
-        (new_expr, domain)
+        (new_expr, domain, changed)
+    }
+
+    fn try_fold_constant_expr(&self, expr: Expr<Index>) -> (Expr<Index>, bool) {
+        let block = DataBlock::empty_with_rows(1);
+        let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+        // Since the expression is constant, it is safe to change its column index type.
+        let projected_expr = expr.project_column_ref(|_| unreachable!()).unwrap();
+        match evaluator.run(&projected_expr) {
+            Ok(Value::Scalar(scalar)) => {
+                let span = expr.span();
+                let data_type = expr.into_data_type();
+                (
+                    Expr::Constant(Constant {
+                        span,
+                        scalar,
+                        data_type,
+                    }),
+                    true,
+                )
+            }
+            _ => (expr, false),
+        }
     }
 
     fn calculate_cast(
@@ -863,7 +819,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
 
         let (_, output_domain) = ConstantFolder::fold_with_domain(
-            &cast_expr,
+            cast_expr,
             &[(0, domain.clone())].into_iter().collect(),
             self.func_ctx,
             self.fn_registry,

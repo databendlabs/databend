@@ -690,7 +690,7 @@ impl Binder {
             let (scalar, _) = *type_checker.resolve(&expr)?;
             let expr = scalar.as_expr()?;
             let (new_expr, _) =
-                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
 
             match new_expr {
                 databend_common_expression::Expr::Constant(Constant {

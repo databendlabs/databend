@@ -114,7 +114,7 @@ impl RewriteVisitor<'_> {
 
                 Ok(Some(
                     ConstantFolder::fold_with_domain(
-                        &func_expr,
+                        func_expr,
                         &self.input_domains,
                         self.func_ctx,
                         self.fn_registry,
@@ -160,7 +160,7 @@ impl RewriteVisitor<'_> {
 
         Ok(Some(
             ConstantFolder::fold_with_domain(
-                &func_expr,
+                func_expr,
                 &self.input_domains,
                 self.func_ctx,
                 self.fn_registry,
@@ -194,7 +194,7 @@ impl RewriteVisitor<'_> {
 
         // check domain for possible overflow
         ConstantFolder::<String>::fold_with_domain(
-            &cast.clone().into(),
+            cast.clone().into(),
             &self.input_domains,
             self.func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -210,7 +210,7 @@ pub(super) fn cast_const(
     constant: Constant,
 ) -> Option<Scalar> {
     let (_, Some(domain)) = ConstantFolder::<String>::fold(
-        &Cast {
+        Cast {
             span: None,
             is_try: false,
             expr: Box::new(constant.into()),

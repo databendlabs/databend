@@ -74,7 +74,7 @@ impl Binder {
                                 let (scalar, _) = *type_checker.resolve(expr.as_ref())?;
                                 let expr = scalar.as_expr()?;
                                 let (new_expr, _) = ConstantFolder::fold(
-                                    &expr,
+                                    expr,
                                     &self.ctx.get_function_context()?,
                                     &BUILTIN_FUNCTIONS,
                                 );

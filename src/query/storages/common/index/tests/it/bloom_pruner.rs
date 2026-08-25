@@ -190,7 +190,7 @@ fn test_bloom_filter_rewrites_string_literal_integer_comparison() {
             schema,
         )
         .unwrap();
-    let folded = ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0;
+    let folded = ConstantFolder::fold_with_domain(expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0;
 
     assert!(matches!(
         folded,
@@ -681,7 +681,7 @@ fn eval_index_expr(
     writeln!(file, "expr     : {expr}").unwrap();
 
     let func_ctx = FunctionContext::default();
-    let (fold_expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
+    let (fold_expr, _) = ConstantFolder::fold(expr.clone(), &func_ctx, &BUILTIN_FUNCTIONS);
     let expr = if fold_expr != expr {
         writeln!(file, "fold_expr: {fold_expr}").unwrap();
         fold_expr
@@ -765,14 +765,20 @@ fn eval_index_expr(
             schema,
         )
         .unwrap();
-    let result =
-        match ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0 {
-            Expr::Constant(Constant {
-                scalar: Scalar::Boolean(false),
-                ..
-            }) => FilterEvalResult::MustFalse,
-            _ => FilterEvalResult::Uncertain,
-        };
+    let result = match ConstantFolder::fold_with_domain(
+        expr.clone(),
+        &domains,
+        &func_ctx,
+        &BUILTIN_FUNCTIONS,
+    )
+    .0
+    {
+        Expr::Constant(Constant {
+            scalar: Scalar::Boolean(false),
+            ..
+        }) => FilterEvalResult::MustFalse,
+        _ => FilterEvalResult::Uncertain,
+    };
     let domains = BTreeMap::from_iter(domains);
 
     writeln!(file, "filter   : {expr}").unwrap();

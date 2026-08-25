@@ -625,11 +625,8 @@ impl SubqueryDecorrelatorOptimizer {
                 let mut constant_scalar = None;
                 if scalar_expr.used_columns().is_empty() && !scalar_expr.has_subquery() {
                     let func_ctx = self.ctx.get_function_context()?;
-                    let (folded, _) = ConstantFolder::fold(
-                        &scalar_expr.as_expr()?,
-                        &func_ctx,
-                        &BUILTIN_FUNCTIONS,
-                    );
+                    let (folded, _) =
+                        ConstantFolder::fold(scalar_expr.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS);
                     if let EExpr::Constant(constant) = folded {
                         constant_scalar = Some(ScalarExpr::TypedConstantExpr(
                             ConstantExpr {

@@ -421,7 +421,7 @@ impl<'a, A> TypeChecker<'a, A> {
 
     fn interval_contains_only_date_parts(&self, interval_expr: &ScalarExpr) -> Result<bool> {
         let expr = interval_expr.as_expr()?;
-        let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (folded, _) = ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
         if let EExpr::Constant(Constant {
             scalar: Scalar::Interval(value),
             ..

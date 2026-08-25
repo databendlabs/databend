@@ -333,7 +333,7 @@ pub fn create_push_down_filters(
         })?
         .unwrap();
     let expr = cast_expr_to_non_null_boolean(expr)?;
-    let (filter, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+    let (filter, _) = ConstantFolder::fold(expr, func_ctx, &BUILTIN_FUNCTIONS);
     let remote_filter = filter.as_remote_expr();
 
     // prepare the inverse filter expression

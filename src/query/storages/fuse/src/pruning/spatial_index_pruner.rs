@@ -158,7 +158,7 @@ impl SpatialIndexPruner {
         }
 
         let (folded, _) = ConstantFolder::fold_with_domain(
-            &self.expr,
+            self.expr.clone(),
             &domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,

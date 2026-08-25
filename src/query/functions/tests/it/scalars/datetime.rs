@@ -1324,12 +1324,12 @@ fn test_calendar_domain_fails_open_across_tz_fallback() {
         // November 1: any domain narrower than `Full` would exclude reachable
         // outputs and let pruning drop live rows.
         let (_, domain) =
-            ConstantFolder::fold_with_domain(&expr, &input, &st_johns, &BUILTIN_FUNCTIONS);
+            ConstantFolder::fold_with_domain(expr.clone(), &input, &st_johns, &BUILTIN_FUNCTIONS);
         assert_eq!(domain, Some(Domain::full(&return_type)), "{name}");
 
         // Under a fixed offset the same range is a single segment: the
         // projection collapses to one day and folds to a constant.
-        let (folded, _) = ConstantFolder::fold_with_domain(&expr, &input, &utc, &BUILTIN_FUNCTIONS);
+        let (folded, _) = ConstantFolder::fold_with_domain(expr, &input, &utc, &BUILTIN_FUNCTIONS);
         assert!(
             matches!(folded, Expr::Constant(_)),
             "{name}: expected constant fold under UTC, got {folded:?}"

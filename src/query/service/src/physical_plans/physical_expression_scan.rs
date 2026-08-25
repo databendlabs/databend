@@ -132,7 +132,7 @@ impl PhysicalPlanBuilder {
                                 input_schema.index_of(&index.to_string())
                             })?;
                         let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                            ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                         Ok(expr.as_remote_expr())
                     })
                     .collect::<Result<Vec<_>>>()

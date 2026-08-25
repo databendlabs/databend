@@ -720,7 +720,7 @@ impl Binder {
         let box (scalar, _) = type_checker.resolve(expr)?;
         let scalar_expr = scalar.as_expr()?;
         let (new_expr, _) = ConstantFolder::fold(
-            &scalar_expr,
+            scalar_expr,
             &self.ctx.get_function_context()?,
             &BUILTIN_FUNCTIONS,
         );
@@ -793,7 +793,7 @@ impl Binder {
                 let v: i64 = check_number(
                     None,
                     &FunctionContext::default(),
-                    &new_expr,
+                    new_expr,
                     &BUILTIN_FUNCTIONS,
                 )?;
                 if v > 0 {

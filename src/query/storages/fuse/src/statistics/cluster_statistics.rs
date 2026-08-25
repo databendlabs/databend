@@ -732,7 +732,7 @@ pub(crate) fn get_min_max_stats(
             .collect();
 
         let (_, domain_opt) = ConstantFolder::fold_with_domain(
-            &prepared_expr.expr,
+            prepared_expr.expr.clone(),
             &input_domains,
             &func_ctx,
             &BUILTIN_FUNCTIONS,

@@ -278,8 +278,7 @@ impl BloomIndex {
             column_stats,
             data_schema,
         )?;
-        match ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS)
-            .0
+        match ConstantFolder::fold_with_domain(expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS).0
         {
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
@@ -1337,7 +1336,7 @@ impl EqVisitor for RewriteVisitor<'_> {
 
         // check domain for possible overflow
         if ConstantFolder::<String>::fold_with_domain(
-            cast,
+            cast.clone(),
             self.domains,
             &FunctionContext::default(),
             &BUILTIN_FUNCTIONS,

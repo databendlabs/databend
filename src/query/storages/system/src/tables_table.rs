@@ -641,31 +641,33 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     &BUILTIN_FUNCTIONS,
                 )?;
 
-                for (i, scalars) in leveld_results.iter().enumerate() {
+                for (i, scalars) in leveld_results.into_iter().enumerate() {
                     if i == 3 {
-                        for r in scalars.iter() {
+                        for r in scalars {
+                            let data_type = r.as_ref().infer_data_type();
                             let e = Expr::Constant(Constant {
                                 span: None,
-                                scalar: r.clone(),
-                                data_type: r.as_ref().infer_data_type(),
+                                scalar: r,
+                                data_type,
                             });
 
                             if let Ok(s) =
-                                check_number::<u64, usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                                check_number::<u64, usize>(None, &func_ctx, e, &BUILTIN_FUNCTIONS)
                             {
                                 tables_ids.push(s);
                             }
                         }
                     } else {
-                        for r in scalars.iter() {
+                        for r in scalars {
+                            let data_type = r.as_ref().infer_data_type();
                             let e = Expr::Constant(Constant {
                                 span: None,
-                                scalar: r.clone(),
-                                data_type: r.as_ref().infer_data_type(),
+                                scalar: r,
+                                data_type,
                             });
 
                             if let Ok(s) =
-                                check_string::<usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                                check_string::<usize>(None, &func_ctx, e, &BUILTIN_FUNCTIONS)
                             {
                                 match i {
                                     0 => catalog_name.push(s),

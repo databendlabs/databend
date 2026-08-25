@@ -966,7 +966,7 @@ where A: UdfAdapter
                     ));
                 }
                 let expr = argument.scalar.as_expr()?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) = ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let Ok(Some(location)) =
                     expr.into_constant().map(|c| c.scalar.as_string().cloned())
                 else {

@@ -198,7 +198,7 @@ fn if_expr(args: Vec<Expr<usize>>) -> Expr<usize> {
 }
 
 fn fold_with_registry(expr: &Expr<usize>, registry: &FunctionRegistry) -> Expr<usize> {
-    ConstantFolder::fold(expr, &FunctionContext::default(), registry).0
+    ConstantFolder::fold(expr.clone(), &FunctionContext::default(), registry).0
 }
 
 fn fold(expr: &Expr<usize>) -> Expr<usize> {
@@ -240,7 +240,7 @@ fn test_monotonic_nullable_domain_rejects_boundary_probe() {
     });
 
     let (folded, output_domain) = ConstantFolder::fold_with_domain(
-        &expr,
+        expr.clone(),
         &HashMap::from([(0, input_domain)]),
         &FunctionContext::default(),
         &registry,
@@ -288,7 +288,7 @@ fn test_monotonicity_check_gates_endpoint_domain() {
     // Accepted range: the fold probes the end points and derives an exact domain.
     let accepted = Domain::Number(NumberDomain::UInt64(SimpleDomain { min: 10, max: 20 }));
     let (_, output_domain) = ConstantFolder::fold_with_domain(
-        &expr,
+        expr.clone(),
         &HashMap::from([(0, accepted)]),
         &FunctionContext::default(),
         &registry,
@@ -304,7 +304,7 @@ fn test_monotonicity_check_gates_endpoint_domain() {
     // Rejected range: no end-point probing; the domain falls back to `Full`.
     let rejected = Domain::Number(NumberDomain::UInt64(SimpleDomain { min: 10, max: 200 }));
     let (_, output_domain) = ConstantFolder::fold_with_domain(
-        &expr,
+        expr,
         &HashMap::from([(0, rejected)]),
         &FunctionContext::default(),
         &registry,

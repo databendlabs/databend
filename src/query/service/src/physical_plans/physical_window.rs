@@ -731,11 +731,8 @@ impl PhysicalPlanBuilder {
                         dest_type: common_ty.clone(),
                     };
                     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                    let (expr, _) = ConstantFolder::fold(
-                        &expr,
-                        &FunctionContext::default(),
-                        &BUILTIN_FUNCTIONS,
-                    );
+                    let (expr, _) =
+                        ConstantFolder::fold(expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
                     if let Expr::Constant(Constant {
                         scalar: new_scalar, ..
                     }) = expr

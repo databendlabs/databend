@@ -164,7 +164,7 @@ where A: super::TypeCheckAdapter
             let scalar = if *data_type != common_type {
                 let cast = wrap_cast(&scalar, &common_type);
                 let expr = cast.as_expr()?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) = ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 match expr.into_constant() {
                     Ok(constant) => ScalarExpr::ConstantExpr(ConstantExpr {
                         span: scalar.span(),

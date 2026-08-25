@@ -157,7 +157,7 @@ impl DefaultExprBinder {
         } else if scalar_expr.is_deterministic() {
             let expr = scalar_expr.as_expr()?;
             let (fold_to_constant, _) =
-                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
             (fold_to_constant, true)
         } else {
             (scalar_expr.as_expr()?, false)

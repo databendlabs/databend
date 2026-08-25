@@ -979,7 +979,7 @@ impl Binder {
             let expr = scalar.as_expr()?;
 
             let (new_expr, _) =
-                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             match new_expr {
                 Expr::Constant(Constant { scalar, .. }) => {
                     let value = scalar.into_string().unwrap();

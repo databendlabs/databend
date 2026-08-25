@@ -166,7 +166,7 @@ impl RangeIndex {
         };
 
         let (new_expr, _) = ConstantFolder::fold_with_domain(
-            &expr,
+            expr.into_owned(),
             &visitor.input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,

@@ -510,7 +510,7 @@ fn run_text_spatial(
 
     let columns = [("g", DataType::Geometry)];
     let expr = parse_expr(text, &columns);
-    let (folded_expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
+    let (folded_expr, _) = ConstantFolder::fold(expr.clone(), &func_ctx, &BUILTIN_FUNCTIONS);
     let index = RangeIndex::try_create(func_ctx, &folded_expr, schema, Default::default()).unwrap();
 
     writeln!(file, "text      : {text}").unwrap();

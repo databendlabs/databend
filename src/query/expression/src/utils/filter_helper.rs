@@ -166,7 +166,7 @@ impl FilterHelpers {
                                 }
                             });
 
-                        let (folded_expr, _) = ConstantFolder::fold(&expr, func_ctx, fn_registry);
+                        let (folded_expr, _) = ConstantFolder::fold(expr, func_ctx, fn_registry);
 
                         if let Expr::Constant(Constant {
                             scalar: Scalar::Boolean(false),

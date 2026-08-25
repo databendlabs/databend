@@ -523,7 +523,7 @@ impl PhysicalPlanBuilder {
                     .scalar_expr_to_remote_expr(condition, output_schema.clone())?
                     .as_expr(&BUILTIN_FUNCTIONS);
                 let (expr, _) = ConstantFolder::fold(
-                    &expr,
+                    expr,
                     &self.ctx.get_function_context()?,
                     &BUILTIN_FUNCTIONS,
                 );
@@ -682,7 +682,7 @@ impl PhysicalPlanBuilder {
             .type_check(schema.as_ref())?
             .project_column_ref(|index| schema.index_of(&index.to_string()))?;
         let (filer, _) = ConstantFolder::fold(
-            &scalar_expr,
+            scalar_expr,
             &self.ctx.get_function_context().unwrap(),
             &BUILTIN_FUNCTIONS,
         );
@@ -909,7 +909,7 @@ pub fn generate_update_list(
                 .as_expr()?
                 .project_column_ref(|col| Ok(col.index.to_string()))?;
             let (expr, _) =
-                ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             acc.push((*index, expr.as_remote_expr()));
             Ok::<_, ErrorCode>(acc)
         },
@@ -996,7 +996,7 @@ pub fn mutation_update_expr(
                 .type_check(input_schema.as_ref())?
                 .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
             let (expr, _) =
-                ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             acc.push((*index, expr.as_remote_expr()));
             Ok::<_, ErrorCode>(acc)
         },
@@ -1044,7 +1044,7 @@ pub fn generate_stored_computed_list(
                     input_schema.index_of(&column_index.unwrap().to_string())
                 })?;
                 let (expr, _) =
-                    ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+                    ConstantFolder::fold(expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
                 remote_exprs.push((i, expr.as_remote_expr()));
             }
         }

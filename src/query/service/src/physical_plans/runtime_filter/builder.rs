@@ -421,7 +421,7 @@ fn normalize_probe_target(
     }
     let expr = check_cast(expr.span(), false, expr, target_type, &BUILTIN_FUNCTIONS)?;
     let expr =
-        databend_common_expression::ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS).0;
+        databend_common_expression::ConstantFolder::fold(expr, func_ctx, &BUILTIN_FUNCTIONS).0;
     Ok(Some(expr.as_remote_expr()))
 }
 
