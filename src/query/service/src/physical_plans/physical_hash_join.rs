@@ -27,6 +27,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
@@ -134,17 +135,19 @@ fn unwrap_integer_to_string_cast<'a>(
         return Ok(None);
     }
 
+    let integer_type = DataType::Number(integer_type);
+    let source_type = DataType::Number(source_type);
     let common_type = common_super_type(
-        DataType::Number(integer_type),
-        DataType::Number(source_type),
+        integer_type.clone(),
+        source_type.clone(),
         &BUILTIN_FUNCTIONS.default_cast_rules,
     );
-    let preserves_equality = matches!(
-        common_type,
-        Some(DataType::Number(common_type))
-            if integer_type.can_lossless_cast_to(common_type)
-                && source_type.can_lossless_cast_to(common_type)
-    );
+    let Some(common_type @ DataType::Number(_)) = common_type else {
+        return Ok(None);
+    };
+    let preserves_equality = classify_conversion(&integer_type, &common_type)
+        .is_safe_for_equality_inference()
+        && classify_conversion(&source_type, &common_type).is_safe_for_equality_inference();
     Ok(preserves_equality.then_some(cast.argument.as_ref()))
 }
 
