@@ -219,7 +219,7 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
     let pattern: Cow<'a, [u8]> = pattern.into();
     let len = pattern.len();
     if len == 0 {
-        return LikePattern::Constant(true);
+        return LikePattern::OrdinalStr(pattern);
     }
 
     let mut index = 0;
@@ -393,6 +393,7 @@ fn test_generate_like_pattern() {
         "warehouse".as_bytes().to_vec(),
     ];
     let test_cases = vec![
+        ("", LikePattern::OrdinalStr("".as_bytes().into())),
         (
             "databend",
             LikePattern::OrdinalStr("databend".as_bytes().into()),
@@ -454,6 +455,14 @@ fn test_generate_like_pattern() {
     for (pattern, pattern_type) in test_cases {
         assert_eq!(pattern_type, generate_like_pattern(pattern.as_bytes(), 1));
     }
+}
+
+#[test]
+fn test_empty_like_pattern_only_matches_empty_haystack() {
+    let pattern = generate_like_pattern("".as_bytes(), 0);
+
+    assert!(pattern.compare("".as_bytes()));
+    assert!(!pattern.compare("anything".as_bytes()));
 }
 
 #[test]

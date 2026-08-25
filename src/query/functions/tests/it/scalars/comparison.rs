@@ -506,6 +506,12 @@ fn test_like(file: &mut impl Write) {
     ];
     run_ast(file, "lhs like rhs", &columns);
 
+    let columns = [
+        ("lhs", StringType::from_data(vec!["x", "", "x"])),
+        ("rhs", StringType::from_data(vec!["", "", "%"])),
+    ];
+    run_ast(file, "lhs like rhs", &columns);
+
     run_ast(file, "parse_json('\"hello\"') like 'h%'", &[]);
     run_ast(file, "parse_json('{\"abc\":1,\"def\":22}') like '%e%'", &[]);
     run_ast(

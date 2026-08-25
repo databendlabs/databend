@@ -2420,16 +2420,20 @@ mod tests {
     }
 
     #[test]
-    fn test_calc_like_domain_empty_pattern_does_not_fold_to_all_true() {
+    fn test_calc_like_domain_empty_pattern_matches_empty_string() {
         let domain = StringDomain {
             min: "".to_string(),
             max: Some("zzz".to_string()),
         };
+        let empty = StringDomain {
+            min: "".to_string(),
+            max: Some("".to_string()),
+        };
 
         assert_eq!(
             calc_like_domain(&domain, "".to_string()),
-            None,
-            "empty patterns should not reuse repeated all-% folding"
+            Some(domain.domain_eq(&empty)),
+            "empty patterns should use empty-string equality semantics"
         );
     }
 
