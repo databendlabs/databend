@@ -61,7 +61,7 @@ struct RangeBoundBuilder;
 
 impl RangeBoundBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["range_bound"],
             RangeBoundBuilder::range_bound_arguments(),
             RangeBoundBuilder::RANGE_BOUND_FEATURES,

@@ -97,8 +97,8 @@ inventory::submit! {
 }
 
 impl SumBuilder {
-    fn sum_route() -> DirectNameRoute {
-        DirectNameRoute::new(
+    fn sum_route() -> NameRoute {
+        NameRoute::new(
             &["sum"],
             Self::sum_arguments(),
             Self::SUM_FEATURES,
@@ -118,8 +118,8 @@ impl SumBuilder {
         .then(StateRoute::unary(Self::create).with_features(Self::STATE_FEATURES))
     }
 
-    fn sum0_route() -> DirectNameRoute {
-        DirectNameRoute::new(
+    fn sum0_route() -> NameRoute {
+        NameRoute::new(
             &["sum0", "sum_zero"],
             Self::sum_zero_arguments(),
             Self::SUM_ZERO_FEATURES,
@@ -138,8 +138,8 @@ impl SumBuilder {
         .then(DistinctRoute::unary(Self::create_zero))
     }
 
-    fn sum_distinct_route() -> DirectNameRoute {
-        DirectNameRoute::new(
+    fn sum_distinct_route() -> NameRoute {
+        NameRoute::new(
             &["sum_distinct"],
             Self::sum_distinct_arguments(),
             Self::SUM_DISTINCT_FEATURES,

@@ -34,25 +34,13 @@ use super::sort_combinator;
 use super::state_combinator;
 
 pub(crate) trait Combinator {
-    fn create_aggregate_function<I>(
+    fn create<const ORDERED: bool, I: AggregateEval>(
         self,
         signature: AggregateSignature,
         features: AggregateFeatures,
         state: AggregateStateDescription,
         eval: I,
-    ) -> Result<AggregateCallRef>
-    where
-        I: AggregateEval;
-
-    fn create_ordered_aggregate_function<I>(
-        self,
-        signature: AggregateSignature,
-        features: AggregateFeatures,
-        state: AggregateStateDescription,
-        eval: I,
-    ) -> Result<AggregateCallRef>
-    where
-        I: AggregateEval;
+    ) -> Result<AggregateCallRef>;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -135,7 +123,7 @@ where
 }
 
 impl Combinator for PlainCombinator {
-    fn create_aggregate_function<I>(
+    fn create<const ORDERED: bool, I>(
         self,
         signature: AggregateSignature,
         features: AggregateFeatures,
@@ -145,25 +133,16 @@ impl Combinator for PlainCombinator {
     where
         I: AggregateEval,
     {
-        Ok(finish(signature, features, state, eval))
-    }
-
-    fn create_ordered_aggregate_function<I>(
-        self,
-        signature: AggregateSignature,
-        features: AggregateFeatures,
-        state: AggregateStateDescription,
-        eval: I,
-    ) -> Result<AggregateCallRef>
-    where
-        I: AggregateEval,
-    {
-        Ok(finish_with_order_by(signature, features, state, eval))
+        if ORDERED {
+            Ok(finish_with_order_by(signature, features, state, eval))
+        } else {
+            Ok(finish(signature, features, state, eval))
+        }
     }
 }
 
 impl Combinator for IfCombinator {
-    fn create_aggregate_function<I>(
+    fn create<const ORDERED: bool, I>(
         self,
         signature: AggregateSignature,
         features: AggregateFeatures,
@@ -173,28 +152,15 @@ impl Combinator for IfCombinator {
     where
         I: AggregateEval,
     {
-        let eval = if_combinator::IfEval::new(
-            eval,
-            self.condition_index,
-            self.nested_args_type.len(),
-            self.always_false,
-            self.strip_nullable_input,
-        );
-        Ok(finish(signature, features, state, eval))
-    }
-
-    fn create_ordered_aggregate_function<I>(
-        self,
-        signature: AggregateSignature,
-        features: AggregateFeatures,
-        state: AggregateStateDescription,
-        eval: I,
-    ) -> Result<AggregateCallRef>
-    where
-        I: AggregateEval,
-    {
-        if signature.order_by.is_empty() {
-            return self.create_aggregate_function(signature, features, state, eval);
+        if !ORDERED || signature.order_by.is_empty() {
+            let eval = if_combinator::IfEval::new(
+                eval,
+                self.condition_index,
+                self.nested_args_type.len(),
+                self.always_false,
+                self.strip_nullable_input,
+            );
+            return Ok(finish(signature, features, state, eval));
         }
 
         // Runtime inputs place the condition last, making the nested ordered
@@ -277,7 +243,7 @@ impl Combinator for IfCombinator {
 }
 
 impl Combinator for DistinctCombinator {
-    fn create_aggregate_function<I>(
+    fn create<const ORDERED: bool, I>(
         self,
         signature: AggregateSignature,
         features: AggregateFeatures,
@@ -289,53 +255,25 @@ impl Combinator for DistinctCombinator {
     {
         let state = distinct_combinator::distinct_state_description(&state);
         if self.skip_nulls {
-            Ok(finish(
-                signature,
-                features,
-                state,
-                distinct_combinator::DistinctEval::<true>::new(eval, self.args_type),
-            ))
+            let eval = distinct_combinator::DistinctEval::<true>::new(eval, self.args_type);
+            if ORDERED {
+                Ok(finish_with_order_by(signature, features, state, eval))
+            } else {
+                Ok(finish(signature, features, state, eval))
+            }
         } else {
-            Ok(finish(
-                signature,
-                features,
-                state,
-                distinct_combinator::DistinctEval::<false>::new(eval, self.args_type),
-            ))
-        }
-    }
-
-    fn create_ordered_aggregate_function<I>(
-        self,
-        signature: AggregateSignature,
-        features: AggregateFeatures,
-        state: AggregateStateDescription,
-        eval: I,
-    ) -> Result<AggregateCallRef>
-    where
-        I: AggregateEval,
-    {
-        let state = distinct_combinator::distinct_state_description(&state);
-        if self.skip_nulls {
-            Ok(finish_with_order_by(
-                signature,
-                features,
-                state,
-                distinct_combinator::DistinctEval::<true>::new(eval, self.args_type),
-            ))
-        } else {
-            Ok(finish_with_order_by(
-                signature,
-                features,
-                state,
-                distinct_combinator::DistinctEval::<false>::new(eval, self.args_type),
-            ))
+            let eval = distinct_combinator::DistinctEval::<false>::new(eval, self.args_type);
+            if ORDERED {
+                Ok(finish_with_order_by(signature, features, state, eval))
+            } else {
+                Ok(finish(signature, features, state, eval))
+            }
         }
     }
 }
 
 impl Combinator for StateCombinator {
-    fn create_aggregate_function<I>(
+    fn create<const ORDERED: bool, I>(
         self,
         signature: AggregateSignature,
         features: AggregateFeatures,
@@ -346,21 +284,11 @@ impl Combinator for StateCombinator {
         I: AggregateEval,
     {
         let (signature, state, eval) = self.wrap(signature, state, eval)?;
-        Ok(finish(signature, features, state, eval))
-    }
-
-    fn create_ordered_aggregate_function<I>(
-        self,
-        signature: AggregateSignature,
-        features: AggregateFeatures,
-        state: AggregateStateDescription,
-        eval: I,
-    ) -> Result<AggregateCallRef>
-    where
-        I: AggregateEval,
-    {
-        let (signature, state, eval) = self.wrap(signature, state, eval)?;
-        Ok(finish_with_order_by(signature, features, state, eval))
+        if ORDERED {
+            Ok(finish_with_order_by(signature, features, state, eval))
+        } else {
+            Ok(finish(signature, features, state, eval))
+        }
     }
 }
 

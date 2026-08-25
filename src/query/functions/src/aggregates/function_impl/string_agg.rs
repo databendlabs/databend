@@ -180,10 +180,10 @@ impl ToStringType for AnyType {
 }
 
 impl StringAggBuilder {
-    fn route() -> DirectNameRoute {
+    fn route() -> NameRoute {
         let arguments = Self::string_agg_arguments();
         let features = Self::STRING_AGG_FEATURES;
-        DirectNameRoute::new(
+        NameRoute::new(
             &["string_agg", "listagg", "group_concat"],
             arguments.clone(),
             features.clone(),
@@ -192,9 +192,9 @@ impl StringAggBuilder {
         .then(MergeRoute::new(false, StringAggBuilder::create))
         .then(MergeRoute::new(true, StringAggBuilder::create))
         .then(PlainRoute::new(StringAggBuilder::create))
-        .then(IfRoute::new(StringAggBuilder::create))
-        .then(StateRoute::new(StringAggBuilder::create))
-        .then(DistinctRoute::new(StringAggBuilder::create))
+        .then(IfRoute::direct(StringAggBuilder::create))
+        .then(StateRoute::direct(StringAggBuilder::create))
+        .then(DistinctRoute::direct(StringAggBuilder::create))
     }
 
     fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {

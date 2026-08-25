@@ -585,10 +585,10 @@ where T: ArgType + AccessType + Debug + Send + Sync
 }
 
 impl ArrayAggBuilder {
-    fn route() -> DirectNameRoute {
+    fn route() -> NameRoute {
         let arguments = Self::array_agg_arguments();
         let features = Self::ARRAY_AGG_FEATURES;
-        DirectNameRoute::new(
+        NameRoute::new(
             &["array_agg", "list"],
             arguments.clone(),
             features.clone(),
@@ -598,8 +598,8 @@ impl ArrayAggBuilder {
         .then(MergeRoute::new(false, ArrayAggBuilder::create))
         .then(MergeRoute::new(true, ArrayAggBuilder::create))
         .then(PlainRoute::new(ArrayAggBuilder::create))
-        .then(IfRoute::new(ArrayAggBuilder::create))
-        .then(StateRoute::new(ArrayAggBuilder::create))
+        .then(IfRoute::direct(ArrayAggBuilder::create))
+        .then(StateRoute::direct(ArrayAggBuilder::create))
     }
 
     fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {

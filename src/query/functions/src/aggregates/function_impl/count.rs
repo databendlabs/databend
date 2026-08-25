@@ -71,7 +71,7 @@ impl CountBuilder {
     fn register(registry: &mut AggregateRegistry) {
         let state_arguments =
             ArgumentsPattern::variadic(vec![], ArgumentPattern::any(), 0, Some(32));
-        DirectNameRoute::new(
+        NameRoute::new(
             &["count"],
             Self::count_arguments(),
             Self::COUNT_FEATURES,
@@ -87,14 +87,14 @@ impl CountBuilder {
                 .with_legacy_signature_resolver(Self::legacy_signatures),
         )
         .then(PlainRoute::new(Self::create))
-        .then(IfRoute::new(Self::create).with_features(Self::COUNT_IF_FEATURES))
+        .then(IfRoute::direct(Self::create).with_features(Self::COUNT_IF_FEATURES))
         .then(
-            StateRoute::new(Self::create)
+            StateRoute::direct(Self::create)
                 .with_arguments(state_arguments)
                 .with_features(Self::COUNT_STATE_FEATURES),
         )
         .register(registry);
-        DirectNameRoute::new(
+        NameRoute::new(
             &["count_distinct"],
             CountBuilder::count_distinct_arguments(),
             CountBuilder::COUNT_DISTINCT_FEATURES,

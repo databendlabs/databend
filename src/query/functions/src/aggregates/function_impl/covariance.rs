@@ -60,7 +60,7 @@ inventory::submit! {
 }
 
 impl CovarianceBuilder {
-    fn route<const TYPE: u8>() -> DirectNameRoute {
+    fn route<const TYPE: u8>() -> NameRoute {
         let (names, features) = match TYPE {
             COVAR_POP => (
                 &["covar_pop", "var_pop", "variance_pop"][..],
@@ -72,7 +72,7 @@ impl CovarianceBuilder {
             ),
             _ => unreachable!(),
         };
-        DirectNameRoute::new(
+        NameRoute::new(
             names,
             Self::covariance_arguments(),
             features,

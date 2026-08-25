@@ -50,7 +50,7 @@ struct QuantileContBuilder;
 
 impl QuantileContBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["quantile_cont"],
             QuantileContBuilder::quantile_cont_arguments(),
             QuantileContBuilder::QUANTILE_CONT_FEATURES,
@@ -62,7 +62,7 @@ impl QuantileContBuilder {
         .then(IfRoute::unary(Self::create))
         .then(StateRoute::unary(Self::create))
         .register(registry);
-        DirectNameRoute::new(
+        NameRoute::new(
             &["median"],
             QuantileContBuilder::quantile_cont_arguments(),
             QuantileContBuilder::MEDIAN_FEATURES,

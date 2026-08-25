@@ -391,10 +391,10 @@ where
 }
 
 impl JsonObjectAggBuilder {
-    fn route() -> DirectNameRoute {
+    fn route() -> NameRoute {
         let arguments = Self::json_object_agg_arguments();
         let features = Self::JSON_OBJECT_AGG_FEATURES;
-        DirectNameRoute::new(
+        NameRoute::new(
             &["json_object_agg"],
             arguments.clone(),
             features.clone(),
@@ -404,8 +404,8 @@ impl JsonObjectAggBuilder {
         .then(MergeRoute::new(false, JsonObjectAggBuilder::create))
         .then(MergeRoute::new(true, JsonObjectAggBuilder::create))
         .then(PlainRoute::new(JsonObjectAggBuilder::create))
-        .then(IfRoute::new(JsonObjectAggBuilder::create))
-        .then(StateRoute::new(JsonObjectAggBuilder::create))
+        .then(IfRoute::direct(JsonObjectAggBuilder::create))
+        .then(StateRoute::direct(JsonObjectAggBuilder::create))
     }
 
     fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {

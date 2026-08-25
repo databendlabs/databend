@@ -45,7 +45,7 @@ struct QuantileTDigestWeightedBuilder;
 
 impl QuantileTDigestWeightedBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["quantile_tdigest_weighted"],
             QuantileTDigestWeightedBuilder::quantile_tdigest_weighted_arguments(),
             QuantileTDigestWeightedBuilder::QUANTILE_TDIGEST_WEIGHTED_FEATURES,
@@ -57,7 +57,7 @@ impl QuantileTDigestWeightedBuilder {
         .then(IfRoute::multi_arg(Self::create))
         .then(StateRoute::multi_arg(Self::create))
         .register(registry);
-        DirectNameRoute::new(
+        NameRoute::new(
             &["median_tdigest_weighted"],
             QuantileTDigestWeightedBuilder::quantile_tdigest_weighted_arguments(),
             QuantileTDigestWeightedBuilder::MEDIAN_TDIGEST_WEIGHTED_FEATURES,

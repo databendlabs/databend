@@ -45,7 +45,7 @@ struct MomentsBuilder;
 
 impl MomentsBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["skewness"],
             MomentsBuilder::moments_arguments(),
             MomentsBuilder::SKEWNESS_FEATURES,
@@ -57,7 +57,7 @@ impl MomentsBuilder {
         .then(IfRoute::unary(Self::create_skewness))
         .then(StateRoute::unary(Self::create_skewness))
         .register(registry);
-        DirectNameRoute::new(
+        NameRoute::new(
             &["kurtosis"],
             MomentsBuilder::moments_arguments(),
             MomentsBuilder::KURTOSIS_FEATURES,

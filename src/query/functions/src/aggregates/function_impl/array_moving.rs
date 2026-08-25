@@ -678,7 +678,7 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
 }
 
 impl ArrayMovingBuilder {
-    fn avg_route() -> DirectNameRoute {
+    fn avg_route() -> NameRoute {
         let arguments = Self::array_moving_arguments();
         let features = AggregateFeatures {
             is_decomposable: true,
@@ -690,7 +690,7 @@ impl ArrayMovingBuilder {
             definition: "group_array_moving_avg([window])(expr)",
             example: "select group_array_moving_avg(2)(number) from numbers(10)",
         };
-        DirectNameRoute::new(
+        NameRoute::new(
             &["group_array_moving_avg"],
             arguments.clone(),
             features,
@@ -699,11 +699,11 @@ impl ArrayMovingBuilder {
         .then(MergeRoute::new(false, ArrayMovingBuilder::create_avg))
         .then(MergeRoute::new(true, ArrayMovingBuilder::create_avg))
         .then(PlainRoute::new(ArrayMovingBuilder::create_avg))
-        .then(IfRoute::new(ArrayMovingBuilder::create_avg))
-        .then(StateRoute::new(ArrayMovingBuilder::create_avg))
+        .then(IfRoute::direct(ArrayMovingBuilder::create_avg))
+        .then(StateRoute::direct(ArrayMovingBuilder::create_avg))
     }
 
-    fn sum_route() -> DirectNameRoute {
+    fn sum_route() -> NameRoute {
         let arguments = Self::array_moving_arguments();
         let features = AggregateFeatures {
             is_decomposable: true,
@@ -715,7 +715,7 @@ impl ArrayMovingBuilder {
             definition: "group_array_moving_sum([window])(expr)",
             example: "select group_array_moving_sum(2)(number) from numbers(10)",
         };
-        DirectNameRoute::new(
+        NameRoute::new(
             &["group_array_moving_sum"],
             arguments.clone(),
             features,
@@ -724,8 +724,8 @@ impl ArrayMovingBuilder {
         .then(MergeRoute::new(false, ArrayMovingBuilder::create_sum))
         .then(MergeRoute::new(true, ArrayMovingBuilder::create_sum))
         .then(PlainRoute::new(ArrayMovingBuilder::create_sum))
-        .then(IfRoute::new(ArrayMovingBuilder::create_sum))
-        .then(StateRoute::new(ArrayMovingBuilder::create_sum))
+        .then(IfRoute::direct(ArrayMovingBuilder::create_sum))
+        .then(StateRoute::direct(ArrayMovingBuilder::create_sum))
     }
 
     fn create_avg(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {

@@ -62,13 +62,13 @@ inventory::submit! {
 }
 
 impl StddevBuilder {
-    fn route<const TYPE: u8>() -> DirectNameRoute {
+    fn route<const TYPE: u8>() -> NameRoute {
         let (names, features) = match TYPE {
             STD_POP => (&["stddev_pop", "std"][..], Self::STDDEV_POP_FEATURES),
             STD_SAMP => (&["stddev_samp", "stddev"][..], Self::STDDEV_SAMP_FEATURES),
             _ => unreachable!(),
         };
-        DirectNameRoute::new(names, Self::stddev_arguments(), features, NullPolicy::Skip)
+        NameRoute::new(names, Self::stddev_arguments(), features, NullPolicy::Skip)
             .then(MergeRoute::unary(false, Self::create_for_type::<TYPE>))
             .then(MergeRoute::unary(true, Self::create_for_type::<TYPE>))
             .then(PlainRoute::unary(Self::create_for_type::<TYPE>))

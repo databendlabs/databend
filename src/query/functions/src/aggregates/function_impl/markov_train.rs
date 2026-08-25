@@ -44,7 +44,7 @@ struct MarkovTrainBuilder;
 
 impl MarkovTrainBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["markov_train"],
             MarkovTrainBuilder::markov_train_arguments(),
             MarkovTrainBuilder::MARKOV_TRAIN_FEATURES,

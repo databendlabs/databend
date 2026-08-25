@@ -52,7 +52,7 @@ struct HistogramBuilder;
 
 impl HistogramBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["histogram"],
             HistogramBuilder::histogram_arguments(),
             HistogramBuilder::HISTOGRAM_FEATURES,

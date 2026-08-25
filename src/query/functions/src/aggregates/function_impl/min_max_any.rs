@@ -252,7 +252,7 @@ impl MinMaxAnyBuilder {
         }
     }
 
-    fn route<const CMP_TYPE: u8>() -> DirectNameRoute {
+    fn route<const CMP_TYPE: u8>() -> NameRoute {
         let (names, features, resolver) = match CMP_TYPE {
             TYPE_MIN => (
                 &["min"][..],
@@ -267,7 +267,7 @@ impl MinMaxAnyBuilder {
             TYPE_ANY => (&["any", "any_value"][..], Self::ANY_FEATURES, None),
             _ => unreachable!(),
         };
-        let route = DirectNameRoute::new(
+        let route = NameRoute::new(
             names,
             Self::min_max_any_arguments(),
             features,

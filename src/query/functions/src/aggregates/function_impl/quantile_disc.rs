@@ -44,7 +44,7 @@ struct QuantileDiscBuilder;
 
 impl QuantileDiscBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["quantile_disc", "quantile"],
             Self::quantile_disc_arguments(),
             Self::QUANTILE_FEATURES,

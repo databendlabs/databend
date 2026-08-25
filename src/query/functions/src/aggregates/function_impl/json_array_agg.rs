@@ -214,15 +214,15 @@ where
 }
 
 impl JsonArrayAggBuilder {
-    fn route(names: &'static [&'static str], features: AggregateFeatures) -> DirectNameRoute {
+    fn route(names: &'static [&'static str], features: AggregateFeatures) -> NameRoute {
         let arguments = Self::json_array_agg_arguments();
-        DirectNameRoute::new(names, arguments.clone(), features.clone(), NullPolicy::Keep)
+        NameRoute::new(names, arguments.clone(), features.clone(), NullPolicy::Keep)
             .with_validator(Self::validate_request)
             .then(MergeRoute::new(false, JsonArrayAggBuilder::create))
             .then(MergeRoute::new(true, JsonArrayAggBuilder::create))
             .then(PlainRoute::new(JsonArrayAggBuilder::create))
-            .then(IfRoute::new(JsonArrayAggBuilder::create))
-            .then(StateRoute::new(JsonArrayAggBuilder::create))
+            .then(IfRoute::direct(JsonArrayAggBuilder::create))
+            .then(StateRoute::direct(JsonArrayAggBuilder::create))
     }
 
     fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {

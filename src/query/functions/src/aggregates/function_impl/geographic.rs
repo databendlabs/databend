@@ -50,7 +50,7 @@ trait GeographicAggregateMetadata {
     const NAMES: &'static [&'static str];
     const FEATURES: AggregateFeatures;
 
-    fn route() -> DirectNameRoute;
+    fn route() -> NameRoute;
 }
 
 impl GeographicBuilder {
@@ -72,10 +72,10 @@ impl GeographicAggregateMetadata for CollectAggOp {
     const NAMES: &'static [&'static str] = &["st_collect"];
     const FEATURES: AggregateFeatures = GeographicBuilder::ST_COLLECT_FEATURES;
 
-    fn route() -> DirectNameRoute {
+    fn route() -> NameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
         let features = CollectAggOp::FEATURES;
-        DirectNameRoute::new(
+        NameRoute::new(
             CollectAggOp::NAMES,
             arguments.clone(),
             features.clone(),
@@ -92,10 +92,10 @@ impl GeographicAggregateMetadata for CollectAggOp {
         .then(PlainRoute::new(
             GeographicBuilder::create_collect::<CollectAggOp>,
         ))
-        .then(IfRoute::new(
+        .then(IfRoute::direct(
             GeographicBuilder::create_collect::<CollectAggOp>,
         ))
-        .then(StateRoute::new(
+        .then(StateRoute::direct(
             GeographicBuilder::create_collect::<CollectAggOp>,
         ))
     }
@@ -105,10 +105,10 @@ impl GeographicAggregateMetadata for GeometryUnionAggOp {
     const NAMES: &'static [&'static str] = &["st_union_agg"];
     const FEATURES: AggregateFeatures = GeographicBuilder::ST_UNION_AGG_FEATURES;
 
-    fn route() -> DirectNameRoute {
+    fn route() -> NameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
         let features = GeometryUnionAggOp::FEATURES;
-        DirectNameRoute::new(
+        NameRoute::new(
             GeometryUnionAggOp::NAMES,
             arguments.clone(),
             features.clone(),
@@ -125,13 +125,13 @@ impl GeographicAggregateMetadata for GeometryUnionAggOp {
         .then(PlainRoute::new(
             GeographicBuilder::create_agg::<GeometryUnionAggOp>,
         ))
-        .then(IfRoute::new(
+        .then(IfRoute::direct(
             GeographicBuilder::create_agg::<GeometryUnionAggOp>,
         ))
-        .then(StateRoute::new(
+        .then(StateRoute::direct(
             GeographicBuilder::create_agg::<GeometryUnionAggOp>,
         ))
-        .then(DistinctAliasRoute::new(
+        .then(DistinctAliasRoute::direct(
             GeographicBuilder::create_agg::<GeometryUnionAggOp>,
         ))
     }
@@ -141,10 +141,10 @@ impl GeographicAggregateMetadata for GeometryIntersectionAggOp {
     const NAMES: &'static [&'static str] = &["st_intersection_agg"];
     const FEATURES: AggregateFeatures = GeographicBuilder::ST_INTERSECTION_AGG_FEATURES;
 
-    fn route() -> DirectNameRoute {
+    fn route() -> NameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
         let features = GeometryIntersectionAggOp::FEATURES;
-        DirectNameRoute::new(
+        NameRoute::new(
             GeometryIntersectionAggOp::NAMES,
             arguments.clone(),
             features.clone(),
@@ -161,13 +161,13 @@ impl GeographicAggregateMetadata for GeometryIntersectionAggOp {
         .then(PlainRoute::new(
             GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
         ))
-        .then(IfRoute::new(
+        .then(IfRoute::direct(
             GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
         ))
-        .then(StateRoute::new(
+        .then(StateRoute::direct(
             GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
         ))
-        .then(DistinctAliasRoute::new(
+        .then(DistinctAliasRoute::direct(
             GeographicBuilder::create_agg::<GeometryIntersectionAggOp>,
         ))
     }
@@ -177,10 +177,10 @@ impl GeographicAggregateMetadata for EnvelopeAggOp {
     const NAMES: &'static [&'static str] = &["st_envelope_agg"];
     const FEATURES: AggregateFeatures = GeographicBuilder::ST_ENVELOPE_AGG_FEATURES;
 
-    fn route() -> DirectNameRoute {
+    fn route() -> NameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
         let features = EnvelopeAggOp::FEATURES;
-        DirectNameRoute::new(
+        NameRoute::new(
             EnvelopeAggOp::NAMES,
             arguments.clone(),
             features.clone(),
@@ -197,11 +197,13 @@ impl GeographicAggregateMetadata for EnvelopeAggOp {
         .then(PlainRoute::new(
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
-        .then(IfRoute::new(GeographicBuilder::create_agg::<EnvelopeAggOp>))
-        .then(StateRoute::new(
+        .then(IfRoute::direct(
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
-        .then(DistinctAliasRoute::new(
+        .then(StateRoute::direct(
+            GeographicBuilder::create_agg::<EnvelopeAggOp>,
+        ))
+        .then(DistinctAliasRoute::direct(
             GeographicBuilder::create_agg::<EnvelopeAggOp>,
         ))
     }

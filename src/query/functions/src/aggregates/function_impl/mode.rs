@@ -45,7 +45,7 @@ struct ModeBuilder;
 
 impl ModeBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["mode"],
             ModeBuilder::mode_arguments(),
             ModeBuilder::MODE_FEATURES,

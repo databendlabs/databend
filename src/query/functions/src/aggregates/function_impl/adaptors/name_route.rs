@@ -50,14 +50,14 @@ use super::try_create_null_argument_result_function;
 ///
 /// Registration metadata is fixed when the route is created. Each route node
 /// provides the metadata transformation for its own descriptor.
-pub(crate) struct DirectNameRoute {
+pub(crate) struct NameRoute {
     names: &'static [&'static str],
     arguments: ArgumentsPattern,
     features: AggregateFeatures,
     distinct_target: Option<String>,
     null_policy: NullPolicy,
     validate: Option<DirectRouteValidateFn>,
-    routes: Vec<Box<dyn DirectRouteNode>>,
+    routes: Vec<Box<dyn RouteNode>>,
 }
 
 type DirectRouteValidateFn = for<'a> fn(&RawAggregateCall<'a>) -> Result<()>;
@@ -70,7 +70,7 @@ pub(crate) struct DirectRouteContext<'request, 'route> {
     null_policy: NullPolicy,
 }
 
-pub(crate) trait DirectRouteNode: Send + Sync {
+pub(crate) trait RouteNode: Send + Sync {
     fn suffix(&self) -> Option<&'static str> {
         None
     }
@@ -94,7 +94,7 @@ pub(crate) trait DirectRouteNode: Send + Sync {
     fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>>;
 }
 
-impl DirectNameRoute {
+impl NameRoute {
     pub(crate) fn new(
         names: &'static [&'static str],
         arguments: ArgumentsPattern,
@@ -123,7 +123,7 @@ impl DirectNameRoute {
         self
     }
 
-    pub(crate) fn then(mut self, next: impl DirectRouteNode + 'static) -> Self {
+    pub(crate) fn then(mut self, next: impl RouteNode + 'static) -> Self {
         self.routes.push(Box::new(next));
         self
     }
@@ -224,7 +224,7 @@ impl DirectNameRoute {
     }
 }
 
-impl AggregateCallBuilder for DirectNameRoute {
+impl AggregateCallBuilder for NameRoute {
     fn arguments(&self) -> &ArgumentsPattern {
         &self.arguments
     }
@@ -234,7 +234,7 @@ impl AggregateCallBuilder for DirectNameRoute {
     }
 
     fn build(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef> {
-        DirectNameRoute::build(self, request)
+        NameRoute::build(self, request)
     }
 }
 
@@ -394,7 +394,7 @@ impl MergeRoute {
     }
 }
 
-impl DirectRouteNode for MergeRoute {
+impl RouteNode for MergeRoute {
     fn suffix(&self) -> Option<&'static str> {
         Some(if self.returns_state {
             "merge_state"
@@ -495,7 +495,7 @@ impl PlainRoute {
     }
 }
 
-impl DirectRouteNode for PlainRoute {
+impl RouteNode for PlainRoute {
     fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>> {
         if context.matching_name_index(None).is_none() {
             return Ok(None);
@@ -528,7 +528,7 @@ pub(crate) struct IfRoute {
 }
 
 impl IfRoute {
-    pub(crate) fn new(build: DirectBuildFn<IfCombinator>) -> Self {
+    pub(crate) fn direct(build: DirectBuildFn<IfCombinator>) -> Self {
         Self {
             features: None,
             build: RouteBuild::Direct(build),
@@ -555,7 +555,7 @@ impl IfRoute {
     }
 }
 
-impl DirectRouteNode for IfRoute {
+impl RouteNode for IfRoute {
     fn suffix(&self) -> Option<&'static str> {
         Some("if")
     }
@@ -631,7 +631,7 @@ pub(crate) struct StateRoute {
 }
 
 impl StateRoute {
-    pub(crate) fn new(build: DirectBuildFn<StateCombinator>) -> Self {
+    pub(crate) fn direct(build: DirectBuildFn<StateCombinator>) -> Self {
         Self {
             arguments: None,
             features: None,
@@ -666,7 +666,7 @@ impl StateRoute {
     }
 }
 
-impl DirectRouteNode for StateRoute {
+impl RouteNode for StateRoute {
     fn suffix(&self) -> Option<&'static str> {
         Some("state")
     }
@@ -738,7 +738,7 @@ pub(crate) struct DistinctAliasRoute {
 }
 
 impl DistinctAliasRoute {
-    pub(crate) fn new(build: DirectBuildFn<PlainCombinator>) -> Self {
+    pub(crate) fn direct(build: DirectBuildFn<PlainCombinator>) -> Self {
         Self {
             build: RouteBuild::Direct(build),
         }
@@ -757,7 +757,7 @@ impl DistinctAliasRoute {
     }
 }
 
-impl DirectRouteNode for DistinctAliasRoute {
+impl RouteNode for DistinctAliasRoute {
     fn suffix(&self) -> Option<&'static str> {
         Some("distinct")
     }
@@ -794,7 +794,7 @@ pub(crate) struct DistinctRoute {
 }
 
 impl DistinctRoute {
-    pub(crate) fn new(build: DirectBuildFn<DistinctCombinator>) -> Self {
+    pub(crate) fn direct(build: DirectBuildFn<DistinctCombinator>) -> Self {
         Self {
             build: RouteBuild::Direct(build),
         }
@@ -813,7 +813,7 @@ impl DistinctRoute {
     }
 }
 
-impl DirectRouteNode for DistinctRoute {
+impl RouteNode for DistinctRoute {
     fn suffix(&self) -> Option<&'static str> {
         Some("distinct")
     }
@@ -888,7 +888,7 @@ mod tests {
         features: AggregateFeatures,
     }
 
-    impl DirectRouteNode for Miss {
+    impl RouteNode for Miss {
         fn arguments(&self, _base: &ArgumentsPattern) -> ArgumentsPattern {
             self.arguments.clone()
         }
@@ -912,7 +912,7 @@ mod tests {
         features: AggregateFeatures,
     }
 
-    impl DirectRouteNode for Stop {
+    impl RouteNode for Stop {
         fn arguments(&self, _base: &ArgumentsPattern) -> ArgumentsPattern {
             self.arguments.clone()
         }
@@ -935,7 +935,7 @@ mod tests {
         features: AggregateFeatures,
     }
 
-    impl DirectRouteNode for MustNotRun {
+    impl RouteNode for MustNotRun {
         fn arguments(&self, _base: &ArgumentsPattern) -> ArgumentsPattern {
             self.arguments.clone()
         }
@@ -958,7 +958,7 @@ mod tests {
         let stops = Arc::new(AtomicUsize::new(0));
         let arguments = ArgumentsPattern::fixed(vec![]);
         let features = AggregateFeatures::default();
-        let rule = DirectNameRoute::new(
+        let rule = NameRoute::new(
             &["test"],
             arguments.clone(),
             features.clone(),
@@ -1002,7 +1002,7 @@ mod tests {
         features: AggregateFeatures,
     }
 
-    impl DirectRouteNode for DescriptorNode {
+    impl RouteNode for DescriptorNode {
         fn suffix(&self) -> Option<&'static str> {
             self.suffix
         }
@@ -1032,7 +1032,7 @@ mod tests {
             ..Default::default()
         };
 
-        let descriptors = DirectNameRoute::new(
+        let descriptors = NameRoute::new(
             &["test", "test_alias"],
             base_arguments.clone(),
             base_features.clone(),
@@ -1068,7 +1068,7 @@ mod tests {
         let mut registry = AggregateRegistry::empty();
         let arguments = ArgumentsPattern::fixed(vec![]);
         let features = AggregateFeatures::default();
-        DirectNameRoute::new(
+        NameRoute::new(
             &["test", "test_alias"],
             arguments.clone(),
             features.clone(),
@@ -1156,7 +1156,7 @@ mod tests {
 
     #[test]
     fn test_direct_name_route_without_matcher_returns_unknown() {
-        let rule = DirectNameRoute::new(
+        let rule = NameRoute::new(
             &["test"],
             ArgumentsPattern::fixed(vec![]),
             AggregateFeatures::default(),

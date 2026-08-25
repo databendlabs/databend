@@ -52,7 +52,7 @@ struct ArgMinMaxBuilder;
 
 impl ArgMinMaxBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["arg_min"],
             ArgMinMaxBuilder::arg_min_max_arguments(),
             ArgMinMaxBuilder::ARG_MIN_FEATURES,
@@ -65,7 +65,7 @@ impl ArgMinMaxBuilder {
         .then(StateRoute::multi_arg(Self::create::<TYPE_MIN>))
         .then(DistinctAliasRoute::multi_arg(Self::create::<TYPE_MIN>))
         .register(registry);
-        DirectNameRoute::new(
+        NameRoute::new(
             &["arg_max"],
             ArgMinMaxBuilder::arg_min_max_arguments(),
             ArgMinMaxBuilder::ARG_MAX_FEATURES,

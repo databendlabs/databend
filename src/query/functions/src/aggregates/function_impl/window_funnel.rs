@@ -149,10 +149,10 @@ fn compare_event<T: Ord>(lhs: &(T, u8), rhs: &(T, u8)) -> Ordering {
 }
 
 impl WindowFunnelBuilder {
-    fn route() -> DirectNameRoute {
+    fn route() -> NameRoute {
         let arguments = Self::window_funnel_arguments();
         let features = Self::WINDOW_FUNNEL_FEATURES;
-        DirectNameRoute::new(
+        NameRoute::new(
             &["window_funnel"],
             arguments.clone(),
             features.clone(),
@@ -161,8 +161,8 @@ impl WindowFunnelBuilder {
         .then(MergeRoute::new(false, WindowFunnelBuilder::create))
         .then(MergeRoute::new(true, WindowFunnelBuilder::create))
         .then(PlainRoute::new(WindowFunnelBuilder::create))
-        .then(IfRoute::new(WindowFunnelBuilder::create))
-        .then(StateRoute::new(WindowFunnelBuilder::create))
+        .then(IfRoute::direct(WindowFunnelBuilder::create))
+        .then(StateRoute::direct(WindowFunnelBuilder::create))
     }
 
     fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {

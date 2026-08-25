@@ -51,10 +51,10 @@ impl UniqBuilder {
 }
 
 impl UniqBuilder {
-    fn route() -> DirectNameRoute {
+    fn route() -> NameRoute {
         let arguments = Self::uniq_arguments();
         let features = Self::UNIQ_FEATURES;
-        DirectNameRoute::new(
+        NameRoute::new(
             &["uniq"],
             arguments.clone(),
             features.clone(),
@@ -64,8 +64,8 @@ impl UniqBuilder {
         .then(MergeRoute::new(false, UniqBuilder::create))
         .then(MergeRoute::new(true, UniqBuilder::create))
         .then(PlainRoute::new(UniqBuilder::create))
-        .then(IfRoute::new(UniqBuilder::create))
-        .then(StateRoute::new(UniqBuilder::create))
+        .then(IfRoute::direct(UniqBuilder::create))
+        .then(StateRoute::direct(UniqBuilder::create))
     }
 
     fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {

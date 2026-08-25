@@ -71,7 +71,7 @@ impl AvgBuilder {
     }
 
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &[Self::NAME],
             Self::arguments(),
             Self::FEATURES,

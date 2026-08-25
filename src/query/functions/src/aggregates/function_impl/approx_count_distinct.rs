@@ -46,7 +46,7 @@ struct ApproxCountDistinctBuilder;
 
 impl ApproxCountDistinctBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["approx_count_distinct"],
             ArgumentsPattern::fixed(vec![ArgumentPattern::any()]),
             Self::APPROX_COUNT_DISTINCT_FEATURES,

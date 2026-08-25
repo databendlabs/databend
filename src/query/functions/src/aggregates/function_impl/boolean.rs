@@ -31,7 +31,7 @@ struct BooleanBuilder;
 
 impl BooleanBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["bool_and"],
             BooleanBuilder::boolean_arguments(),
             BooleanBuilder::BOOL_AND_FEATURES,
@@ -44,7 +44,7 @@ impl BooleanBuilder {
         .then(StateRoute::unary(Self::create::<true>))
         .then(DistinctAliasRoute::unary(Self::create::<true>))
         .register(registry);
-        DirectNameRoute::new(
+        NameRoute::new(
             &["bool_or"],
             BooleanBuilder::boolean_arguments(),
             BooleanBuilder::BOOL_OR_FEATURES,

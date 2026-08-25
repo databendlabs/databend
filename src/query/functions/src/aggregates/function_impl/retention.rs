@@ -54,7 +54,7 @@ struct RetentionBuilder;
 
 impl RetentionBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["retention"],
             Self::retention_arguments(),
             Self::RETENTION_FEATURES,

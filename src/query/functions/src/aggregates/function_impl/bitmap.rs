@@ -705,10 +705,10 @@ where
 }
 
 impl BitmapBuilder {
-    fn bitmap_route<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> DirectNameRoute {
+    fn bitmap_route<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> NameRoute {
         let arguments = Self::bitmap_arguments();
         let features = Self::bitmap_features::<OP_TYPE, RESULT_TYPE>();
-        let route = DirectNameRoute::new(
+        let route = NameRoute::new(
             Self::bitmap_names::<OP_TYPE, RESULT_TYPE>(),
             arguments,
             features,
@@ -773,10 +773,10 @@ impl BitmapBuilder {
         })
     }
 
-    fn construct_route() -> DirectNameRoute {
+    fn construct_route() -> NameRoute {
         let arguments = Self::bitmap_numeric_arguments();
         let features = Self::BITMAP_CONSTRUCT_AGG_FEATURES;
-        DirectNameRoute::new(
+        NameRoute::new(
             &["bitmap_construct_agg", "group_bitmap"],
             arguments.clone(),
             features.clone(),
@@ -785,13 +785,15 @@ impl BitmapBuilder {
         .then(MergeRoute::new(false, BitmapBuilder::create_group_bitmap))
         .then(MergeRoute::new(true, BitmapBuilder::create_group_bitmap))
         .then(PlainRoute::new(BitmapBuilder::create_group_bitmap))
-        .then(IfRoute::new(BitmapBuilder::create_group_bitmap))
-        .then(StateRoute::new(BitmapBuilder::create_group_bitmap))
-        .then(DistinctAliasRoute::new(BitmapBuilder::create_group_bitmap))
+        .then(IfRoute::direct(BitmapBuilder::create_group_bitmap))
+        .then(StateRoute::direct(BitmapBuilder::create_group_bitmap))
+        .then(DistinctAliasRoute::direct(
+            BitmapBuilder::create_group_bitmap,
+        ))
     }
 
-    fn intersect_count_route() -> DirectNameRoute {
-        DirectNameRoute::new(
+    fn intersect_count_route() -> NameRoute {
+        NameRoute::new(
             &["intersect_count"],
             Self::bitmap_intersect_count_arguments(),
             Self::INTERSECT_COUNT_FEATURES,

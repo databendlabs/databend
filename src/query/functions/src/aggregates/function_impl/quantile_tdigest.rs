@@ -48,7 +48,7 @@ struct QuantileTDigestBuilder;
 
 impl QuantileTDigestBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        DirectNameRoute::new(
+        NameRoute::new(
             &["quantile_tdigest"],
             QuantileTDigestBuilder::quantile_tdigest_arguments(),
             QuantileTDigestBuilder::QUANTILE_TDIGEST_FEATURES,
@@ -60,7 +60,7 @@ impl QuantileTDigestBuilder {
         .then(IfRoute::unary(Self::create))
         .then(StateRoute::unary(Self::create))
         .register(registry);
-        DirectNameRoute::new(
+        NameRoute::new(
             &["median_tdigest"],
             QuantileTDigestBuilder::quantile_tdigest_arguments(),
             QuantileTDigestBuilder::MEDIAN_TDIGEST_FEATURES,
