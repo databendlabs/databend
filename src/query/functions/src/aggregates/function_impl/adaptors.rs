@@ -62,7 +62,6 @@ pub(super) use unary_state::AggregateUnaryStateImplementation;
 pub(super) struct UnaryBuildContext<'a, C> {
     request: AggregateFunctionRequest<'a>,
     signature_args_type: &'a [DataType],
-    combinator_args_type: &'a [DataType],
     features: FunctionFeatures,
     combinator: C,
     arg_type: DataType,
@@ -71,7 +70,6 @@ pub(super) struct UnaryBuildContext<'a, C> {
 pub(super) struct MultiArgBuildContext<'a, C> {
     request: AggregateFunctionRequest<'a>,
     signature_args_type: &'a [DataType],
-    combinator_args_type: &'a [DataType],
     features: FunctionFeatures,
     combinator: C,
     args_type: Vec<DataType>,
@@ -80,7 +78,6 @@ pub(super) struct MultiArgBuildContext<'a, C> {
 pub(super) struct DirectBuildContext<'a, C> {
     request: AggregateFunctionRequest<'a>,
     signature_args_type: &'a [DataType],
-    combinator_args_type: &'a [DataType],
     features: FunctionFeatures,
     combinator: C,
 }

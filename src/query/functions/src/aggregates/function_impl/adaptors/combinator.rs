@@ -24,16 +24,25 @@ use super::AggregateFunctionRef;
 use super::AggregateFunctionSignature;
 use super::AggregateStateDescription;
 use super::FunctionFeatures;
-use super::NullPolicy;
 use super::StateCombinatorPlan;
 use super::distinct_combinator;
 use super::if_combinator;
+use super::sort_combinator;
 use super::state_combinator;
 
-pub(crate) trait CombinatorImpl: Copy {
+pub(crate) trait CombinatorImpl {
     fn create_aggregate_function<I>(
         self,
-        args_type: &[DataType],
+        signature: AggregateFunctionSignature,
+        features: FunctionFeatures,
+        state: AggregateStateDescription,
+        implementation: I,
+    ) -> Result<AggregateFunctionRef>
+    where
+        I: AggrImpl;
+
+    fn create_ordered_aggregate_function<I>(
+        self,
         signature: AggregateFunctionSignature,
         features: FunctionFeatures,
         state: AggregateStateDescription,
@@ -46,14 +55,18 @@ pub(crate) trait CombinatorImpl: Copy {
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct PlainCombinator;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct IfCombinator {
-    pub(crate) null_policy: NullPolicy,
+    pub(crate) nested_args_type: Vec<DataType>,
+    pub(crate) condition_index: usize,
+    pub(crate) always_false: bool,
+    pub(crate) strip_nullable_input: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct DistinctCombinator {
-    pub(crate) null_policy: NullPolicy,
+    pub(crate) args_type: Vec<DataType>,
+    pub(crate) skip_nulls: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -61,10 +74,47 @@ pub(crate) struct StateCombinator {
     pub(crate) plan: StateCombinatorPlan,
 }
 
+fn finish<I>(
+    signature: AggregateFunctionSignature,
+    features: FunctionFeatures,
+    state: AggregateStateDescription,
+    implementation: I,
+) -> AggregateFunctionRef
+where
+    I: AggrImpl,
+{
+    Arc::new(AggregateFunction::new(
+        signature,
+        features,
+        state,
+        implementation,
+    ))
+}
+
+fn finish_with_order_by<I>(
+    signature: AggregateFunctionSignature,
+    features: FunctionFeatures,
+    state: AggregateStateDescription,
+    implementation: I,
+) -> AggregateFunctionRef
+where
+    I: AggrImpl,
+{
+    if signature.order_by.is_empty() {
+        return finish(signature, features, state, implementation);
+    }
+
+    let (input_types, order_by) =
+        sort_combinator::sort_runtime_inputs(&signature.args_type, &signature.order_by);
+    let state = sort_combinator::sort_state_description(&state);
+    let implementation =
+        sort_combinator::AggregateSortImplementation::new(implementation, input_types, order_by);
+    finish(signature, features, state, implementation)
+}
+
 impl CombinatorImpl for PlainCombinator {
     fn create_aggregate_function<I>(
         self,
-        _args_type: &[DataType],
         signature: AggregateFunctionSignature,
         features: FunctionFeatures,
         state: AggregateStateDescription,
@@ -73,19 +123,31 @@ impl CombinatorImpl for PlainCombinator {
     where
         I: AggrImpl,
     {
-        Ok(Arc::new(AggregateFunction::new(
+        Ok(finish(signature, features, state, implementation))
+    }
+
+    fn create_ordered_aggregate_function<I>(
+        self,
+        signature: AggregateFunctionSignature,
+        features: FunctionFeatures,
+        state: AggregateStateDescription,
+        implementation: I,
+    ) -> Result<AggregateFunctionRef>
+    where
+        I: AggrImpl,
+    {
+        Ok(finish_with_order_by(
             signature,
             features,
             state,
             implementation,
-        )))
+        ))
     }
 }
 
 impl CombinatorImpl for IfCombinator {
     fn create_aggregate_function<I>(
         self,
-        args_type: &[DataType],
         signature: AggregateFunctionSignature,
         features: FunctionFeatures,
         state: AggregateStateDescription,
@@ -94,28 +156,53 @@ impl CombinatorImpl for IfCombinator {
     where
         I: AggrImpl,
     {
-        let condition_index = args_type.len() - 1;
-        let condition_type = args_type[condition_index].remove_nullable();
-        let always_false = condition_type.is_null();
-        let strip_nullable_input = self.null_policy != NullPolicy::Keep;
-        Ok(Arc::new(AggregateFunction::new(
-            signature,
-            features,
-            state,
-            if_combinator::AggregateIfImplementation::new(
-                implementation,
-                condition_index,
-                always_false,
-                strip_nullable_input,
-            ),
-        )))
+        let implementation = if_combinator::AggregateIfImplementation::new(
+            implementation,
+            self.condition_index,
+            self.always_false,
+            self.strip_nullable_input,
+        );
+        Ok(finish(signature, features, state, implementation))
+    }
+
+    fn create_ordered_aggregate_function<I>(
+        self,
+        signature: AggregateFunctionSignature,
+        features: FunctionFeatures,
+        state: AggregateStateDescription,
+        implementation: I,
+    ) -> Result<AggregateFunctionRef>
+    where
+        I: AggrImpl,
+    {
+        if signature.order_by.is_empty() {
+            return self.create_aggregate_function(signature, features, state, implementation);
+        }
+
+        // FILTER is intentionally outside ORDER BY. It removes the condition
+        // but preserves derived sort keys, so the sort adaptor only buffers rows
+        // that participate in the aggregate.
+        let (input_types, order_by) =
+            sort_combinator::sort_runtime_inputs(&self.nested_args_type, &signature.order_by);
+        let state = sort_combinator::sort_state_description(&state);
+        let implementation = sort_combinator::AggregateSortImplementation::new(
+            implementation,
+            input_types,
+            order_by,
+        );
+        let implementation = if_combinator::AggregateIfImplementation::new(
+            implementation,
+            self.condition_index,
+            self.always_false,
+            self.strip_nullable_input,
+        );
+        Ok(finish(signature, features, state, implementation))
     }
 }
 
 impl CombinatorImpl for DistinctCombinator {
     fn create_aggregate_function<I>(
         self,
-        args_type: &[DataType],
         signature: AggregateFunctionSignature,
         features: FunctionFeatures,
         state: AggregateStateDescription,
@@ -124,29 +211,61 @@ impl CombinatorImpl for DistinctCombinator {
     where
         I: AggrImpl,
     {
-        let args_type = args_type.to_vec();
         let state = distinct_combinator::distinct_state_description(&state);
-        let skip_nulls = self.null_policy != NullPolicy::Keep;
-        if skip_nulls {
-            Ok(Arc::new(AggregateFunction::new(
+        if self.skip_nulls {
+            Ok(finish(
                 signature,
                 features,
                 state,
                 distinct_combinator::AggregateDistinctImplementation::<true>::new(
                     implementation,
-                    args_type,
+                    self.args_type,
                 ),
-            )))
+            ))
         } else {
-            Ok(Arc::new(AggregateFunction::new(
+            Ok(finish(
                 signature,
                 features,
                 state,
                 distinct_combinator::AggregateDistinctImplementation::<false>::new(
                     implementation,
-                    args_type,
+                    self.args_type,
                 ),
-            )))
+            ))
+        }
+    }
+
+    fn create_ordered_aggregate_function<I>(
+        self,
+        signature: AggregateFunctionSignature,
+        features: FunctionFeatures,
+        state: AggregateStateDescription,
+        implementation: I,
+    ) -> Result<AggregateFunctionRef>
+    where
+        I: AggrImpl,
+    {
+        let state = distinct_combinator::distinct_state_description(&state);
+        if self.skip_nulls {
+            Ok(finish_with_order_by(
+                signature,
+                features,
+                state,
+                distinct_combinator::AggregateDistinctImplementation::<true>::new(
+                    implementation,
+                    self.args_type,
+                ),
+            ))
+        } else {
+            Ok(finish_with_order_by(
+                signature,
+                features,
+                state,
+                distinct_combinator::AggregateDistinctImplementation::<false>::new(
+                    implementation,
+                    self.args_type,
+                ),
+            ))
         }
     }
 }
@@ -154,12 +273,49 @@ impl CombinatorImpl for DistinctCombinator {
 impl CombinatorImpl for StateCombinator {
     fn create_aggregate_function<I>(
         self,
-        _args_type: &[DataType],
         signature: AggregateFunctionSignature,
         features: FunctionFeatures,
         state: AggregateStateDescription,
         implementation: I,
     ) -> Result<AggregateFunctionRef>
+    where
+        I: AggrImpl,
+    {
+        let (signature, state, implementation) = self.wrap(signature, state, implementation)?;
+        Ok(finish(signature, features, state, implementation))
+    }
+
+    fn create_ordered_aggregate_function<I>(
+        self,
+        signature: AggregateFunctionSignature,
+        features: FunctionFeatures,
+        state: AggregateStateDescription,
+        implementation: I,
+    ) -> Result<AggregateFunctionRef>
+    where
+        I: AggrImpl,
+    {
+        let (signature, state, implementation) = self.wrap(signature, state, implementation)?;
+        Ok(finish_with_order_by(
+            signature,
+            features,
+            state,
+            implementation,
+        ))
+    }
+}
+
+impl StateCombinator {
+    fn wrap<I>(
+        self,
+        signature: AggregateFunctionSignature,
+        state: AggregateStateDescription,
+        implementation: I,
+    ) -> Result<(
+        AggregateFunctionSignature,
+        AggregateStateDescription,
+        state_combinator::AggregateStateImplementation<I>,
+    )>
     where
         I: AggrImpl,
     {
@@ -183,15 +339,14 @@ impl CombinatorImpl for StateCombinator {
             return_type,
             ..signature
         };
-        Ok(Arc::new(AggregateFunction::new(
+        Ok((
             signature,
-            features,
             state,
             state_combinator::AggregateStateImplementation::new(
                 implementation,
                 self.plan.strip_nullable_input,
                 self.plan.nullable_input_result_flag,
             ),
-        )))
+        ))
     }
 }

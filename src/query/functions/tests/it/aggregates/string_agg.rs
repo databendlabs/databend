@@ -1,11 +1,22 @@
 use std::io::Write;
 
+use borsh::BorshDeserialize;
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
 use databend_common_expression::Symbol;
+use databend_common_expression::aggregate_function::AccumulateInput;
 use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
 use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_expression::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate_function::AggregateStateOwner;
+use databend_common_expression::aggregate_function::MergeResultInput;
+use databend_common_expression::aggregate_function::SerializeInput;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal64Type;
@@ -142,4 +153,75 @@ fn test_string_agg_registers_distinct_aliases() {
             .unwrap();
         assert_eq!(function.signature().name, name);
     }
+}
+
+#[test]
+fn test_ordered_listagg_if_filters_before_sorting() -> Result<()> {
+    let values: BlockEntry = StringType::from_data(vec!["abc", "def", "opq", "xyz"]).into();
+    let condition: BlockEntry =
+        BooleanType::from_data_with_validity(vec![true, false, false, true], vec![
+            true, true, false, true,
+        ])
+        .into();
+    let order_key: BlockEntry =
+        Int64Type::from_data_with_validity(vec![3, 2, 1, 0], vec![true, true, true, false]).into();
+    let args_type = [values.data_type(), condition.data_type()];
+    let order_by = [AggregateBoundOrderByItem {
+        index: Symbol::new(2),
+        source: AggregateBoundOrderBySource::Derived,
+        data_type: order_key.data_type(),
+        nulls_first: false,
+        asc: false,
+    }];
+    let params = [Scalar::String("|".to_string())];
+    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        name: "listagg_if",
+        params: &params,
+        args_type: &args_type,
+        distinct: false,
+        order_by: &order_by,
+    })?;
+    let owner = AggregateStateOwner::new(vec![function.clone()])?;
+    let columns = [values, condition, order_key];
+    function.accumulate(AccumulateInput {
+        state: owner.state(0),
+        columns: (&columns).into(),
+        validity: None,
+    })?;
+
+    let mut state_builders = function
+        .state()
+        .serde_items()
+        .iter()
+        .map(|item| match item {
+            StateSerdeItem::DataType(data_type) => ColumnBuilder::with_capacity(data_type, 1),
+            StateSerdeItem::Binary(_) => ColumnBuilder::with_capacity(
+                &databend_common_expression::types::DataType::Binary,
+                1,
+            ),
+        })
+        .collect::<Vec<_>>();
+    function.serialize(SerializeInput {
+        states: owner.state_set(0),
+        builders: &mut state_builders,
+    })?;
+    let sort_state = state_builders.remove(0).build();
+    let ScalarRef::Binary(mut sort_state) = sort_state.index(0).unwrap() else {
+        unreachable!("sort state must serialize as binary")
+    };
+    let buffered_columns = Vec::<Column>::deserialize(&mut sort_state)?;
+    assert_eq!(buffered_columns.len(), 2);
+    assert!(buffered_columns.iter().all(|column| column.len() == 2));
+
+    let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
+    function.merge_result(MergeResultInput {
+        state: owner.state(0),
+        builder: &mut builder,
+    })?;
+    let result = builder.build();
+    assert_eq!(
+        unsafe { result.index_unchecked(0) },
+        ScalarRef::String("abc|xyz")
+    );
+    Ok(())
 }

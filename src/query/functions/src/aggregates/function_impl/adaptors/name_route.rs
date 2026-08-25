@@ -286,7 +286,6 @@ where C: CombinatorImpl
         &self,
         request: AggregateFunctionRequest<'a>,
         signature_args_type: &'a [DataType],
-        combinator_args_type: &'a [DataType],
         features: FunctionFeatures,
         combinator: C,
     ) -> Result<AggregateFunctionRef> {
@@ -294,21 +293,18 @@ where C: CombinatorImpl
             Self::Unary(build) => build(UnaryBuildContext::new(
                 request,
                 signature_args_type,
-                combinator_args_type,
                 features,
                 combinator,
             )?),
             Self::MultiArg(build) => build(MultiArgBuildContext::new(
                 request,
                 signature_args_type,
-                combinator_args_type,
                 features,
                 combinator,
             )),
             Self::Direct(build) => build(DirectBuildContext::new(
                 request,
                 signature_args_type,
-                combinator_args_type,
                 features,
                 combinator,
             )),
@@ -459,13 +455,8 @@ impl DirectRouteNode for MergeRoute {
             {
                 return Ok(function);
             }
-            self.build.build(
-                nested_request,
-                args_type,
-                args_type,
-                features.clone(),
-                PlainCombinator,
-            )
+            self.build
+                .build(nested_request, args_type, features.clone(), PlainCombinator)
         };
         merge_combinator::create(
             request,
@@ -536,9 +527,9 @@ impl DirectRouteNode for PlainRoute {
         }
         let request = context.request.clone();
         let args_type = request.args_type;
-        let function =
-            self.build
-                .build(request, args_type, args_type, features, PlainCombinator)?;
+        let function = self
+            .build
+            .build(request, args_type, features, PlainCombinator)?;
         Ok(Some(function))
     }
 }
@@ -613,6 +604,7 @@ impl DirectRouteNode for IfRoute {
                 context.request.name
             )));
         };
+        let condition_index = nested_arg_types.len();
         let condition_type = condition_type.remove_nullable();
         if !condition_type.is_null() && condition_type != DataType::Boolean {
             return Err(ErrorCode::BadArguments(format!(
@@ -634,17 +626,15 @@ impl DirectRouteNode for IfRoute {
             .clone()
             .unwrap_or_else(|| context.features.clone());
         let signature_args_type = context.request.args_type;
-        let combinator_args_type = context.request.args_type;
         let request = request_with_args_type(&context.request, &args_type, false);
-        let function = self.build.build(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            IfCombinator {
-                null_policy: context.null_policy,
-            },
-        )?;
+        let function = self
+            .build
+            .build(request, signature_args_type, features, IfCombinator {
+                nested_args_type: args_type.clone(),
+                condition_index,
+                always_false: condition_type.is_null(),
+                strip_nullable_input: !keep_null,
+            })?;
         Ok(Some(function))
     }
 }
@@ -752,14 +742,11 @@ impl DirectRouteNode for StateRoute {
             Some(args_type) => request_with_args_type(&context.request, args_type, false),
             None => context.request.clone(),
         };
-        let combinator_args_type = request.args_type;
-        let function = self.build.build(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            StateCombinator { plan: state_plan },
-        )?;
+        let function =
+            self.build
+                .build(request, signature_args_type, features, StateCombinator {
+                    plan: state_plan,
+                })?;
         Ok(Some(function))
     }
 }
@@ -816,9 +803,9 @@ impl DirectRouteNode for DistinctAliasRoute {
         let features = context.features.clone();
         let request = context.request.clone();
         let args_type = request.args_type;
-        let function =
-            self.build
-                .build(request, args_type, args_type, features, PlainCombinator)?;
+        let function = self
+            .build
+            .build(request, args_type, features, PlainCombinator)?;
         Ok(Some(function))
     }
 }
@@ -879,16 +866,13 @@ impl DirectRouteNode for DistinctRoute {
             .collect::<Vec<_>>();
         let signature_args_type = context.request.args_type;
         let request = request_with_args_type(&context.request, &args_type, true);
-        let combinator_args_type = request.args_type;
-        let function = self.build.build(
-            request,
-            signature_args_type,
-            combinator_args_type,
-            features,
-            DistinctCombinator {
-                null_policy: context.null_policy,
-            },
-        )?;
+        let combinator = DistinctCombinator {
+            args_type: args_type.clone(),
+            skip_nulls: context.null_policy != NullPolicy::Keep,
+        };
+        let function = self
+            .build
+            .build(request, signature_args_type, features, combinator)?;
         Ok(Some(function))
     }
 }

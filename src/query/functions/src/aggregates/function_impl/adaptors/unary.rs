@@ -283,13 +283,7 @@ where
         ),
     )));
     let state = unary_distinct_or_null_state_description(&state);
-    combinator.create_aggregate_function(
-        &distinct_args_type,
-        signature,
-        features,
-        state,
-        implementation,
-    )
+    combinator.create_aggregate_function(signature, features, state, implementation)
 }
 
 fn unary_distinct_or_null_state_description(

@@ -45,32 +45,13 @@ impl<I> AggregateIfImplementation<I> {
         }
     }
 
-    fn arguments(&self, columns: ProjectedBlock<'_>) -> Vec<BlockEntry> {
-        columns.iter().take(self.condition_index).cloned().collect()
-    }
-
-    fn strip_nullable_columns(
-        columns: ProjectedBlock<'_>,
-        validity: Option<Bitmap>,
-    ) -> (Vec<BlockEntry>, Option<Bitmap>) {
-        let mut not_null_columns = Vec::with_capacity(columns.len());
-        let mut validity = validity;
-        for entry in columns.iter() {
-            validity = column_merge_validity(entry, validity);
-            not_null_columns.push(entry.clone().remove_nullable());
-        }
-        (not_null_columns, Bitmap::map_all_sets_to_none(validity))
-    }
-
-    fn strip_nullable_condition(
-        &self,
-        columns: ProjectedBlock<'_>,
-        validity: Option<Bitmap>,
-    ) -> (Vec<BlockEntry>, Option<Bitmap>) {
-        let mut columns = columns.iter().cloned().collect::<Vec<_>>();
-        let validity = column_merge_validity(&columns[self.condition_index], validity);
-        columns[self.condition_index] = columns[self.condition_index].clone().remove_nullable();
-        (columns, Bitmap::map_all_sets_to_none(validity))
+    fn nested_columns(&self, columns: ProjectedBlock<'_>) -> Vec<BlockEntry> {
+        columns
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index != self.condition_index)
+            .map(|(_, entry)| entry.clone())
+            .collect()
     }
 
     fn prepare_columns(
@@ -78,11 +59,18 @@ impl<I> AggregateIfImplementation<I> {
         columns: ProjectedBlock<'_>,
         validity: Option<Bitmap>,
     ) -> (Vec<BlockEntry>, Option<Bitmap>) {
+        let mut columns = columns.iter().cloned().collect::<Vec<_>>();
+        let mut validity = validity;
         if self.strip_nullable_input {
-            Self::strip_nullable_columns(columns, validity)
-        } else {
-            self.strip_nullable_condition(columns, validity)
+            for entry in &mut columns[..self.condition_index] {
+                validity = column_merge_validity(entry, validity);
+                *entry = entry.clone().remove_nullable();
+            }
         }
+
+        let validity = column_merge_validity(&columns[self.condition_index], validity);
+        columns[self.condition_index] = columns[self.condition_index].clone().remove_nullable();
+        (columns, Bitmap::map_all_sets_to_none(validity))
     }
 
     fn predicate(
@@ -134,7 +122,7 @@ where I: AggrImpl
         let Some(predicate) = self.predicate(columns, validity.as_ref()) else {
             return Ok(());
         };
-        let args = self.arguments(columns);
+        let args = self.nested_columns(columns);
         if args.is_empty() {
             let rows = predicate.as_ref().map(Bitmap::true_count).unwrap_or(rows);
             return self.nested.accumulate_row_count(AccumulateRowCountInput {
@@ -157,7 +145,7 @@ where I: AggrImpl
 
         let (columns, validity) = self.prepare_columns(input.columns, None);
         let columns: ProjectedBlock<'_> = (&columns).into();
-        let args = self.arguments(columns);
+        let args = self.nested_columns(columns);
         let args: ProjectedBlock<'_> = (&args).into();
         for (row, state) in input.states.iter().enumerate() {
             if !self.should_accumulate_row(columns, validity.as_ref(), row) {
@@ -187,7 +175,7 @@ where I: AggrImpl
         if !self.should_accumulate_row(columns, validity.as_ref(), input.row) {
             return Ok(());
         }
-        let args = self.arguments(columns);
+        let args = self.nested_columns(columns);
         if args.is_empty() {
             return self.nested.accumulate_row_count(AccumulateRowCountInput {
                 state: input.state,

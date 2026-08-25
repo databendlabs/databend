@@ -31,7 +31,6 @@ use super::MultiArgBuildContext;
 use super::UnaryAggrImpl;
 use super::UnaryBuildContext;
 use super::UnaryState;
-use super::sort_combinator;
 
 fn build_signature(
     request: &AggregateFunctionRequest<'_>,
@@ -54,7 +53,6 @@ where C: CombinatorImpl
     pub(super) fn new(
         request: AggregateFunctionRequest<'a>,
         signature_args_type: &'a [DataType],
-        combinator_args_type: &'a [DataType],
         features: FunctionFeatures,
         combinator: C,
     ) -> Result<Self> {
@@ -68,7 +66,6 @@ where C: CombinatorImpl
         Ok(Self {
             request,
             signature_args_type,
-            combinator_args_type,
             features,
             combinator,
             arg_type: arg_type.remove_nullable(),
@@ -105,7 +102,6 @@ where C: CombinatorImpl
                     function_info.into(),
                 ));
             self.combinator.create_aggregate_function(
-                self.combinator_args_type,
                 signature,
                 self.features,
                 state,
@@ -117,7 +113,6 @@ where C: CombinatorImpl
                     function_info.into(),
                 ));
             self.combinator.create_aggregate_function(
-                self.combinator_args_type,
                 signature,
                 self.features,
                 state,
@@ -142,13 +137,8 @@ where C: CombinatorImpl
         let implementation =
             super::UnaryAggregateImplementation::new(super::UnaryOrNull::new(inner));
         let state = state.with_null_flag();
-        self.combinator.create_aggregate_function(
-            self.combinator_args_type,
-            signature,
-            self.features,
-            state,
-            implementation,
-        )
+        self.combinator
+            .create_aggregate_function(signature, self.features, state, implementation)
     }
 
     pub(crate) fn create_unary_or_null_with_impl<I, R, U>(
@@ -166,13 +156,8 @@ where C: CombinatorImpl
         let implementation =
             super::UnaryAggregateImplementation::new(super::UnaryOrNull::new(implementation));
         let state = state.with_null_flag();
-        self.combinator.create_aggregate_function(
-            self.combinator_args_type,
-            signature,
-            self.features,
-            state,
-            implementation,
-        )
+        self.combinator
+            .create_aggregate_function(signature, self.features, state, implementation)
     }
 
     pub(crate) fn create_unary_distinct_or_null<S, I, R>(
@@ -210,7 +195,6 @@ where C: CombinatorImpl
     pub(super) fn new(
         request: AggregateFunctionRequest<'a>,
         signature_args_type: &'a [DataType],
-        combinator_args_type: &'a [DataType],
         features: FunctionFeatures,
         combinator: C,
     ) -> Self {
@@ -222,7 +206,6 @@ where C: CombinatorImpl
         Self {
             request,
             signature_args_type,
-            combinator_args_type,
             features,
             combinator,
             args_type,
@@ -253,7 +236,6 @@ where C: CombinatorImpl
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
         debug_assert!(signature.order_by.is_empty());
         self.combinator.create_aggregate_function(
-            self.combinator_args_type,
             signature,
             self.features,
             state.with_null_flag(),
@@ -268,14 +250,12 @@ where C: CombinatorImpl
     pub(super) fn new(
         request: AggregateFunctionRequest<'a>,
         signature_args_type: &'a [DataType],
-        combinator_args_type: &'a [DataType],
         features: FunctionFeatures,
         combinator: C,
     ) -> Self {
         Self {
             request,
             signature_args_type,
-            combinator_args_type,
             features,
             combinator,
         }
@@ -304,13 +284,8 @@ where C: CombinatorImpl
     {
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
         debug_assert!(signature.order_by.is_empty());
-        self.combinator.create_aggregate_function(
-            self.combinator_args_type,
-            signature,
-            self.features,
-            state,
-            implementation,
-        )
+        self.combinator
+            .create_aggregate_function(signature, self.features, state, implementation)
     }
 
     pub(crate) fn create_ordered<I>(
@@ -323,26 +298,7 @@ where C: CombinatorImpl
         I: AggrImpl,
     {
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        if signature.order_by.is_empty() {
-            return self.combinator.create_aggregate_function(
-                self.combinator_args_type,
-                signature,
-                self.features,
-                state,
-                implementation,
-            );
-        }
-
-        let (input_types, order_by) =
-            sort_combinator::sort_runtime_inputs(self.combinator_args_type, &signature.order_by);
-        let state = sort_combinator::sort_state_description(&state);
-        let implementation = sort_combinator::AggregateSortImplementation::new(
-            implementation,
-            input_types,
-            order_by,
-        );
-        self.combinator.create_aggregate_function(
-            self.combinator_args_type,
+        self.combinator.create_ordered_aggregate_function(
             signature,
             self.features,
             state,
