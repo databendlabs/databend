@@ -376,7 +376,7 @@ pub(crate) fn select_scalar_segments(
         {
             continue;
         }
-        segment_stats.push((i, stats));
+        segment_stats.push((i, stats.min, stats.max));
         segments[i] = Some(SelectedReclusterSegment {
             loc: loc.clone(),
             info: compact_segment.clone(),
@@ -395,11 +395,11 @@ pub(crate) fn select_scalar_segments(
     let mut current_window: IndexSet<usize> = IndexSet::new();
     let mut current_window_max_depth = 0usize;
     let mut segment_points = BTreeMap::new();
-    for (i, stats) in &segment_stats {
+    for (i, min, max) in &segment_stats {
         let point: &mut (Vec<usize>, Vec<usize>) =
-            segment_points.entry(ScalarSlice(stats.min())).or_default();
+            segment_points.entry(ScalarSlice(min)).or_default();
         point.0.push(*i);
-        let point = segment_points.entry(ScalarSlice(stats.max())).or_default();
+        let point = segment_points.entry(ScalarSlice(max)).or_default();
         point.1.push(*i);
     }
 
