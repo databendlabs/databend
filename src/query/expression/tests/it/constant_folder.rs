@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::io::Write;
 use std::sync::Arc;
 
 use databend_common_expression::ConstantFolder;
@@ -44,6 +45,10 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::string::StringDomain;
+use databend_common_expression_test_support::parse_raw_expr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use goldenfile::Mint;
 
 fn bool_column(id: usize, display_name: &str) -> Expr<usize> {
     Expr::ColumnRef(ColumnRef {
@@ -208,49 +213,68 @@ fn fold(expr: &Expr<usize>) -> Expr<usize> {
     fold_with_registry(expr, &if_test_registry())
 }
 
-#[test]
-fn test_monotonic_nullable_domain_rejects_boundary_probe() {
-    let mut registry = FunctionRegistry::empty();
-    registry.register_passthrough_nullable_1_arg::<UInt64Type, UInt64Type, _>(
-        "identity",
-        |_, _| FunctionDomain::Full,
-        |value, _| value,
-    );
-    registry.properties.insert(
-        "identity".to_string(),
-        FunctionProperty::default().monotonicity(),
-    );
-
-    let data_type = DataType::Number(NumberDataType::UInt64).wrap_nullable();
-    let expr = databend_common_expression::type_check::check_function(
-        None,
-        "identity",
-        &[],
-        &[Expr::ColumnRef(ColumnRef {
-            span: None,
-            id: 0,
-            data_type,
-            display_name: "a".to_string(),
-        })],
-        &registry,
-    )
-    .unwrap();
-    let input_domain = Domain::Nullable(NullableDomain {
-        has_null: true,
-        value: Some(Box::new(Domain::Number(NumberDomain::UInt64(
-            SimpleDomain { min: 10, max: 20 },
-        )))),
-    });
-
+fn run_fold_case(
+    file: &mut impl Write,
+    text: &str,
+    columns: &[(&str, DataType)],
+    domain_overrides: &[(&str, Domain)],
+) {
+    let raw_expr = parse_raw_expr(text, columns, &BUILTIN_FUNCTIONS);
+    let expr =
+        databend_common_expression::type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+    let input_domains = columns
+        .iter()
+        .enumerate()
+        .map(|(index, (name, data_type))| {
+            let domain = domain_overrides
+                .iter()
+                .find(|(domain_name, _)| domain_name == name)
+                .map(|(_, domain)| domain.clone())
+                .unwrap_or_else(|| Domain::full(data_type));
+            (index, domain)
+        })
+        .collect::<HashMap<_, _>>();
     let (folded, output_domain) = ConstantFolder::fold_with_domain(
         Cow::Borrowed(&expr),
-        &HashMap::from([(0, input_domain)]),
+        &input_domains,
         &FunctionContext::default(),
-        &registry,
+        &BUILTIN_FUNCTIONS,
     );
 
-    assert_eq!(folded.as_ref(), &expr);
-    assert_eq!(output_domain, None);
+    writeln!(file, "expression: {text}").unwrap();
+    writeln!(file, "checked:    {}", expr.sql_display()).unwrap();
+    writeln!(file, "folded:     {}", folded.sql_display()).unwrap();
+    writeln!(
+        file,
+        "domain:     {}\n",
+        output_domain
+            .map(|domain| domain.to_string())
+            .unwrap_or_else(|| "Unknown".to_string())
+    )
+    .unwrap();
+}
+
+#[test]
+fn test_constant_folder_golden() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("constant_folder.txt").unwrap();
+    let columns = &[("value", DataType::String.wrap_nullable())];
+
+    for has_null in [false, true] {
+        let domains = &[(
+            "value",
+            Domain::Nullable(NullableDomain {
+                has_null,
+                value: Some(Box::new(Domain::String(StringDomain {
+                    min: "2007-01-01".to_string(),
+                    max: Some("2007-01-02".to_string()),
+                }))),
+            }),
+        )];
+
+        run_fold_case(&mut file, "to_timestamp(value)", columns, domains);
+        run_fold_case(&mut file, "CAST(value AS TIMESTAMP NULL)", columns, domains);
+    }
 }
 
 #[test]

@@ -1,0 +1,20 @@
+expression: to_timestamp(value)
+checked:    to_timestamp(value)
+folded:     to_timestamp(value)
+domain:     {1167609600000000..=1167696000000000}
+
+expression: CAST(value AS TIMESTAMP NULL)
+checked:    CAST(value AS Timestamp NULL)
+folded:     CAST(value AS Timestamp NULL)
+domain:     {1167609600000000..=1167696000000000}
+
+expression: to_timestamp(value)
+checked:    to_timestamp(value)
+folded:     to_timestamp(value)
+domain:     {1167609600000000..=1167696000000000} ∪ {NULL}
+
+expression: CAST(value AS TIMESTAMP NULL)
+checked:    CAST(value AS Timestamp NULL)
+folded:     CAST(value AS Timestamp NULL)
+domain:     {1167609600000000..=1167696000000000} ∪ {NULL}
+

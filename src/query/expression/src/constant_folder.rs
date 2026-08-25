@@ -910,19 +910,32 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     match (res, is_monotonic) {
                         (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
                             let domain = domains.first().unwrap();
-                            if args_expr[0].as_ref().data_type().is_nullable_or_null() {
-                                return None;
-                            }
+                            let (value_domain, has_null) = match domain {
+                                Domain::Nullable(NullableDomain { has_null, value }) => {
+                                    (value.as_deref(), *has_null)
+                                }
+                                domain => (Some(domain), false),
+                            };
 
-                            let (min, max) = domain.to_minmax();
-                            if min.is_null() || max.is_null() {
+                            let mut boundaries = Vec::with_capacity(3);
+                            if let Some(value_domain) = value_domain {
+                                let (min, max) = value_domain.to_minmax();
+                                if min.is_null() || max.is_null() {
+                                    return None;
+                                }
+                                boundaries.extend([min, max]);
+                            }
+                            if has_null {
+                                boundaries.push(Scalar::Null);
+                            }
+                            if boundaries.is_empty() {
                                 return None;
                             }
 
                             {
                                 let mut ctx = EvalContext {
                                     generics: &call.generics,
-                                    num_rows: 2,
+                                    num_rows: boundaries.len(),
                                     validity: None,
                                     errors: None,
                                     func_ctx: self.func_ctx,
@@ -931,10 +944,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                 };
                                 let mut builder = ColumnBuilder::with_capacity(
                                     args_expr[0].as_ref().data_type(),
-                                    2,
+                                    boundaries.len(),
                                 );
-                                builder.push(min.as_ref());
-                                builder.push(max.as_ref());
+                                for boundary in &boundaries {
+                                    builder.push(boundary.as_ref());
+                                }
 
                                 let input = Value::Column(builder.build());
                                 let result = eval.eval(&[input], &mut ctx);
@@ -946,23 +960,41 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                     // min, max: String("2024-09-02 00:00") String("2024-09-02 00:0�")
                                     // to_date(s) > to_date('2024-01-1')
                                     let col = result.as_column().unwrap();
-                                    let d = if ctx.has_error(0) || ctx.has_error(1) {
-                                        let (full_min, full_max) =
-                                            Domain::full(&call.return_type).to_minmax();
+                                    let d = if boundaries
+                                        .iter()
+                                        .enumerate()
+                                        .any(|(index, _)| ctx.has_error(index))
+                                    {
+                                        // NULL is not an ordered boundary. If evaluating it fails,
+                                        // the function's domain is not known.
+                                        if has_null && ctx.has_error(boundaries.len() - 1) {
+                                            return None;
+                                        }
+
+                                        let full_domain = Domain::full(&call.return_type);
+                                        let full_value_domain = match &full_domain {
+                                            Domain::Nullable(NullableDomain { value, .. }) => {
+                                                value.as_deref()?
+                                            }
+                                            domain => domain,
+                                        };
+                                        let (full_min, full_max) = full_value_domain.to_minmax();
                                         if full_min.is_null() || full_max.is_null() {
                                             return None;
                                         }
 
-                                        let mut builder =
-                                            ColumnBuilder::with_capacity(&call.return_type, 2);
+                                        let mut builder = ColumnBuilder::with_capacity(
+                                            &call.return_type,
+                                            boundaries.len(),
+                                        );
 
-                                        for (i, (v, f)) in
-                                            col.iter().zip([full_min, full_max].iter()).enumerate()
-                                        {
-                                            if ctx.has_error(i) {
-                                                builder.push(f.as_ref());
+                                        for (index, value) in col.iter().enumerate() {
+                                            if ctx.has_error(index) {
+                                                let fallback =
+                                                    if index == 0 { &full_min } else { &full_max };
+                                                builder.push(fallback.as_ref());
                                             } else {
-                                                builder.push(v);
+                                                builder.push(value);
                                             }
                                         }
                                         builder.build().domain()
