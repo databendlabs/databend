@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
+mod hash_partition_stream;
+mod partition_stream;
 
-pub trait FlightScatter: Sync + Send {
-    fn name(&self) -> &'static str;
-
-    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>>;
-}
+pub use hash_partition_stream::create_hash_partition_streams;
+pub use partition_stream::PartitionStream;
+pub use partition_stream::PartitionedBlock;
+pub use partition_stream::pre_partitioned_blocks;

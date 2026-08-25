@@ -390,26 +390,6 @@ impl<P: PartitionStream> AggregateSpiller<P> {
     }
 }
 
-pub struct AggregateSpillReader {
-    read_setting: ReadSettings,
-    data_schema: DataSchemaRef,
-}
-
-impl AggregateSpillReader {
-    pub fn try_create(ctx: Arc<QueryContext>, schema: DataSchemaRef) -> Result<Self> {
-        let table_ctx: Arc<dyn TableContext> = ctx;
-        let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
-        Ok(Self {
-            read_setting,
-            data_schema: schema,
-        })
-    }
-
-    pub fn restore(&self, payload: SpilledPayload) -> Result<SerializedPayload> {
-        restore_payload(self.read_setting, payload, &self.data_schema)
-    }
-}
-
 fn restore_payload(
     read_setting: ReadSettings,
     payload: SpilledPayload,
@@ -454,8 +434,6 @@ fn restore_payload(
         Ok(SerializedPayload {
             bucket,
             data_block: block,
-            // this field is no longer used in new aggregate
-            max_partition_count: 0,
         })
     } else {
         Err(ErrorCode::Internal("read empty block from final aggregate"))
@@ -493,13 +471,19 @@ mod tests {
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_aggregate_payload_writers_lazy_init() -> Result<()> {
+    async fn test_aggregate_payload_writers_lazy_init_and_batches() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
 
         let partition_count = 4;
-        let partition_stream = SharedPartitionStream::new(1, 1024, 1024 * 1024, partition_count);
-        let mut spiller = AggregateSpiller::try_create(
+        let partition_stream = SharedPartitionStream::new(2, 1024, 1024 * 1024, partition_count);
+        let mut first_spiller = AggregateSpiller::try_create(
+            ctx.clone(),
+            partition_count,
+            Arc::new(DataSchema::empty()),
+            partition_stream.clone(),
+        )?;
+        let mut second_spiller = AggregateSpiller::try_create(
             ctx.clone(),
             partition_count,
             Arc::new(DataSchema::empty()),
@@ -508,10 +492,12 @@ mod tests {
 
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2, 3])]);
 
-        spiller.spill(0, block.clone())?;
-        spiller.spill(2, block)?;
+        first_spiller.spill(0, block.clone())?;
+        second_spiller.spill(0, block.clone())?;
+        second_spiller.spill(2, block)?;
 
-        let payloads = spiller.spill_finish()?;
+        assert!(first_spiller.spill_finish()?.is_empty());
+        let payloads = second_spiller.spill_finish()?;
 
         assert_eq!(payloads.len(), 2);
 
@@ -521,6 +507,15 @@ mod tests {
         let buckets: HashSet<_> = payloads.iter().map(|p| p.bucket).collect();
         assert!(buckets.contains(&0));
         assert!(buckets.contains(&2));
+        assert_eq!(
+            payloads
+                .iter()
+                .find(|payload| payload.bucket == 0)
+                .unwrap()
+                .row_group
+                .num_rows(),
+            6
+        );
 
         Ok(())
     }

@@ -293,6 +293,7 @@ impl ReplaceInterpreter {
                 kind: FragmentKind::Expansive,
                 keys: vec![],
                 allow_adjust_parallelism: true,
+                destination_parallelism: None,
                 ignore_exchange: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             });
@@ -302,6 +303,7 @@ impl ReplaceInterpreter {
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
+                destination_parallelism: None,
                 ignore_exchange: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             });
@@ -361,6 +363,7 @@ impl ReplaceInterpreter {
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
+                destination_parallelism: None,
                 ignore_exchange: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             });

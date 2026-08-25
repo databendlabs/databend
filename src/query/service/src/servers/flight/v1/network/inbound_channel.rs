@@ -32,6 +32,8 @@ use databend_common_io::prelude::BinaryRead;
 use databend_common_io::prelude::bincode_deserialize_from_stream;
 use tokio::sync::Semaphore;
 
+use super::DefaultExchangeDataCodec;
+use super::ExchangeDataCodec;
 use super::inbound_quota::QueueItem;
 use super::inbound_quota::SubQueue;
 
@@ -78,6 +80,15 @@ impl NetworkInboundChannelSet {
 
     pub fn create_receiver(&self, t_idx: usize, schema: &DataSchemaRef) -> Arc<dyn InboundChannel> {
         NetworkInboundReceiver::create(schema, self.channels[t_idx].clone())
+    }
+
+    pub fn create_receiver_with_codec(
+        &self,
+        t_idx: usize,
+        schema: &DataSchemaRef,
+        codec: Arc<dyn ExchangeDataCodec>,
+    ) -> Arc<dyn InboundChannel> {
+        NetworkInboundReceiver::create_with_codec(schema, self.channels[t_idx].clone(), codec)
     }
 }
 
@@ -182,6 +193,7 @@ pub struct NetworkInboundReceiver {
     channel: Arc<NetworkInboundChannel>,
     schema: DataSchemaRef,
     arrow_schema: Arc<ArrowSchema>,
+    codec: Arc<dyn ExchangeDataCodec>,
 }
 
 impl NetworkInboundReceiver {
@@ -189,10 +201,19 @@ impl NetworkInboundReceiver {
         schema: &DataSchemaRef,
         channel: Arc<NetworkInboundChannel>,
     ) -> Arc<dyn InboundChannel> {
+        Self::create_with_codec(schema, channel, DefaultExchangeDataCodec::create())
+    }
+
+    pub fn create_with_codec(
+        schema: &DataSchemaRef,
+        channel: Arc<NetworkInboundChannel>,
+        codec: Arc<dyn ExchangeDataCodec>,
+    ) -> Arc<dyn InboundChannel> {
         Arc::new(Self {
             channel,
             arrow_schema: Arc::new(ArrowSchema::from(schema.as_ref())),
             schema: schema.clone(),
+            codec,
         })
     }
 }
@@ -210,16 +231,18 @@ impl InboundChannel for NetworkInboundReceiver {
     }
 
     async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode> {
-        match self.channel.recv_raw().await {
-            None => Ok(None),
-            Some(QueueItem::LocalData(v)) => Ok(Some(v.into_data())),
-            Some(QueueItem::RemoteData(r)) => {
-                let flight_data = strip_tid(r.into_data());
-                Ok(Some(deserialize_flight_data(
-                    flight_data,
-                    &self.schema,
-                    &self.arrow_schema,
-                )?))
+        loop {
+            match self.channel.recv_raw().await {
+                None => return Ok(None),
+                Some(QueueItem::LocalData(v)) => return Ok(Some(v.into_data())),
+                Some(QueueItem::RemoteData(r)) => {
+                    let flight_data = strip_tid(r.into_data());
+                    let block =
+                        deserialize_flight_data(flight_data, &self.schema, &self.arrow_schema)?;
+                    if let Some(block) = self.codec.decode(block)? {
+                        return Ok(Some(block));
+                    }
+                }
             }
         }
     }
@@ -365,12 +388,23 @@ pub(crate) fn deserialize_flight_data(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+
     use arrow_flight::FlightData;
+    use arrow_ipc::writer::IpcWriteOptions;
     use bytes::BufMut;
     use bytes::Bytes;
     use bytes::BytesMut;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::ArgType;
+    use databend_common_expression::types::Int64Type;
 
     use super::*;
+    use crate::servers::flight::v1::network::outbound_channel::serialize_block;
 
     const BATCH_MARKER: u8 = 0x02;
 
@@ -477,5 +511,91 @@ mod tests {
             let restored_tid = u16::from_le_bytes([item.app_metadata[0], item.app_metadata[1]]);
             assert_eq!(restored_tid, tid);
         }
+    }
+
+    struct RejectRemoteCodec;
+
+    impl ExchangeDataCodec for RejectRemoteCodec {
+        fn encode(
+            &self,
+            _block: DataBlock,
+        ) -> databend_common_exception::Result<Option<DataBlock>> {
+            panic!("local channel must not encode")
+        }
+
+        fn decode(
+            &self,
+            _block: DataBlock,
+        ) -> databend_common_exception::Result<Option<DataBlock>> {
+            panic!("local channel must not decode")
+        }
+    }
+
+    struct RecordingDecodeCodec {
+        called: Arc<AtomicBool>,
+    }
+
+    impl ExchangeDataCodec for RecordingDecodeCodec {
+        fn encode(
+            &self,
+            _block: DataBlock,
+        ) -> databend_common_exception::Result<Option<DataBlock>> {
+            panic!("inbound channel never encodes")
+        }
+
+        fn decode(&self, block: DataBlock) -> databend_common_exception::Result<Option<DataBlock>> {
+            self.called.store(true, Ordering::SeqCst);
+            Ok(Some(block))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_local_channel_bypasses_exchange_codec() {
+        let channel_set = NetworkInboundChannelSet::new(1);
+        let channel = crate::servers::flight::v1::network::create_local_channels(&channel_set)
+            .pop()
+            .unwrap();
+        let schema =
+            DataSchemaRefExt::create(vec![DataField::new("value", Int64Type::data_type())]);
+        let receiver =
+            channel_set.create_receiver_with_codec(0, &schema, Arc::new(RejectRemoteCodec));
+        let block = DataBlock::new_from_columns(vec![Int64Type::from_data(vec![1, 2, 3])]);
+
+        channel.add_block(block).await.unwrap();
+        let received = receiver.recv().await.unwrap().unwrap();
+        assert_eq!(received.num_rows(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_remote_channel_decodes_after_arrow_flight() {
+        let channel_set = NetworkInboundChannelSet::new(1);
+        let sender = NetworkInboundSender::new(&channel_set, 1024 * 1024);
+        let schema =
+            DataSchemaRefExt::create(vec![DataField::new("value", Int64Type::data_type())]);
+        let called = Arc::new(AtomicBool::new(false));
+        let receiver = channel_set.create_receiver_with_codec(
+            0,
+            &schema,
+            Arc::new(RecordingDecodeCodec {
+                called: called.clone(),
+            }),
+        );
+        let block = DataBlock::new_from_columns(vec![Int64Type::from_data(vec![1, 2, 3])]);
+        let mut packets = serialize_block(block, &IpcWriteOptions::default(), None).unwrap();
+        assert_eq!(packets.len(), 1);
+        let packet = packets.pop().unwrap();
+        let mut metadata = 0_u16.to_le_bytes().to_vec();
+        metadata.extend_from_slice(&packet.app_metadata);
+        sender
+            .add_data(FlightData {
+                app_metadata: metadata.into(),
+                ..packet
+            })
+            .await
+            .unwrap();
+
+        let received = receiver.recv().await.unwrap().unwrap();
+        assert!(called.load(Ordering::SeqCst));
+        assert_eq!(received.num_rows(), 3);
     }
 }

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate_exchange_codec;
 mod aggregate_exchange_injector;
 mod aggregate_meta;
 mod aggregate_spiller;
 mod aggregator_params;
 mod build_partition_bucket;
-mod row_shuffle_reader_transform;
 mod serde;
 mod statistics;
 mod transform_aggregate_expand;
@@ -25,6 +25,7 @@ mod transform_aggregate_final;
 mod transform_aggregate_partial;
 mod transform_single_key;
 
+pub use aggregate_exchange_codec::AggregateExchangeDataCodec;
 pub use aggregate_exchange_injector::AggregateInjector;
 pub use aggregate_meta::*;
 pub use aggregate_spiller::*;
@@ -33,7 +34,6 @@ pub use build_partition_bucket::build_partition_bucket;
 pub use databend_common_expression::aggregate::AggregatePayload;
 pub use databend_common_expression::aggregate::SerializedPayload;
 pub use databend_query_script_udf_support::create_udaf_script_function;
-pub use row_shuffle_reader_transform::RowShuffleReaderTransform;
 pub use transform_aggregate_expand::TransformExpandGroupingSets;
 pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;

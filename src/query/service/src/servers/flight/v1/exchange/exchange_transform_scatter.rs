@@ -25,14 +25,14 @@ use super::exchange_transform_shuffle::ExchangeShuffleMeta;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 pub struct ScatterTransform {
-    scatter: Arc<Box<dyn FlightScatter>>,
+    scatter: Arc<dyn FlightScatter>,
 }
 
 impl ScatterTransform {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        scatter: Arc<Box<dyn FlightScatter>>,
+        scatter: Arc<dyn FlightScatter>,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(input, output, ScatterTransform {
             scatter,

@@ -18,11 +18,12 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::RemoteExpr;
 
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::ExchangeDataCodec;
+use crate::servers::flight::v1::partition::PartitionStream;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 #[derive(Clone)]
@@ -33,7 +34,7 @@ pub struct ShuffleExchangeParams {
     pub schema: DataSchemaRef,
     pub destination_ids: Vec<String>,
     pub destination_channels: Vec<(String, Vec<String>)>,
-    pub shuffle_scatter: Arc<Box<dyn FlightScatter>>,
+    pub shuffle_scatter: Arc<dyn FlightScatter>,
     pub exchange_injector: Arc<dyn ExchangeInjector>,
     pub allow_adjust_parallelism: bool,
 }
@@ -47,7 +48,6 @@ pub struct MergeExchangeParams {
     pub schema: DataSchemaRef,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
-    pub exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
 #[derive(Clone)]
@@ -59,14 +59,29 @@ pub struct BroadcastExchangeParams {
     pub destination_channels: Vec<(String, Vec<String>)>,
 }
 
-#[derive(Clone)]
 pub struct GlobalExchangeParams {
     pub query_id: String,
     pub executor_id: String,
     pub schema: DataSchemaRef,
     pub exchange_id: String,
-    pub shuffle_keys: Vec<RemoteExpr>,
     pub destination_channels: Vec<(String, Vec<String>)>,
+    pub partition_streams: Vec<Box<dyn PartitionStream>>,
+    pub codec: Arc<dyn ExchangeDataCodec>,
+}
+
+impl GlobalExchangeParams {
+    pub fn take_partition_streams(
+        &mut self,
+        expected: usize,
+    ) -> Result<Vec<Box<dyn PartitionStream>>> {
+        if self.partition_streams.len() != expected {
+            return Err(ErrorCode::Internal(format!(
+                "Global shuffle expected {expected} partition streams, got {}",
+                self.partition_streams.len()
+            )));
+        }
+        Ok(std::mem::take(&mut self.partition_streams))
+    }
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -78,21 +93,12 @@ pub enum ExchangeParams {
 }
 
 impl ExchangeParams {
-    pub fn get_schema(&self) -> DataSchemaRef {
+    pub fn get_query_id(&self) -> &str {
         match self {
-            ExchangeParams::NodeShuffleExchange(exchange) => exchange.schema.clone(),
-            ExchangeParams::MergeExchange(exchange) => exchange.schema.clone(),
-            ExchangeParams::BroadcastExchange(exchange) => exchange.schema.clone(),
-            ExchangeParams::GlobalShuffleExchange(exchange) => exchange.schema.clone(),
-        }
-    }
-
-    pub fn get_query_id(&self) -> String {
-        match self {
-            ExchangeParams::NodeShuffleExchange(exchange) => exchange.query_id.clone(),
-            ExchangeParams::MergeExchange(exchange) => exchange.query_id.clone(),
-            ExchangeParams::BroadcastExchange(exchange) => exchange.query_id.clone(),
-            ExchangeParams::GlobalShuffleExchange(exchange) => exchange.query_id.clone(),
+            ExchangeParams::NodeShuffleExchange(exchange) => &exchange.query_id,
+            ExchangeParams::MergeExchange(exchange) => &exchange.query_id,
+            ExchangeParams::BroadcastExchange(exchange) => &exchange.query_id,
+            ExchangeParams::GlobalShuffleExchange(exchange) => &exchange.query_id,
         }
     }
 
@@ -224,7 +230,6 @@ impl ShuffleExchangeParams {
                         destination.clone(),
                         FlightSender::create(async_channel::bounded(1).0),
                     ));
-
                     continue;
                 }
 
@@ -234,7 +239,6 @@ impl ShuffleExchangeParams {
                         destination, self.fragment_id
                     )));
                 };
-
                 exchanges.extend(senders.into_iter().map(|x| (destination.clone(), x)));
             }
         }
@@ -257,7 +261,7 @@ impl ShuffleExchangeParams {
                             self.executor_id, self.fragment_id
                         )));
                     };
-                    exchanges.extend(receivers.into_iter());
+                    exchanges.extend(receivers);
                 }
             }
         }

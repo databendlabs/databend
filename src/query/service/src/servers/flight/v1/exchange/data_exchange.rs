@@ -20,7 +20,7 @@ pub enum DataExchange {
     Merge(MergeExchange),
     Broadcast(BroadcastExchange),
     NodeToNodeExchange(NodeToNodeExchange),
-    GlobalShuffleExchange(NodeToNodeExchange),
+    GlobalShuffleExchange(GlobalShuffleExchange),
 }
 
 impl DataExchange {
@@ -38,7 +38,11 @@ impl DataExchange {
             DataExchange::Merge(exchange) => vec![exchange.destination_id.clone()],
             DataExchange::Broadcast(exchange) => exchange.destination_ids.clone(),
             DataExchange::NodeToNodeExchange(exchange) => exchange.destination_ids.clone(),
-            DataExchange::GlobalShuffleExchange(exchange) => exchange.destination_ids.clone(),
+            DataExchange::GlobalShuffleExchange(exchange) => exchange
+                .destination_channels
+                .iter()
+                .map(|(destination, _)| destination.clone())
+                .collect(),
         }
     }
 
@@ -54,8 +58,16 @@ impl DataExchange {
 
                 vec![]
             }
-            DataExchange::NodeToNodeExchange(exchange)
-            | DataExchange::GlobalShuffleExchange(exchange) => {
+            DataExchange::NodeToNodeExchange(exchange) => {
+                for (to, channels) in &exchange.destination_channels {
+                    if to == destination {
+                        return channels.clone();
+                    }
+                }
+
+                vec![]
+            }
+            DataExchange::GlobalShuffleExchange(exchange) => {
                 for (to, channels) in &exchange.destination_channels {
                     if to == destination {
                         return channels.clone();
@@ -74,10 +86,6 @@ impl DataExchange {
             DataExchange::Broadcast(_) | DataExchange::GlobalShuffleExchange(_)
         )
     }
-
-    pub fn get_parallel(&self) -> usize {
-        1
-    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -87,6 +95,13 @@ pub struct NodeToNodeExchange {
     pub shuffle_keys: Vec<RemoteExpr>,
     pub destination_channels: Vec<(String, Vec<String>)>,
     pub allow_adjust_parallelism: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GlobalShuffleExchange {
+    pub id: String,
+    pub shuffle_keys: Vec<RemoteExpr>,
+    pub destination_channels: Vec<(String, Vec<String>)>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
