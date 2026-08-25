@@ -21,7 +21,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
-use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table::Table;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -40,7 +39,6 @@ use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
-use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -58,10 +56,10 @@ use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
 use databend_common_sql::plans::TagSetObject;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_users::MGET_OWNERSHIP_BATCH_SIZE;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
-use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -87,10 +85,26 @@ pub struct PrivilegeAccess {
 #[derive(Default)]
 struct QueryAccessCache {
     database_ids: Mutex<HashMap<(String, String), u64>>,
-    ownership_checks: Mutex<HashMap<(OwnershipObject, bool), bool>>,
+    /// Ownership answers computed against all effective roles.
+    ownership_checks: Mutex<HashMap<OwnershipObject, bool>>,
+    /// Ownership answers restricted to the current role. Kept in its own map, rather than
+    /// widening the key to `(OwnershipObject, bool)`, so a lookup can borrow the object
+    /// instead of cloning one for every probe.
+    current_role_ownership_checks: Mutex<HashMap<OwnershipObject, bool>>,
 }
 
 impl QueryAccessCache {
+    fn ownership_map(
+        &self,
+        check_current_role_only: bool,
+    ) -> &Mutex<HashMap<OwnershipObject, bool>> {
+        if check_current_role_only {
+            &self.current_role_ownership_checks
+        } else {
+            &self.ownership_checks
+        }
+    }
+
     async fn get_or_load_database_id<F, Fut>(
         &self,
         catalog_name: &str,
@@ -121,13 +135,14 @@ impl QueryAccessCache {
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<bool>>,
     {
-        let key = (object.clone(), check_current_role_only);
-        if let Some(has_ownership) = self.ownership_checks.lock().get(&key) {
-            return Ok(*has_ownership);
+        if let Some(has_ownership) = self.ownership_check(object, check_current_role_only) {
+            return Ok(has_ownership);
         }
 
         let has_ownership = load().await?;
-        self.ownership_checks.lock().insert(key, has_ownership);
+        self.ownership_map(check_current_role_only)
+            .lock()
+            .insert(object.clone(), has_ownership);
         Ok(has_ownership)
     }
 
@@ -136,18 +151,15 @@ impl QueryAccessCache {
         object: &OwnershipObject,
         check_current_role_only: bool,
     ) -> Option<bool> {
-        self.ownership_checks
+        self.ownership_map(check_current_role_only)
             .lock()
-            .get(&(object.clone(), check_current_role_only))
+            .get(object)
             .copied()
     }
 
+    /// Publish prefetched answers, which are always computed against all effective roles.
     fn insert_ownership_checks(&self, checks: impl IntoIterator<Item = (OwnershipObject, bool)>) {
-        self.ownership_checks.lock().extend(
-            checks
-                .into_iter()
-                .map(|(object, has_ownership)| ((object, false), has_ownership)),
-        );
+        self.ownership_checks.lock().extend(checks);
     }
 }
 
@@ -159,49 +171,44 @@ enum ObjectId {
 // table functions that need `Super` privilege
 const SYSTEM_TABLE_FUNCTIONS: [&str; 2] = ["fuse_amend", "set_cache_capacity"];
 
-/// Bound each ownership MGet to avoid oversized Meta RPC payloads for queries
-/// that reference many tables.
-const MGET_OWNERSHIP_BATCH_SIZE: usize = 256;
-
-type TableAccessKey<'a> = (&'a str, &'a str, &'a str, u64);
-
-fn mark_table_access_checked<'a>(
-    checked_tables: &mut HashSet<TableAccessKey<'a>>,
-    catalog: &'a str,
-    database: &'a str,
-    table: &'a str,
-    table_id: u64,
-) -> bool {
-    checked_tables.insert((catalog, database, table, table_id))
-}
-
-fn should_prefetch_ownerships(session_type: &SessionType) -> bool {
-    !matches!(session_type, SessionType::Local)
+/// Whether `db_name` names a schema whose ownership is never consulted.
+///
+/// Must agree with the `system` skip in [`PrivilegeAccess::convert_to_owner_object`], which
+/// compares case-insensitively; prefetching an object that `convert_to_owner_object` then
+/// refuses to look up would issue Meta requests for entries nothing ever reads.
+fn is_ownership_exempt_schema(db_name: &str) -> bool {
+    db_name.eq_ignore_ascii_case("system") || db_name.eq_ignore_ascii_case("information_schema")
 }
 
 #[async_trait::async_trait]
 trait OwnershipPrefetchApi: Send + Sync {
-    async fn mget_ownerships(
+    /// Deliberately named apart from [`UserApiProvider::mget_ownerships`]: an identically
+    /// named trait method would let `self.mget_ownerships(..)` inside the impl resolve back
+    /// to the trait and recurse forever.
+    async fn prefetch_mget_ownerships(
         &self,
         tenant: &Tenant,
         objects: &[OwnershipObject],
     ) -> Result<Vec<Option<OwnershipInfo>>>;
 
-    async fn exists_role(&self, tenant: &Tenant, role: String) -> Result<bool>;
+    /// Whether `role` still exists, matching what [`UserApiProvider::get_ownership`] checks
+    /// before attributing an object to `account_admin`. See
+    /// [`OwnershipPrefetchApi::prefetch_mget_ownerships`] for the naming rationale.
+    async fn prefetch_role_exists(&self, tenant: &Tenant, role: &str) -> Result<bool>;
 }
 
 #[async_trait::async_trait]
 impl OwnershipPrefetchApi for UserApiProvider {
-    async fn mget_ownerships(
+    async fn prefetch_mget_ownerships(
         &self,
         tenant: &Tenant,
         objects: &[OwnershipObject],
     ) -> Result<Vec<Option<OwnershipInfo>>> {
-        UserApiProvider::mget_ownerships(self, tenant, objects).await
+        self.mget_ownerships(tenant, objects).await
     }
 
-    async fn exists_role(&self, tenant: &Tenant, role: String) -> Result<bool> {
-        UserApiProvider::exists_role(self, tenant, role).await
+    async fn prefetch_role_exists(&self, tenant: &Tenant, role: &str) -> Result<bool> {
+        self.exists_role(tenant, role.to_string()).await
     }
 }
 
@@ -220,55 +227,60 @@ async fn prefetch_ownerships_with_api(
         }
     }
 
+    // An object with no ownership record, or one owned by a role that no longer exists, falls
+    // back to account_admin. If account_admin is not effective, that fallback can only answer
+    // `false`, which makes the role-existence lookups below unable to change any outcome.
+    let admin_is_effective = effective_role_names.contains(BUILTIN_ROLE_ACCOUNT_ADMIN);
+
     let mut role_exists = HashMap::new();
-    for objects in unique_objects.chunks(MGET_OWNERSHIP_BATCH_SIZE) {
-        let ownerships = user_api.mget_ownerships(tenant, objects).await?;
-        if ownerships.len() != objects.len() {
+    // Collect every chunk's answers before publishing them, so a failure part way through
+    // leaves the cache untouched instead of half populated.
+    let mut checks = Vec::with_capacity(unique_objects.len());
+    for batch in unique_objects.chunks(MGET_OWNERSHIP_BATCH_SIZE) {
+        let ownerships = user_api.prefetch_mget_ownerships(tenant, batch).await?;
+        if ownerships.len() != batch.len() {
             return Err(ErrorCode::Internal(format!(
                 "ownership MGet returned {} results for {} objects",
                 ownerships.len(),
-                objects.len()
+                batch.len()
             )));
         }
 
-        let mut checks = Vec::with_capacity(objects.len());
-        for (object, ownership) in objects.iter().cloned().zip(ownerships) {
-            let owner_role = match ownership {
+        for (object, ownership) in batch.iter().zip(ownerships) {
+            // `mget_ownerships` maps results positionally onto keys built from `batch`, so a
+            // record's identity comes from its position. `owner.object` is deliberately not
+            // consulted, matching `UserApiProvider::get_ownership`: a table key omits db_id, so
+            // a stored value can legitimately disagree with the object that was requested.
+            let has_ownership = match ownership {
+                None => admin_is_effective,
                 Some(owner) => {
-                    // Compare encoded keys rather than full objects. Table ownership keys
-                    // intentionally omit db_id, so OwnershipInfo may retain the old db_id after
-                    // a legacy or lower-level cross-database rename while still belonging to the
-                    // requested key.
-                    let requested_key =
-                        TenantOwnershipObjectIdent::new(tenant, object.clone()).to_string_key();
-                    let returned_key =
-                        TenantOwnershipObjectIdent::new(tenant, owner.object.clone())
-                            .to_string_key();
-                    if returned_key != requested_key {
-                        return Err(ErrorCode::Internal(format!(
-                            "ownership MGet returned key {returned_key} for requested key {requested_key}"
-                        )));
-                    }
-                    let exists = match role_exists.get(&owner.role) {
-                        Some(exists) => *exists,
-                        None => {
-                            let exists = user_api.exists_role(tenant, owner.role.clone()).await?;
-                            role_exists.insert(owner.role.clone(), exists);
-                            exists
-                        }
-                    };
-                    if exists {
-                        owner.role
+                    let owner_is_effective = effective_role_names.contains(&owner.role);
+                    if owner_is_effective == admin_is_effective {
+                        // The recorded owner and the account_admin fallback lead to the same
+                        // answer, so whether that role still exists cannot change it.
+                        owner_is_effective
                     } else {
-                        BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()
+                        let exists = match role_exists.get(&owner.role) {
+                            Some(exists) => *exists,
+                            None => {
+                                let exists =
+                                    user_api.prefetch_role_exists(tenant, &owner.role).await?;
+                                role_exists.insert(owner.role.clone(), exists);
+                                exists
+                            }
+                        };
+                        if exists {
+                            owner_is_effective
+                        } else {
+                            admin_is_effective
+                        }
                     }
                 }
-                None => BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
             };
-            checks.push((object, effective_role_names.contains(&owner_role)));
+            checks.push((object.clone(), has_ownership));
         }
-        cache.insert_ownership_checks(checks);
     }
+    cache.insert_ownership_checks(checks);
     Ok(())
 }
 
@@ -318,7 +330,9 @@ impl PrivilegeAccess {
         }
 
         let session = self.ctx.get_current_session();
-        if !should_prefetch_ownerships(&session.get_type()) {
+        // Such a session answers every ownership check `true` without consulting the owner,
+        // so prefetched answers would never be read.
+        if session.bypasses_ownership_checks() {
             return Ok(());
         }
 
@@ -1824,9 +1838,13 @@ impl AccessChecker for PrivilegeAccess {
                 }
 
                 let metadata = metadata.read().clone();
+                // Warm the ownership cache for the tables the loop below will check. This is a
+                // pure optimization: every object gathered here is re-derived by the checking
+                // loop, so anything skipped only costs an extra round trip later. Errors while
+                // gathering are therefore swallowed rather than propagated - the checking loop
+                // reports them with the user-facing handling each object type expects.
                 let mut ownership_objects = Vec::new();
                 let mut prepared_ownerships = HashSet::new();
-                let mut prepared_tables = HashSet::new();
                 for table in metadata.tables() {
                     if table.is_source_of_view()
                         || table.is_source_of_stage()
@@ -1839,31 +1857,24 @@ impl AccessChecker for PrivilegeAccess {
                     let database = table.database();
                     let table_name = table.name();
                     let catalog_table = table.table();
-                    let table_id = catalog_table.get_id();
-                    if !mark_table_access_checked(
-                        &mut prepared_tables,
-                        catalog_name,
-                        database,
-                        table_name,
-                        table_id,
-                    ) {
-                        continue;
-                    }
-
-                    if database == "information_schema"
-                        || database == "system"
+                    if is_ownership_exempt_schema(database)
                         || is_materialized_view_engine(catalog_table.engine())
                     {
                         continue;
                     }
 
-                    let catalog = self.ctx.get_catalog(catalog_name).await?;
+                    let Ok(catalog) = self.ctx.get_catalog(catalog_name).await else {
+                        continue;
+                    };
                     if catalog.exists_table_function(table_name) {
                         continue;
                     }
-                    let db_id = self
+                    let Ok(db_id) = self
                         .get_database_id(&tenant, catalog_name, &catalog, database)
-                        .await?;
+                        .await
+                    else {
+                        continue;
+                    };
                     let database_owner = OwnershipObject::Database {
                         catalog_name: catalog_name.to_string(),
                         db_id,
@@ -1874,7 +1885,7 @@ impl AccessChecker for PrivilegeAccess {
                     let table_owner = OwnershipObject::Table {
                         catalog_name: catalog_name.to_string(),
                         db_id,
-                        table_id,
+                        table_id: catalog_table.get_id(),
                     };
                     if prepared_ownerships.insert(table_owner.clone()) {
                         ownership_objects.push(table_owner);
@@ -1909,13 +1920,16 @@ impl AccessChecker for PrivilegeAccess {
                         let database = table.database();
                         let table_name = table.name();
                         let catalog_table = table.table();
-                        if mark_table_access_checked(
-                            &mut checked_tables,
+                        // The same table can be bound several times (aliases, subqueries,
+                        // UNION ALL branches); check it once. Keyed by table id as well as
+                        // name so a rebind that resolved to a different table is not skipped.
+                        let first_check = checked_tables.insert((
                             catalog_name,
                             database,
                             table_name,
                             catalog_table.get_id(),
-                        ) {
+                        ));
+                        if first_check {
                             if is_materialized_view_engine(catalog_table.engine()) {
                                 self.validate_mv_source_access(catalog_table.as_ref()).await?;
                             } else {
@@ -2986,7 +3000,6 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
 
-    use databend_common_catalog::session_type::SessionType;
     use databend_common_exception::ErrorCode;
     use databend_common_exception::Result;
     use databend_common_meta_app::principal::OwnershipInfo;
@@ -2997,30 +3010,35 @@ mod tests {
     use super::MGET_OWNERSHIP_BATCH_SIZE;
     use super::OwnershipPrefetchApi;
     use super::QueryAccessCache;
-    use super::mark_table_access_checked;
+    use super::is_ownership_exempt_schema;
     use super::prefetch_ownerships_with_api;
-    use super::should_prefetch_ownerships;
 
     #[derive(Default)]
     struct FakeOwnershipApi {
         ownerships: HashMap<OwnershipObject, Option<OwnershipInfo>>,
         existing_roles: HashMap<String, bool>,
         mget_batch_sizes: Mutex<Vec<usize>>,
-        exists_role_calls: Mutex<Vec<String>>,
+        role_exists_calls: Mutex<Vec<String>>,
         mget_error: bool,
-        exists_role_error: Option<String>,
+        /// Fail the MGet once this many calls have already succeeded.
+        fail_mget_after_calls: Option<usize>,
+        role_exists_error: Option<String>,
         truncate_mget_result: bool,
     }
 
     #[async_trait::async_trait]
     impl OwnershipPrefetchApi for FakeOwnershipApi {
-        async fn mget_ownerships(
+        async fn prefetch_mget_ownerships(
             &self,
             _tenant: &Tenant,
             objects: &[OwnershipObject],
         ) -> Result<Vec<Option<OwnershipInfo>>> {
-            self.mget_batch_sizes.lock().push(objects.len());
-            if self.mget_error {
+            let call_index = {
+                let mut sizes = self.mget_batch_sizes.lock();
+                sizes.push(objects.len());
+                sizes.len() - 1
+            };
+            if self.mget_error || self.fail_mget_after_calls == Some(call_index) {
                 return Err(ErrorCode::MetaServiceError("injected MGet failure"));
             }
 
@@ -3034,12 +3052,12 @@ mod tests {
             Ok(ownerships)
         }
 
-        async fn exists_role(&self, _tenant: &Tenant, role: String) -> Result<bool> {
-            self.exists_role_calls.lock().push(role.clone());
-            if self.exists_role_error.as_ref() == Some(&role) {
+        async fn prefetch_role_exists(&self, _tenant: &Tenant, role: &str) -> Result<bool> {
+            self.role_exists_calls.lock().push(role.to_string());
+            if self.role_exists_error.as_deref() == Some(role) {
                 return Err(ErrorCode::MetaServiceError("injected role lookup failure"));
             }
-            Ok(self.existing_roles.get(&role).copied().unwrap_or(false))
+            Ok(self.existing_roles.get(role).copied().unwrap_or(false))
         }
     }
 
@@ -3173,7 +3191,7 @@ mod tests {
     }
 
     #[test]
-    fn test_mark_table_access_checked_uses_catalog_name_and_table_id() {
+    fn test_table_access_dedup_key_covers_catalog_database_name_and_table_id() {
         let accesses = [
             ("default", "db", "t1", 1),
             ("default", "db", "t1", 1),
@@ -3186,17 +3204,28 @@ mod tests {
         let checked_count = accesses
             .into_iter()
             .filter(|(catalog, database, table, table_id)| {
-                mark_table_access_checked(&mut checked_tables, catalog, database, table, *table_id)
+                checked_tables.insert((*catalog, *database, *table, *table_id))
             })
             .count();
         assert_eq!(checked_count, 5);
     }
 
+    /// The prefetch must exempt exactly the schemas `convert_to_owner_object` refuses to
+    /// resolve, which compares case-insensitively.
     #[test]
-    fn test_local_sessions_skip_ownership_prefetch() {
-        assert!(!should_prefetch_ownerships(&SessionType::Local));
-        assert!(should_prefetch_ownerships(&SessionType::MySQL));
-        assert!(should_prefetch_ownerships(&SessionType::Dummy));
+    fn test_ownership_exempt_schemas_match_case_insensitively() {
+        for exempt in [
+            "system",
+            "System",
+            "SYSTEM",
+            "information_schema",
+            "INFORMATION_SCHEMA",
+        ] {
+            assert!(is_ownership_exempt_schema(exempt), "{exempt}");
+        }
+        for owned in ["db", "systems", "my_system", "information_schema_2"] {
+            assert!(!is_ownership_exempt_schema(owned), "{owned}");
+        }
     }
 
     #[tokio::test]
@@ -3280,7 +3309,13 @@ mod tests {
         // Prefetch only populates the all-effective-roles scope.
         assert_eq!(cache.ownership_check(&table_object, true), None);
         assert_eq!(*api.mget_batch_sizes.lock(), vec![4]);
-        assert_eq!(api.exists_role_calls.lock().len(), 3);
+        // Only the two objects whose owner role is not effective need a lookup: for them the
+        // account_admin fallback (effective here) would answer differently. `database` is owned
+        // by an effective role and `unowned` has no record at all, so both are decided outright.
+        assert_eq!(*api.role_exists_calls.lock(), vec![
+            "table_owner".to_string(),
+            "deleted_role".to_string()
+        ]);
 
         let api = FakeOwnershipApi {
             ownerships,
@@ -3326,7 +3361,80 @@ mod tests {
         prefetch_ownerships_with_api(&cache, &tenant, &objects, &role_names(&["owner"]), &api)
             .await?;
         assert_eq!(*api.mget_batch_sizes.lock(), vec![256, 1]);
-        assert_eq!(*api.exists_role_calls.lock(), vec!["owner".to_string()]);
+        assert_eq!(*api.role_exists_calls.lock(), vec!["owner".to_string()]);
+        Ok(())
+    }
+
+    /// Ownership answers are published only after every chunk succeeds, so a plan large enough
+    /// to span batches cannot leave the cache holding a partial view.
+    #[tokio::test]
+    async fn test_ownership_prefetch_publishes_nothing_when_a_later_batch_fails() -> Result<()> {
+        let tenant = Tenant::new_literal("tenant");
+        let objects = (0..MGET_OWNERSHIP_BATCH_SIZE + 1)
+            .map(|db_id| database(db_id as u64))
+            .collect::<Vec<_>>();
+        let api = FakeOwnershipApi {
+            ownerships: objects
+                .iter()
+                .map(|object| (object.clone(), owned_by(object, "owner")))
+                .collect(),
+            existing_roles: HashMap::from([("owner".to_string(), true)]),
+            fail_mget_after_calls: Some(1),
+            ..Default::default()
+        };
+        let cache = QueryAccessCache::default();
+        let error =
+            prefetch_ownerships_with_api(&cache, &tenant, &objects, &role_names(&["owner"]), &api)
+                .await
+                .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::META_SERVICE_ERROR);
+        assert_eq!(*api.mget_batch_sizes.lock(), vec![256, 1]);
+        // The first batch resolved cleanly, but its answers must not be visible.
+        for object in &objects {
+            assert_eq!(cache.ownership_check(object, false), None);
+        }
+        Ok(())
+    }
+
+    /// The owner role lookup exists only to apply the account_admin fallback, so it is skipped
+    /// whenever the recorded owner and that fallback would answer the same way.
+    #[tokio::test]
+    async fn test_ownership_prefetch_skips_role_lookup_that_cannot_change_the_answer() -> Result<()>
+    {
+        let tenant = Tenant::new_literal("tenant");
+        let object = database(1);
+        let objects = [object.clone()];
+        let ownerships = HashMap::from([(object.clone(), owned_by(&object, "owner"))]);
+
+        // Neither the owner role nor account_admin is effective: denied either way.
+        let api = FakeOwnershipApi {
+            ownerships: ownerships.clone(),
+            existing_roles: HashMap::from([("owner".to_string(), true)]),
+            ..Default::default()
+        };
+        let cache = QueryAccessCache::default();
+        prefetch_ownerships_with_api(&cache, &tenant, &objects, &role_names(&["other"]), &api)
+            .await?;
+        assert_eq!(cache.ownership_check(&object, false), Some(false));
+        assert!(api.role_exists_calls.lock().is_empty());
+
+        // Both are effective: granted either way.
+        let api = FakeOwnershipApi {
+            ownerships,
+            existing_roles: HashMap::from([("owner".to_string(), true)]),
+            ..Default::default()
+        };
+        let cache = QueryAccessCache::default();
+        prefetch_ownerships_with_api(
+            &cache,
+            &tenant,
+            &objects,
+            &role_names(&["owner", "account_admin"]),
+            &api,
+        )
+        .await?;
+        assert_eq!(cache.ownership_check(&object, false), Some(true));
+        assert!(api.role_exists_calls.lock().is_empty());
         Ok(())
     }
 
@@ -3356,17 +3464,24 @@ mod tests {
             .await?;
         assert_eq!(cache.ownership_check(&object, false), Some(true));
 
+        // A failing owner-role lookup must not be cached as a denial. account_admin is
+        // effective while the owner role is not, so the lookup is required to decide.
         let object = database(2);
         let cache = QueryAccessCache::default();
         let api = FakeOwnershipApi {
             ownerships: HashMap::from([(object.clone(), owned_by(&object, "owner"))]),
-            exists_role_error: Some("owner".to_string()),
+            role_exists_error: Some("owner".to_string()),
             ..Default::default()
         };
-        let error =
-            prefetch_ownerships_with_api(&cache, &tenant, &[object.clone()], &HashSet::new(), &api)
-                .await
-                .unwrap_err();
+        let error = prefetch_ownerships_with_api(
+            &cache,
+            &tenant,
+            &[object.clone()],
+            &role_names(&["account_admin"]),
+            &api,
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.code(), ErrorCode::META_SERVICE_ERROR);
         assert_eq!(cache.ownership_check(&object, false), None);
 
@@ -3382,24 +3497,15 @@ mod tests {
                 .unwrap_err();
         assert_eq!(error.code(), ErrorCode::INTERNAL);
         assert_eq!(cache.ownership_check(&object, false), None);
-
-        let object = database(4);
-        let cache = QueryAccessCache::default();
-        let api = FakeOwnershipApi {
-            ownerships: HashMap::from([(object.clone(), owned_by(&database(5), "owner"))]),
-            ..Default::default()
-        };
-        let error =
-            prefetch_ownerships_with_api(&cache, &tenant, &[object.clone()], &HashSet::new(), &api)
-                .await
-                .unwrap_err();
-        assert_eq!(error.code(), ErrorCode::INTERNAL);
-        assert_eq!(cache.ownership_check(&object, false), None);
         Ok(())
     }
 
+    /// A table ownership key omits db_id, so a stored record can carry a stale db_id and still
+    /// be the record for the requested key. `UserApiProvider::get_ownership` accepts such a
+    /// record, and the prefetch must agree with it rather than reject the query.
     #[tokio::test]
-    async fn test_ownership_prefetch_accepts_stale_table_database_id() -> Result<()> {
+    async fn test_ownership_prefetch_accepts_record_whose_value_has_stale_database_id() -> Result<()>
+    {
         let tenant = Tenant::new_literal("tenant");
         let object = table(2, 4);
         let stored_object = table(1, 4);
@@ -3419,7 +3525,38 @@ mod tests {
         .await?;
         assert_eq!(cache.ownership_check(&object, false), Some(true));
         assert_eq!(*api.mget_batch_sizes.lock(), vec![1]);
-        assert_eq!(*api.exists_role_calls.lock(), vec!["owner".to_string()]);
+        // The owner role is effective while account_admin is not, so the fallback would answer
+        // differently and the role must actually be confirmed to exist.
+        assert_eq!(*api.role_exists_calls.lock(), vec!["owner".to_string()]);
+        Ok(())
+    }
+
+    /// Likewise for a record whose stored catalog disagrees with the requested one. Results are
+    /// mapped positionally onto the requested keys, so the value's own fields are not identity.
+    #[tokio::test]
+    async fn test_ownership_prefetch_accepts_record_whose_value_has_other_catalog() -> Result<()> {
+        let tenant = Tenant::new_literal("tenant");
+        let object = OwnershipObject::Table {
+            catalog_name: "iceberg".to_string(),
+            db_id: 1,
+            table_id: 4,
+        };
+        let stored_object = table(1, 4);
+        let cache = QueryAccessCache::default();
+        let api = FakeOwnershipApi {
+            ownerships: HashMap::from([(object.clone(), owned_by(&stored_object, "owner"))]),
+            existing_roles: HashMap::from([("owner".to_string(), true)]),
+            ..Default::default()
+        };
+        prefetch_ownerships_with_api(
+            &cache,
+            &tenant,
+            &[object.clone()],
+            &role_names(&["owner"]),
+            &api,
+        )
+        .await?;
+        assert_eq!(cache.ownership_check(&object, false), Some(true));
         Ok(())
     }
 }
