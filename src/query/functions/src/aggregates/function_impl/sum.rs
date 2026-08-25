@@ -135,7 +135,7 @@ impl SumBuilder {
         )
         .then(PlainRoute::unary(Self::create_zero).with_validator(Self::validate_sum0_plain))
         .then(StateRoute::unary(Self::create_zero).with_features(Self::STATE_FEATURES))
-        .then(DistinctRoute::unary(Self::create_zero))
+        .then(DistinctRoute::<true>::unary(Self::create_zero))
     }
 
     fn sum_distinct_route() -> NameRoute {

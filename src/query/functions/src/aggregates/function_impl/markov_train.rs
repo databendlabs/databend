@@ -55,7 +55,7 @@ impl MarkovTrainBuilder {
         .then(PlainRoute::multi_arg(MarkovTrainBuilder::create))
         .then(IfRoute::multi_arg(MarkovTrainBuilder::create))
         .then(StateRoute::multi_arg(MarkovTrainBuilder::create))
-        .then(DistinctRoute::multi_arg(MarkovTrainBuilder::create))
+        .then(DistinctRoute::<true>::multi_arg(MarkovTrainBuilder::create))
         .register(registry);
     }
 }

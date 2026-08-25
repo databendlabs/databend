@@ -82,7 +82,7 @@ impl AvgBuilder {
         .then(PlainRoute::unary(Self::create))
         .then(IfRoute::unary(Self::create))
         .then(StateRoute::unary(Self::create))
-        .then(DistinctRoute::unary(Self::create))
+        .then(DistinctRoute::<true>::unary(Self::create))
         .register(registry);
     }
 }

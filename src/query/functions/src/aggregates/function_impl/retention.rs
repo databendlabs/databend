@@ -65,7 +65,7 @@ impl RetentionBuilder {
         .then(PlainRoute::multi_arg(Self::create))
         .then(IfRoute::multi_arg(Self::create))
         .then(StateRoute::multi_arg(Self::create).with_features(Self::RETENTION_STATE_FEATURES))
-        .then(DistinctRoute::multi_arg(Self::create))
+        .then(DistinctRoute::<true>::multi_arg(Self::create))
         .register(registry);
     }
 }

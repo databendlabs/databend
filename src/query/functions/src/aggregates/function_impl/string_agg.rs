@@ -194,7 +194,7 @@ impl StringAggBuilder {
         .then(PlainRoute::new(StringAggBuilder::create))
         .then(IfRoute::direct(StringAggBuilder::create))
         .then(StateRoute::direct(StringAggBuilder::create))
-        .then(DistinctRoute::direct(StringAggBuilder::create))
+        .then(DistinctRoute::<true>::direct(StringAggBuilder::create))
     }
 
     fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {

@@ -789,31 +789,31 @@ impl RouteNode for DistinctAliasRoute {
     }
 }
 
-pub(crate) struct DistinctRoute {
-    build: RouteBuild<DistinctCombinator>,
+pub(crate) struct DistinctRoute<const SKIP_NULLS: bool> {
+    build: RouteBuild<DistinctCombinator<SKIP_NULLS>>,
 }
 
-impl DistinctRoute {
-    pub(crate) fn direct(build: DirectBuildFn<DistinctCombinator>) -> Self {
+impl<const SKIP_NULLS: bool> DistinctRoute<SKIP_NULLS> {
+    pub(crate) fn direct(build: DirectBuildFn<DistinctCombinator<SKIP_NULLS>>) -> Self {
         Self {
             build: RouteBuild::Direct(build),
         }
     }
 
-    pub(crate) fn unary(build: UnaryBuildFn<DistinctCombinator>) -> Self {
+    pub(crate) fn unary(build: UnaryBuildFn<DistinctCombinator<SKIP_NULLS>>) -> Self {
         Self {
             build: RouteBuild::Unary(build),
         }
     }
 
-    pub(crate) fn multi_arg(build: MultiArgBuildFn<DistinctCombinator>) -> Self {
+    pub(crate) fn multi_arg(build: MultiArgBuildFn<DistinctCombinator<SKIP_NULLS>>) -> Self {
         Self {
             build: RouteBuild::MultiArg(build),
         }
     }
 }
 
-impl RouteNode for DistinctRoute {
+impl<const SKIP_NULLS: bool> RouteNode for DistinctRoute<SKIP_NULLS> {
     fn suffix(&self) -> Option<&'static str> {
         Some("distinct")
     }
@@ -844,7 +844,6 @@ impl RouteNode for DistinctRoute {
         let request = request_with_args_type(&context.request, &args_type, true);
         let combinator = DistinctCombinator {
             args_type: args_type.clone(),
-            skip_nulls: context.null_policy != NullPolicy::Keep,
         };
         let function = self
             .build

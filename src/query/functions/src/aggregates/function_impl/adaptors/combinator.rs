@@ -55,9 +55,8 @@ pub(crate) struct IfCombinator {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct DistinctCombinator {
+pub(crate) struct DistinctCombinator<const SKIP_NULLS: bool> {
     pub(crate) args_type: Vec<DataType>,
-    pub(crate) skip_nulls: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -242,7 +241,7 @@ impl Combinator for IfCombinator {
     }
 }
 
-impl Combinator for DistinctCombinator {
+impl<const SKIP_NULLS: bool> Combinator for DistinctCombinator<SKIP_NULLS> {
     fn create<const ORDERED: bool, I>(
         self,
         signature: AggregateSignature,
@@ -254,20 +253,11 @@ impl Combinator for DistinctCombinator {
         I: AggregateEval,
     {
         let state = distinct_combinator::distinct_state_description(&state);
-        if self.skip_nulls {
-            let eval = distinct_combinator::DistinctEval::<true>::new(eval, self.args_type);
-            if ORDERED {
-                Ok(finish_with_order_by(signature, features, state, eval))
-            } else {
-                Ok(finish(signature, features, state, eval))
-            }
+        let eval = distinct_combinator::DistinctEval::<SKIP_NULLS>::new(eval, self.args_type);
+        if ORDERED {
+            Ok(finish_with_order_by(signature, features, state, eval))
         } else {
-            let eval = distinct_combinator::DistinctEval::<false>::new(eval, self.args_type);
-            if ORDERED {
-                Ok(finish_with_order_by(signature, features, state, eval))
-            } else {
-                Ok(finish(signature, features, state, eval))
-            }
+            Ok(finish(signature, features, state, eval))
         }
     }
 }
