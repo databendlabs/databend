@@ -351,6 +351,7 @@ pub(crate) fn create_state_null_result_function(
         ]);
     Ok(Arc::new(AggregateFunction::new(
         signature,
+        FunctionInputLayout::Identity,
         AggregateStateNullResultImplementation::FEATURES,
         state,
         AggregateStateNullResultImplementation { result },

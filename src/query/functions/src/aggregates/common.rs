@@ -54,11 +54,7 @@ pub fn eval_aggr(
     })?;
     let data_type = function.signature().return_type.clone();
     let owner = AggregateStateOwner::new(vec![function.clone()])?;
-    let projected_entries = function
-        .input_layout()
-        .map(|input_layout| input_layout.project(entries))
-        .transpose()?;
-    let entries = projected_entries.as_deref().unwrap_or(entries);
+    let entries = function.input_layout().project(entries)?;
 
     if entries.is_empty() {
         function.accumulate_row_count(AccumulateRowCountInput {
@@ -68,7 +64,7 @@ pub fn eval_aggr(
     } else {
         function.accumulate(AccumulateInput {
             state: owner.state(0),
-            columns: entries.into(),
+            columns: entries.as_ref().into(),
             validity: None,
         })?;
     }

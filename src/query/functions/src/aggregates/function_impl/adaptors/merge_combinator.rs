@@ -35,6 +35,7 @@ use super::AggregateFunctionRequest;
 use super::AggregateFunctionSignature;
 use super::AggregateStateSet;
 use super::ArgumentsPattern;
+use super::FunctionInputLayout;
 use super::MergeResultInput;
 use super::MergeSerializedInput;
 use super::MergeStatesInput;
@@ -97,6 +98,7 @@ pub(super) fn create(
     let state = nested.state().clone();
     Ok(Arc::new(AggregateFunction::new(
         signature,
+        FunctionInputLayout::Identity,
         features,
         state,
         AggregateMergeImplementation {

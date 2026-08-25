@@ -165,8 +165,8 @@ impl FunctionInstance for TrackedHeapAggregateFunction {
         &FEATURES
     }
 
-    fn input_layout(&self) -> Option<&FunctionInputLayout> {
-        None
+    fn input_layout(&self) -> &FunctionInputLayout {
+        &FunctionInputLayout::Identity
     }
 
     fn state(&self) -> &AggregateStateDescription {

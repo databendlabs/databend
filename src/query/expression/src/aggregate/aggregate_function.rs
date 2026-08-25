@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Layout;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt;
@@ -81,12 +82,13 @@ pub enum AggregateRuntimeOrderByInput {
 /// Maps the logical aggregate inputs (`arguments` followed by derived ORDER BY
 /// keys) to the column order consumed by a concrete function instance.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionInputLayout {
-    projection: Vec<usize>,
+pub enum FunctionInputLayout {
+    Identity,
+    Projection(Vec<usize>),
 }
 
 impl FunctionInputLayout {
-    pub fn try_create(input_len: usize, projection: Vec<usize>) -> Result<Self> {
+    pub fn new(input_len: usize, projection: Vec<usize>) -> Result<Self> {
         if projection.len() != input_len {
             return Err(ErrorCode::Internal(format!(
                 "aggregate input projection has {} entries for {input_len} inputs",
@@ -102,26 +104,30 @@ impl FunctionInputLayout {
                 )));
             }
         }
-        Ok(Self { projection })
+        if projection.iter().copied().eq(0..input_len) {
+            Ok(Self::Identity)
+        } else {
+            Ok(Self::Projection(projection))
+        }
     }
 
-    pub fn projection(&self) -> &[usize] {
-        &self.projection
-    }
-
-    pub fn project<T: Clone>(&self, inputs: &[T]) -> Result<Vec<T>> {
-        if inputs.len() != self.projection.len() {
+    pub fn project<'a, T: Clone>(&self, inputs: &'a [T]) -> Result<Cow<'a, [T]>> {
+        let Self::Projection(projection) = self else {
+            return Ok(Cow::Borrowed(inputs));
+        };
+        if inputs.len() != projection.len() {
             return Err(ErrorCode::Internal(format!(
                 "aggregate input layout expects {} inputs, got {}",
-                self.projection.len(),
+                projection.len(),
                 inputs.len()
             )));
         }
-        Ok(self
-            .projection
-            .iter()
-            .map(|&index| inputs[index].clone())
-            .collect())
+        Ok(Cow::Owned(
+            projection
+                .iter()
+                .map(|&index| inputs[index].clone())
+                .collect(),
+        ))
     }
 }
 
@@ -565,9 +571,8 @@ pub trait FunctionInstance: fmt::Display + Send + Sync + 'static {
 
     fn features(&self) -> &FunctionFeatures;
 
-    /// Physical input order expected by `accumulate*`; `None` keeps the
-    /// logical order from the signature and derived ORDER BY keys.
-    fn input_layout(&self) -> Option<&FunctionInputLayout>;
+    /// Physical input order expected by `accumulate*`.
+    fn input_layout(&self) -> &FunctionInputLayout;
 
     fn state(&self) -> &AggregateStateDescription;
 
@@ -604,7 +609,7 @@ pub trait FunctionInstance: fmt::Display + Send + Sync + 'static {
 
 pub struct AggregateFunction<I> {
     signature: AggregateFunctionSignature,
-    input_layout: Option<FunctionInputLayout>,
+    input_layout: FunctionInputLayout,
     features: FunctionFeatures,
     state: AggregateStateDescription,
     implementation: I,
@@ -615,22 +620,18 @@ where I: AggrImpl
 {
     pub fn new(
         signature: AggregateFunctionSignature,
+        input_layout: FunctionInputLayout,
         features: FunctionFeatures,
         state: AggregateStateDescription,
         implementation: I,
     ) -> Self {
         Self {
             signature,
-            input_layout: None,
+            input_layout,
             features,
             state,
             implementation,
         }
-    }
-
-    pub fn with_input_layout(mut self, input_layout: FunctionInputLayout) -> Self {
-        self.input_layout = Some(input_layout);
-        self
     }
 }
 
@@ -641,8 +642,8 @@ where I: AggrImpl
         &self.signature
     }
 
-    fn input_layout(&self) -> Option<&FunctionInputLayout> {
-        self.input_layout.as_ref()
+    fn input_layout(&self) -> &FunctionInputLayout {
+        &self.input_layout
     }
 
     fn features(&self) -> &FunctionFeatures {

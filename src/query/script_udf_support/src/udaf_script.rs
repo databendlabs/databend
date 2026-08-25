@@ -326,6 +326,7 @@ pub fn create_udaf_script_function(
             order_by: vec![],
             return_type: output_type,
         },
+        v2::FunctionInputLayout::Identity,
         v2::FunctionFeatures::default(),
         v2::AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<UdfAggState>())],

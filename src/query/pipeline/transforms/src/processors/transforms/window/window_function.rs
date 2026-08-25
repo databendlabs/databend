@@ -218,10 +218,7 @@ impl WindowFunctionInfo {
                     distinct: false,
                     order_by: &agg.sig.order_by,
                 })?;
-                let args = match agg_func.input_layout() {
-                    Some(input_layout) => input_layout.project(&args)?,
-                    None => args,
-                };
+                let args = agg_func.input_layout().project(&args)?.into_owned();
                 Self::Aggregate(agg_func, args)
             }
             WindowFunction::RowNumber => Self::RowNumber,
@@ -382,8 +379,8 @@ mod tests {
             &FEATURES
         }
 
-        fn input_layout(&self) -> Option<&FunctionInputLayout> {
-            None
+        fn input_layout(&self) -> &FunctionInputLayout {
+            &FunctionInputLayout::Identity
         }
 
         fn state(&self) -> &AggregateStateDescription {

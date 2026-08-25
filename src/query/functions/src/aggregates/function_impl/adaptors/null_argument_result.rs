@@ -54,6 +54,7 @@ pub(crate) fn try_create_null_argument_result_function(
         ]);
     Ok(Arc::new(AggregateFunction::new(
         signature,
+        FunctionInputLayout::Identity,
         FunctionFeatures::default(),
         state,
         AggregateFixedResultImplementation { result },

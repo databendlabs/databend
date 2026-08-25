@@ -92,10 +92,7 @@ impl PipelineBuilder {
                     ),
                     Some((UDFType::Server(_), _state_fields)) => unimplemented!(),
                 }?;
-                let args = match function.input_layout() {
-                    Some(input_layout) => input_layout.project(&args)?,
-                    None => args,
-                };
+                let args = function.input_layout().project(&args)?.into_owned();
                 agg_args.push(args);
                 Ok(function)
             })

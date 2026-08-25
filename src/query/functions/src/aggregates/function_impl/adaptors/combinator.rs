@@ -22,11 +22,11 @@ use super::AggrImpl;
 use super::AggregateBoundOrderByItem;
 use super::AggregateBoundOrderBySource;
 use super::AggregateFunction;
-use super::FunctionInputLayout;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSignature;
 use super::AggregateStateDescription;
 use super::FunctionFeatures;
+use super::FunctionInputLayout;
 use super::StateCombinatorPlan;
 use super::distinct_combinator;
 use super::if_combinator;
@@ -88,6 +88,7 @@ where
 {
     Arc::new(AggregateFunction::new(
         signature,
+        FunctionInputLayout::Identity,
         features,
         state,
         implementation,
@@ -104,10 +105,13 @@ fn finish_with_input_layout<I>(
 where
     I: AggrImpl,
 {
-    Arc::new(
-        AggregateFunction::new(signature, features, state, implementation)
-            .with_input_layout(input_layout),
-    )
+    Arc::new(AggregateFunction::new(
+        signature,
+        input_layout,
+        features,
+        state,
+        implementation,
+    ))
 }
 
 fn finish_with_order_by<I>(
@@ -211,7 +215,7 @@ impl CombinatorImpl for IfCombinator {
         projection.extend(0..self.condition_index);
         projection.extend(signature.args_type.len()..logical_input_len);
         projection.push(self.condition_index);
-        let input_layout = FunctionInputLayout::try_create(logical_input_len, projection)?;
+        let input_layout = FunctionInputLayout::new(logical_input_len, projection)?;
         let runtime_condition_index = logical_input_len - 1;
 
         // After FILTER, ordering by the condition is constant and can be

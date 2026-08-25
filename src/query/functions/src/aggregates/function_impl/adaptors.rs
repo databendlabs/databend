@@ -470,6 +470,7 @@ mod tests {
                 order_by: vec![],
                 return_type: UInt64Type::data_type().wrap_nullable(),
             },
+            FunctionInputLayout::Identity,
             FunctionFeatures {
                 is_decomposable: false,
                 supports_filter: false,
@@ -520,6 +521,7 @@ mod tests {
                 order_by: vec![],
                 return_type: UInt64Type::data_type().wrap_nullable(),
             },
+            FunctionInputLayout::Identity,
             FunctionFeatures::default(),
             or_null_sum_state_description(),
             AggregateMultiArgOrNullImplementation::new(plain_sum(drop_count.clone())),
@@ -553,6 +555,7 @@ mod tests {
                 order_by: vec![],
                 return_type: UInt64Type::data_type(),
             },
+            FunctionInputLayout::Identity,
             FunctionFeatures {
                 distinct_policy: DistinctPolicy::Unsupported,
                 ..Default::default()
