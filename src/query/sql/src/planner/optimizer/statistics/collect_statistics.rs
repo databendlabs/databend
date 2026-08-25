@@ -569,7 +569,7 @@ impl Optimizer for CollectStatisticsOptimizer {
         "CollectStatisticsOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        self.optimize_async(s_expr).await
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        self.optimize_async(&s_expr).await
     }
 }

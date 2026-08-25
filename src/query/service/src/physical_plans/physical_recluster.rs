@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::plan::BlockMetaOptions;
@@ -310,11 +311,25 @@ impl IPhysicalPlan for Recluster {
                     cluster_stats_gen.extra_key_num,
                 )?;
 
-                add_aggregate_state_reaggregate_transform(
+                let reaggregated = add_aggregate_state_reaggregate_transform(
                     &mut builder.main_pipeline,
                     table.engine(),
                     table.schema().as_ref(),
                 )?;
+                // Re-aggregation flushes rows in hash-table order, which
+                // breaks the ordering the merge sort just established.
+                // Re-sort each block before serialization: serialize-time
+                // cluster statistics read the first and last rows of a
+                // sorted block. Compact relies on the partial sort inside
+                // `cluster_gen_for_append` for the same guarantee.
+                if reaggregated {
+                    let resort_descs: Arc<[_]> = cluster_stats_gen.sort_descs().into();
+                    if !resort_descs.is_empty() {
+                        builder.main_pipeline.add_transformer(move || {
+                            TransformSortPartial::new(LimitType::None, resort_descs.clone())
+                        });
+                    }
+                }
 
                 builder.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {

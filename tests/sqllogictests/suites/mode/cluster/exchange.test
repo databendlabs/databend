@@ -230,8 +230,9 @@ Exchange
         └── estimated rows: 2.00
 
 # The grand-total MaterializedCTE is scalar and ends in Merge exchange. The
-# post-Cascades MCTE optimizer redistributes it with a constant-key GlobalHash,
-# exercising Merge-input fragment scheduling on a real MCTE producer chain.
+# MCTE placement optimizer redistributes it with a constant-key GlobalHash
+# before Exchange-sensitive stage lowering, exercising Merge-input fragment
+# scheduling on a real MCTE producer chain.
 statement ok
 set grouping_sets_to_union = 1;
 
