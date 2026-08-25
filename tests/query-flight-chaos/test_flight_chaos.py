@@ -352,30 +352,48 @@ def assert_default_settings(connection: Any) -> None:
 
 
 def configure_new_flight(
-    connection: Any, *, retry_times: int = 0, retry_interval: int = 1
+    connection: Any,
+    *,
+    retry_times: int = 0,
+    retry_interval: int = 1,
+    keep_alive: bool = False,
 ) -> None:
     cursor = connection.cursor()
     try:
         cursor.execute("SET enable_experiment_new_flight = 1")
         cursor.execute(f"SET flight_connection_max_retry_times = {retry_times}")
         cursor.execute(f"SET flight_connection_retry_interval = {retry_interval}")
+        keep_alive_value = 1 if keep_alive else 0
+        cursor.execute(f"SET flight_client_keep_alive_time_secs = {keep_alive_value}")
+        cursor.execute(
+            f"SET flight_client_keep_alive_interval_secs = {keep_alive_value}"
+        )
+        cursor.execute(
+            f"SET flight_client_keep_alive_retries = {2 if keep_alive else 0}"
+        )
         cursor.execute(
             "SELECT name, value FROM system.settings "
             "WHERE name IN ('enable_experiment_new_flight', "
             "'flight_connection_max_retry_times', "
-            "'flight_connection_retry_interval')"
+            "'flight_connection_retry_interval', "
+            "'flight_client_keep_alive_time_secs', "
+            "'flight_client_keep_alive_interval_secs', "
+            "'flight_client_keep_alive_retries')"
         )
         configured = {str(name): str(value) for name, value in cursor}
         expected = {
             "enable_experiment_new_flight": "1",
             "flight_connection_max_retry_times": str(retry_times),
             "flight_connection_retry_interval": str(retry_interval),
+            "flight_client_keep_alive_time_secs": str(keep_alive_value),
+            "flight_client_keep_alive_interval_secs": str(keep_alive_value),
+            "flight_client_keep_alive_retries": "2" if keep_alive else "0",
         }
         assert configured == expected, configured
         chaos_log(
             "session_config "
             f"enable_experiment_new_flight=1 retry_times={retry_times} "
-            f"retry_interval={retry_interval}"
+            f"retry_interval={retry_interval} keep_alive={int(keep_alive)}"
         )
     finally:
         cursor.close()
@@ -482,6 +500,49 @@ def wait_for_do_exchange(
     )
 
 
+def wait_for_query_log(
+    namespace: str,
+    query_id: str,
+    message: str,
+    timeout: float = QUERY_START_TIMEOUT,
+) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for pod in QUERY_PODS:
+            try:
+                output = subprocess.run(
+                    [
+                        "kubectl",
+                        "-n",
+                        namespace,
+                        "logs",
+                        pod,
+                        "-c",
+                        "query",
+                        "--since=2m",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                ).stdout
+            except subprocess.CalledProcessError:
+                continue
+            if any(
+                query_id in line and message in line
+                for line in output.replace("\0", "").splitlines()
+            ):
+                chaos_log(
+                    f"query_log_observed query_id={query_id} pod={pod} "
+                    f"message={message!r}"
+                )
+                return
+        time.sleep(POLL_INTERVAL)
+    raise AssertionError(
+        f"query {query_id} did not emit {message!r} within {timeout} seconds"
+    )
+
+
 def wait_for_reset_match(
     fault: ClusterFault, task: QueryTask, timeout: float = 10
 ) -> dict[str, int]:
@@ -523,6 +584,7 @@ class FlightChaosHarness:
         required_exchange_pods: int = len(QUERY_PODS),
         retry_times: int = 0,
         retry_interval: int = 1,
+        keep_alive: bool = False,
     ) -> RunningQuery:
         connection = connect_mysql()
         try:
@@ -531,6 +593,7 @@ class FlightChaosHarness:
                 connection,
                 retry_times=retry_times,
                 retry_interval=retry_interval,
+                keep_alive=keep_alive,
             )
             task = QueryTask(connection, sql)
             task.start()
@@ -582,9 +645,11 @@ class FlightChaosHarness:
         try:
             self._fault.reset_connections()
             wait_for_reset_match(self._fault, running.task)
-            # Keep the RST rule long enough for the immediate reconnect attempt to
-            # fail, so the query must exercise retry backoff and replacement.
-            time.sleep(1)
+            wait_for_query_log(
+                self._namespace,
+                running.identity.query_id,
+                "do_exchange connection attempt failed",
+            )
             if not running.task.is_running():
                 raise AssertionError(
                     "query finished before the reconnect fault was recovered"
@@ -610,6 +675,11 @@ class FlightChaosHarness:
                 )
         finally:
             self._fault.recover()
+        wait_for_query_log(
+            self._namespace,
+            running.identity.query_id,
+            "do_exchange sender reconnected",
+        )
         chaos_log(
             "fault_recovered type=tcp_reset_and_partition "
             f"query_id={running.identity.query_id} "
@@ -661,6 +731,7 @@ def test_exact_join_reconnect(harness: FlightChaosHarness) -> None:
         exact_join(marker, rows_count),
         marker,
         retry_times=FLIGHT_RETRY_TIMES,
+        keep_alive=True,
     )
     try:
         harness.partition_then_recover(running)
@@ -681,18 +752,13 @@ def test_limit_early_stop_after_reconnect(harness: FlightChaosHarness) -> None:
     running = harness.start_query(
         f"""
         SELECT number
-        FROM (
-            SELECT lhs.number
-            FROM numbers_mt(1000000000000) AS lhs
-            INNER JOIN numbers_mt(100003) AS rhs
-                ON lhs.number % 100003 = rhs.number
-            WHERE lhs.number % 500000000 = 0
-        ) AS {marker}
+        FROM numbers_mt(1000000000000) AS {marker}
+        WHERE number % 500000000 = 0
         LIMIT 10
         """,
         marker,
-        required_exchange_pods=1,
         retry_times=FLIGHT_RETRY_TIMES,
+        keep_alive=True,
     )
     try:
         harness.partition_then_recover(running)
@@ -716,6 +782,7 @@ def test_kill_query_during_reconnect(harness: FlightChaosHarness) -> None:
         marker,
         retry_times=FLIGHT_RETRY_TIMES,
         retry_interval=retry_interval,
+        keep_alive=True,
     )
     kill_connection = None
     try:
@@ -745,7 +812,7 @@ def test_kill_query_during_reconnect(harness: FlightChaosHarness) -> None:
 def test_tcp_reset_without_retry_fails(harness: FlightChaosHarness) -> None:
     chaos_log("scenario_start name=tcp_reset_without_retry_fails")
     marker = "flight_retry_disabled_rst_ci"
-    running = harness.start_query(exact_join(marker), marker)
+    running = harness.start_query(exact_join(marker), marker, keep_alive=True)
     try:
         try:
             chaos_log(
