@@ -149,9 +149,9 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
         };
         let opt_ctx = OptimizerContext::new(ctx, metadata.clone());
         let mut collector = CollectStatisticsOptimizer::new(opt_ctx.clone());
-        let s_expr = collector.optimize(&s_expr).await?;
+        let s_expr = collector.optimize(*s_expr).await?;
         let s_expr = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::PushDownLimitSort])
-            .optimize_sync(&s_expr)?;
+            .optimize_sync(s_expr)?;
         (s_expr, metadata)
     } else {
         let Plan::Query {

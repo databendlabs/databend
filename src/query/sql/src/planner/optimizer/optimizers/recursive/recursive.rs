@@ -103,17 +103,17 @@ impl RecursiveRuleOptimizer {
 
     /// Run the optimizer on the given expression.
     #[recursive::recursive]
-    pub fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&self, s_expr: SExpr) -> Result<SExpr> {
         self.optimize_expression(s_expr, self.materialized_view_output_columns.as_ref())
     }
 
     #[recursive::recursive]
     fn optimize_expression(
         &self,
-        s_expr: &SExpr,
+        s_expr: SExpr,
         materialized_view_output_columns: Option<&HashSet<Symbol>>,
     ) -> Result<SExpr> {
-        let mut current = s_expr.clone();
+        let mut current = s_expr;
 
         loop {
             // Materialized-view substitution must inspect the largest query subtree before its
@@ -136,20 +136,16 @@ impl RecursiveRuleOptimizer {
                     &current,
                     materialized_view_output_columns,
                 )?;
-            let mut optimized_children = Vec::with_capacity(current.arity());
-            let mut children_changed = false;
-            for expr in current.children() {
-                let optimized_child = self
-                    .optimize_expression(expr, child_materialized_view_output_columns.as_ref())?;
-                if !optimized_child.eq(expr) {
-                    children_changed = true;
-                }
+            let mut optimized_children = Vec::with_capacity(current.children.len());
+            for expr in std::mem::take(&mut current.children) {
+                let optimized_child = self.optimize_expression(
+                    Arc::unwrap_or_clone(expr),
+                    child_materialized_view_output_columns.as_ref(),
+                )?;
                 optimized_children.push(Arc::new(optimized_child));
             }
 
-            if children_changed {
-                current = current.replace_children(optimized_children);
-            }
+            current = current.replace_children(optimized_children);
 
             match self.apply_transform_rules(
                 &current,
@@ -282,7 +278,7 @@ impl Optimizer for RecursiveRuleOptimizer {
         format!("RecursiveRuleOptimizer[{}]", preview)
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr)
     }
 

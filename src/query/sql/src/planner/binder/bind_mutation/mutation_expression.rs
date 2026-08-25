@@ -406,7 +406,7 @@ impl MutationExpression {
 
         let opt_ctx = OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());
         let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx, None);
-        result.input = rewriter.optimize_sync(&result.input)?;
+        result.input = rewriter.optimize_sync(result.input)?;
 
         // DELETE only needs the row ID; a non-lazy UPDATE needs all bound target columns.
         if !is_lazy_table && result.mutation_type != MutationType::Delete {
