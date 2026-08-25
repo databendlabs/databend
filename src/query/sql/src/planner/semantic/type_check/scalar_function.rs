@@ -639,6 +639,34 @@ where A: TypeCheckAdapter
         // will be folded from `timestamp > to_timestamp('2001-01-01')` to `timestamp > 978307200000000`
         // Note: check function may reorder the args
 
+        let mut folded_args = match &expr {
+            expr::Expr::FunctionCall(expr::FunctionCall {
+                function,
+                args: checked_args,
+                ..
+            }) => checked_args
+                .iter()
+                .zip(
+                    function
+                        .signature
+                        .args_type
+                        .iter()
+                        .map(DataType::is_generic),
+                )
+                .zip(args)
+                .map(|((checked_arg, is_generic), arg)| {
+                    if !arg.evaluable() || is_generic {
+                        return arg;
+                    }
+                    match self.try_fold_constant(checked_arg.clone()) {
+                        Ok(box (constant, _)) => constant,
+                        Err(_) => arg,
+                    }
+                })
+                .collect(),
+            _ => args,
+        };
+
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             self.adapter.set_result_cache_uncacheable();
         }
@@ -648,55 +676,25 @@ where A: TypeCheckAdapter
             Err(expr) => expr,
         };
 
-        let (mut folded_args, return_type) = match expr {
-            expr::Expr::FunctionCall(expr::FunctionCall {
-                function,
-                args: checked_args,
-                return_type,
-                ..
-            }) => {
-                let folded_args = checked_args
-                    .into_iter()
-                    .zip(
-                        function
-                            .signature
-                            .args_type
-                            .iter()
-                            .map(DataType::is_generic),
-                    )
-                    .zip(args)
-                    .map(|((checked_arg, is_generic), arg)| {
-                        if !arg.evaluable() || is_generic {
-                            return arg;
-                        }
-                        match self.try_fold_constant(checked_arg) {
-                            Ok(box (constant, _)) => constant,
-                            Err(_) => arg,
-                        }
-                    })
-                    .collect();
-                (folded_args, return_type)
-            }
-            expr::Expr::Cast(expr::Cast {
-                span,
-                is_try,
+        if let expr::Expr::Cast(expr::Cast {
+            span,
+            is_try,
+            dest_type,
+            ..
+        }) = expr
+        {
+            assert_eq!(folded_args.len(), 1);
+            return Ok(Box::new((
+                CastExpr {
+                    span,
+                    is_try,
+                    argument: Box::new(folded_args.pop().unwrap()),
+                    target_type: Box::new(dest_type.clone()),
+                }
+                .into(),
                 dest_type,
-                ..
-            }) => {
-                assert_eq!(args.len(), 1);
-                return Ok(Box::new((
-                    CastExpr {
-                        span,
-                        is_try,
-                        argument: Box::new(args.into_iter().next().unwrap()),
-                        target_type: Box::new(dest_type.clone()),
-                    }
-                    .into(),
-                    dest_type,
-                )));
-            }
-            expr => (args, expr.into_data_type()),
-        };
+            )));
+        }
 
         // reorder
         if func_name == "eq"
@@ -707,6 +705,7 @@ where A: TypeCheckAdapter
             folded_args.swap(0, 1);
         }
 
+        let return_type = expr.into_data_type();
         Ok(Box::new((
             FunctionCall {
                 span,

@@ -15,6 +15,12 @@ async fn test_type_check_scalar_function_rules() -> Result<()> {
             setup_sqls: &[],
             sql: "to_decimal(number, number)",
         },
+        SqlTestCase {
+            name: "partially_folded_if_keeps_argument_alignment",
+            description: "Removing constant IF branches must preserve alignment with planner arguments.",
+            setup_sqls: &[],
+            sql: "if(false, 1, number > 0, 2, 3)",
+        },
     ];
 
     run_type_check_cases("scalar_function.txt", &cases).await
