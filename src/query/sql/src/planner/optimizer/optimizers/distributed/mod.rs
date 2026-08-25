@@ -20,5 +20,6 @@ mod sort_and_limit;
 
 pub use distributed::DistributedOptimizer;
 pub use distributed_merge::BroadcastToShuffleOptimizer;
+pub use materialized_cte::MaterializedCTEDistribution;
 pub use materialized_cte::MaterializedCTEDistributionOptimizer;
 pub use sort_and_limit::SortAndLimitPushDownOptimizer;
