@@ -9,10 +9,11 @@ Run from src/query/functions/tests/it:
 By default this runs:
 
     cargo rustc -p databend-common-functions --lib --profile test -- \
-        -Z dump-mono-stats=y -Z dump-mono-stats-format=json -Z print-mono-items=y
+        -Z dump-mono-stats=<out-dir> \
+        -Z dump-mono-stats-format=json -Z print-mono-items=y
 
 Outputs are written below ./mono-stats-report. The wrapper graph is derived
-from rustc MONO_ITEM lines by extracting concrete adaptors_v2 type paths; it
+from rustc MONO_ITEM lines by extracting concrete function_impl adaptor type paths; it
 does not inspect object files or maintain a hard-coded list of combinator edges.
 """
 
@@ -30,16 +31,18 @@ from typing import Iterable
 
 
 MONO_ITEM_RE = re.compile(r"^MONO_ITEM\s+(\S+)\s+(.+?)\s+@@\s+")
+FUNCTION_IMPL_PREFIX = "aggregates::function_impl::"
+ADAPTORS_PREFIX = FUNCTION_IMPL_PREFIX + "adaptors::"
 ADAPTOR_TYPE_RE = re.compile(
-    r"aggregate_function_v2_impl::adaptors_v2::"
+    r"aggregates::function_impl::adaptors::"
     r"([A-Za-z_][A-Za-z0-9_]*)::([A-Z][A-Za-z0-9_]*)"
 )
-AGGR_IMPL_RE = re.compile(
-    r" as databend_common_expression::aggregate::aggregate_function_v2::AggrImpl>"
+AGGREGATE_EVAL_RE = re.compile(
+    r" as [^>]*::AggregateEval>"
     r"::([A-Za-z_][A-Za-z0-9_]*)"
 )
 AGGREGATE_FUNCTION_RE = re.compile(
-    r"aggregate_function_v2_impl::([A-Za-z_][A-Za-z0-9_]*)::"
+    r"aggregates::function_impl::([A-Za-z_][A-Za-z0-9_]*)::"
 )
 
 
@@ -74,7 +77,7 @@ def run_cargo(args: argparse.Namespace, root: Path, out_dir: Path) -> Path:
         args.profile,
         "--",
         "-Z",
-        "dump-mono-stats=.",
+        f"dump-mono-stats={out_dir}",
         "-Z",
         "dump-mono-stats-format=json",
         "-Z",
@@ -90,7 +93,9 @@ def run_cargo(args: argparse.Namespace, root: Path, out_dir: Path) -> Path:
     command_path.write_text(command + "\n")
 
     with stdout_path.open("w") as stdout:
-        subprocess.run(cmd, cwd=out_dir, env=env, stdout=stdout, check=True)
+        completed = subprocess.run(cmd, cwd=root, env=env, stdout=stdout, check=False)
+    if completed.returncode != 0 and not args.allow_rustc_failure:
+        raise subprocess.CalledProcessError(completed.returncode, cmd)
 
     return stdout_path
 
@@ -119,8 +124,8 @@ def module_bucket(symbol: str) -> str:
     match = ADAPTOR_TYPE_RE.search(symbol)
     if match:
         return match.group(1)
-    if "aggregate_function_v2_impl::adaptors_v2::" in symbol:
-        return "adaptors_v2"
+    if ADAPTORS_PREFIX in symbol:
+        return "adaptors"
     match = AGGREGATE_FUNCTION_RE.search(symbol)
     if match:
         return f"function::{match.group(1)}"
@@ -128,15 +133,11 @@ def module_bucket(symbol: str) -> str:
 
 
 def method_bucket(symbol: str) -> str:
-    match = AGGR_IMPL_RE.search(symbol)
+    match = AGGREGATE_EVAL_RE.search(symbol)
     if match:
-        return "AggrImpl::" + match.group(1)
-    if "create_ordered_aggregate_function" in symbol:
-        return "create_ordered_aggregate_function"
-    if "create_named_aggregate_function" in symbol:
-        return "create_named_aggregate_function"
-    if "create_aggregate_function" in symbol:
-        return "create_aggregate_function"
+        return "AggregateEval::" + match.group(1)
+    if "::create" in symbol:
+        return "create"
     if "drop_in_place" in symbol or "drop" in symbol:
         return "std/glue::drop"
     if "alloc::vec" in symbol or "Vec<" in symbol:
@@ -150,8 +151,8 @@ def method_bucket(symbol: str) -> str:
     return "other"
 
 
-def read_mono_stats_json(paths: Iterable[Path]) -> Counter:
-    stats = Counter()
+def read_mono_stats_json(paths: Iterable[Path]) -> dict[str, dict[str, int]]:
+    stats: dict[str, dict[str, int]] = {}
     for path in paths:
         try:
             items = json.loads(path.read_text(errors="ignore"))
@@ -163,9 +164,16 @@ def read_mono_stats_json(paths: Iterable[Path]) -> Counter:
             if not isinstance(item, dict):
                 continue
             name = item.get("name")
-            count = item.get("instantiation_count")
-            if isinstance(name, str) and isinstance(count, int):
-                stats[name] += count
+            if not isinstance(name, str):
+                continue
+            record = stats.setdefault(
+                name,
+                {"instantiation_count": 0, "size_estimate": 0, "total_estimate": 0},
+            )
+            for field in record:
+                value = item.get(field)
+                if isinstance(value, int):
+                    record[field] += value
     return stats
 
 
@@ -183,14 +191,14 @@ def analyze(logs: list[Path], mono_json: list[Path]):
     for kind, symbol in iter_mono_items(logs):
         total_items += 1
         item_kinds[kind] += 1
-        if "aggregate_function_v2_impl::" not in symbol:
+        if FUNCTION_IMPL_PREFIX not in symbol:
             continue
 
         function_match = AGGREGATE_FUNCTION_RE.search(symbol)
         if function_match:
             function_counts[function_match.group(1)] += 1
 
-        if "aggregate_function_v2_impl::adaptors_v2" not in symbol:
+        if ADAPTORS_PREFIX not in symbol:
             continue
 
         adaptor_items += 1
@@ -257,10 +265,23 @@ def write_report(out_dir: Path, data: dict, logs: list[Path], mono_json: list[Pa
         ["kind", "mono_items"],
         data["item_kinds"].most_common(),
     )
+    mono_stats = sorted(
+        data["mono_stats"].items(),
+        key=lambda item: item[1]["total_estimate"],
+        reverse=True,
+    )
     write_csv(
         out_dir / "mono_stats.csv",
-        ["name", "instantiation_count"],
-        data["mono_stats"].most_common(),
+        ["name", "instantiation_count", "size_estimate", "total_estimate"],
+        (
+            (
+                name,
+                values["instantiation_count"],
+                values["size_estimate"],
+                values["total_estimate"],
+            )
+            for name, values in mono_stats
+        ),
     )
 
     dot_path = out_dir / "wrapper_edges.dot"
@@ -275,11 +296,17 @@ def write_report(out_dir: Path, data: dict, logs: list[Path], mono_json: list[Pa
         f.write("}\n")
 
     report_path = out_dir / "mono-stats-report.md"
+    total_estimate = (
+        str(sum(item["total_estimate"] for item in data["mono_stats"].values()))
+        if data["mono_stats"]
+        else "unavailable (no mono-stats JSON input)"
+    )
     lines = [
         "# Mono Stats Report",
         "",
         f"- total mono items: {data['total_items']}",
-        f"- aggregate v2 adaptor mono items: {data['adaptor_items']}",
+        f"- aggregate function_impl adaptor mono items: {data['adaptor_items']}",
+        f"- rustc total estimate: {total_estimate}",
         "- rustc input:",
         *[f"  - `{path}`" for path in logs],
         *[f"  - `{path}`" for path in mono_json],
@@ -304,13 +331,24 @@ def write_report(out_dir: Path, data: dict, logs: list[Path], mono_json: list[Pa
     for bucket, count in data["method_counts"].most_common(30):
         lines.append(f"| `{bucket}` | {count} |")
 
-    lines.extend(["", "## Aggregate V2 Functions", "", "| function/module | mono items |", "|---|---:|"])
+    lines.extend(["", "## Aggregate Functions", "", "| function/module | mono items |", "|---|---:|"])
     for function, count in data["function_counts"].most_common(30):
         lines.append(f"| `{function}` | {count} |")
 
-    lines.extend(["", "## Mono Stats Json", "", "| name | instantiations |", "|---|---:|"])
-    for name, count in data["mono_stats"].most_common(30):
-        lines.append(f"| `{name}` | {count} |")
+    lines.extend(
+        [
+            "",
+            "## Mono Stats Json",
+            "",
+            "| name | instantiations | size estimate | total estimate |",
+            "|---|---:|---:|---:|",
+        ]
+    )
+    for name, values in mono_stats[:30]:
+        lines.append(
+            f"| `{name}` | {values['instantiation_count']} | "
+            f"{values['size_estimate']} | {values['total_estimate']} |"
+        )
 
     lines.extend(["", "## Wrapper Stacks", "", "| stack | mono items |", "|---|---:|"])
     for stack, count in data["stack_counts"].most_common(30):
@@ -343,6 +381,11 @@ def main() -> int:
     parser.add_argument("--target-dir")
     parser.add_argument("--out-dir", default="mono-stats-report")
     parser.add_argument("--no-build", action="store_true")
+    parser.add_argument(
+        "--allow-rustc-failure",
+        action="store_true",
+        help="Analyze complete front-end outputs even if later code generation fails.",
+    )
     parser.add_argument(
         "--log",
         action="append",
