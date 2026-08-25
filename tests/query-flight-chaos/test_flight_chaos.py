@@ -8,6 +8,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import mysql.connector
@@ -97,9 +98,11 @@ class QueryTask:
 
 
 class ClusterFault:
-    def __init__(self, namespace: str, coordinator_ip: str):
+    def __init__(self, namespace: str, coordinator_ip: str, network_chaos: Path):
         self._namespace = namespace
         self._coordinator_ip = coordinator_ip
+        self._network_chaos = network_chaos
+        self._partition_active = False
 
     def _exec_pod(self, pod: str, command: str, *, check: bool = True) -> None:
         run(
@@ -136,6 +139,44 @@ class ClusterFault:
         )
         for pod in WORKER_PODS:
             self._exec_pod(pod, f"while {rule} 2>/dev/null; do :; done", check=False)
+
+    def apply_partition(self) -> None:
+        if self._partition_active:
+            raise AssertionError("network partition is already active")
+        run(["kubectl", "apply", "-f", str(self._network_chaos)])
+        self._partition_active = True
+        try:
+            run(
+                [
+                    "kubectl",
+                    "-n",
+                    self._namespace,
+                    "wait",
+                    "--for=condition=AllInjected",
+                    "networkchaos/worker-to-coordinator",
+                    "--timeout=60s",
+                ]
+            )
+        except BaseException:
+            self.clear_partition()
+            raise
+
+    def clear_partition(self) -> None:
+        if not self._partition_active:
+            return
+        run(
+            [
+                "kubectl",
+                "delete",
+                "-f",
+                str(self._network_chaos),
+                "--ignore-not-found",
+                "--wait=true",
+                "--timeout=60s",
+            ],
+            check=False,
+        )
+        self._partition_active = False
 
     def reset_match_counts(self) -> dict[str, int]:
         result = {}
@@ -248,6 +289,7 @@ class ClusterFault:
 
     def recover(self) -> None:
         self.clear_resets()
+        self.clear_partition()
         for pod in QUERY_PODS:
             self.signal_query(pod, "CONT", check=False)
 
@@ -271,7 +313,7 @@ def connect_mysql() -> Any:
     raise AssertionError(f"could not connect to Databend: {last_error}") from last_error
 
 
-def assert_default_no_retry(connection: Any) -> None:
+def assert_default_settings(connection: Any) -> None:
     expected_defaults = {
         "enable_experiment_new_flight": "0",
         "flight_connection_max_retry_times": "0",
@@ -317,6 +359,24 @@ def configure_new_flight(
         cursor.execute("SET enable_experiment_new_flight = 1")
         cursor.execute(f"SET flight_connection_max_retry_times = {retry_times}")
         cursor.execute(f"SET flight_connection_retry_interval = {retry_interval}")
+        cursor.execute(
+            "SELECT name, value FROM system.settings "
+            "WHERE name IN ('enable_experiment_new_flight', "
+            "'flight_connection_max_retry_times', "
+            "'flight_connection_retry_interval')"
+        )
+        configured = {str(name): str(value) for name, value in cursor}
+        expected = {
+            "enable_experiment_new_flight": "1",
+            "flight_connection_max_retry_times": str(retry_times),
+            "flight_connection_retry_interval": str(retry_interval),
+        }
+        assert configured == expected, configured
+        chaos_log(
+            "session_config "
+            f"enable_experiment_new_flight=1 retry_times={retry_times} "
+            f"retry_interval={retry_interval}"
+        )
     finally:
         cursor.close()
 
@@ -443,7 +503,7 @@ def wait_for_reset_match(
     )
 
 
-class NoRetryHarness:
+class FlightChaosHarness:
     def __init__(
         self,
         control_cursor: Any,
@@ -466,7 +526,7 @@ class NoRetryHarness:
     ) -> RunningQuery:
         connection = connect_mysql()
         try:
-            assert_default_no_retry(connection)
+            assert_default_settings(connection)
             configure_new_flight(
                 connection,
                 retry_times=retry_times,
@@ -502,7 +562,7 @@ class NoRetryHarness:
         connection = connect_mysql()
         cursor = None
         try:
-            assert_default_no_retry(connection)
+            assert_default_settings(connection)
             configure_new_flight(connection)
             cursor = connection.cursor()
             wait_for_cluster(cursor)
@@ -518,7 +578,7 @@ class NoRetryHarness:
     def fault(self) -> ClusterFault:
         return self._fault
 
-    def reset_then_recover(self, running: RunningQuery) -> None:
+    def reset_for_retry_backoff(self, running: RunningQuery) -> None:
         try:
             self._fault.reset_connections()
             wait_for_reset_match(self._fault, running.task)
@@ -533,6 +593,27 @@ class NoRetryHarness:
             self._fault.clear_resets()
         chaos_log(
             f"fault_recovered type=tcp_reset query_id={running.identity.query_id}"
+        )
+
+    def partition_then_recover(
+        self, running: RunningQuery, partition_seconds: float = 3
+    ) -> None:
+        self._fault.apply_partition()
+        try:
+            self._fault.reset_connections()
+            wait_for_reset_match(self._fault, running.task)
+            self._fault.clear_resets()
+            time.sleep(partition_seconds)
+            if not running.task.is_running():
+                raise AssertionError(
+                    "query finished while Flight traffic was still partitioned"
+                )
+        finally:
+            self._fault.recover()
+        chaos_log(
+            "fault_recovered type=tcp_reset_and_partition "
+            f"query_id={running.identity.query_id} "
+            f"partition_seconds={partition_seconds}"
         )
 
 
@@ -550,7 +631,28 @@ def exact_join(marker: str, rows: int = 1000000000000) -> str:
     """
 
 
-def test_exact_join_reconnect(harness: NoRetryHarness) -> None:
+def test_legacy_transport_smoke() -> None:
+    chaos_log("scenario_start name=legacy_transport_smoke")
+    rows_count = 100000000
+    modulus = 1000000
+    connection = connect_mysql()
+    try:
+        assert_default_settings(connection)
+        task = QueryTask(
+            connection, exact_join("flight_legacy_transport_ci", rows_count)
+        )
+        task.start()
+        rows = task.rows()
+        assert len(rows) == 1, rows
+        assert int(rows[0][0]) == rows_count, rows
+        expected_sum = (rows_count // modulus) * modulus * (modulus - 1) // 2
+        assert int(rows[0][1]) == expected_sum, rows
+        chaos_log("scenario_pass name=legacy_transport_smoke")
+    finally:
+        connection.close()
+
+
+def test_exact_join_reconnect(harness: FlightChaosHarness) -> None:
     chaos_log("scenario_start name=exact_join_reconnect")
     marker = "flight_exact_join_reconnect_ci"
     rows_count = 1000000000
@@ -561,7 +663,7 @@ def test_exact_join_reconnect(harness: NoRetryHarness) -> None:
         retry_times=FLIGHT_RETRY_TIMES,
     )
     try:
-        harness.reset_then_recover(running)
+        harness.partition_then_recover(running)
         rows = running.task.rows()
         assert len(rows) == 1, rows
         assert int(rows[0][0]) == rows_count, rows
@@ -573,7 +675,7 @@ def test_exact_join_reconnect(harness: NoRetryHarness) -> None:
         running.close()
 
 
-def test_limit_early_stop_after_reconnect(harness: NoRetryHarness) -> None:
+def test_limit_early_stop_after_reconnect(harness: FlightChaosHarness) -> None:
     chaos_log("scenario_start name=join_limit_early_stop_after_reconnect")
     marker = "flight_limit_reconnect_ci"
     running = harness.start_query(
@@ -593,7 +695,7 @@ def test_limit_early_stop_after_reconnect(harness: NoRetryHarness) -> None:
         retry_times=FLIGHT_RETRY_TIMES,
     )
     try:
-        harness.reset_then_recover(running)
+        harness.partition_then_recover(running)
         rows = running.task.rows()
         values = [int(row[0]) for row in rows]
         assert len(values) == 10, values
@@ -605,7 +707,7 @@ def test_limit_early_stop_after_reconnect(harness: NoRetryHarness) -> None:
         running.close()
 
 
-def test_kill_query_during_reconnect(harness: NoRetryHarness) -> None:
+def test_kill_query_during_reconnect(harness: FlightChaosHarness) -> None:
     chaos_log("scenario_start name=kill_query_during_reconnect")
     marker = "flight_kill_during_reconnect_ci"
     retry_interval = 5
@@ -618,7 +720,7 @@ def test_kill_query_during_reconnect(harness: NoRetryHarness) -> None:
     kill_connection = None
     try:
         kill_connection = connect_mysql()
-        harness.reset_then_recover(running)
+        harness.reset_for_retry_backoff(running)
         chaos_log(
             "fault_inject type=kill_query_during_retry_backoff "
             f"query_id={running.identity.query_id} "
@@ -640,9 +742,9 @@ def test_kill_query_during_reconnect(harness: NoRetryHarness) -> None:
         running.close()
 
 
-def test_tcp_reset_failure(harness: NoRetryHarness) -> None:
-    chaos_log("scenario_start name=tcp_reset_during_join")
-    marker = "flight_no_retry_rst_ci"
+def test_tcp_reset_without_retry_fails(harness: FlightChaosHarness) -> None:
+    chaos_log("scenario_start name=tcp_reset_without_retry_fails")
+    marker = "flight_retry_disabled_rst_ci"
     running = harness.start_query(exact_join(marker), marker)
     try:
         try:
@@ -665,13 +767,15 @@ def test_tcp_reset_failure(harness: NoRetryHarness) -> None:
     finally:
         running.close()
     harness.assert_healthy()
-    chaos_log("scenario_pass name=tcp_reset_during_join")
+    chaos_log("scenario_pass name=tcp_reset_without_retry_fails")
 
 
-def test_worker_crash_failure(harness: NoRetryHarness) -> None:
-    chaos_log("scenario_start name=worker_oom_style_failure_during_join")
-    marker = "flight_no_retry_worker_failure_ci"
-    running = harness.start_query(exact_join(marker), marker)
+def test_worker_crash_failure(harness: FlightChaosHarness) -> None:
+    chaos_log("scenario_start name=worker_crash_with_retry_fails")
+    marker = "flight_retry_worker_failure_ci"
+    running = harness.start_query(
+        exact_join(marker), marker, retry_times=FLIGHT_RETRY_TIMES
+    )
     restart_count = None
     try:
         failed_at = time.monotonic()
@@ -696,12 +800,12 @@ def test_worker_crash_failure(harness: NoRetryHarness) -> None:
         f"previous_restart_count={restart_count}"
     )
     harness.assert_healthy()
-    chaos_log("scenario_pass name=worker_oom_style_failure_during_join")
+    chaos_log("scenario_pass name=worker_crash_with_retry_fails")
 
 
-def test_short_receiver_pause(harness: NoRetryHarness) -> None:
+def test_short_receiver_pause(harness: FlightChaosHarness) -> None:
     chaos_log("scenario_start name=short_flight_listener_pause_during_join")
-    marker = "flight_no_retry_pause_ci"
+    marker = "flight_no_response_timeout_pause_ci"
     rows_count = 1000000000
     modulus = 1000000
     running = harness.start_query(exact_join(marker, rows_count), marker)
@@ -728,6 +832,7 @@ def test_short_receiver_pause(harness: NoRetryHarness) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--namespace", required=True)
+    parser.add_argument("--network-chaos", required=True, type=Path)
     args = parser.parse_args()
 
     coordinator_ip = subprocess.check_output(
@@ -746,21 +851,30 @@ def main() -> None:
 
     control_connection = connect_mysql()
     control_cursor = control_connection.cursor()
-    fault = ClusterFault(args.namespace, coordinator_ip)
-    harness = NoRetryHarness(control_cursor, fault, args.namespace)
+    fault = ClusterFault(args.namespace, coordinator_ip, args.network_chaos)
+    harness = FlightChaosHarness(control_cursor, fault, args.namespace)
 
     try:
         chaos_log(
             f"suite_start namespace={args.namespace} coordinator_ip={coordinator_ip}"
         )
-        assert_default_no_retry(control_connection)
+        assert_default_settings(control_connection)
         wait_for_cluster(control_cursor)
+        chaos_log("group_start name=setting_disabled")
+        test_legacy_transport_smoke()
+        chaos_log("group_pass name=setting_disabled")
+        chaos_log(f"group_start name=retry_enabled retry_times={FLIGHT_RETRY_TIMES}")
         test_exact_join_reconnect(harness)
         test_limit_early_stop_after_reconnect(harness)
         test_kill_query_during_reconnect(harness)
-        test_tcp_reset_failure(harness)
         test_worker_crash_failure(harness)
+        chaos_log("group_pass name=retry_enabled")
+        chaos_log("group_start name=retry_disabled retry_times=0")
+        test_tcp_reset_without_retry_fails(harness)
+        chaos_log("group_pass name=retry_disabled")
+        chaos_log("group_start name=transport_liveness")
         test_short_receiver_pause(harness)
+        chaos_log("group_pass name=transport_liveness")
         harness.assert_healthy()
         chaos_log("suite_pass")
     except BaseException as error:

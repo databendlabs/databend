@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: databend-flight-no-retry
+  name: databend-flight-chaos
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: meta
-  namespace: databend-flight-no-retry
+  namespace: databend-flight-chaos
 spec:
   selector:
     app: databend-meta
@@ -20,7 +20,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: databend-meta
-  namespace: databend-flight-no-retry
+  namespace: databend-flight-chaos
 spec:
   replicas: 1
   selector:
@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - name: meta
-          image: databend-query-flight-no-retry-chaos:ci
+          image: databend-query-flight-chaos:ci
           imagePullPolicy: Never
           command: ["/databend-meta"]
           args:
@@ -83,7 +83,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: query-config
-  namespace: databend-flight-no-retry
+  namespace: databend-flight-chaos
 data:
   query.toml: |
     [query]
@@ -96,8 +96,8 @@ data:
     http_handler_host = "0.0.0.0"
     http_handler_port = 8000
     tenant_id = "test_tenant"
-    cluster_id = "flight_no_retry_cluster"
-    warehouse_id = "flight_no_retry_warehouse"
+    cluster_id = "flight_chaos_cluster"
+    warehouse_id = "flight_chaos_warehouse"
     table_engine_memory_enabled = true
 
     [[query.users]]
@@ -111,7 +111,7 @@ data:
     format = "text"
 
     [meta]
-    endpoints = ["meta.databend-flight-no-retry.svc.cluster.local:9191"]
+    endpoints = ["meta.databend-flight-chaos.svc.cluster.local:9191"]
     username = "root"
     password = "root"
 
@@ -124,7 +124,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: query-headless
-  namespace: databend-flight-no-retry
+  namespace: databend-flight-chaos
 spec:
   clusterIP: None
   selector:
@@ -139,7 +139,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: databend-query
-  namespace: databend-flight-no-retry
+  namespace: databend-flight-chaos
 spec:
   serviceName: query-headless
   podManagementPolicy: Parallel
@@ -163,10 +163,10 @@ spec:
           command:
             - sh
             - -c
-            - until nc -z -w 1 meta.databend-flight-no-retry.svc.cluster.local 9191; do sleep 1; done
+            - until nc -z -w 1 meta.databend-flight-chaos.svc.cluster.local 9191; do sleep 1; done
       containers:
         - name: query
-          image: databend-query-flight-no-retry-chaos:ci
+          image: databend-query-flight-chaos:ci
           imagePullPolicy: Never
           command: ["/databend-query"]
           args:
@@ -196,5 +196,5 @@ spec:
             name: query-config
         - name: data
           hostPath:
-            path: /var/lib/databend-flight-no-retry/data
+            path: /var/lib/databend-flight-chaos/data
             type: DirectoryOrCreate

@@ -543,7 +543,7 @@ jobs:
         with:
           name: test-ee-management-mode-linux
 
-  query_flight_no_retry_chaos:
+  query_flight_chaos:
     needs: [info, build, check]
     runs-on:
       - self-hosted
@@ -553,16 +553,16 @@ jobs:
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/test_query_flight_no_retry_chaos
-        timeout-minutes: 30
+      - uses: ./.github/actions/test_query_flight_chaos
+        timeout-minutes: 40
         with:
           target: ${{ needs.info.outputs.target }}
       - name: Upload Flight chaos logs
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: query-flight-no-retry-chaos
-          path: .databend/query-flight-no-retry-chaos
+          name: query-flight-chaos
+          path: .databend/query-flight-chaos
           if-no-files-found: warn
           include-hidden-files: true
           retention-days: 7
