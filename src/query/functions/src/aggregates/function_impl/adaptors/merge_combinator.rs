@@ -29,12 +29,12 @@ use super::AccumulateInput;
 use super::AccumulateKeysInput;
 use super::AccumulateRowInput;
 use super::AggrImpl;
-use super::AggregateArgumentsPattern;
 use super::AggregateFunction;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionRequest;
 use super::AggregateFunctionSignature;
 use super::AggregateStateSet;
+use super::ArgumentsPattern;
 use super::MergeResultInput;
 use super::MergeSerializedInput;
 use super::MergeStatesInput;
@@ -49,7 +49,7 @@ pub(super) fn create(
     request: AggregateFunctionRequest<'_>,
     nested_name: &str,
     nested_aliases: &[&str],
-    nested_arguments: &AggregateArgumentsPattern,
+    nested_arguments: &ArgumentsPattern,
     legacy_signature_resolver: Option<LegacySignatureResolver>,
     nested_build: &NestedBuild<'_>,
     returns_state: bool,
@@ -112,7 +112,7 @@ pub(super) fn create(
 struct NestedRequest<'a> {
     name: &'a str,
     aliases: &'a [&'a str],
-    arguments: &'a AggregateArgumentsPattern,
+    arguments: &'a ArgumentsPattern,
     legacy_signature_resolver: Option<LegacySignatureResolver>,
     build: &'a NestedBuild<'a>,
     params: &'a [Scalar],

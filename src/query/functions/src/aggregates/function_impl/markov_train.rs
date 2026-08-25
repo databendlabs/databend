@@ -67,8 +67,8 @@ inventory::submit! {
 }
 
 impl MarkovTrainBuilder {
-    fn markov_train_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::String)])
+    fn markov_train_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::String)])
     }
 
     const MARKOV_TRAIN_FEATURES: FunctionFeatures = FunctionFeatures {

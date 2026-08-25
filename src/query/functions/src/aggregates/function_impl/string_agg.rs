@@ -54,10 +54,10 @@ inventory::submit! {
 }
 
 impl StringAggBuilder {
-    fn string_agg_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::variadic(
-            vec![AggregateArgumentPattern::any()],
-            AggregateArgumentPattern::exact(DataType::String),
+    fn string_agg_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::variadic(
+            vec![ArgumentPattern::any()],
+            ArgumentPattern::exact(DataType::String),
             0,
             Some(1),
         )

@@ -78,14 +78,61 @@ pub enum AggregateRuntimeOrderByInput {
     SortKey { offset: usize },
 }
 
+/// Maps the logical aggregate inputs (`arguments` followed by derived ORDER BY
+/// keys) to the column order consumed by a concrete function instance.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AggregateArgumentPattern {
-    pub kind: AggregateArgumentKind,
-    pub nullability: AggregateArgumentNullability,
+pub struct FunctionInputLayout {
+    projection: Vec<usize>,
+}
+
+impl FunctionInputLayout {
+    pub fn try_create(input_len: usize, projection: Vec<usize>) -> Result<Self> {
+        if projection.len() != input_len {
+            return Err(ErrorCode::Internal(format!(
+                "aggregate input projection has {} entries for {input_len} inputs",
+                projection.len()
+            )));
+        }
+
+        let mut seen = vec![false; input_len];
+        for &index in &projection {
+            if index >= input_len || std::mem::replace(&mut seen[index], true) {
+                return Err(ErrorCode::Internal(format!(
+                    "aggregate input projection is not a permutation: {projection:?}"
+                )));
+            }
+        }
+        Ok(Self { projection })
+    }
+
+    pub fn projection(&self) -> &[usize] {
+        &self.projection
+    }
+
+    pub fn project<T: Clone>(&self, inputs: &[T]) -> Result<Vec<T>> {
+        if inputs.len() != self.projection.len() {
+            return Err(ErrorCode::Internal(format!(
+                "aggregate input layout expects {} inputs, got {}",
+                self.projection.len(),
+                inputs.len()
+            )));
+        }
+        Ok(self
+            .projection
+            .iter()
+            .map(|&index| inputs[index].clone())
+            .collect())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AggregateArgumentKind {
+pub struct ArgumentPattern {
+    pub kind: ArgumentKind,
+    pub nullability: ArgumentNullability,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArgumentKind {
     Exact(DataType),
     AnyNumber,
     AnyDecimal,
@@ -94,70 +141,70 @@ pub enum AggregateArgumentKind {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum AggregateArgumentNullability {
+pub enum ArgumentNullability {
     #[default]
     Any,
     NonNullable,
     Nullable,
 }
 
-impl AggregateArgumentPattern {
+impl ArgumentPattern {
     pub fn exact(data_type: DataType) -> Self {
         Self {
-            kind: AggregateArgumentKind::Exact(data_type),
-            nullability: AggregateArgumentNullability::Any,
+            kind: ArgumentKind::Exact(data_type),
+            nullability: ArgumentNullability::Any,
         }
     }
 
     pub fn any_number() -> Self {
         Self {
-            kind: AggregateArgumentKind::AnyNumber,
-            nullability: AggregateArgumentNullability::Any,
+            kind: ArgumentKind::AnyNumber,
+            nullability: ArgumentNullability::Any,
         }
     }
 
     pub fn any_decimal() -> Self {
         Self {
-            kind: AggregateArgumentKind::AnyDecimal,
-            nullability: AggregateArgumentNullability::Any,
+            kind: ArgumentKind::AnyDecimal,
+            nullability: ArgumentNullability::Any,
         }
     }
 
     pub fn any_numeric() -> Self {
         Self {
-            kind: AggregateArgumentKind::AnyNumeric,
-            nullability: AggregateArgumentNullability::Any,
+            kind: ArgumentKind::AnyNumeric,
+            nullability: ArgumentNullability::Any,
         }
     }
 
     pub fn any() -> Self {
         Self {
-            kind: AggregateArgumentKind::Any,
-            nullability: AggregateArgumentNullability::Any,
+            kind: ArgumentKind::Any,
+            nullability: ArgumentNullability::Any,
         }
     }
 
     pub fn non_nullable(mut self) -> Self {
-        self.nullability = AggregateArgumentNullability::NonNullable;
+        self.nullability = ArgumentNullability::NonNullable;
         self
     }
 
     pub fn nullable(mut self) -> Self {
-        self.nullability = AggregateArgumentNullability::Nullable;
+        self.nullability = ArgumentNullability::Nullable;
         self
     }
 
     pub fn matches_type(&self, data_type: &DataType) -> bool {
         let data_type = match self.nullability {
-            AggregateArgumentNullability::Any if data_type.is_null() => return true,
-            AggregateArgumentNullability::Any => data_type.remove_nullable(),
-            AggregateArgumentNullability::NonNullable => {
+            ArgumentNullability::Any if data_type.is_null() => return true,
+            ArgumentNullability::Any => data_type.remove_nullable(),
+            ArgumentNullability::NonNullable => {
                 if data_type.is_nullable_or_null() {
                     return false;
                 }
                 data_type.clone()
             }
-            AggregateArgumentNullability::Nullable => {
+            ArgumentNullability::Nullable => {
                 let DataType::Nullable(inner) = data_type else {
                     return false;
                 };
@@ -166,46 +213,46 @@ impl AggregateArgumentPattern {
         };
 
         match &self.kind {
-            AggregateArgumentKind::Exact(expected) => expected == &data_type,
-            AggregateArgumentKind::AnyNumber => matches!(data_type, DataType::Number(_)),
-            AggregateArgumentKind::AnyDecimal => matches!(data_type, DataType::Decimal(_)),
-            AggregateArgumentKind::AnyNumeric => {
+            ArgumentKind::Exact(expected) => expected == &data_type,
+            ArgumentKind::AnyNumber => matches!(data_type, DataType::Number(_)),
+            ArgumentKind::AnyDecimal => matches!(data_type, DataType::Decimal(_)),
+            ArgumentKind::AnyNumeric => {
                 matches!(data_type, DataType::Number(_) | DataType::Decimal(_))
             }
-            AggregateArgumentKind::Any => true,
+            ArgumentKind::Any => true,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AggregateArgumentsPattern {
-    Fixed(Vec<AggregateArgumentPattern>),
-    OneOf(Vec<AggregateArgumentsPattern>),
-    If(Box<AggregateArgumentsPattern>),
+pub enum ArgumentsPattern {
+    Fixed(Vec<ArgumentPattern>),
+    OneOf(Vec<ArgumentsPattern>),
+    If(Box<ArgumentsPattern>),
     Variadic {
-        prefix: Vec<AggregateArgumentPattern>,
-        repeated: AggregateArgumentPattern,
+        prefix: Vec<ArgumentPattern>,
+        repeated: ArgumentPattern,
         min_repeats: usize,
         max_repeats: Option<usize>,
     },
 }
 
-impl AggregateArgumentsPattern {
-    pub fn fixed(args: impl Into<Vec<AggregateArgumentPattern>>) -> Self {
+impl ArgumentsPattern {
+    pub fn fixed(args: impl Into<Vec<ArgumentPattern>>) -> Self {
         Self::Fixed(args.into())
     }
 
-    pub fn one_of(patterns: impl Into<Vec<AggregateArgumentsPattern>>) -> Self {
+    pub fn one_of(patterns: impl Into<Vec<ArgumentsPattern>>) -> Self {
         Self::OneOf(patterns.into())
     }
 
-    pub fn if_condition(arguments: AggregateArgumentsPattern) -> Self {
+    pub fn if_condition(arguments: ArgumentsPattern) -> Self {
         Self::If(Box::new(arguments))
     }
 
     pub fn variadic(
-        prefix: impl Into<Vec<AggregateArgumentPattern>>,
-        repeated: AggregateArgumentPattern,
+        prefix: impl Into<Vec<ArgumentPattern>>,
+        repeated: ArgumentPattern,
         min_repeats: usize,
         max_repeats: Option<usize>,
     ) -> Self {
@@ -233,7 +280,7 @@ impl AggregateArgumentsPattern {
                 let Some((condition, nested_args)) = args_type.split_last() else {
                     return false;
                 };
-                AggregateArgumentPattern::exact(DataType::Boolean).matches_type(condition)
+                ArgumentPattern::exact(DataType::Boolean).matches_type(condition)
                     && arguments.matches_types(nested_args)
             }
             Self::Variadic {
@@ -286,8 +333,8 @@ impl AggregateArgumentsPattern {
     }
 }
 
-impl From<Vec<AggregateArgumentPattern>> for AggregateArgumentsPattern {
-    fn from(args: Vec<AggregateArgumentPattern>) -> Self {
+impl From<Vec<ArgumentPattern>> for ArgumentsPattern {
+    fn from(args: Vec<ArgumentPattern>) -> Self {
         Self::fixed(args)
     }
 }
@@ -518,6 +565,10 @@ pub trait FunctionInstance: fmt::Display + Send + Sync + 'static {
 
     fn features(&self) -> &FunctionFeatures;
 
+    /// Physical input order expected by `accumulate*`; `None` keeps the
+    /// logical order from the signature and derived ORDER BY keys.
+    fn input_layout(&self) -> Option<&FunctionInputLayout>;
+
     fn state(&self) -> &AggregateStateDescription;
 
     fn init_state(&self, state: AggrState<'_>);
@@ -553,6 +604,7 @@ pub trait FunctionInstance: fmt::Display + Send + Sync + 'static {
 
 pub struct AggregateFunction<I> {
     signature: AggregateFunctionSignature,
+    input_layout: Option<FunctionInputLayout>,
     features: FunctionFeatures,
     state: AggregateStateDescription,
     implementation: I,
@@ -569,10 +621,16 @@ where I: AggrImpl
     ) -> Self {
         Self {
             signature,
+            input_layout: None,
             features,
             state,
             implementation,
         }
+    }
+
+    pub fn with_input_layout(mut self, input_layout: FunctionInputLayout) -> Self {
+        self.input_layout = Some(input_layout);
+        self
     }
 }
 
@@ -581,6 +639,10 @@ where I: AggrImpl
 {
     fn signature(&self) -> &AggregateFunctionSignature {
         &self.signature
+    }
+
+    fn input_layout(&self) -> Option<&FunctionInputLayout> {
+        self.input_layout.as_ref()
     }
 
     fn features(&self) -> &FunctionFeatures {
@@ -656,7 +718,7 @@ pub struct AggregateFunctionRequest<'a> {
 }
 
 pub trait AggregateFunctionBuilder: Send + Sync + 'static {
-    fn arguments(&self) -> &AggregateArgumentsPattern;
+    fn arguments(&self) -> &ArgumentsPattern;
 
     fn features(&self) -> &FunctionFeatures;
 
@@ -666,7 +728,7 @@ pub trait AggregateFunctionBuilder: Send + Sync + 'static {
 pub struct AggregateFunctionDescriptor {
     pub name: String,
     pub aliases: Vec<String>,
-    arguments: AggregateArgumentsPattern,
+    arguments: ArgumentsPattern,
     features: FunctionFeatures,
     builder: Arc<dyn AggregateFunctionBuilder>,
 }
@@ -694,7 +756,7 @@ impl AggregateFunctionDescriptor {
 
     pub fn with_metadata(
         mut self,
-        arguments: AggregateArgumentsPattern,
+        arguments: ArgumentsPattern,
         features: FunctionFeatures,
     ) -> Self {
         self.arguments = arguments;
@@ -702,7 +764,7 @@ impl AggregateFunctionDescriptor {
         self
     }
 
-    pub fn arguments(&self) -> &AggregateArgumentsPattern {
+    pub fn arguments(&self) -> &ArgumentsPattern {
         &self.arguments
     }
 

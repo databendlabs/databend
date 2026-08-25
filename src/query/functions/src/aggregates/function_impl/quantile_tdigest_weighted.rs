@@ -91,10 +91,10 @@ impl QuantileTDigestWeightedBuilder {
         Self::create(build)
     }
 
-    fn quantile_tdigest_weighted_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![
-            AggregateArgumentPattern::any_number(),
-            AggregateArgumentPattern::any_number(),
+    fn quantile_tdigest_weighted_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![
+            ArgumentPattern::any_number(),
+            ArgumentPattern::any_number(),
         ])
     }
 

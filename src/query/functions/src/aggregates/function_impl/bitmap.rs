@@ -81,18 +81,18 @@ inventory::submit! {
 }
 
 impl BitmapBuilder {
-    fn bitmap_numeric_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()])
+    fn bitmap_numeric_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    fn bitmap_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::Bitmap)])
+    fn bitmap_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Bitmap)])
     }
 
-    fn bitmap_intersect_count_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![
-            AggregateArgumentPattern::exact(DataType::Bitmap),
-            AggregateArgumentPattern::any(),
+    fn bitmap_intersect_count_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![
+            ArgumentPattern::exact(DataType::Bitmap),
+            ArgumentPattern::any(),
         ])
     }
 

@@ -66,8 +66,8 @@ inventory::submit! {
 }
 
 impl QuantileDiscBuilder {
-    fn quantile_disc_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()])
+    fn quantile_disc_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
     const QUANTILE_FEATURES: FunctionFeatures = FunctionFeatures {

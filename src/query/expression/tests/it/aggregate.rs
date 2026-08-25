@@ -165,6 +165,10 @@ impl FunctionInstance for TrackedHeapAggregateFunction {
         &FEATURES
     }
 
+    fn input_layout(&self) -> Option<&FunctionInputLayout> {
+        None
+    }
+
     fn state(&self) -> &AggregateStateDescription {
         static STATE: std::sync::LazyLock<AggregateStateDescription> =
             std::sync::LazyLock::new(|| {
@@ -806,13 +810,13 @@ fn test_combined_payload_bucket_extraction_keeps_states_valid() {
 /// and this pins the two together for the shapes used by real functions.
 #[test]
 fn test_argument_pattern_accepts_arity_agrees_with_matches_types() {
-    let any = AggregateArgumentPattern::any;
-    let boolean = || AggregateArgumentPattern::exact(DataType::Boolean);
+    let any = ArgumentPattern::any;
+    let boolean = || ArgumentPattern::exact(DataType::Boolean);
 
     // sum: exactly one numeric-or-interval argument.
-    let sum = AggregateArgumentsPattern::one_of(vec![
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()]),
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::Interval)]),
+    let sum = ArgumentsPattern::one_of(vec![
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()]),
+        ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Interval)]),
     ]);
     assert!(!sum.accepts_arity(0));
     assert!(sum.accepts_arity(1));
@@ -820,29 +824,29 @@ fn test_argument_pattern_accepts_arity_agrees_with_matches_types() {
     assert!(!sum.accepts_arity(3));
 
     // count: zero or one argument.
-    let count = AggregateArgumentsPattern::one_of(vec![
-        AggregateArgumentsPattern::fixed(vec![]),
-        AggregateArgumentsPattern::fixed(vec![any()]),
+    let count = ArgumentsPattern::one_of(vec![
+        ArgumentsPattern::fixed(vec![]),
+        ArgumentsPattern::fixed(vec![any()]),
     ]);
     assert!(count.accepts_arity(0));
     assert!(count.accepts_arity(1));
     assert!(!count.accepts_arity(2));
 
     // arg_min: exactly two arguments.
-    let arg_min = AggregateArgumentsPattern::fixed(vec![any(), any()]);
+    let arg_min = ArgumentsPattern::fixed(vec![any(), any()]);
     assert!(!arg_min.accepts_arity(1));
     assert!(arg_min.accepts_arity(2));
     assert!(!arg_min.accepts_arity(3));
 
     // retention: 1..=32 boolean arguments.
-    let retention = AggregateArgumentsPattern::variadic(vec![], boolean(), 1, Some(32));
+    let retention = ArgumentsPattern::variadic(vec![], boolean(), 1, Some(32));
     assert!(!retention.accepts_arity(0));
     assert!(retention.accepts_arity(1));
     assert!(retention.accepts_arity(32));
     assert!(!retention.accepts_arity(33));
 
     // `_if` wraps a nested pattern and appends a boolean condition.
-    let sum_if = AggregateArgumentsPattern::if_condition(sum.clone());
+    let sum_if = ArgumentsPattern::if_condition(sum.clone());
     assert!(!sum_if.accepts_arity(0));
     assert!(!sum_if.accepts_arity(1));
     assert!(sum_if.accepts_arity(2));

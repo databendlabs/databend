@@ -19,13 +19,13 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 
-use super::AggregateArgumentPattern;
-use super::AggregateArgumentsPattern;
 use super::AggregateFunctionBuilder;
 use super::AggregateFunctionDescriptor;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionRegistry;
 use super::AggregateFunctionRequest;
+use super::ArgumentPattern;
+use super::ArgumentsPattern;
 use super::CombinatorImpl;
 use super::DirectBuildContext;
 use super::DirectBuildFn;
@@ -52,7 +52,7 @@ use super::try_create_null_argument_result_function;
 /// provides the metadata transformation for its own descriptor.
 pub(crate) struct DirectNameRoute {
     names: &'static [&'static str],
-    arguments: AggregateArgumentsPattern,
+    arguments: ArgumentsPattern,
     features: FunctionFeatures,
     distinct_target: Option<String>,
     null_policy: NullPolicy,
@@ -65,7 +65,7 @@ type DirectRouteValidateFn = for<'a> fn(&AggregateFunctionRequest<'a>) -> Result
 pub(crate) struct DirectRouteContext<'request, 'route> {
     request: AggregateFunctionRequest<'request>,
     names: &'route [&'route str],
-    arguments: &'route AggregateArgumentsPattern,
+    arguments: &'route ArgumentsPattern,
     features: &'route FunctionFeatures,
     null_policy: NullPolicy,
 }
@@ -75,7 +75,7 @@ pub(crate) trait DirectRouteNode: Send + Sync {
         None
     }
 
-    fn arguments(&self, base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+    fn arguments(&self, base: &ArgumentsPattern) -> ArgumentsPattern {
         base.clone()
     }
 
@@ -100,7 +100,7 @@ pub(crate) trait DirectRouteNode: Send + Sync {
 impl DirectNameRoute {
     pub(crate) fn new(
         names: &'static [&'static str],
-        arguments: AggregateArgumentsPattern,
+        arguments: ArgumentsPattern,
         features: FunctionFeatures,
         null_policy: NullPolicy,
     ) -> Self {
@@ -231,7 +231,7 @@ impl DirectNameRoute {
 }
 
 impl AggregateFunctionBuilder for DirectNameRoute {
-    fn arguments(&self) -> &AggregateArgumentsPattern {
+    fn arguments(&self) -> &ArgumentsPattern {
         &self.arguments
     }
 
@@ -409,8 +409,8 @@ impl DirectRouteNode for MergeRoute {
         })
     }
 
-    fn arguments(&self, _base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
+    fn arguments(&self, _base: &ArgumentsPattern) -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
     fn features(&self, base: &FunctionFeatures) -> FunctionFeatures {
@@ -572,8 +572,8 @@ impl DirectRouteNode for IfRoute {
         Some("if")
     }
 
-    fn arguments(&self, base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::if_condition(base.clone())
+    fn arguments(&self, base: &ArgumentsPattern) -> ArgumentsPattern {
+        ArgumentsPattern::if_condition(base.clone())
     }
 
     fn features(&self, base: &FunctionFeatures) -> FunctionFeatures {
@@ -640,7 +640,7 @@ impl DirectRouteNode for IfRoute {
 }
 
 pub(crate) struct StateRoute {
-    arguments: Option<AggregateArgumentsPattern>,
+    arguments: Option<ArgumentsPattern>,
     features: Option<FunctionFeatures>,
     build: RouteBuild<StateCombinator>,
 }
@@ -670,7 +670,7 @@ impl StateRoute {
         }
     }
 
-    pub(crate) fn with_arguments(mut self, arguments: AggregateArgumentsPattern) -> Self {
+    pub(crate) fn with_arguments(mut self, arguments: ArgumentsPattern) -> Self {
         self.arguments = Some(arguments);
         self
     }
@@ -686,7 +686,7 @@ impl DirectRouteNode for StateRoute {
         Some("state")
     }
 
-    fn arguments(&self, base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+    fn arguments(&self, base: &ArgumentsPattern) -> ArgumentsPattern {
         self.arguments.clone().unwrap_or_else(|| base.clone())
     }
 
@@ -888,12 +888,12 @@ mod tests {
     use super::*;
 
     struct FixedResultBuilder {
-        arguments: AggregateArgumentsPattern,
+        arguments: ArgumentsPattern,
         features: FunctionFeatures,
     }
 
     impl AggregateFunctionBuilder for FixedResultBuilder {
-        fn arguments(&self) -> &AggregateArgumentsPattern {
+        fn arguments(&self) -> &ArgumentsPattern {
             &self.arguments
         }
 
@@ -908,12 +908,12 @@ mod tests {
 
     struct Miss {
         count: Arc<AtomicUsize>,
-        arguments: AggregateArgumentsPattern,
+        arguments: ArgumentsPattern,
         features: FunctionFeatures,
     }
 
     impl DirectRouteNode for Miss {
-        fn arguments(&self, _base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+        fn arguments(&self, _base: &ArgumentsPattern) -> ArgumentsPattern {
             self.arguments.clone()
         }
 
@@ -932,12 +932,12 @@ mod tests {
 
     struct Stop {
         count: Arc<AtomicUsize>,
-        arguments: AggregateArgumentsPattern,
+        arguments: ArgumentsPattern,
         features: FunctionFeatures,
     }
 
     impl DirectRouteNode for Stop {
-        fn arguments(&self, _base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+        fn arguments(&self, _base: &ArgumentsPattern) -> ArgumentsPattern {
             self.arguments.clone()
         }
 
@@ -955,12 +955,12 @@ mod tests {
     }
 
     struct MustNotRun {
-        arguments: AggregateArgumentsPattern,
+        arguments: ArgumentsPattern,
         features: FunctionFeatures,
     }
 
     impl DirectRouteNode for MustNotRun {
-        fn arguments(&self, _base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+        fn arguments(&self, _base: &ArgumentsPattern) -> ArgumentsPattern {
             self.arguments.clone()
         }
 
@@ -980,7 +980,7 @@ mod tests {
     fn test_direct_name_route_is_linear_and_short_circuits() {
         let misses = Arc::new(AtomicUsize::new(0));
         let stops = Arc::new(AtomicUsize::new(0));
-        let arguments = AggregateArgumentsPattern::fixed(vec![]);
+        let arguments = ArgumentsPattern::fixed(vec![]);
         let features = FunctionFeatures::default();
         let rule = DirectNameRoute::new(
             &["test"],
@@ -1022,7 +1022,7 @@ mod tests {
 
     struct DescriptorNode {
         suffix: Option<&'static str>,
-        arguments: AggregateArgumentsPattern,
+        arguments: ArgumentsPattern,
         features: FunctionFeatures,
     }
 
@@ -1031,7 +1031,7 @@ mod tests {
             self.suffix
         }
 
-        fn arguments(&self, _base: &AggregateArgumentsPattern) -> AggregateArgumentsPattern {
+        fn arguments(&self, _base: &ArgumentsPattern) -> ArgumentsPattern {
             self.arguments.clone()
         }
 
@@ -1049,8 +1049,8 @@ mod tests {
 
     #[test]
     fn test_direct_name_route_produces_descriptors() {
-        let base_arguments = AggregateArgumentsPattern::fixed(vec![]);
-        let if_arguments = AggregateArgumentsPattern::if_condition(base_arguments.clone());
+        let base_arguments = ArgumentsPattern::fixed(vec![]);
+        let if_arguments = ArgumentsPattern::if_condition(base_arguments.clone());
         let base_features = FunctionFeatures {
             is_decomposable: true,
             ..Default::default()
@@ -1090,7 +1090,7 @@ mod tests {
     #[test]
     fn test_direct_name_route_registers_descriptor_names_and_aliases() {
         let mut registry = AggregateFunctionRegistry::empty();
-        let arguments = AggregateArgumentsPattern::fixed(vec![]);
+        let arguments = ArgumentsPattern::fixed(vec![]);
         let features = FunctionFeatures::default();
         DirectNameRoute::new(
             &["test", "test_alias"],
@@ -1105,7 +1105,7 @@ mod tests {
         })
         .then(DescriptorNode {
             suffix: Some("if"),
-            arguments: AggregateArgumentsPattern::if_condition(arguments.clone()),
+            arguments: ArgumentsPattern::if_condition(arguments.clone()),
             features: features.clone(),
         })
         .then(DescriptorNode {
@@ -1133,7 +1133,7 @@ mod tests {
     #[test]
     fn test_registry_redirects_distinct_without_name_route_or_suffix() {
         let mut registry = AggregateFunctionRegistry::empty();
-        let arguments = AggregateArgumentsPattern::fixed(vec![]);
+        let arguments = ArgumentsPattern::fixed(vec![]);
         let builder = Arc::new(FixedResultBuilder {
             arguments: arguments.clone(),
             features: FunctionFeatures::default(),
@@ -1170,7 +1170,7 @@ mod tests {
     fn test_direct_name_route_without_matcher_returns_unknown() {
         let rule = DirectNameRoute::new(
             &["test"],
-            AggregateArgumentsPattern::fixed(vec![]),
+            ArgumentsPattern::fixed(vec![]),
             FunctionFeatures::default(),
             NullPolicy::Skip,
         );

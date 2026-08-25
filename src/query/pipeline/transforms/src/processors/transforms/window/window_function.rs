@@ -218,6 +218,10 @@ impl WindowFunctionInfo {
                     distinct: false,
                     order_by: &agg.sig.order_by,
                 })?;
+                let args = match agg_func.input_layout() {
+                    Some(input_layout) => input_layout.project(&args)?,
+                    None => args,
+                };
                 Self::Aggregate(agg_func, args)
             }
             WindowFunction::RowNumber => Self::RowNumber,
@@ -326,6 +330,7 @@ mod tests {
     use databend_common_expression::aggregate::aggregate_function::MergeSerializedInput;
     use databend_common_expression::aggregate::aggregate_function::MergeStatesInput;
     use databend_common_expression::aggregate::aggregate_function::SerializeInput;
+    use databend_common_expression::aggregate_function::FunctionInputLayout;
 
     use super::*;
 
@@ -375,6 +380,10 @@ mod tests {
                 example: "",
             };
             &FEATURES
+        }
+
+        fn input_layout(&self) -> Option<&FunctionInputLayout> {
+            None
         }
 
         fn state(&self) -> &AggregateStateDescription {

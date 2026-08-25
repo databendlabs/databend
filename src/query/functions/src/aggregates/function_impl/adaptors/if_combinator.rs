@@ -26,6 +26,7 @@ use super::*;
 pub(crate) struct AggregateIfImplementation<I> {
     nested: I,
     condition_index: usize,
+    nested_args_count: usize,
     always_false: bool,
     strip_nullable_input: bool,
 }
@@ -34,24 +35,21 @@ impl<I> AggregateIfImplementation<I> {
     pub(crate) fn new(
         nested: I,
         condition_index: usize,
+        nested_args_count: usize,
         always_false: bool,
         strip_nullable_input: bool,
     ) -> Self {
         Self {
             nested,
             condition_index,
+            nested_args_count,
             always_false,
             strip_nullable_input,
         }
     }
 
-    fn nested_columns(&self, columns: ProjectedBlock<'_>) -> Vec<BlockEntry> {
-        columns
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| *index != self.condition_index)
-            .map(|(_, entry)| entry.clone())
-            .collect()
+    fn nested_columns<'a>(&self, columns: ProjectedBlock<'a>) -> ProjectedBlock<'a> {
+        columns.slice(..self.condition_index)
     }
 
     fn prepare_columns(
@@ -62,7 +60,7 @@ impl<I> AggregateIfImplementation<I> {
         let mut columns = columns.iter().cloned().collect::<Vec<_>>();
         let mut validity = validity;
         if self.strip_nullable_input {
-            for entry in &mut columns[..self.condition_index] {
+            for entry in &mut columns[..self.nested_args_count] {
                 validity = column_merge_validity(entry, validity);
                 *entry = entry.clone().remove_nullable();
             }
@@ -133,7 +131,7 @@ where I: AggrImpl
 
         self.nested.accumulate(AccumulateInput {
             state: input.state,
-            columns: (&args).into(),
+            columns: args,
             validity: predicate.as_ref(),
         })
     }
@@ -146,7 +144,6 @@ where I: AggrImpl
         let (columns, validity) = self.prepare_columns(input.columns, None);
         let columns: ProjectedBlock<'_> = (&columns).into();
         let args = self.nested_columns(columns);
-        let args: ProjectedBlock<'_> = (&args).into();
         for (row, state) in input.states.iter().enumerate() {
             if !self.should_accumulate_row(columns, validity.as_ref(), row) {
                 continue;
@@ -184,7 +181,7 @@ where I: AggrImpl
         }
         self.nested.accumulate_row(AccumulateRowInput {
             state: input.state,
-            columns: (&args).into(),
+            columns: args,
             row: input.row,
         })
     }

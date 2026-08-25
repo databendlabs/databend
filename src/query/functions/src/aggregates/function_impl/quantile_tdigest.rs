@@ -94,8 +94,8 @@ impl QuantileTDigestBuilder {
         Self::create(build)
     }
 
-    fn quantile_tdigest_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()])
+    fn quantile_tdigest_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
     const QUANTILE_TDIGEST_FEATURES: FunctionFeatures = FunctionFeatures {

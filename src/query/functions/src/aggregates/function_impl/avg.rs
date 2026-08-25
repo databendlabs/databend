@@ -66,8 +66,8 @@ impl AvgBuilder {
         example: "select avg(number) from numbers(10)",
     };
 
-    fn arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()])
+    fn arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
     fn register(registry: &mut AggregateFunctionRegistry) {

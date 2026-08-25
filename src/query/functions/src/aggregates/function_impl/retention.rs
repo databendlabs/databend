@@ -77,10 +77,10 @@ inventory::submit! {
 }
 
 impl RetentionBuilder {
-    fn retention_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::variadic(
+    fn retention_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::variadic(
             vec![],
-            AggregateArgumentPattern::exact(DataType::Boolean),
+            ArgumentPattern::exact(DataType::Boolean),
             1,
             Some(32),
         )

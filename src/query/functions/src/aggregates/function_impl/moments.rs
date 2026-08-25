@@ -79,8 +79,8 @@ inventory::submit! {
 }
 
 impl MomentsBuilder {
-    fn moments_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()])
+    fn moments_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
     const SKEWNESS_FEATURES: FunctionFeatures = FunctionFeatures {

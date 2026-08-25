@@ -59,10 +59,10 @@ inventory::submit! {
 }
 
 impl WindowFunnelBuilder {
-    fn window_funnel_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::variadic(
-            vec![AggregateArgumentPattern::any()],
-            AggregateArgumentPattern::exact(DataType::Boolean),
+    fn window_funnel_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::variadic(
+            vec![ArgumentPattern::any()],
+            ArgumentPattern::exact(DataType::Boolean),
             1,
             Some(32),
         )

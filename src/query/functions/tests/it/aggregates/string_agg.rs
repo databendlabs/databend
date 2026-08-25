@@ -183,6 +183,9 @@ fn test_ordered_listagg_if_filters_before_sorting() -> Result<()> {
     })?;
     let owner = AggregateStateOwner::new(vec![function.clone()])?;
     let columns = [values, condition, order_key];
+    let input_layout = function.input_layout().unwrap();
+    assert_eq!(input_layout.projection(), &[0, 2, 1]);
+    let columns = input_layout.project(&columns)?;
     function.accumulate(AccumulateInput {
         state: owner.state(0),
         columns: (&columns).into(),

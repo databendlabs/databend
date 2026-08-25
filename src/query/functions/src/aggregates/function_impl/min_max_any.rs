@@ -71,8 +71,8 @@ inventory::submit! {
 }
 
 impl MinMaxAnyBuilder {
-    fn min_max_any_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
+    fn min_max_any_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
     const MIN_FEATURES: FunctionFeatures = FunctionFeatures {

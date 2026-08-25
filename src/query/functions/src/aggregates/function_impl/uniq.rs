@@ -34,8 +34,8 @@ inventory::submit! {
 }
 
 impl UniqBuilder {
-    fn uniq_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::variadic(vec![], AggregateArgumentPattern::any(), 1, Some(32))
+    fn uniq_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::variadic(vec![], ArgumentPattern::any(), 1, Some(32))
     }
 
     const UNIQ_FEATURES: FunctionFeatures = FunctionFeatures {

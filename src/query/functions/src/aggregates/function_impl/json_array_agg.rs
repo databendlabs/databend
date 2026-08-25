@@ -53,8 +53,8 @@ inventory::submit! {
 }
 
 impl JsonArrayAggBuilder {
-    fn json_array_agg_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
+    fn json_array_agg_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
     const JSON_ARRAY_AGG_FEATURES: FunctionFeatures = FunctionFeatures {

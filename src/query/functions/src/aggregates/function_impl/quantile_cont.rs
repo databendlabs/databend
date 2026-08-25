@@ -96,8 +96,8 @@ impl QuantileContBuilder {
         Self::create(build)
     }
 
-    fn quantile_cont_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()])
+    fn quantile_cont_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
     const QUANTILE_CONT_FEATURES: FunctionFeatures = FunctionFeatures {

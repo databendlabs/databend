@@ -64,10 +64,10 @@ inventory::submit! {
 }
 
 impl ArrayMovingBuilder {
-    fn array_moving_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::one_of(vec![
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()]),
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::Null)]),
+    fn array_moving_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::one_of(vec![
+            ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()]),
+            ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Null)]),
         ])
     }
 }

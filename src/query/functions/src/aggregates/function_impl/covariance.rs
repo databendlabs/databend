@@ -85,10 +85,10 @@ impl CovarianceBuilder {
         .then(StateRoute::multi_arg(Self::create::<TYPE>))
     }
 
-    fn covariance_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![
-            AggregateArgumentPattern::any_number(),
-            AggregateArgumentPattern::any_number(),
+    fn covariance_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![
+            ArgumentPattern::any_number(),
+            ArgumentPattern::any_number(),
         ])
     }
 

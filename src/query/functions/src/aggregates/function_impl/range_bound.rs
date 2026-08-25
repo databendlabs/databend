@@ -83,8 +83,8 @@ inventory::submit! {
 }
 
 impl RangeBoundBuilder {
-    fn range_bound_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
+    fn range_bound_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
     const RANGE_BOUND_FEATURES: FunctionFeatures = FunctionFeatures {

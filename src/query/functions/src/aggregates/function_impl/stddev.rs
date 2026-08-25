@@ -76,8 +76,8 @@ impl StddevBuilder {
             .then(StateRoute::unary(Self::create_for_type::<TYPE>))
     }
 
-    fn stddev_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()])
+    fn stddev_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
     const STDDEV_POP_FEATURES: FunctionFeatures = FunctionFeatures {

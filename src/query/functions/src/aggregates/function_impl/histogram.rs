@@ -74,10 +74,10 @@ inventory::submit! {
 }
 
 impl HistogramBuilder {
-    fn histogram_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::variadic(
-            vec![AggregateArgumentPattern::any()],
-            AggregateArgumentPattern::any(),
+    fn histogram_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::variadic(
+            vec![ArgumentPattern::any()],
+            ArgumentPattern::any(),
             0,
             Some(1),
         )

@@ -67,8 +67,8 @@ inventory::submit! {
 }
 
 impl BooleanBuilder {
-    fn boolean_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::Boolean)])
+    fn boolean_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Boolean)])
     }
 
     const BOOL_AND_FEATURES: FunctionFeatures = FunctionFeatures {

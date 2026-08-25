@@ -67,8 +67,8 @@ inventory::submit! {
 }
 
 impl ModeBuilder {
-    fn mode_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
+    fn mode_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
     const MODE_FEATURES: FunctionFeatures = FunctionFeatures {

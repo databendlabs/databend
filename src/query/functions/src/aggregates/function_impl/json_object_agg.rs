@@ -58,10 +58,10 @@ inventory::submit! {
 }
 
 impl JsonObjectAggBuilder {
-    fn json_object_agg_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![
-            AggregateArgumentPattern::exact(DataType::String),
-            AggregateArgumentPattern::any(),
+    fn json_object_agg_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![
+            ArgumentPattern::exact(DataType::String),
+            ArgumentPattern::any(),
         ])
     }
 

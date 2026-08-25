@@ -69,12 +69,8 @@ impl CountBuilder {
     }
 
     fn register(registry: &mut AggregateFunctionRegistry) {
-        let state_arguments = AggregateArgumentsPattern::variadic(
-            vec![],
-            AggregateArgumentPattern::any(),
-            0,
-            Some(32),
-        );
+        let state_arguments =
+            ArgumentsPattern::variadic(vec![], ArgumentPattern::any(), 0, Some(32));
         DirectNameRoute::new(
             &["count"],
             Self::count_arguments(),
@@ -116,15 +112,15 @@ inventory::submit! {
 }
 
 impl CountBuilder {
-    fn count_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::one_of(vec![
-            AggregateArgumentsPattern::fixed(vec![]),
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()]),
+    fn count_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::one_of(vec![
+            ArgumentsPattern::fixed(vec![]),
+            ArgumentsPattern::fixed(vec![ArgumentPattern::any()]),
         ])
     }
 
-    fn count_distinct_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::variadic(vec![], AggregateArgumentPattern::any(), 1, Some(32))
+    fn count_distinct_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::variadic(vec![], ArgumentPattern::any(), 1, Some(32))
     }
 
     const COUNT_FEATURES: FunctionFeatures = FunctionFeatures {

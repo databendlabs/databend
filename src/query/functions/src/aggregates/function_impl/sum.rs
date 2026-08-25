@@ -159,27 +159,21 @@ impl SumBuilder {
         }
     }
 
-    fn sum_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::one_of(vec![
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()]),
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(
-                DataType::Interval,
-            )]),
+    fn sum_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::one_of(vec![
+            ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()]),
+            ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Interval)]),
         ])
     }
 
-    fn sum_zero_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(
-            NumberType::<u64>::data_type(),
-        )])
+    fn sum_zero_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::exact(NumberType::<u64>::data_type())])
     }
 
-    fn sum_distinct_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::one_of(vec![
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any_numeric()]),
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(
-                DataType::Interval,
-            )]),
+    fn sum_distinct_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::one_of(vec![
+            ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()]),
+            ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Interval)]),
         ])
     }
 

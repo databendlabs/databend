@@ -61,8 +61,8 @@ inventory::submit! {
 }
 
 impl ArrayAggBuilder {
-    fn array_agg_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::any()])
+    fn array_agg_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
     const ARRAY_AGG_FEATURES: FunctionFeatures = FunctionFeatures {

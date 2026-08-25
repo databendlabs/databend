@@ -63,9 +63,7 @@ impl PipelineBuilder {
                         args.push(input_schema.index_of(&item.index.to_string())?);
                     }
                 }
-                agg_args.push(args);
-
-                match &agg_func.sig.udaf {
+                let function = match &agg_func.sig.udaf {
                     None => AGGR_REGISTRY.resolve(AggregateFunctionRequest {
                         name: agg_func.sig.name.as_str(),
                         params: &agg_func.sig.params.clone(),
@@ -93,7 +91,13 @@ impl PipelineBuilder {
                         agg_func.sig.return_type.clone(),
                     ),
                     Some((UDFType::Server(_), _state_fields)) => unimplemented!(),
-                }
+                }?;
+                let args = match function.input_layout() {
+                    Some(input_layout) => input_layout.project(&args)?,
+                    None => args,
+                };
+                agg_args.push(args);
+                Ok(function)
             })
             .collect::<Result<_>>()?;
 

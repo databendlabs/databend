@@ -19,7 +19,10 @@ use databend_common_expression::StateSerdeType;
 use databend_common_expression::types::DataType;
 
 use super::AggrImpl;
+use super::AggregateBoundOrderByItem;
+use super::AggregateBoundOrderBySource;
 use super::AggregateFunction;
+use super::FunctionInputLayout;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSignature;
 use super::AggregateStateDescription;
@@ -91,6 +94,22 @@ where
     ))
 }
 
+fn finish_with_input_layout<I>(
+    signature: AggregateFunctionSignature,
+    input_layout: FunctionInputLayout,
+    features: FunctionFeatures,
+    state: AggregateStateDescription,
+    implementation: I,
+) -> AggregateFunctionRef
+where
+    I: AggrImpl,
+{
+    Arc::new(
+        AggregateFunction::new(signature, features, state, implementation)
+            .with_input_layout(input_layout),
+    )
+}
+
 fn finish_with_order_by<I>(
     signature: AggregateFunctionSignature,
     features: FunctionFeatures,
@@ -159,6 +178,7 @@ impl CombinatorImpl for IfCombinator {
         let implementation = if_combinator::AggregateIfImplementation::new(
             implementation,
             self.condition_index,
+            self.nested_args_type.len(),
             self.always_false,
             self.strip_nullable_input,
         );
@@ -179,11 +199,66 @@ impl CombinatorImpl for IfCombinator {
             return self.create_aggregate_function(signature, features, state, implementation);
         }
 
-        // FILTER is intentionally outside ORDER BY. It removes the condition
-        // but preserves derived sort keys, so the sort adaptor only buffers rows
-        // that participate in the aggregate.
+        // Runtime inputs place the condition last, making the nested ordered
+        // inputs a contiguous prefix: [args..., derived keys..., condition].
+        let derived_key_count = signature
+            .order_by
+            .iter()
+            .filter(|item| matches!(item.source, AggregateBoundOrderBySource::Derived))
+            .count();
+        let logical_input_len = signature.args_type.len() + derived_key_count;
+        let mut projection = Vec::with_capacity(logical_input_len);
+        projection.extend(0..self.condition_index);
+        projection.extend(signature.args_type.len()..logical_input_len);
+        projection.push(self.condition_index);
+        let input_layout = FunctionInputLayout::try_create(logical_input_len, projection)?;
+        let runtime_condition_index = logical_input_len - 1;
+
+        // After FILTER, ordering by the condition is constant and can be
+        // removed. References after it shift left because condition is absent
+        // from the nested Sort input.
+        let nested_order_by = signature
+            .order_by
+            .iter()
+            .filter_map(|item| {
+                let source = match item.source {
+                    AggregateBoundOrderBySource::Argument { index }
+                        if index == self.condition_index =>
+                    {
+                        return None;
+                    }
+                    AggregateBoundOrderBySource::Argument { index } => {
+                        AggregateBoundOrderBySource::Argument {
+                            index: index - usize::from(index > self.condition_index),
+                        }
+                    }
+                    AggregateBoundOrderBySource::Derived => AggregateBoundOrderBySource::Derived,
+                };
+                Some(AggregateBoundOrderByItem {
+                    source,
+                    ..item.clone()
+                })
+            })
+            .collect::<Vec<_>>();
+        if nested_order_by.is_empty() {
+            let implementation = if_combinator::AggregateIfImplementation::new(
+                implementation,
+                runtime_condition_index,
+                self.nested_args_type.len(),
+                self.always_false,
+                self.strip_nullable_input,
+            );
+            return Ok(finish_with_input_layout(
+                signature,
+                input_layout,
+                features,
+                state,
+                implementation,
+            ));
+        }
+
         let (input_types, order_by) =
-            sort_combinator::sort_runtime_inputs(&self.nested_args_type, &signature.order_by);
+            sort_combinator::sort_runtime_inputs(&self.nested_args_type, &nested_order_by);
         let state = sort_combinator::sort_state_description(&state);
         let implementation = sort_combinator::AggregateSortImplementation::new(
             implementation,
@@ -192,11 +267,18 @@ impl CombinatorImpl for IfCombinator {
         );
         let implementation = if_combinator::AggregateIfImplementation::new(
             implementation,
-            self.condition_index,
+            runtime_condition_index,
+            self.nested_args_type.len(),
             self.always_false,
             self.strip_nullable_input,
         );
-        Ok(finish(signature, features, state, implementation))
+        Ok(finish_with_input_layout(
+            signature,
+            input_layout,
+            features,
+            state,
+            implementation,
+        ))
     }
 }
 

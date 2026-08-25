@@ -208,12 +208,10 @@ impl GeographicAggregateMetadata for EnvelopeAggOp {
 }
 
 impl GeographicBuilder {
-    fn geometry_arguments() -> AggregateArgumentsPattern {
-        AggregateArgumentsPattern::one_of(vec![
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(
-                DataType::Geometry,
-            )]),
-            AggregateArgumentsPattern::fixed(vec![AggregateArgumentPattern::exact(DataType::Null)]),
+    fn geometry_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::one_of(vec![
+            ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Geometry)]),
+            ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Null)]),
         ])
     }
 
