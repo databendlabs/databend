@@ -238,18 +238,19 @@ pub fn check_string<Index: ColumnIndex>(
 ) -> Result<String> {
     let (expr, _) = if expr.data_type() != &DataType::String {
         ConstantFolder::fold(
-            Expr::Cast(Cast {
+            Cow::Owned(Expr::Cast(Cast {
                 span,
                 is_try: false,
                 expr: Box::new(expr),
                 dest_type: DataType::String,
-            }),
+            })),
             func_ctx,
             fn_registry,
         )
     } else {
-        ConstantFolder::fold(expr, func_ctx, fn_registry)
+        ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry)
     };
+    let expr = expr.into_owned();
 
     match expr {
         Expr::Constant(Constant {
@@ -272,18 +273,19 @@ pub fn check_number<T: Number, Index: ColumnIndex>(
     let origin_ty = expr.data_type().clone();
     let (expr, _) = if origin_ty != DataType::Number(T::data_type()) {
         ConstantFolder::fold(
-            Expr::Cast(Cast {
+            Cow::Owned(Expr::Cast(Cast {
                 span,
                 is_try: false,
                 expr: Box::new(expr),
                 dest_type: DataType::Number(T::data_type()),
-            }),
+            })),
             func_ctx,
             fn_registry,
         )
     } else {
-        ConstantFolder::fold(expr, func_ctx, fn_registry)
+        ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry)
     };
+    let expr = expr.into_owned();
 
     match expr {
         Expr::Constant(Constant {

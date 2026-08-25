@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -123,9 +124,13 @@ fn try_fold_to_scalar(
     subquery_executor: &Option<Arc<dyn QueryExecutor>>,
 ) -> Result<Scalar> {
     let expr = scalar.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
+    let (expr, _) = ConstantFolder::fold(
+        Cow::Owned(expr),
+        &scalar_binder.get_func_ctx()?,
+        &BUILTIN_FUNCTIONS,
+    );
 
-    match expr.into_constant() {
+    match expr.into_owned().into_constant() {
         Ok(Constant { scalar, .. }) => Ok(scalar),
         Err(_) => {
             if contains_subquery(ast_expr) {

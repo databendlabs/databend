@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -966,9 +967,12 @@ where A: UdfAdapter
                     ));
                 }
                 let expr = argument.scalar.as_expr()?;
-                let (expr, _) = ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let Ok(Some(location)) =
-                    expr.into_constant().map(|c| c.scalar.as_string().cloned())
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let Ok(Some(location)) = expr
+                    .into_owned()
+                    .into_constant()
+                    .map(|c| c.scalar.as_string().cloned())
                 else {
                     return Err(ErrorCode::SemanticError(format!(
                         "invalid parameter {argument} for udf function, expected constant string",

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use chrono_tz::Tz;
@@ -74,11 +75,11 @@ impl Binder {
                                 let (scalar, _) = *type_checker.resolve(expr.as_ref())?;
                                 let expr = scalar.as_expr()?;
                                 let (new_expr, _) = ConstantFolder::fold(
-                                    expr,
+                                    Cow::Owned(expr),
                                     &self.ctx.get_function_context()?,
                                     &BUILTIN_FUNCTIONS,
                                 );
-                                match new_expr {
+                                match new_expr.into_owned() {
                                     Expr::Constant(Constant { scalar, .. }) => {
                                         let scalar = cast_scalar(
                                             None,

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use databend_common_expression::Constant;
@@ -64,11 +65,12 @@ impl PartitionPruner {
             .into_iter()
             .map(|expr| {
                 ConstantFolder::fold(
-                    expr.as_expr(&BUILTIN_FUNCTIONS),
+                    Cow::Owned(expr.as_expr(&BUILTIN_FUNCTIONS)),
                     &func_ctx,
                     &BUILTIN_FUNCTIONS,
                 )
                 .0
+                .into_owned()
             })
             .collect();
 
@@ -95,10 +97,11 @@ impl PartitionPruner {
         let filter = visit_expr(&self.filter, &mut visitor)
             .unwrap()
             .unwrap_or_else(|| self.filter.clone());
-        let (filter, _) = ConstantFolder::fold(filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (filter, _) =
+            ConstantFolder::fold(Cow::Owned(filter), &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         !matches!(
-            filter,
+            filter.as_ref(),
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
@@ -185,13 +188,13 @@ impl PartitionPredicateRewriter<'_> {
             return true;
         };
         let (equality, _) = ConstantFolder::fold_with_domain(
-            equality,
+            Cow::Owned(equality),
             input_domains,
             self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
         !matches!(
-            equality,
+            equality.as_ref(),
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..

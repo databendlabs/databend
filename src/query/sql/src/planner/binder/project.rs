@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -689,10 +690,13 @@ impl Binder {
             )?;
             let (scalar, _) = *type_checker.resolve(&expr)?;
             let expr = scalar.as_expr()?;
-            let (new_expr, _) =
-                ConstantFolder::fold(expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            let (new_expr, _) = ConstantFolder::fold(
+                Cow::Owned(expr),
+                &self.ctx.get_function_context()?,
+                &BUILTIN_FUNCTIONS,
+            );
 
-            match new_expr {
+            match new_expr.into_owned() {
                 databend_common_expression::Expr::Constant(Constant {
                     scalar: Scalar::Array(Column::Boolean(bitmap)),
                     ..
@@ -720,7 +724,7 @@ impl Binder {
                         output.items.push(item);
                     }
                 }
-                _ => {
+                new_expr => {
                     return Err(ErrorCode::SemanticError(format!(
                         "Column lambda expression must be constant folded: {:?}",
                         new_expr

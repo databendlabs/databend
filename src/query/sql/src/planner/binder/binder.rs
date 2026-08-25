@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::mem;
@@ -978,9 +979,12 @@ impl Binder {
             let scalar = wrap_cast(&scalar, &DataType::String);
             let expr = scalar.as_expr()?;
 
-            let (new_expr, _) =
-                ConstantFolder::fold(expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-            match new_expr {
+            let (new_expr, _) = ConstantFolder::fold(
+                Cow::Owned(expr),
+                &self.ctx.get_function_context()?,
+                &BUILTIN_FUNCTIONS,
+            );
+            match new_expr.into_owned() {
                 Expr::Constant(Constant { scalar, .. }) => {
                     let value = scalar.into_string().unwrap();
                     if variable.to_lowercase().as_str() == "timezone" {

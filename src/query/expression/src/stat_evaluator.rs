@@ -132,9 +132,12 @@ impl<'a> StatEvaluator<'a> {
             dest_type: cast.dest_type.clone(),
         });
         let input_domains = HashMap::from([(0, input.domain.clone())]);
-        let (_, Some(domain)) =
-            ConstantFolder::fold_with_domain(expr, &input_domains, self.func_ctx, self.fn_registry)
-        else {
+        let (_, Some(domain)) = ConstantFolder::fold_with_domain(
+            Cow::Owned(expr),
+            &input_domains,
+            self.func_ctx,
+            self.fn_registry,
+        ) else {
             return Ok(None);
         };
 

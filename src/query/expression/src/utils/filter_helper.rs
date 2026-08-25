@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 
 use databend_common_column::bitmap::Bitmap;
@@ -166,12 +167,13 @@ impl FilterHelpers {
                                 }
                             });
 
-                        let (folded_expr, _) = ConstantFolder::fold(expr, func_ctx, fn_registry);
+                        let (folded_expr, _) =
+                            ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry);
 
                         if let Expr::Constant(Constant {
                             scalar: Scalar::Boolean(false),
                             ..
-                        }) = folded_expr
+                        }) = folded_expr.as_ref()
                         {
                             if idx == 0 {
                                 results.push(value.clone());

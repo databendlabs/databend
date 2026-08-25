@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
@@ -557,9 +559,12 @@ where A: TypeCheckAdapter
             CoreWindowFrameBound::Following(Some(expr))
             | CoreWindowFrameBound::Preceding(Some(expr)) => {
                 let box (expr, _) = self.resolve_core(arena, *expr)?;
-                let (expr, _) =
-                    ConstantFolder::fold(expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                match expr.into_constant() {
+                let (expr, _) = ConstantFolder::fold(
+                    Cow::Owned(expr.as_expr()?),
+                    &self.func_ctx,
+                    &BUILTIN_FUNCTIONS,
+                );
+                match expr.into_owned().into_constant() {
                     Ok(expr::Constant { scalar, .. }) => Ok(Some(scalar)),
                     Err(expr) => Err(ErrorCode::SemanticError(
                         "Only constant is allowed in RANGE offset".to_string(),

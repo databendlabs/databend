@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
@@ -731,8 +732,12 @@ impl PhysicalPlanBuilder {
                         dest_type: common_ty.clone(),
                     };
                     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                    let (expr, _) =
-                        ConstantFolder::fold(expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
+                    let (expr, _) = ConstantFolder::fold(
+                        Cow::Owned(expr),
+                        &FunctionContext::default(),
+                        &BUILTIN_FUNCTIONS,
+                    );
+                    let expr = expr.into_owned();
                     if let Expr::Constant(Constant {
                         scalar: new_scalar, ..
                     }) = expr

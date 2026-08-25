@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -67,14 +68,14 @@ impl InternalColumnPruner {
             input_domains.insert(col_name.to_string(), domain);
 
             let (folded_expr, _) = ConstantFolder::fold_with_domain(
-                self.expr.clone(),
+                Cow::Borrowed(&self.expr),
                 &input_domains,
                 &self.func_ctx,
                 &BUILTIN_FUNCTIONS,
             );
 
             !matches!(
-                folded_expr,
+                folded_expr.as_ref(),
                 Expr::Constant(Constant {
                     scalar: Scalar::Boolean(false),
                     ..

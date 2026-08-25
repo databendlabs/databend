@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -278,7 +279,14 @@ impl BloomIndex {
             column_stats,
             data_schema,
         )?;
-        match ConstantFolder::fold_with_domain(expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS).0
+        match ConstantFolder::fold_with_domain(
+            Cow::Owned(expr),
+            &domains,
+            &self.func_ctx,
+            &BUILTIN_FUNCTIONS,
+        )
+        .0
+        .as_ref()
         {
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
@@ -1336,7 +1344,7 @@ impl EqVisitor for RewriteVisitor<'_> {
 
         // check domain for possible overflow
         if ConstantFolder::<String>::fold_with_domain(
-            cast.clone(),
+            Cow::Borrowed(cast),
             self.domains,
             &FunctionContext::default(),
             &BUILTIN_FUNCTIONS,

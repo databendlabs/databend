@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::Write;
 use std::str::FromStr;
 
@@ -1323,15 +1324,20 @@ fn test_calendar_domain_fails_open_across_tz_fallback() {
         // Both end points map to October 31, but the range internally touches
         // November 1: any domain narrower than `Full` would exclude reachable
         // outputs and let pruning drop live rows.
-        let (_, domain) =
-            ConstantFolder::fold_with_domain(expr.clone(), &input, &st_johns, &BUILTIN_FUNCTIONS);
+        let (_, domain) = ConstantFolder::fold_with_domain(
+            Cow::Borrowed(&expr),
+            &input,
+            &st_johns,
+            &BUILTIN_FUNCTIONS,
+        );
         assert_eq!(domain, Some(Domain::full(&return_type)), "{name}");
 
         // Under a fixed offset the same range is a single segment: the
         // projection collapses to one day and folds to a constant.
-        let (folded, _) = ConstantFolder::fold_with_domain(expr, &input, &utc, &BUILTIN_FUNCTIONS);
+        let (folded, _) =
+            ConstantFolder::fold_with_domain(Cow::Owned(expr), &input, &utc, &BUILTIN_FUNCTIONS);
         assert!(
-            matches!(folded, Expr::Constant(_)),
+            matches!(folded.as_ref(), Expr::Constant(_)),
             "{name}: expected constant fold under UTC, got {folded:?}"
         );
     }

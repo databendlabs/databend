@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SetType;
@@ -65,13 +67,14 @@ impl Binder {
                         let (scalar, _) = *type_checker.resolve(expr.as_ref())?;
                         let expr = scalar.as_expr()?;
                         let (new_expr, _) = ConstantFolder::fold(
-                            expr,
+                            Cow::Owned(expr),
                             &self.ctx.get_function_context()?,
                             &BUILTIN_FUNCTIONS,
                         );
-                        let Constant { scalar, .. } = new_expr.into_constant().map_err(|_| {
-                            ErrorCode::SemanticError("value must be constant value")
-                        })?;
+                        let Constant { scalar, .. } =
+                            new_expr.into_owned().into_constant().map_err(|_| {
+                                ErrorCode::SemanticError("value must be constant value")
+                            })?;
                         results.push(scalar);
                     }
                     SetScalarsOrQuery::VarValue(results)

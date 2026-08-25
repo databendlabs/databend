@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -625,9 +626,12 @@ impl SubqueryDecorrelatorOptimizer {
                 let mut constant_scalar = None;
                 if scalar_expr.used_columns().is_empty() && !scalar_expr.has_subquery() {
                     let func_ctx = self.ctx.get_function_context()?;
-                    let (folded, _) =
-                        ConstantFolder::fold(scalar_expr.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS);
-                    if let EExpr::Constant(constant) = folded {
+                    let (folded, _) = ConstantFolder::fold(
+                        Cow::Owned(scalar_expr.as_expr()?),
+                        &func_ctx,
+                        &BUILTIN_FUNCTIONS,
+                    );
+                    if let EExpr::Constant(constant) = folded.into_owned() {
                         constant_scalar = Some(ScalarExpr::TypedConstantExpr(
                             ConstantExpr {
                                 span: scalar_expr.span(),

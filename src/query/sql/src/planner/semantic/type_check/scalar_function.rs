@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -588,7 +590,14 @@ where A: TypeCheckAdapter
                           default: i64|
              -> Result<i64> {
                 Ok(args.get(index).map(|arg| {
-                    match ConstantFolder::fold(arg.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS).0 {
+                    match ConstantFolder::fold(
+                        Cow::Owned(arg.as_expr()?),
+                        &func_ctx,
+                        &BUILTIN_FUNCTIONS,
+                    )
+                    .0
+                    .into_owned()
+                    {
                         EExpr::Constant(Constant {
                             scalar,
                             ..

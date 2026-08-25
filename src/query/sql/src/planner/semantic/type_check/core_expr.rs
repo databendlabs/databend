@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
@@ -715,8 +717,10 @@ where A: TypeCheckAdapter
         for (display_name, param) in params {
             let box (scalar, _) = self.resolve_core(arena, *param)?;
             let expr = scalar.as_expr()?;
-            let (expr, _) = ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let (expr, _) =
+                ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
             let constant = expr
+                .into_owned()
                 .into_constant()
                 .map_err(|_| {
                     ErrorCode::SemanticError(format!(

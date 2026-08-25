@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -401,8 +402,12 @@ enum FoldedConstantStat {
 
 fn fold_constant_stat(expr: &ScalarExpr) -> Result<Option<FoldedConstantStat>> {
     let expr = expr.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-    let Ok(constant) = expr.into_constant() else {
+    let (expr, _) = ConstantFolder::fold(
+        Cow::Owned(expr),
+        &FunctionContext::default(),
+        &BUILTIN_FUNCTIONS,
+    );
+    let Ok(constant) = expr.into_owned().into_constant() else {
         return Ok(None);
     };
     if constant.scalar == Scalar::Null {
