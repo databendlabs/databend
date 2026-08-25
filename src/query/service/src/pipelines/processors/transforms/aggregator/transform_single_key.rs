@@ -31,7 +31,7 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::StatesLayout;
 use databend_common_expression::aggregate::aggregate_function::AccumulateInput;
 use databend_common_expression::aggregate::aggregate_function::AccumulateRowCountInput;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
+use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate::aggregate_function::AggregateStateSet;
 use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
 use databend_common_expression::aggregate::aggregate_function::MergeSerializedInput;
@@ -52,7 +52,7 @@ pub struct PartialSingleStateAggregator {
     addr: StateAddr,
     states_layout: StatesLayout,
     arg_indices: Vec<Vec<usize>>,
-    funcs: Vec<AggregateFunctionRef>,
+    funcs: Vec<AggregateCallRef>,
 
     start: Instant,
     first_block_start: Option<Instant>,
@@ -217,7 +217,7 @@ pub struct FinalSingleStateAggregator {
     arena: Bump,
     states_layout: StatesLayout,
     to_merge_data: Vec<DataBlock>,
-    funcs: Vec<AggregateFunctionRef>,
+    funcs: Vec<AggregateCallRef>,
 }
 
 impl FinalSingleStateAggregator {

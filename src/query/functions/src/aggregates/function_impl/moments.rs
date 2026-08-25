@@ -38,13 +38,13 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct MomentsBuilder;
 
 impl MomentsBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["skewness"],
             MomentsBuilder::moments_arguments(),
@@ -73,7 +73,7 @@ impl MomentsBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: MomentsBuilder::register,
     }
 }
@@ -83,7 +83,7 @@ impl MomentsBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    const SKEWNESS_FEATURES: FunctionFeatures = FunctionFeatures {
+    const SKEWNESS_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -94,7 +94,7 @@ impl MomentsBuilder {
         example: "select skewness(number) from numbers(10)",
     };
 
-    const KURTOSIS_FEATURES: FunctionFeatures = FunctionFeatures {
+    const KURTOSIS_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -334,21 +334,17 @@ macro_rules! create_moment_function {
 }
 
 impl MomentsBuilder {
-    fn create_skewness(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create_skewness(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         create_moment_function!(AggregateSkewnessState, build)
     }
 
-    fn create_kurtosis(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create_kurtosis(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         create_moment_function!(AggregateKurtosisState, build)
     }
 
     fn create_instance<S, I>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef>
+        build: UnaryBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef>
     where
         S: MomentState + UnaryState<I, Float64Type, FunctionInfo = ()>,
         I: AccessType,

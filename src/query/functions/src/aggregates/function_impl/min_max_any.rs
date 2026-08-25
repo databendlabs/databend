@@ -46,7 +46,7 @@ use databend_common_expression::types::i256;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 use super::serialized_scalar_at;
 
@@ -57,7 +57,7 @@ pub const TYPE_MAX: u8 = 2;
 struct MinMaxAnyBuilder;
 
 impl MinMaxAnyBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::route::<TYPE_MIN>().register(registry);
         Self::route::<TYPE_MAX>().register(registry);
         Self::route::<TYPE_ANY>().register(registry);
@@ -65,7 +65,7 @@ impl MinMaxAnyBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: MinMaxAnyBuilder::register,
     }
 }
@@ -75,7 +75,7 @@ impl MinMaxAnyBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    const MIN_FEATURES: FunctionFeatures = FunctionFeatures {
+    const MIN_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -86,7 +86,7 @@ impl MinMaxAnyBuilder {
         example: "select min(number) from numbers(10)",
     };
 
-    const MAX_FEATURES: FunctionFeatures = FunctionFeatures {
+    const MAX_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -97,7 +97,7 @@ impl MinMaxAnyBuilder {
         example: "select max(number) from numbers(10)",
     };
 
-    const ANY_FEATURES: FunctionFeatures = FunctionFeatures {
+    const ANY_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -295,8 +295,8 @@ impl MinMaxAnyBuilder {
     }
 
     fn create<const CMP_TYPE: u8>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+        build: UnaryBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef> {
         let data_type = build.arg_type().clone();
         let need_drop = need_manual_drop_state(&data_type);
 
@@ -353,10 +353,10 @@ impl MinMaxAnyBuilder {
     }
 
     fn create_instance<T, const CMP_TYPE: u8>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         return_type: DataType,
         need_manual_drop: bool,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         T: ValueType,
         T::Scalar: BorshSerialize + BorshDeserialize,
@@ -366,23 +366,19 @@ impl MinMaxAnyBuilder {
             return_type.clone(),
             need_manual_drop,
         );
-        let implementation = AggregateMinMaxAnyImplementation::<T, CMP_TYPE>::new();
+        let eval = MinMaxAnyEval::<T, CMP_TYPE>::new();
 
-        build.create_unary_or_null_with_impl::<T, T, _>(
-            return_type.wrap_nullable(),
-            state,
-            implementation,
-        )
+        build.create_unary_or_null_with_eval::<T, T, _>(return_type.wrap_nullable(), state, eval)
     }
 }
 
-struct AggregateMinMaxAnyImplementation<T, const CMP_TYPE: u8>
+struct MinMaxAnyEval<T, const CMP_TYPE: u8>
 where T: ValueType
 {
     _p: PhantomData<fn(T)>,
 }
 
-impl<T, const CMP_TYPE: u8> AggregateMinMaxAnyImplementation<T, CMP_TYPE>
+impl<T, const CMP_TYPE: u8> MinMaxAnyEval<T, CMP_TYPE>
 where T: ValueType
 {
     fn new() -> Self {
@@ -390,7 +386,7 @@ where T: ValueType
     }
 }
 
-impl<T, const CMP_TYPE: u8> UnaryAggrImpl<T, T> for AggregateMinMaxAnyImplementation<T, CMP_TYPE>
+impl<T, const CMP_TYPE: u8> UnaryEval<T, T> for MinMaxAnyEval<T, CMP_TYPE>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,

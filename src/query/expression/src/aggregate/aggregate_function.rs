@@ -16,6 +16,7 @@ use std::alloc::Layout;
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt;
 use std::sync::Arc;
 
@@ -38,10 +39,10 @@ use crate::StateSerdeItem;
 use crate::Symbol;
 use crate::types::DataType;
 
-pub type AggregateFunctionRef = Arc<dyn FunctionInstance>;
+pub type AggregateCallRef = Arc<dyn AggregateCall>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AggregateFunctionSignature {
+pub struct AggregateSignature {
     pub name: String,
     pub params: Vec<Scalar>,
     pub args_type: Vec<DataType>,
@@ -369,7 +370,7 @@ pub enum DistinctPolicy {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct FunctionFeatures {
+pub struct AggregateFeatures {
     pub is_decomposable: bool,
     pub supports_filter: bool,
     pub sort_policy: SortPolicy,
@@ -521,7 +522,7 @@ pub struct MergeResultInput<'a> {
     pub builder: &'a mut ColumnBuilder,
 }
 
-pub trait AggrImpl: Send + Sync + 'static {
+pub trait AggregateEval: Send + Sync + 'static {
     fn init_state(&self, state: AggrState<'_>);
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()>;
@@ -566,10 +567,10 @@ pub trait AggrImpl: Send + Sync + 'static {
     unsafe fn drop_state(&self, state: AggrState<'_>);
 }
 
-pub trait FunctionInstance: fmt::Display + Send + Sync + 'static {
-    fn signature(&self) -> &AggregateFunctionSignature;
+pub trait AggregateCall: fmt::Display + Send + Sync + 'static {
+    fn signature(&self) -> &AggregateSignature;
 
-    fn features(&self) -> &FunctionFeatures;
+    fn features(&self) -> &AggregateFeatures;
 
     /// Physical input order expected by `accumulate*`.
     fn input_layout(&self) -> &FunctionInputLayout;
@@ -607,21 +608,21 @@ pub trait FunctionInstance: fmt::Display + Send + Sync + 'static {
     unsafe fn drop_state(&self, state: AggrState<'_>);
 }
 
-pub struct AggregateFunction<I> {
-    signature: AggregateFunctionSignature,
+pub struct AggregateCallInstance<I> {
+    signature: AggregateSignature,
     input_layout: FunctionInputLayout,
-    features: FunctionFeatures,
+    features: AggregateFeatures,
     state: AggregateStateDescription,
     implementation: I,
 }
 
-impl<I> AggregateFunction<I>
-where I: AggrImpl
+impl<I> AggregateCallInstance<I>
+where I: AggregateEval
 {
     pub fn new(
-        signature: AggregateFunctionSignature,
+        signature: AggregateSignature,
         input_layout: FunctionInputLayout,
-        features: FunctionFeatures,
+        features: AggregateFeatures,
         state: AggregateStateDescription,
         implementation: I,
     ) -> Self {
@@ -635,10 +636,10 @@ where I: AggrImpl
     }
 }
 
-impl<I> FunctionInstance for AggregateFunction<I>
-where I: AggrImpl
+impl<I> AggregateCall for AggregateCallInstance<I>
+where I: AggregateEval
 {
-    fn signature(&self) -> &AggregateFunctionSignature {
+    fn signature(&self) -> &AggregateSignature {
         &self.signature
     }
 
@@ -646,7 +647,7 @@ where I: AggrImpl
         &self.input_layout
     }
 
-    fn features(&self) -> &FunctionFeatures {
+    fn features(&self) -> &AggregateFeatures {
         &self.features
     }
 
@@ -703,14 +704,14 @@ where I: AggrImpl
     }
 }
 
-impl<I> fmt::Display for AggregateFunction<I> {
+impl<I> fmt::Display for AggregateCallInstance<I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.signature.name)
     }
 }
 
 #[derive(Clone)]
-pub struct AggregateFunctionRequest<'a> {
+pub struct RawAggregateCall<'a> {
     pub name: &'a str,
     pub params: &'a [Scalar],
     pub args_type: &'a [DataType],
@@ -718,27 +719,24 @@ pub struct AggregateFunctionRequest<'a> {
     pub order_by: &'a [AggregateBoundOrderByItem],
 }
 
-pub trait AggregateFunctionBuilder: Send + Sync + 'static {
+pub trait AggregateCallBuilder: Send + Sync + 'static {
     fn arguments(&self) -> &ArgumentsPattern;
 
-    fn features(&self) -> &FunctionFeatures;
+    fn features(&self) -> &AggregateFeatures;
 
-    fn build(&self, request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef>;
+    fn build(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef>;
 }
 
-pub struct AggregateFunctionDescriptor {
+pub struct AggregateDescriptor {
     pub name: String,
     pub aliases: Vec<String>,
     arguments: ArgumentsPattern,
-    features: FunctionFeatures,
-    builder: Arc<dyn AggregateFunctionBuilder>,
+    features: AggregateFeatures,
+    builder: Arc<dyn AggregateCallBuilder>,
 }
 
-impl AggregateFunctionDescriptor {
-    pub fn from_builder(
-        name: impl Into<String>,
-        builder: Arc<dyn AggregateFunctionBuilder>,
-    ) -> Self {
+impl AggregateDescriptor {
+    pub fn from_builder(name: impl Into<String>, builder: Arc<dyn AggregateCallBuilder>) -> Self {
         let arguments = builder.arguments().clone();
         let features = builder.features().clone();
         Self {
@@ -758,7 +756,7 @@ impl AggregateFunctionDescriptor {
     pub fn with_metadata(
         mut self,
         arguments: ArgumentsPattern,
-        features: FunctionFeatures,
+        features: AggregateFeatures,
     ) -> Self {
         self.arguments = arguments;
         self.features = features;
@@ -769,29 +767,36 @@ impl AggregateFunctionDescriptor {
         &self.arguments
     }
 
-    pub fn features(&self) -> &FunctionFeatures {
+    pub fn features(&self) -> &AggregateFeatures {
         &self.features
     }
 }
 
 #[derive(Default)]
-pub struct AggregateFunctionRegistry {
-    functions: HashMap<String, Vec<AggregateFunctionDescriptor>>,
+pub struct AggregateRegistry {
+    functions: HashMap<String, AggregateDescriptor>,
     aliases: HashMap<String, String>,
 }
 
-impl AggregateFunctionRegistry {
+impl AggregateRegistry {
     pub fn empty() -> Self {
         Self::default()
     }
 
-    pub fn register(&mut self, descriptor: AggregateFunctionDescriptor) {
-        let name = descriptor.name.to_lowercase();
-        for alias in &descriptor.aliases {
-            self.aliases.insert(alias.to_lowercase(), name.clone());
+    pub fn register(&mut self, descriptor: AggregateDescriptor) {
+        let name = descriptor.name.to_ascii_lowercase();
+        match self.functions.entry(name) {
+            Entry::Vacant(entry) => {
+                for alias in &descriptor.aliases {
+                    self.aliases
+                        .insert(alias.to_ascii_lowercase(), entry.key().clone());
+                }
+                entry.insert(descriptor);
+            }
+            Entry::Occupied(entry) => {
+                panic!("duplicate aggregate function registration: {}", entry.key())
+            }
         }
-
-        self.functions.entry(name).or_default().push(descriptor);
     }
 
     pub fn registered_names(&self) -> Vec<String> {
@@ -811,38 +816,27 @@ impl AggregateFunctionRegistry {
         aliases
     }
 
-    pub fn descriptors(&self, name: &str) -> &[AggregateFunctionDescriptor] {
+    pub fn descriptor(&self, name: &str) -> Option<&AggregateDescriptor> {
         let name = self.canonical_name(name);
-        self.functions
-            .get(name.as_str())
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
+        self.functions.get(name.as_str())
     }
 
     pub fn contains(&self, name: &str) -> bool {
-        !self.descriptors(name).is_empty()
+        self.descriptor(name).is_some()
     }
 
-    pub fn is_decomposable(&self, name: &str) -> bool {
-        self.descriptors(name)
-            .iter()
-            .any(|descriptor| descriptor.features().is_decomposable)
-    }
-
-    pub fn resolve(&self, request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
+    pub fn resolve(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef> {
         let requested_name = request.name.to_ascii_lowercase();
         let name = self.canonical_name(&requested_name);
-        let descriptors = self.functions.get(&name).ok_or_else(|| {
+        let descriptor = self.functions.get(&name).ok_or_else(|| {
             ErrorCode::UnknownAggregateFunction(format!(
                 "Unsupported AggregateFunction: {requested_name}"
             ))
         })?;
 
         if request.distinct {
-            if descriptors.iter().any(|descriptor| {
-                descriptor.features().distinct_policy == DistinctPolicy::Idempotent
-            }) {
-                return self.resolve(AggregateFunctionRequest {
+            if descriptor.features().distinct_policy == DistinctPolicy::Idempotent {
+                return self.resolve(RawAggregateCall {
                     name: requested_name.as_str(),
                     params: request.params,
                     args_type: request.args_type,
@@ -855,77 +849,53 @@ impl AggregateFunctionRegistry {
             // before checking the source signature because they may accept
             // different argument counts (for example, count and
             // count_distinct).
-            let targets = descriptors
-                .iter()
-                .filter_map(|descriptor| {
-                    descriptor
-                        .features()
-                        .distinct_policy
-                        .target_for(&requested_name)
-                })
-                .collect::<BTreeSet<_>>();
-            let mut last_error = None;
-            for target in targets {
-                let redirected = AggregateFunctionRequest {
+            if let Some(target) = descriptor
+                .features()
+                .distinct_policy
+                .target_for(&requested_name)
+            {
+                let redirected = RawAggregateCall {
                     name: target,
                     params: request.params,
                     args_type: request.args_type,
                     distinct: false,
                     order_by: request.order_by,
                 };
-                match self.resolve(redirected) {
-                    Ok(function) => return Ok(function),
-                    Err(error) => last_error = Some(error),
-                }
+                return self.resolve(redirected);
             }
-            return Err(last_error.unwrap_or_else(|| {
-                ErrorCode::UnknownAggregateFunction(format!(
-                    "Unsupported AggregateFunction signature: {requested_name}({:?})",
-                    request.args_type
-                ))
-            }));
+            return Err(ErrorCode::UnknownAggregateFunction(format!(
+                "Unsupported AggregateFunction signature: {requested_name}({:?})",
+                request.args_type
+            )));
         }
 
-        if !descriptors.iter().any(|descriptor| {
-            descriptor
-                .arguments()
-                .accepts_arity(request.args_type.len())
-        }) {
+        if !descriptor
+            .arguments()
+            .accepts_arity(request.args_type.len())
+        {
             return Err(ErrorCode::NumberArgumentsNotMatch(format!(
                 "Aggregate function {requested_name} does not accept {} arguments",
                 request.args_type.len()
             )));
         }
 
-        let mut last_error = None;
-        for descriptor in descriptors {
-            if !descriptor.arguments().matches_types(request.args_type) {
-                continue;
-            }
-            if !descriptor.features().sort_policy.accepts(request.order_by) {
-                continue;
-            }
-
-            let request = AggregateFunctionRequest {
-                name: requested_name.as_str(),
-                params: request.params,
-                args_type: request.args_type,
-                distinct: false,
-                order_by: request.order_by,
-            };
-            let builder = descriptor.builder.as_ref();
-            match builder.build(request) {
-                Ok(function) => return Ok(function),
-                Err(error) => last_error = Some(error),
-            }
-        }
-
-        Err(last_error.unwrap_or_else(|| {
-            ErrorCode::UnknownAggregateFunction(format!(
+        if !descriptor.arguments().matches_types(request.args_type)
+            || !descriptor.features().sort_policy.accepts(request.order_by)
+        {
+            return Err(ErrorCode::UnknownAggregateFunction(format!(
                 "Unsupported AggregateFunction signature: {requested_name}({:?})",
                 request.args_type
-            ))
-        }))
+            )));
+        }
+
+        let request = RawAggregateCall {
+            name: requested_name.as_str(),
+            params: request.params,
+            args_type: request.args_type,
+            distinct: false,
+            order_by: request.order_by,
+        };
+        descriptor.builder.build(request)
     }
 
     fn canonical_name(&self, name: &str) -> String {
@@ -977,7 +947,7 @@ impl DistinctPolicy {
     }
 }
 
-pub fn get_states_layout(functions: &[AggregateFunctionRef]) -> Result<StatesLayout> {
+pub fn get_states_layout(functions: &[AggregateCallRef]) -> Result<StatesLayout> {
     let mut states = Vec::new();
     let mut offsets = Vec::with_capacity(functions.len() + 1);
     let mut serialize_type = Vec::with_capacity(functions.len());
@@ -1005,12 +975,12 @@ pub fn get_states_layout(functions: &[AggregateFunctionRef]) -> Result<StatesLay
 pub struct AggregateStateOwner {
     addr: StateAddr,
     layout: StatesLayout,
-    functions: Vec<AggregateFunctionRef>,
+    functions: Vec<AggregateCallRef>,
     _arena: Bump,
 }
 
 impl AggregateStateOwner {
-    pub fn new(functions: Vec<AggregateFunctionRef>) -> Result<Self> {
+    pub fn new(functions: Vec<AggregateCallRef>) -> Result<Self> {
         let layout = get_states_layout(&functions)?;
         let _arena = Bump::new();
         let addr = _arena.alloc_layout(layout.layout).into();

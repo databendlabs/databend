@@ -37,13 +37,13 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
 use super::super::common::get_levels;
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct QuantileDiscBuilder;
 
 impl QuantileDiscBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["quantile_disc", "quantile"],
             Self::quantile_disc_arguments(),
@@ -60,7 +60,7 @@ impl QuantileDiscBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: QuantileDiscBuilder::register,
     }
 }
@@ -70,7 +70,7 @@ impl QuantileDiscBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    const QUANTILE_FEATURES: FunctionFeatures = FunctionFeatures {
+    const QUANTILE_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -289,7 +289,7 @@ where
 }
 
 impl QuantileDiscBuilder {
-    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
         let levels = get_levels(build.params())?;
@@ -317,10 +317,10 @@ impl QuantileDiscBuilder {
     }
 
     fn create_instance<T>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         data_type: DataType,
         levels: Vec<f64>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         T: AccessType + ValueType,
         T::Scalar: BorshSerialize + BorshDeserialize + Ord,
@@ -337,10 +337,10 @@ impl QuantileDiscBuilder {
     }
 
     fn create_typed<I, R>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         return_type: DataType,
         levels: Vec<f64>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         I: AccessType + ValueType,
         I::Scalar: BorshSerialize + BorshDeserialize,

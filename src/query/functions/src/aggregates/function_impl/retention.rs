@@ -28,7 +28,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt32Type;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 #[derive(Default)]
@@ -46,14 +46,14 @@ impl AggregateRetentionState {
     }
 }
 
-pub struct AggregateRetentionImplementation {
+pub struct RetentionEval {
     events_size: usize,
 }
 
 struct RetentionBuilder;
 
 impl RetentionBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["retention"],
             Self::retention_arguments(),
@@ -71,7 +71,7 @@ impl RetentionBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: RetentionBuilder::register,
     }
 }
@@ -86,7 +86,7 @@ impl RetentionBuilder {
         )
     }
 
-    const RETENTION_FEATURES: FunctionFeatures = FunctionFeatures {
+    const RETENTION_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -97,7 +97,7 @@ impl RetentionBuilder {
         example: "select retention(event1, event2) from t",
     };
 
-    const RETENTION_STATE_FEATURES: FunctionFeatures = FunctionFeatures {
+    const RETENTION_STATE_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -109,7 +109,7 @@ impl RetentionBuilder {
     };
 }
 
-impl AggregateRetentionImplementation {
+impl RetentionEval {
     pub fn new(events_size: usize) -> Self {
         debug_assert!((1..=32).contains(&events_size));
         Self { events_size }
@@ -145,7 +145,7 @@ impl AggregateRetentionImplementation {
     }
 }
 
-impl AggrImpl for AggregateRetentionImplementation {
+impl AggregateEval for RetentionEval {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(AggregateRetentionState::default);
     }
@@ -237,14 +237,12 @@ impl AggrImpl for AggregateRetentionImplementation {
 }
 
 impl RetentionBuilder {
-    fn create(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create(build: MultiArgBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let events_size = build.args_type().len();
         build.create_multi_arg_or_null(
             DataType::Array(Box::new(UInt8Type::data_type())).wrap_nullable(),
-            AggregateRetentionImplementation::state_description(),
-            AggregateRetentionImplementation::new(events_size),
+            RetentionEval::state_description(),
+            RetentionEval::new(events_size),
         )
     }
 }

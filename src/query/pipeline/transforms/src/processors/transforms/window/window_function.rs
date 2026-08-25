@@ -24,9 +24,9 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
 use databend_common_expression::aggregate::aggregate_function::AccumulateRowInput;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_expression::aggregate_function::get_states_layout;
 use databend_common_expression::types::DataType;
@@ -38,7 +38,7 @@ use databend_common_sql::executor::physical_plans::window::WindowFunction;
 #[derive(Clone)]
 pub enum WindowFunctionInfo {
     // (func instance, argument offsets)
-    Aggregate(AggregateFunctionRef, Vec<usize>),
+    Aggregate(AggregateCallRef, Vec<usize>),
     RowNumber,
     Rank,
     DenseRank,
@@ -53,7 +53,7 @@ type Arena = bumpalo::Bump;
 pub struct WindowFuncAggImpl {
     // Need to hold arena until `drop`.
     _arena: Arena,
-    agg: AggregateFunctionRef,
+    agg: AggregateCallRef,
     addr: StateAddr,
     loc: Box<[AggrStateLoc]>,
     args: Vec<usize>,
@@ -211,7 +211,7 @@ impl WindowFunctionInfo {
                     }
                 }
 
-                let agg_func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+                let agg_func = AGGR_REGISTRY.resolve(RawAggregateCall {
                     name: agg.sig.name.as_str(),
                     params: &agg.sig.params.clone(),
                     args_type: &agg.sig.args.clone(),
@@ -318,11 +318,11 @@ mod tests {
     use databend_common_expression::aggregate::aggregate_function::AccumulateRowCountInput;
     use databend_common_expression::aggregate::aggregate_function::AccumulateRowCountKeysInput;
     use databend_common_expression::aggregate::aggregate_function::AccumulateRowInput;
-    use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
-    use databend_common_expression::aggregate::aggregate_function::AggregateFunctionSignature;
+    use databend_common_expression::aggregate::aggregate_function::AggregateCall;
+    use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
+    use databend_common_expression::aggregate::aggregate_function::AggregateFeatures;
+    use databend_common_expression::aggregate::aggregate_function::AggregateSignature;
     use databend_common_expression::aggregate::aggregate_function::AggregateStateDescription;
-    use databend_common_expression::aggregate::aggregate_function::FunctionFeatures;
-    use databend_common_expression::aggregate::aggregate_function::FunctionInstance;
     use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
     use databend_common_expression::aggregate::aggregate_function::MergeSerializedInput;
     use databend_common_expression::aggregate::aggregate_function::MergeStatesInput;
@@ -351,10 +351,10 @@ mod tests {
         }
     }
 
-    impl FunctionInstance for DropCountingAggregate {
-        fn signature(&self) -> &AggregateFunctionSignature {
-            static SIGNATURE: std::sync::LazyLock<AggregateFunctionSignature> =
-                std::sync::LazyLock::new(|| AggregateFunctionSignature {
+    impl AggregateCall for DropCountingAggregate {
+        fn signature(&self) -> &AggregateSignature {
+            static SIGNATURE: std::sync::LazyLock<AggregateSignature> =
+                std::sync::LazyLock::new(|| AggregateSignature {
                     name: "drop_counting_aggregate".to_string(),
                     params: vec![],
                     args_type: vec![],
@@ -365,8 +365,8 @@ mod tests {
             &SIGNATURE
         }
 
-        fn features(&self) -> &FunctionFeatures {
-            static FEATURES: FunctionFeatures = FunctionFeatures {
+        fn features(&self) -> &AggregateFeatures {
+            static FEATURES: AggregateFeatures = AggregateFeatures {
                 is_decomposable: false,
                 supports_filter: false,
                 sort_policy: databend_common_expression::aggregate::aggregate_function::SortPolicy::Unsupported,
@@ -449,7 +449,7 @@ mod tests {
     #[test]
     fn reset_drops_existing_manual_state_before_reinitializing() -> Result<()> {
         let drops = Arc::new(AtomicUsize::new(0));
-        let agg: AggregateFunctionRef = Arc::new(DropCountingAggregate {
+        let agg: AggregateCallRef = Arc::new(DropCountingAggregate {
             drops: drops.clone(),
         });
         let arena = Arena::new();

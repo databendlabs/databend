@@ -32,7 +32,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_license::license::Feature;
@@ -217,7 +217,7 @@ impl Binder {
                     unreachable!()
                 };
                 let merge_name = format!("{}_merge", state.function_name);
-                let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+                let function = AGGR_REGISTRY.resolve(RawAggregateCall {
                     name: &merge_name,
                     params: &[],
                     args_type: std::slice::from_ref(&argument_type),

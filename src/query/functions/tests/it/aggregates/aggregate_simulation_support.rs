@@ -31,7 +31,7 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::StatesLayout;
 use databend_common_expression::Value;
 use databend_common_expression::aggregate::aggregate_function as v2;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 pub use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
@@ -236,7 +236,7 @@ pub(super) fn simulate_two_groups_group_by(
     sort_descs: Vec<AggregateBoundOrderByItem>,
 ) -> databend_common_exception::Result<(Column, DataType)> {
     let arguments: Vec<DataType> = entries.iter().map(|c| c.data_type()).collect();
-    let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let func = AGGR_REGISTRY.resolve(RawAggregateCall {
         name,
         params: &params,
         args_type: &arguments,
@@ -298,7 +298,7 @@ pub(super) fn eval_aggregate_for_test(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let func = AGGR_REGISTRY.resolve(RawAggregateCall {
         name,
         params: &params,
         args_type: &arguments,
@@ -356,11 +356,11 @@ struct EvalAggr {
     addr: StateAddr,
     state_layout: StatesLayout,
     _arena: Bump,
-    func: v2::AggregateFunctionRef,
+    func: v2::AggregateCallRef,
 }
 
 impl EvalAggr {
-    fn new(func: v2::AggregateFunctionRef) -> Self {
+    fn new(func: v2::AggregateCallRef) -> Self {
         let funcs = [func];
         let state_layout = v2::get_states_layout(&funcs).unwrap();
         let [func] = funcs;

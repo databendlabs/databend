@@ -41,7 +41,7 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 pub struct AggregateNumberSumState<R>
@@ -83,7 +83,7 @@ impl SumBuilder {
         }
     }
 
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::sum_route().register(registry);
         Self::sum_distinct_route().register(registry);
         Self::sum0_route().register(registry);
@@ -91,7 +91,7 @@ impl SumBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: SumBuilder::register,
     }
 }
@@ -148,7 +148,7 @@ impl SumBuilder {
         .then(PlainRoute::unary(Self::create_distinct))
     }
 
-    fn validate_sum0_plain(request: &AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_sum0_plain(request: &RawAggregateCall<'_>) -> Result<()> {
         if request.args_type.iter().any(DataType::is_null) {
             Err(ErrorCode::InvalidArgument(format!(
                 "Invalid argument type for {}, must be uint64",
@@ -177,7 +177,7 @@ impl SumBuilder {
         ])
     }
 
-    const SUM_FEATURES: FunctionFeatures = FunctionFeatures {
+    const SUM_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -188,7 +188,7 @@ impl SumBuilder {
         example: "select sum(number) from numbers(10)",
     };
 
-    const SUM_DISTINCT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const SUM_DISTINCT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -199,7 +199,7 @@ impl SumBuilder {
         example: "select sum_distinct(number) from numbers(10)",
     };
 
-    const SUM_ZERO_FEATURES: FunctionFeatures = FunctionFeatures {
+    const SUM_ZERO_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -210,7 +210,7 @@ impl SumBuilder {
         example: "select sum0(number) from numbers(10)",
     };
 
-    const SUM_IF_FEATURES: FunctionFeatures = FunctionFeatures {
+    const SUM_IF_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -221,7 +221,7 @@ impl SumBuilder {
         example: "select sum_if(number, number > 0) from numbers(10)",
     };
 
-    const STATE_FEATURES: FunctionFeatures = FunctionFeatures {
+    const STATE_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -456,7 +456,7 @@ impl UnaryState<IntervalType, IntervalType> for AggregateIntervalSumState {
 }
 
 impl SumBuilder {
-    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let data_type = build.arg_type().clone();
 
         #[rustfmt::skip]
@@ -528,9 +528,7 @@ impl SumBuilder {
         function
     }
 
-    fn create_distinct(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create_distinct(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let data_type = build.arg_type().clone();
 
         #[rustfmt::skip]
@@ -602,9 +600,7 @@ impl SumBuilder {
         function
     }
 
-    fn create_zero(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create_zero(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         if build.arg_type().remove_nullable() != NumberType::<u64>::data_type() {
             return Err(ErrorCode::InvalidArgument(format!(
                 "Invalid argument type for {}, must be uint64",

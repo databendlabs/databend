@@ -30,20 +30,20 @@ pub struct AggregateSortState {
     columns: Vec<ColumnBuilder>,
 }
 
-pub struct AggregateSortImplementation<I> {
-    inner: I,
+pub struct SortEval<I> {
+    nested: I,
     input_types: Vec<DataType>,
     order_by: Vec<AggregateRuntimeOrderByItem>,
 }
 
-impl<I> AggregateSortImplementation<I> {
+impl<I> SortEval<I> {
     pub fn new(
-        inner: I,
+        nested: I,
         input_types: Vec<DataType>,
         order_by: Vec<AggregateRuntimeOrderByItem>,
     ) -> Self {
         Self {
-            inner,
+            nested,
             input_types,
             order_by,
         }
@@ -129,7 +129,7 @@ impl<I> AggregateSortImplementation<I> {
     }
 
     fn prepare_inner_state<'a>(&self, state: AggrState<'a>) -> Result<AggrState<'a>>
-    where I: AggrImpl {
+    where I: AggregateEval {
         let sort_state = Self::state(state);
         let inner_state = state.remove_first_loc();
         if sort_state.columns.is_empty() {
@@ -174,8 +174,8 @@ impl<I> AggregateSortImplementation<I> {
         let args = (0..block.num_columns())
             .filter(|index| !skip_offsets.contains(index))
             .collect_vec();
-        self.inner.init_state(inner_state);
-        self.inner.accumulate(AccumulateInput {
+        self.nested.init_state(inner_state);
+        self.nested.accumulate(AccumulateInput {
             state: inner_state,
             columns: ProjectedBlock::project(&args, &block),
             validity: None,
@@ -233,12 +233,12 @@ pub(crate) fn sort_state_description(
     AggregateStateDescription::new(fields, serde_items).with_manual_drop(true)
 }
 
-impl<I> AggrImpl for AggregateSortImplementation<I>
-where I: AggrImpl
+impl<I> AggregateEval for SortEval<I>
+where I: AggregateEval
 {
     fn init_state(&self, state: AggrState<'_>) {
         write_state_at(state, 0, AggregateSortState::default());
-        self.inner.init_state(state.remove_first_loc());
+        self.nested.init_state(state.remove_first_loc());
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
@@ -295,7 +295,7 @@ where I: AggrImpl
             columns.serialize(&mut data)?;
             sort_builders[0].push(ScalarRef::Binary(&data));
         }
-        self.inner.serialize(SerializeInput {
+        self.nested.serialize(SerializeInput {
             states: input.states.without_first_loc(),
             builders: inner_builders,
         })
@@ -313,7 +313,7 @@ where I: AggrImpl
 
         let field_count = serialized_field_count(input.state);
         let inner_state = project_serialized_fields(input.state, 1, field_count);
-        self.inner.merge_serialized(MergeSerializedInput {
+        self.nested.merge_serialized(MergeSerializedInput {
             states: input.states.without_first_loc(),
             state: &inner_state,
             filter: input.filter,
@@ -328,7 +328,7 @@ where I: AggrImpl
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let inner_state = self.prepare_inner_state(input.state)?;
-        self.inner.merge_result(MergeResultInput {
+        self.nested.merge_result(MergeResultInput {
             state: inner_state,
             builder: input.builder,
         })
@@ -336,7 +336,7 @@ where I: AggrImpl
 
     fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         let inner_state = self.prepare_inner_state(input.state)?;
-        self.inner.merge_result_read_only(MergeResultInput {
+        self.nested.merge_result_read_only(MergeResultInput {
             state: inner_state,
             builder: input.builder,
         })
@@ -344,6 +344,6 @@ where I: AggrImpl
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
         unsafe { std::ptr::drop_in_place(Self::state(state)) };
-        unsafe { self.inner.drop_state(state.remove_first_loc()) };
+        unsafe { self.nested.drop_state(state.remove_first_loc()) };
     }
 }

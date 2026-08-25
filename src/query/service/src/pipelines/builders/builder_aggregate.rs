@@ -17,8 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_sql::Symbol;
@@ -49,7 +49,7 @@ impl PipelineBuilder {
             .into_iter()
             .unzip::<_, _, Vec<_>, Vec<_>>();
 
-        let aggs: Vec<AggregateFunctionRef> = agg_funcs
+        let aggs: Vec<AggregateCallRef> = agg_funcs
             .iter()
             .map(|agg_func| {
                 let input_len = agg_func.arg_indices.len() + agg_func.sig.order_by.len();
@@ -64,7 +64,7 @@ impl PipelineBuilder {
                     }
                 }
                 let function = match &agg_func.sig.udaf {
-                    None => AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+                    None => AGGR_REGISTRY.resolve(RawAggregateCall {
                         name: agg_func.sig.name.as_str(),
                         params: &agg_func.sig.params.clone(),
                         args_type: &agg_func.sig.args.clone(),

@@ -38,7 +38,7 @@ use databend_common_expression::types::number::F64;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 pub const STD_POP: u8 = 0;
@@ -49,14 +49,14 @@ pub const VAR_SAMP: u8 = 3;
 struct StddevBuilder;
 
 impl StddevBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::route::<STD_POP>().register(registry);
         Self::route::<STD_SAMP>().register(registry);
     }
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: StddevBuilder::register,
     }
 }
@@ -80,7 +80,7 @@ impl StddevBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    const STDDEV_POP_FEATURES: FunctionFeatures = FunctionFeatures {
+    const STDDEV_POP_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -91,7 +91,7 @@ impl StddevBuilder {
         example: "select stddev_pop(number) from numbers(10)",
     };
 
-    const STDDEV_SAMP_FEATURES: FunctionFeatures = FunctionFeatures {
+    const STDDEV_SAMP_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -225,8 +225,8 @@ where
 
 impl StddevBuilder {
     fn create_for_type<const TYPE: u8>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+        build: UnaryBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef> {
         let display_name = build.name();
         let data_type = build.arg_type().clone();
 
@@ -251,8 +251,8 @@ impl StddevBuilder {
     }
 
     fn create<const TYPE: u8, I>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef>
+        build: UnaryBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef>
     where
         AggregateStddevState<TYPE>: UnaryState<I, NullableType<Float64Type>, FunctionInfo = ()>,
         I: AccessType,

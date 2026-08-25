@@ -13,10 +13,10 @@ use databend_common_expression::Symbol;
 use databend_common_expression::aggregate_function::AccumulateInput;
 use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
 use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
-use databend_common_expression::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::aggregate_function::AggregateStateOwner;
 use databend_common_expression::aggregate_function::FunctionInputLayout;
 use databend_common_expression::aggregate_function::MergeResultInput;
+use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::aggregate_function::SerializeInput;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
@@ -144,7 +144,7 @@ fn test_string_agg_registers_distinct_aliases() {
         "group_concat_distinct",
     ] {
         let function = AGGR_REGISTRY
-            .resolve(AggregateFunctionRequest {
+            .resolve(RawAggregateCall {
                 name,
                 params: &params,
                 args_type: &[databend_common_expression::types::DataType::String],
@@ -175,7 +175,7 @@ fn test_ordered_listagg_if_filters_before_sorting() -> Result<()> {
         asc: false,
     }];
     let params = [Scalar::String("|".to_string())];
-    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(RawAggregateCall {
         name: "listagg_if",
         params: &params,
         args_type: &args_type,

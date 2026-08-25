@@ -303,7 +303,7 @@ fn eval_v2_state_merge_entry(
     state: BlockEntry,
 ) -> Result<(Column, DataType)> {
     let args_type = [state_type.clone()];
-    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(RawAggregateCall {
         name,
         params,
         args_type: &args_type,
@@ -431,7 +431,7 @@ fn test_v2_sum_merge_keys_skips_nullable_states() -> Result<()> {
         .wrap_nullable(Some(Bitmap::from([true, false])));
 
     let nullable_state_type = DataType::Nullable(Box::new(left.1));
-    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(RawAggregateCall {
         name: "sum_merge",
         params: &[],
         args_type: &[nullable_state_type],
@@ -466,7 +466,7 @@ fn test_v2_sum_merge_keys_skips_nullable_states() -> Result<()> {
 fn test_v2_merge_rejects_mismatched_state_function() -> Result<()> {
     let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
     let (_, state_type) = eval_v2_aggr("sum_state", &entries, 4, false)?;
-    let error = match AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let error = match AGGR_REGISTRY.resolve(RawAggregateCall {
         name: "avg_merge",
         params: &[],
         args_type: &[state_type],
@@ -589,7 +589,7 @@ fn test_v2_sum_merge_does_not_fallback_after_precise_resolver() -> Result<()> {
     };
     let physical_type = metadata.physical_type().clone();
 
-    let error = match AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let error = match AGGR_REGISTRY.resolve(RawAggregateCall {
         name: "sum_merge",
         params: &[],
         args_type: std::slice::from_ref(&physical_type),
@@ -614,7 +614,7 @@ fn test_v2_merge_rejects_unrecoverable_legacy_state() -> Result<()> {
         // Bare, non-tuple layouts are never produced by serialization.
         UInt64Type::data_type(),
     ] {
-        let error = match AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        let error = match AGGR_REGISTRY.resolve(RawAggregateCall {
             name: "sum_merge",
             params: &[],
             args_type: std::slice::from_ref(&state_type),

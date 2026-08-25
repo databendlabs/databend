@@ -40,19 +40,19 @@ use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct JsonObjectAggBuilder;
 
 impl JsonObjectAggBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::route().register(registry);
     }
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: JsonObjectAggBuilder::register,
     }
 }
@@ -65,7 +65,7 @@ impl JsonObjectAggBuilder {
         ])
     }
 
-    const JSON_OBJECT_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
+    const JSON_OBJECT_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -77,7 +77,7 @@ impl JsonObjectAggBuilder {
     };
 }
 
-trait BinaryScalarStateFunc<V: ValueType>:
+trait BinaryScalarState<V: ValueType>:
     Clone + BorshSerialize + BorshDeserialize + Send + 'static
 where V::Scalar: BorshSerialize + BorshDeserialize
 {
@@ -115,7 +115,7 @@ where
     }
 }
 
-impl<V> BinaryScalarStateFunc<V> for JsonObjectAggState<V>
+impl<V> BinaryScalarState<V> for JsonObjectAggState<V>
 where
     V: ValueType,
     V::Scalar: BorshSerialize + BorshDeserialize,
@@ -239,21 +239,21 @@ where
     }
 }
 
-struct AggregateJsonObjectAggImplementation<V, State> {
+struct JsonObjectAggEval<V, State> {
     _p: PhantomData<fn(V, State)>,
 }
 
-impl<V, State> Default for AggregateJsonObjectAggImplementation<V, State> {
+impl<V, State> Default for JsonObjectAggEval<V, State> {
     fn default() -> Self {
         Self { _p: PhantomData }
     }
 }
 
-impl<V, State> AggregateJsonObjectAggImplementation<V, State>
+impl<V, State> JsonObjectAggEval<V, State>
 where
     V: ValueType,
     V::Scalar: BorshSerialize + BorshDeserialize,
-    State: BinaryScalarStateFunc<V>,
+    State: BinaryScalarState<V>,
 {
     fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<State>())], vec![
@@ -280,11 +280,11 @@ where
     }
 }
 
-impl<V, State> AggrImpl for AggregateJsonObjectAggImplementation<V, State>
+impl<V, State> AggregateEval for JsonObjectAggEval<V, State>
 where
     V: ValueType,
     V::Scalar: BorshSerialize + BorshDeserialize + Clone + Send + Sync,
-    State: BinaryScalarStateFunc<V> + Sync,
+    State: BinaryScalarState<V> + Sync,
 {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(State::new);
@@ -408,7 +408,7 @@ impl JsonObjectAggBuilder {
         .then(StateRoute::new(JsonObjectAggBuilder::create))
     }
 
-    fn validate_request(request: &AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {
         if request.params.is_empty() {
             Ok(())
         } else {
@@ -419,7 +419,7 @@ impl JsonObjectAggBuilder {
         }
     }
 
-    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let key_type = build.args_type()[0].remove_nullable();
         if key_type != DataType::String {
             return Err(ErrorCode::BadDataValueType(format!(
@@ -430,14 +430,11 @@ impl JsonObjectAggBuilder {
         }
 
         type State = JsonObjectAggState<AnyType>;
-        let state = AggregateJsonObjectAggImplementation::<AnyType, State>::state_description();
+        let state = JsonObjectAggEval::<AnyType, State>::state_description();
         build.create(
             DataType::Variant.wrap_nullable(),
             state.with_null_flag(),
-            AggregateMultiArgOrNullImplementation::new(AggregateJsonObjectAggImplementation::<
-                AnyType,
-                State,
-            >::default()),
+            MultiArgOrNullEval::new(JsonObjectAggEval::<AnyType, State>::default()),
         )
     }
 }

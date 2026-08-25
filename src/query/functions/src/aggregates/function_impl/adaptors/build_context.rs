@@ -12,32 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 
-use super::AggrImpl;
-use super::AggregateFunctionSignature;
-use super::AggregateMultiArgOrNullImplementation;
+use super::AggregateEval;
+use super::AggregateFeatures;
+use super::AggregateSignature;
 use super::AggregateStateDescription;
-use super::CombinatorImpl;
+use super::Combinator;
 use super::DirectBuildContext;
-use super::FunctionFeatures;
 use super::MultiArgBuildContext;
-use super::UnaryAggrImpl;
+use super::MultiArgOrNullEval;
 use super::UnaryBuildContext;
+use super::UnaryEval;
+use super::UnaryEvalAdapter;
+use super::UnaryOrNull;
 use super::UnaryState;
+use super::UnaryStateEval;
 
 fn build_signature(
-    request: &AggregateFunctionRequest<'_>,
+    request: &RawAggregateCall<'_>,
     signature_args_type: &[DataType],
     return_type: DataType,
-) -> AggregateFunctionSignature {
-    AggregateFunctionSignature {
+) -> AggregateSignature {
+    AggregateSignature {
         name: request.name.to_string(),
         params: request.params.to_vec(),
         args_type: signature_args_type.to_vec(),
@@ -48,12 +53,12 @@ fn build_signature(
 }
 
 impl<'a, C> UnaryBuildContext<'a, C>
-where C: CombinatorImpl
+where C: Combinator
 {
     pub(super) fn new(
-        request: AggregateFunctionRequest<'a>,
+        request: RawAggregateCall<'a>,
         signature_args_type: &'a [DataType],
-        features: FunctionFeatures,
+        features: AggregateFeatures,
         combinator: C,
     ) -> Result<Self> {
         let [arg_type] = request.args_type else {
@@ -89,7 +94,7 @@ where C: CombinatorImpl
         return_type: DataType,
         state: AggregateStateDescription,
         function_info: S::FunctionInfo,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         S: UnaryState<I, R>,
         I: AccessType,
@@ -97,27 +102,15 @@ where C: CombinatorImpl
     {
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
         if signature.args_type[0].is_nullable_or_null() {
-            let implementation =
-                super::UnaryAggregateImplementation::new(super::UnaryImpl::<S, I, R, true>::new(
-                    function_info.into(),
-                ));
-            self.combinator.create_aggregate_function(
-                signature,
-                self.features,
-                state,
-                implementation,
-            )
+            let eval =
+                UnaryEvalAdapter::new(UnaryStateEval::<S, I, R, true>::new(function_info.into()));
+            self.combinator
+                .create_aggregate_function(signature, self.features, state, eval)
         } else {
-            let implementation =
-                super::UnaryAggregateImplementation::new(super::UnaryImpl::<S, I, R, false>::new(
-                    function_info.into(),
-                ));
-            self.combinator.create_aggregate_function(
-                signature,
-                self.features,
-                state,
-                implementation,
-            )
+            let eval =
+                UnaryEvalAdapter::new(UnaryStateEval::<S, I, R, false>::new(function_info.into()));
+            self.combinator
+                .create_aggregate_function(signature, self.features, state, eval)
         }
     }
 
@@ -126,38 +119,36 @@ where C: CombinatorImpl
         return_type: DataType,
         state: AggregateStateDescription,
         function_info: S::FunctionInfo,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         S: UnaryState<I, R>,
         I: AccessType,
         R: ValueType,
     {
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        let inner = super::UnaryImpl::<S, I, R, false>::new(std::sync::Arc::new(function_info));
-        let implementation =
-            super::UnaryAggregateImplementation::new(super::UnaryOrNull::new(inner));
+        let nested = UnaryStateEval::<S, I, R, false>::new(Arc::new(function_info));
+        let eval = UnaryEvalAdapter::new(UnaryOrNull::new(nested));
         let state = state.with_null_flag();
         self.combinator
-            .create_aggregate_function(signature, self.features, state, implementation)
+            .create_aggregate_function(signature, self.features, state, eval)
     }
 
-    pub(crate) fn create_unary_or_null_with_impl<I, R, U>(
+    pub(crate) fn create_unary_or_null_with_eval<I, R, U>(
         self,
         return_type: DataType,
         state: AggregateStateDescription,
-        implementation: U,
-    ) -> Result<AggregateFunctionRef>
+        eval: U,
+    ) -> Result<AggregateCallRef>
     where
         I: AccessType,
         R: ValueType,
-        U: UnaryAggrImpl<I, R>,
+        U: UnaryEval<I, R>,
     {
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        let implementation =
-            super::UnaryAggregateImplementation::new(super::UnaryOrNull::new(implementation));
+        let eval = UnaryEvalAdapter::new(UnaryOrNull::new(eval));
         let state = state.with_null_flag();
         self.combinator
-            .create_aggregate_function(signature, self.features, state, implementation)
+            .create_aggregate_function(signature, self.features, state, eval)
     }
 
     pub(crate) fn create_unary_distinct_or_null<S, I, R>(
@@ -165,7 +156,7 @@ where C: CombinatorImpl
         return_type: DataType,
         state: AggregateStateDescription,
         function_info: S::FunctionInfo,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         S: UnaryState<I, R>,
         I: AccessType,
@@ -190,12 +181,12 @@ where C: CombinatorImpl
 }
 
 impl<'a, C> MultiArgBuildContext<'a, C>
-where C: CombinatorImpl
+where C: Combinator
 {
     pub(super) fn new(
-        request: AggregateFunctionRequest<'a>,
+        request: RawAggregateCall<'a>,
         signature_args_type: &'a [DataType],
-        features: FunctionFeatures,
+        features: AggregateFeatures,
         combinator: C,
     ) -> Self {
         let args_type = request
@@ -228,10 +219,10 @@ where C: CombinatorImpl
         self,
         return_type: DataType,
         state: AggregateStateDescription,
-        implementation: I,
-    ) -> Result<AggregateFunctionRef>
+        eval: I,
+    ) -> Result<AggregateCallRef>
     where
-        I: AggrImpl,
+        I: AggregateEval,
     {
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
         debug_assert!(signature.order_by.is_empty());
@@ -239,18 +230,18 @@ where C: CombinatorImpl
             signature,
             self.features,
             state.with_null_flag(),
-            AggregateMultiArgOrNullImplementation::new(implementation),
+            MultiArgOrNullEval::new(eval),
         )
     }
 }
 
 impl<'a, C> DirectBuildContext<'a, C>
-where C: CombinatorImpl
+where C: Combinator
 {
     pub(super) fn new(
-        request: AggregateFunctionRequest<'a>,
+        request: RawAggregateCall<'a>,
         signature_args_type: &'a [DataType],
-        features: FunctionFeatures,
+        features: AggregateFeatures,
         combinator: C,
     ) -> Self {
         Self {
@@ -277,32 +268,28 @@ where C: CombinatorImpl
         self,
         return_type: DataType,
         state: AggregateStateDescription,
-        implementation: I,
-    ) -> Result<AggregateFunctionRef>
+        eval: I,
+    ) -> Result<AggregateCallRef>
     where
-        I: AggrImpl,
+        I: AggregateEval,
     {
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
         debug_assert!(signature.order_by.is_empty());
         self.combinator
-            .create_aggregate_function(signature, self.features, state, implementation)
+            .create_aggregate_function(signature, self.features, state, eval)
     }
 
     pub(crate) fn create_ordered<I>(
         self,
         return_type: DataType,
         state: AggregateStateDescription,
-        implementation: I,
-    ) -> Result<AggregateFunctionRef>
+        eval: I,
+    ) -> Result<AggregateCallRef>
     where
-        I: AggrImpl,
+        I: AggregateEval,
     {
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        self.combinator.create_ordered_aggregate_function(
-            signature,
-            self.features,
-            state,
-            implementation,
-        )
+        self.combinator
+            .create_ordered_aggregate_function(signature, self.features, state, eval)
     }
 }

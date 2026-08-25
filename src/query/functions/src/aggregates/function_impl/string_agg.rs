@@ -36,19 +36,19 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct StringAggBuilder;
 
 impl StringAggBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::route().register(registry);
     }
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: StringAggBuilder::register,
     }
 }
@@ -63,7 +63,7 @@ impl StringAggBuilder {
         )
     }
 
-    const STRING_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
+    const STRING_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Optional,
@@ -197,7 +197,7 @@ impl StringAggBuilder {
         .then(DistinctRoute::new(StringAggBuilder::create))
     }
 
-    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let value_type = build.args_type()[0].remove_nullable();
         let delimiter = if build.params().len() == 1 {
             build.params()[0].as_string().unwrap().clone()
@@ -237,22 +237,18 @@ impl StringAggBuilder {
     }
 
     fn create_instance<T>(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
+        build: DirectBuildContext<'_, impl Combinator>,
         delimiter: String,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         T: ToStringType + ValueType,
     {
         let state = AggregateStringAggState::state_description();
         let return_type = StringType::data_type();
 
-        let inner =
-            UnaryImpl::<AggregateStringAggState, T, StringType, false>::new(delimiter.into());
-        let implementation = UnaryAggregateImplementation::new(UnaryOrNull::new(inner));
-        build.create_ordered(
-            return_type.wrap_nullable(),
-            state.with_null_flag(),
-            implementation,
-        )
+        let nested =
+            UnaryStateEval::<AggregateStringAggState, T, StringType, false>::new(delimiter.into());
+        let eval = UnaryEvalAdapter::new(UnaryOrNull::new(nested));
+        build.create_ordered(return_type.wrap_nullable(), state.with_null_flag(), eval)
     }
 }

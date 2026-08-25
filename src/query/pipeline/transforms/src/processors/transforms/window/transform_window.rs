@@ -1615,7 +1615,7 @@ mod tests {
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
-    use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+    use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
     use databend_common_expression::block_debug::assert_blocks_eq;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
@@ -1653,7 +1653,7 @@ mod tests {
         bounds: (FrameBound, FrameBound),
         arg_type: DataType,
     ) -> Result<TransformWindow> {
-        let agg = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        let agg = AGGR_REGISTRY.resolve(RawAggregateCall {
             name: "sum",
             params: &[],
             args_type: &[arg_type],
@@ -1681,7 +1681,7 @@ mod tests {
         bounds: (FrameBound, FrameBound),
         arg_type: DataType,
     ) -> Result<TransformWindow> {
-        let agg = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        let agg = AGGR_REGISTRY.resolve(RawAggregateCall {
             name: "sum",
             params: &[],
             args_type: &[arg_type],
@@ -2538,7 +2538,7 @@ mod tests {
         _unit: WindowFuncFrameUnits,
         bounds: (FrameBound, FrameBound),
     ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
-        let agg = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        let agg = AGGR_REGISTRY.resolve(RawAggregateCall {
             name: "sum",
             params: &[],
             args_type: &[DataType::Number(NumberDataType::Int32)],

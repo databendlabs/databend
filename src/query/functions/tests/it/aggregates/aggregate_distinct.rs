@@ -2,8 +2,8 @@ use std::io::Write;
 
 use databend_common_exception::Result;
 use databend_common_expression::FromData;
-use databend_common_expression::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::aggregate_function::DistinctPolicy;
+use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
@@ -78,13 +78,15 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         ("SUM_ZERO", "sum_zero_distinct"),
     ] {
         assert_eq!(
-            AGGR_REGISTRY.descriptors(base)[0]
+            AGGR_REGISTRY
+                .descriptor(base)
+                .unwrap()
                 .features()
                 .distinct_policy
                 .target_for(base),
             Some(target)
         );
-        let semantic = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        let semantic = AGGR_REGISTRY.resolve(RawAggregateCall {
             name: base,
             params: &[],
             args_type: &args_type,
@@ -94,7 +96,7 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         assert_eq!(semantic.signature().name, target);
         assert!(!semantic.signature().distinct);
 
-        let explicit = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        let explicit = AGGR_REGISTRY.resolve(RawAggregateCall {
             name: target,
             params: &[],
             args_type: &args_type,
@@ -105,12 +107,14 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
     }
 
     assert_eq!(
-        AGGR_REGISTRY.descriptors("min")[0]
+        AGGR_REGISTRY
+            .descriptor("min")
+            .unwrap()
             .features()
             .distinct_policy,
         DistinctPolicy::Idempotent
     );
-    let min = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let min = AGGR_REGISTRY.resolve(RawAggregateCall {
         name: "min",
         params: &[],
         args_type: &args_type,
@@ -120,7 +124,7 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
     assert_eq!(min.signature().name, "min");
     assert!(!min.signature().distinct);
 
-    let explicit_min_distinct = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let explicit_min_distinct = AGGR_REGISTRY.resolve(RawAggregateCall {
         name: "min_distinct",
         params: &[],
         args_type: &args_type,
@@ -132,7 +136,7 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
     for intrinsic_name in ["uniq", "approx_count_distinct"] {
         assert!(
             AGGR_REGISTRY
-                .resolve(AggregateFunctionRequest {
+                .resolve(RawAggregateCall {
                     name: intrinsic_name,
                     params: &[],
                     args_type: &args_type,
@@ -143,7 +147,7 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         );
     }
 
-    let count_multiple_args = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let count_multiple_args = AGGR_REGISTRY.resolve(RawAggregateCall {
         name: "count",
         params: &[],
         args_type: &[args_type[0].clone(), args_type[0].clone()],

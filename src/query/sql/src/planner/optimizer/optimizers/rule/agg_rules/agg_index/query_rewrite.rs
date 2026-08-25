@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
@@ -131,7 +131,7 @@ impl AggIndexView {
                         .map(|arg| arg.data_type().into_owned())
                         .collect::<Vec<_>>();
                     let order_by = func.bound_order_by()?;
-                    let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+                    let func = AGGR_REGISTRY.resolve(RawAggregateCall {
                         name: &func.func_name,
                         params: &func.params,
                         args_type: &args_type,

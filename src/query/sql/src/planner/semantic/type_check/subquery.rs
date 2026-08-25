@@ -25,7 +25,7 @@ use databend_common_ast::ast::SubqueryModifier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Symbol;
-use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -400,7 +400,7 @@ where A: super::TypeCheckAdapter
                     #[visitor(Expr(enter), ASTFunctionCall(enter))]
                     struct AggFuncVisitor {
                         contain_agg: bool,
-                        aggregate_function_registry: &'static AggregateFunctionRegistry,
+                        aggregate_function_registry: &'static AggregateRegistry,
                     }
                     impl AggFuncVisitor {
                         fn enter_ast_function_call(&mut self, func: &ASTFunctionCall) {

@@ -24,8 +24,8 @@ use databend_common_expression::ProbeState;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
-use databend_common_expression::aggregate_function::AggregateFunctionRef;
-use databend_common_expression::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate_function::AggregateCallRef;
+use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
@@ -58,7 +58,7 @@ pub struct TransformReaggregateAggregateStateBlock {
     table_column_count: usize,
     state_indices: Vec<usize>,
     group_indices: Vec<usize>,
-    functions: Vec<AggregateFunctionRef>,
+    functions: Vec<AggregateCallRef>,
     group_types: Vec<DataType>,
 }
 
@@ -89,7 +89,7 @@ impl TransformReaggregateAggregateStateBlock {
                         .iter()
                         .map(DataType::from)
                         .collect::<Vec<_>>();
-                    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+                    let function = AGGR_REGISTRY.resolve(RawAggregateCall {
                         name: &function_name,
                         params,
                         args_type,
@@ -215,7 +215,7 @@ mod tests {
     use super::*;
 
     fn sum_state_block(groups: &[&str], values: &[i32]) -> Result<DataBlock> {
-        let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
             name: "sum_state",
             params: &[],
             args_type: &[DataType::Number(NumberDataType::Int32)],
@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn reaggregate_merges_duplicate_group_keys() -> Result<()> {
-        let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
             name: "sum_state",
             params: &[],
             args_type: &[DataType::Number(NumberDataType::Int32)],
@@ -280,7 +280,7 @@ mod tests {
     fn reaggregate_preserves_column_layout() -> Result<()> {
         // Materialized view physical schemas store aggregate state columns
         // before group columns; the transform output must keep that layout.
-        let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
             name: "sum_state",
             params: &[],
             args_type: &[DataType::Number(NumberDataType::Int32)],

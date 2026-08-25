@@ -23,7 +23,7 @@ use databend_common_expression::utils::column_merge_validity;
 
 use super::*;
 
-pub(crate) struct AggregateIfImplementation<I> {
+pub(crate) struct IfEval<I> {
     nested: I,
     condition_index: usize,
     nested_args_count: usize,
@@ -31,7 +31,7 @@ pub(crate) struct AggregateIfImplementation<I> {
     strip_nullable_input: bool,
 }
 
-impl<I> AggregateIfImplementation<I> {
+impl<I> IfEval<I> {
     pub(crate) fn new(
         nested: I,
         condition_index: usize,
@@ -102,8 +102,8 @@ impl<I> AggregateIfImplementation<I> {
     }
 }
 
-impl<I> AggrImpl for AggregateIfImplementation<I>
-where I: AggrImpl
+impl<I> AggregateEval for IfEval<I>
+where I: AggregateEval
 {
     fn init_state(&self, state: AggrState<'_>) {
         self.nested.init_state(state)

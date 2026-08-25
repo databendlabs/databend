@@ -45,13 +45,13 @@ use databend_common_expression::with_number_mapped_type;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct HistogramBuilder;
 
 impl HistogramBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["histogram"],
             HistogramBuilder::histogram_arguments(),
@@ -68,7 +68,7 @@ impl HistogramBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: HistogramBuilder::register,
     }
 }
@@ -83,7 +83,7 @@ impl HistogramBuilder {
         )
     }
 
-    const HISTOGRAM_FEATURES: FunctionFeatures = FunctionFeatures {
+    const HISTOGRAM_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -241,7 +241,7 @@ where
 }
 
 impl HistogramBuilder {
-    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
         let max_num_buckets = Self::get_max_num_buckets(build.params(), &display_name)?;
@@ -275,10 +275,10 @@ impl HistogramBuilder {
     }
 
     fn create_instance<T>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         data_type: DataType,
         max_num_buckets: u64,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         T: AccessType + ValueType,
         T::Scalar: Ord + BorshSerialize + BorshDeserialize + Serialize + Display,

@@ -20,7 +20,7 @@ use itertools::Itertools;
 use super::BATCH_SIZE;
 use super::PayloadFlushState;
 use super::StatesLayout;
-use super::aggregate_function::AggregateFunctionRef;
+use super::aggregate_function::AggregateCallRef;
 use super::aggregate_function::get_states_layout;
 use super::payload::Payload;
 use super::payload::PayloadTransferBatch;
@@ -60,7 +60,7 @@ impl PartitionMask {
 pub struct PartitionedPayload {
     pub(super) payloads: Vec<Payload>,
     pub(super) group_types: Vec<DataType>,
-    pub(super) aggrs: Vec<AggregateFunctionRef>,
+    pub(super) aggrs: Vec<AggregateCallRef>,
 
     pub(super) row_layout: RowLayout,
 
@@ -76,7 +76,7 @@ unsafe impl Sync for PartitionedPayload {}
 impl PartitionedPayload {
     pub fn new(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         partition_count: u64,
         arenas: Vec<Arc<Bump>>,
     ) -> Self {
@@ -85,7 +85,7 @@ impl PartitionedPayload {
 
     pub(super) fn new_with_start_bit(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         partition_count: u64,
         partition_start_bit: u64,
         arenas: Vec<Arc<Bump>>,

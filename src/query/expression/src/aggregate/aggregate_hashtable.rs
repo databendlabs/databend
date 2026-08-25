@@ -35,7 +35,7 @@ use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
 use crate::aggregate::aggregate_function::AccumulateKeysInput;
-use crate::aggregate::aggregate_function::AggregateFunctionRef;
+use crate::aggregate::aggregate_function::AggregateCallRef;
 use crate::aggregate::aggregate_function::AggregateStateSet;
 use crate::aggregate::aggregate_function::MergeResultInput;
 use crate::aggregate::aggregate_function::MergeSerializedInput;
@@ -64,7 +64,7 @@ unsafe impl Sync for AggregateHashTable {}
 impl AggregateHashTable {
     pub fn new(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         config: HashTableConfig,
         arena: Arc<Bump>,
     ) -> Self {
@@ -74,7 +74,7 @@ impl AggregateHashTable {
 
     pub fn new_with_capacity(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         config: HashTableConfig,
         capacity: usize,
         arena: Arc<Bump>,
@@ -97,7 +97,7 @@ impl AggregateHashTable {
 
     pub fn new_with_partitioned_arenas(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         config: HashTableConfig,
     ) -> Self {
         // Repartition transfers raw aggregate state addresses between payloads. Separate arenas
@@ -136,7 +136,7 @@ impl AggregateHashTable {
 
     pub fn new_directly(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         config: HashTableConfig,
         capacity: usize,
         arena: Arc<Bump>,

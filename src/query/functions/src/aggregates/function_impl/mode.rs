@@ -38,13 +38,13 @@ use databend_common_expression::types::i256;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct ModeBuilder;
 
 impl ModeBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["mode"],
             ModeBuilder::mode_arguments(),
@@ -61,7 +61,7 @@ impl ModeBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: ModeBuilder::register,
     }
 }
@@ -71,7 +71,7 @@ impl ModeBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    const MODE_FEATURES: FunctionFeatures = FunctionFeatures {
+    const MODE_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -217,7 +217,7 @@ where
 }
 
 impl ModeBuilder {
-    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let data_type = build.arg_type().clone();
 
         with_number_mapped_type!(|NUM| match &data_type {
@@ -236,9 +236,9 @@ impl ModeBuilder {
     }
 
     fn create_instance<T>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         return_type: DataType,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         T: AccessType + ValueType,
         T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize,

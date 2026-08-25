@@ -37,7 +37,7 @@ use databend_common_expression::types::number::F64;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 use super::serialized_scalar_at;
 
@@ -47,14 +47,14 @@ pub const COVAR_SAMP: u8 = 1;
 struct CovarianceBuilder;
 
 impl CovarianceBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::route::<COVAR_POP>().register(registry);
         Self::route::<COVAR_SAMP>().register(registry);
     }
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: CovarianceBuilder::register,
     }
 }
@@ -92,7 +92,7 @@ impl CovarianceBuilder {
         ])
     }
 
-    const COVAR_POP_FEATURES: FunctionFeatures = FunctionFeatures {
+    const COVAR_POP_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -103,7 +103,7 @@ impl CovarianceBuilder {
         example: "select covar_pop(a, b) from t",
     };
 
-    const COVAR_SAMP_FEATURES: FunctionFeatures = FunctionFeatures {
+    const COVAR_SAMP_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -215,8 +215,8 @@ fn large_and_comparable(a: u64, b: u64) -> bool {
 
 impl CovarianceBuilder {
     fn create<const TYPE: u8>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+        build: MultiArgBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef> {
         let left_type = build.args_type()[0].clone();
         let right_type = build.args_type()[1].clone();
         let display_name = build.name().to_string();
@@ -245,23 +245,23 @@ impl CovarianceBuilder {
     }
 
     fn create_instance<const TYPE: u8, L, R>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef>
+        build: MultiArgBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef>
     where
         L: AccessType,
         L::Scalar: AsPrimitive<f64>,
         R: AccessType,
         R::Scalar: AsPrimitive<f64>,
     {
-        let implementation = AggregateCovarianceImplementation::<TYPE, L, R>::new();
+        let eval = CovarianceEval::<TYPE, L, R>::new();
         let return_type = Float64Type::data_type();
         let state = AggregateCovarianceState::<TYPE>::state_description();
 
-        build.create_multi_arg_or_null(return_type.wrap_nullable(), state, implementation)
+        build.create_multi_arg_or_null(return_type.wrap_nullable(), state, eval)
     }
 }
 
-struct AggregateCovarianceImplementation<const TYPE: u8, L, R>
+struct CovarianceEval<const TYPE: u8, L, R>
 where
     L: AccessType,
     R: AccessType,
@@ -269,7 +269,7 @@ where
     _p: PhantomData<fn(L, R)>,
 }
 
-impl<const TYPE: u8, L, R> AggregateCovarianceImplementation<TYPE, L, R>
+impl<const TYPE: u8, L, R> CovarianceEval<TYPE, L, R>
 where
     L: AccessType,
     R: AccessType,
@@ -279,7 +279,7 @@ where
     }
 }
 
-impl<const TYPE: u8, L, R> AggrImpl for AggregateCovarianceImplementation<TYPE, L, R>
+impl<const TYPE: u8, L, R> AggregateEval for CovarianceEval<TYPE, L, R>
 where
     L: AccessType,
     L::Scalar: AsPrimitive<f64>,

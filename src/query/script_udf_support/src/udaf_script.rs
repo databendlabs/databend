@@ -34,7 +34,9 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateSerdeItem;
-use databend_common_expression::aggregate::aggregate_function as v2;
+use databend_common_expression::aggregate::aggregate_function::*;
+use databend_common_expression::aggregate_function::AggregateCallInstance;
+use databend_common_expression::aggregate_function::AggregateFeatures;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
 use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::types::BinaryType;
@@ -54,12 +56,12 @@ pub struct AggregateUdfScript {
     init_state: UdfAggState,
 }
 
-impl v2::AggrImpl for AggregateUdfScript {
+impl AggregateEval for AggregateUdfScript {
     fn init_state(&self, place: AggrState<'_>) {
         place.write(|| UdfAggState(self.init_state.0.clone()));
     }
 
-    fn accumulate(&self, input: v2::AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let input_batch = self.create_input_batch(input.columns, input.validity)?;
         let state = input.state.get::<UdfAggState>();
         let state = self
@@ -70,9 +72,9 @@ impl v2::AggrImpl for AggregateUdfScript {
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: v2::AccumulateKeysInput<'_>) -> Result<()> {
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
-            self.accumulate_row(v2::AccumulateRowInput {
+            self.accumulate_row(AccumulateRowInput {
                 state,
                 columns: input.columns,
                 row,
@@ -81,7 +83,7 @@ impl v2::AggrImpl for AggregateUdfScript {
         Ok(())
     }
 
-    fn accumulate_row(&self, input: v2::AccumulateRowInput<'_>) -> Result<()> {
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let input_batch = self.create_input_batch_row(input.columns, input.row)?;
         let state = input.state.get::<UdfAggState>();
         let state = self
@@ -92,7 +94,7 @@ impl v2::AggrImpl for AggregateUdfScript {
         Ok(())
     }
 
-    fn serialize(&self, input: v2::SerializeInput<'_>) -> Result<()> {
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let binary_builder = input.builders[0].as_binary_mut().unwrap();
         for state in input.states.iter() {
             let state = state.get::<UdfAggState>();
@@ -104,7 +106,7 @@ impl v2::AggrImpl for AggregateUdfScript {
         Ok(())
     }
 
-    fn merge_serialized(&self, input: v2::MergeSerializedInput<'_>) -> Result<()> {
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         let view = input.state.downcast::<UnaryType<BinaryType>>().unwrap();
         let iter = input.states.iter().zip(view.iter());
 
@@ -120,7 +122,7 @@ impl v2::AggrImpl for AggregateUdfScript {
         Ok(())
     }
 
-    fn merge_states(&self, input: v2::MergeStatesInput<'_>) -> Result<()> {
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         let state = input.state.get::<UdfAggState>();
         let other = input.rhs.get::<UdfAggState>();
         let states = arrow_select::concat::concat(&[&state.0, &other.0])
@@ -133,7 +135,7 @@ impl v2::AggrImpl for AggregateUdfScript {
         Ok(())
     }
 
-    fn merge_result(&self, input: v2::MergeResultInput<'_>) -> Result<()> {
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         let state = input.state.get::<UdfAggState>();
         let array = self
             .runtime
@@ -266,7 +268,7 @@ pub fn create_udaf_script_function(
     state_fields: Vec<DataField>,
     arguments: Vec<DataField>,
     output_type: DataType,
-) -> Result<v2::AggregateFunctionRef> {
+) -> Result<AggregateCallRef> {
     let UDFScriptCode { language, code, .. } = code;
     let runtime = match language {
         UDFLanguage::JavaScript => {
@@ -313,8 +315,8 @@ pub fn create_udaf_script_function(
         .create_state()
         .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to create state: {e}")))?;
 
-    Ok(Arc::new(v2::AggregateFunction::new(
-        v2::AggregateFunctionSignature {
+    Ok(Arc::new(AggregateCallInstance::new(
+        AggregateSignature {
             name,
             params: vec![],
             args_type: argument_schema
@@ -326,9 +328,9 @@ pub fn create_udaf_script_function(
             order_by: vec![],
             return_type: output_type,
         },
-        v2::FunctionInputLayout::Identity,
-        v2::FunctionFeatures::default(),
-        v2::AggregateStateDescription::new(
+        FunctionInputLayout::Identity,
+        AggregateFeatures::default(),
+        AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<UdfAggState>())],
             vec![StateSerdeItem::Binary(None)],
         )

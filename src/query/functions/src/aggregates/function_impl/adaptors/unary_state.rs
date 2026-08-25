@@ -45,17 +45,17 @@ where T: AccessType
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
 }
 
-pub(crate) struct AggregateUnaryStateImplementation<T, State> {
+pub(crate) struct AggregateUnaryStateEval<T, State> {
     _p: PhantomData<fn(T, State)>,
 }
 
-impl<T, State> Default for AggregateUnaryStateImplementation<T, State> {
+impl<T, State> Default for AggregateUnaryStateEval<T, State> {
     fn default() -> Self {
         Self { _p: PhantomData }
     }
 }
 
-impl<T, State> AggrImpl for AggregateUnaryStateImplementation<T, State>
+impl<T, State> AggregateEval for AggregateUnaryStateEval<T, State>
 where
     T: AccessType,
     State: Default + AggregateUnaryState<T>,

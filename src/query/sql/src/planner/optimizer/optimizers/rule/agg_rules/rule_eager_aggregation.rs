@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
-use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::type_check::infer_function_return_type;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
@@ -574,7 +574,7 @@ impl EagerCandidates {
         agg_final: &Aggregate,
         join_columns: &Pair<ColumnSet>,
         eval_scalar_used_columns: &ColumnSet,
-        function_registry: &AggregateFunctionRegistry,
+        function_registry: &AggregateRegistry,
     ) -> Self {
         let mut candidates = Self {
             by_side: Pair::new_with(|_| vec![]),
@@ -585,7 +585,9 @@ impl EagerCandidates {
             let ScalarExpr::AggregateFunction(aggregate_function) = &func.scalar else {
                 continue;
             };
-            if !function_registry.is_decomposable(&aggregate_function.func_name)
+            if !function_registry
+                .descriptor(&aggregate_function.func_name)
+                .is_some_and(|descriptor| descriptor.features().is_decomposable)
                 || !eval_scalar_used_columns.contains(&func.index)
             {
                 continue;
@@ -1283,7 +1285,7 @@ impl EagerAnalysis {
         };
         aggregate_function.return_type = Box::new(
             AGGR_REGISTRY
-                .resolve(AggregateFunctionRequest {
+                .resolve(RawAggregateCall {
                     name: &aggregate_function.func_name,
                     params: &aggregate_function.params.clone(),
                     args_type: std::slice::from_ref(&multiplied_type),

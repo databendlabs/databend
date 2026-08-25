@@ -37,13 +37,13 @@ use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::ValueType;
 
 use super::super::common::extract_number_param;
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct MarkovTrainBuilder;
 
 impl MarkovTrainBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["markov_train"],
             MarkovTrainBuilder::markov_train_arguments(),
@@ -61,7 +61,7 @@ impl MarkovTrainBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: MarkovTrainBuilder::register,
     }
 }
@@ -71,7 +71,7 @@ impl MarkovTrainBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::String)])
     }
 
-    const MARKOV_TRAIN_FEATURES: FunctionFeatures = FunctionFeatures {
+    const MARKOV_TRAIN_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -220,11 +220,11 @@ impl AggregateMarkovTrainState {
     }
 }
 
-struct AggregateMarkovTrainImplementation {
+struct MarkovTrainEval {
     params: TrainParameters,
 }
 
-impl AggregateMarkovTrainImplementation {
+impl MarkovTrainEval {
     fn append_model_result(
         &self,
         model: &AggregateMarkovTrainState,
@@ -259,7 +259,7 @@ impl AggregateMarkovTrainImplementation {
     }
 }
 
-impl AggrImpl for AggregateMarkovTrainImplementation {
+impl AggregateEval for MarkovTrainEval {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(AggregateMarkovTrainState::default);
     }
@@ -361,9 +361,7 @@ impl AggrImpl for AggregateMarkovTrainImplementation {
 }
 
 impl MarkovTrainBuilder {
-    fn create(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create(build: MultiArgBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         if build.args_type()[0] != DataType::String {
             return Err(ErrorCode::BadDataValueType(format!(
                 "{} does not support type '{:?}', must be string type",
@@ -421,7 +419,7 @@ impl MarkovTrainBuilder {
             ])))
             .wrap_nullable(),
             AggregateMarkovTrainState::state_description(),
-            AggregateMarkovTrainImplementation { params },
+            MarkovTrainEval { params },
         )
     }
 }

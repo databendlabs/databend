@@ -41,44 +41,44 @@ mod unary;
 mod unary_nullable;
 mod unary_state;
 
-pub(super) use combinator::CombinatorImpl;
+pub(super) use combinator::Combinator;
 pub(super) use combinator::DistinctCombinator;
 pub(super) use combinator::IfCombinator;
 pub(super) use combinator::PlainCombinator;
 pub(super) use combinator::StateCombinator;
-pub(super) use distinct_combinator::AggregateDistinctImplementation;
 pub(super) use distinct_combinator::AggregateDistinctState;
+pub(super) use distinct_combinator::DistinctEval;
 pub(super) use merge_combinator::LegacySignatureResolver;
-pub(super) use multi_arg_nullable::AggregateMultiArgOrNullImplementation;
-pub(super) use multi_arg_nullable::AggregateMultiArgSkipNullImplementation;
+pub(super) use multi_arg_nullable::MultiArgOrNullEval;
+pub(super) use multi_arg_nullable::MultiArgSkipNullEval;
 pub(super) use name_route::*;
 pub(super) use null_argument_result::try_create_null_argument_result_function;
 pub(super) use unary::*;
 pub(super) use unary_nullable::UnaryOrNull;
 pub(super) use unary_nullable::UnarySkipNull;
 pub(super) use unary_state::AggregateUnaryState;
-pub(super) use unary_state::AggregateUnaryStateImplementation;
+pub(super) use unary_state::AggregateUnaryStateEval;
 
 pub(super) struct UnaryBuildContext<'a, C> {
-    request: AggregateFunctionRequest<'a>,
+    request: RawAggregateCall<'a>,
     signature_args_type: &'a [DataType],
-    features: FunctionFeatures,
+    features: AggregateFeatures,
     combinator: C,
     arg_type: DataType,
 }
 
 pub(super) struct MultiArgBuildContext<'a, C> {
-    request: AggregateFunctionRequest<'a>,
+    request: RawAggregateCall<'a>,
     signature_args_type: &'a [DataType],
-    features: FunctionFeatures,
+    features: AggregateFeatures,
     combinator: C,
     args_type: Vec<DataType>,
 }
 
 pub(super) struct DirectBuildContext<'a, C> {
-    request: AggregateFunctionRequest<'a>,
+    request: RawAggregateCall<'a>,
     signature_args_type: &'a [DataType],
-    features: FunctionFeatures,
+    features: AggregateFeatures,
     combinator: C,
 }
 
@@ -96,14 +96,13 @@ pub(crate) struct StateCombinatorPlan {
     pub(crate) nullable_input_result_flag: bool,
 }
 
-pub(super) type UnaryBuildFn<C> =
-    for<'a> fn(UnaryBuildContext<'a, C>) -> Result<AggregateFunctionRef>;
+pub(super) type UnaryBuildFn<C> = for<'a> fn(UnaryBuildContext<'a, C>) -> Result<AggregateCallRef>;
 
 pub(super) type MultiArgBuildFn<C> =
-    for<'a> fn(MultiArgBuildContext<'a, C>) -> Result<AggregateFunctionRef>;
+    for<'a> fn(MultiArgBuildContext<'a, C>) -> Result<AggregateCallRef>;
 
 pub(super) type DirectBuildFn<C> =
-    for<'a> fn(DirectBuildContext<'a, C>) -> Result<AggregateFunctionRef>;
+    for<'a> fn(DirectBuildContext<'a, C>) -> Result<AggregateCallRef>;
 
 fn state_at<T>(state: AggrState<'_>, index: usize) -> &mut T
 where T: Send + 'static {
@@ -218,9 +217,9 @@ mod tests {
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::UInt64Type;
 
-    use super::legacy_adapter::AggregateFunctionV2LegacyAdapter;
-    use super::sort_combinator::AggregateSortImplementation;
+    use super::legacy_adapter::LegacyAggregateCallAdapter;
     use super::sort_combinator::AggregateSortState;
+    use super::sort_combinator::SortEval;
     use super::*;
 
     struct SumState {
@@ -242,16 +241,16 @@ mod tests {
         }
     }
 
-    struct SumFunctionInfo {
+    struct SumInfo {
         drop_count: SumDropCounter,
     }
 
-    struct SumImplementation {
-        function_info: Arc<SumFunctionInfo>,
+    struct SumEval {
+        function_info: Arc<SumInfo>,
     }
 
-    impl SumImplementation {
-        fn new(function_info: Arc<SumFunctionInfo>) -> Self {
+    impl SumEval {
+        fn new(function_info: Arc<SumInfo>) -> Self {
             Self { function_info }
         }
 
@@ -263,7 +262,7 @@ mod tests {
         }
     }
 
-    impl AggrImpl for SumImplementation {
+    impl AggregateEval for SumEval {
         fn init_state(&self, state: AggrState<'_>) {
             state.write(|| SumState { value: 0 });
         }
@@ -340,17 +339,17 @@ mod tests {
         }
     }
 
-    fn plain_sum(drop_count: Arc<AtomicUsize>) -> impl AggrImpl {
+    fn plain_sum(drop_count: Arc<AtomicUsize>) -> impl AggregateEval {
         plain_sum_with_counter(SumDropCounter::Shared(drop_count))
     }
 
-    fn plain_sum_with_counter(drop_count: SumDropCounter) -> impl AggrImpl {
+    fn plain_sum_with_counter(drop_count: SumDropCounter) -> impl AggregateEval {
         let function_info = sum_function_info(drop_count);
-        SumImplementation::new(function_info)
+        SumEval::new(function_info)
     }
 
-    fn sum_function_info(drop_count: SumDropCounter) -> Arc<SumFunctionInfo> {
-        Arc::new(SumFunctionInfo { drop_count })
+    fn sum_function_info(drop_count: SumDropCounter) -> Arc<SumInfo> {
+        Arc::new(SumInfo { drop_count })
     }
 
     fn distinct_sum_state_description() -> AggregateStateDescription {
@@ -407,7 +406,7 @@ mod tests {
     }
 
     fn serialize_state(
-        function: &AggregateFunctionRef,
+        function: &AggregateCallRef,
         owner: &AggregateStateOwner,
     ) -> Result<BlockEntry> {
         let data_types = function
@@ -447,22 +446,21 @@ mod tests {
     fn full_modifier_function(
         drop_count: Arc<AtomicUsize>,
         order_by: Vec<AggregateRuntimeOrderByItem>,
-    ) -> AggregateFunctionRef {
-        let implementation =
-            AggregateMultiArgOrNullImplementation::new(AggregateSortImplementation::new(
-                AggregateDistinctImplementation::<false>::new(plain_sum(drop_count), vec![
-                    UInt64Type::data_type(),
-                    DataType::Boolean,
-                ]),
-                vec![
-                    UInt64Type::data_type(),
-                    DataType::Boolean,
-                    UInt64Type::data_type(),
-                ],
-                order_by,
-            ));
-        Arc::new(AggregateFunction::new(
-            AggregateFunctionSignature {
+    ) -> AggregateCallRef {
+        let eval = MultiArgOrNullEval::new(SortEval::new(
+            DistinctEval::<false>::new(plain_sum(drop_count), vec![
+                UInt64Type::data_type(),
+                DataType::Boolean,
+            ]),
+            vec![
+                UInt64Type::data_type(),
+                DataType::Boolean,
+                UInt64Type::data_type(),
+            ],
+            order_by,
+        ));
+        Arc::new(AggregateCallInstance::new(
+            AggregateSignature {
                 name: "sum_probe_full_modifiers".to_string(),
                 params: vec![],
                 args_type: vec![UInt64Type::data_type(), DataType::Boolean],
@@ -471,7 +469,7 @@ mod tests {
                 return_type: UInt64Type::data_type().wrap_nullable(),
             },
             FunctionInputLayout::Identity,
-            FunctionFeatures {
+            AggregateFeatures {
                 is_decomposable: false,
                 supports_filter: false,
                 sort_policy: SortPolicy::Required,
@@ -479,7 +477,7 @@ mod tests {
                 ..Default::default()
             },
             full_modifier_state_description(),
-            implementation,
+            eval,
         ))
     }
 
@@ -492,7 +490,7 @@ mod tests {
     }
 
     fn direct_full_modifier_result(
-        function: &AggregateFunctionRef,
+        function: &AggregateCallRef,
         entries: &[BlockEntry],
     ) -> Result<Column> {
         let owner = AggregateStateOwner::new(vec![function.clone()])?;
@@ -512,8 +510,8 @@ mod tests {
     #[test]
     fn test_or_null_emits_null_without_input_rows() -> Result<()> {
         let drop_count = Arc::new(AtomicUsize::new(0));
-        let function: AggregateFunctionRef = Arc::new(AggregateFunction::new(
-            AggregateFunctionSignature {
+        let function: AggregateCallRef = Arc::new(AggregateCallInstance::new(
+            AggregateSignature {
                 name: "sum_probe_or_null".to_string(),
                 params: vec![],
                 args_type: vec![UInt64Type::data_type()],
@@ -522,9 +520,9 @@ mod tests {
                 return_type: UInt64Type::data_type().wrap_nullable(),
             },
             FunctionInputLayout::Identity,
-            FunctionFeatures::default(),
+            AggregateFeatures::default(),
             or_null_sum_state_description(),
-            AggregateMultiArgOrNullImplementation::new(plain_sum(drop_count.clone())),
+            MultiArgOrNullEval::new(plain_sum(drop_count.clone())),
         ));
 
         {
@@ -546,8 +544,8 @@ mod tests {
     #[test]
     fn test_distinct_serialized_merge_restores_key_set() -> Result<()> {
         let drop_count = Arc::new(AtomicUsize::new(0));
-        let function: AggregateFunctionRef = Arc::new(AggregateFunction::new(
-            AggregateFunctionSignature {
+        let function: AggregateCallRef = Arc::new(AggregateCallInstance::new(
+            AggregateSignature {
                 name: "sum_probe_distinct".to_string(),
                 params: vec![],
                 args_type: vec![UInt64Type::data_type()],
@@ -556,14 +554,15 @@ mod tests {
                 return_type: UInt64Type::data_type(),
             },
             FunctionInputLayout::Identity,
-            FunctionFeatures {
+            AggregateFeatures {
                 distinct_policy: DistinctPolicy::Unsupported,
                 ..Default::default()
             },
             distinct_sum_state_description(),
-            AggregateDistinctImplementation::<false>::new(plain_sum(drop_count.clone()), vec![
-                UInt64Type::data_type(),
-            ]),
+            DistinctEval::<false>::new(
+                plain_sum(drop_count.clone()),
+                vec![UInt64Type::data_type()],
+            ),
         ));
 
         {
@@ -606,7 +605,7 @@ mod tests {
         let entries = full_modifier_entries();
         let direct_result = direct_full_modifier_result(&function, &entries)?;
 
-        let legacy = AggregateFunctionV2LegacyAdapter::create(function.clone());
+        let legacy = LegacyAggregateCallAdapter::create(function.clone());
         let legacy_functions: Vec<
             databend_common_expression::aggregate_function_v1::AggregateFunctionRef,
         > = vec![legacy.clone()];
@@ -661,7 +660,7 @@ mod tests {
     }
 
     #[test]
-    fn test_intrusive_modifiers_compose_as_concrete_implementations() -> Result<()> {
+    fn test_intrusive_modifiers_compose_as_concrete_evals() -> Result<()> {
         let drop_count = Arc::new(AtomicUsize::new(0));
         let function = full_modifier_function(drop_count.clone(), full_modifier_order_by());
 

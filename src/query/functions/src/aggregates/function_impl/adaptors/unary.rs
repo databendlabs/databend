@@ -106,7 +106,7 @@ where
     }
 }
 
-pub(crate) struct UnaryImpl<S, I, R, const MAYBE_NULL: bool>
+pub(crate) struct UnaryStateEval<S, I, R, const MAYBE_NULL: bool>
 where
     S: UnaryState<I, R>,
     I: AccessType,
@@ -133,7 +133,7 @@ pub(crate) struct UnaryAccumulateRowInput<'a> {
     pub(crate) row: usize,
 }
 
-pub(crate) trait UnaryAggrImpl<I, R>: Send + Sync + 'static
+pub(crate) trait UnaryEval<I, R>: Send + Sync + 'static
 where
     I: AccessType,
     R: ValueType,
@@ -161,25 +161,25 @@ where
     unsafe fn drop_state(&self, state: AggrState<'_>);
 }
 
-pub(crate) struct UnaryAggregateImplementation<I, R, U>
+pub(crate) struct UnaryEvalAdapter<I, R, U>
 where
     I: AccessType,
     R: ValueType,
-    U: UnaryAggrImpl<I, R>,
+    U: UnaryEval<I, R>,
 {
-    inner: U,
+    nested: U,
     _p: PhantomData<fn(I, R)>,
 }
 
-impl<I, R, U> UnaryAggregateImplementation<I, R, U>
+impl<I, R, U> UnaryEvalAdapter<I, R, U>
 where
     I: AccessType,
     R: ValueType,
-    U: UnaryAggrImpl<I, R>,
+    U: UnaryEval<I, R>,
 {
-    pub fn new(inner: U) -> Self {
+    pub fn new(nested: U) -> Self {
         Self {
-            inner,
+            nested,
             _p: PhantomData,
         }
     }
@@ -192,13 +192,13 @@ struct UnaryDistinctState {
 }
 
 pub struct UnaryDistinct<U> {
-    inner: U,
+    nested: U,
     arg_type: DataType,
 }
 
 impl<U> UnaryDistinct<U> {
-    pub fn new(inner: U, arg_type: DataType) -> Self {
-        Self { inner, arg_type }
+    pub fn new(nested: U, arg_type: DataType) -> Self {
+        Self { nested, arg_type }
     }
 
     fn state(state: AggrState<'_>) -> &mut UnaryDistinctState {
@@ -225,7 +225,7 @@ impl<U> UnaryDistinct<U> {
     where
         I: AccessType,
         R: ValueType,
-        U: UnaryAggrImpl<I, R>,
+        U: UnaryEval<I, R>,
     {
         let distinct_state = Self::state(state);
         if distinct_state.replayed {
@@ -236,7 +236,7 @@ impl<U> UnaryDistinct<U> {
             let mut key_slice = key.as_slice();
             let row = Vec::<Scalar>::deserialize(&mut key_slice)?;
             let entry = BlockEntry::new_const_column(self.arg_type.clone(), row[0].clone(), 1);
-            self.inner.accumulate_row(UnaryAccumulateRowInput {
+            self.nested.accumulate_row(UnaryAccumulateRowInput {
                 state: state.remove_first_loc(),
                 column: &entry,
                 row: 0,
@@ -247,7 +247,7 @@ impl<U> UnaryDistinct<U> {
     }
 }
 
-impl<S, I, R, const MAYBE_NULL: bool> UnaryImpl<S, I, R, MAYBE_NULL>
+impl<S, I, R, const MAYBE_NULL: bool> UnaryStateEval<S, I, R, MAYBE_NULL>
 where
     S: UnaryState<I, R>,
     I: AccessType,
@@ -263,27 +263,25 @@ where
 
 pub(crate) fn create_unary_distinct_or_null_aggregate_function<S, I, R, C>(
     combinator: C,
-    signature: AggregateFunctionSignature,
-    features: FunctionFeatures,
+    signature: AggregateSignature,
+    features: AggregateFeatures,
     state: AggregateStateDescription,
     function_info: S::FunctionInfo,
     distinct_args_type: Vec<DataType>,
-) -> Result<AggregateFunctionRef>
+) -> Result<AggregateCallRef>
 where
     S: UnaryState<I, R>,
     I: AccessType,
     R: ValueType,
-    C: CombinatorImpl,
+    C: Combinator,
 {
     debug_assert_eq!(distinct_args_type.len(), 1);
-    let implementation = UnaryAggregateImplementation::new(UnarySkipNull::new(UnaryOrNull::new(
-        UnaryDistinct::new(
-            UnaryImpl::<S, I, R, false>::new(Arc::new(function_info)),
-            distinct_args_type[0].clone(),
-        ),
-    )));
+    let eval = UnaryEvalAdapter::new(UnarySkipNull::new(UnaryOrNull::new(UnaryDistinct::new(
+        UnaryStateEval::<S, I, R, false>::new(Arc::new(function_info)),
+        distinct_args_type[0].clone(),
+    ))));
     let state = unary_distinct_or_null_state_description(&state);
-    combinator.create_aggregate_function(signature, features, state, implementation)
+    combinator.create_aggregate_function(signature, features, state, eval)
 }
 
 fn unary_distinct_or_null_state_description(
@@ -320,15 +318,15 @@ pub fn unary_distinct_state_description(
     AggregateStateDescription::new(fields, serde_items).with_manual_drop(true)
 }
 
-impl<I, R, U> UnaryAggrImpl<I, R> for UnaryDistinct<U>
+impl<I, R, U> UnaryEval<I, R> for UnaryDistinct<U>
 where
     I: AccessType,
     R: ValueType,
-    U: UnaryAggrImpl<I, R>,
+    U: UnaryEval<I, R>,
 {
     fn init_state(&self, state: AggrState<'_>) {
         write_state_at(state, 0, UnaryDistinctState::default());
-        self.inner.init_state(state.remove_first_loc());
+        self.nested.init_state(state.remove_first_loc());
     }
 
     fn accumulate(&self, input: UnaryAccumulateInput<'_>) -> Result<()> {
@@ -368,7 +366,7 @@ where
             }
             key_builder.commit_row();
         }
-        self.inner.serialize(SerializeInput {
+        self.nested.serialize(SerializeInput {
             states: input.states.without_first_loc(),
             builders: inner_builders,
         })
@@ -391,7 +389,7 @@ where
 
         let field_count = serialized_field_count(input.state);
         let inner_state = project_serialized_fields(input.state, 1, field_count);
-        self.inner.merge_serialized(MergeSerializedInput {
+        self.nested.merge_serialized(MergeSerializedInput {
             states: input.states.without_first_loc(),
             state: &inner_state,
             filter: input.filter,
@@ -410,7 +408,7 @@ where
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.replay_keys::<I, R>(input.state)?;
-        self.inner.merge_result(MergeResultInput {
+        self.nested.merge_result(MergeResultInput {
             state: input.state.remove_first_loc(),
             builder: input.builder,
         })
@@ -418,7 +416,7 @@ where
 
     fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.replay_keys::<I, R>(input.state)?;
-        self.inner.merge_result_read_only(MergeResultInput {
+        self.nested.merge_result_read_only(MergeResultInput {
             state: input.state.remove_first_loc(),
             builder: input.builder,
         })
@@ -426,22 +424,22 @@ where
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
         unsafe { std::ptr::drop_in_place(Self::state(state)) };
-        unsafe { self.inner.drop_state(state.remove_first_loc()) };
+        unsafe { self.nested.drop_state(state.remove_first_loc()) };
     }
 }
 
-impl<I, R, U> AggrImpl for UnaryAggregateImplementation<I, R, U>
+impl<I, R, U> AggregateEval for UnaryEvalAdapter<I, R, U>
 where
     I: AccessType,
     R: ValueType,
-    U: UnaryAggrImpl<I, R>,
+    U: UnaryEval<I, R>,
 {
     fn init_state(&self, state: AggrState<'_>) {
-        self.inner.init_state(state)
+        self.nested.init_state(state)
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
-        self.inner.accumulate(UnaryAccumulateInput {
+        self.nested.accumulate(UnaryAccumulateInput {
             state: input.state,
             column: &input.columns[0],
             validity: input.validity,
@@ -449,14 +447,14 @@ where
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        self.inner.accumulate_keys(UnaryAccumulateKeysInput {
+        self.nested.accumulate_keys(UnaryAccumulateKeysInput {
             states: input.states,
             column: &input.columns[0],
         })
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
-        self.inner.accumulate_row(UnaryAccumulateRowInput {
+        self.nested.accumulate_row(UnaryAccumulateRowInput {
             state: input.state,
             column: &input.columns[0],
             row: input.row,
@@ -464,31 +462,31 @@ where
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        self.inner.serialize(input)
+        self.nested.serialize(input)
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        self.inner.merge_serialized(input)
+        self.nested.merge_serialized(input)
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        self.inner.merge_states(input)
+        self.nested.merge_states(input)
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        self.inner.merge_result(input)
+        self.nested.merge_result(input)
     }
 
     fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
-        self.inner.merge_result_read_only(input)
+        self.nested.merge_result_read_only(input)
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
-        unsafe { self.inner.drop_state(state) };
+        unsafe { self.nested.drop_state(state) };
     }
 }
 
-impl<S, I, R, const MAYBE_NULL: bool> UnaryAggrImpl<I, R> for UnaryImpl<S, I, R, MAYBE_NULL>
+impl<S, I, R, const MAYBE_NULL: bool> UnaryEval<I, R> for UnaryStateEval<S, I, R, MAYBE_NULL>
 where
     S: UnaryState<I, R>,
     I: AccessType,

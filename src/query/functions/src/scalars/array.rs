@@ -41,9 +41,9 @@ use databend_common_expression::aggregate::AggrState;
 use databend_common_expression::aggregate::StateAddr;
 use databend_common_expression::aggregate::StatesLayout;
 use databend_common_expression::aggregate::aggregate_function::AccumulateInput;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::aggregate::aggregate_function::get_states_layout;
 use databend_common_expression::domain_evaluator;
 use databend_common_expression::scalar_evaluator;
@@ -1227,7 +1227,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 struct ArrayAggEvaluator<'a> {
-    func: &'a AggregateFunctionRef,
+    func: &'a AggregateCallRef,
     state_layout: &'a StatesLayout,
     addr: StateAddr,
     need_manual_drop_state: bool,
@@ -1235,7 +1235,7 @@ struct ArrayAggEvaluator<'a> {
 }
 
 impl<'a> ArrayAggEvaluator<'a> {
-    fn new(func: &'a AggregateFunctionRef, state_layout: &'a StatesLayout) -> Self {
+    fn new(func: &'a AggregateCallRef, state_layout: &'a StatesLayout) -> Self {
         let arena = Bump::new();
         let addr = arena.alloc_layout(state_layout.layout).into();
         func.init_state(AggrState::new(addr, &state_layout.states_loc[0]));
@@ -1284,14 +1284,14 @@ impl Drop for ArrayAggEvaluator<'_> {
 }
 
 struct ArrayAggDesc {
-    func: AggregateFunctionRef,
+    func: AggregateCallRef,
     state_layout: Arc<StatesLayout>,
     return_type: DataType,
 }
 
 impl ArrayAggDesc {
     fn new(name: &str, array_type: &DataType) -> Result<Self> {
-        let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+        let func = AGGR_REGISTRY.resolve(RawAggregateCall {
             name,
             params: &[],
             args_type: std::slice::from_ref(array_type),

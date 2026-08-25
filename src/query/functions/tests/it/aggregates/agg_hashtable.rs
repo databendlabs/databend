@@ -25,8 +25,8 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::aggregate_function::AggregateFunctionRef;
-use databend_common_expression::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate_function::AggregateCallRef;
+use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::aggregate_function::get_states_layout;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
@@ -47,9 +47,9 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use itertools::Itertools;
 
-fn resolve_agg(name: &str, arg_type: DataType) -> AggregateFunctionRef {
+fn resolve_agg(name: &str, arg_type: DataType) -> AggregateCallRef {
     AGGR_REGISTRY
-        .resolve(AggregateFunctionRequest {
+        .resolve(RawAggregateCall {
             name,
             params: &[],
             args_type: &[arg_type],

@@ -42,7 +42,7 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 use super::min_max_any::TYPE_MAX;
 use super::min_max_any::TYPE_MIN;
@@ -51,7 +51,7 @@ use super::serialized_scalar_at;
 struct ArgMinMaxBuilder;
 
 impl ArgMinMaxBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["arg_min"],
             ArgMinMaxBuilder::arg_min_max_arguments(),
@@ -82,7 +82,7 @@ impl ArgMinMaxBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: ArgMinMaxBuilder::register,
     }
 }
@@ -92,7 +92,7 @@ impl ArgMinMaxBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any(), ArgumentPattern::any()])
     }
 
-    const ARG_MIN_FEATURES: FunctionFeatures = FunctionFeatures {
+    const ARG_MIN_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -103,7 +103,7 @@ impl ArgMinMaxBuilder {
         example: "select arg_min(name, score) from t",
     };
 
-    const ARG_MAX_FEATURES: FunctionFeatures = FunctionFeatures {
+    const ARG_MAX_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -216,18 +216,18 @@ where
 
 impl ArgMinMaxBuilder {
     fn create<const CMP_TYPE: u8>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+        build: MultiArgBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef> {
         let arg_type = build.args_type()[0].clone();
         let value_type = build.args_type()[1].clone();
         Self::create_for_arg::<CMP_TYPE>(build, arg_type, value_type)
     }
 
     fn create_for_arg<const CMP_TYPE: u8>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl Combinator>,
         arg_type: DataType,
         value_type: DataType,
-    ) -> Result<AggregateFunctionRef> {
+    ) -> Result<AggregateCallRef> {
         match &arg_type {
             DataType::String => {
                 Self::create_for_value::<StringType, CMP_TYPE>(build, arg_type, value_type)
@@ -258,10 +258,10 @@ impl ArgMinMaxBuilder {
     }
 
     fn create_for_value<A, const CMP_TYPE: u8>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl Combinator>,
         arg_type: DataType,
         value_type: DataType,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         A: ValueType,
         A::Scalar: BorshSerialize + BorshDeserialize,
@@ -303,10 +303,10 @@ impl ArgMinMaxBuilder {
     }
 
     fn create_instance<A, V, const CMP_TYPE: u8>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl Combinator>,
         arg_type: DataType,
         value_type: DataType,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         A: ValueType,
         A::Scalar: BorshSerialize + BorshDeserialize,
@@ -318,12 +318,12 @@ impl ArgMinMaxBuilder {
             arg_type.clone(),
             value_type,
         );
-        let implementation = AggregateArgMinMaxImplementation::<A, V, CMP_TYPE>::new();
-        build.create_multi_arg_or_null(arg_type.wrap_nullable(), state, implementation)
+        let eval = ArgMinMaxEval::<A, V, CMP_TYPE>::new();
+        build.create_multi_arg_or_null(arg_type.wrap_nullable(), state, eval)
     }
 }
 
-struct AggregateArgMinMaxImplementation<A, V, const CMP_TYPE: u8>
+struct ArgMinMaxEval<A, V, const CMP_TYPE: u8>
 where
     A: ValueType,
     V: ValueType,
@@ -331,7 +331,7 @@ where
     _p: PhantomData<fn(A, V)>,
 }
 
-impl<A, V, const CMP_TYPE: u8> AggregateArgMinMaxImplementation<A, V, CMP_TYPE>
+impl<A, V, const CMP_TYPE: u8> ArgMinMaxEval<A, V, CMP_TYPE>
 where
     A: ValueType,
     V: ValueType,
@@ -341,7 +341,7 @@ where
     }
 }
 
-impl<A, V, const CMP_TYPE: u8> AggrImpl for AggregateArgMinMaxImplementation<A, V, CMP_TYPE>
+impl<A, V, const CMP_TYPE: u8> AggregateEval for ArgMinMaxEval<A, V, CMP_TYPE>
 where
     A: ValueType,
     A::Scalar: BorshSerialize + BorshDeserialize,

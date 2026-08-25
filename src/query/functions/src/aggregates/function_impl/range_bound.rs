@@ -53,14 +53,14 @@ use rand::prelude::SliceRandom;
 use rand::rngs::SmallRng;
 use rand::thread_rng;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 use crate::with_simple_no_number_mapped_type;
 
 struct RangeBoundBuilder;
 
 impl RangeBoundBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["range_bound"],
             RangeBoundBuilder::range_bound_arguments(),
@@ -77,7 +77,7 @@ impl RangeBoundBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: RangeBoundBuilder::register,
     }
 }
@@ -87,7 +87,7 @@ impl RangeBoundBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    const RANGE_BOUND_FEATURES: FunctionFeatures = FunctionFeatures {
+    const RANGE_BOUND_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -331,7 +331,7 @@ where
 }
 
 impl RangeBoundBuilder {
-    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
         let function_info = Self::get_partitions(build.params(), &display_name, data_type.clone())?;
@@ -365,10 +365,10 @@ impl RangeBoundBuilder {
     }
 
     fn create_instance<T>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         return_type: DataType,
         function_info: RangeBoundData,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         T: AccessType + ReturnType,
         T::Scalar: Ord + BorshSerialize + BorshDeserialize,

@@ -3,7 +3,7 @@ use std::io::Write;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::FromData;
-use databend_common_expression::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -102,7 +102,7 @@ fn test_v2_count_reports_argument_count_mismatch() {
         DataType::Number(NumberDataType::UInt8),
         DataType::Number(NumberDataType::UInt8),
     ];
-    let error = match AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let error = match AGGR_REGISTRY.resolve(RawAggregateCall {
         name: "count",
         params: &[],
         args_type: &args_type,

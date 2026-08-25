@@ -14,8 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AggrState;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeType;
@@ -28,33 +30,33 @@ use databend_common_expression::utils::column_merge_validity;
 use super::AccumulateInput;
 use super::AccumulateKeysInput;
 use super::AccumulateRowInput;
-use super::AggrImpl;
-use super::AggregateFunction;
-use super::AggregateFunctionRef;
-use super::AggregateFunctionRequest;
-use super::AggregateFunctionSignature;
+use super::AggregateCallInstance;
+use super::AggregateCallRef;
+use super::AggregateEval;
+use super::AggregateSignature;
 use super::AggregateStateSet;
 use super::ArgumentsPattern;
 use super::FunctionInputLayout;
 use super::MergeResultInput;
 use super::MergeSerializedInput;
 use super::MergeStatesInput;
+use super::RawAggregateCall;
 use super::SerializeInput;
 use super::state_combinator::aggregate_state_data_type;
 
-type NestedBuild<'a> = dyn Fn(&[Scalar], &[DataType]) -> Result<AggregateFunctionRef> + 'a;
+type NestedBuild<'a> = dyn Fn(&[Scalar], &[DataType]) -> Result<AggregateCallRef> + 'a;
 
 pub(crate) type LegacySignatureResolver = fn(&[Scalar], &DataType) -> Vec<Vec<DataType>>;
 
 pub(super) fn create(
-    request: AggregateFunctionRequest<'_>,
+    request: RawAggregateCall<'_>,
     nested_name: &str,
     nested_aliases: &[&str],
     nested_arguments: &ArgumentsPattern,
     legacy_signature_resolver: Option<LegacySignatureResolver>,
     nested_build: &NestedBuild<'_>,
     returns_state: bool,
-) -> Result<AggregateFunctionRef> {
+) -> Result<AggregateCallRef> {
     let combinator_name = if returns_state {
         "merge_state"
     } else {
@@ -86,7 +88,7 @@ pub(super) fn create(
     } else {
         nested.signature().return_type.clone()
     };
-    let signature = AggregateFunctionSignature {
+    let signature = AggregateSignature {
         name: request.name.to_string(),
         params: request.params.to_vec(),
         args_type: request.args_type.to_vec(),
@@ -96,12 +98,12 @@ pub(super) fn create(
     };
     let features = nested.features().clone();
     let state = nested.state().clone();
-    Ok(Arc::new(AggregateFunction::new(
+    Ok(Arc::new(AggregateCallInstance::new(
         signature,
         FunctionInputLayout::Identity,
         features,
         state,
-        AggregateMergeImplementation {
+        MergeEval {
             nested,
             returns_state,
         },
@@ -124,7 +126,7 @@ fn create_from_metadata(
     request: NestedRequest<'_>,
     state: &AggregateStateDataType,
     combinator_name: &str,
-) -> Result<(AggregateFunctionRef, DataType)> {
+) -> Result<(AggregateCallRef, DataType)> {
     let nested_name = request.name;
     if !std::iter::once(request.name)
         .chain(request.aliases.iter().copied())
@@ -162,7 +164,7 @@ fn create_from_legacy_state(
     request: NestedRequest<'_>,
     state_type: &DataType,
     combinator_name: &str,
-) -> Result<(AggregateFunctionRef, DataType)> {
+) -> Result<(AggregateCallRef, DataType)> {
     let resolved = match request.legacy_signature_resolver {
         Some(resolve) => resolve(request.params, state_type)
             .into_iter()
@@ -188,7 +190,7 @@ fn try_legacy_signature(
     request: NestedRequest<'_>,
     state_type: &DataType,
     argument_types: Vec<DataType>,
-) -> Option<(AggregateFunctionRef, Vec<DataType>)> {
+) -> Option<(AggregateCallRef, Vec<DataType>)> {
     if !request.arguments.matches_types(&argument_types) {
         return None;
     }
@@ -201,7 +203,7 @@ fn try_legacy_signature(
     Some((nested, argument_types))
 }
 
-fn serialized_state_type(function: &AggregateFunctionRef) -> DataType {
+fn serialized_state_type(function: &AggregateCallRef) -> DataType {
     StateSerdeType::new(function.state().serde_items().to_vec()).data_type()
 }
 
@@ -258,7 +260,7 @@ impl<'a> LegacySignatureSearch<'a> {
         }
     }
 
-    fn run(mut self) -> Option<(AggregateFunctionRef, Vec<DataType>)> {
+    fn run(mut self) -> Option<(AggregateCallRef, Vec<DataType>)> {
         // Arity 0 is tried last: it only applies to `count`, and trying it first
         // would let a zero-argument state shadow a genuine single-argument one.
         for arity in (1..=Self::MAX_ARGUMENTS).chain(std::iter::once(0)) {
@@ -283,7 +285,7 @@ impl<'a> LegacySignatureSearch<'a> {
         self.attempts >= Self::MAX_ATTEMPTS
     }
 
-    fn search(&mut self, arity: usize) -> Option<(AggregateFunctionRef, Vec<DataType>)> {
+    fn search(&mut self, arity: usize) -> Option<(AggregateCallRef, Vec<DataType>)> {
         if self.argument_types.len() == arity {
             return self.try_current();
         }
@@ -304,7 +306,7 @@ impl<'a> LegacySignatureSearch<'a> {
 
     /// Checks the fully built argument list, returning the nested function when
     /// it reproduces the state layout unambiguously.
-    fn try_current(&mut self) -> Option<(AggregateFunctionRef, Vec<DataType>)> {
+    fn try_current(&mut self) -> Option<(AggregateCallRef, Vec<DataType>)> {
         self.attempts += 1;
         try_legacy_signature(self.request, self.state_type, self.argument_types.clone())
     }
@@ -389,15 +391,13 @@ fn persist_params(params: &[Scalar]) -> Result<Vec<AggregateFunctionParam>> {
         .collect()
 }
 
-struct AggregateMergeImplementation {
-    nested: AggregateFunctionRef,
+struct MergeEval {
+    nested: AggregateCallRef,
     returns_state: bool,
 }
 
-impl AggregateMergeImplementation {
-    fn physical_input(
-        entry: &BlockEntry,
-    ) -> (BlockEntry, Option<databend_common_column::bitmap::Bitmap>) {
+impl MergeEval {
+    fn physical_input(entry: &BlockEntry) -> (BlockEntry, Option<Bitmap>) {
         let validity = column_merge_validity(entry, None);
         let entry = entry.clone().remove_nullable();
         let entry = match entry {
@@ -410,8 +410,8 @@ impl AggregateMergeImplementation {
     }
 }
 
-impl AggrImpl for AggregateMergeImplementation {
-    fn init_state(&self, state: databend_common_expression::AggrState<'_>) {
+impl AggregateEval for MergeEval {
+    fn init_state(&self, state: AggrState<'_>) {
         self.nested.init_state(state)
     }
 
@@ -491,7 +491,7 @@ impl AggrImpl for AggregateMergeImplementation {
         }
     }
 
-    unsafe fn drop_state(&self, state: databend_common_expression::AggrState<'_>) {
+    unsafe fn drop_state(&self, state: AggrState<'_>) {
         unsafe { self.nested.drop_state(state) }
     }
 }

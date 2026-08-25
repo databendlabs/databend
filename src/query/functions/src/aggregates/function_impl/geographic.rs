@@ -41,20 +41,20 @@ use databend_common_io::geo_to_ewkb;
 use geo::Geometry;
 use geozero::wkb::Ewkb;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct GeographicBuilder;
 
 trait GeographicAggregateMetadata {
     const NAMES: &'static [&'static str];
-    const FEATURES: FunctionFeatures;
+    const FEATURES: AggregateFeatures;
 
     fn route() -> DirectNameRoute;
 }
 
 impl GeographicBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         CollectAggOp::route().register(registry);
         GeometryUnionAggOp::route().register(registry);
         GeometryIntersectionAggOp::route().register(registry);
@@ -63,14 +63,14 @@ impl GeographicBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: GeographicBuilder::register,
     }
 }
 
 impl GeographicAggregateMetadata for CollectAggOp {
     const NAMES: &'static [&'static str] = &["st_collect"];
-    const FEATURES: FunctionFeatures = GeographicBuilder::ST_COLLECT_FEATURES;
+    const FEATURES: AggregateFeatures = GeographicBuilder::ST_COLLECT_FEATURES;
 
     fn route() -> DirectNameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
@@ -103,7 +103,7 @@ impl GeographicAggregateMetadata for CollectAggOp {
 
 impl GeographicAggregateMetadata for GeometryUnionAggOp {
     const NAMES: &'static [&'static str] = &["st_union_agg"];
-    const FEATURES: FunctionFeatures = GeographicBuilder::ST_UNION_AGG_FEATURES;
+    const FEATURES: AggregateFeatures = GeographicBuilder::ST_UNION_AGG_FEATURES;
 
     fn route() -> DirectNameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
@@ -139,7 +139,7 @@ impl GeographicAggregateMetadata for GeometryUnionAggOp {
 
 impl GeographicAggregateMetadata for GeometryIntersectionAggOp {
     const NAMES: &'static [&'static str] = &["st_intersection_agg"];
-    const FEATURES: FunctionFeatures = GeographicBuilder::ST_INTERSECTION_AGG_FEATURES;
+    const FEATURES: AggregateFeatures = GeographicBuilder::ST_INTERSECTION_AGG_FEATURES;
 
     fn route() -> DirectNameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
@@ -175,7 +175,7 @@ impl GeographicAggregateMetadata for GeometryIntersectionAggOp {
 
 impl GeographicAggregateMetadata for EnvelopeAggOp {
     const NAMES: &'static [&'static str] = &["st_envelope_agg"];
-    const FEATURES: FunctionFeatures = GeographicBuilder::ST_ENVELOPE_AGG_FEATURES;
+    const FEATURES: AggregateFeatures = GeographicBuilder::ST_ENVELOPE_AGG_FEATURES;
 
     fn route() -> DirectNameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
@@ -215,7 +215,7 @@ impl GeographicBuilder {
         ])
     }
 
-    const ST_COLLECT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const ST_COLLECT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -226,7 +226,7 @@ impl GeographicBuilder {
         example: "select st_collect(geom) from t",
     };
 
-    const ST_UNION_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
+    const ST_UNION_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -237,7 +237,7 @@ impl GeographicBuilder {
         example: "select st_union_agg(geom) from t",
     };
 
-    const ST_INTERSECTION_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
+    const ST_INTERSECTION_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -248,7 +248,7 @@ impl GeographicBuilder {
         example: "select st_intersection_agg(geom) from t",
     };
 
-    const ST_ENVELOPE_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
+    const ST_ENVELOPE_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -468,21 +468,21 @@ where O: GeoAggOp
     }
 }
 
-struct AggregateGeometryAggImplementation<O> {
+struct GeometryAggEval<O> {
     _p: PhantomData<fn(O)>,
 }
 
-struct AggregateGeometryCollectImplementation<O> {
+struct GeometryCollectEval<O> {
     _p: PhantomData<fn(O)>,
 }
 
-impl<O> Default for AggregateGeometryAggImplementation<O> {
+impl<O> Default for GeometryAggEval<O> {
     fn default() -> Self {
         Self { _p: PhantomData }
     }
 }
 
-impl<O> Default for AggregateGeometryCollectImplementation<O> {
+impl<O> Default for GeometryCollectEval<O> {
     fn default() -> Self {
         Self { _p: PhantomData }
     }
@@ -519,7 +519,7 @@ fn merge_geometry_validity(entry: &BlockEntry, validity: Option<Bitmap>) -> Opti
     }
 }
 
-impl<O> AggrImpl for AggregateGeometryAggImplementation<O>
+impl<O> AggregateEval for GeometryAggEval<O>
 where O: GeoAggOp
 {
     fn init_state(&self, state: AggrState<'_>) {
@@ -635,7 +635,7 @@ where O: GeoAggOp
     }
 }
 
-impl<O> AggrImpl for AggregateGeometryCollectImplementation<O>
+impl<O> AggregateEval for GeometryCollectEval<O>
 where O: GeoAggOp
 {
     fn init_state(&self, state: AggrState<'_>) {
@@ -752,33 +752,31 @@ where O: GeoAggOp
 }
 
 impl GeographicBuilder {
-    fn create_agg<O>(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef>
+    fn create_agg<O>(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef>
     where O: GeoAggOp {
         Self::validate_request(&build)?;
 
         build.create(
             DataType::Geometry.wrap_nullable(),
             AggregateGeometryAggState::<O>::state_description(),
-            AggregateGeometryAggImplementation::<O>::default(),
+            GeometryAggEval::<O>::default(),
         )
     }
 
     fn create_collect<O>(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef>
+        build: DirectBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef>
     where O: GeoAggOp {
         Self::validate_request(&build)?;
 
         build.create(
             DataType::Geometry.wrap_nullable(),
             AggregateGeometryCollectState::<O>::state_description(),
-            AggregateGeometryCollectImplementation::<O>::default(),
+            GeometryCollectEval::<O>::default(),
         )
     }
 
-    fn validate_request(build: &DirectBuildContext<'_, impl CombinatorImpl>) -> Result<()> {
+    fn validate_request(build: &DirectBuildContext<'_, impl Combinator>) -> Result<()> {
         if !build.params().is_empty() {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",

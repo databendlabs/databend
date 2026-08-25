@@ -47,7 +47,7 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct AvgBuilder;
@@ -55,7 +55,7 @@ struct AvgBuilder;
 impl AvgBuilder {
     const NAME: &'static str = "avg";
 
-    const FEATURES: FunctionFeatures = FunctionFeatures {
+    const FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -70,7 +70,7 @@ impl AvgBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &[Self::NAME],
             Self::arguments(),
@@ -88,7 +88,7 @@ impl AvgBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: AvgBuilder::register,
     }
 }
@@ -322,7 +322,7 @@ where T: Decimal + std::ops::AddAssign
 }
 
 impl AvgBuilder {
-    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
 
@@ -370,9 +370,9 @@ impl AvgBuilder {
     }
 
     fn create_number<S, I>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         sum_type: DataType,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         S: AvgState<I, Float64Type, FunctionInfo = ()>,
         I: AccessType,
@@ -387,10 +387,10 @@ impl AvgBuilder {
     }
 
     fn create_decimal<S, T>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         return_type: DataType,
         function_info: DecimalAvgData,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         S: AvgState<DecimalType<T>, DecimalType<T>, FunctionInfo = DecimalAvgData>,
         T: Decimal,
@@ -404,22 +404,18 @@ impl AvgBuilder {
     }
 
     fn create_instance<S, I, R>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         return_type: DataType,
         state: AggregateStateDescription,
         function_info: Arc<S::FunctionInfo>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         S: AvgState<I, R>,
         I: AccessType,
         R: ValueType,
     {
-        let implementation = AggregateAvgImplementation::<S, I, R>::new(function_info);
-        build.create_unary_or_null_with_impl::<I, R, _>(
-            return_type.wrap_nullable(),
-            state,
-            implementation,
-        )
+        let eval = AvgEval::<S, I, R>::new(function_info);
+        build.create_unary_or_null_with_eval::<I, R, _>(return_type.wrap_nullable(), state, eval)
     }
 }
 
@@ -489,7 +485,7 @@ where
     fn state_description(sum_type: DataType) -> AggregateStateDescription;
 }
 
-struct AggregateAvgImplementation<S, I, R>
+struct AvgEval<S, I, R>
 where
     S: AvgState<I, R>,
     I: AccessType,
@@ -499,7 +495,7 @@ where
     _p: PhantomData<fn(S, I, R)>,
 }
 
-impl<S, I, R> AggregateAvgImplementation<S, I, R>
+impl<S, I, R> AvgEval<S, I, R>
 where
     S: AvgState<I, R>,
     I: AccessType,
@@ -513,7 +509,7 @@ where
     }
 }
 
-impl<S, I, R> UnaryAggrImpl<I, R> for AggregateAvgImplementation<S, I, R>
+impl<S, I, R> UnaryEval<I, R> for AvgEval<S, I, R>
 where
     S: AvgState<I, R>,
     I: AccessType,

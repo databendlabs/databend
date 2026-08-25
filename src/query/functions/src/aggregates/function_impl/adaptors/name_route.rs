@@ -19,25 +19,25 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 
-use super::AggregateFunctionBuilder;
-use super::AggregateFunctionDescriptor;
-use super::AggregateFunctionRef;
-use super::AggregateFunctionRegistry;
-use super::AggregateFunctionRequest;
+use super::AggregateCallBuilder;
+use super::AggregateCallRef;
+use super::AggregateDescriptor;
+use super::AggregateFeatures;
+use super::AggregateRegistry;
 use super::ArgumentPattern;
 use super::ArgumentsPattern;
-use super::CombinatorImpl;
+use super::Combinator;
 use super::DirectBuildContext;
 use super::DirectBuildFn;
 use super::DistinctCombinator;
 use super::DistinctPolicy;
-use super::FunctionFeatures;
 use super::IfCombinator;
 use super::LegacySignatureResolver;
 use super::MultiArgBuildContext;
 use super::MultiArgBuildFn;
 use super::NullPolicy;
 use super::PlainCombinator;
+use super::RawAggregateCall;
 use super::StateCombinator;
 use super::StateCombinatorPlan;
 use super::UnaryBuildContext;
@@ -53,20 +53,20 @@ use super::try_create_null_argument_result_function;
 pub(crate) struct DirectNameRoute {
     names: &'static [&'static str],
     arguments: ArgumentsPattern,
-    features: FunctionFeatures,
+    features: AggregateFeatures,
     distinct_target: Option<String>,
     null_policy: NullPolicy,
     validate: Option<DirectRouteValidateFn>,
     routes: Vec<Box<dyn DirectRouteNode>>,
 }
 
-type DirectRouteValidateFn = for<'a> fn(&AggregateFunctionRequest<'a>) -> Result<()>;
+type DirectRouteValidateFn = for<'a> fn(&RawAggregateCall<'a>) -> Result<()>;
 
 pub(crate) struct DirectRouteContext<'request, 'route> {
-    request: AggregateFunctionRequest<'request>,
+    request: RawAggregateCall<'request>,
     names: &'route [&'route str],
     arguments: &'route ArgumentsPattern,
-    features: &'route FunctionFeatures,
+    features: &'route AggregateFeatures,
     null_policy: NullPolicy,
 }
 
@@ -79,7 +79,7 @@ pub(crate) trait DirectRouteNode: Send + Sync {
         base.clone()
     }
 
-    fn features(&self, base: &FunctionFeatures) -> FunctionFeatures {
+    fn features(&self, base: &AggregateFeatures) -> AggregateFeatures {
         base.clone()
     }
 
@@ -91,17 +91,14 @@ pub(crate) trait DirectRouteNode: Send + Sync {
         false
     }
 
-    fn try_build(
-        &self,
-        context: &DirectRouteContext<'_, '_>,
-    ) -> Result<Option<AggregateFunctionRef>>;
+    fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>>;
 }
 
 impl DirectNameRoute {
     pub(crate) fn new(
         names: &'static [&'static str],
         arguments: ArgumentsPattern,
-        features: FunctionFeatures,
+        features: AggregateFeatures,
         null_policy: NullPolicy,
     ) -> Self {
         assert!(!names.is_empty(), "a direct name route requires a name");
@@ -131,7 +128,7 @@ impl DirectNameRoute {
         self
     }
 
-    pub(crate) fn into_descriptors(self) -> Vec<AggregateFunctionDescriptor> {
+    pub(crate) fn into_descriptors(self) -> Vec<AggregateDescriptor> {
         let route = Arc::new(self);
         let supports_filter = route.routes.iter().any(|node| node.suffix() == Some("if"));
         let routed_distinct = route.routes.iter().find_map(|node| {
@@ -180,7 +177,7 @@ impl DirectNameRoute {
                     .iter()
                     .map(|alias| suffixed_name(alias, suffix))
                     .collect::<Vec<_>>();
-                let builder: Arc<dyn AggregateFunctionBuilder> = route.clone();
+                let builder: Arc<dyn AggregateCallBuilder> = route.clone();
                 let mut features = node.features(&route.features);
                 features.supports_filter = suffix.is_none() && supports_filter;
                 if suffix.is_none()
@@ -188,7 +185,7 @@ impl DirectNameRoute {
                 {
                     features.distinct_policy = policy.clone();
                 }
-                let mut descriptor = AggregateFunctionDescriptor::from_builder(name, builder)
+                let mut descriptor = AggregateDescriptor::from_builder(name, builder)
                     .with_metadata(node.arguments(&route.arguments), features);
                 if !aliases.is_empty() {
                     descriptor = descriptor.with_aliases(aliases);
@@ -198,16 +195,13 @@ impl DirectNameRoute {
             .collect()
     }
 
-    pub(crate) fn register(self, registry: &mut AggregateFunctionRegistry) {
+    pub(crate) fn register(self, registry: &mut AggregateRegistry) {
         for descriptor in self.into_descriptors() {
             registry.register(descriptor);
         }
     }
 
-    pub(crate) fn build(
-        &self,
-        request: AggregateFunctionRequest<'_>,
-    ) -> Result<AggregateFunctionRef> {
+    pub(crate) fn build(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef> {
         if let Some(validate) = self.validate {
             validate(&request)?;
         }
@@ -230,16 +224,16 @@ impl DirectNameRoute {
     }
 }
 
-impl AggregateFunctionBuilder for DirectNameRoute {
+impl AggregateCallBuilder for DirectNameRoute {
     fn arguments(&self) -> &ArgumentsPattern {
         &self.arguments
     }
 
-    fn features(&self) -> &FunctionFeatures {
+    fn features(&self) -> &AggregateFeatures {
         &self.features
     }
 
-    fn build(&self, request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
+    fn build(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef> {
         DirectNameRoute::build(self, request)
     }
 }
@@ -273,7 +267,7 @@ enum RouteBuild<C> {
 }
 
 impl<C> RouteBuild<C>
-where C: CombinatorImpl
+where C: Combinator
 {
     fn null_argument_mode(&self) -> NullArgumentMode {
         match self {
@@ -284,11 +278,11 @@ where C: CombinatorImpl
 
     fn build<'a>(
         &self,
-        request: AggregateFunctionRequest<'a>,
+        request: RawAggregateCall<'a>,
         signature_args_type: &'a [DataType],
-        features: FunctionFeatures,
+        features: AggregateFeatures,
         combinator: C,
-    ) -> Result<AggregateFunctionRef> {
+    ) -> Result<AggregateCallRef> {
         match self {
             Self::Unary(build) => build(UnaryBuildContext::new(
                 request,
@@ -319,11 +313,11 @@ enum NullArgumentMode {
 }
 
 fn request_with_args_type<'a, 'b>(
-    request: &'b AggregateFunctionRequest<'a>,
+    request: &'b RawAggregateCall<'a>,
     args_type: &'b [DataType],
     strip_distinct: bool,
-) -> AggregateFunctionRequest<'b> {
-    AggregateFunctionRequest {
+) -> RawAggregateCall<'b> {
+    RawAggregateCall {
         name: request.name,
         params: request.params,
         args_type,
@@ -333,10 +327,10 @@ fn request_with_args_type<'a, 'b>(
 }
 
 fn null_argument_result(
-    request: &AggregateFunctionRequest<'_>,
+    request: &RawAggregateCall<'_>,
     mode: NullArgumentMode,
     returns_default_when_only_null: bool,
-) -> Result<Option<AggregateFunctionRef>> {
+) -> Result<Option<AggregateCallRef>> {
     let has_null_argument = match mode {
         NullArgumentMode::Only => matches!(request.args_type, [DataType::Null]),
         NullArgumentMode::Any => request.args_type.iter().any(DataType::is_null),
@@ -413,16 +407,13 @@ impl DirectRouteNode for MergeRoute {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    fn features(&self, base: &FunctionFeatures) -> FunctionFeatures {
+    fn features(&self, base: &AggregateFeatures) -> AggregateFeatures {
         let mut features = base.clone();
         features.distinct_policy = DistinctPolicy::Unsupported;
         features
     }
 
-    fn try_build(
-        &self,
-        context: &DirectRouteContext<'_, '_>,
-    ) -> Result<Option<AggregateFunctionRef>> {
+    fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>> {
         let suffix = if self.returns_state {
             "merge_state"
         } else {
@@ -439,7 +430,7 @@ impl DirectRouteNode for MergeRoute {
         let null_argument_mode = self.build.null_argument_mode();
         let features = self.features(context.features);
         let nested_build = |params: &[Scalar], args_type: &[DataType]| {
-            let nested_request = AggregateFunctionRequest {
+            let nested_request = RawAggregateCall {
                 name: nested_name,
                 params,
                 args_type,
@@ -505,10 +496,7 @@ impl PlainRoute {
 }
 
 impl DirectRouteNode for PlainRoute {
-    fn try_build(
-        &self,
-        context: &DirectRouteContext<'_, '_>,
-    ) -> Result<Option<AggregateFunctionRef>> {
+    fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>> {
         if context.matching_name_index(None).is_none() {
             return Ok(None);
         }
@@ -535,7 +523,7 @@ impl DirectRouteNode for PlainRoute {
 }
 
 pub(crate) struct IfRoute {
-    features: Option<FunctionFeatures>,
+    features: Option<AggregateFeatures>,
     build: RouteBuild<IfCombinator>,
 }
 
@@ -561,7 +549,7 @@ impl IfRoute {
         }
     }
 
-    pub(crate) fn with_features(mut self, features: FunctionFeatures) -> Self {
+    pub(crate) fn with_features(mut self, features: AggregateFeatures) -> Self {
         self.features = Some(features);
         self
     }
@@ -576,14 +564,11 @@ impl DirectRouteNode for IfRoute {
         ArgumentsPattern::if_condition(base.clone())
     }
 
-    fn features(&self, base: &FunctionFeatures) -> FunctionFeatures {
+    fn features(&self, base: &AggregateFeatures) -> AggregateFeatures {
         self.features.clone().unwrap_or_else(|| base.clone())
     }
 
-    fn try_build(
-        &self,
-        context: &DirectRouteContext<'_, '_>,
-    ) -> Result<Option<AggregateFunctionRef>> {
+    fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>> {
         if context.matching_name_index(Some("if")).is_none() {
             return Ok(None);
         }
@@ -641,7 +626,7 @@ impl DirectRouteNode for IfRoute {
 
 pub(crate) struct StateRoute {
     arguments: Option<ArgumentsPattern>,
-    features: Option<FunctionFeatures>,
+    features: Option<AggregateFeatures>,
     build: RouteBuild<StateCombinator>,
 }
 
@@ -675,7 +660,7 @@ impl StateRoute {
         self
     }
 
-    pub(crate) fn with_features(mut self, features: FunctionFeatures) -> Self {
+    pub(crate) fn with_features(mut self, features: AggregateFeatures) -> Self {
         self.features = Some(features);
         self
     }
@@ -690,14 +675,11 @@ impl DirectRouteNode for StateRoute {
         self.arguments.clone().unwrap_or_else(|| base.clone())
     }
 
-    fn features(&self, base: &FunctionFeatures) -> FunctionFeatures {
+    fn features(&self, base: &AggregateFeatures) -> AggregateFeatures {
         self.features.clone().unwrap_or_else(|| base.clone())
     }
 
-    fn try_build(
-        &self,
-        context: &DirectRouteContext<'_, '_>,
-    ) -> Result<Option<AggregateFunctionRef>> {
+    fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>> {
         if context.matching_name_index(Some("state")).is_none() {
             return Ok(None);
         }
@@ -784,10 +766,7 @@ impl DirectRouteNode for DistinctAliasRoute {
         true
     }
 
-    fn try_build(
-        &self,
-        context: &DirectRouteContext<'_, '_>,
-    ) -> Result<Option<AggregateFunctionRef>> {
+    fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>> {
         if context.matching_name_index(Some("distinct")).is_none() {
             return Ok(None);
         }
@@ -843,10 +822,7 @@ impl DirectRouteNode for DistinctRoute {
         Some(suffixed_name(base_name, self.suffix()))
     }
 
-    fn try_build(
-        &self,
-        context: &DirectRouteContext<'_, '_>,
-    ) -> Result<Option<AggregateFunctionRef>> {
+    fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>> {
         if context.matching_name_index(Some("distinct")).is_none() {
             return Ok(None);
         }
@@ -889,19 +865,19 @@ mod tests {
 
     struct FixedResultBuilder {
         arguments: ArgumentsPattern,
-        features: FunctionFeatures,
+        features: AggregateFeatures,
     }
 
-    impl AggregateFunctionBuilder for FixedResultBuilder {
+    impl AggregateCallBuilder for FixedResultBuilder {
         fn arguments(&self) -> &ArgumentsPattern {
             &self.arguments
         }
 
-        fn features(&self) -> &FunctionFeatures {
+        fn features(&self) -> &AggregateFeatures {
             &self.features
         }
 
-        fn build(&self, request: AggregateFunctionRequest<'_>) -> Result<AggregateFunctionRef> {
+        fn build(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef> {
             try_create_null_argument_result_function(request, false)
         }
     }
@@ -909,7 +885,7 @@ mod tests {
     struct Miss {
         count: Arc<AtomicUsize>,
         arguments: ArgumentsPattern,
-        features: FunctionFeatures,
+        features: AggregateFeatures,
     }
 
     impl DirectRouteNode for Miss {
@@ -917,14 +893,14 @@ mod tests {
             self.arguments.clone()
         }
 
-        fn features(&self, _base: &FunctionFeatures) -> FunctionFeatures {
+        fn features(&self, _base: &AggregateFeatures) -> AggregateFeatures {
             self.features.clone()
         }
 
         fn try_build(
             &self,
             _context: &DirectRouteContext<'_, '_>,
-        ) -> Result<Option<AggregateFunctionRef>> {
+        ) -> Result<Option<AggregateCallRef>> {
             self.count.fetch_add(1, Ordering::Relaxed);
             Ok(None)
         }
@@ -933,7 +909,7 @@ mod tests {
     struct Stop {
         count: Arc<AtomicUsize>,
         arguments: ArgumentsPattern,
-        features: FunctionFeatures,
+        features: AggregateFeatures,
     }
 
     impl DirectRouteNode for Stop {
@@ -941,14 +917,14 @@ mod tests {
             self.arguments.clone()
         }
 
-        fn features(&self, _base: &FunctionFeatures) -> FunctionFeatures {
+        fn features(&self, _base: &AggregateFeatures) -> AggregateFeatures {
             self.features.clone()
         }
 
         fn try_build(
             &self,
             _context: &DirectRouteContext<'_, '_>,
-        ) -> Result<Option<AggregateFunctionRef>> {
+        ) -> Result<Option<AggregateCallRef>> {
             self.count.fetch_add(1, Ordering::Relaxed);
             Err(ErrorCode::Internal("stop"))
         }
@@ -956,7 +932,7 @@ mod tests {
 
     struct MustNotRun {
         arguments: ArgumentsPattern,
-        features: FunctionFeatures,
+        features: AggregateFeatures,
     }
 
     impl DirectRouteNode for MustNotRun {
@@ -964,14 +940,14 @@ mod tests {
             self.arguments.clone()
         }
 
-        fn features(&self, _base: &FunctionFeatures) -> FunctionFeatures {
+        fn features(&self, _base: &AggregateFeatures) -> AggregateFeatures {
             self.features.clone()
         }
 
         fn try_build(
             &self,
             _context: &DirectRouteContext<'_, '_>,
-        ) -> Result<Option<AggregateFunctionRef>> {
+        ) -> Result<Option<AggregateCallRef>> {
             panic!("route evaluation must stop after the first result")
         }
     }
@@ -981,7 +957,7 @@ mod tests {
         let misses = Arc::new(AtomicUsize::new(0));
         let stops = Arc::new(AtomicUsize::new(0));
         let arguments = ArgumentsPattern::fixed(vec![]);
-        let features = FunctionFeatures::default();
+        let features = AggregateFeatures::default();
         let rule = DirectNameRoute::new(
             &["test"],
             arguments.clone(),
@@ -1002,7 +978,7 @@ mod tests {
             arguments,
             features,
         });
-        let request = AggregateFunctionRequest {
+        let request = RawAggregateCall {
             name: "test",
             params: &[],
             args_type: &[],
@@ -1023,7 +999,7 @@ mod tests {
     struct DescriptorNode {
         suffix: Option<&'static str>,
         arguments: ArgumentsPattern,
-        features: FunctionFeatures,
+        features: AggregateFeatures,
     }
 
     impl DirectRouteNode for DescriptorNode {
@@ -1035,14 +1011,14 @@ mod tests {
             self.arguments.clone()
         }
 
-        fn features(&self, _base: &FunctionFeatures) -> FunctionFeatures {
+        fn features(&self, _base: &AggregateFeatures) -> AggregateFeatures {
             self.features.clone()
         }
 
         fn try_build(
             &self,
             _context: &DirectRouteContext<'_, '_>,
-        ) -> Result<Option<AggregateFunctionRef>> {
+        ) -> Result<Option<AggregateCallRef>> {
             Ok(None)
         }
     }
@@ -1051,7 +1027,7 @@ mod tests {
     fn test_direct_name_route_produces_descriptors() {
         let base_arguments = ArgumentsPattern::fixed(vec![]);
         let if_arguments = ArgumentsPattern::if_condition(base_arguments.clone());
-        let base_features = FunctionFeatures {
+        let base_features = AggregateFeatures {
             is_decomposable: true,
             ..Default::default()
         };
@@ -1089,9 +1065,9 @@ mod tests {
 
     #[test]
     fn test_direct_name_route_registers_descriptor_names_and_aliases() {
-        let mut registry = AggregateFunctionRegistry::empty();
+        let mut registry = AggregateRegistry::empty();
         let arguments = ArgumentsPattern::fixed(vec![]);
-        let features = FunctionFeatures::default();
+        let features = AggregateFeatures::default();
         DirectNameRoute::new(
             &["test", "test_alias"],
             arguments.clone(),
@@ -1123,37 +1099,49 @@ mod tests {
         assert!(registry.contains("test_alias_state"));
         assert!(!registry.contains("test_distinct"));
         for name in ["test", "test_alias"] {
-            assert!(registry.descriptors(name)[0].features().supports_filter);
+            assert!(
+                registry
+                    .descriptor(name)
+                    .unwrap()
+                    .features()
+                    .supports_filter
+            );
         }
         for name in ["test_if", "test_alias_if", "test_state", "test_alias_state"] {
-            assert!(!registry.descriptors(name)[0].features().supports_filter);
+            assert!(
+                !registry
+                    .descriptor(name)
+                    .unwrap()
+                    .features()
+                    .supports_filter
+            );
         }
     }
 
     #[test]
     fn test_registry_redirects_distinct_without_name_route_or_suffix() {
-        let mut registry = AggregateFunctionRegistry::empty();
+        let mut registry = AggregateRegistry::empty();
         let arguments = ArgumentsPattern::fixed(vec![]);
         let builder = Arc::new(FixedResultBuilder {
             arguments: arguments.clone(),
-            features: FunctionFeatures::default(),
+            features: AggregateFeatures::default(),
         });
-        registry.register(AggregateFunctionDescriptor::from_builder(
+        registry.register(AggregateDescriptor::from_builder(
             "deduplicated_test",
             builder.clone(),
         ));
 
-        let source_features = FunctionFeatures {
+        let source_features = AggregateFeatures {
             distinct_policy: DistinctPolicy::redirect("deduplicated_test"),
             ..Default::default()
         };
         registry.register(
-            AggregateFunctionDescriptor::from_builder("test", builder)
+            AggregateDescriptor::from_builder("test", builder)
                 .with_metadata(arguments, source_features),
         );
 
         let function = registry
-            .resolve(AggregateFunctionRequest {
+            .resolve(RawAggregateCall {
                 name: "test",
                 params: &[],
                 args_type: &[],
@@ -1171,10 +1159,10 @@ mod tests {
         let rule = DirectNameRoute::new(
             &["test"],
             ArgumentsPattern::fixed(vec![]),
-            FunctionFeatures::default(),
+            AggregateFeatures::default(),
             NullPolicy::Skip,
         );
-        let request = AggregateFunctionRequest {
+        let request = RawAggregateCall {
             name: "test_distinct",
             params: &[],
             args_type: &[],

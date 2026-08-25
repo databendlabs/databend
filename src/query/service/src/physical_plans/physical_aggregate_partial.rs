@@ -24,7 +24,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -97,7 +97,7 @@ impl IPhysicalPlan for AggregatePartial {
             }
 
             let func = registry
-                .resolve(AggregateFunctionRequest {
+                .resolve(RawAggregateCall {
                     name: &desc.sig.name,
                     params: &desc.sig.params,
                     args_type: &desc.sig.args,

@@ -21,7 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRequest;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal;
@@ -109,9 +109,8 @@ impl<'a> CoreExprArena<'a> {
             }
             let supports_filter = self
                 .aggregate_function_registry
-                .descriptors(&func_name)
-                .iter()
-                .any(|descriptor| descriptor.features().supports_filter);
+                .descriptor(&func_name)
+                .is_some_and(|descriptor| descriptor.features().supports_filter);
             if !supports_filter {
                 return Err(ErrorCode::SemanticError(format!(
                     "FILTER clause is not supported for aggregate function `{func_name}`"
@@ -429,7 +428,7 @@ where A: TypeCheckAdapter
         };
 
         let agg_func = AGGR_REGISTRY
-            .resolve(AggregateFunctionRequest {
+            .resolve(RawAggregateCall {
                 name: func_name,
                 params: &params.clone(),
                 args_type: &arg_types,

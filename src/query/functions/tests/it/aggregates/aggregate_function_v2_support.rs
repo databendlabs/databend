@@ -48,7 +48,7 @@ fn eval_v2_aggr_with_params_and_sort(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(RawAggregateCall {
         name,
         params,
         args_type: &args_type,
@@ -139,7 +139,7 @@ pub(super) fn assert_v2_read_only_matches_final_result(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(RawAggregateCall {
         name,
         params: &params,
         args_type: &args_type,
@@ -192,7 +192,7 @@ pub(super) fn assert_v2_serialized_read_only_matches_final_result(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(RawAggregateCall {
         name,
         params: &params,
         args_type: &args_type,

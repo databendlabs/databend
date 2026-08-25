@@ -38,14 +38,14 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 use simple_hll::HyperLogLog;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 use crate::aggregates::common::extract_number_param;
 
 struct ApproxCountDistinctBuilder;
 
 impl ApproxCountDistinctBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["approx_count_distinct"],
             ArgumentsPattern::fixed(vec![ArgumentPattern::any()]),
@@ -62,13 +62,13 @@ impl ApproxCountDistinctBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: ApproxCountDistinctBuilder::register,
     }
 }
 
 impl ApproxCountDistinctBuilder {
-    const APPROX_COUNT_DISTINCT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const APPROX_COUNT_DISTINCT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -175,7 +175,7 @@ where
 }
 
 impl ApproxCountDistinctBuilder {
-    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let mut p = 14;
         if !build.params().is_empty() {
             let error_rate = Self::extract_f64_param(build.params()[0].clone())?;
@@ -201,9 +201,9 @@ impl ApproxCountDistinctBuilder {
     }
 
     fn create_templated<const P: usize>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         data_type: &DataType,
-    ) -> Result<AggregateFunctionRef> {
+    ) -> Result<AggregateCallRef> {
         with_number_mapped_type!(|NUM_TYPE| match data_type {
             DataType::Number(NumberDataType::NUM_TYPE) => {
                 Self::create_instance::<P, NumberType<NUM_TYPE>>(build)
@@ -216,8 +216,8 @@ impl ApproxCountDistinctBuilder {
     }
 
     fn create_instance<const P: usize, T>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef>
+        build: UnaryBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef>
     where
         T: ValueType,
         T::Scalar: Hash,

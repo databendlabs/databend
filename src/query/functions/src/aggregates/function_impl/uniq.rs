@@ -15,20 +15,20 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 use super::count::create_distinct_count_function;
 
 struct UniqBuilder;
 
 impl UniqBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::route().register(registry);
     }
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: UniqBuilder::register,
     }
 }
@@ -38,7 +38,7 @@ impl UniqBuilder {
         ArgumentsPattern::variadic(vec![], ArgumentPattern::any(), 1, Some(32))
     }
 
-    const UNIQ_FEATURES: FunctionFeatures = FunctionFeatures {
+    const UNIQ_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -68,7 +68,7 @@ impl UniqBuilder {
         .then(StateRoute::new(UniqBuilder::create))
     }
 
-    fn validate_request(request: &AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {
         if request.params.is_empty() {
             Ok(())
         } else {
@@ -79,7 +79,7 @@ impl UniqBuilder {
         }
     }
 
-    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         create_distinct_count_function(build, false)
     }
 }

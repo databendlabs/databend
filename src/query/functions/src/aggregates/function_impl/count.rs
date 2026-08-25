@@ -39,7 +39,7 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::with_number_mapped_type;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 #[derive(Default)]
@@ -47,7 +47,7 @@ pub struct AggregateCountState {
     count: u64,
 }
 
-pub struct AggregateCountImplementation {
+pub struct CountEval {
     has_argument: bool,
 }
 
@@ -68,7 +68,7 @@ impl CountBuilder {
         }
     }
 
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         let state_arguments =
             ArgumentsPattern::variadic(vec![], ArgumentPattern::any(), 0, Some(32));
         DirectNameRoute::new(
@@ -106,7 +106,7 @@ impl CountBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: CountBuilder::register,
     }
 }
@@ -123,7 +123,7 @@ impl CountBuilder {
         ArgumentsPattern::variadic(vec![], ArgumentPattern::any(), 1, Some(32))
     }
 
-    const COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -134,7 +134,7 @@ impl CountBuilder {
         example: "select count(*) from numbers(10)",
     };
 
-    const COUNT_DISTINCT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const COUNT_DISTINCT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -145,7 +145,7 @@ impl CountBuilder {
         example: "select count_distinct(number) from numbers(10)",
     };
 
-    const COUNT_IF_FEATURES: FunctionFeatures = FunctionFeatures {
+    const COUNT_IF_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -156,7 +156,7 @@ impl CountBuilder {
         example: "select count_if(number > 0) from numbers(10)",
     };
 
-    const COUNT_STATE_FEATURES: FunctionFeatures = FunctionFeatures {
+    const COUNT_STATE_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -169,19 +169,17 @@ impl CountBuilder {
 }
 
 impl CountBuilder {
-    fn create_distinct(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create_distinct(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         create_distinct_count_function(build, true)
     }
 
-    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let has_argument = !build.args_type().is_empty();
 
         build.create(
             UInt64Type::data_type(),
-            AggregateCountImplementation::state_description(),
-            AggregateCountImplementation::new(has_argument),
+            CountEval::state_description(),
+            CountEval::new(has_argument),
         )
     }
 
@@ -201,9 +199,9 @@ impl CountBuilder {
 }
 
 pub(super) fn create_distinct_count_function(
-    build: DirectBuildContext<'_, impl CombinatorImpl>,
+    build: DirectBuildContext<'_, impl Combinator>,
     count_argument: bool,
-) -> Result<AggregateFunctionRef> {
+) -> Result<AggregateCallRef> {
     if !build.params().is_empty() {
         return Err(ErrorCode::BadArguments(format!(
             "{} expects no parameters",
@@ -217,19 +215,17 @@ pub(super) fn create_distinct_count_function(
 
     let state = CountBuilder::distinct_state_description();
     let args_type = build.args_type().to_vec();
-    let implementation = AggregateMultiArgSkipNullImplementation::new(
-        AggregateDistinctImplementation::<false>::new(
-            AggregateCountImplementation::new(count_argument),
-            args_type,
-        ),
-    );
+    let eval = MultiArgSkipNullEval::new(DistinctEval::<false>::new(
+        CountEval::new(count_argument),
+        args_type,
+    ));
 
-    build.create(UInt64Type::data_type(), state, implementation)
+    build.create(UInt64Type::data_type(), state, eval)
 }
 
 fn create_unary_distinct_count_function(
-    build: DirectBuildContext<'_, impl CombinatorImpl>,
-) -> Result<AggregateFunctionRef> {
+    build: DirectBuildContext<'_, impl Combinator>,
+) -> Result<AggregateCallRef> {
     let data_type = build.args_type()[0].remove_nullable();
     with_number_mapped_type!(|NUM_TYPE| match data_type {
         DataType::Number(NumberDataType::NUM_TYPE) => {
@@ -243,23 +239,23 @@ fn create_unary_distinct_count_function(
 }
 
 fn create_unary_distinct_count_function_typed<T>(
-    build: DirectBuildContext<'_, impl CombinatorImpl>,
-) -> Result<AggregateFunctionRef>
+    build: DirectBuildContext<'_, impl Combinator>,
+) -> Result<AggregateCallRef>
 where T: ValueType {
-    let state = AggregateCountImplementation::state_description();
+    let state = CountEval::state_description();
     let distinct_arg_type = build.args_type()[0].remove_nullable();
-    let implementation = UnaryAggregateImplementation::new(UnarySkipNull::new(UnaryDistinct::new(
-        UnaryImpl::<AggregateCountState, T, UInt64Type, false>::new(().into()),
+    let eval = UnaryEvalAdapter::new(UnarySkipNull::new(UnaryDistinct::new(
+        UnaryStateEval::<AggregateCountState, T, UInt64Type, false>::new(().into()),
         distinct_arg_type,
     )));
     build.create(
         UInt64Type::data_type(),
         unary_distinct_state_description(&state),
-        implementation,
+        eval,
     )
 }
 
-impl AggregateCountImplementation {
+impl CountEval {
     pub fn new(has_argument: bool) -> Self {
         Self { has_argument }
     }
@@ -286,7 +282,7 @@ impl AggregateCountImplementation {
     }
 }
 
-impl AggrImpl for AggregateCountImplementation {
+impl AggregateEval for CountEval {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(AggregateCountState::default);
     }

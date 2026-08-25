@@ -24,7 +24,7 @@ use super::Payload;
 use super::ProbeState;
 use crate::DataBlock;
 use crate::ProjectedBlock;
-use crate::aggregate::aggregate_function::AggregateFunctionRef;
+use crate::aggregate::aggregate_function::AggregateCallRef;
 use crate::types::DataType;
 
 pub struct SerializedPayload {
@@ -39,7 +39,7 @@ impl SerializedPayload {
     pub fn convert_to_aggregate_table(
         &self,
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         num_states: usize,
         radix_bits: u64,
         arena: Arc<Bump>,
@@ -80,7 +80,7 @@ impl SerializedPayload {
     pub fn convert_to_partitioned_payload(
         &self,
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         num_states: usize,
         radix_bits: u64,
         arena: Arc<Bump>,
@@ -99,7 +99,7 @@ impl SerializedPayload {
     pub fn convert_to_single_payload(
         &self,
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         num_states: usize,
         arena: Arc<Bump>,
     ) -> Result<Payload> {

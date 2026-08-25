@@ -27,7 +27,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_license::license::Feature;
@@ -143,7 +143,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         self.ctx.get_settings()
     }
 
-    fn aggregate_function_registry(&self) -> &'static AggregateFunctionRegistry {
+    fn aggregate_function_registry(&self) -> &'static AggregateRegistry {
         self.dependencies.aggregate_function_registry
     }
 

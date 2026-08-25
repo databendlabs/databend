@@ -47,7 +47,7 @@ use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
 
 struct StateDropGuard {
-    func: AggregateFunctionRef,
+    func: AggregateCallRef,
     loc: Box<[databend_common_expression::AggrStateLoc]>,
     addrs: Vec<StateAddr>,
 }
@@ -77,7 +77,7 @@ fn simulate_accumulate_matches_rows(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let func = AGGR_REGISTRY.resolve(RawAggregateCall {
         name,
         params: &params,
         args_type: &arguments,
@@ -489,7 +489,7 @@ fn simulate_accumulate_keys_matches_rows(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let func = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let func = AGGR_REGISTRY.resolve(RawAggregateCall {
         name,
         params: &params,
         args_type: &arguments,
@@ -623,7 +623,7 @@ fn simulate_v2_merge_split(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(RawAggregateCall {
         name,
         params: &params,
         args_type: &args_type,
@@ -838,7 +838,7 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
     let level = |value| Scalar::Number(NumberScalar::Float64(OrderedFloat(value)));
     let arguments = vec![DataType::Number(NumberDataType::UInt64)];
     let registry = &*AGGR_REGISTRY;
-    let state = registry.resolve(AggregateFunctionRequest {
+    let state = registry.resolve(RawAggregateCall {
         name: "quantile_tdigest_state",
         params: &[level(0.5)],
         args_type: &arguments,
@@ -847,14 +847,14 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
     })?;
     let state_type = state.signature().return_type.clone();
 
-    registry.resolve(AggregateFunctionRequest {
+    registry.resolve(RawAggregateCall {
         name: "quantile_tdigest_merge",
         params: &[],
         args_type: std::slice::from_ref(&state_type),
         distinct: false,
         order_by: &[],
     })?;
-    registry.resolve(AggregateFunctionRequest {
+    registry.resolve(RawAggregateCall {
         name: "quantile_tdigest_merge",
         params: &[level(0.5)],
         args_type: std::slice::from_ref(&state_type),
@@ -863,7 +863,7 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
     })?;
 
     for name in ["quantile_tdigest_merge", "quantile_tdigest_merge_state"] {
-        let error = match registry.resolve(AggregateFunctionRequest {
+        let error = match registry.resolve(RawAggregateCall {
             name,
             params: &[level(0.9)],
             args_type: std::slice::from_ref(&state_type),
@@ -878,7 +878,7 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
     }
 
     let arguments = [DataType::Number(NumberDataType::UInt64)];
-    let state = registry.resolve(AggregateFunctionRequest {
+    let state = registry.resolve(RawAggregateCall {
         name: "quantile_tdigest_state",
         params: &[level(0.5)],
         args_type: &arguments,
@@ -888,7 +888,7 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
     let state_type = [state.signature().return_type.clone()];
 
     for params in [vec![], vec![level(0.5)]] {
-        registry.resolve(AggregateFunctionRequest {
+        registry.resolve(RawAggregateCall {
             name: "quantile_tdigest_merge",
             params: &params,
             args_type: &state_type,
@@ -897,7 +897,7 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
         })?;
     }
     for name in ["quantile_tdigest_merge", "quantile_tdigest_merge_state"] {
-        let error = match registry.resolve(AggregateFunctionRequest {
+        let error = match registry.resolve(RawAggregateCall {
             name,
             params: &[level(0.9)],
             args_type: &state_type,

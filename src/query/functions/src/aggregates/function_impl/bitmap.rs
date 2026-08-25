@@ -54,14 +54,14 @@ use databend_common_io::prelude::BinaryWrite;
 use num_traits::AsPrimitive;
 
 use super::super::common::extract_number_param;
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 use crate::with_simple_no_number_mapped_type;
 
 struct BitmapBuilder;
 
 impl BitmapBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::construct_route().register(registry);
         Self::bitmap_route::<BITMAP_AND, BITMAP_COUNT>().register(registry);
         Self::bitmap_route::<BITMAP_NOT, BITMAP_COUNT>().register(registry);
@@ -75,7 +75,7 @@ impl BitmapBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: BitmapBuilder::register,
     }
 }
@@ -96,7 +96,7 @@ impl BitmapBuilder {
         ])
     }
 
-    const BITMAP_CONSTRUCT_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
+    const BITMAP_CONSTRUCT_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -107,7 +107,7 @@ impl BitmapBuilder {
         example: "select bitmap_construct_agg(number) from numbers(10)",
     };
 
-    const BITMAP_AND_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const BITMAP_AND_COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -118,7 +118,7 @@ impl BitmapBuilder {
         example: "select bitmap_and_count(bitmap_col) from t",
     };
 
-    const BITMAP_NOT_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const BITMAP_NOT_COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -129,7 +129,7 @@ impl BitmapBuilder {
         example: "select bitmap_not_count(bitmap_col) from t",
     };
 
-    const BITMAP_OR_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const BITMAP_OR_COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -140,7 +140,7 @@ impl BitmapBuilder {
         example: "select bitmap_or_count(bitmap_col) from t",
     };
 
-    const BITMAP_XOR_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const BITMAP_XOR_COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -151,7 +151,7 @@ impl BitmapBuilder {
         example: "select bitmap_xor_count(bitmap_col) from t",
     };
 
-    const BITMAP_UNION_FEATURES: FunctionFeatures = FunctionFeatures {
+    const BITMAP_UNION_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -162,7 +162,7 @@ impl BitmapBuilder {
         example: "select bitmap_union(bitmap_col) from t",
     };
 
-    const BITMAP_INTERSECT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const BITMAP_INTERSECT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -173,7 +173,7 @@ impl BitmapBuilder {
         example: "select bitmap_intersect(bitmap_col) from t",
     };
 
-    const BITMAP_XOR_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
+    const BITMAP_XOR_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -184,7 +184,7 @@ impl BitmapBuilder {
         example: "select bitmap_xor_agg(bitmap_col) from t",
     };
 
-    const INTERSECT_COUNT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const INTERSECT_COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -195,7 +195,7 @@ impl BitmapBuilder {
         example: "select intersect_count(1, 2)(bitmap_col, key) from t",
     };
 
-    fn bitmap_features<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> FunctionFeatures {
+    fn bitmap_features<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> AggregateFeatures {
         match (OP_TYPE, RESULT_TYPE) {
             (BITMAP_AND, BITMAP_COUNT) => Self::BITMAP_AND_COUNT_FEATURES,
             (BITMAP_NOT, BITMAP_COUNT) => Self::BITMAP_NOT_COUNT_FEATURES,
@@ -449,17 +449,17 @@ impl BitmapResult for BitmapRawResult {
     }
 }
 
-struct AggregateBitmapImplementation<OP, R> {
+struct BitmapEval<OP, R> {
     _p: PhantomData<fn(OP, R)>,
 }
 
-impl<OP, R> Default for AggregateBitmapImplementation<OP, R> {
+impl<OP, R> Default for BitmapEval<OP, R> {
     fn default() -> Self {
         Self { _p: PhantomData }
     }
 }
 
-impl<OP, R> AggrImpl for AggregateBitmapImplementation<OP, R>
+impl<OP, R> AggregateEval for BitmapEval<OP, R>
 where
     OP: BitmapOperate,
     R: BitmapResult,
@@ -529,17 +529,17 @@ where
     }
 }
 
-struct AggregateGroupBitmapImplementation<N, R> {
+struct GroupBitmapEval<N, R> {
     _p: PhantomData<fn(N, R)>,
 }
 
-struct AggregateBitmapIntersectCountImplementation<T>
+struct BitmapIntersectCountEval<T>
 where T: AccessType
 {
     filter_values: Vec<T::Scalar>,
 }
 
-impl<T> AggregateBitmapIntersectCountImplementation<T>
+impl<T> BitmapIntersectCountEval<T>
 where T: AccessType
 {
     fn new(filter_values: Vec<T::Scalar>) -> Self {
@@ -559,7 +559,7 @@ where T: AccessType
     }
 }
 
-impl<T> AggrImpl for AggregateBitmapIntersectCountImplementation<T>
+impl<T> AggregateEval for BitmapIntersectCountEval<T>
 where
     T: AccessType,
     T::Scalar: Send + Sync,
@@ -630,13 +630,13 @@ where
     }
 }
 
-impl<N, R> Default for AggregateGroupBitmapImplementation<N, R> {
+impl<N, R> Default for GroupBitmapEval<N, R> {
     fn default() -> Self {
         Self { _p: PhantomData }
     }
 }
 
-impl<N, R> AggrImpl for AggregateGroupBitmapImplementation<N, R>
+impl<N, R> AggregateEval for GroupBitmapEval<N, R>
 where
     N: Number + AsPrimitive<u64>,
     R: BitmapResult,
@@ -741,7 +741,7 @@ impl BitmapBuilder {
         }
     }
 
-    fn validate_bitmap_request(request: &AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_bitmap_request(request: &RawAggregateCall<'_>) -> Result<()> {
         if request.params.is_empty() {
             Ok(())
         } else {
@@ -753,8 +753,8 @@ impl BitmapBuilder {
     }
 
     fn create_bitmap<const OP_TYPE: u8, const RESULT_TYPE: u8>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+        build: MultiArgBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef> {
         let data_type = &build.args_type()[0];
         if data_type != &DataType::Bitmap {
             return Err(ErrorCode::BadDataValueType(format!(
@@ -766,8 +766,7 @@ impl BitmapBuilder {
 
         with_bitmap_op_mapped_type!(|OP| match OP_TYPE {
             OP => with_bitmap_result_mapped_type!(|R| match RESULT_TYPE {
-                R =>
-                    Self::create_nullable_instance::<AggregateBitmapImplementation<OP, R>, R>(build),
+                R => Self::create_nullable_instance::<BitmapEval<OP, R>, R>(build),
                 _ => unreachable!(),
             }),
             _ => unreachable!(),
@@ -807,8 +806,8 @@ impl BitmapBuilder {
     }
 
     fn create_intersect_count(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+        build: MultiArgBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef> {
         if !(1..=32).contains(&build.params().len()) {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects between 1 and 32 parameters",
@@ -864,8 +863,8 @@ impl BitmapBuilder {
     }
 
     fn create_group_bitmap(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+        build: DirectBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef> {
         if !build.params().is_empty() {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
@@ -884,7 +883,7 @@ impl BitmapBuilder {
 
         with_unsigned_integer_mapped_type!(|N| match number_type {
             NumberDataType::N => Self::create_raw_instance::<
-                AggregateGroupBitmapImplementation<N, BitmapRawResult>,
+                GroupBitmapEval<N, BitmapRawResult>,
                 BitmapRawResult,
             >(build),
             _ => Err(ErrorCode::BadDataValueType(format!(
@@ -896,49 +895,45 @@ impl BitmapBuilder {
     }
 
     fn create_nullable_instance<I, R>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef>
+        build: MultiArgBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef>
     where
-        I: AggrImpl + Default,
+        I: AggregateEval + Default,
         R: BitmapResult,
     {
         let return_type = R::return_type().wrap_nullable();
-        let implementation = I::default();
+        let eval = I::default();
 
-        build.create_multi_arg_or_null(
-            return_type,
-            AggregateBitmapState::state_description(),
-            implementation,
-        )
+        build.create_multi_arg_or_null(return_type, AggregateBitmapState::state_description(), eval)
     }
 
     fn create_raw_instance<I, R>(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef>
+        build: DirectBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef>
     where
-        I: AggrImpl + Default,
+        I: AggregateEval + Default,
         R: BitmapResult,
     {
         let has_nullable_input = build.args_type().iter().any(DataType::is_nullable_or_null);
-        let implementation = I::default();
+        let eval = I::default();
         if has_nullable_input {
             return build.create(
                 R::return_type(),
                 AggregateBitmapState::state_description(),
-                AggregateMultiArgSkipNullImplementation::new(implementation),
+                MultiArgSkipNullEval::new(eval),
             );
         }
         build.create(
             R::return_type(),
             AggregateBitmapState::state_description(),
-            implementation,
+            eval,
         )
     }
 
     fn create_intersect_count_instance<T>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl Combinator>,
         filter_values: Vec<T::Scalar>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         T: AccessType,
         T::Scalar: Send + Sync,
@@ -946,7 +941,7 @@ impl BitmapBuilder {
         build.create_multi_arg_or_null(
             UInt64Type::data_type().wrap_nullable(),
             AggregateBitmapState::state_description(),
-            AggregateBitmapIntersectCountImplementation::<T>::new(filter_values),
+            BitmapIntersectCountEval::<T>::new(filter_values),
         )
     }
 }

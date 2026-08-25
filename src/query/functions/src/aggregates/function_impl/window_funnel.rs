@@ -41,19 +41,19 @@ use databend_common_expression::with_integer_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::common::extract_number_param;
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct WindowFunnelBuilder;
 
 impl WindowFunnelBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::route().register(registry);
     }
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: WindowFunnelBuilder::register,
     }
 }
@@ -68,7 +68,7 @@ impl WindowFunnelBuilder {
         )
     }
 
-    const WINDOW_FUNNEL_FEATURES: FunctionFeatures = FunctionFeatures {
+    const WINDOW_FUNNEL_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -165,7 +165,7 @@ impl WindowFunnelBuilder {
         .then(StateRoute::new(WindowFunnelBuilder::create))
     }
 
-    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         if build.params().len() != 1 {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects one parameter",
@@ -198,9 +198,9 @@ impl WindowFunnelBuilder {
     }
 
     fn create_instance<T>(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
+        build: DirectBuildContext<'_, impl Combinator>,
         window: u64,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         T: ArgType,
         T::Scalar: Number
@@ -211,24 +211,23 @@ impl WindowFunnelBuilder {
             + BorshSerialize
             + BorshDeserialize,
     {
-        let state = AggregateWindowFunnelImplementation::<T>::state_description();
-        let implementation =
-            AggregateWindowFunnelImplementation::<T>::new(build.args_type().len() - 1, window);
+        let state = WindowFunnelEval::<T>::state_description();
+        let eval = WindowFunnelEval::<T>::new(build.args_type().len() - 1, window);
         build.create(
             UInt8Type::data_type().wrap_nullable(),
             state.with_null_flag(),
-            AggregateMultiArgOrNullImplementation::new(implementation),
+            MultiArgOrNullEval::new(eval),
         )
     }
 }
 
-pub struct AggregateWindowFunnelImplementation<T: ArgType> {
+pub struct WindowFunnelEval<T: ArgType> {
     event_size: usize,
     window: u64,
     _t: PhantomData<fn(T)>,
 }
 
-impl<T> AggregateWindowFunnelImplementation<T>
+impl<T> WindowFunnelEval<T>
 where
     T: ArgType,
     T::Scalar: Number
@@ -334,7 +333,7 @@ where
     }
 }
 
-impl<T> AggrImpl for AggregateWindowFunnelImplementation<T>
+impl<T> AggregateEval for WindowFunnelEval<T>
 where
     T: ArgType,
     T::Scalar: Number

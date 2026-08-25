@@ -35,15 +35,15 @@ pub struct AggregateDistinctState {
     replayed: bool,
 }
 
-pub struct AggregateDistinctImplementation<const SKIP_NULLS: bool = false> {
-    inner: Box<dyn AggrImpl>,
+pub struct DistinctEval<const SKIP_NULLS: bool = false> {
+    nested: Box<dyn AggregateEval>,
     args_type: Vec<DataType>,
 }
 
-impl<const SKIP_NULLS: bool> AggregateDistinctImplementation<SKIP_NULLS> {
-    pub fn new(inner: impl AggrImpl, args_type: Vec<DataType>) -> Self {
+impl<const SKIP_NULLS: bool> DistinctEval<SKIP_NULLS> {
+    pub fn new(nested: impl AggregateEval, args_type: Vec<DataType>) -> Self {
         Self {
-            inner: Box::new(inner),
+            nested: Box::new(nested),
             args_type,
         }
     }
@@ -125,7 +125,7 @@ impl<const SKIP_NULLS: bool> AggregateDistinctImplementation<SKIP_NULLS> {
                     BlockEntry::new_const_column(data_type.clone(), scalar.clone(), 1)
                 })
                 .collect::<Vec<_>>();
-            self.inner.accumulate_row(AccumulateRowInput {
+            self.nested.accumulate_row(AccumulateRowInput {
                 state: Self::inner_state(state),
                 columns: (&entries).into(),
                 row: 0,
@@ -136,10 +136,10 @@ impl<const SKIP_NULLS: bool> AggregateDistinctImplementation<SKIP_NULLS> {
     }
 }
 
-impl<const SKIP_NULLS: bool> AggrImpl for AggregateDistinctImplementation<SKIP_NULLS> {
+impl<const SKIP_NULLS: bool> AggregateEval for DistinctEval<SKIP_NULLS> {
     fn init_state(&self, state: AggrState<'_>) {
         write_state_at(state, 0, AggregateDistinctState::default());
-        self.inner.init_state(Self::inner_state(state));
+        self.nested.init_state(Self::inner_state(state));
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
@@ -185,14 +185,14 @@ impl<const SKIP_NULLS: bool> AggrImpl for AggregateDistinctImplementation<SKIP_N
     }
 
     fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()> {
-        self.inner.accumulate_row_count(AccumulateRowCountInput {
+        self.nested.accumulate_row_count(AccumulateRowCountInput {
             state: Self::inner_state(input.state),
             rows: input.rows,
         })
     }
 
     fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
-        self.inner
+        self.nested
             .accumulate_row_count_keys(AccumulateRowCountKeysInput {
                 states: Self::inner_states(input.states),
             })
@@ -207,7 +207,7 @@ impl<const SKIP_NULLS: bool> AggrImpl for AggregateDistinctImplementation<SKIP_N
             }
             key_builder.commit_row();
         }
-        self.inner.serialize(SerializeInput {
+        self.nested.serialize(SerializeInput {
             states: Self::inner_states(input.states),
             builders: inner_builders,
         })
@@ -230,7 +230,7 @@ impl<const SKIP_NULLS: bool> AggrImpl for AggregateDistinctImplementation<SKIP_N
 
         let field_count = serialized_field_count(input.state);
         let inner_state = project_serialized_fields(input.state, 1, field_count);
-        self.inner.merge_serialized(MergeSerializedInput {
+        self.nested.merge_serialized(MergeSerializedInput {
             states: Self::inner_states(input.states),
             state: &inner_state,
             filter: input.filter,
@@ -249,7 +249,7 @@ impl<const SKIP_NULLS: bool> AggrImpl for AggregateDistinctImplementation<SKIP_N
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.replay_keys(input.state)?;
-        self.inner.merge_result(MergeResultInput {
+        self.nested.merge_result(MergeResultInput {
             state: Self::inner_state(input.state),
             builder: input.builder,
         })
@@ -257,7 +257,7 @@ impl<const SKIP_NULLS: bool> AggrImpl for AggregateDistinctImplementation<SKIP_N
 
     fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         self.replay_keys(input.state)?;
-        self.inner.merge_result_read_only(MergeResultInput {
+        self.nested.merge_result_read_only(MergeResultInput {
             state: Self::inner_state(input.state),
             builder: input.builder,
         })
@@ -265,7 +265,7 @@ impl<const SKIP_NULLS: bool> AggrImpl for AggregateDistinctImplementation<SKIP_N
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
         unsafe { std::ptr::drop_in_place(Self::state(state)) };
-        unsafe { self.inner.drop_state(Self::inner_state(state)) };
+        unsafe { self.nested.drop_state(Self::inner_state(state)) };
     }
 }
 

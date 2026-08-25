@@ -30,7 +30,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
@@ -94,7 +94,7 @@ type CoreUdfCallArgs = SmallVec<[(String, CoreExprId); 4]>;
 pub struct CoreExprArena<'a> {
     nodes: Vec<CoreExpr<'a>>,
     week_start: u64,
-    pub(super) aggregate_function_registry: &'static AggregateFunctionRegistry,
+    pub(super) aggregate_function_registry: &'static AggregateRegistry,
     pub(super) in_lambda_function: bool,
 }
 
@@ -286,7 +286,7 @@ pub struct FullTypeCheckAdapter {
 #[derive(Clone)]
 struct FullTypeCheckAdapterDependencies {
     async_runtime_handle: fn() -> Result<Handle>,
-    aggregate_function_registry: &'static AggregateFunctionRegistry,
+    aggregate_function_registry: &'static AggregateRegistry,
     license_manager: Arc<LicenseManagerSwitch>,
     catalog_manager: Arc<CatalogManager>,
     user_api_provider: Arc<UserApiProvider>,
@@ -343,7 +343,7 @@ pub trait TypeCheckAdapter: Clone + Sized {
 
     fn settings(&self) -> Arc<Settings>;
 
-    fn aggregate_function_registry(&self) -> &'static AggregateFunctionRegistry;
+    fn aggregate_function_registry(&self) -> &'static AggregateRegistry;
 
     fn udf_adapter(&self) -> Result<Self::UdfAdapter>;
 

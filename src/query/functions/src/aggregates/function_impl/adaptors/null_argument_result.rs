@@ -28,9 +28,9 @@ use databend_common_expression::types::NumberScalar;
 use super::*;
 
 pub(crate) fn try_create_null_argument_result_function(
-    request: AggregateFunctionRequest<'_>,
+    request: RawAggregateCall<'_>,
     returns_default_when_only_null: bool,
-) -> Result<AggregateFunctionRef> {
+) -> Result<AggregateCallRef> {
     let (data_type, result) = if returns_default_when_only_null {
         (
             DataType::Number(NumberDataType::UInt64),
@@ -40,7 +40,7 @@ pub(crate) fn try_create_null_argument_result_function(
         (DataType::Null, Scalar::Null)
     };
     let return_type = data_type.clone();
-    let signature = AggregateFunctionSignature {
+    let signature = AggregateSignature {
         name: request.name.to_string(),
         params: request.params.to_vec(),
         args_type: request.args_type.to_vec(),
@@ -52,20 +52,20 @@ pub(crate) fn try_create_null_argument_result_function(
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
             StateSerdeItem::DataType(data_type),
         ]);
-    Ok(Arc::new(AggregateFunction::new(
+    Ok(Arc::new(AggregateCallInstance::new(
         signature,
         FunctionInputLayout::Identity,
-        FunctionFeatures::default(),
+        AggregateFeatures::default(),
         state,
-        AggregateFixedResultImplementation { result },
+        FixedResultEval { result },
     )))
 }
 
-struct AggregateFixedResultImplementation {
+struct FixedResultEval {
     result: Scalar,
 }
 
-impl AggregateFixedResultImplementation {
+impl FixedResultEval {
     fn push_result(&self, builder: &mut ColumnBuilder) {
         if let Some(fields) = builder.as_tuple_mut() {
             fields[0].push(self.result.as_ref());
@@ -75,7 +75,7 @@ impl AggregateFixedResultImplementation {
     }
 }
 
-impl AggrImpl for AggregateFixedResultImplementation {
+impl AggregateEval for FixedResultEval {
     fn init_state(&self, _state: AggrState<'_>) {}
 
     fn accumulate(&self, _input: AccumulateInput<'_>) -> Result<()> {

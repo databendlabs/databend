@@ -20,7 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
+use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate::aggregate_function::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::StatesLayout;
@@ -32,7 +32,7 @@ pub struct AggregatorParams {
     pub group_columns: Vec<IndexType>,
     pub group_data_types: Vec<DataType>,
 
-    pub aggregate_functions: Vec<AggregateFunctionRef>,
+    pub aggregate_functions: Vec<AggregateCallRef>,
     pub aggregate_functions_arguments: Vec<Vec<usize>>,
 
     // about function state memory layout
@@ -51,7 +51,7 @@ impl AggregatorParams {
         input_schema: DataSchemaRef,
         group_data_types: Vec<DataType>,
         group_columns: &[usize],
-        agg_funcs: &[AggregateFunctionRef],
+        agg_funcs: &[AggregateCallRef],
         agg_args: &[Vec<usize>],
         cluster_aggregator: bool,
         max_block_rows: usize,

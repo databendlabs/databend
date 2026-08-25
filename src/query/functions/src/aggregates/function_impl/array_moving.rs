@@ -45,20 +45,20 @@ use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::common::extract_number_param;
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct ArrayMovingBuilder;
 
 impl ArrayMovingBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::avg_route().register(registry);
         Self::sum_route().register(registry);
     }
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: ArrayMovingBuilder::register,
     }
 }
@@ -323,12 +323,12 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
     }
 }
 
-struct AggregateArrayMovingImplementation<State> {
+struct ArrayMovingEval<State> {
     info: ArrayMovingInfo,
     _p: PhantomData<fn(State)>,
 }
 
-impl<State> AggregateArrayMovingImplementation<State> {
+impl<State> ArrayMovingEval<State> {
     fn new(info: ArrayMovingInfo) -> Self {
         Self {
             info,
@@ -337,7 +337,7 @@ impl<State> AggregateArrayMovingImplementation<State> {
     }
 }
 
-impl<I, S> AggrImpl for AggregateArrayMovingImplementation<AggregateNumberArrayMovingState<I, S>>
+impl<I, S> AggregateEval for ArrayMovingEval<AggregateNumberArrayMovingState<I, S>>
 where
     I: ValueType + AccessType + ArgType,
     S: ValueType + AccessType + ArgType,
@@ -507,7 +507,7 @@ where
     }
 }
 
-impl<T> AggrImpl for AggregateArrayMovingImplementation<AggregateDecimalArrayMovingState<T>>
+impl<T> AggregateEval for ArrayMovingEval<AggregateDecimalArrayMovingState<T>>
 where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
 {
     fn init_state(&self, state: AggrState<'_>) {
@@ -680,7 +680,7 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
 impl ArrayMovingBuilder {
     fn avg_route() -> DirectNameRoute {
         let arguments = Self::array_moving_arguments();
-        let features = FunctionFeatures {
+        let features = AggregateFeatures {
             is_decomposable: true,
             supports_filter: false,
             sort_policy: SortPolicy::Unsupported,
@@ -705,7 +705,7 @@ impl ArrayMovingBuilder {
 
     fn sum_route() -> DirectNameRoute {
         let arguments = Self::array_moving_arguments();
-        let features = FunctionFeatures {
+        let features = AggregateFeatures {
             is_decomposable: true,
             supports_filter: false,
             sort_policy: SortPolicy::Unsupported,
@@ -728,22 +728,18 @@ impl ArrayMovingBuilder {
         .then(StateRoute::new(ArrayMovingBuilder::create_sum))
     }
 
-    fn create_avg(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create_avg(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         Self::create(build, ArrayMovingKind::Avg)
     }
 
-    fn create_sum(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create_sum(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         Self::create(build, ArrayMovingKind::Sum)
     }
 
     fn create(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
+        build: DirectBuildContext<'_, impl Combinator>,
         kind: ArrayMovingKind,
-    ) -> Result<AggregateFunctionRef> {
+    ) -> Result<AggregateCallRef> {
         if build.params().len() > 1 {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects at most one parameter",
@@ -782,10 +778,10 @@ impl ArrayMovingBuilder {
     }
 
     fn create_number<I, S>(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
+        build: DirectBuildContext<'_, impl Combinator>,
         kind: ArrayMovingKind,
         window_size: Option<usize>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         I: ValueType + AccessType + ArgType,
         S: ValueType + AccessType + ArgType,
@@ -810,11 +806,11 @@ impl ArrayMovingBuilder {
     }
 
     fn create_decimal<T>(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
+        build: DirectBuildContext<'_, impl Combinator>,
         kind: ArrayMovingKind,
         input_size: DecimalSize,
         window_size: Option<usize>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign,
     {
@@ -840,19 +836,19 @@ impl ArrayMovingBuilder {
     }
 
     fn create_instance<State>(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
+        build: DirectBuildContext<'_, impl Combinator>,
         info: ArrayMovingInfo,
         serialized_type: DataType,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
-        AggregateArrayMovingImplementation<State>: AggrImpl,
+        ArrayMovingEval<State>: AggregateEval,
         State: ArrayMovingStateDescription,
     {
         let return_type = info.return_type.clone();
         build.create(
             return_type.clone(),
             <State as ArrayMovingStateDescription>::state_description(serialized_type),
-            AggregateArrayMovingImplementation::new(info),
+            ArrayMovingEval::new(info),
         )
     }
 }

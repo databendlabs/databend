@@ -41,13 +41,13 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
 use super::super::common::get_levels;
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct QuantileTDigestBuilder;
 
 impl QuantileTDigestBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["quantile_tdigest"],
             QuantileTDigestBuilder::quantile_tdigest_arguments(),
@@ -76,15 +76,13 @@ impl QuantileTDigestBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: QuantileTDigestBuilder::register,
     }
 }
 
 impl QuantileTDigestBuilder {
-    fn create_median(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create_median(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         if !build.params().is_empty() {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
@@ -98,7 +96,7 @@ impl QuantileTDigestBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    const QUANTILE_TDIGEST_FEATURES: FunctionFeatures = FunctionFeatures {
+    const QUANTILE_TDIGEST_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -109,7 +107,7 @@ impl QuantileTDigestBuilder {
         example: "select quantile_tdigest(0.5)(number) from numbers(10)",
     };
 
-    const MEDIAN_TDIGEST_FEATURES: FunctionFeatures = FunctionFeatures {
+    const MEDIAN_TDIGEST_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -484,7 +482,7 @@ where for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 }
 
 impl QuantileTDigestBuilder {
-    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
         let levels = get_levels(build.params())?;
@@ -510,9 +508,9 @@ impl QuantileTDigestBuilder {
     }
 
     fn create_typed<I>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         levels: Vec<f64>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>,
     {
@@ -528,10 +526,10 @@ impl QuantileTDigestBuilder {
     }
 
     fn create_result<I, R>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         return_type: DataType,
         levels: Vec<f64>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>,
         R: ValueType,

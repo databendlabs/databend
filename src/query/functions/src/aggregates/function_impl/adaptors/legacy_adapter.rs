@@ -25,17 +25,17 @@ use databend_common_expression::aggregate_function_v1::AggregateFunctionRef as L
 
 use super::*;
 
-pub struct AggregateFunctionV2LegacyAdapter {
-    function: AggregateFunctionRef,
+pub struct LegacyAggregateCallAdapter {
+    function: AggregateCallRef,
 }
 
-impl AggregateFunctionV2LegacyAdapter {
-    pub fn create(function: AggregateFunctionRef) -> LegacyAggregateFunctionRef {
+impl LegacyAggregateCallAdapter {
+    pub fn create(function: AggregateCallRef) -> LegacyAggregateFunctionRef {
         Arc::new(Self { function })
     }
 }
 
-impl LegacyAggregateFunction for AggregateFunctionV2LegacyAdapter {
+impl LegacyAggregateFunction for LegacyAggregateCallAdapter {
     fn name(&self) -> &str {
         &self.function.signature().name
     }
@@ -170,7 +170,7 @@ impl LegacyAggregateFunction for AggregateFunctionV2LegacyAdapter {
     }
 }
 
-impl fmt::Display for AggregateFunctionV2LegacyAdapter {
+impl fmt::Display for LegacyAggregateCallAdapter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.function.signature().name)
     }

@@ -24,13 +24,13 @@ use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct BooleanBuilder;
 
 impl BooleanBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["bool_and"],
             BooleanBuilder::boolean_arguments(),
@@ -61,7 +61,7 @@ impl BooleanBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: BooleanBuilder::register,
     }
 }
@@ -71,7 +71,7 @@ impl BooleanBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Boolean)])
     }
 
-    const BOOL_AND_FEATURES: FunctionFeatures = FunctionFeatures {
+    const BOOL_AND_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -82,7 +82,7 @@ impl BooleanBuilder {
         example: "select bool_and(flag) from t",
     };
 
-    const BOOL_OR_FEATURES: FunctionFeatures = FunctionFeatures {
+    const BOOL_OR_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: true,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -164,8 +164,8 @@ impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for AggregateBoole
 
 impl BooleanBuilder {
     fn create<const IS_AND: bool>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+        build: UnaryBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef> {
         debug_assert_eq!(build.arg_type(), &DataType::Boolean);
         build.create_unary_or_null::<AggregateBooleanState<IS_AND>, BooleanType, BooleanType>(
             DataType::Boolean.wrap_nullable(),

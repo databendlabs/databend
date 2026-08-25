@@ -22,24 +22,18 @@ use databend_common_expression::utils::column_merge_validity;
 
 use super::*;
 
-pub type AggregateMultiArgSkipNullImplementation<I> =
-    AggregateMultiArgNullableImplementation<I, false, false>;
-pub type AggregateMultiArgOrNullImplementation<I> =
-    AggregateMultiArgNullableImplementation<I, true, true>;
+pub type MultiArgSkipNullEval<I> = MultiArgNullableEval<I, false, false>;
+pub type MultiArgOrNullEval<I> = MultiArgNullableEval<I, true, true>;
 
-pub struct AggregateMultiArgNullableImplementation<
-    I,
-    const RESULT_NULL: bool,
-    const FULL_NULL_FILTER: bool,
-> {
-    inner: I,
+pub struct MultiArgNullableEval<I, const RESULT_NULL: bool, const FULL_NULL_FILTER: bool> {
+    nested: I,
 }
 
 impl<I, const RESULT_NULL: bool, const FULL_NULL_FILTER: bool>
-    AggregateMultiArgNullableImplementation<I, RESULT_NULL, FULL_NULL_FILTER>
+    MultiArgNullableEval<I, RESULT_NULL, FULL_NULL_FILTER>
 {
-    pub fn new(inner: I) -> Self {
-        Self { inner }
+    pub fn new(nested: I) -> Self {
+        Self { nested }
     }
 
     fn inner_state<'a>(state: AggrState<'a>) -> AggrState<'a> {
@@ -108,15 +102,15 @@ impl<I, const RESULT_NULL: bool, const FULL_NULL_FILTER: bool>
     }
 }
 
-impl<I, const RESULT_NULL: bool, const FULL_NULL_FILTER: bool> AggrImpl
-    for AggregateMultiArgNullableImplementation<I, RESULT_NULL, FULL_NULL_FILTER>
-where I: AggrImpl
+impl<I, const RESULT_NULL: bool, const FULL_NULL_FILTER: bool> AggregateEval
+    for MultiArgNullableEval<I, RESULT_NULL, FULL_NULL_FILTER>
+where I: AggregateEval
 {
     fn init_state(&self, state: AggrState<'_>) {
         if RESULT_NULL {
             *Self::result_flag(state) = 0;
         }
-        self.inner.init_state(Self::inner_state(state));
+        self.nested.init_state(Self::inner_state(state));
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
@@ -126,7 +120,7 @@ where I: AggrImpl
         if RESULT_NULL && !Self::mark_seen_if_has_rows(input.state, rows, validity.as_ref()) {
             return Ok(());
         }
-        self.inner.accumulate(AccumulateInput {
+        self.nested.accumulate(AccumulateInput {
             state: Self::inner_state(input.state),
             columns: (&columns).into(),
             validity: validity.as_ref(),
@@ -142,7 +136,7 @@ where I: AggrImpl
                     if RESULT_NULL {
                         Self::mark_seen(state);
                     }
-                    self.inner.accumulate_row(AccumulateRowInput {
+                    self.nested.accumulate_row(AccumulateRowInput {
                         state: Self::inner_state(state),
                         columns,
                         row,
@@ -153,7 +147,7 @@ where I: AggrImpl
         }
 
         if RESULT_NULL {
-            self.inner.accumulate_keys(AccumulateKeysInput {
+            self.nested.accumulate_keys(AccumulateKeysInput {
                 states: input.states.without_last_loc(),
                 columns,
             })?;
@@ -162,7 +156,7 @@ where I: AggrImpl
             }
             Ok(())
         } else {
-            self.inner.accumulate_keys(AccumulateKeysInput {
+            self.nested.accumulate_keys(AccumulateKeysInput {
                 states: input.states,
                 columns,
             })
@@ -181,7 +175,7 @@ where I: AggrImpl
         if RESULT_NULL {
             Self::mark_seen(input.state);
         }
-        self.inner.accumulate_row(AccumulateRowInput {
+        self.nested.accumulate_row(AccumulateRowInput {
             state: Self::inner_state(input.state),
             columns: (&columns).into(),
             row: input.row,
@@ -192,7 +186,7 @@ where I: AggrImpl
         if RESULT_NULL {
             if input.rows > 0 {
                 Self::mark_seen(input.state);
-                self.inner.accumulate_row_count(AccumulateRowCountInput {
+                self.nested.accumulate_row_count(AccumulateRowCountInput {
                     state: Self::inner_state(input.state),
                     rows: input.rows,
                 })?;
@@ -210,7 +204,7 @@ where I: AggrImpl
 
     fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
         if RESULT_NULL {
-            self.inner
+            self.nested
                 .accumulate_row_count_keys(AccumulateRowCountKeysInput {
                     states: input.states.without_last_loc(),
                 })?;
@@ -232,12 +226,12 @@ where I: AggrImpl
             for state in input.states.iter() {
                 flag_builder[0].push(ScalarRef::Boolean(Self::seen(state)));
             }
-            self.inner.serialize(SerializeInput {
+            self.nested.serialize(SerializeInput {
                 states: input.states.without_last_loc(),
                 builders: inner_builders,
             })
         } else {
-            self.inner.serialize(input)
+            self.nested.serialize(input)
         }
     }
 
@@ -256,13 +250,13 @@ where I: AggrImpl
                 }
             }
             let inner_state = project_serialized_fields(input.state, 0, flag_field);
-            self.inner.merge_serialized(MergeSerializedInput {
+            self.nested.merge_serialized(MergeSerializedInput {
                 states: input.states.without_last_loc(),
                 state: &inner_state,
                 filter: flag_filter.as_ref(),
             })
         } else {
-            self.inner.merge_serialized(input)
+            self.nested.merge_serialized(input)
         }
     }
 
@@ -270,7 +264,7 @@ where I: AggrImpl
         if RESULT_NULL && Self::seen(input.rhs) {
             Self::mark_seen(input.state);
         }
-        self.inner.merge_states(MergeStatesInput {
+        self.nested.merge_states(MergeStatesInput {
             state: Self::inner_state(input.state),
             rhs: Self::inner_state(input.rhs),
         })
@@ -279,26 +273,27 @@ where I: AggrImpl
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         if RESULT_NULL {
             Self::merge_result_or_null(input.state, input.builder, |state, builder| {
-                self.inner.merge_result(MergeResultInput { state, builder })
+                self.nested
+                    .merge_result(MergeResultInput { state, builder })
             })
         } else {
-            self.inner.merge_result(input)
+            self.nested.merge_result(input)
         }
     }
 
     fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         if RESULT_NULL {
             Self::merge_result_or_null(input.state, input.builder, |state, builder| {
-                self.inner
+                self.nested
                     .merge_result_read_only(MergeResultInput { state, builder })
             })
         } else {
-            self.inner.merge_result_read_only(input)
+            self.nested.merge_result_read_only(input)
         }
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
-        unsafe { self.inner.drop_state(Self::inner_state(state)) };
+        unsafe { self.nested.drop_state(Self::inner_state(state)) };
     }
 }
 

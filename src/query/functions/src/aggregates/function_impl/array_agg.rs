@@ -43,19 +43,19 @@ use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct ArrayAggBuilder;
 
 impl ArrayAggBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::route().register(registry);
     }
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: ArrayAggBuilder::register,
     }
 }
@@ -65,7 +65,7 @@ impl ArrayAggBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    const ARRAY_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
+    const ARRAY_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Optional,
@@ -602,7 +602,7 @@ impl ArrayAggBuilder {
         .then(StateRoute::new(ArrayAggBuilder::create))
     }
 
-    fn validate_request(request: &AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {
         if request.params.is_empty() {
             Ok(())
         } else {
@@ -613,15 +613,15 @@ impl ArrayAggBuilder {
         }
     }
 
-    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let data_type = build.args_type()[0].clone();
         let not_null_type = data_type.remove_nullable();
         let return_type = DataType::Array(Box::new(not_null_type.clone()));
 
         fn simple<V>(
-            build: DirectBuildContext<'_, impl CombinatorImpl>,
+            build: DirectBuildContext<'_, impl Combinator>,
             return_type: DataType,
-        ) -> Result<AggregateFunctionRef>
+        ) -> Result<AggregateCallRef>
         where
             V: SimpleType + Debug,
             V::Scalar: Send + Sync,
@@ -695,9 +695,9 @@ impl ArrayAggBuilder {
     }
 
     fn create_instance<T, State>(
-        build: DirectBuildContext<'_, impl CombinatorImpl>,
+        build: DirectBuildContext<'_, impl Combinator>,
         return_type: DataType,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         T: AccessType,
         State: Default + AggregateUnaryState<T>,
@@ -705,7 +705,7 @@ impl ArrayAggBuilder {
         build.create_ordered(
             return_type.clone(),
             State::state_description(return_type),
-            AggregateUnaryStateImplementation::<T, State>::default(),
+            AggregateUnaryStateEval::<T, State>::default(),
         )
     }
 }

@@ -34,20 +34,20 @@ use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct JsonArrayAggBuilder;
 
 impl JsonArrayAggBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         Self::route(&["json_array_agg"], Self::JSON_ARRAY_AGG_FEATURES).register(registry);
         Self::route(&["json_agg"], Self::JSON_AGG_FEATURES).register(registry);
     }
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: JsonArrayAggBuilder::register,
     }
 }
@@ -57,7 +57,7 @@ impl JsonArrayAggBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    const JSON_ARRAY_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
+    const JSON_ARRAY_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -68,7 +68,7 @@ impl JsonArrayAggBuilder {
         example: "select json_array_agg(number) from numbers(10)",
     };
 
-    const JSON_AGG_FEATURES: FunctionFeatures = FunctionFeatures {
+    const JSON_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -214,7 +214,7 @@ where
 }
 
 impl JsonArrayAggBuilder {
-    fn route(names: &'static [&'static str], features: FunctionFeatures) -> DirectNameRoute {
+    fn route(names: &'static [&'static str], features: AggregateFeatures) -> DirectNameRoute {
         let arguments = Self::json_array_agg_arguments();
         DirectNameRoute::new(names, arguments.clone(), features.clone(), NullPolicy::Keep)
             .with_validator(Self::validate_request)
@@ -225,7 +225,7 @@ impl JsonArrayAggBuilder {
             .then(StateRoute::new(JsonArrayAggBuilder::create))
     }
 
-    fn validate_request(request: &AggregateFunctionRequest<'_>) -> Result<()> {
+    fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {
         if request.params.is_empty() {
             Ok(())
         } else {
@@ -236,13 +236,13 @@ impl JsonArrayAggBuilder {
         }
     }
 
-    fn create(build: DirectBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         build.create(
             DataType::Variant,
             <JsonArrayAggState<AnyType> as AggregateUnaryState<AnyType>>::state_description(
                 DataType::Variant,
             ),
-            AggregateUnaryStateImplementation::<AnyType, JsonArrayAggState<AnyType>>::default(),
+            AggregateUnaryStateEval::<AnyType, JsonArrayAggState<AnyType>>::default(),
         )
     }
 }

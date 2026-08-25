@@ -43,13 +43,13 @@ use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::common::get_levels;
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 
 struct QuantileContBuilder;
 
 impl QuantileContBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["quantile_cont"],
             QuantileContBuilder::quantile_cont_arguments(),
@@ -78,15 +78,13 @@ impl QuantileContBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: QuantileContBuilder::register,
     }
 }
 
 impl QuantileContBuilder {
-    fn create_median(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create_median(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         if !build.params().is_empty() {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
@@ -100,7 +98,7 @@ impl QuantileContBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    const QUANTILE_CONT_FEATURES: FunctionFeatures = FunctionFeatures {
+    const QUANTILE_CONT_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -111,7 +109,7 @@ impl QuantileContBuilder {
         example: "select quantile_cont(0.5)(number) from numbers(10)",
     };
 
-    const MEDIAN_FEATURES: FunctionFeatures = FunctionFeatures {
+    const MEDIAN_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -534,7 +532,7 @@ where
 }
 
 impl QuantileContBuilder {
-    fn create(build: UnaryBuildContext<'_, impl CombinatorImpl>) -> Result<AggregateFunctionRef> {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let data_type = build.arg_type().clone();
         let display_name = build.name().to_string();
         let levels = get_levels(build.params())?;
@@ -582,10 +580,10 @@ impl QuantileContBuilder {
     }
 
     fn create_number_typed<I, R>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         return_type: DataType,
         levels: Vec<f64>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         I: AccessType + ValueType,
         I::Scalar: Number + AsPrimitive<f64>,
@@ -601,10 +599,10 @@ impl QuantileContBuilder {
     }
 
     fn create_decimal_typed<I, R>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         return_type: DataType,
         levels: Vec<f64>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         I: AccessType + ValueType,
         I::Scalar: BorshSerialize + BorshDeserialize + Decimal,
@@ -620,11 +618,11 @@ impl QuantileContBuilder {
     }
 
     fn create_typed<I, R, S>(
-        build: UnaryBuildContext<'_, impl CombinatorImpl>,
+        build: UnaryBuildContext<'_, impl Combinator>,
         state: AggregateStateDescription,
         return_type: DataType,
         levels: Vec<f64>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         I: AccessType + ValueType,
         R: ValueType,

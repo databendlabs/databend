@@ -23,9 +23,9 @@ use databend_common_expression::Scalar;
 use databend_common_expression::aggregate_function::AccumulateInput;
 use databend_common_expression::aggregate_function::AccumulateRowCountInput;
 use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
-use databend_common_expression::aggregate_function::AggregateFunctionRequest;
 use databend_common_expression::aggregate_function::AggregateStateOwner;
 use databend_common_expression::aggregate_function::MergeResultInput;
+use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F64;
@@ -45,7 +45,7 @@ pub fn eval_aggr(
         .iter()
         .map(BlockEntry::data_type)
         .collect::<Vec<_>>();
-    let function = AGGR_REGISTRY.resolve(AggregateFunctionRequest {
+    let function = AGGR_REGISTRY.resolve(RawAggregateCall {
         name,
         params: &params,
         args_type: &args_type,

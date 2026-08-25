@@ -54,13 +54,13 @@ pub(crate) fn aggregate_state_data_type(
     })))
 }
 
-pub(crate) struct AggregateStateImplementation<I> {
+pub(crate) struct StateEval<I> {
     nested: I,
     strip_nullable_input: bool,
     nullable_input_result_flag: bool,
 }
 
-impl<I> AggregateStateImplementation<I> {
+impl<I> StateEval<I> {
     pub(crate) fn new(
         nested: I,
         strip_nullable_input: bool,
@@ -115,8 +115,8 @@ impl<I> AggregateStateImplementation<I> {
     }
 }
 
-impl<I> AggrImpl for AggregateStateImplementation<I>
-where I: AggrImpl
+impl<I> AggregateEval for StateEval<I>
+where I: AggregateEval
 {
     fn init_state(&self, state: AggrState<'_>) {
         if self.nullable_input_result_flag {
@@ -314,9 +314,9 @@ pub(crate) fn nullable_input_state_description(
 }
 
 pub(crate) fn create_state_null_result_function(
-    request: AggregateFunctionRequest<'_>,
+    request: RawAggregateCall<'_>,
     returns_default_when_only_null: bool,
-) -> Result<AggregateFunctionRef> {
+) -> Result<AggregateCallRef> {
     let (data_type, result) = if returns_default_when_only_null {
         (
             DataType::Number(NumberDataType::UInt64),
@@ -337,7 +337,7 @@ pub(crate) fn create_state_null_result_function(
         request.args_type.to_vec(),
         physical_type,
     )?;
-    let signature = AggregateFunctionSignature {
+    let signature = AggregateSignature {
         name: request.name.to_string(),
         params: request.params.to_vec(),
         args_type: request.args_type.to_vec(),
@@ -349,21 +349,21 @@ pub(crate) fn create_state_null_result_function(
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
             serde_item,
         ]);
-    Ok(Arc::new(AggregateFunction::new(
+    Ok(Arc::new(AggregateCallInstance::new(
         signature,
         FunctionInputLayout::Identity,
-        AggregateStateNullResultImplementation::FEATURES,
+        StateNullResultEval::FEATURES,
         state,
-        AggregateStateNullResultImplementation { result },
+        StateNullResultEval { result },
     )))
 }
 
-struct AggregateStateNullResultImplementation {
+struct StateNullResultEval {
     result: Scalar,
 }
 
-impl AggregateStateNullResultImplementation {
-    const FEATURES: FunctionFeatures = FunctionFeatures {
+impl StateNullResultEval {
+    const FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -379,7 +379,7 @@ impl AggregateStateNullResultImplementation {
     }
 }
 
-impl AggrImpl for AggregateStateNullResultImplementation {
+impl AggregateEval for StateNullResultEval {
     fn init_state(&self, _state: AggrState<'_>) {}
 
     fn accumulate(&self, _input: AccumulateInput<'_>) -> Result<()> {

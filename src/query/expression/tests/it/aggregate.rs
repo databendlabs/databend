@@ -137,10 +137,10 @@ impl fmt::Display for TrackedHeapAggregateFunction {
     }
 }
 
-impl FunctionInstance for TrackedHeapAggregateFunction {
-    fn signature(&self) -> &AggregateFunctionSignature {
-        static SIGNATURE: std::sync::LazyLock<AggregateFunctionSignature> =
-            std::sync::LazyLock::new(|| AggregateFunctionSignature {
+impl AggregateCall for TrackedHeapAggregateFunction {
+    fn signature(&self) -> &AggregateSignature {
+        static SIGNATURE: std::sync::LazyLock<AggregateSignature> =
+            std::sync::LazyLock::new(|| AggregateSignature {
                 name: "tracked_heap".to_string(),
                 params: vec![],
                 args_type: vec![],
@@ -151,8 +151,8 @@ impl FunctionInstance for TrackedHeapAggregateFunction {
         &SIGNATURE
     }
 
-    fn features(&self) -> &FunctionFeatures {
-        static FEATURES: FunctionFeatures = FunctionFeatures {
+    fn features(&self) -> &AggregateFeatures {
+        static FEATURES: AggregateFeatures = AggregateFeatures {
             is_decomposable: false,
             supports_filter: false,
             sort_policy: databend_common_expression::aggregate::aggregate_function::SortPolicy::Unsupported,
@@ -363,7 +363,7 @@ impl TrackedHeapFixture {
         }
     }
 
-    fn aggrs(&self) -> Vec<AggregateFunctionRef> {
+    fn aggrs(&self) -> Vec<AggregateCallRef> {
         vec![Arc::new(TrackedHeapAggregateFunction {
             live_bytes: self.live_bytes.clone(),
             drop_count: self.drop_count.clone(),

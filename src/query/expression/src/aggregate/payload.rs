@@ -28,7 +28,7 @@ use super::PayloadFlushState;
 use super::RowID;
 use super::StateAddr;
 use super::StatesLayout;
-use super::aggregate_function::AggregateFunctionRef;
+use super::aggregate_function::AggregateCallRef;
 use super::aggregate_function::MergeResultInput;
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
@@ -53,7 +53,7 @@ use crate::types::DataType;
 pub struct Payload {
     pub(super) arena: Arc<Bump>,
     pub(super) group_types: Vec<DataType>,
-    pub(super) aggrs: Vec<AggregateFunctionRef>,
+    pub(super) aggrs: Vec<AggregateCallRef>,
     pub(super) row_layout: RowLayout,
 
     pub(super) pages: Vec<Page>,
@@ -193,7 +193,7 @@ impl Payload {
     pub fn new(
         arena: Arc<Bump>,
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         states_layout: Option<StatesLayout>,
     ) -> Self {
         let mut tuple_size = 0;

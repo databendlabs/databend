@@ -44,16 +44,16 @@ mod window_funnel;
 
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::aggregate_function::AggregateFunctionRegistry;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 
-struct FunctionFactory {
-    register: fn(&mut AggregateFunctionRegistry),
+struct AggregateRegistration {
+    register: fn(&mut AggregateRegistry),
 }
 
-inventory::collect!(FunctionFactory);
+inventory::collect!(AggregateRegistration);
 
-pub(super) fn register_functions(registry: &mut AggregateFunctionRegistry) {
-    for factory in inventory::iter::<FunctionFactory> {
+pub(super) fn register_functions(registry: &mut AggregateRegistry) {
+    for factory in inventory::iter::<AggregateRegistration> {
         (factory.register)(registry);
     }
 }

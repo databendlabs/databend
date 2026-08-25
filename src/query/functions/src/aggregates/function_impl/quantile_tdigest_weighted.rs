@@ -36,7 +36,7 @@ use databend_common_expression::with_unsigned_integer_mapped_type;
 use num_traits::AsPrimitive;
 
 use super::super::common::get_levels;
-use super::FunctionFactory;
+use super::AggregateRegistration;
 use super::adaptors::*;
 use super::quantile_tdigest::AggregateQuantileTDigestState;
 use super::serialized_scalar_at;
@@ -44,7 +44,7 @@ use super::serialized_scalar_at;
 struct QuantileTDigestWeightedBuilder;
 
 impl QuantileTDigestWeightedBuilder {
-    fn register(registry: &mut AggregateFunctionRegistry) {
+    fn register(registry: &mut AggregateRegistry) {
         DirectNameRoute::new(
             &["quantile_tdigest_weighted"],
             QuantileTDigestWeightedBuilder::quantile_tdigest_weighted_arguments(),
@@ -73,15 +73,13 @@ impl QuantileTDigestWeightedBuilder {
 }
 
 inventory::submit! {
-    FunctionFactory {
+    AggregateRegistration {
         register: QuantileTDigestWeightedBuilder::register,
     }
 }
 
 impl QuantileTDigestWeightedBuilder {
-    fn create_median(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create_median(build: MultiArgBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         if !build.params().is_empty() {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects no parameters",
@@ -98,7 +96,7 @@ impl QuantileTDigestWeightedBuilder {
         ])
     }
 
-    const QUANTILE_TDIGEST_WEIGHTED_FEATURES: FunctionFeatures = FunctionFeatures {
+    const QUANTILE_TDIGEST_WEIGHTED_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -109,7 +107,7 @@ impl QuantileTDigestWeightedBuilder {
         example: "select quantile_tdigest_weighted(0.5)(number, weight) from t",
     };
 
-    const MEDIAN_TDIGEST_WEIGHTED_FEATURES: FunctionFeatures = FunctionFeatures {
+    const MEDIAN_TDIGEST_WEIGHTED_FEATURES: AggregateFeatures = AggregateFeatures {
         is_decomposable: false,
         supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
@@ -125,7 +123,7 @@ pub struct QuantileTDigestWeightedData {
     levels: Vec<f64>,
 }
 
-struct AggregateQuantileTDigestWeightedImplementation<V, W, R>
+struct QuantileTDigestWeightedEval<V, W, R>
 where
     V: AccessType,
     W: AccessType,
@@ -135,7 +133,7 @@ where
     _p: PhantomData<fn(V, W, R)>,
 }
 
-impl<V, W, R> AggregateQuantileTDigestWeightedImplementation<V, W, R>
+impl<V, W, R> QuantileTDigestWeightedEval<V, W, R>
 where
     V: AccessType,
     W: AccessType,
@@ -149,7 +147,7 @@ where
     }
 }
 
-impl<V, W, R> AggrImpl for AggregateQuantileTDigestWeightedImplementation<V, W, R>
+impl<V, W, R> AggregateEval for QuantileTDigestWeightedEval<V, W, R>
 where
     V: AccessType,
     V::Scalar: Number + AsPrimitive<f64>,
@@ -311,9 +309,7 @@ impl QuantileTDigestWeightedResult<ArrayType<Float64Type>> for AggregateQuantile
 }
 
 impl QuantileTDigestWeightedBuilder {
-    fn create(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
-    ) -> Result<AggregateFunctionRef> {
+    fn create(build: MultiArgBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         let value_type = build.args_type()[0].clone();
         let weight_type = build.args_type()[1].clone();
         let display_name = build.name().to_string();
@@ -339,9 +335,9 @@ impl QuantileTDigestWeightedBuilder {
     }
 
     fn create_typed<V, W>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl Combinator>,
         levels: Vec<f64>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         V: AccessType,
         V::Scalar: Number + AsPrimitive<f64>,
@@ -360,10 +356,10 @@ impl QuantileTDigestWeightedBuilder {
     }
 
     fn create_result<V, W, R>(
-        build: MultiArgBuildContext<'_, impl CombinatorImpl>,
+        build: MultiArgBuildContext<'_, impl Combinator>,
         return_type: DataType,
         levels: Vec<f64>,
-    ) -> Result<AggregateFunctionRef>
+    ) -> Result<AggregateCallRef>
     where
         V: AccessType,
         V::Scalar: Number + AsPrimitive<f64>,
@@ -374,9 +370,8 @@ impl QuantileTDigestWeightedBuilder {
             QuantileTDigestWeightedResult<R, FunctionInfo = QuantileTDigestWeightedData>,
     {
         let state = AggregateQuantileTDigestState::state_description();
-        let implementation = AggregateQuantileTDigestWeightedImplementation::<V, W, R>::new(
-            QuantileTDigestWeightedData { levels },
-        );
-        build.create_multi_arg_or_null(return_type.wrap_nullable(), state, implementation)
+        let eval =
+            QuantileTDigestWeightedEval::<V, W, R>::new(QuantileTDigestWeightedData { levels });
+        build.create_multi_arg_or_null(return_type.wrap_nullable(), state, eval)
     }
 }

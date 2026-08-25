@@ -26,19 +26,19 @@ use databend_common_expression::utils::column_merge_validity;
 use super::unary::UnaryAccumulateInput;
 use super::unary::UnaryAccumulateKeysInput;
 use super::unary::UnaryAccumulateRowInput;
-use super::unary::UnaryAggrImpl;
+use super::unary::UnaryEval;
 use super::*;
 
 pub(crate) type UnarySkipNull<U> = UnaryNullable<U, false>;
 pub(crate) type UnaryOrNull<U> = UnaryNullable<U, true>;
 
 pub(crate) struct UnaryNullable<U, const RESULT_NULL: bool> {
-    inner: U,
+    nested: U,
 }
 
 impl<U, const RESULT_NULL: bool> UnaryNullable<U, RESULT_NULL> {
-    pub fn new(inner: U) -> Self {
-        Self { inner }
+    pub fn new(nested: U) -> Self {
+        Self { nested }
     }
 
     fn flag(state: AggrState<'_>) -> &mut u8 {
@@ -94,17 +94,17 @@ fn merge_nullable_validity(column: &BlockEntry, validity: Option<Bitmap>) -> Opt
     }
 }
 
-impl<I, R, U, const RESULT_NULL: bool> UnaryAggrImpl<I, R> for UnaryNullable<U, RESULT_NULL>
+impl<I, R, U, const RESULT_NULL: bool> UnaryEval<I, R> for UnaryNullable<U, RESULT_NULL>
 where
     I: AccessType,
     R: ValueType,
-    U: UnaryAggrImpl<I, R>,
+    U: UnaryEval<I, R>,
 {
     fn init_state(&self, state: AggrState<'_>) {
         if RESULT_NULL {
             *Self::flag(state) = 0;
         }
-        self.inner.init_state(Self::inner_state(state));
+        self.nested.init_state(Self::inner_state(state));
     }
 
     fn accumulate(&self, input: UnaryAccumulateInput<'_>) -> Result<()> {
@@ -116,7 +116,7 @@ where
         if RESULT_NULL {
             *Self::flag(input.state) = 1;
         }
-        self.inner.accumulate(UnaryAccumulateInput {
+        self.nested.accumulate(UnaryAccumulateInput {
             state: Self::inner_state(input.state),
             column: &column,
             validity: validity.as_ref(),
@@ -131,7 +131,7 @@ where
                     if RESULT_NULL {
                         *Self::flag(state) = 1;
                     }
-                    self.inner.accumulate_row(UnaryAccumulateRowInput {
+                    self.nested.accumulate_row(UnaryAccumulateRowInput {
                         state: Self::inner_state(state),
                         column: &column,
                         row,
@@ -142,7 +142,7 @@ where
         }
 
         if RESULT_NULL {
-            self.inner.accumulate_keys(UnaryAccumulateKeysInput {
+            self.nested.accumulate_keys(UnaryAccumulateKeysInput {
                 states: input.states.without_last_loc(),
                 column: &column,
             })?;
@@ -152,7 +152,7 @@ where
             return Ok(());
         }
 
-        self.inner.accumulate_keys(UnaryAccumulateKeysInput {
+        self.nested.accumulate_keys(UnaryAccumulateKeysInput {
             states: input.states,
             column: &column,
         })
@@ -170,7 +170,7 @@ where
         if RESULT_NULL {
             *Self::flag(input.state) = 1;
         }
-        self.inner.accumulate_row(UnaryAccumulateRowInput {
+        self.nested.accumulate_row(UnaryAccumulateRowInput {
             state: Self::inner_state(input.state),
             column: &column,
             row: input.row,
@@ -179,13 +179,13 @@ where
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         if !RESULT_NULL {
-            return self.inner.serialize(input);
+            return self.nested.serialize(input);
         }
         let (inner_builders, flag_builder) = input.builders.split_at_mut(input.builders.len() - 1);
         for state in input.states.iter() {
             flag_builder[0].push(ScalarRef::Boolean(*Self::flag(state) != 0));
         }
-        self.inner.serialize(SerializeInput {
+        self.nested.serialize(SerializeInput {
             states: input.states.without_last_loc(),
             builders: inner_builders,
         })
@@ -193,7 +193,7 @@ where
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         if !RESULT_NULL {
-            return self.inner.merge_serialized(input);
+            return self.nested.merge_serialized(input);
         }
         let field_count = serialized_field_count(input.state);
         let flag_field = field_count - 1;
@@ -207,7 +207,7 @@ where
             }
         }
         let inner_state = project_serialized_fields(input.state, 0, flag_field);
-        self.inner.merge_serialized(MergeSerializedInput {
+        self.nested.merge_serialized(MergeSerializedInput {
             states: input.states.without_last_loc(),
             state: &inner_state,
             filter: flag_filter.as_ref(),
@@ -221,7 +221,7 @@ where
                 *Self::flag(input.state) = 1;
             }
         }
-        self.inner.merge_states(MergeStatesInput {
+        self.nested.merge_states(MergeStatesInput {
             state: Self::inner_state(input.state),
             rhs: Self::inner_state(input.rhs),
         })
@@ -229,21 +229,21 @@ where
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         if !RESULT_NULL {
-            return self.inner.merge_result(input);
+            return self.nested.merge_result(input);
         }
         if *Self::flag(input.state) == 0 {
             input.builder.push(ScalarRef::Null);
             return Ok(());
         }
         if let ColumnBuilder::Nullable(inner) = input.builder {
-            self.inner.merge_result(MergeResultInput {
+            self.nested.merge_result(MergeResultInput {
                 state: input.state.remove_last_loc(),
                 builder: &mut inner.builder,
             })?;
             inner.validity.push(true);
             return Ok(());
         }
-        self.inner.merge_result(MergeResultInput {
+        self.nested.merge_result(MergeResultInput {
             state: input.state.remove_last_loc(),
             builder: input.builder,
         })
@@ -251,27 +251,27 @@ where
 
     fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         if !RESULT_NULL {
-            return self.inner.merge_result_read_only(input);
+            return self.nested.merge_result_read_only(input);
         }
         if *Self::flag(input.state) == 0 {
             input.builder.push(ScalarRef::Null);
             return Ok(());
         }
         if let ColumnBuilder::Nullable(inner) = input.builder {
-            self.inner.merge_result_read_only(MergeResultInput {
+            self.nested.merge_result_read_only(MergeResultInput {
                 state: input.state.remove_last_loc(),
                 builder: &mut inner.builder,
             })?;
             inner.validity.push(true);
             return Ok(());
         }
-        self.inner.merge_result_read_only(MergeResultInput {
+        self.nested.merge_result_read_only(MergeResultInput {
             state: input.state.remove_last_loc(),
             builder: input.builder,
         })
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
-        unsafe { self.inner.drop_state(Self::inner_state(state)) };
+        unsafe { self.nested.drop_state(Self::inner_state(state)) };
     }
 }
