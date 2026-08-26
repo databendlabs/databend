@@ -24,6 +24,9 @@ use databend_common_exception::Result;
 use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::ColumnSet;
 use crate::Symbol;
@@ -271,6 +274,66 @@ impl JoinEquiCondition {
             })
             .collect()
     }
+
+    /// Return the equality-preserving key expressions used by both statistics and execution.
+    pub fn canonical_keys(&self) -> (&ScalarExpr, &ScalarExpr) {
+        if let Some(right) = unwrap_integer_to_string_cast(&self.left, &self.right) {
+            return (&self.left, right);
+        }
+        if let Some(left) = unwrap_integer_to_string_cast(&self.right, &self.left) {
+            return (left, &self.right);
+        }
+        (&self.left, &self.right)
+    }
+}
+
+/// Remove an integer-to-string round trip when the other equality key is an integer.
+///
+/// Mixed string/integer equality normally uses `Decimal(38, 5)` as the hash key. That coercion is
+/// needed for arbitrary strings such as `"1.2"`, but it is unnecessary when the string is produced
+/// directly from another integer. Both integers must fit losslessly in their normal common numeric
+/// type, so formatting and parsing the value cannot change equality.
+fn unwrap_integer_to_string_cast<'a>(
+    integer_expr: &ScalarExpr,
+    string_expr: &'a ScalarExpr,
+) -> Option<&'a ScalarExpr> {
+    let ScalarExpr::CastExpr(cast) = string_expr else {
+        return None;
+    };
+    if cast.is_try || !matches!(cast.target_type.remove_nullable(), DataType::String) {
+        return None;
+    }
+
+    let integer_type = integer_expr.data_type();
+    let DataType::Number(integer_type) = integer_type.remove_nullable() else {
+        return None;
+    };
+    if !integer_type.is_integer() {
+        return None;
+    }
+
+    let source_type = cast.argument.data_type();
+    let DataType::Number(source_type) = source_type.remove_nullable() else {
+        return None;
+    };
+    if !source_type.is_integer() {
+        return None;
+    }
+
+    let integer_type = DataType::Number(integer_type);
+    let source_type = DataType::Number(source_type);
+    let common_type = common_super_type(
+        integer_type.clone(),
+        source_type.clone(),
+        &BUILTIN_FUNCTIONS.default_cast_rules,
+    );
+    let Some(common_type @ DataType::Number(_)) = common_type else {
+        return None;
+    };
+    let preserves_equality = classify_conversion(&integer_type, &common_type)
+        .is_safe_for_equality_inference()
+        && classify_conversion(&source_type, &common_type).is_safe_for_equality_inference();
+    preserves_equality.then_some(cast.argument.as_ref())
 }
 
 fn direct_column(expr: &ScalarExpr) -> Option<Symbol> {
@@ -730,9 +793,10 @@ impl Join {
         self.equi_conditions
             .iter()
             .filter_map(|condition| {
+                let (left, right) = condition.canonical_keys();
                 Some(JoinConditionColumns {
-                    left: direct_column(&condition.left)?,
-                    right: direct_column(&condition.right)?,
+                    left: direct_column(left)?,
+                    right: direct_column(right)?,
                 })
             })
             .map(|columns| side.join_column(columns))
@@ -772,28 +836,26 @@ impl Join {
             if estimator.has_no_matches() {
                 break;
             }
+            let (left_condition, right_condition) = condition.canonical_keys();
             let output_columns = match (
-                direct_column(&condition.left),
-                direct_column(&condition.right),
+                direct_column(left_condition),
+                direct_column(right_condition),
             ) {
                 (Some(left), Some(right)) => Some(JoinConditionColumns { left, right }),
                 _ => None,
             };
             if drop_null_join_keys && !condition.is_null_equal {
-                if let Some(column) = null_rejected_column(&condition.left) {
+                if let Some(column) = null_rejected_column(left_condition) {
                     left.clear_null_count(&mut left_join_keys, column);
                 }
-                if let Some(column) = null_rejected_column(&condition.right) {
+                if let Some(column) = null_rejected_column(right_condition) {
                     right.clear_null_count(&mut right_join_keys, column);
                 }
             }
-            let left_condition_stat = join_condition_stat(
-                &condition.left,
-                left_input_statistics,
-                left_stat_cardinality,
-            )?;
+            let left_condition_stat =
+                join_condition_stat(left_condition, left_input_statistics, left_stat_cardinality)?;
             let right_condition_stat = join_condition_stat(
-                &condition.right,
+                right_condition,
                 right_input_statistics,
                 right_stat_cardinality,
             )?;
@@ -809,8 +871,8 @@ impl Join {
             };
             estimator.apply_condition(
                 output_columns,
-                condition.left.data_type().as_ref(),
-                condition.right.data_type().as_ref(),
+                left_condition.data_type().as_ref(),
+                right_condition.data_type().as_ref(),
                 left_condition_stat.as_ref(),
                 right_condition_stat.as_ref(),
                 condition.is_null_equal,
@@ -1485,6 +1547,7 @@ mod tests {
     use crate::Visibility;
     use crate::optimizer::ir::SExpr;
     use crate::plans::BoundColumnRef;
+    use crate::plans::CastExpr;
     use crate::plans::Exchange;
     use crate::plans::FunctionCall;
     use crate::plans::Scan;
@@ -1530,6 +1593,27 @@ mod tests {
         )
     }
 
+    fn int_column_stat(min: i64, max: i64, ndv: f64) -> ColumnStat {
+        ColumnStat::Int {
+            min,
+            max,
+            ndv: NdvEstimate::exact(ndv),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }
+    }
+
+    fn stat_info(cardinality: f64, column: Symbol, stat: ColumnStat) -> Arc<StatInfo> {
+        Arc::new(StatInfo {
+            cardinality,
+            statistics: Statistics {
+                precise_cardinality: Some(cardinality as u64),
+                column_stats: HashMap::from([(column, stat)]),
+                ..Default::default()
+            },
+        })
+    }
+
     #[test]
     fn test_anti_join_only_scales_estimated_matched_rows() {
         assert_eq!(estimate_anti_join_cardinality(100.0, 100.0, None), 0.0);
@@ -1546,6 +1630,30 @@ mod tests {
             10.0
         );
         assert_eq!(estimate_anti_join_cardinality(100.0, 0.0, Some(0.0)), 100.0);
+    }
+
+    #[test]
+    fn test_canonical_integer_string_keys_drive_join_stats() -> Result<()> {
+        let left_key = column(0, DataType::Number(NumberDataType::Int64));
+        let right_source = column(1, DataType::Number(NumberDataType::Int32));
+        let right_key = ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try: false,
+            argument: Box::new(right_source),
+            target_type: Box::new(DataType::String),
+        });
+        let join = Join {
+            join_type: JoinType::Inner,
+            equi_conditions: vec![JoinEquiCondition::new(left_key, right_key, false)],
+            ..Default::default()
+        };
+        let left = stat_info(4.0, Symbol::new(0), int_column_stat(1, 4, 4.0));
+        let right = stat_info(3.0, Symbol::new(1), int_column_stat(0, 1, 2.0));
+
+        let stats = join.derive_join_stats(left, right)?;
+
+        assert_eq!(stats.cardinality, 3.0);
+        Ok(())
     }
 
     #[test]
