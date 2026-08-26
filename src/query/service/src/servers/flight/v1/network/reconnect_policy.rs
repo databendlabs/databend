@@ -21,9 +21,40 @@ const RECEIVER_LEASE_MARGIN: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Copy)]
 pub(crate) struct FlightReconnectPolicy {
-    pub(crate) retry_times: u64,
+    retry_times: u64,
     pub(crate) retry_interval: Duration,
     pub(crate) timeout: Duration,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct FlightConnectionAttempts {
+    remaining: u64,
+}
+
+impl FlightConnectionAttempts {
+    pub(crate) fn remaining(self) -> u64 {
+        self.remaining
+    }
+
+    pub(crate) fn is_empty(self) -> bool {
+        self.remaining == 0
+    }
+
+    pub(crate) fn consume(mut self, used: u64) -> Self {
+        self.remaining = self
+            .remaining
+            .checked_sub(used)
+            .expect("connection attempts used must not exceed the available budget");
+        self
+    }
+
+    fn max_elapsed(self, timeout: Duration, retry_interval: Duration) -> Duration {
+        let attempts = self.remaining.min(u32::MAX as u64) as u32;
+        let intervals = attempts.saturating_sub(1);
+        timeout
+            .saturating_mul(attempts)
+            .saturating_add(retry_interval.saturating_mul(intervals))
+    }
 }
 
 impl FlightReconnectPolicy {
@@ -39,13 +70,26 @@ impl FlightReconnectPolicy {
         })
     }
 
+    pub(crate) fn initial_attempts(self) -> FlightConnectionAttempts {
+        FlightConnectionAttempts {
+            remaining: self.retry_times.saturating_add(1),
+        }
+    }
+
+    pub(crate) fn reconnect_attempts(self) -> FlightConnectionAttempts {
+        FlightConnectionAttempts {
+            remaining: self.retry_times,
+        }
+    }
+
     pub(crate) fn receiver_lease(self) -> Duration {
-        if self.retry_times == 0 {
+        let attempts = self.reconnect_attempts();
+        if attempts.is_empty() {
             return Duration::ZERO;
         }
-        let retry_times = self.retry_times.min(u32::MAX as u64) as u32;
-        self.timeout
-            .saturating_add(self.retry_interval.saturating_mul(retry_times))
+
+        attempts
+            .max_elapsed(self.timeout, self.retry_interval)
             .saturating_add(std::cmp::max(self.retry_interval, RECEIVER_LEASE_MARGIN))
     }
 }
@@ -55,14 +99,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_receiver_lease_includes_retry_grace() {
+    fn test_connection_attempt_budgets() {
         let policy = FlightReconnectPolicy {
             retry_times: 10,
             retry_interval: Duration::from_secs(1),
             timeout: Duration::from_secs(60),
         };
 
-        assert_eq!(policy.receiver_lease(), Duration::from_secs(75));
+        assert_eq!(policy.initial_attempts().remaining(), 11);
+        assert_eq!(policy.reconnect_attempts().remaining(), 10);
+        assert_eq!(policy.reconnect_attempts().consume(3).remaining(), 7);
+    }
+
+    #[test]
+    fn test_receiver_lease_covers_all_reconnect_attempts() {
+        let policy = FlightReconnectPolicy {
+            retry_times: 10,
+            retry_interval: Duration::from_secs(1),
+            timeout: Duration::from_secs(60),
+        };
+
+        assert_eq!(policy.receiver_lease(), Duration::from_secs(614));
     }
 
     #[test]

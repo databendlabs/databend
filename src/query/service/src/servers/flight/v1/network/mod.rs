@@ -23,6 +23,7 @@ pub mod outbound_buffer;
 pub mod outbound_channel;
 pub mod outbound_transport;
 mod reconnect_policy;
+mod transport_mode;
 
 pub use block_outbound_set::BlockOutboundConfig;
 pub use block_outbound_set::BlockOutboundSet;
@@ -56,4 +57,6 @@ pub use outbound_transport::PingPongCallback;
 pub use outbound_transport::PingPongExchange;
 pub use outbound_transport::PingPongExchangeInner;
 pub use outbound_transport::PingPongResponse;
+pub(crate) use reconnect_policy::FlightConnectionAttempts;
 pub(crate) use reconnect_policy::FlightReconnectPolicy;
+pub(crate) use transport_mode::FlightTransportMode;

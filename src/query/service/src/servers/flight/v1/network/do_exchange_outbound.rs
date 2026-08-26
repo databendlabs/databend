@@ -39,6 +39,7 @@ use tonic::Status;
 
 use super::DoExchangeRequest;
 use super::DoExchangeResponse;
+use super::FlightConnectionAttempts;
 use super::FlightReconnectPolicy;
 use crate::servers::flight::FlightOperation;
 use crate::servers::flight::add_flight_error_context;
@@ -65,7 +66,7 @@ struct InFlightPacket {
     encoded: FlightData,
     expected: ExpectedResponse,
     // A replacement transport consumes this budget; only logical progress installs a fresh one.
-    reconnect_attempts_remaining: u64,
+    reconnect_attempts: FlightConnectionAttempts,
 }
 
 enum ExpectedResponse {
@@ -457,7 +458,7 @@ impl OutboundDriver {
         self.logical.in_flight = Some(InFlightPacket {
             encoded,
             expected: ExpectedResponse::Ack(sequence),
-            reconnect_attempts_remaining: self.physical.reconnect.retry_times,
+            reconnect_attempts: self.physical.reconnect.reconnect_attempts(),
         });
     }
 
@@ -467,7 +468,7 @@ impl OutboundDriver {
         self.logical.in_flight = Some(InFlightPacket {
             encoded,
             expected: ExpectedResponse::ReceiverClosed,
-            reconnect_attempts_remaining: self.physical.reconnect.retry_times,
+            reconnect_attempts: self.physical.reconnect.reconnect_attempts(),
         });
     }
 
@@ -477,24 +478,21 @@ impl OutboundDriver {
         self.logical.in_flight = Some(InFlightPacket {
             encoded,
             expected: ExpectedResponse::ReceiverClosed,
-            reconnect_attempts_remaining: self.physical.reconnect.retry_times,
+            reconnect_attempts: self.physical.reconnect.reconnect_attempts(),
         });
     }
 
     async fn reconnect_transport(&mut self, status: Status) -> Result<()> {
         let (replay, attempts) = match &self.logical.in_flight {
-            Some(packet) => (
-                Some(packet.encoded.clone()),
-                packet.reconnect_attempts_remaining,
-            ),
-            None => (None, self.physical.reconnect.retry_times),
+            Some(packet) => (Some(packet.encoded.clone()), packet.reconnect_attempts),
+            None => (None, self.physical.reconnect.reconnect_attempts()),
         };
         let attempts_used = self
             .physical
             .reconnect(status, replay, attempts, &self.cancellation)
             .await?;
         if let Some(packet) = &mut self.logical.in_flight {
-            packet.reconnect_attempts_remaining -= attempts_used;
+            packet.reconnect_attempts = packet.reconnect_attempts.consume(attempts_used);
         }
         Ok(())
     }
@@ -520,7 +518,7 @@ impl PhysicalConnection {
             local_node_id,
             remote_node_id,
         };
-        let attempts = reconnect.retry_times + 1;
+        let attempts = reconnect.initial_attempts();
         let (transport, _) = connection.establish(None, attempts).await?;
         connection.transport = Some(transport);
         Ok(connection)
@@ -552,11 +550,11 @@ impl PhysicalConnection {
         &mut self,
         status: Status,
         replay: Option<FlightData>,
-        attempts: u64,
+        attempts: FlightConnectionAttempts,
         cancellation: &CancellationToken,
     ) -> Result<u64> {
         self.transport = None;
-        if !is_retryable_status(&status) || attempts == 0 {
+        if !is_retryable_status(&status) || attempts.is_empty() {
             let cause = self.status_error(status);
             self.warn_failure(&cause);
             return Err(cause);
@@ -582,7 +580,7 @@ impl PhysicalConnection {
     fn establish(
         &self,
         replay: Option<FlightData>,
-        attempts: u64,
+        attempts: FlightConnectionAttempts,
     ) -> impl Future<Output = Result<(DoExchangeTransport, u64)>> + Send + 'static {
         let connector = self.connector.clone();
         let reconnect = self.reconnect;
@@ -590,6 +588,7 @@ impl PhysicalConnection {
         let remote_node_id = self.remote_node_id.clone();
 
         async move {
+            let attempts = attempts.remaining();
             for attempt in 0..attempts {
                 if attempt > 0 {
                     tokio::time::sleep(reconnect.retry_interval).await;

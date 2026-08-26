@@ -42,6 +42,7 @@ use crate::servers::flight::v1::network::BlockOutboundConfig;
 use crate::servers::flight::v1::network::BlockOutboundSet;
 use crate::servers::flight::v1::network::ExchangeBufferConfig;
 use crate::servers::flight::v1::network::ExchangeSinkBuffer;
+use crate::servers::flight::v1::network::FlightTransportMode;
 use crate::servers::flight::v1::network::LegacyRemoteChannel;
 use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::RemoteOutboundChannel;
@@ -95,35 +96,36 @@ impl ExchangeSink {
                 }
 
                 let exchange_manager = ctx.get_exchange_manager();
-                let enable_new_flight = ctx.get_settings().get_enable_experiment_new_flight()?;
+                let transport = FlightTransportMode::from_settings(&ctx.get_settings())?;
 
-                let items = if enable_new_flight {
-                    let mut pending = exchange_manager
-                        .take_block_outbounds(&params.query_id, &params.channel_id)?;
-                    let outbound = pending.remove(&params.destination_id).ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "block outbound not found for target {}",
-                            params.destination_id
-                        ))
-                    })?;
-                    let outbound = Arc::new(BlockOutboundSet::create_with_producers(
-                        vec![outbound],
-                        1,
-                        BlockOutboundConfig::default(),
-                        &GlobalIORuntime::instance(),
-                    ));
-                    install_packet_outbound_failure_handler(outbound.clone(), pipeline);
-                    vec![create_packet_writer_item(
-                        outbound,
-                        0,
-                        params.ignore_exchange,
-                    )]
-                } else {
-                    exchange_manager
+                let items = match transport {
+                    FlightTransportMode::Legacy => exchange_manager
                         .get_flight_sender(&ExchangeParams::MergeExchange(params.clone()))?
                         .into_iter()
                         .map(|(_, sender)| create_writer_item(sender, params.ignore_exchange))
-                        .collect::<Vec<_>>()
+                        .collect::<Vec<_>>(),
+                    FlightTransportMode::Reconnectable(_) => {
+                        let mut pending = exchange_manager
+                            .take_block_outbounds(&params.query_id, &params.channel_id)?;
+                        let outbound = pending.remove(&params.destination_id).ok_or_else(|| {
+                            ErrorCode::Internal(format!(
+                                "block outbound not found for target {}",
+                                params.destination_id
+                            ))
+                        })?;
+                        let outbound = Arc::new(BlockOutboundSet::create_with_producers(
+                            vec![outbound],
+                            1,
+                            BlockOutboundConfig::default(),
+                            &GlobalIORuntime::instance(),
+                        ));
+                        install_packet_outbound_failure_handler(outbound.clone(), pipeline);
+                        vec![create_packet_writer_item(
+                            outbound,
+                            0,
+                            params.ignore_exchange,
+                        )]
+                    }
                 };
 
                 let output = items.len();
@@ -139,18 +141,19 @@ impl ExchangeSink {
                 exchange_shuffle(ctx, params, pipeline)?;
 
                 let exchange_manager = ctx.get_exchange_manager();
-                let enable_new_flight = ctx.get_settings().get_enable_experiment_new_flight()?;
+                let transport = FlightTransportMode::from_settings(&ctx.get_settings())?;
 
                 // exchange writer sink
                 let len = pipeline.output_len();
-                let items = if enable_new_flight {
-                    build_node_shuffle_packet_sinks(ctx, params, pipeline, 1)?
-                } else {
-                    exchange_manager
+                let items = match transport {
+                    FlightTransportMode::Legacy => exchange_manager
                         .get_flight_sender(&ExchangeParams::NodeShuffleExchange(params.clone()))?
                         .into_iter()
                         .map(|(_, sender)| create_writer_item(sender, false))
-                        .collect::<Vec<_>>()
+                        .collect::<Vec<_>>(),
+                    FlightTransportMode::Reconnectable(_) => {
+                        build_node_shuffle_packet_sinks(ctx, params, pipeline, 1)?
+                    }
                 };
 
                 pipeline.add_pipe(Pipe::create(len, 0, items));
@@ -180,7 +183,7 @@ impl ExchangeSink {
         }
 
         let compression = ctx.get_settings().get_query_flight_compression()?;
-        let enable_new_flight = ctx.get_settings().get_enable_experiment_new_flight()?;
+        let transport = FlightTransportMode::from_settings(&ctx.get_settings())?;
         let rows_threshold = ctx.get_settings().get_hash_shuffle_rows_threshold()?;
         let bytes_threshold = ctx.get_settings().get_hash_shuffle_bytes_threshold()?;
         let waker = pipeline.get_waker();
@@ -196,7 +199,7 @@ impl ExchangeSink {
 
         let local_outbound = create_local_channels(&channel_set);
         let remote_outbound =
-            build_hash_outbound_channels(params, local_outbound, compression, enable_new_flight)?;
+            build_hash_outbound_channels(params, local_outbound, compression, transport)?;
         remote_outbound.install_failure_handler(pipeline);
 
         let scatter = Arc::new(HashFlightScatter::try_create(
@@ -312,13 +315,13 @@ pub(super) fn build_broadcast_outbound_channels(
     params: &BroadcastExchangeParams,
     local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
-    enable_new_flight: bool,
+    transport: FlightTransportMode,
 ) -> Result<SharedOutboundChannels> {
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
 
-    if !enable_new_flight {
+    if let FlightTransportMode::Legacy = transport {
         let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
         let mut exchanges_seq = Vec::with_capacity(exchanges.len());
 
@@ -421,13 +424,13 @@ pub(super) fn build_hash_outbound_channels(
     params: &GlobalExchangeParams,
     mut local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
-    enable_new_flight: bool,
+    transport: FlightTransportMode,
 ) -> Result<SharedOutboundChannels> {
     let num_threads = local_outbound_channels.len();
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
-    if !enable_new_flight {
+    if let FlightTransportMode::Legacy = transport {
         let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
         let mut exchanges_seq = Vec::with_capacity(exchanges.len());
 

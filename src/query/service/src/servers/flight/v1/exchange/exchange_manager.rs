@@ -41,6 +41,7 @@ use databend_common_pipeline::core::basic_callback;
 use databend_common_settings::FlightKeepAliveParams;
 use fastrace::prelude::*;
 use futures::StreamExt;
+use log::info;
 use log::warn;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -84,7 +85,7 @@ use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::network::DoExchangeConnector;
 use crate::servers::flight::v1::network::DoExchangeTransport;
-use crate::servers::flight::v1::network::FlightReconnectPolicy;
+use crate::servers::flight::v1::network::FlightTransportMode;
 use crate::servers::flight::v1::network::NetworkInboundChannelSet;
 use crate::servers::flight::v1::network::NetworkInboundConnection;
 use crate::servers::flight::v1::network::NetworkInboundSender;
@@ -339,10 +340,13 @@ impl DataExchangeManager {
             None => env.settings.clone(),
         };
         let keep_alive = settings.get_flight_keep_alive_params()?;
-        let enable_new_flight = settings.get_enable_experiment_new_flight()?;
-        let reconnect = enable_new_flight
-            .then(|| FlightReconnectPolicy::from_settings(&settings))
-            .transpose()?;
+        let transport = FlightTransportMode::from_settings(&settings)?;
+        info!(
+            "Flight transport selected: query_id={}, node_id={}, mode={}",
+            env.query_id,
+            config.query.node_id,
+            transport.name()
+        );
 
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
@@ -371,28 +375,23 @@ impl DataExchangeManager {
                     let source_id = source.id.clone();
 
                     let keep_alive_params = keep_alive;
-                    match edge {
-                        Edge::Fragment(channel) => {
-                            if !enable_new_flight {
-                                flight_exchanges.push(Box::pin(async move {
-                                    let mut flight_client = Self::create_client(
-                                        &source_id,
-                                        &address,
-                                        with_cur_rt,
-                                        keep_alive_params,
-                                    )
-                                    .await?;
-                                    Ok::<QueryExchange, ErrorCode>(QueryExchange::Fragment {
-                                        channel: channel.clone(),
-                                        exchange: flight_client.do_get(&query_id, &channel).await?,
-                                    })
-                                }));
-                            }
+                    match (transport, edge) {
+                        (FlightTransportMode::Legacy, Edge::Fragment(channel)) => {
+                            flight_exchanges.push(Box::pin(async move {
+                                let mut flight_client = Self::create_client(
+                                    &source_id,
+                                    &address,
+                                    with_cur_rt,
+                                    keep_alive_params,
+                                )
+                                .await?;
+                                Ok::<QueryExchange, ErrorCode>(QueryExchange::Fragment {
+                                    channel: channel.clone(),
+                                    exchange: flight_client.do_get(&query_id, &channel).await?,
+                                })
+                            }));
                         }
-                        Edge::Statistics => {
-                            if enable_new_flight {
-                                continue;
-                            }
+                        (FlightTransportMode::Legacy, Edge::Statistics) => {
                             flight_exchanges.push(Box::pin(async move {
                                 let mut flight_client = Self::create_client(
                                     &source_id,
@@ -409,9 +408,8 @@ impl DataExchangeManager {
                                 })
                             }));
                         }
-                        Edge::ExchangeFragment { .. } => {
-                            // Skip: remote sender will call do_exchange on us,
-                            // handled by handle_do_exchange
+                        _ => {
+                            // Reconnectable incoming streams are opened by their remote sender.
                         }
                     }
                 }
@@ -427,13 +425,14 @@ impl DataExchangeManager {
                     let target = env.dataflow_diagram[edge.target()].clone();
                     let edge = edge.weight().clone();
 
-                    if enable_new_flight && matches!(edge, Edge::Statistics) {
+                    if let (FlightTransportMode::Reconnectable(reconnect), Edge::Statistics) =
+                        (transport, &edge)
+                    {
                         let target_id = target.id.clone();
                         let query_id = env.query_id.clone();
                         let source_id = config.query.node_id.clone();
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
-                        let reconnect = reconnect.expect("new Flight requires reconnect policy");
                         flight_exchanges.push(Box::pin(async move {
                             let params = DoExchangeParams::reconnectable_statistics(
                                 query_id,
@@ -466,14 +465,17 @@ impl DataExchangeManager {
                         continue;
                     }
 
-                    let (exchange_id, channels) = match edge {
-                        Edge::Fragment(channel) if enable_new_flight => {
+                    let (exchange_id, channels) = match (transport, edge) {
+                        (FlightTransportMode::Reconnectable(_), Edge::Fragment(channel)) => {
                             (channel.clone(), vec![channel])
                         }
-                        Edge::ExchangeFragment {
-                            exchange_id,
-                            channels,
-                        } => (exchange_id, channels),
+                        (
+                            _,
+                            Edge::ExchangeFragment {
+                                exchange_id,
+                                channels,
+                            },
+                        ) => (exchange_id, channels),
                         _ => continue,
                     };
 
@@ -489,68 +491,70 @@ impl DataExchangeManager {
                     );
 
                     flight_exchanges.push(Box::pin(async move {
-                        if !enable_new_flight {
-                            let mut flight_client = create_flight_client(
-                                target_id.clone(),
-                                address,
-                                with_cur_rt,
-                                keep_alive_params,
-                            )
-                            .await?;
-                            let (send_tx, send_rx) = async_channel::bounded(1);
-                            let response_stream = flight_client
-                                .do_exchange(
-                                    send_rx,
-                                    DoExchangeParams::legacy(
-                                        query_id,
-                                        exchange_id.clone(),
+                        match transport {
+                            FlightTransportMode::Legacy => {
+                                let mut flight_client = create_flight_client(
+                                    target_id.clone(),
+                                    address,
+                                    with_cur_rt,
+                                    keep_alive_params,
+                                )
+                                .await?;
+                                let (send_tx, send_rx) = async_channel::bounded(1);
+                                let response_stream = flight_client
+                                    .do_exchange(
+                                        send_rx,
+                                        DoExchangeParams::legacy(
+                                            query_id,
+                                            exchange_id.clone(),
+                                            num_threads,
+                                        ),
+                                    )
+                                    .await?;
+
+                                Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
+                                    target_id: target_id.clone(),
+                                    exchange_id,
+                                    exchange: PingPongExchange::from_parts(
                                         num_threads,
+                                        send_tx,
+                                        response_stream,
+                                        local_node_id,
+                                        target_id,
                                     ),
+                                })
+                            }
+                            FlightTransportMode::Reconnectable(reconnect) => {
+                                let params = DoExchangeParams::reconnectable(
+                                    query_id,
+                                    exchange_id.clone(),
+                                    local_node_id.clone(),
+                                    num_threads,
+                                    reconnect.receiver_lease().as_secs(),
+                                );
+                                let connector = create_do_exchange_connector(
+                                    target_id.clone(),
+                                    address,
+                                    with_cur_rt,
+                                    keep_alive_params,
+                                    params,
+                                );
+                                let outbound = PendingNetworkOutbound::connect(
+                                    num_threads,
+                                    connector,
+                                    reconnect,
+                                    local_node_id,
+                                    target_id.clone(),
                                 )
                                 .await?;
 
-                            return Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
-                                target_id: target_id.clone(),
-                                exchange_id,
-                                exchange: PingPongExchange::from_parts(
-                                    num_threads,
-                                    send_tx,
-                                    response_stream,
-                                    local_node_id,
-                                    target_id,
-                                ),
-                            });
+                                Ok::<QueryExchange, ErrorCode>(QueryExchange::BlockOutbound {
+                                    target_id: target_id.clone(),
+                                    exchange_id,
+                                    outbound,
+                                })
+                            }
                         }
-
-                        let reconnect = reconnect.expect("new Flight requires reconnect policy");
-                        let params = DoExchangeParams::reconnectable(
-                            query_id,
-                            exchange_id.clone(),
-                            local_node_id.clone(),
-                            num_threads,
-                            reconnect.receiver_lease().as_secs(),
-                        );
-                        let connector = create_do_exchange_connector(
-                            target_id.clone(),
-                            address,
-                            with_cur_rt,
-                            keep_alive_params,
-                            params,
-                        );
-                        let outbound = PendingNetworkOutbound::connect(
-                            num_threads,
-                            connector,
-                            reconnect,
-                            local_node_id,
-                            target_id.clone(),
-                        )
-                        .await?;
-
-                        Ok::<QueryExchange, ErrorCode>(QueryExchange::BlockOutbound {
-                            target_id: target_id.clone(),
-                            exchange_id,
-                            outbound,
-                        })
                     }));
                 }
 
