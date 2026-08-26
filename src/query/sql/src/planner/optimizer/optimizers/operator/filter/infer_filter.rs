@@ -189,6 +189,12 @@ impl<'a> InferFilterOptimizer<'a> {
     }
 
     pub fn add_equal_expr(&mut self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
+        if left == right {
+            // Under SQL three-valued logic, NULL = NULL is NULL rather than TRUE. Only
+            // absorb a reflexive equality when its operand is guaranteed to be non-null.
+            return !left.data_type().is_nullable_or_null();
+        }
+
         let left_ty = left.data_type();
         let right_ty = right.data_type();
         if !common_super_type_with_conversion(left_ty.as_ref(), right_ty.as_ref())
