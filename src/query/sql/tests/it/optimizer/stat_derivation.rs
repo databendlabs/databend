@@ -25,6 +25,7 @@ use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::CollectStatisticsOptimizer;
 use databend_common_sql::optimizer::Optimizer;
 use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatInfo;
@@ -111,19 +112,32 @@ fn write_stats(file: &mut impl Write, metadata: &Metadata, stats: &StatInfo) -> 
     let mut column_stats = stats.statistics.column_stats.iter().collect::<Vec<_>>();
     column_stats.sort_by_key(|(column, _)| **column);
     for (column, stat) in column_stats {
+        let Some(bounds) = stat.bounds() else {
+            writeln!(
+                file,
+                "column_stat: {} all-null, null_count={:?}",
+                column_label(metadata, *column),
+                stat.null_count(),
+            )?;
+            continue;
+        };
+        let (min, max) = bounds.display_parts();
+        let has_histogram = match stat {
+            ColumnStat::Int { histogram, .. } => histogram.is_some(),
+            ColumnStat::UInt { histogram, .. } => histogram.is_some(),
+            ColumnStat::Float { histogram, .. } => histogram.is_some(),
+            ColumnStat::Bytes { histogram, .. } => histogram.is_some(),
+            ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => false,
+        };
         writeln!(
             file,
             "column_stat: {} min={}, max={}, ndv={:?}, null_count={:?}, histogram={}",
             column_label(metadata, *column),
-            stat.min,
-            stat.max,
-            stat.ndv,
-            stat.null_count,
-            if stat.histogram.is_some() {
-                "some"
-            } else {
-                "none"
-            }
+            min,
+            max,
+            stat.ndv(),
+            stat.null_count(),
+            if has_histogram { "some" } else { "none" }
         )?;
     }
     Ok(())
@@ -149,9 +163,9 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
         };
         let opt_ctx = OptimizerContext::new(ctx, metadata.clone());
         let mut collector = CollectStatisticsOptimizer::new(opt_ctx.clone());
-        let s_expr = collector.optimize(&s_expr).await?;
+        let s_expr = collector.optimize(*s_expr).await?;
         let s_expr = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::PushDownLimitSort])
-            .optimize_sync(&s_expr)?;
+            .optimize_sync(s_expr)?;
         (s_expr, metadata)
     } else {
         let Plan::Query {

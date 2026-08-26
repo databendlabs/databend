@@ -259,12 +259,6 @@ impl SExpr {
         self.applied_rules.get(rule_id)
     }
 
-    /// Check if contain subquery
-    #[recursive::recursive]
-    pub(crate) fn has_subquery(&self) -> bool {
-        self.plan.has_subquery() || self.children.iter().any(|child| child.has_subquery())
-    }
-
     #[recursive::recursive]
     pub fn support_lazy_materialize(&self) -> bool {
         self.plan.support_lazy_materialize()

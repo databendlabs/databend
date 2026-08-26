@@ -41,23 +41,23 @@ impl RuleNormalizeAggregateOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut children = Vec::with_capacity(s_expr.arity());
-        for child in s_expr.children() {
-            let child = self.optimize_sync(child)?;
+    pub fn optimize_sync(&self, mut s_expr: SExpr) -> Result<SExpr> {
+        let mut children = Vec::with_capacity(s_expr.children.len());
+        for child in std::mem::take(&mut s_expr.children) {
+            let child = self.optimize_sync(Arc::unwrap_or_clone(child))?;
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);
         if let RelOperator::Aggregate(_) = s_expr.plan.as_ref() {
-            self.normalize_aggregate(&s_expr)
+            self.normalize_aggregate(s_expr)
         } else {
             Ok(s_expr)
         }
     }
 
-    fn normalize_aggregate(&self, s_expr: &SExpr) -> Result<SExpr> {
+    fn normalize_aggregate(&self, mut s_expr: SExpr) -> Result<SExpr> {
         let aggregate: Aggregate = s_expr.plan().clone().try_into()?;
-        if let Some(rewritten) = self.rewrite_distinct_count(&aggregate, s_expr)? {
+        if let Some(rewritten) = self.rewrite_distinct_count(&aggregate, &s_expr)? {
             return Ok(rewritten);
         }
         let mut work_expr = None;
@@ -172,7 +172,7 @@ impl RuleNormalizeAggregateOptimizer {
         }
 
         if !rewritten {
-            return Ok(s_expr.clone());
+            return Ok(s_expr);
         }
 
         let new_aggregate = Aggregate {
@@ -184,10 +184,8 @@ impl RuleNormalizeAggregateOptimizer {
             grouping_sets: aggregate.grouping_sets,
         };
 
-        let mut new_aggregate = SExpr::create_unary(
-            Arc::new(new_aggregate.into()),
-            Arc::new(s_expr.child(0)?.clone()),
-        );
+        assert_eq!(s_expr.children.len(), 1);
+        let mut new_aggregate = SExpr::create_unary(new_aggregate, s_expr.children.pop().unwrap());
 
         let mut scalar_items = Vec::new();
 
@@ -337,7 +335,7 @@ impl Optimizer for RuleNormalizeAggregateOptimizer {
         "RuleNormalizeAggregateOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr)
     }
 }

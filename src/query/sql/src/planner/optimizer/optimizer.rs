@@ -113,7 +113,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 
                 let s_expr = Box::new(
                     SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None)
-                        .optimize_sync(&s_expr)?,
+                        .optimize_sync(*s_expr)?,
                 );
                 Ok(Plan::Explain {
                     kind,
@@ -374,7 +374,7 @@ fn rewrite_insert_multi_table_whens(
         });
 
         let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None);
-        let rewritten = rewriter.optimize_sync(&eval_expr)?;
+        let rewritten = rewriter.optimize_sync(eval_expr)?;
         let RelOperator::EvalScalar(eval) = rewritten.plan() else {
             return Err(ErrorCode::Internal(
                 "Subquery rewrite for multi-table insert must keep the top eval scalar".to_string(),
@@ -431,7 +431,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
     // Optimize the input plan.
     let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
     input_s_expr = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[RuleID::MergeFilterIntoMutation])
-        .optimize_sync(&input_s_expr)?;
+        .optimize_sync(input_s_expr)?;
 
     // For distributed query optimization, we need to remove the Exchange operator at the top of the plan.
     if let &RelOperator::Exchange(_) = input_s_expr.plan() {

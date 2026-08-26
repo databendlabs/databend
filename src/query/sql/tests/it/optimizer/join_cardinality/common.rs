@@ -84,17 +84,42 @@ fn count_summary(count: StatCount) -> String {
 }
 
 pub(super) fn column_stat_summary(stat: &ColumnStat) -> String {
-    format!(
-        "min={}, max={}, ndv={}, null={}, histogram={}",
-        stat.min,
-        stat.max,
-        estimate_summary(stat.ndv.expected, stat.ndv.upper),
-        count_summary(stat.null_count),
-        stat.histogram
-            .as_ref()
-            .map(histogram_summary)
-            .unwrap_or_else(|| "none".to_string())
-    )
+    match stat.bounds() {
+        Some(bounds) => {
+            let (min, max) = bounds.display_parts();
+            format!(
+                "min={}, max={}, ndv={}, null={}, histogram={}",
+                min,
+                max,
+                estimate_summary(stat.ndv().expected, stat.ndv().upper),
+                count_summary(stat.null_count()),
+                match stat {
+                    ColumnStat::Int { histogram, .. } => histogram
+                        .as_ref()
+                        .map(|histogram| Histogram::Int(histogram.clone())),
+                    ColumnStat::UInt { histogram, .. } => histogram
+                        .as_ref()
+                        .map(|histogram| Histogram::UInt(histogram.clone())),
+                    ColumnStat::Float { histogram, .. } => histogram
+                        .as_ref()
+                        .map(|histogram| Histogram::Float(histogram.clone())),
+                    ColumnStat::Bytes { histogram, .. } => histogram
+                        .as_ref()
+                        .map(|histogram| Histogram::Bytes(histogram.clone())),
+                    ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => None,
+                }
+                .as_ref()
+                .map(histogram_summary)
+                .unwrap_or_else(|| "none".to_string())
+            )
+        }
+        None => {
+            format!(
+                "all_null=true, null={}, histogram=none",
+                count_summary(stat.null_count())
+            )
+        }
+    }
 }
 
 pub(super) fn write_join_stat_info(

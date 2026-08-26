@@ -34,10 +34,10 @@ input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
-join          : INNER cardinality=12.000
-stat          : l.k (#0) min=1, max=3, ndv=3.000, null=3.000, histogram=none
+join          : INNER cardinality=3.000
+stat          : l.k (#0) min=1, max=3, ndv=2.250, null=0.750, histogram=none
 stat          : b (#1) min=false, max=true, ndv=2.000, null=0.000, histogram=none
-stat          : r.k (#2) min=1, max=2, ndv=2.000, null=4.000, histogram=none
+stat          : r.k (#2) min=1, max=2, ndv=1.333, null=1.000, histogram=none
 stat          : b (#3) min=false, max=true, ndv=2.000, null=0.000, histogram=none
 
 === inner_derived_boolean_lossless_cast ===
@@ -49,11 +49,11 @@ input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
-join          : INNER cardinality=12.000
-stat          : l.k (#0) min=1, max=3, ndv=3.000, null=3.000, histogram=none
-stat          : b (#1) min=false, max=true, ndv=2.000, null=0.000, histogram=none
-stat          : r.k (#2) min=1, max=2, ndv=2.000, null=4.000, histogram=none
-stat          : b (#3) min=false, max=true, ndv=2.000, null=0.000, histogram=none
+join          : INNER cardinality=3.000
+stat          : l.k (#0) min=1, max=3, ndv=2.250, null=0.750, histogram=none
+stat          : b (#1) min=false, max=true, ndv=1.875 (upper=2.000), null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=2, ndv=1.333, null=1.000, histogram=none
+stat          : b (#3) min=false, max=true, ndv=1.615 (upper=2.000), null=0.000, histogram=none
 
 === inner_disjoint_bounds ===
 description: Disjoint value bounds drive regular equality to zero matches without a histogram.
@@ -78,9 +78,9 @@ input stat    : right.k min=10, max=14, ndv=Some(5), null=1
 input stat    : right.payload min=20, max=24, ndv=Some(5), null=0
 join          : RIGHT OUTER cardinality=4.000
 stat          : l.k (#0) min=1, max=3, ndv=3.000, null=1.000, histogram=rows=3.000, ndv=3.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000]
-stat          : r.k (#1) min=10, max=14, ndv=4.000, null=1.000, histogram=none
-stat          : r.payload (#2) min=20, max=24, ndv=4.000, null=0.000, histogram=rows=5.000, ndv=5.000, buckets=[20..20:1.000/1.000, 21..21:1.000/1.000, 22..22:1.000/1.000, 23..23:1.000/1.000, 24..24:1.000/1.000]
-stat          : payload (#3) min=20, max=24, ndv=4.000, null=0.000, histogram=none
+stat          : r.k (#1) all_null=true, null=4.000, histogram=none
+stat          : r.payload (#2) all_null=true, null=4.000, histogram=none
+stat          : payload (#3) all_null=true, null=4.000, histogram=none
 
 === left_outer_partial_overlap ===
 description: A partially matched LEFT join adds one unmatched outer row to the nullable-side join key's NULL count.
@@ -93,8 +93,8 @@ right rows     : 1
 input stat    : right.k min=1, max=1, ndv=Some(1), null=0
 join          : LEFT OUTER cardinality=2.000
 stat          : l.k (#0) min=1, max=2, ndv=2.000, null=0.000, histogram=none
-stat          : r.k (#1) min=1, max=1, ndv=1.000, null=0.000, histogram=none
-stat          : k (#2) min=1, max=1, ndv=1.000, null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=1, ndv=1.000, null=1.000, histogram=none
+stat          : k (#2) min=1, max=1, ndv=1.000, null=1.000, histogram=none
 
 === left_semi_non_key_histogram_finish ===
 description: A selective SEMI join keeps the preserved join-key histogram while dropping the now-inaccurate synthesized histogram on its payload column.
@@ -166,6 +166,7 @@ right rows     : 10
 input stat    : right.k min=1, max=10, ndv=Some(10), null=0
 join          : INNER cardinality=10.000
 stat          : l.k (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : payload (#1) all_null=true, null=10.000, histogram=none
 stat          : r.k (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
 
 === inner_two_key_equality ===
@@ -211,7 +212,7 @@ input stat    : left.k min=42, max=44, ndv=Some(2), null=1
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 4
 input stat    : right.k min=42, max=45, ndv=Some(3), null=1
-join          : LEFT OUTER cardinality=4.000
+join          : LEFT OUTER cardinality=4.375
 stat          : l.k (#0) min=42, max=44, ndv=2.000, null=1.000, histogram=none
 stat          : r.k (#1) min=42, max=44, ndv=2.750 (upper=3.000), null=1.000, histogram=none
 
@@ -225,8 +226,8 @@ right ddl      : CREATE TABLE r(k BIGINT NULL)
 right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
 join          : INNER cardinality=2.000
-stat          : l.k (#0) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=2.000, ndv=2.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000]
-stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=2.000, ndv=2.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000]
+stat          : l.k (#0) min=1, max=3, ndv=1.809 (upper=2.000), null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
 
 === inner_mixed_numeric_equality ===
 description: Different integer SQL types reach the numeric comparison boundary through the normal binder and optimizer path.
@@ -252,9 +253,7 @@ right ddl      : CREATE TABLE r(k UINT64 NOT NULL)
 right rows     : 2
 input stat    : right.k min=9007199254740992, max=9007199254741002, ndv=Some(1), null=0
 input hist    : right.k present
-join          : INNER cardinality=6.000
-stat          : l.k (#0) min=9007199254740992, max=9007199254741002, ndv=1.000, null=0.000, histogram=none
-stat          : r.k (#1) min=9007199254740992, max=9007199254741002, ndv=1.000, null=0.000, histogram=none
+join          : INNER cardinality=0.000
 
 === inner_mixed_integer_upper_only_extremes ===
 description: Upper-only UInt64 and Int64 statistics at opposite numeric extremes produce no overlap without overflowing conversion.
@@ -278,7 +277,9 @@ right ddl      : CREATE TABLE r(k BIGINT NOT NULL)
 right rows     : 2
 input stat    : right.k min=9007199254740993, max=9007199254740993, ndv=Some(1), null=0
 input hist    : right.k present
-join          : INNER cardinality=0.000
+join          : INNER cardinality=6.000
+stat          : l.k (#0) min=9007199254740992, max=9007199254740992, ndv=1.000, null=0.000, histogram=none
+stat          : r.k (#1) min=9007199254740993, max=9007199254740993, ndv=1.000, null=0.000, histogram=none
 
 === inner_mixed_numeric_histogram_not_propagated ===
 description: Mixed signed and unsigned histograms contribute to cardinality, while incompatible typed histograms are not propagated to output columns.
@@ -304,9 +305,9 @@ input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k BIGINT NULL)
 right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
-join          : INNER cardinality=12.000
-stat          : l.k (#0) min=1, max=3, ndv=3.000, null=3.000, histogram=none
-stat          : r.k (#1) min=1, max=2, ndv=2.000, null=4.000, histogram=none
+join          : INNER cardinality=8.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
 
 === inner_lossy_cast_key ===
 description: A narrowing cast is outside the reverse-propagation whitelist, so the golden captures its fallback cardinality and per-side output statistics.
@@ -317,9 +318,9 @@ input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k TINYINT NULL)
 right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
-join          : INNER cardinality=2.000
-stat          : l.k (#0) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=2.000, ndv=2.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000]
-stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=2.000, ndv=2.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000]
+join          : INNER cardinality=8.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
 
 === inner_function_join_key ===
 description: A function join key is not reverse-propagated to its source, while the complete plan still shows any statistics derivable for the expression.
@@ -330,9 +331,9 @@ input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
-join          : INNER cardinality=12.000
-stat          : l.k (#0) min=1, max=3, ndv=3.000, null=3.000, histogram=none
-stat          : r.k (#1) min=1, max=2, ndv=2.000, null=4.000, histogram=none
+join          : INNER cardinality=8.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
 
 === inner_string_equality ===
 description: String bounds pass through the byte-statistics path and narrow both join keys to their shared range.
@@ -396,8 +397,8 @@ left rows     : 4
 input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 20
-join          : INNER cardinality=80.000
-stat          : l.k (#0) min=1, max=3, ndv=3.000, null=0.000, histogram=rows=3.000, ndv=3.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000]
+join          : INNER cardinality=60.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=0.000, histogram=none
 
 === inner_known_and_upper_only_ndv ===
 description: One missing NDV input yields an upper-only Scan estimate and the join fallback uses the other side's known NDV.
@@ -434,6 +435,5 @@ input stat    : left.k all_null=true, ndv=Some(0), null=4
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 10
 input stat    : right.k min=1, max=3, ndv=Some(3), null=2
-join          : INNER cardinality=40.000
-stat          : r.k (#1) min=1, max=3, ndv=3.000, null=0.000, histogram=rows=8.000, ndv=3.000, buckets=[1..1:2.667/1.000, 2..2:2.667/1.000, 3..3:2.667/1.000]
+join          : INNER cardinality=0.000
 
