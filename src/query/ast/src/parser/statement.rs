@@ -24,6 +24,8 @@ use super::stream::create_stream;
 use super::stream::describe_stream;
 use super::stream::show_streams;
 use crate::ast::*;
+use crate::parser::Error;
+use crate::parser::ErrorKind;
 use crate::parser::comment::comment;
 use crate::parser::common::*;
 use crate::parser::copy::copy_into;
@@ -37,8 +39,6 @@ use crate::parser::query::*;
 use crate::parser::stage::*;
 use crate::parser::stream::drop_stream;
 use crate::parser::token::*;
-use crate::parser::Error;
-use crate::parser::ErrorKind;
 use crate::span::merge_span;
 
 pub enum ShowGrantOption {

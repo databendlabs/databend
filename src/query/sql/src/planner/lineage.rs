@@ -1926,6 +1926,7 @@ mod tests {
             catalog_info: Arc::new(CatalogInfo::default()),
             database_name: "default".to_string(),
             table_name: "dst".to_string(),
+            branch: None,
             from_stage_attachment,
             required_values_schema: data_schema.clone(),
             values_consts: vec![],
