@@ -11,7 +11,7 @@ spec:
       - databend-flight-chaos
     labelSelectors:
       chaos-role: worker
-  direction: to
+  direction: both
   target:
     mode: all
     selector:

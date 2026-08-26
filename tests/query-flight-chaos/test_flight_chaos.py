@@ -22,6 +22,10 @@ NODE_FAILURE_TIMEOUT = 90
 QUERY_STOP_STABILITY_WINDOW = 3
 PAUSE_DURATION = 3
 FLIGHT_RETRY_TIMES = 10
+TCP_KEEP_ALIVE_SECONDS = 1
+TCP_KEEP_ALIVE_RETRIES = 2
+TCP_KEEP_ALIVE_DETECTION_TIMEOUT = 15
+TCP_DRAIN_DURATION = 5
 POLL_INTERVAL = 0.1
 COORDINATOR = "databend-query-0"
 FAILED_WORKER = "databend-query-1"
@@ -214,6 +218,37 @@ class ClusterFault:
             result[pod] = matched
         return result
 
+    def flight_socket_states(self, pod: str) -> dict[str, tuple[int, bool]]:
+        output = subprocess.check_output(
+            [
+                "kubectl",
+                "-n",
+                self._namespace,
+                "exec",
+                pod,
+                "-c",
+                "net-admin",
+                "--",
+                "sh",
+                "-c",
+                "ss -Hnto state established "
+                f"dst {self._coordinator_ip} dport = :9090",
+            ],
+            text=True,
+        )
+        states = {}
+        peer = "{}:9090".format(self._coordinator_ip)
+        for line in output.splitlines():
+            fields = line.split()
+            try:
+                peer_index = fields.index(peer)
+                local_address = fields[peer_index - 1]
+                send_queue = int(fields[peer_index - 2])
+            except (ValueError, IndexError):
+                continue
+            states[local_address] = (send_queue, "timer:(keepalive" in line)
+        return states
+
     def signal_query(self, pod: str, signal: str, *, check: bool = True) -> None:
         if pod not in QUERY_PODS:
             raise AssertionError(f"cannot signal unknown query pod {pod}")
@@ -363,13 +398,14 @@ def configure_new_flight(
         cursor.execute("SET enable_experiment_new_flight = 1")
         cursor.execute(f"SET flight_connection_max_retry_times = {retry_times}")
         cursor.execute(f"SET flight_connection_retry_interval = {retry_interval}")
-        keep_alive_value = 1 if keep_alive else 0
+        keep_alive_value = TCP_KEEP_ALIVE_SECONDS if keep_alive else 0
         cursor.execute(f"SET flight_client_keep_alive_time_secs = {keep_alive_value}")
         cursor.execute(
             f"SET flight_client_keep_alive_interval_secs = {keep_alive_value}"
         )
+        keep_alive_retries = TCP_KEEP_ALIVE_RETRIES if keep_alive else 0
         cursor.execute(
-            f"SET flight_client_keep_alive_retries = {2 if keep_alive else 0}"
+            f"SET flight_client_keep_alive_retries = {keep_alive_retries}"
         )
         cursor.execute(
             "SELECT name, value FROM system.settings "
@@ -387,7 +423,7 @@ def configure_new_flight(
             "flight_connection_retry_interval": str(retry_interval),
             "flight_client_keep_alive_time_secs": str(keep_alive_value),
             "flight_client_keep_alive_interval_secs": str(keep_alive_value),
-            "flight_client_keep_alive_retries": "2" if keep_alive else "0",
+            "flight_client_keep_alive_retries": str(keep_alive_retries),
         }
         assert configured == expected, configured
         chaos_log(
@@ -660,6 +696,83 @@ class FlightChaosHarness:
             f"fault_recovered type=tcp_reset query_id={running.identity.query_id}"
         )
 
+    def tcp_keepalive_partition_then_recover(self, running: RunningQuery) -> None:
+        paused_workers: list[str] = []
+        tracked_sockets: dict[str, set[str]] = {}
+        try:
+            for pod in WORKER_PODS:
+                self._fault.signal_query(pod, "STOP")
+                paused_workers.append(pod)
+
+            # With userspace stopped and an empty send queue, only the kernel's
+            # TCP keepalive probes can detect the silent partition.
+            drain_deadline = time.monotonic() + TCP_DRAIN_DURATION
+            last_states: dict[str, dict[str, tuple[int, bool]]] = {}
+            while time.monotonic() < drain_deadline:
+                last_states = {
+                    pod: self._fault.flight_socket_states(pod) for pod in WORKER_PODS
+                }
+                tracked_sockets = {}
+                for pod, states in last_states.items():
+                    sockets = {
+                        address
+                        for address, (send_queue, keep_alive) in states.items()
+                        if send_queue == 0 and keep_alive
+                    }
+                    if sockets:
+                        tracked_sockets[pod] = sockets
+                if tracked_sockets:
+                    break
+                time.sleep(POLL_INTERVAL)
+            else:
+                raise AssertionError(
+                    "workers have no idle Flight socket with TCP keepalive enabled; "
+                    "states={}".format(last_states)
+                )
+            chaos_log("tcp_keepalive_sockets_ready sockets={}".format(tracked_sockets))
+
+            self._fault.apply_partition()
+            deadline = time.monotonic() + TCP_KEEP_ALIVE_DETECTION_TIMEOUT
+            remaining = tracked_sockets
+            while time.monotonic() < deadline:
+                remaining = {
+                    pod: sockets.intersection(self._fault.flight_socket_states(pod))
+                    for pod, sockets in tracked_sockets.items()
+                }
+                if all(not sockets for sockets in remaining.values()):
+                    break
+                time.sleep(POLL_INTERVAL)
+            else:
+                raise AssertionError(
+                    "TCP keepalive did not close partitioned Flight sockets within "
+                    "{} seconds; remaining={}".format(
+                        TCP_KEEP_ALIVE_DETECTION_TIMEOUT, remaining
+                    )
+                )
+
+            if not running.task.is_running():
+                raise AssertionError(
+                    "query finished before the TCP keepalive fault was recovered"
+                )
+            chaos_log(
+                "fault_observed type=tcp_keepalive_timeout "
+                f"query_id={running.identity.query_id}"
+            )
+        finally:
+            self._fault.clear_partition()
+            for pod in reversed(paused_workers):
+                self._fault.signal_query(pod, "CONT", check=False)
+
+        wait_for_query_log(
+            self._namespace,
+            running.identity.query_id,
+            "do_exchange sender reconnected",
+        )
+        chaos_log(
+            "fault_recovered type=tcp_keepalive_partition "
+            f"query_id={running.identity.query_id}"
+        )
+
     def partition_then_recover(
         self, running: RunningQuery, partition_seconds: float = 3
     ) -> None:
@@ -722,9 +835,9 @@ def test_legacy_transport_smoke() -> None:
         connection.close()
 
 
-def test_exact_join_reconnect(harness: FlightChaosHarness) -> None:
-    chaos_log("scenario_start name=exact_join_reconnect")
-    marker = "flight_exact_join_reconnect_ci"
+def test_tcp_keepalive_reconnect(harness: FlightChaosHarness) -> None:
+    chaos_log("scenario_start name=tcp_keepalive_reconnect")
+    marker = "flight_tcp_keepalive_reconnect_ci"
     rows_count = 1000000000
     modulus = 1000000
     running = harness.start_query(
@@ -734,14 +847,14 @@ def test_exact_join_reconnect(harness: FlightChaosHarness) -> None:
         keep_alive=True,
     )
     try:
-        harness.partition_then_recover(running)
+        harness.tcp_keepalive_partition_then_recover(running)
         rows = running.task.rows()
         assert len(rows) == 1, rows
         assert int(rows[0][0]) == rows_count, rows
         expected_sum = (rows_count // modulus) * modulus * (modulus - 1) // 2
         assert int(rows[0][1]) == expected_sum, rows
         harness.assert_stopped(running.identity)
-        chaos_log(f"scenario_pass name=exact_join_reconnect rows={rows_count}")
+        chaos_log(f"scenario_pass name=tcp_keepalive_reconnect rows={rows_count}")
     finally:
         running.close()
 
@@ -931,7 +1044,7 @@ def main() -> None:
         test_legacy_transport_smoke()
         chaos_log("group_pass name=setting_disabled")
         chaos_log(f"group_start name=retry_enabled retry_times={FLIGHT_RETRY_TIMES}")
-        test_exact_join_reconnect(harness)
+        test_tcp_keepalive_reconnect(harness)
         test_limit_early_stop_after_reconnect(harness)
         test_kill_query_during_reconnect(harness)
         test_worker_crash_failure(harness)
