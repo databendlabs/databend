@@ -266,9 +266,7 @@ enum RouteBuild<C> {
     Direct(DirectBuildFn<C>),
 }
 
-impl<C> RouteBuild<C>
-where C: Combinator
-{
+impl<C: Combinator> RouteBuild<C> {
     fn null_argument_mode(&self) -> NullArgumentMode {
         match self {
             Self::MultiArg(_) => NullArgumentMode::Any,

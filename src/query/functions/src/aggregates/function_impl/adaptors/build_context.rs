@@ -104,21 +104,13 @@ where C: Combinator
         if signature.args_type[0].is_nullable_or_null() {
             let eval =
                 UnaryEvalAdapter::new(UnaryStateEval::<S, I, R, true>::new(function_info.into()));
-            self.combinator.create::<false, _>(
-                signature,
-                self.features,
-                state,
-                eval,
-            )
+            self.combinator
+                .create::<false>(signature, self.features, state, eval)
         } else {
             let eval =
                 UnaryEvalAdapter::new(UnaryStateEval::<S, I, R, false>::new(function_info.into()));
-            self.combinator.create::<false, _>(
-                signature,
-                self.features,
-                state,
-                eval,
-            )
+            self.combinator
+                .create::<false>(signature, self.features, state, eval)
         }
     }
 
@@ -138,7 +130,7 @@ where C: Combinator
         let eval = UnaryEvalAdapter::new(UnaryOrNull::new(nested));
         let state = state.with_null_flag();
         self.combinator
-            .create::<false, _>(signature, self.features, state, eval)
+            .create::<false>(signature, self.features, state, eval)
     }
 
     pub(crate) fn create_unary_or_null_with_eval<I, R, U>(
@@ -156,7 +148,7 @@ where C: Combinator
         let eval = UnaryEvalAdapter::new(UnaryOrNull::new(eval));
         let state = state.with_null_flag();
         self.combinator
-            .create::<false, _>(signature, self.features, state, eval)
+            .create::<false>(signature, self.features, state, eval)
     }
 
     pub(crate) fn create_unary_distinct_or_null<S, I, R>(
@@ -234,7 +226,7 @@ where C: Combinator
     {
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
         debug_assert!(signature.order_by.is_empty());
-        self.combinator.create::<false, _>(
+        self.combinator.create::<false>(
             signature,
             self.features,
             state.with_null_flag(),
@@ -284,7 +276,7 @@ where C: Combinator
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
         debug_assert!(signature.order_by.is_empty());
         self.combinator
-            .create::<false, _>(signature, self.features, state, eval)
+            .create::<false>(signature, self.features, state, eval)
     }
 
     pub(crate) fn create_ordered<I>(
@@ -298,6 +290,6 @@ where C: Combinator
     {
         let signature = build_signature(&self.request, self.signature_args_type, return_type);
         self.combinator
-            .create::<true, _>(signature, self.features, state, eval)
+            .create::<true>(signature, self.features, state, eval)
     }
 }

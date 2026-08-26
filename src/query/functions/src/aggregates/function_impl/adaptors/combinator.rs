@@ -34,12 +34,12 @@ use super::sort_combinator;
 use super::state_combinator;
 
 pub(crate) trait Combinator {
-    fn create<const ORDERED: bool, I: AggregateEval>(
+    fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
         features: AggregateFeatures,
         state: AggregateStateDescription,
-        eval: I,
+        eval: impl AggregateEval,
     ) -> Result<AggregateCallRef>;
 }
 
@@ -122,16 +122,13 @@ where
 }
 
 impl Combinator for PlainCombinator {
-    fn create<const ORDERED: bool, I>(
+    fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
         features: AggregateFeatures,
         state: AggregateStateDescription,
-        eval: I,
-    ) -> Result<AggregateCallRef>
-    where
-        I: AggregateEval,
-    {
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
         if ORDERED {
             Ok(finish_with_order_by(signature, features, state, eval))
         } else {
@@ -141,16 +138,13 @@ impl Combinator for PlainCombinator {
 }
 
 impl Combinator for IfCombinator {
-    fn create<const ORDERED: bool, I>(
+    fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
         features: AggregateFeatures,
         state: AggregateStateDescription,
-        eval: I,
-    ) -> Result<AggregateCallRef>
-    where
-        I: AggregateEval,
-    {
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
         if !ORDERED || signature.order_by.is_empty() {
             let eval = if_combinator::IfEval::new(
                 eval,
@@ -242,16 +236,13 @@ impl Combinator for IfCombinator {
 }
 
 impl<const SKIP_NULLS: bool> Combinator for DistinctCombinator<SKIP_NULLS> {
-    fn create<const ORDERED: bool, I>(
+    fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
         features: AggregateFeatures,
         state: AggregateStateDescription,
-        eval: I,
-    ) -> Result<AggregateCallRef>
-    where
-        I: AggregateEval,
-    {
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
         let state = distinct_combinator::distinct_state_description(&state);
         let eval = distinct_combinator::DistinctEval::<SKIP_NULLS>::new(eval, self.args_type);
         if ORDERED {
@@ -263,16 +254,13 @@ impl<const SKIP_NULLS: bool> Combinator for DistinctCombinator<SKIP_NULLS> {
 }
 
 impl Combinator for StateCombinator {
-    fn create<const ORDERED: bool, I>(
+    fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
         features: AggregateFeatures,
         state: AggregateStateDescription,
-        eval: I,
-    ) -> Result<AggregateCallRef>
-    where
-        I: AggregateEval,
-    {
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
         let (signature, state, eval) = self.wrap(signature, state, eval)?;
         if ORDERED {
             Ok(finish_with_order_by(signature, features, state, eval))

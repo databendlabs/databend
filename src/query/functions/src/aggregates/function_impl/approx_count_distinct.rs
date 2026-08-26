@@ -80,14 +80,14 @@ impl ApproxCountDistinctBuilder {
     };
 }
 
-pub struct AggregateApproxCountDistinctState<const P: usize, T>
+pub struct ApproxCountDistinctState<const P: usize, T>
 where T: ValueType
 {
     hll: HyperLogLog<P>,
     _p: PhantomData<fn(T)>,
 }
 
-impl<const P: usize, T> Default for AggregateApproxCountDistinctState<P, T>
+impl<const P: usize, T> Default for ApproxCountDistinctState<P, T>
 where T: ValueType
 {
     fn default() -> Self {
@@ -98,7 +98,7 @@ where T: ValueType
     }
 }
 
-impl<const P: usize, T> AggregateApproxCountDistinctState<P, T>
+impl<const P: usize, T> ApproxCountDistinctState<P, T>
 where
     T: ValueType,
     T::Scalar: Hash,
@@ -119,7 +119,7 @@ where
     }
 }
 
-impl<const P: usize, T> UnaryState<T, UInt64Type> for AggregateApproxCountDistinctState<P, T>
+impl<const P: usize, T> UnaryState<T, UInt64Type> for ApproxCountDistinctState<P, T>
 where
     T: ValueType,
     T::Scalar: Hash,
@@ -222,9 +222,9 @@ impl ApproxCountDistinctBuilder {
         T: ValueType,
         T::Scalar: Hash,
     {
-        build.create_unary::<AggregateApproxCountDistinctState<P, T>, T, UInt64Type>(
+        build.create_unary::<ApproxCountDistinctState<P, T>, T, UInt64Type>(
             UInt64Type::data_type(),
-            AggregateApproxCountDistinctState::<P, T>::state_description(),
+            ApproxCountDistinctState::<P, T>::state_description(),
             (),
         )
     }

@@ -281,7 +281,7 @@ where
         distinct_args_type[0].clone(),
     ))));
     let state = unary_distinct_or_null_state_description(&state);
-    combinator.create::<false, _>(signature, features, state, eval)
+    combinator.create::<false>(signature, features, state, eval)
 }
 
 fn unary_distinct_or_null_state_description(
