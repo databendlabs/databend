@@ -141,8 +141,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - { dataset: hits, size: Small, database: hits, timeout: 10, cache_size: 0, tries: 3 }
-          - { dataset: hits, size: Large, database: hits, timeout: 10, cache_size: 0, tries: 3 }
+          # The query suite completed before the previous 10m timeout. Allow another 10m
+          # for queued system-history collection and cleanup without changing benchmark code.
+          - { dataset: hits, size: Small, database: hits, timeout: 20, cache_size: 0, tries: 3 }
+          - { dataset: hits, size: Large, database: hits, timeout: 20, cache_size: 0, tries: 3 }
           - { dataset: tpch100, size: Small, database: tpch_100, timeout: 20, cache_size: 0, tries: 3 }
           - { dataset: tpch100, size: Large, database: tpch_100, timeout: 20, cache_size: 0, tries: 3 }
           - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60, cache_size: 0, tries: 1 }
