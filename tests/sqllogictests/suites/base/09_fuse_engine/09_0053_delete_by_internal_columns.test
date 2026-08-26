@@ -1,0 +1,142 @@
+statement ok
+drop table if exists t_delete_internal_block
+
+statement ok
+drop table if exists t_delete_internal_segment
+
+statement ok
+create table t_delete_internal_block(a int)
+
+query I
+insert into t_delete_internal_block select number from numbers(10)
+----
+10
+
+query I
+insert into t_delete_internal_block select number + 10 from numbers(10)
+----
+10
+
+query I
+select count(*) from t_delete_internal_block
+----
+20
+
+statement ok
+set variable delete_block_name = (select min(_block_name) from t_delete_internal_block)
+
+query I
+delete from t_delete_internal_block where _block_name in ('__not_existing_block__')
+----
+0
+
+query I
+select count(*) from t_delete_internal_block
+----
+20
+
+query I
+delete from t_delete_internal_block where _block_name = $delete_block_name and _block_name = '__not_existing_block__'
+----
+0
+
+query I
+select count(*) from t_delete_internal_block
+----
+20
+
+query I
+delete from t_delete_internal_block where _block_name in ($delete_block_name)
+----
+10
+
+query I
+select count(*) from t_delete_internal_block
+----
+10
+
+statement ok
+set variable delete_block_name = (select min(_block_name) from t_delete_internal_block)
+
+query I
+delete from t_delete_internal_block where _block_name = $delete_block_name
+----
+10
+
+query I
+select count(*) from t_delete_internal_block
+----
+0
+
+statement ok
+create table t_delete_internal_segment(a int)
+
+query I
+insert into t_delete_internal_segment select number from numbers(10)
+----
+10
+
+query I
+insert into t_delete_internal_segment select number + 10 from numbers(10)
+----
+10
+
+query I
+select count(*) from t_delete_internal_segment
+----
+20
+
+statement ok
+set variable delete_segment_name = (select min(_segment_name) from t_delete_internal_segment)
+
+query I
+delete from t_delete_internal_segment where _segment_name in ('__not_existing_segment__')
+----
+0
+
+query I
+select count(*) from t_delete_internal_segment
+----
+20
+
+query I
+delete from t_delete_internal_segment where _segment_name = $delete_segment_name and _segment_name = '__not_existing_segment__'
+----
+0
+
+query I
+select count(*) from t_delete_internal_segment
+----
+20
+
+query I
+delete from t_delete_internal_segment where _segment_name in ($delete_segment_name)
+----
+10
+
+query I
+select count(*) from t_delete_internal_segment
+----
+10
+
+statement ok
+set variable delete_segment_name = (select min(_segment_name) from t_delete_internal_segment)
+
+query I
+delete from t_delete_internal_segment where _segment_name = $delete_segment_name
+----
+10
+
+query I
+select count(*) from t_delete_internal_segment
+----
+0
+
+statement ok
+unset variable (delete_block_name, delete_segment_name)
+
+statement ok
+drop table t_delete_internal_block all
+
+statement ok
+drop table t_delete_internal_segment all
