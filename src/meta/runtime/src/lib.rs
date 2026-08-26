@@ -21,6 +21,7 @@
 //! core decoupled from the query runtime.
 
 mod client_bridge;
+mod in_process_grpc;
 mod metrics;
 
 use std::future::Future;
@@ -41,6 +42,10 @@ use databend_meta::runtime_api::TlsConfig;
 use databend_meta::runtime_api::TrackingData;
 use fastrace::collector::SpanContext;
 use hyper_util::client::legacy::connect::HttpConnector;
+pub use in_process_grpc::InProcessGrpcEndpoint;
+pub use in_process_grpc::InProcessGrpcStream;
+use in_process_grpc::connect_in_process_grpc;
+use in_process_grpc::is_in_process_grpc_address;
 pub use metrics::DatabendMetrics;
 use tonic_013::transport::Certificate;
 use tonic_013::transport::ClientTlsConfig;
@@ -189,6 +194,10 @@ impl SpawnApi for DatabendRuntime {
         timeout: Option<Duration>,
         tls_config: Option<TlsConfig>,
     ) -> BoxFuture<'static, Result<Channel, ChannelError>> {
+        if is_in_process_grpc_address(&addr) {
+            return connect_in_process_grpc(addr, timeout, tls_config);
+        }
+
         Box::pin(async move {
             let uri = format!(
                 "{}://{}",
