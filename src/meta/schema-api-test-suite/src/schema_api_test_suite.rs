@@ -8861,6 +8861,13 @@ impl SchemaApiTestSuite {
             branch_id: expired_branch_id,
         })
         .await?;
+        let dropped_key =
+            DroppedBranchIdent::new(base_table_id, expired_branch_name, expired_branch_id);
+        assert_eq!(
+            expired_expire_at,
+            mt.get_pb(&dropped_key).await?.unwrap().data.drop_on
+        );
+
         let err = mt
             .undrop_table_branch(UndropTableBranchReq {
                 tenant: tenant.clone(),
@@ -8888,6 +8895,36 @@ impl SchemaApiTestSuite {
             .await?
             .unwrap();
         assert_eq!(Some(renewed_expire_at), renewed_branch.data.expire_at);
+
+        // Expiration remains the retention origin after DROP.
+        let branch_name = "branch_expired_beyond_retention";
+        let expire_at = Utc::now() - Duration::hours(4);
+        let branch_id = self
+            .create_active_branch(mt, tenant, base_table, branch_name, Some(expire_at))
+            .await?;
+        mt.drop_table_branch(DropTableBranchReq {
+            tenant: tenant.clone(),
+            table_id: base_table_id,
+            branch_name: branch_name.to_string(),
+            branch_id,
+        })
+        .await?;
+        mt.fetch_set_vacuum_timestamp(tenant, expire_at + Duration::seconds(1))
+            .await?;
+
+        let err = mt
+            .undrop_table_branch_by_id(UndropTableBranchByIdReq {
+                tenant: tenant.clone(),
+                table_id: base_table_id,
+                branch_id,
+                new_expire_at: Some(Utc::now() + Duration::hours(4)),
+            })
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::UndropTableRetentionGuard(_))
+        ));
 
         Ok(())
     }
