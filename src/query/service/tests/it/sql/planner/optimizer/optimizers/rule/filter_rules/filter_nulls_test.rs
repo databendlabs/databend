@@ -33,7 +33,6 @@ use databend_common_sql::optimizer::optimizers::rule::TransformResult;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::Scan;
-use databend_common_statistics::Datum;
 
 use crate::sql::planner::optimizer::test_utils::ExprBuilder;
 
@@ -123,9 +122,9 @@ fn scan_with_stats(table_index: usize, column: Symbol, null_count: u64) -> SExpr
 }
 
 fn column_stat(null_count: u64) -> ColumnStat {
-    ColumnStat {
-        min: Datum::Int(0),
-        max: Datum::Int(99),
+    ColumnStat::Int {
+        min: 0,
+        max: 99,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(null_count),
         histogram: None,

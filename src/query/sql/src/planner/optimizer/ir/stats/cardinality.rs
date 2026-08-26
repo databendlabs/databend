@@ -42,20 +42,22 @@ pub(crate) fn cap_stat_info_by_rows(mut stat_info: StatInfo, limit: usize) -> St
         .map(|cardinality| cardinality.min(limit as u64));
 
     for column_stat in stat_info.statistics.column_stats.values_mut() {
-        let ndv_upper = column_stat.ndv.upper.min(limit);
-        column_stat.ndv = match column_stat.ndv.expected {
+        let ndv = column_stat.ndv();
+        let ndv_upper = ndv.upper.min(limit);
+        column_stat.set_ndv(match ndv.expected {
             Some(expected) => NdvEstimate::new(expected.min(ndv_upper), ndv_upper),
             None => NdvEstimate::upper_bound(ndv_upper),
-        };
+        });
 
-        column_stat.null_count = if column_stat.null_count == StatCount::exact(0) {
+        let null_count = column_stat.null_count();
+        column_stat.set_null_count(if null_count == StatCount::exact(0) {
             StatCount::exact(0)
         } else {
-            let upper = column_stat.null_count.upper().min(limit);
-            let expected = column_stat.null_count.expected() * limit / input_cardinality;
+            let upper = null_count.upper().min(limit);
+            let expected = null_count.expected() * limit / input_cardinality;
             StatCount::estimate(expected.min(upper), upper)
-        };
-        column_stat.histogram = None;
+        });
+        column_stat.clear_histogram();
     }
 
     stat_info.statistics.top_n.clear();
@@ -66,8 +68,6 @@ pub(crate) fn cap_stat_info_by_rows(mut stat_info: StatInfo, limit: usize) -> St
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-
-    use databend_common_statistics::Datum;
 
     use super::*;
     use crate::Symbol;
@@ -80,9 +80,9 @@ mod tests {
             max_cardinality: cardinality,
             statistics: Statistics {
                 precise_cardinality,
-                column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
-                    min: Datum::Int(1),
-                    max: Datum::Int(100),
+                column_stats: HashMap::from([(Symbol::new(0), ColumnStat::Int {
+                    min: 1,
+                    max: 100,
                     ndv: NdvEstimate::new(80.0, 90.0),
                     null_count: StatCount::estimate(20.0, 30.0),
                     histogram: None,
@@ -109,8 +109,8 @@ mod tests {
 
         assert_eq!(capped.cardinality, 10.0);
         assert_eq!(capped.statistics.precise_cardinality, Some(10));
-        assert_eq!(column_stat.ndv, NdvEstimate::new(80.0, 90.0));
-        assert_eq!(column_stat.null_count, StatCount::estimate(20.0, 30.0));
+        assert_eq!(column_stat.ndv(), NdvEstimate::new(80.0, 90.0));
+        assert_eq!(column_stat.null_count(), StatCount::estimate(20.0, 30.0));
     }
 
     #[test]
@@ -120,8 +120,11 @@ mod tests {
 
         assert_eq!(capped.cardinality, 10.0);
         assert_eq!(capped.statistics.precise_cardinality, Some(10));
-        assert_eq!(column_stat.ndv, NdvEstimate::exact(10.0));
-        assert_eq!(column_stat.null_count, StatCount::estimate(2.0, 10.0));
-        assert!(column_stat.histogram.is_none());
+        assert_eq!(column_stat.ndv(), NdvEstimate::exact(10.0));
+        assert_eq!(column_stat.null_count(), StatCount::estimate(2.0, 10.0));
+        assert!(matches!(column_stat, ColumnStat::Int {
+            histogram: None,
+            ..
+        }));
     }
 }

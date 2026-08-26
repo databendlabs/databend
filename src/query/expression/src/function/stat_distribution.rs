@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_statistics::BorrowedHistogram;
 use databend_common_statistics::Histogram;
 pub use databend_common_statistics::NdvEstimate;
 pub use databend_common_statistics::StatCardinality;
@@ -106,7 +107,7 @@ impl<D> StatDistribution<D> {
 }
 
 impl<'a> ArgStat<'a> {
-    pub fn histogram(&self) -> Option<&'a Histogram> {
+    pub fn histogram(&self) -> Option<BorrowedHistogram<'a>> {
         self.distribution.as_histogram()
     }
 
@@ -146,12 +147,12 @@ pub struct StatArgs<'a> {
 #[derive(Debug, Clone, Copy)]
 pub enum BorrowedDistribution<'a> {
     Unknown,
-    Histogram(&'a Histogram),
+    Histogram(BorrowedHistogram<'a>),
     Boolean(BooleanDistribution),
 }
 
 impl<'a> BorrowedDistribution<'a> {
-    pub fn as_histogram(&self) -> Option<&'a Histogram> {
+    pub fn as_histogram(&self) -> Option<BorrowedHistogram<'a>> {
         match self {
             BorrowedDistribution::Histogram(histogram) => Some(*histogram),
             BorrowedDistribution::Unknown | BorrowedDistribution::Boolean(_) => None,
@@ -191,7 +192,9 @@ impl OwnedDistribution {
     pub fn as_borrowed_distribution(&self) -> BorrowedDistribution<'_> {
         match self {
             OwnedDistribution::Unknown => BorrowedDistribution::Unknown,
-            OwnedDistribution::Histogram(histogram) => BorrowedDistribution::Histogram(histogram),
+            OwnedDistribution::Histogram(histogram) => {
+                BorrowedDistribution::Histogram(BorrowedHistogram::from(histogram))
+            }
             OwnedDistribution::Boolean(distribution) => {
                 BorrowedDistribution::Boolean(*distribution)
             }
@@ -204,7 +207,7 @@ impl<'a> DistributionInvariant for BorrowedDistribution<'a> {
         match self {
             BorrowedDistribution::Unknown => Ok(()),
             BorrowedDistribution::Histogram(histogram) => {
-                check_histogram_distribution(stat, histogram)
+                check_histogram_distribution(stat, *histogram)
             }
             BorrowedDistribution::Boolean(distribution) => {
                 check_boolean_distribution(stat, distribution)
@@ -218,7 +221,7 @@ impl DistributionInvariant for OwnedDistribution {
         match self {
             OwnedDistribution::Unknown => Ok(()),
             OwnedDistribution::Histogram(histogram) => {
-                check_histogram_distribution(stat, histogram)
+                check_histogram_distribution(stat, BorrowedHistogram::from(histogram))
             }
             OwnedDistribution::Boolean(distribution) => {
                 check_boolean_distribution(stat, distribution)
@@ -229,7 +232,7 @@ impl DistributionInvariant for OwnedDistribution {
 
 fn check_histogram_distribution<D>(
     stat: &StatDistribution<D>,
-    histogram: &Histogram,
+    histogram: BorrowedHistogram<'_>,
 ) -> Result<(), String> {
     let num_values = histogram.num_values();
     if !num_values.is_finite() || num_values < 0.0 {

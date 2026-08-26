@@ -34,16 +34,12 @@ fn contains_recursive_cte(expr: &SExpr) -> bool {
 }
 
 fn join_build_cardinality(stat: &StatInfo) -> f64 {
-    if !stat.cardinality.is_finite()
-        || stat.cardinality < 0.0
-        || !stat.max_cardinality.is_finite()
-        || stat.max_cardinality < 0.0
-    {
-        return f64::INFINITY;
-    }
-    if stat.cardinality_is_severely_underestimated() {
+    if stat.cardinality_is_severely_underestimated() && stat.max_cardinality.is_finite() {
         stat.max_cardinality.max(stat.cardinality)
     } else {
+        // Unknown bounds still block automatic broadcast, but they should not
+        // reorder unrelated joins. Preserve the existing expected-cardinality
+        // ordering unless there is a finite, severe underestimate to correct.
         stat.cardinality
     }
 }
@@ -204,11 +200,11 @@ mod tests {
     }
 
     #[test]
-    fn test_commute_join_avoids_unknown_build_cardinality() {
+    fn test_commute_join_preserves_expected_order_for_unknown_risk() {
         let known = estimated_stat(1_000.0);
         let unknown = StatInfo::default();
 
-        assert!(should_commute(JoinType::Inner, &known, &unknown));
-        assert!(!should_commute(JoinType::Inner, &unknown, &known));
+        assert!(!should_commute(JoinType::Inner, &known, &unknown));
+        assert!(should_commute(JoinType::Inner, &unknown, &known));
     }
 }

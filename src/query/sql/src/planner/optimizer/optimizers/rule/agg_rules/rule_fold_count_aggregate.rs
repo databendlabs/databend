@@ -94,7 +94,7 @@ impl Rule for RuleFoldCountAggregate {
                     });
                 } else if let ScalarExpr::BoundColumnRef(col) = &agg_func.args[0]
                     && let Some(card) = column_stats.get(&col.column.index)
-                    && let StatCount::Exact(null_count) = card.null_count
+                    && let StatCount::Exact(null_count) = card.null_count()
                     && let Some(card) = table_card.checked_sub(null_count)
                 {
                     item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
