@@ -43,6 +43,7 @@ use super::stat_distribution::StatCount;
 use super::stat_distribution::StatEstimate;
 use super::stat_distribution::StatUnaryArg;
 use crate::Constant;
+use crate::types::DataType;
 
 pub struct StatEvaluator<'a> {
     func_ctx: &'a FunctionContext,
@@ -107,12 +108,38 @@ impl<'a> StatEvaluator<'a> {
         cast: &Cast<I>,
         input_stats: &'s HashMap<I, ArgStat<'_>>,
     ) -> Result<Option<ReturnStat>> {
-        let src_type = cast.expr.data_type();
-        if cast.is_try || !classify_conversion(src_type, &cast.dest_type).is_lossless_injective() {
+        if cast.is_try {
             return Ok(None);
         }
 
-        let Some(input) = self.eval(&cast.expr, input_stats)? else {
+        let mut src_expr = cast.expr.as_ref();
+        let mut src_type = src_expr.data_type();
+        if !classify_conversion(src_type, &cast.dest_type).is_lossless_injective() {
+            // Integer/string comparisons are coerced through Decimal. If the string
+            // operand itself is a non-TRY cast from an integer, this round trip is
+            // equivalent to a direct lossless integer-to-decimal cast. Evaluating
+            // the intermediate string domain is both unnecessary and generally
+            // impossible because numeric bounds are not lexical string bounds.
+            let Expr::Cast(string_cast) = src_expr else {
+                return Ok(None);
+            };
+            let integer_type = string_cast.expr.data_type();
+            let is_integer_string_round_trip = !string_cast.is_try
+                && matches!(
+                    integer_type.remove_nullable(),
+                    DataType::Number(number) if number.is_integer()
+                )
+                && matches!(string_cast.dest_type.remove_nullable(), DataType::String)
+                && matches!(cast.dest_type.remove_nullable(), DataType::Decimal(_))
+                && classify_conversion(integer_type, &cast.dest_type).is_lossless_injective();
+            if !is_integer_string_round_trip {
+                return Ok(None);
+            }
+            src_expr = string_cast.expr.as_ref();
+            src_type = integer_type;
+        }
+
+        let Some(input) = self.eval(src_expr, input_stats)? else {
             return Ok(None);
         };
         let input = input.as_ref();

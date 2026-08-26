@@ -301,6 +301,7 @@ mod tests {
     use databend_common_expression::stat_distribution::NdvEstimate;
     use databend_common_expression::stat_distribution::StatCount;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use databend_common_statistics::StatBounds;
@@ -516,5 +517,32 @@ mod tests {
         ));
         assert!(!stats.statistics.column_stats.contains_key(&Symbol::new(2)));
         assert!(stats.statistics.column_stats.contains_key(&Symbol::new(0)));
+    }
+
+    #[test]
+    fn test_derive_stats_for_integer_string_decimal_round_trip() {
+        let decimal = DataType::Decimal(DecimalSize::new(38, 5).unwrap());
+        let integer_to_string = ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try: false,
+            argument: Box::new(column(0)),
+            target_type: Box::new(DataType::String),
+        });
+        let stats = derive(
+            vec![ScalarItem {
+                scalar: ScalarExpr::CastExpr(CastExpr {
+                    span: None,
+                    is_try: false,
+                    argument: Box::new(integer_to_string),
+                    target_type: Box::new(decimal),
+                }),
+                index: Symbol::new(1),
+            }],
+            HashMap::from([(Symbol::new(0), column_stat(1, 3, 3.0))]),
+        );
+
+        let derived = &stats.statistics.column_stats[&Symbol::new(1)];
+        assert_eq!(derived.ndv(), NdvEstimate::exact(3.0));
+        assert_eq!(derived.null_count(), StatCount::exact(0));
     }
 }
