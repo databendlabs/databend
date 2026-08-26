@@ -27,7 +27,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
@@ -100,69 +99,6 @@ type MergedFieldsResult = (
     Vec<DataField>,
     Vec<(usize, (bool, bool))>,
 );
-
-/// Remove an integer-to-string round trip from an equality key when the other key is an integer.
-///
-/// Mixed string/integer equality normally uses `Decimal(38, 5)` as the hash key. That coercion is
-/// needed for arbitrary strings such as `"1.2"`, but it is unnecessary when the string is produced
-/// directly from another integer. Keep the rewrite deliberately narrow: both integers must fit
-/// losslessly in their normal common numeric type. In that case formatting and parsing the value
-/// cannot change equality.
-fn unwrap_integer_to_string_cast<'a>(
-    integer_expr: &ScalarExpr,
-    string_expr: &'a ScalarExpr,
-) -> Result<Option<&'a ScalarExpr>> {
-    let ScalarExpr::CastExpr(cast) = string_expr else {
-        return Ok(None);
-    };
-    if cast.is_try || !matches!(cast.target_type.remove_nullable(), DataType::String) {
-        return Ok(None);
-    }
-
-    let integer_type = integer_expr.data_type();
-    let DataType::Number(integer_type) = integer_type.remove_nullable() else {
-        return Ok(None);
-    };
-    if !integer_type.is_integer() {
-        return Ok(None);
-    }
-
-    let source_type = cast.argument.data_type();
-    let DataType::Number(source_type) = source_type.remove_nullable() else {
-        return Ok(None);
-    };
-    if !source_type.is_integer() {
-        return Ok(None);
-    }
-
-    let integer_type = DataType::Number(integer_type);
-    let source_type = DataType::Number(source_type);
-    let common_type = common_super_type(
-        integer_type.clone(),
-        source_type.clone(),
-        &BUILTIN_FUNCTIONS.default_cast_rules,
-    );
-    let Some(common_type @ DataType::Number(_)) = common_type else {
-        return Ok(None);
-    };
-    let preserves_equality = classify_conversion(&integer_type, &common_type)
-        .is_safe_for_equality_inference()
-        && classify_conversion(&source_type, &common_type).is_safe_for_equality_inference();
-    Ok(preserves_equality.then_some(cast.argument.as_ref()))
-}
-
-fn simplify_integer_string_join_keys<'a>(
-    left: &'a ScalarExpr,
-    right: &'a ScalarExpr,
-) -> Result<(&'a ScalarExpr, &'a ScalarExpr)> {
-    if let Some(right) = unwrap_integer_to_string_cast(left, right)? {
-        return Ok((left, right));
-    }
-    if let Some(left) = unwrap_integer_to_string_cast(right, left)? {
-        return Ok((left, right));
-    }
-    Ok((left, right))
-}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct NestedLoopFilterInfo {
@@ -875,10 +811,7 @@ impl PhysicalPlanBuilder {
         for condition in join.equi_conditions.iter() {
             let original_left_condition = &condition.left;
             let original_right_condition = &condition.right;
-            let (left_condition, right_condition) = simplify_integer_string_join_keys(
-                original_left_condition,
-                original_right_condition,
-            )?;
+            let (left_condition, right_condition) = condition.canonical_keys();
 
             // Type check expressions
             let right_expr = right_condition
@@ -1569,7 +1502,8 @@ mod tests {
         let string_source = typed_column(1, DataType::Number(NumberDataType::Int32));
         let string = cast_to_string(string_source.clone());
 
-        let (left, right) = simplify_integer_string_join_keys(&integer, &string)?;
+        let condition = JoinEquiCondition::new(integer.clone(), string, false);
+        let (left, right) = condition.canonical_keys();
 
         assert_eq!(left, &integer);
         assert_eq!(right, &string_source);
@@ -1582,7 +1516,8 @@ mod tests {
         let string = cast_to_string(string_source.clone());
         let integer = typed_column(1, DataType::Number(NumberDataType::Int64));
 
-        let (left, right) = simplify_integer_string_join_keys(&string, &integer)?;
+        let condition = JoinEquiCondition::new(string, integer.clone(), false);
+        let (left, right) = condition.canonical_keys();
 
         assert_eq!(left, &string_source);
         assert_eq!(right, &integer);
@@ -1601,7 +1536,8 @@ mod tests {
             false,
         );
 
-        let (left, right) = simplify_integer_string_join_keys(&integer, &string)?;
+        let condition = JoinEquiCondition::new(integer.clone(), string, false);
+        let (left, right) = condition.canonical_keys();
 
         assert_eq!(left, &integer);
         assert_eq!(right, &string_source);
@@ -1614,12 +1550,12 @@ mod tests {
         let source = typed_column(1, DataType::Number(NumberDataType::Int32));
         let try_cast = cast(source, DataType::String, true);
 
-        let simplified = simplify_integer_string_join_keys(&integer, &try_cast)?;
-        assert_eq!(simplified, (&integer, &try_cast));
+        let condition = JoinEquiCondition::new(integer.clone(), try_cast.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&integer, &try_cast));
 
         let string_column = typed_column(1, DataType::String);
-        let simplified = simplify_integer_string_join_keys(&integer, &string_column)?;
-        assert_eq!(simplified, (&integer, &string_column));
+        let condition = JoinEquiCondition::new(integer.clone(), string_column.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&integer, &string_column));
         Ok(())
     }
 
@@ -1635,14 +1571,14 @@ mod tests {
 
         for (index, source_type) in source_types.into_iter().enumerate() {
             let string = cast_to_string(typed_column(index + 1, source_type));
-            let simplified = simplify_integer_string_join_keys(&integer, &string)?;
-            assert_eq!(simplified, (&integer, &string));
+            let condition = JoinEquiCondition::new(integer.clone(), string.clone(), false);
+            assert_eq!(condition.canonical_keys(), (&integer, &string));
         }
 
         let float = typed_column(1, DataType::Number(NumberDataType::Float64));
         let string = cast_to_string(typed_column(2, DataType::Number(NumberDataType::Int32)));
-        let simplified = simplify_integer_string_join_keys(&float, &string)?;
-        assert_eq!(simplified, (&float, &string));
+        let condition = JoinEquiCondition::new(float.clone(), string.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&float, &string));
         Ok(())
     }
 
@@ -1651,9 +1587,8 @@ mod tests {
         let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
         let string = cast_to_string(typed_column(1, DataType::Number(NumberDataType::UInt64)));
 
-        let simplified = simplify_integer_string_join_keys(&integer, &string)?;
-
-        assert_eq!(simplified, (&integer, &string));
+        let condition = JoinEquiCondition::new(integer.clone(), string.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&integer, &string));
         Ok(())
     }
 }
