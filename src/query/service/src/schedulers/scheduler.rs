@@ -22,6 +22,7 @@ use databend_common_sql::planner::QueryExecutor;
 use futures_util::TryStreamExt;
 
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::build_broadcast_plans;
 use crate::pipelines::PipelineBuildResult;
@@ -170,7 +171,9 @@ impl QueryExecutor for ServiceQueryExecutor {
             let mut planner = Planner::new(self.ctx.clone());
             let (plan, _) = planner.plan_sql(query_sql).await?;
             let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
-            let stream = interpreter.execute(self.ctx.clone()).await?;
+            let stream = interpreter
+                .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+                .await?;
             let blocks = stream.try_collect::<Vec<_>>().await?;
             Ok(blocks)
         }

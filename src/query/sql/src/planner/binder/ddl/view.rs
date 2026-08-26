@@ -16,28 +16,45 @@ use databend_common_ast::ast::AlterViewStmt;
 use databend_common_ast::ast::CreateViewStmt;
 use databend_common_ast::ast::DescribeViewStmt;
 use databend_common_ast::ast::DropViewStmt;
+use databend_common_ast::ast::RefreshLineageStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowViewsStmt;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::visit::WalkMut;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
 use log::debug;
+use log::warn;
 
 use crate::BindContext;
 use crate::SelectBuilder;
 use crate::ViewRewriter;
 use crate::binder::Binder;
+use crate::binder::lineage_enabled;
 use crate::planner::semantic::normalize_identifier;
-use crate::plans::AlterViewPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::DescribeViewPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::Plan;
+use crate::plans::RefreshLineagePlan;
+use crate::plans::RefreshLineageSelector;
 use crate::plans::RewriteKind;
 
 impl Binder {
+    pub(in crate::planner::binder) fn bind_refresh_lineage(
+        &self,
+        stmt: &RefreshLineageStmt,
+    ) -> Plan {
+        Plan::RefreshLineage(Box::new(RefreshLineagePlan {
+            selector: RefreshLineageSelector::AllViews,
+            dry_run: stmt.dry_run,
+        }))
+    }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_view(
         &mut self,
@@ -64,6 +81,17 @@ impl Binder {
         };
         query.walk_mut(&mut visitor)?;
         let subquery = format!("{}", query);
+        let query_plan = if lineage_enabled() {
+            match self.view_query_plan(&query).await {
+                Ok(plan) => Some(Box::new(plan)),
+                Err(error) => {
+                    warn!("Failed to bind CREATE VIEW query for lineage: {:?}", error);
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         let plan = CreateViewPlan {
             create_option: create_option.clone().into(),
@@ -73,6 +101,7 @@ impl Binder {
             view_name,
             column_names,
             subquery,
+            query_plan,
         };
         Ok(Plan::CreateView(plan.into()))
     }
@@ -82,37 +111,14 @@ impl Binder {
         &mut self,
         stmt: &AlterViewStmt,
     ) -> Result<Plan> {
-        let AlterViewStmt {
-            catalog,
-            database,
-            view,
-            columns,
-            query,
-        } = stmt;
-
-        let mut query = *query.clone();
-        let tenant = self.ctx.get_tenant();
-        let (catalog, database, view_name) =
-            self.normalize_object_identifier_triple(catalog, database, view);
-        let column_names = columns
-            .iter()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .collect::<Vec<_>>();
-        let mut visitor = ViewRewriter {
-            current_database: database.clone(),
-        };
-        query.walk_mut(&mut visitor)?;
-        let subquery = format!("{}", query);
-
-        let plan = AlterViewPlan {
-            tenant,
-            catalog,
-            database,
-            view_name,
-            column_names,
-            subquery,
-        };
-        Ok(Plan::AlterView(plan.into()))
+        let _ = stmt;
+        // View dependencies are tracked from the stored query. Changing the
+        // definition or output columns in place would require rewriting lineage
+        // metadata and makes rename/restore semantics harder to reason about.
+        // TODO: support ALTER VIEW <name> RENAME TO <new_name>.
+        Err(databend_common_exception::ErrorCode::Unimplemented(
+            "ALTER VIEW does not support changing the view query",
+        ))
     }
 
     #[async_backtrace::framed]
@@ -172,7 +178,10 @@ impl Binder {
                 .with_column("created_on AS create_time")
                 .with_column("view_query");
         } else {
-            select_builder.with_column(format!("name AS `Views_in_{database}`"));
+            select_builder.with_column(format!(
+                "name AS {}",
+                QuotedIdent(format!("Views_in_{database}"), '`')
+            ));
         }
 
         if *with_history {
@@ -184,7 +193,7 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
 
         let catalog_name = match catalog {
             None => self.ctx.get_current_catalog(),
@@ -195,11 +204,11 @@ impl Binder {
             }
         };
 
-        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&catalog_name, '\'')));
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {
@@ -243,5 +252,10 @@ impl Binder {
             view_name,
             schema,
         })))
+    }
+    async fn view_query_plan(&mut self, query: &databend_common_ast::ast::Query) -> Result<Plan> {
+        let stmt = Statement::Query(Box::new(query.clone()));
+        let mut bind_context = BindContext::new();
+        self.bind_statement(&mut bind_context, &stmt).await
     }
 }

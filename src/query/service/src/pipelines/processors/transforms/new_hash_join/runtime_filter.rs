@@ -35,7 +35,6 @@ pub struct RuntimeFiltersDesc {
     pub bloom_threshold: usize,
     pub inlist_threshold: usize,
     pub min_max_threshold: usize,
-    pub spatial_threshold: usize,
     pub selectivity_threshold: u64,
 
     broadcast_id: Option<u32>,
@@ -49,7 +48,6 @@ impl RuntimeFiltersDesc {
         let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
         let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
         let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
-        let spatial_threshold = settings.get_spatial_runtime_filter_threshold()? as usize;
         let selectivity_threshold = settings.get_join_runtime_filter_selectivity_threshold()?;
         let func_ctx = ctx.get_function_context()?;
 
@@ -58,9 +56,15 @@ impl RuntimeFiltersDesc {
 
         for filter_desc in &join.runtime_filter.filters {
             let filter_desc = RuntimeFilterDesc::from(filter_desc);
+            let enable_statistics_pruning = (filter_desc.enable_min_max_runtime_filter
+                && min_max_threshold > 0)
+                || (filter_desc.enable_inlist_runtime_filter && inlist_threshold > 0);
 
-            for (_probe_key, scan_id) in &filter_desc.probe_targets {
-                let ready = Arc::new(RuntimeFilterReady::default());
+            for (probe_key, scan_id) in &filter_desc.probe_targets {
+                let ready = Arc::new(RuntimeFilterReady::for_statistics_probe_exprs(
+                    enable_statistics_pruning,
+                    [probe_key],
+                ));
                 runtime_filters_ready.push(ready.clone());
                 ctx.set_runtime_filter_ready(*scan_id, ready);
             }
@@ -74,7 +78,6 @@ impl RuntimeFiltersDesc {
             bloom_threshold,
             inlist_threshold,
             min_max_threshold,
-            spatial_threshold,
             selectivity_threshold,
             runtime_filters_ready,
             ctx: ctx.clone(),

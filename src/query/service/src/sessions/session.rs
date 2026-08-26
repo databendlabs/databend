@@ -252,8 +252,30 @@ impl Session {
         self.session_ctx.get_current_tenant()
     }
 
-    pub fn set_current_tenant(&mut self, tenant: Tenant) {
+    pub fn set_current_tenant(&mut self, tenant: Tenant) -> Result<()> {
+        if tenant.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty("set_current_tenant"));
+        }
+
+        let config = GlobalConfig::instance();
+        let configured_tenant = &config.query.tenant_id;
+        let allow_tenant_override = config.query.common.management_mode
+            || config.query.common.internal_enable_sandbox_tenant
+            || matches!(self.get_type(), SessionType::Local);
+
+        // Runtime tenant override is only valid for management, sandbox tenant,
+        // and local sessions. In normal mode, callers may still pass the
+        // configured tenant in tests or setup paths.
+        if !allow_tenant_override && &tenant != configured_tenant {
+            return Err(ErrorCode::BadArguments(format!(
+                "tenant override is not allowed: requested tenant `{}`, configured tenant `{}`",
+                tenant.tenant_name(),
+                configured_tenant.tenant_name()
+            )));
+        }
+
         self.session_ctx.set_current_tenant(tenant);
+        Ok(())
     }
 
     pub fn get_current_user(&self) -> Result<UserInfo> {
@@ -453,24 +475,26 @@ impl Session {
     }
     pub fn get_temp_table_prefix(&self) -> Result<String> {
         let typ = self.typ.read().clone();
-        let session_id = match typ {
-            SessionType::MySQL => self.id.clone(),
+        let user_name = self.get_current_user()?.name;
+        match typ {
+            SessionType::MySQL => Ok(format!("{}/{}", user_name, self.id.as_str())),
             SessionType::HTTPQuery => {
                 if let Some(id) = self.get_client_session_id() {
-                    id
+                    Ok(temporary_table_session_prefix(
+                        &self.get_current_tenant(),
+                        &user_name,
+                        &id,
+                    ))
                 } else {
-                    return Err(ErrorCode::BadArguments(
+                    Err(ErrorCode::BadArguments(
                         "can not use temp table in http handler if cookie is not enabled",
-                    ));
+                    ))
                 }
             }
-            t => {
-                return Err(ErrorCode::BadArguments(format!(
-                    "can not use temp table in session type {t}"
-                )));
-            }
-        };
-        Ok(format!("{}/{session_id}", self.get_current_user()?.name))
+            t => Err(ErrorCode::BadArguments(format!(
+                "can not use temp table in session type {t}"
+            ))),
+        }
     }
 
     pub fn get_current_workload_group(&self) -> Option<String> {
@@ -482,11 +506,43 @@ impl Session {
     }
 }
 
+pub(crate) fn temporary_table_session_prefix(
+    tenant: &Tenant,
+    user_name: &str,
+    session_id: &str,
+) -> String {
+    format!("{}/{user_name}/{session_id}", tenant.tenant_name())
+}
+
 impl Drop for Session {
     fn drop(&mut self) {
         drop_guard(move || {
             debug!("Drop session {}", self.id.clone());
             SessionManager::instance().destroy_session(&self.id.clone());
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::tenant::Tenant;
+
+    use super::temporary_table_session_prefix;
+
+    #[test]
+    fn test_temporary_table_session_prefix_is_tenant_scoped() {
+        let tenant_a = Tenant::new_literal("tenant_a");
+        let tenant_b = Tenant::new_literal("tenant_b");
+        let user_name = "analyst";
+        let session_id = "018f2b74-0000-7000-8000-000000000001";
+
+        assert_ne!(
+            temporary_table_session_prefix(&tenant_a, user_name, session_id),
+            temporary_table_session_prefix(&tenant_b, user_name, session_id)
+        );
+        assert_eq!(
+            "tenant_a/analyst/018f2b74-0000-7000-8000-000000000001",
+            temporary_table_session_prefix(&tenant_a, user_name, session_id)
+        );
     }
 }

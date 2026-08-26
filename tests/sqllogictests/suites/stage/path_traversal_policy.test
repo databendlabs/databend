@@ -1,0 +1,28 @@
+statement ok
+drop stage if exists path_traversal_policy
+
+statement ok
+create stage path_traversal_policy
+
+## Default policy is 'disable': traversal paths are rejected for both read and write.
+
+statement error stage path traversal is not allowed by stage_path_traversal_policy
+copy into @path_traversal_policy/../blocked.csv
+from (select 1)
+file_format=(type=csv)
+single=true
+include_query_id=false
+use_raw_path=true
+overwrite=true
+
+statement error stage path traversal is not allowed by stage_path_traversal_policy
+remove @path_traversal_policy/../blocked.csv
+
+statement error stage path traversal is not allowed by stage_path_traversal_policy
+select * from @path_traversal_policy/../blocked.csv (file_format => 'csv')
+
+statement error stage path traversal is not allowed by stage_path_traversal_policy
+select name from list_stage(location => '@path_traversal_policy/../blocked.csv')
+
+statement ok
+drop stage if exists path_traversal_policy

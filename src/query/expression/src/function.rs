@@ -34,6 +34,7 @@ use jiff::Zoned;
 use jiff::tz::TimeZone;
 use serde::Deserialize;
 use serde::Serialize;
+use smallvec::SmallVec;
 
 use self::function_factory::FunctionFactoryHelper;
 use crate::Column;
@@ -178,9 +179,9 @@ pub struct EvalContext<'a> {
     pub num_rows: usize,
 
     pub func_ctx: &'a FunctionContext,
-    /// Validity bitmap of outer nullable column. This is an optimization
-    /// to avoid recording errors on the NULL value which has a corresponding
-    /// default value in nullable's inner column.
+    /// Active rows propagated by nullable and conditional partial evaluation.
+    /// Functions evaluate all rows by default, but expensive functions may opt in to skipping
+    /// inactive rows with `PartialEvalPolicy::SkipInactiveRows`.
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
     pub suppress_error: bool,
@@ -276,10 +277,10 @@ impl FunctionRegistry {
         name: &str,
         params: &[Scalar],
         args: &[Expr<Index>],
-    ) -> Vec<(FunctionID, Arc<Function>)> {
+    ) -> SmallVec<[(FunctionID, Arc<Function>); 1]> {
         let name = name.to_lowercase();
 
-        let mut candidates = Vec::new();
+        let mut candidates: SmallVec<[(FunctionID, Arc<Function>); 1]> = SmallVec::new();
 
         if let Some(funcs) = self.funcs.get(&name) {
             candidates.extend(funcs.iter().filter_map(|(func, id)| {
@@ -304,13 +305,27 @@ impl FunctionRegistry {
                 .cloned()
                 .collect::<Vec<_>>();
             candidates.extend(factories.iter().filter_map(|(factory, id)| {
-                factory.create(params, &args_type).map(|func| {
+                let mut factory_args_type = Cow::Borrowed(args_type.as_slice());
+                let mut func = factory.create(params, &factory_args_type);
+                if func.is_none() {
+                    let physical_args_type = args_type
+                        .iter()
+                        .map(|data_type| data_type.physical_type().into_owned())
+                        .collect::<Vec<_>>();
+                    if physical_args_type != args_type {
+                        factory_args_type = Cow::Owned(physical_args_type);
+                        func = factory.create(params, &factory_args_type);
+                    }
+                }
+
+                func.map(|func| {
+                    let factory_args_type = factory_args_type.into_owned();
                     (
                         FunctionID::Factory {
                             name: name.to_string(),
                             id: *id,
                             params: params.to_vec(),
-                            args_type: args_type.clone(),
+                            args_type: factory_args_type,
                         },
                         func,
                     )
@@ -338,11 +353,20 @@ impl FunctionRegistry {
 
     pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
         let func_name = func_name.to_lowercase();
-        if self.contains(&func_name) {
-            Some(self.properties.get(&func_name).cloned().unwrap_or_default())
-        } else {
-            None
+        if !self.contains(&func_name) {
+            return None;
         }
+
+        // Properties are stored under canonical function names, and aliases point directly to
+        // their canonical functions.
+        let canonical_name = self.aliases.get(&func_name).unwrap_or(&func_name);
+
+        Some(
+            self.properties
+                .get(canonical_name)
+                .cloned()
+                .unwrap_or_default(),
+        )
     }
 
     pub fn register_function(&mut self, func: Function) {

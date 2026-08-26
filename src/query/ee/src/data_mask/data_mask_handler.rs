@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_meta_api::DatamaskApi;
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::data_mask::CreateDatamaskReply;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;

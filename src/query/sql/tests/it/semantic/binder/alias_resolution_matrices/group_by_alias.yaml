@@ -1,0 +1,264 @@
+matrix: group_by_alias
+local_dimensions:
+  - name: relation
+    values: [input-conflict, no-input, input-ambiguous]
+  - name: scope
+    values: [same-list-exact, same-set, separate-set]
+regions:
+  - description: bare GROUP BY names bind input columns first and fall back to SELECT scalar aliases
+    main:
+      consumers: [G0]
+      name_shapes: [N0]
+      producers: [S1]
+    local:
+      relation: [input-conflict, no-input, input-ambiguous]
+    cases:
+      - key: G0N0S1_0_0
+        name: group_by_bare_select_alias_conflict_uses_input
+        setup_sqls:
+          - "CREATE TABLE t(i Int32, x Int32)"
+        runs:
+          - sql: "SELECT i AS x, count(*) FROM t GROUP BY x"
+      - key: G0N0S1_0_1
+        name: group_by_bare_select_alias_no_input
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY k"
+      - key: G0N0S1_0_2
+        name: group_by_bare_select_alias_ambiguous_input_rejected
+        setup_sqls:
+          - "CREATE TABLE t(x Int32)"
+        runs:
+          - sql: "SELECT t1.x AS x, count(*) FROM t AS t1 INNER JOIN t AS t2 ON true GROUP BY x"
+  - description: prior GROUP BY aliases reused by later expressions in the same ordinary grouping list
+    main:
+      consumers: [G0, G2]
+      name_shapes: [N2]
+      producers: [G0]
+    local:
+      scope: [same-list-exact]
+    cases:
+      - key: G0N2G0_1_0
+        name: group_by_expression_uses_prior_group_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)"
+      - key: G2N2G0_1_0
+        name: rollup_same_list_uses_prior_group_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY ROLLUP(k, abs(k))"
+  - description: GROUPING SETS scope boundaries for prior GROUP BY alias reuse
+    main:
+      consumers: [G1]
+      name_shapes: [N2]
+      producers: [G0]
+    local:
+      scope: [same-set, separate-set]
+    cases:
+      - key: G1N2G0_2_1
+        name: grouping_sets_same_set_uses_prior_group_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY GROUPING SETS ((k, abs(k)))"
+      - key: G1N2G0_2_2
+        name: grouping_sets_separate_set_does_not_share_prior_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY GROUPING SETS ((k), (abs(k)))"
+  - description: CUBE-generated grouping sets that do not preserve prior alias visibility
+    main:
+      consumers: [G3]
+      name_shapes: [N2]
+      producers: [G0]
+    cases:
+      - key: G3N2G0_3_
+        name: cube_generated_set_does_not_share_prior_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY CUBE(k, abs(k))"
+  - description: combined GROUP BY forms where normal items seed later grouping-set expressions
+    main:
+      consumers: [G4]
+      name_shapes: [N2]
+      producers: [G0]
+    cases:
+      - key: G4N2G0_4_
+        name: combined_grouping_sets_uses_prior_group_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, GROUPING SETS ((abs(k)))"
+  - description: complex GROUP BY expressions bind input columns first and fall back to SELECT scalar aliases only for unresolved names
+    main:
+      consumers: [G0]
+      name_shapes: [N2]
+      producers: [S1]
+    local:
+      relation: [input-conflict, no-input, input-ambiguous]
+    cases:
+      - key: G0N2S1_5_0
+        name: group_by_complex_select_alias_conflict_uses_input
+        setup_sqls:
+          - "CREATE TABLE t(i Int32, k Int32)"
+        runs:
+          - sql: "SELECT 1 AS k, count(*) FROM t GROUP BY k + 1"
+      - key: G0N2S1_5_1
+        name: group_by_complex_select_alias_no_input_fallback
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT 1 AS k, count(*) FROM t GROUP BY k + 1"
+      - key: G0N2S1_5_2
+        name: group_by_complex_select_alias_ambiguous_input_rejected
+        setup_sqls:
+          - "CREATE TABLE t(k Int32)"
+        runs:
+          - sql: "SELECT 1 AS k, count(*) FROM t AS t1 INNER JOIN t AS t2 ON true GROUP BY k + 1"
+  - description: qualified GROUP BY names included to document why they are outside alias lookup
+    main:
+      consumers: [G0]
+      name_shapes: [N1]
+      producers: [S1]
+    local:
+      relation: [no-input]
+    masks:
+      - when:
+          main:
+            name_shapes: [N1]
+          local:
+            relation: [no-input]
+        reason: qualified GROUP BY names bypass SELECT output aliases and belong to relation-name resolution
+  - description: GROUP BY references to aggregate SELECT aliases distinguish conflict from no-input legality
+    main:
+      consumers: [G0]
+      name_shapes: [N0]
+      producers: [S2]
+    local:
+      relation: [input-conflict, no-input]
+    cases:
+      - key: G0N0S2_7_0
+        name: group_by_aggregate_alias_conflict_uses_input
+        setup_sqls: []
+        runs:
+          - sql: "SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x"
+      - key: G0N0S2_7_1
+        name: group_by_aggregate_alias_no_input_rejected
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT count(*) AS c FROM t GROUP BY c"
+  - description: GROUP BY references to SRF SELECT aliases distinguish conflict from alias fallback
+    main:
+      consumers: [G0]
+      name_shapes: [N0]
+      producers: [S4]
+    local:
+      relation: [input-conflict, no-input]
+    cases:
+      - key: G0N0S4_8_0
+        name: group_by_srf_alias_conflict_uses_input
+        setup_sqls:
+          - "CREATE TABLE t_str(col1 String, col2 String)"
+        runs:
+          - sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2"
+      - key: G0N0S4_8_1
+        name: group_by_srf_alias_no_input
+        setup_sqls:
+          - "CREATE TABLE t_str(col1 String, col2 String)"
+        runs:
+          - sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3"
+  - description: ordinal GROUP BY syntax included to document why producer-kind legality does not apply
+    main:
+      consumers: [G0]
+      name_shapes: [N4]
+      producers: [S2]
+    local:
+      relation: [no-input]
+    masks:
+      - when:
+          main:
+            name_shapes: [N4]
+          local:
+            relation: [no-input]
+        reason: ordinal GROUP BY syntax does not consume alias names, so producer kind legality is irrelevant
+  - description: GROUP BY ordinal references consume SELECT-item positions rather than alias names
+    main:
+      consumers: [G0]
+      name_shapes: [N4]
+      producers: [N0]
+    cases:
+      - key: G0N4N0_10_
+        name: group_by_ordinal_uses_select_item_position
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY 1"
+  - description: GROUP BY ALL expands non-aggregate SELECT items without resolving a user-written alias name
+    main:
+      consumers: [G5]
+      name_shapes: [N5]
+      producers: [N0]
+    cases:
+      - key: G5N5N0_11_
+        name: group_by_all_expands_non_aggregate_select_items
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY ALL"
+  - description: GROUP BY-family main-coordinate closure outside positive coverage obligations
+    excluded: true
+    reason: this coarse region closes GROUP BY-family main-coordinate coverage; cases here are boundary probes rather than positive coverage obligations
+    main:
+      consumers: [G0, G1, G2, G3, G4, G5]
+      name_shapes: [N0, N1, N2, N3, N4, N5]
+      producers: [I0, S0, S1, S2, S3, S4, G0, N0]
+    cases:
+      - key: G0N1G0_12_
+        name: group_by_qualified_name_does_not_consume_prior_group_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY k, t.k"
+      - key: G0N3S1_12_
+        name: group_by_qualified_complex_does_not_fallback_to_select_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY t.k + 1"
+      - key: G1N1S1_12_
+        name: grouping_sets_qualified_name_does_not_fallback_to_select_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((t.k))"
+      - key: G1N2S1_12_
+        name: grouping_sets_complex_select_alias_does_not_fallback
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((abs(k)))"
+      - key: G2N2S1_12_
+        name: rollup_complex_select_alias_does_not_fallback
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY ROLLUP(abs(k))"
+      - key: G3N2S1_12_
+        name: cube_complex_select_alias_does_not_fallback
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY CUBE(abs(k))"
+      - key: G4N2S1_12_
+        name: combined_normal_complex_select_alias_fallback
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT 1 AS k, count(*) FROM t GROUP BY k + 1, GROUPING SETS (())"

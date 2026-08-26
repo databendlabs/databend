@@ -51,11 +51,9 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UDTFServer;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -103,6 +101,7 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -121,8 +120,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -282,7 +279,6 @@ async fn test_commit_to_meta_server() -> anyhow::Result<()> {
                 new_segments,
                 None,
                 None,
-                None,
                 TestFixture::default_table_meta_timestamps(),
             )
             .unwrap();
@@ -416,10 +412,6 @@ impl TableContext for CtxDelegation {
         self.ctx.written_segment_locations()
     }
 
-    fn selected_segment_locations(&self) -> &SegmentLocationsState {
-        self.ctx.selected_segment_locations()
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -436,6 +428,10 @@ impl TableContextQueryState for CtxDelegation {
 
     fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         todo!()
+    }
+
+    fn get_nodes_memory_usage(&self) -> usize {
+        self.ctx.get_nodes_memory_usage()
     }
 
     fn push_warning(&self, _warn: String) {
@@ -703,17 +699,8 @@ impl TableContextQueryProfile for CtxDelegation {
     }
 }
 
-#[async_trait::async_trait]
 impl TableContextStage for CtxDelegation {
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        todo!()
-    }
-
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
-        todo!()
-    }
-
-    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
         todo!()
     }
 }
@@ -923,7 +910,10 @@ impl TableContextRuntimeFilter for CtxDelegation {
         HashMap::new()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
+    fn get_bloom_runtime_filter_with_id(
+        &self,
+        _id: usize,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)> {
         todo!()
     }
 
@@ -1021,6 +1011,35 @@ impl Catalog for FakedCatalog {
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         self.cat.get_table_meta_by_id(table_id).await
+    }
+
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.cat.get_mv_definition(tenant, mv_id).await
+    }
+
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.cat
+            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
+            .await
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        self.cat
+            .get_mv_current_source_generation(tenant, source_table_id)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -1248,20 +1267,19 @@ impl Catalog for FakedCatalog {
 
     async fn retryable_update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         if let Some(e) = &self.error_injection {
             Err(e.clone())
         } else {
-            self.cat.retryable_update_multi_table_meta(req).await
+            self.cat
+                .retryable_update_multi_table_meta(tenant, req)
+                .await
         }
     }
 
     async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
-        todo!()
-    }
-
-    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
         todo!()
     }
 

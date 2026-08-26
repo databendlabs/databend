@@ -133,7 +133,7 @@ where
                     txn_cond_seq(&tbid, Eq, seq_meta.seq),
                 ],
                 vec![
-                    txn_put_pb(&tbid, &new_table_meta)?, // tb_id -> tb_meta
+                    txn_put_pb(&tbid, &new_table_meta), // tb_id -> tb_meta
                 ],
             );
 
@@ -212,8 +212,8 @@ where
                     // Compatibility, can be deleted in the future
                     new_table_meta.row_access_policy = None;
                     txn_req.if_then = vec![
-                        txn_put_pb(&tbid, &new_table_meta)?, /* tb_id -> tb_meta row access policy Some */
-                        txn_put_pb(&ident, &RowAccessPolicyTableId {})?, // add policy_tb_id
+                        txn_put_pb(&tbid, &new_table_meta), /* tb_id -> tb_meta row access policy Some */
+                        txn_put_pb(&ident, &RowAccessPolicyTableId {}), // add policy_tb_id
                     ];
                 }
                 SetSecurityPolicyAction::Unset(old_policy) => {
@@ -247,7 +247,7 @@ where
                     }
 
                     txn_req.if_then = vec![
-                        txn_put_pb(&tbid, &new_table_meta)?, /* tb_id -> tb_meta row access policy None */
+                        txn_put_pb(&tbid, &new_table_meta), /* tb_id -> tb_meta row access policy None */
                         txn_del(&ident), // table drop row access policy, del policy_tb_id
                     ];
                 }
@@ -281,9 +281,7 @@ async fn update_mask_policy(
                 table_id,
             };
             let ident = MaskPolicyTableIdIdent::new_generic(tenant.clone(), id);
-            txn_req
-                .if_then
-                .push(txn_put_pb(&ident, &MaskPolicyTableId)?);
+            txn_req.if_then.push(txn_put_pb(&ident, &MaskPolicyTableId));
         }
         SetSecurityPolicyAction::Unset(policy_id) => {
             let id = MaskPolicyIdTableId {

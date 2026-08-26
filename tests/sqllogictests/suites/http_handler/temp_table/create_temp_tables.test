@@ -406,6 +406,12 @@ create or replace temp table IF NOT EXISTS replace_test(b int);
 statement ok
 create or replace temp table replace_test(b int);
 
+statement error 1302
+create or replace temp table replace_test(c int) engine=memory;
+
+statement ok
+select b from replace_test;
+
 statement error 1065
 select a from replace_test;
 
@@ -458,6 +464,15 @@ drop table if exists crt1
 # CASE: no (visible)table should be created if anything fails
 statement error 1006
 create temp table t as select number/0 from numbers(1);
+
+# repeated failures must not accumulate CTAS staging entries
+statement error 1006
+create temp table t as select number/0 from numbers(1);
+
+query I
+select count(*) from system.temporary_tables where is_current_session = true and (name = 't' or name like '__tmp_orphan@%');
+----
+0
 
 # table t should not be created
 # expects:  ERROR 1105 (HY000): UnknownTable. Code: 1025, Text = error: ...

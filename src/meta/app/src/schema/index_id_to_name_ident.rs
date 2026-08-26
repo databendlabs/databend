@@ -23,10 +23,7 @@ pub use kvapi_impl::IndexIdToName;
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::schema::IndexNameIdentRaw;
-    use crate::schema::index_id_to_name_ident::IndexIdToNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct IndexIdToName;
@@ -35,10 +32,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "IndexIdToNameIdent";
         const HAS_TENANT: bool = false;
         type ValueType = IndexNameIdentRaw;
-    }
-
-    impl kvapi::Value for IndexNameIdentRaw {
-        type KeyType = IndexIdToNameIdent;
     }
 }
 

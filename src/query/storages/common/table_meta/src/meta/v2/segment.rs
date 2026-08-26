@@ -27,19 +27,21 @@ use databend_common_expression::VariantDataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
-use databend_common_native::ColumnMeta as NativeColumnMeta;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::BlockHLLState;
+use crate::meta::BlockTopN;
 use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
 use crate::meta::Compression;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
+use crate::meta::PartitionStatistics;
 use crate::meta::SpatialStatistics;
 use crate::meta::Statistics;
+use crate::meta::StatisticsOfVectorColumns;
 use crate::meta::Versioned;
 use crate::meta::v0;
 use crate::meta::v1;
@@ -181,6 +183,8 @@ pub struct BlockMeta {
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
     pub cluster_stats: Option<ClusterStatistics>,
+    #[serde(default)]
+    pub partition_stats: Option<PartitionStatistics>,
     /// location of data block
     pub location: Location,
     /// location of bloom filter index
@@ -195,6 +199,7 @@ pub struct BlockMeta {
     pub spatial_index_size: Option<u64>,
     pub spatial_index_location: Option<Location>,
     pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
+    pub vector_stats: Option<StatisticsOfVectorColumns>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
     pub compression: Compression,
@@ -233,6 +238,7 @@ impl BlockMeta {
             col_stats,
             col_metas,
             cluster_stats,
+            partition_stats: None,
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
@@ -243,6 +249,7 @@ impl BlockMeta {
             spatial_index_size,
             spatial_index_location,
             spatial_stats,
+            vector_stats: None,
             virtual_block_meta,
             compression,
             create_on,
@@ -252,20 +259,6 @@ impl BlockMeta {
     pub fn compression(&self) -> Compression {
         self.compression
     }
-
-    /// Get the page size of the block.
-    ///
-    /// - If the format is parquet, its page size is its row count.
-    /// - If the format is native, its page size is the row count of each page.
-    ///
-    /// The row count of the last page may be smaller than the page size
-    pub fn page_size(&self) -> u64 {
-        if let Some((_, ColumnMeta::Native(meta))) = self.col_metas.iter().next() {
-            meta.pages.first().unwrap().num_values
-        } else {
-            self.row_count
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
@@ -273,6 +266,8 @@ pub struct ExtendedBlockMeta {
     pub block_meta: BlockMeta,
     pub draft_virtual_block_meta: Option<DraftVirtualBlockMeta>,
     pub column_hlls: Option<BlockHLLState>,
+    #[serde(default)]
+    pub column_top_n: Option<BlockTopN>,
 }
 
 #[typetag::serde(name = "extended_block_meta")]
@@ -333,53 +328,30 @@ impl SegmentInfo {
 )]
 pub enum ColumnMeta {
     Parquet(v0::ColumnMeta),
-    Native(NativeColumnMeta),
 }
 
 impl ColumnMeta {
     pub fn total_rows(&self) -> usize {
         match self {
             ColumnMeta::Parquet(v) => v.num_values as usize,
-            ColumnMeta::Native(v) => v.pages.iter().map(|page| page.num_values as usize).sum(),
         }
     }
 
     pub fn offset_length(&self) -> (u64, u64) {
         match self {
             ColumnMeta::Parquet(v) => (v.offset, v.len),
-            ColumnMeta::Native(v) => (v.offset, v.pages.iter().map(|page| page.length).sum()),
         }
     }
 
-    pub fn read_rows(&self, range: Option<&Range<usize>>) -> u64 {
+    pub fn read_rows(&self, _range: Option<&Range<usize>>) -> u64 {
         match self {
             ColumnMeta::Parquet(v) => v.num_values,
-            ColumnMeta::Native(v) => match range {
-                Some(range) => v
-                    .pages
-                    .iter()
-                    .skip(range.start)
-                    .take(range.end - range.start)
-                    .map(|page| page.num_values)
-                    .sum(),
-                None => v.pages.iter().map(|page| page.num_values).sum(),
-            },
         }
     }
 
-    pub fn read_bytes(&self, range: &Option<Range<usize>>) -> u64 {
+    pub fn read_bytes(&self, _range: &Option<Range<usize>>) -> u64 {
         match self {
             ColumnMeta::Parquet(v) => v.len,
-            ColumnMeta::Native(v) => match range {
-                Some(range) => v
-                    .pages
-                    .iter()
-                    .skip(range.start)
-                    .take(range.end - range.start)
-                    .map(|page| page.length)
-                    .sum(),
-                None => v.pages.iter().map(|page| page.length).sum(),
-            },
         }
     }
 }
@@ -401,6 +373,7 @@ impl BlockMeta {
             col_stats,
             col_metas,
             cluster_stats: None,
+            partition_stats: None,
             location: (s.location.path.clone(), 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
@@ -411,6 +384,7 @@ impl BlockMeta {
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
+            vector_stats: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,
@@ -432,6 +406,7 @@ impl BlockMeta {
             col_stats,
             col_metas,
             cluster_stats: None,
+            partition_stats: None,
             location: s.location.clone(),
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
             bloom_filter_index_size: s.bloom_filter_index_size,
@@ -442,6 +417,7 @@ impl BlockMeta {
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
+            vector_stats: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,

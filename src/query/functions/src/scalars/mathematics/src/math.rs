@@ -22,9 +22,9 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 use databend_common_expression::function_stat::ReturnStat;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::OwnedDistribution;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
@@ -81,12 +81,36 @@ pub fn register(registry: &mut FunctionRegistry) {
         |f: F64, _| OrderedFloat(1.0f64) / f.tan(),
     );
 
+    fn unit_domain_bounds(domain: &SimpleDomain<F64>) -> Option<(F64, F64)> {
+        let min = Ord::max(domain.min, OrderedFloat(-1.0));
+        let max = Ord::min(domain.max, OrderedFloat(1.0));
+
+        if min <= max { Some((min, max)) } else { None }
+    }
+
+    fn has_unit_domain_overflow(domain: &SimpleDomain<F64>) -> bool {
+        domain.min < OrderedFloat(-1.0) || domain.max > OrderedFloat(1.0)
+    }
+
     registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "acos",
-        |_, _| {
+        |_, domain| {
+            let Some((input_min, input_max)) = unit_domain_bounds(domain) else {
+                return FunctionDomain::Domain(SimpleDomain {
+                    min: OrderedFloat(f64::NAN),
+                    max: OrderedFloat(f64::NAN),
+                });
+            };
+
+            let max = if has_unit_domain_overflow(domain) {
+                OrderedFloat(f64::NAN)
+            } else {
+                input_min.acos()
+            };
+
             FunctionDomain::Domain(SimpleDomain {
-                min: OrderedFloat(0.0),
-                max: OrderedFloat(PI),
+                min: input_max.acos(),
+                max,
             })
         },
         |f: F64, _| f.acos(),
@@ -94,10 +118,23 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "asin",
-        |_, _| {
+        |_, domain| {
+            let Some((min, max)) = unit_domain_bounds(domain) else {
+                return FunctionDomain::Domain(SimpleDomain {
+                    min: OrderedFloat(f64::NAN),
+                    max: OrderedFloat(f64::NAN),
+                });
+            };
+
+            let max = if has_unit_domain_overflow(domain) {
+                OrderedFloat(f64::NAN)
+            } else {
+                max.asin()
+            };
+
             FunctionDomain::Domain(SimpleDomain {
-                min: OrderedFloat(0.0),
-                max: OrderedFloat(2.0 * PI),
+                min: min.asin(),
+                max,
             })
         },
         |f: F64, _| f.asin(),
@@ -137,7 +174,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
         .derive_stat(|_, _| {
             Ok(Some(ReturnStat {
-                ndv: StatEstimate::exact(1.0),
+                ndv: NdvEstimate::exact(1.0),
                 null_count: StatCount::exact(0),
                 domain: Float64Type::upcast_domain(SimpleDomain {
                     min: OrderedFloat(PI),
@@ -415,9 +452,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                     |_, _| FunctionDomain::MayThrow,
                     vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>>(
                         |val, output, ctx| {
-                            let n: i64 = AsPrimitive::<i64>::as_(val);
-                            if n > MAX_FACTORIAL_NUMBER {
+                            let max = AsPrimitive::<NUM_TYPE>::as_(MAX_FACTORIAL_NUMBER);
+                            if val > max {
                                 ctx.set_error(output.len(), format!("factorial number is out of range, max is: {}", MAX_FACTORIAL_NUMBER));
+                                output.push(0);
+                                return;
+                            }
+
+                            let n = AsPrimitive::<i64>::as_(val);
+                            if n < 0 {
+                                ctx.set_error(
+                                    output.len(),
+                                    "factorial number is out of range, min is: 0".to_string(),
+                                );
                                 output.push(0);
                             } else {
                                 output.push(factorial(n));
@@ -530,5 +577,5 @@ type Log10Function = GenericLogFunction<TenBase>;
 type Log2Function = GenericLogFunction<TwoBase>;
 
 fn factorial(n: i64) -> i64 {
-    if n <= 0 { 1 } else { n * factorial(n - 1) }
+    if n == 0 { 1 } else { n * factorial(n - 1) }
 }

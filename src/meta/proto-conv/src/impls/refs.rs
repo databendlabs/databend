@@ -20,13 +20,13 @@ use chrono::Utc;
 use databend_common_meta_app::schema as mt;
 use databend_common_protos::pb;
 
+use crate::reader_check_msg;
 use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
-use crate::MIN_READER_VER;
 use crate::ToProtoOptionExt;
+use crate::MIN_READER_VER;
 use crate::VER;
-use crate::reader_check_msg;
 
 impl FromToProto for mt::TableBranch {
     type PB = pb::TableBranch;
@@ -45,13 +45,13 @@ impl FromToProto for mt::TableBranch {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            expire_at: self.expire_at.to_pb_opt()?,
+            expire_at: self.expire_at.to_pb_opt(),
             branch_id: self.branch_id,
-        })
+        }
     }
 }
 
@@ -72,13 +72,13 @@ impl FromToProto for mt::TableTag {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            expire_at: self.expire_at.to_pb_opt()?,
+            expire_at: self.expire_at.to_pb_opt(),
             snapshot_loc: self.snapshot_loc.clone(),
-        })
+        }
     }
 }
 
@@ -99,13 +99,13 @@ impl FromToProto for mt::DroppedBranchMeta {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            drop_on: self.drop_on.to_pb()?,
-            expire_at: self.expire_at.to_pb_opt()?,
-        })
+            drop_on: self.drop_on.to_pb(),
+            expire_at: self.expire_at.to_pb_opt(),
+        }
     }
 }
 
@@ -126,12 +126,12 @@ impl FromToProto for mt::TableIdBranchName {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             table_id: self.table_id,
             branch_name: self.branch_name.clone(),
-        })
+        }
     }
 }

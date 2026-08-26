@@ -34,10 +34,10 @@ use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_expression::display::scalar_ref_to_string;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::UDFDefinition;
-use databend_common_storages_basic::RESULT_SCAN;
 use databend_common_storages_basic::ResultCacheMetaManager;
 use databend_common_storages_basic::ResultScan;
 use databend_common_users::UserApiProvider;
@@ -63,6 +63,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 
 impl Binder {
+    /// Bind a base table.
     /// Bind a table function.
     pub(crate) fn bind_table_function(
         &mut self,
@@ -101,6 +102,7 @@ impl Binder {
                             params: vec![],
                             args,
                             order_by: vec![],
+                            filter: None,
                             window: None,
                             lambda: None,
                         },
@@ -213,6 +215,7 @@ impl Binder {
                         .into_iter()
                         .zip(bind_context.columns.iter())
                     {
+                        let return_type = DataType::from(&return_type);
                         let input_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
                             span: None,
                             column: output_binding.clone(),
@@ -303,13 +306,13 @@ impl Binder {
         let table_index = self.metadata.write().add_table(
             CATALOG_DEFAULT.to_string(),
             "system".to_string(),
-            table.name().to_string(),
             table.as_table(),
             None,
             table_alias_name,
             false,
             false,
             false,
+            None,
         );
         let (s_expr, mut bind_context) =
             self.bind_base_table(bind_context, "system", table_index, None, sample, true)?;
@@ -364,13 +367,13 @@ impl Binder {
             let table_index = self.metadata.write().add_table(
                 CATALOG_DEFAULT.to_string(),
                 "system".to_string(),
-                RESULT_SCAN.to_string(),
                 table.clone(),
                 None,
                 table_alias_name,
                 false,
                 false,
                 false,
+                None,
             );
 
             let (s_expr, mut bind_context) =
@@ -417,17 +420,28 @@ impl Binder {
                 // Delete srf result tuple column, extract tuple inner columns instead
                 let _ = bind_context.columns.pop();
                 let scalar = &plan.items[0].scalar;
+                let scalar_type = scalar.data_type();
+                let tuple_types = scalar_type.as_tuple().ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Invalid table function result type, expected tuple, got {scalar_type}"
+                    ))
+                })?;
 
                 // Add tuple inner columns
                 let mut items = Vec::with_capacity(fields.len());
                 for (i, field) in fields.into_iter().enumerate() {
+                    let data_type = tuple_types.get(i).cloned().ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Invalid table function result: field {field} has no tuple type"
+                        ))
+                    })?;
                     let field_expr = ScalarExpr::FunctionCall(FunctionCall {
                         span: *span,
                         func_name: "get".to_string(),
                         params: vec![Scalar::Number(NumberScalar::Int64((i + 1) as i64))],
                         arguments: vec![scalar.clone()],
+                        return_type: Box::new(data_type.clone()),
                     });
-                    let data_type = field_expr.data_type()?;
                     let index = self
                         .metadata
                         .write()
@@ -513,6 +527,7 @@ impl Binder {
                             args,
                             params: vec![],
                             order_by: vec![],
+                            filter: None,
                             window: None,
                             lambda: None,
                         },
@@ -537,7 +552,7 @@ impl Binder {
                                 column_ref.column.clone()
                             } else {
                                 // Add result column to metadata
-                                let data_type = srf_result.data_type()?;
+                                let data_type = srf_result.data_type().into_owned();
                                 let index = self
                                     .metadata
                                     .write()

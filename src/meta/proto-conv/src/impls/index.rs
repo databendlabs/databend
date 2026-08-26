@@ -54,20 +54,19 @@ impl FromToProto for mt::IndexMeta {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let p = pb::IndexMeta {
+    fn to_pb(&self) -> Self::PB {
+        pb::IndexMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             table_id: self.table_id,
             index_type: self.index_type.clone() as i32,
-            created_on: self.created_on.to_pb()?,
-            dropped_on: self.dropped_on.to_pb_opt()?,
-            updated_on: self.updated_on.to_pb_opt()?,
+            created_on: self.created_on.to_pb(),
+            dropped_on: self.dropped_on.to_pb_opt(),
+            updated_on: self.updated_on.to_pb_opt(),
             original_query: self.original_query.clone(),
             query: self.query.clone(),
             sync_creation: self.sync_creation,
-        };
-        Ok(p)
+        }
     }
 }
 
@@ -86,12 +85,12 @@ impl FromToProto for mt::MarkedDeletedIndexMeta {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            dropped_on: self.dropped_on.to_pb()?,
+            dropped_on: self.dropped_on.to_pb(),
             index_type: self.index_type.clone() as i32,
-        })
+        }
     }
 }

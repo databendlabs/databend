@@ -99,7 +99,9 @@ pub fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>) {
     }
 
     // databend::log::query
-    if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
+    if let Err(error) =
+        InterpreterQueryLog::log_finish(ctx, now, error, has_profiles, &query_profiles)
+    {
         error!("Failed to log query finish: {:?}", error)
     }
 }

@@ -122,7 +122,8 @@ pub struct CopyIntoTablePlan {
     pub database_name: String,
     pub table_name: String,
     pub branch: Option<String>,
-    pub from_attachment: bool,
+    /// True only for client-supplied values transported through an HTTP StageAttachment.
+    pub from_stage_attachment: bool,
 
     // given SQL: ... into table (c1, c2, c3, c4) values (1, ?, 'a', ?)
     // required_values_schema = (c1, c2, c3, c4)
@@ -286,6 +287,7 @@ impl Debug for CopyIntoTablePlan {
             table_name,
             branch,
             no_file_to_copy,
+            from_stage_attachment,
             validation_mode,
             stage_table_info,
             query,
@@ -300,6 +302,7 @@ impl Debug for CopyIntoTablePlan {
             write!(f, "/{branch}")?;
         }
         write!(f, ", no_file_to_copy: {no_file_to_copy:?}")?;
+        write!(f, ", from_stage_attachment: {from_stage_attachment}")?;
         write!(f, ", validation_mode: {validation_mode:?}")?;
         write!(f, ", from: {stage_table_info:?}")?;
         write!(f, " query: {query:?}")?;
@@ -326,10 +329,10 @@ impl CopyIntoTablePlan {
     }
 
     pub fn schema(&self) -> DataSchemaRef {
-        if self.from_attachment {
-            Arc::new(DataSchema::empty())
-        } else {
+        if matches!(self.write_mode, CopyIntoTableMode::Copy) {
             Self::copy_into_table_schema()
+        } else {
+            Arc::new(DataSchema::empty())
         }
     }
 }

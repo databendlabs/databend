@@ -1,0 +1,95 @@
+statement ok
+CREATE OR REPLACE DATABASE test_hilbert
+
+statement ok
+USE test_hilbert
+
+statement ok
+CREATE OR REPLACE TABLE t_direct(a int, b int) CLUSTER BY HILBERT(a, b) row_per_block=2 block_per_segment=2
+
+statement ok
+CREATE OR REPLACE TABLE t_expr(a int, b string, c int) CLUSTER BY HILBERT(substring(b, 1, 2), c + 1) row_per_block=2 block_per_segment=2
+
+statement ok
+CREATE OR REPLACE TABLE t_string(b string, c int) CLUSTER BY HILBERT(b, c) row_per_block=2 block_per_segment=2
+
+statement ok
+CREATE OR REPLACE TABLE t_alter(a int, b int) CLUSTER BY LINEAR(a) row_per_block=4 block_per_segment=2
+
+statement ok
+INSERT INTO t_alter VALUES (0, 0), (1, 1), (2, 2), (3, 3)
+
+statement ok
+ALTER TABLE t_alter CLUSTER BY HILBERT(a, b)
+
+query TT rowsort
+SELECT cluster_key, type FROM clustering_information('test_hilbert', 't_direct')
+UNION ALL
+SELECT cluster_key, type FROM clustering_information('test_hilbert', 't_alter')
+----
+(a, b) hilbert
+(a, b) hilbert
+
+statement ok
+DELETE FROM t_alter WHERE a = 0
+
+query TTI
+SELECT min, max, block_depth
+FROM clustering_statistics('test_hilbert', 't_alter')
+----
+[1, 1] [3, 3] NULL
+
+query TT
+SELECT cluster_key, type FROM clustering_information('test_hilbert', 't_expr')
+----
+(SUBSTRING(b FROM 1 FOR 2), c + 1) hilbert
+
+query TT
+SELECT cluster_key, type FROM clustering_information('test_hilbert', 't_string')
+----
+(b, c) hilbert
+
+statement ok
+INSERT INTO t_direct VALUES (0, 0), (2, 2), (1, 1), (3, 3)
+
+statement ok
+INSERT INTO t_direct VALUES (10, 10), (12, 12), (11, 11), (13, 13)
+
+statement ok
+INSERT INTO t_expr VALUES (1, 'aa', 10), (1, 'ab', 20), (2, 'ba', 30), (2, 'bb', 40)
+
+statement ok
+INSERT INTO t_string VALUES ('abcdefgh-01', 10), ('abcdefgh-02', 20), ('ijklmnop-01', 30), ('ijklmnop-02', 40)
+
+query TTII
+SELECT cluster_key, type, info:max_depth, info:total_block_count
+FROM clustering_information('test_hilbert', 't_direct')
+----
+(a, b) hilbert 2 4
+
+query TTI
+SELECT min, max, block_depth
+FROM clustering_statistics('test_hilbert', 't_direct')
+WHERE min = '[0, 0]'
+----
+[0, 0] [2, 2] NULL
+
+# Hilbert reclustering is added by the stacked recluster PR.
+statement error 1002
+ALTER TABLE t_direct RECLUSTER
+
+# hilbert is syntax in CLUSTER BY HILBERT(...), not a scalar function.
+statement error 1008
+CREATE OR REPLACE TABLE bad_function(a int, b int) CLUSTER BY (hilbert(a, b))
+
+statement error 1008
+CREATE OR REPLACE TABLE bad_position(a int, b int, c int) CLUSTER BY (hilbert(a, b), c)
+
+statement error 1008
+CREATE OR REPLACE TABLE bad_dimension(a int) CLUSTER BY (hilbert(a))
+
+statement error 1008
+SELECT hilbert(1, 2)
+
+statement ok
+DROP DATABASE test_hilbert

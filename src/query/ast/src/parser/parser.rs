@@ -17,7 +17,6 @@ use nom::Parser;
 use crate::ParseError;
 use crate::Result;
 use crate::ast::*;
-use crate::parser::Backtrace;
 use crate::parser::common::IResult;
 use crate::parser::common::comma_separated_list0;
 use crate::parser::common::comma_separated_list1;
@@ -40,7 +39,11 @@ use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token<'_>>> {
-    Tokenizer::new(sql).collect::<Result<Vec<_>>>()
+    let mut tokens = Vec::with_capacity((sql.len() / 4).clamp(4, 256));
+    for token in Tokenizer::new(sql) {
+        tokens.push(token?);
+    }
+    Ok(tokens)
 }
 
 /// Parse a SQL string into `Statement`s.
@@ -160,12 +163,10 @@ pub fn run_parser<O>(
     allow_partial: bool,
     mut parser: impl FnMut(Input) -> IResult<O>,
 ) -> Result<O> {
-    let backtrace = Backtrace::new();
     let input = Input {
         tokens,
         dialect,
         mode,
-        backtrace: &backtrace,
     };
     match parser(input) {
         Ok((rest, res)) => {

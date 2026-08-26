@@ -14,12 +14,14 @@
 
 pub mod default;
 mod iceberg;
+mod paimon;
 
 pub use databend_common_catalog::catalog::Catalog;
 pub use databend_common_storages_hive as hive;
 pub use default::DatabaseCatalog;
 pub use default::table_memory_meta::InMemoryMetas;
 pub use iceberg::IcebergCreator;
+pub use paimon::PaimonCreator;
 
 /// Merges two iterators of Option<T>, preferring left (primary) values over right (fallback) values.
 /// If both primary and fallback are None, returns None.

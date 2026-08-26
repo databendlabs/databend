@@ -21,6 +21,7 @@ use databend_common_base::JoinHandle;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::PlanProfile;
@@ -62,7 +63,7 @@ impl StatisticsSender {
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
         let handle = spawner
-            .try_spawn({
+            .try_spawn(ThreadTracker::tracking_future({
                 let query_id = query_id.to_string();
 
                 async move {
@@ -81,6 +82,10 @@ impl StatisticsSender {
                                 break;
                             }
                             Either::Right((Ok(Some(error_code)), _recv)) => {
+                                if let Err(error) = Self::send_io_stats(&tx).await {
+                                    warn!("IoStats send has error, cause: {:?}.", error);
+                                }
+
                                 let data = DataPacket::ErrorCode(error_code);
                                 if let Err(error_code) = tx.send(data).await {
                                     warn!(
@@ -143,8 +148,12 @@ impl StatisticsSender {
                     if let Err(error) = Self::send_part_statistics(&ctx, &tx).await {
                         warn!("PartStatistics send has error, cause: {:?}.", error);
                     }
+
+                    if let Err(error) = Self::send_io_stats(&tx).await {
+                        warn!("IoStats send has error, cause: {:?}.", error);
+                    }
                 }
-            })
+            }))
             .unwrap();
 
         StatisticsSender {
@@ -154,24 +163,22 @@ impl StatisticsSender {
         }
     }
 
-    pub fn shutdown(&mut self, error: Option<ErrorCode>) {
+    pub async fn shutdown(&mut self, error: Option<ErrorCode>) {
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
         let join_handle = self.join_handle.take();
-        futures::executor::block_on(async move {
-            if let Err(error_code) = shutdown_flag_sender.send(error).await {
-                warn!(
-                    "Cannot send data via flight exchange, cause: {:?}",
-                    error_code
-                );
-            }
+        if let Err(error_code) = shutdown_flag_sender.send(error).await {
+            warn!(
+                "Cannot send data via flight exchange, cause: {:?}",
+                error_code
+            );
+        }
 
-            shutdown_flag_sender.close();
+        shutdown_flag_sender.close();
 
-            if let Some(join_handle) = join_handle {
-                let _ = join_handle.await;
-            }
-        });
+        if let Some(join_handle) = join_handle {
+            let _ = join_handle.await;
+        }
     }
 
     #[async_backtrace::framed]
@@ -305,6 +312,15 @@ impl StatisticsSender {
             }
         }
         Ok(())
+    }
+
+    async fn send_io_stats(flight_sender: &FlightSender) -> Result<()> {
+        let Some(stats) = ThreadTracker::io_stats() else {
+            return Ok(());
+        };
+
+        let data_packet = DataPacket::IoStats(stats.snapshot());
+        flight_sender.send(data_packet).await
     }
 
     fn fetch_progress(ctx: &Arc<QueryContext>) -> Vec<ProgressInfo> {

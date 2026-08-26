@@ -49,6 +49,7 @@ pub use processor::Event;
 pub use processor::EventCause;
 pub use processor::Processor;
 pub use processor::ProcessorPtr;
+pub use processor::check_interrupt;
 pub use profile::PlanProfile;
 pub use profile::PlanScope;
 pub use sync_task::SyncTaskHandle;

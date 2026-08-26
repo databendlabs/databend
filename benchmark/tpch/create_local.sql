@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS customer (
     c_acctbal DECIMAL(15, 2) not null,
     c_mktsegment STRING not null,
     c_comment STRING not null
-) CLUSTER BY (c_custkey) storage_format = 'native' compression = 'lz4';
+) CLUSTER BY (c_custkey) storage_format = 'parquet' compression = 'lz4';
 
 CREATE TABLE IF NOT EXISTS lineitem (
     l_orderkey BIGINT not null,
@@ -26,14 +26,14 @@ CREATE TABLE IF NOT EXISTS lineitem (
     l_shipinstruct STRING not null,
     l_shipmode STRING not null,
     l_comment STRING not null
-) CLUSTER BY(l_shipdate, l_orderkey) storage_format = 'native' compression = 'lz4';
+) CLUSTER BY(l_shipdate, l_orderkey) storage_format = 'parquet' compression = 'lz4';
 
 CREATE TABLE IF NOT EXISTS nation (
     n_nationkey INTEGER not null,
     n_name STRING not null,
     n_regionkey INTEGER not null,
     n_comment STRING
-) CLUSTER BY (n_nationkey) storage_format = 'native' compression = 'lz4';
+) CLUSTER BY (n_nationkey) storage_format = 'parquet' compression = 'lz4';
 
 CREATE TABLE IF NOT EXISTS orders (
     o_orderkey BIGINT not null,
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS orders (
     o_clerk STRING not null,
     o_shippriority INTEGER not null,
     o_comment STRING not null
-) CLUSTER BY (o_orderkey, o_orderdate) storage_format = 'native' compression = 'lz4';
+) CLUSTER BY (o_orderkey, o_orderdate) storage_format = 'parquet' compression = 'lz4';
 
 CREATE TABLE IF NOT EXISTS partsupp (
     ps_partkey BIGINT not null,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS partsupp (
     ps_availqty BIGINT not null,
     ps_supplycost DECIMAL(15, 2) not null,
     ps_comment STRING not null
-) CLUSTER BY (ps_partkey) storage_format = 'native' compression = 'lz4';
+) CLUSTER BY (ps_partkey) storage_format = 'parquet' compression = 'lz4';
 
 CREATE TABLE IF NOT EXISTS part (
     p_partkey BIGINT not null,
@@ -65,13 +65,13 @@ CREATE TABLE IF NOT EXISTS part (
     p_container STRING not null,
     p_retailprice DECIMAL(15, 2) not null,
     p_comment STRING not null
-) CLUSTER BY (p_partkey) storage_format = 'native' compression = 'lz4';
+) CLUSTER BY (p_partkey) storage_format = 'parquet' compression = 'lz4';
 
 CREATE TABLE IF NOT EXISTS region (
     r_regionkey INTEGER not null,
     r_name STRING not null,
     r_comment STRING
-) CLUSTER BY (r_regionkey) storage_format = 'native' compression = 'lz4';
+) CLUSTER BY (r_regionkey) storage_format = 'parquet' compression = 'lz4';
 
 CREATE TABLE IF NOT EXISTS supplier (
     s_suppkey BIGINT not null,
@@ -81,4 +81,4 @@ CREATE TABLE IF NOT EXISTS supplier (
     s_phone STRING not null,
     s_acctbal DECIMAL(15, 2) not null,
     s_comment STRING not null
-) CLUSTER BY (s_suppkey) storage_format = 'native' compression = 'lz4';
+) CLUSTER BY (s_suppkey) storage_format = 'parquet' compression = 'lz4';

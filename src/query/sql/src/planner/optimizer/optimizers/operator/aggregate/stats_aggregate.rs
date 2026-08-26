@@ -100,7 +100,7 @@ impl RuleStatsAggregateOptimizer {
                         if ["min", "max"].contains(&function.func_name.as_str())
                             && function.args.len() == 1
                             && !function.distinct
-                            && Self::supported_stat_type(&function.args[0].data_type()?)
+                            && Self::supported_stat_type(function.args[0].data_type().as_ref())
                         {
                             if let ScalarExpr::BoundColumnRef(b) = &function.args[0] {
                                 if let Ok(col_id) =

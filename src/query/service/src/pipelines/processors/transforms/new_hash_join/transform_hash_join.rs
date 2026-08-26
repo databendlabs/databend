@@ -68,7 +68,6 @@ impl TransformHashJoin {
             rf_desc.inlist_threshold,
             rf_desc.bloom_threshold,
             rf_desc.min_max_threshold,
-            rf_desc.spatial_threshold,
         )?;
 
         Ok(ProcessorPtr::create(Box::new(TransformHashJoin {

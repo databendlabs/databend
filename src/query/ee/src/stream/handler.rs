@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -57,7 +56,6 @@ impl StreamHandler for RealStreamHandler {
         ctx: Arc<dyn TableContext>,
         plan: &CreateStreamPlan,
     ) -> Result<CreateTableReply> {
-        let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(&plan.catalog).await?;
         let source_table_name = plan
             .table_branch
@@ -65,7 +63,7 @@ impl StreamHandler for RealStreamHandler {
             .map(|branch| format!("{}/{}", plan.table_name, branch))
             .unwrap_or_else(|| plan.table_name.clone());
 
-        let mut table = ctx
+        let table = ctx
             .get_table_with_branch(
                 &plan.catalog,
                 &plan.table_database,
@@ -96,10 +94,12 @@ impl StreamHandler for RealStreamHandler {
         }
 
         let table_id = table_info.ident.table_id;
-        if !table.change_tracking_enabled() {
-            let table_seq = table_info.ident.seq;
-            // enable change tracking.
-            let req = UpsertTableOptionReq {
+        let table_seq = table_info.ident.seq;
+        // Keep the stream offset at this data boundary. The atomic option update advances the
+        // source metadata seq but does not create a new snapshot; the first later data mutation
+        // uses the advanced seq as its origin version and remains visible to this stream.
+        let source_table_option =
+            (!table.change_tracking_enabled()).then(|| UpsertTableOptionReq {
                 table_id,
                 seq: MatchSeq::Exact(table_seq),
                 options: HashMap::from([
@@ -112,14 +112,7 @@ impl StreamHandler for RealStreamHandler {
                         Some(table_seq.to_string()),
                     ),
                 ]),
-            };
-
-            catalog
-                .upsert_table_option(&tenant, &plan.table_database, req)
-                .await?;
-            // refreash table.
-            table = table.refresh(ctx.as_ref()).await?;
-        }
+            });
 
         let table = FuseTable::try_from_table(table.as_ref())?;
         let change_desc = table
@@ -130,7 +123,14 @@ impl StreamHandler for RealStreamHandler {
                 plan.navigation.as_ref(),
             )
             .await?;
-        table.check_changes_valid(&table.get_table_info().desc, change_desc.seq)?;
+        if source_table_option.is_none() {
+            table.check_changes_valid(&table.get_table_info().desc, change_desc.seq)?;
+        } else if table_seq > change_desc.seq {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Change tracking has been missing for the time range requested on table {}",
+                table.get_table_info().desc
+            )));
+        }
 
         let db_id = table
             .get_table_info()
@@ -186,7 +186,9 @@ impl StreamHandler for RealStreamHandler {
                 comment: plan.comment.clone().unwrap_or("".to_string()),
                 ..Default::default()
             },
+            source_table_option,
             as_dropped: false,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         };

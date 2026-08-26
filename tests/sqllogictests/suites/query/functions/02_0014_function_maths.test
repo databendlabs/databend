@@ -330,7 +330,15 @@ SELECT factorial(5)
 120
 
 statement error 1006
+SELECT factorial(-1)
+
+
+statement error 1006
 SELECT factorial(30)
+
+
+statement error 1006
+SELECT factorial(18446744073709551615::UInt64)
 
 
 statement error 1006

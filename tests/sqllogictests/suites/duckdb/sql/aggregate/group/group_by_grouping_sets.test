@@ -346,3 +346,86 @@ drop table tt all;
 
 statement ok
 drop database grouping_sets;
+
+# Regression: SELECT alias containing grouping() must not shadow column in GROUPING SETS
+statement ok
+create database grouping_alias_test;
+
+statement ok
+use grouping_alias_test;
+
+statement ok
+create table t(k int, d string, v int);
+
+statement ok
+insert into t values (1, 'A', 10), (1, 'B', 20), (2, 'A', 30), (2, 'B', 40);
+
+query ITI rowsort
+select if(grouping(k)=1, 0, k) as k, d, sum(v) from t group by grouping sets ((d), (k, d));
+----
+0 A 40
+0 B 60
+1 A 10
+1 B 20
+2 A 30
+2 B 40
+
+# ORDER BY and HAVING alias prebinding must keep grouping() bound to the input column.
+query ITI
+select if(grouping(k)=1, 0, k) as k, d, sum(v) from t group by grouping sets ((d), (k, d)) order by k, d;
+----
+0 A 40
+0 B 60
+1 A 10
+1 B 20
+2 A 30
+2 B 40
+
+query ITI rowsort
+select if(grouping(k)=1, 0, k) as k, d, sum(v) from t group by grouping sets ((d), (k, d)) having k is not null;
+----
+0 A 40
+0 B 60
+1 A 10
+1 B 20
+2 A 30
+2 B 40
+
+# GROUPING arguments retain alias fallback when no input column has that name.
+query III
+select k + 1 as x, grouping(x) as g, sum(v) from t group by grouping sets ((x), ()) order by g, x;
+----
+2 0 30
+3 0 70
+NULL 1 100
+
+# A same-name alias that is itself the grouping-sets item keeps winning over the input column.
+query II
+select k + 1 as k, sum(v) from t group by grouping sets ((k + 1), ()) order by grouping(k), k;
+----
+2 30
+3 70
+NULL 100
+
+statement ok
+create table logs(game_id string, v int);
+
+statement ok
+insert into logs values ('a', 1), ('a', 2), ('b', 3);
+
+# Production shape: CASE WHEN grouping() alias over a string group column with a lateral alias.
+query TII
+select case when grouping(game_id) = 1 then 'all' else game_id end as game_id, count(*) as c, c + sum(v) as t from logs group by grouping sets ((game_id), ()) order by game_id;
+----
+a 2 5
+all 3 9
+b 1 4
+
+statement ok
+drop table logs all;
+
+statement ok
+drop table t all;
+
+statement ok
+drop database grouping_alias_test;

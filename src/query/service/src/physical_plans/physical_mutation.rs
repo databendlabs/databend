@@ -165,8 +165,9 @@ impl IPhysicalPlan for Mutation {
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
 
+        let input_schema = DataSchema::from(table.schema_with_stream()).into();
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, None)?;
+            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?;
 
         let max_threads = builder.settings.get_max_threads()? as usize;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads));
@@ -272,11 +273,11 @@ impl PhysicalPlanBuilder {
         let mut maybe_udfs = BTreeSet::new();
         for matched_evaluator in matched_evaluators {
             if let Some(condition) = &matched_evaluator.condition {
-                maybe_udfs.extend(condition.used_columns());
+                condition.collect_used_columns(&mut maybe_udfs);
             }
             if let Some(update_list) = &matched_evaluator.update {
                 for update_scalar in update_list.values() {
-                    maybe_udfs.extend(update_scalar.used_columns());
+                    update_scalar.collect_used_columns(&mut maybe_udfs);
                 }
             }
         }
@@ -285,17 +286,17 @@ impl PhysicalPlanBuilder {
         let mut unmatched_required = BTreeSet::new();
         for unmatched_evaluator in unmatched_evaluators {
             if let Some(condition) = &unmatched_evaluator.condition {
-                maybe_udfs.extend(condition.used_columns());
-                unmatched_required.extend(condition.used_columns());
+                condition.collect_used_columns(&mut maybe_udfs);
+                condition.collect_used_columns(&mut unmatched_required);
             }
             for value in &unmatched_evaluator.values {
-                maybe_udfs.extend(value.used_columns());
-                unmatched_required.extend(value.used_columns());
+                value.collect_used_columns(&mut maybe_udfs);
+                value.collect_used_columns(&mut unmatched_required);
             }
         }
         required.extend(unmatched_required);
         for filter_value in direct_filter {
-            maybe_udfs.extend(filter_value.used_columns());
+            filter_value.collect_used_columns(&mut maybe_udfs);
         }
 
         let udf_ids = s_expr.get_udfs_col_ids()?;
@@ -811,6 +812,7 @@ fn build_mutation_row_fetch(
         cols_to_fetch,
         fetched_fields,
         need_wrap_nullable,
+        populate_cache: false,
         enable_block_id_repartition: true,
         stat_info: None,
         meta: PhysicalPlanMeta::new("RowFetch"),
@@ -841,14 +843,14 @@ pub fn generate_update_list(
         Vec::with_capacity(update_list.len()),
         |mut acc, (index, scalar)| {
             let field = schema.field(*index);
-            let data_type = scalar.data_type()?;
+            let data_type = scalar.data_type();
             let target_type = field.data_type();
 
             let scalar = if col_indices.is_empty() {
                 // The condition is always true.
                 // Replace column to the result of the following expression:
                 // CAST(expression, type)
-                if data_type != *target_type {
+                if data_type.as_ref() != target_type {
                     wrap_cast(scalar, target_type)
                 } else {
                     scalar.clone()
@@ -880,12 +882,12 @@ pub fn generate_update_list(
                 })?;
 
                 // If right is nullable, left must also be wrapped in nullable to ensure both have the same type.
-                let target_type = if right.data_type()?.is_nullable() {
+                let target_type = if right.data_type().is_nullable() {
                     target_type.wrap_nullable()
                 } else {
                     target_type.clone()
                 };
-                let left = if data_type != target_type {
+                let left = if data_type.as_ref() != &target_type {
                     wrap_cast(scalar, &target_type)
                 } else {
                     scalar.clone()
@@ -900,6 +902,7 @@ pub fn generate_update_list(
                     func_name: "if".to_string(),
                     params: vec![],
                     arguments: vec![predicate.clone(), left, right],
+                    return_type: Box::new(target_type),
                 })
             };
             let expr = scalar
@@ -944,7 +947,7 @@ pub fn mutation_update_expr(
         Vec::with_capacity(update_list.len()),
         |mut acc, (index, scalar)| {
             let field = schema.field(*index);
-            let data_type = scalar.data_type()?;
+            let data_type = scalar.data_type();
             let target_type = field.data_type();
 
             // Replace column to the result of the following expression:
@@ -971,12 +974,12 @@ pub fn mutation_update_expr(
             })?;
 
             // If right is nullable, left must also be wrapped in nullable to ensure both have the same type.
-            let target_type = if right.data_type()?.is_nullable() {
+            let target_type = if right.data_type().is_nullable() {
                 target_type.wrap_nullable()
             } else {
                 target_type.clone()
             };
-            let left = if data_type != target_type {
+            let left = if data_type.as_ref() != &target_type {
                 wrap_cast(scalar, &target_type)
             } else {
                 scalar.clone()
@@ -987,6 +990,7 @@ pub fn mutation_update_expr(
                 func_name: "if".to_string(),
                 params: vec![],
                 arguments: vec![predicate.clone(), left, right],
+                return_type: Box::new(target_type),
             });
             let expr = scalar
                 .type_check(input_schema.as_ref())?

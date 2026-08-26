@@ -278,8 +278,12 @@ where T: Decimal + std::ops::AddAssign
 impl<const SHOULD_CHECK_OVERFLOW: bool, T> StateSerde for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
 where T: Decimal + std::ops::AddAssign
 {
-    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
-        vec![DataType::Decimal(T::default_decimal_size()).into()]
+    fn serialize_type(info: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
+        let data_type = info
+            .and_then(|info| info.as_any().downcast_ref::<DataType>())
+            .cloned()
+            .unwrap_or_else(|| DataType::Decimal(T::default_decimal_size()));
+        vec![data_type.into()]
     }
 
     fn batch_serialize(
@@ -405,19 +409,24 @@ pub fn try_create_aggregate_sum_function(
                     let should_check_overflow = DECIMAL::MAX_PRECISION > i64::MAX_PRECISION
                         && s.precision() > i64::MAX_PRECISION;
                     let return_type = DataType::Decimal(decimal_size);
-                    if should_check_overflow {
+                    let aggregate = if should_check_overflow {
                         AggregateUnaryFunction::<
                             DecimalSumState<true, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::create(display_name, return_type)
+                        >::new(display_name, return_type.clone())
+                        .with_serialize_info(Box::new(return_type))
+                        .finish()
                     } else {
                         AggregateUnaryFunction::<
                             DecimalSumState<false, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::create(display_name, return_type)
-                    }
+                        >::new(display_name, return_type.clone())
+                        .with_serialize_info(Box::new(return_type))
+                        .finish()
+                    };
+                    aggregate
                 }
             })
         }

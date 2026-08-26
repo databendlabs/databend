@@ -3,7 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "create or replace database test" | $BENDSQL_CLIENT_CONNECT
+echo "create or replace database test" | bendsql_connect_root
 
 
 stmt """
@@ -37,7 +37,7 @@ and t.name = 'b'
 echo """
 set hide_options_in_show_create_table=0;
 SHOW CREATE TABLE test.b;
-""" | $BENDSQL_CLIENT_CONNECT
+""" | bendsql_connect_root
 
 stmt "create or replace view test.v_b as select * from test.b"
 
@@ -60,7 +60,7 @@ query "SHOW CREATE TABLE test.c"
 echo """
 create or replace table test.t(c1 int, c2 int);
 create or replace table test.t1(c1 int, c2 string);
-""" | $BENDSQL_CLIENT_CONNECT
+""" | bendsql_connect_root
 
 stmt "create or replace view test.v_union as select c1 from test.t union all select c1 from test.t1;"
 
@@ -87,7 +87,7 @@ show create table test.tc;
 set quoted_ident_case_sensitive=1;
 set sql_dialect='MySQL';
 show create table test.tc;
-""" | $BENDSQL_CLIENT_CONNECT
+""" | bendsql_connect_root
 
 stmt """
 create or replace table test.auto_increment(c1 int, c2 int autoincrement, c3 int identity (2, 3) order);

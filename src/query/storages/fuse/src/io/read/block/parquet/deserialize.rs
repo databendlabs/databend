@@ -62,6 +62,7 @@ pub fn column_chunks_to_record_batch(
             DataItem::ColumnArray(_) => {}
         }
     }
+    projection_mask.sort_unstable();
     let row_group = Box::new(builder.build());
     let field_levels = parquet_to_arrow_field_levels(
         &parquet_schema,

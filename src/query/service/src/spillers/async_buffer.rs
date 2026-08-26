@@ -22,6 +22,7 @@ use std::sync::PoisonError;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 use std::time::Instant;
 
 use arrow_schema::Schema;
@@ -58,6 +59,7 @@ use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 
 use super::record_read_profile;
+use super::record_write_profile;
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Copy)]
@@ -225,9 +227,10 @@ impl SpillsBufferPool {
         op: Operator,
         path: String,
         pool_bytes: usize,
+        target: SpillTarget,
     ) -> Result<SpillsDataWriter> {
         let writer = self.buffer_writer(op, path, pool_bytes)?;
-        Ok(SpillsDataWriter::Uninitialize(Some(writer)))
+        Ok(SpillsDataWriter::create(writer, target))
     }
 
     pub(super) fn buffer_writer(
@@ -303,17 +306,6 @@ pub struct BufferWriter {
 
 impl BufferWriter {
     pub fn close(mut self) -> io::Result<Metadata> {
-        if let Some(b) = self.current_bytes.take() {
-            if self.buffer_tx.try_send(b.freeze()).is_err() {
-                return Err(io::ErrorKind::BrokenPipe.into());
-            }
-        }
-
-        self.buffer_tx.close();
-        self.response.wait_and_take()
-    }
-
-    pub(super) fn finish(&mut self) -> std::io::Result<Metadata> {
         if let Some(b) = self.current_bytes.take() {
             if self.buffer_tx.try_send(b.freeze()).is_err() {
                 return Err(io::ErrorKind::BrokenPipe.into());
@@ -406,18 +398,35 @@ pub struct InitializedBlocksStreamWriter {
 }
 
 pub enum SpillsDataWriter {
-    Uninitialize(Option<BufferWriter>),
-    Initialized(InitializedBlocksStreamWriter),
+    Uninitialize {
+        writer: Option<BufferWriter>,
+        target: SpillTarget,
+        write_duration: Duration,
+    },
+    Initialized {
+        writer: InitializedBlocksStreamWriter,
+        target: SpillTarget,
+        write_duration: Duration,
+    },
 }
 
 impl SpillsDataWriter {
-    pub fn create(writer: BufferWriter) -> Self {
-        Self::Uninitialize(Some(writer))
+    pub fn create(writer: BufferWriter, target: SpillTarget) -> Self {
+        Self::Uninitialize {
+            writer: Some(writer),
+            target,
+            write_duration: Duration::default(),
+        }
     }
 
     pub fn write(&mut self, block: DataBlock) -> Result<()> {
         match self {
-            SpillsDataWriter::Uninitialize(writer) => {
+            SpillsDataWriter::Uninitialize {
+                writer,
+                target,
+                write_duration,
+            } => {
+                let start = Instant::now();
                 let data_schema = block.infer_schema();
                 let table_schema = infer_table_schema(&data_schema)?;
 
@@ -433,47 +442,92 @@ impl SpillsDataWriter {
                 let mut writer = ArrowWriter::try_new(buffer_writer, arrow_schema, Some(props))?;
                 let record_batch = block.to_record_batch(&table_schema)?;
                 writer.write(&record_batch)?;
-                *self = SpillsDataWriter::Initialized(InitializedBlocksStreamWriter {
-                    writer,
-                    table_schema,
-                });
+                let write_duration = *write_duration + start.elapsed();
+                *self = SpillsDataWriter::Initialized {
+                    writer: InitializedBlocksStreamWriter {
+                        writer,
+                        table_schema,
+                    },
+                    target: *target,
+                    write_duration,
+                };
 
                 Ok(())
             }
-            SpillsDataWriter::Initialized(writer) => {
+            SpillsDataWriter::Initialized {
+                writer,
+                write_duration,
+                ..
+            } => {
+                let start = Instant::now();
                 let record_batch = block.to_record_batch(&writer.table_schema)?;
-                Ok(writer.writer.write(&record_batch)?)
+                writer.writer.write(&record_batch)?;
+                *write_duration += start.elapsed();
+                Ok(())
             }
         }
     }
 
     pub fn flush(&mut self) -> Result<()> {
         match self {
-            SpillsDataWriter::Uninitialize(_) => Err(ErrorCode::Internal(
+            SpillsDataWriter::Uninitialize { .. } => Err(ErrorCode::Internal(
                 "Bad state, BlockStreamWriter is uninitialized",
             )),
-            SpillsDataWriter::Initialized(writer) => {
+            SpillsDataWriter::Initialized {
+                writer,
+                write_duration,
+                ..
+            } => {
+                let start = Instant::now();
                 writer.writer.flush()?;
-                Ok(writer.writer.inner_mut().flush()?)
+                writer.writer.inner_mut().flush()?;
+                *write_duration += start.elapsed();
+                Ok(())
+            }
+        }
+    }
+
+    /// Flush current buffered data as complete row groups and return the total flushed row group count.
+    pub fn flush_row_groups(&mut self) -> Result<usize> {
+        match self {
+            SpillsDataWriter::Uninitialize { .. } => Err(ErrorCode::Internal(
+                "Bad state, BlockStreamWriter is uninitialized",
+            )),
+            SpillsDataWriter::Initialized {
+                writer,
+                write_duration,
+                ..
+            } => {
+                let start = Instant::now();
+                writer.writer.flush()?;
+                writer.writer.inner_mut().flush()?;
+                *write_duration += start.elapsed();
+                Ok(writer.writer.flushed_row_groups().len())
             }
         }
     }
 
     pub fn close(self) -> Result<(usize, Vec<RowGroupMetaData>)> {
         match self {
-            SpillsDataWriter::Uninitialize(mut writer) => {
+            SpillsDataWriter::Uninitialize { mut writer, .. } => {
                 if let Some(writer) = writer.take() {
                     writer.close()?;
                 }
 
                 Ok((0, vec![]))
             }
-            SpillsDataWriter::Initialized(mut writer) => {
+            SpillsDataWriter::Initialized {
+                mut writer,
+                target,
+                mut write_duration,
+            } => {
+                let start = Instant::now();
                 writer.writer.flush()?;
                 let row_groups = writer.writer.flushed_row_groups().to_vec();
                 let bytes_written = writer.writer.bytes_written();
                 writer.writer.into_inner()?.close()?;
-
+                write_duration += start.elapsed();
+                record_write_profile(target, write_duration, bytes_written);
                 Ok((bytes_written, row_groups))
             }
         }
@@ -556,7 +610,7 @@ impl SpillsDataReader {
         )?;
         let batch = reader.next().transpose()?.unwrap();
         debug_assert!(reader.next().is_none());
-        record_read_profile(self.target, &start, fetched.read_bytes);
+        record_read_profile(self.target, start.elapsed(), fetched.read_bytes);
         Ok(Some(DataBlock::from_record_batch(
             &self.data_schema,
             &batch,

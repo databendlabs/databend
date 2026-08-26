@@ -15,10 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
 use crate::ScalarExpr;
-use crate::binder::split_conjunctions;
+use crate::binder::conjunctions;
+use crate::binder::into_conjunctions;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
@@ -86,7 +88,7 @@ impl PullUpFilterOptimizer {
     fn pull_up_filter(&mut self, s_expr: &SExpr, filter: &Filter) -> Result<SExpr> {
         let child = self.pull_up(s_expr.child(0)?)?;
         for predicate in filter.predicates.iter() {
-            self.predicates.extend(split_conjunctions(predicate));
+            self.predicates.extend(conjunctions(predicate).cloned());
         }
         Ok(child)
     }
@@ -109,36 +111,37 @@ impl PullUpFilterOptimizer {
         let mut right = right_pull_up.pull_up(s_expr.child(1)?)?;
         if left_need_pull_up {
             for predicate in left_pull_up.predicates {
-                self.predicates.extend(split_conjunctions(&predicate));
+                self.predicates.extend(into_conjunctions(predicate));
             }
         } else {
             left = left_pull_up.finish(left)?;
         }
         if right_need_pull_up {
             for predicate in right_pull_up.predicates {
-                self.predicates.extend(split_conjunctions(&predicate));
+                self.predicates.extend(into_conjunctions(predicate));
             }
         } else {
             right = right_pull_up.finish(right)?;
         }
         let mut join = join.clone();
         if left_need_pull_up && right_need_pull_up {
-            for condition in join.equi_conditions.iter() {
-                let left_condition = condition.left.clone();
-                let right_condition = condition.right.clone();
+            for condition in std::mem::take(&mut join.equi_conditions) {
+                let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                    &condition.left,
+                    &condition.right,
+                ]);
                 let predicate = ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
                     func_name: "eq".to_string(),
                     params: vec![],
-                    arguments: vec![left_condition, right_condition],
+                    arguments: vec![condition.left, condition.right],
+                    return_type: Box::new(return_type),
                 });
                 self.predicates.push(predicate);
             }
-            for predicate in join.non_equi_conditions.iter() {
-                self.predicates.extend(split_conjunctions(predicate));
+            for predicate in std::mem::take(&mut join.non_equi_conditions) {
+                self.predicates.extend(into_conjunctions(predicate));
             }
-            join.equi_conditions.clear();
-            join.non_equi_conditions.clear();
             join.join_type = JoinType::Cross;
         }
         let s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));

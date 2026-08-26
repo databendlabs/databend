@@ -41,6 +41,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
+use crate::plans::FunctionCall;
 use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
 use crate::plans::RelOp;
@@ -594,7 +595,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 column: ColumnBindingBuilder::new(
                     format!("group_item_{}", group_item.index),
                     group_item.index,
-                    group_item.scalar.data_type()?.into(),
+                    Box::new(group_item.scalar.data_type().into_owned()),
                     Visibility::Visible,
                 )
                 .build(),
@@ -604,7 +605,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         // Transform aggregate functions for re-aggregation
         for agg_func in hierarchical_agg.aggregate_functions.iter_mut() {
             // Get the original data type before modifying the function
-            let original_data_type = agg_func.scalar.data_type()?;
+            let original_data_type = agg_func.scalar.data_type().into_owned();
             if let ScalarExpr::AggregateFunction(func) = &mut agg_func.scalar {
                 match func.func_name.as_str() {
                     "count" => {
@@ -618,7 +619,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                                 column: ColumnBindingBuilder::new(
                                     format!("agg_result_{}", agg_func.index),
                                     agg_func.index,
-                                    original_data_type.clone().into(), // Keep original UInt64 type, not nullable
+                                    Box::new(original_data_type.clone()), // Keep original UInt64 type, not nullable
                                     Visibility::Visible,
                                 )
                                 .build(),
@@ -633,7 +634,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                             column: ColumnBindingBuilder::new(
                                 format!("agg_result_{}", agg_func.index),
                                 agg_func.index,
-                                original_data_type.into(),
+                                Box::new(original_data_type),
                                 Visibility::Visible,
                             )
                             .build(),
@@ -1016,5 +1017,12 @@ impl VisitorMut<'_> for GroupingSetsNullVisitor {
             return Ok(());
         }
         walk_expr_mut(self, expr)
+    }
+
+    fn visit_function_call(&mut self, function: &mut FunctionCall) -> Result<()> {
+        for argument in &mut function.arguments {
+            self.visit(argument)?;
+        }
+        function.refresh_return_type()
     }
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_statistics::Histogram;
+pub use databend_common_statistics::NdvEstimate;
 pub use databend_common_statistics::StatCardinality;
 pub use databend_common_statistics::StatCount;
 pub use databend_common_statistics::StatEstimate;
@@ -26,7 +27,7 @@ use crate::types::nullable::NullableDomain;
 #[derive(Debug, Clone)]
 pub struct StatDistribution<D> {
     pub domain: Domain,
-    pub ndv: StatEstimate,
+    pub ndv: NdvEstimate,
     pub null_count: StatCount,
     pub distribution: D,
 }
@@ -53,6 +54,14 @@ impl<D: DistributionInvariant> StatDistribution<D> {
                 ));
             }
             self.domain.check_data_type(data_type)?;
+        }
+        if let Some(domain_cardinality) = self.domain.finite_cardinality_upper()
+            && self.ndv.upper > domain_cardinality as f64
+        {
+            return Err(format!(
+                "ndv upper bound exceeds finite domain cardinality: ndv {:?}, domain cardinality {domain_cardinality:?}, domain {:?}",
+                self.ndv, self.domain
+            ));
         }
         self.null_count.check_consistency()?;
         if let Domain::Nullable(domain) = &self.domain {
@@ -92,15 +101,7 @@ impl<D> StatDistribution<D> {
         let StatCardinality::Exact(cardinality) = cardinality else {
             return self.null_count;
         };
-        let cardinality = cardinality as f64;
-        let non_null_lower = self.ndv.lower;
-        let null_upper_from_cardinality = cardinality - non_null_lower;
-        debug_assert!(
-            null_upper_from_cardinality >= 0.0,
-            "ndv lower bound exceeds cardinality: {non_null_lower:?} > {cardinality:?}"
-        );
-        let upper = self.null_count.upper().min(null_upper_from_cardinality);
-        self.null_count.reduce(upper)
+        self.null_count.reduce(cardinality as f64)
     }
 }
 
@@ -234,7 +235,10 @@ fn check_histogram_distribution<D>(
     if !num_values.is_finite() || num_values < 0.0 {
         return Err(format!("histogram num_values is invalid: {num_values}"));
     }
-    let histogram_ndv = histogram.num_distinct_values();
+    let histogram_ndv = histogram
+        .ndv()
+        .expected
+        .ok_or_else(|| "histogram ndv must have an expected value".to_string())?;
     if !histogram_ndv.is_finite() || histogram_ndv < 0.0 {
         return Err(format!("histogram ndv is invalid: {histogram_ndv}"));
     }
@@ -284,6 +288,8 @@ mod tests {
 
     use super::*;
     use crate::types::boolean::BooleanDomain;
+    use crate::types::number::NumberDomain;
+    use crate::types::number::SimpleDomain;
 
     #[test]
     fn test_empty_histogram_requires_non_null_value_domain() {
@@ -292,7 +298,7 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: StatEstimate::exact(0.0),
+            ndv: NdvEstimate::exact(0.0),
             null_count: StatCount::exact(10),
             distribution: OwnedDistribution::Histogram(Histogram::Int(TypedHistogram::new(
                 vec![],
@@ -314,7 +320,7 @@ mod tests {
                     has_false: true,
                 }))),
             }),
-            ndv: StatEstimate::exact(2.0),
+            ndv: NdvEstimate::exact(2.0),
             null_count: StatCount::exact(1),
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::exact(1.0),
@@ -328,7 +334,7 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: StatEstimate::exact(0.0),
+            ndv: NdvEstimate::exact(0.0),
             null_count: StatCount::exact(10),
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::exact(0.0),
@@ -342,7 +348,7 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: StatEstimate::new(0.0, 1.0, 1.0),
+            ndv: NdvEstimate::exact(0.0),
             null_count: StatCount::exact(10),
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::new(0.0, 0.5, 1.0),
@@ -354,7 +360,47 @@ mod tests {
     }
 
     #[test]
-    fn test_effective_null_count_keeps_known_ndv_rows() {
+    fn test_ndv_must_fit_finite_domain_cardinality() {
+        let invalid = ReturnStat {
+            domain: Domain::Number(NumberDomain::Int8(SimpleDomain { min: -1, max: 1 })),
+            ndv: NdvEstimate::exact(4.0),
+            null_count: StatCount::exact(0),
+            distribution: OwnedDistribution::Unknown,
+        };
+
+        let err = invalid.check_consistency().unwrap_err();
+        assert!(err.contains("finite domain cardinality"));
+
+        let valid_nullable_all_null = ReturnStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            ndv: NdvEstimate::exact(0.0),
+            null_count: StatCount::exact(10),
+            distribution: OwnedDistribution::Unknown,
+        };
+
+        valid_nullable_all_null.check_consistency().unwrap();
+
+        let valid_nullable_boolean = ReturnStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Boolean(BooleanDomain {
+                    has_true: true,
+                    has_false: true,
+                }))),
+            }),
+            ndv: NdvEstimate::exact(2.0),
+            null_count: StatCount::exact(1),
+            distribution: OwnedDistribution::Unknown,
+        };
+
+        valid_nullable_boolean.check_consistency().unwrap();
+    }
+
+    #[test]
+    fn test_effective_null_count_does_not_infer_non_null_rows_from_ndv() {
         let stat = ReturnStat {
             domain: Domain::Nullable(NullableDomain {
                 has_null: true,
@@ -363,14 +409,14 @@ mod tests {
                     has_false: true,
                 }))),
             }),
-            ndv: StatEstimate::exact(3.0),
+            ndv: NdvEstimate::exact(3.0),
             null_count: StatCount::exact(1),
             distribution: OwnedDistribution::Unknown,
         };
 
         assert_eq!(
             stat.effective_null_count(StatCardinality::exact(3)),
-            StatCount::estimate(0.0, 0.0)
+            StatCount::estimate(1.0, 1.0)
         );
         assert_eq!(
             stat.effective_null_count(StatCardinality::estimate(3.0)),

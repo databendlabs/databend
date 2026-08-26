@@ -24,12 +24,11 @@ use pretty_assertions::assert_eq;
 /// It also print out encoded protobuf message as data for backward compatibility test.
 pub(crate) fn test_pb_from_to<MT>(name: impl Display, m: MT) -> anyhow::Result<()>
 where MT: FromToProto + PartialEq + Debug {
-    let p = m.to_pb()?;
+    let p = m.to_pb();
 
     let n = std::any::type_name::<MT>();
 
-    let mut buf = vec![];
-    prost::Message::encode(&p, &mut buf)?;
+    let buf = prost::Message::encode_to_vec(&p);
 
     let var_name = n.split("::").last().unwrap();
     // The encoded data should be saved for compatibility test.

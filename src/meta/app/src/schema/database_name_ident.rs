@@ -34,10 +34,7 @@ impl DatabaseNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::schema::DatabaseId;
-    use crate::schema::database_name_ident::DatabaseNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct DatabaseNameRsc;
@@ -46,10 +43,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "DatabaseNameIdent";
         const HAS_TENANT: bool = true;
         type ValueType = DatabaseId;
-    }
-
-    impl kvapi::Value for DatabaseId {
-        type KeyType = DatabaseNameIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

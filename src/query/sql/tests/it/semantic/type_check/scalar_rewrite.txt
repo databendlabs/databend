@@ -1,0 +1,34 @@
+=== not_between_rewrites_to_or_comparisons ===
+description: A NOT BETWEEN predicate from range-join tests should type check as the explicit disjunction.
+sql: number NOT BETWEEN 1 AND 5
+status: ok
+scalar: or(lt(number (#0), 1), gt(number (#0), 5))
+type: Boolean NULL
+
+=== is_distinct_from_rewrites_null_safe_comparison ===
+description: IS DISTINCT FROM appears in join tests and should lower through the null-aware comparison rewrite.
+sql: number IS DISTINCT FROM delta
+status: ok
+scalar: assume_not_null(if(and(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))), false, or(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))), true, noteq(number (#0), delta (#3))))
+type: Boolean
+
+=== is_not_distinct_from_rewrites_null_safe_comparison ===
+description: IS NOT DISTINCT FROM should share the same null-aware comparison path with the inverted result.
+sql: number IS NOT DISTINCT FROM delta
+status: ok
+scalar: assume_not_null(if(and(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))), true, or(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))), false, eq(number (#0), delta (#3))))
+type: Boolean
+
+=== searched_case_from_sqllogictest_binds ===
+description: A searched CASE expression from sqllogictest patterns should rewrite into the IF function shape.
+sql: CASE WHEN number > 1 THEN text WHEN number < 0 THEN pattern ELSE 'fallback' END
+status: ok
+scalar: if(gt(number (#0), 1), text (#1), lt(number (#0), 0), pattern (#2), 'fallback')
+type: String NULL
+
+=== simple_case_compares_operand_to_each_condition ===
+description: A simple CASE expression should preserve the operand-comparison rewrite.
+sql: CASE number WHEN 1 THEN text WHEN 2 THEN pattern ELSE 'fallback' END
+status: ok
+scalar: if(eq(number (#0), 1), text (#1), eq(number (#0), 2), pattern (#2), 'fallback')
+type: String NULL

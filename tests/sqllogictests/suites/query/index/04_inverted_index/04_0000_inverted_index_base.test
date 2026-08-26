@@ -564,7 +564,7 @@ select * from t4 where query('body.videoInfo.extraData.name:codecB AND body.vide
 
 
 statement ok
-CREATE TABLE t_native (id int, content string, INVERTED INDEX idx1 (content)) storage_format = 'native' row_per_page = 2;
+CREATE TABLE t_native (id int, content string, INVERTED INDEX idx1 (content)) storage_format = 'parquet' row_per_page = 2;
 
 statement ok
 INSERT INTO t_native VALUES 

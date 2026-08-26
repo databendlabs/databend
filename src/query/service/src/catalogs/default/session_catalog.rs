@@ -80,6 +80,8 @@ use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -99,8 +101,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -108,10 +108,13 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
@@ -316,6 +319,45 @@ impl Catalog for SessionCatalog {
         }
     }
 
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.inner.get_mv_definition(tenant, mv_table_id).await
+    }
+
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.inner
+            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
+            .await
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        self.inner
+            .get_mv_current_source_generation(tenant, source_table_id)
+            .await
+    }
+
+    async fn get_mv_source_binding_snapshot(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<MVSourceBindingSnapshot> {
+        self.inner
+            .get_mv_source_binding_snapshot(tenant, source_table_id)
+            .await
+    }
+
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,
@@ -517,7 +559,10 @@ impl Catalog for SessionCatalog {
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         match req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
-            Some(prefix) => self.temp_tbl_mgr.lock().create_table(req, prefix.clone()),
+            Some(_) if req.source_table_option.is_some() => Err(ErrorCode::Unimplemented(
+                "Atomic source option update is not supported for temporary tables",
+            )),
+            Some(prefix) => self.temp_tbl_mgr.lock().create_table(req, prefix),
             None => self.inner.create_table(req).await,
         }
     }
@@ -579,6 +624,7 @@ impl Catalog for SessionCatalog {
 
     async fn retryable_update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         mut req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         let state = self.txn_mgr.lock().state();
@@ -588,7 +634,9 @@ impl Catalog for SessionCatalog {
                 let reply = if req.is_empty() {
                     Ok(Default::default())
                 } else {
-                    self.inner.retryable_update_multi_table_meta(req).await?
+                    self.inner
+                        .retryable_update_multi_table_meta(tenant, req)
+                        .await?
                 };
                 self.temp_tbl_mgr
                     .lock()
@@ -596,7 +644,7 @@ impl Catalog for SessionCatalog {
                 Ok(reply)
             }
             TxnState::Active => {
-                self.txn_mgr.lock().update_multi_table_meta(req);
+                self.txn_mgr.lock().update_multi_table_meta(tenant, req)?;
                 Ok(Ok(Default::default()))
             }
             TxnState::Fail => unreachable!(),
@@ -843,8 +891,21 @@ impl Catalog for SessionCatalog {
         self.inner.create_dictionary(req).await
     }
 
-    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
-        self.inner.update_dictionary(req).await
+    async fn get_dictionary_id(
+        &self,
+        dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryId>>> {
+        self.inner.get_dictionary_id(dict_ident).await
+    }
+
+    async fn update_dictionary_by_id(
+        &self,
+        id_ident: DictionaryIdIdent,
+        dictionary_meta: DictionaryMeta,
+    ) -> Result<Change<DictionaryMeta>> {
+        self.inner
+            .update_dictionary_by_id(id_ident, dictionary_meta)
+            .await
     }
 
     async fn drop_dictionary(

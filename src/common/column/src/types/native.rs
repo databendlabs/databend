@@ -142,11 +142,11 @@ impl NativeType for F32 {
     }
     #[inline]
     fn from_le_bytes(bytes: Self::Bytes) -> Self {
-        Self(f32::from_le_bytes(bytes))
+        OrderedFloat(f32::from_le_bytes(bytes))
     }
     #[inline]
     fn from_be_bytes(bytes: Self::Bytes) -> Self {
-        Self(f32::from_be_bytes(bytes))
+        OrderedFloat(f32::from_be_bytes(bytes))
     }
 }
 
@@ -164,11 +164,11 @@ impl NativeType for F64 {
     }
     #[inline]
     fn from_le_bytes(bytes: Self::Bytes) -> Self {
-        Self(f64::from_le_bytes(bytes))
+        OrderedFloat(f64::from_le_bytes(bytes))
     }
     #[inline]
     fn from_be_bytes(bytes: Self::Bytes) -> Self {
-        Self(f64::from_be_bytes(bytes))
+        OrderedFloat(f64::from_be_bytes(bytes))
     }
 }
 

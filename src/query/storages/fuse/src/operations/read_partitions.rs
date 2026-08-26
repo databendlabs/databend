@@ -33,12 +33,17 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
+use databend_common_catalog::table::ReusablePrunedMetas;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
@@ -48,7 +53,7 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_sql::DefaultExprBinder;
+use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
@@ -58,6 +63,8 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_SIZE;
@@ -72,7 +79,6 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::ROW_COUN
 use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::stat_name;
 use databend_storages_common_table_meta::table::ChangeType;
-use databend_storages_common_table_meta::table::ClusterType;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -97,6 +103,9 @@ use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
 use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
+use crate::pruning_pipeline::PrunedSegmentMeta;
+use crate::pruning_pipeline::RuntimeFilterPruneContext;
+use crate::pruning_pipeline::RuntimeTopNSegmentReorder;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
 use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
@@ -109,7 +118,99 @@ use crate::segment_format_from_location;
 const DEFAULT_GRAM_SIZE: usize = 3;
 const DEFAULT_BLOOM_SIZE: u64 = 1024 * 1024;
 
+struct SnapshotReadInfo {
+    snapshot_id: SnapshotId,
+    snapshot_location: String,
+    segment_locations: Vec<Location>,
+    row_count: usize,
+    compressed_byte_size: usize,
+    block_count: usize,
+}
+
+type IndexedBlockMetas = Vec<(BlockMetaIndex, Arc<BlockMeta>)>;
+type PrunedBlockMetas = Vec<(Option<BlockMetaIndex>, Arc<BlockMeta>)>;
+
+#[derive(Clone)]
+struct ReusableFusePrunedMetas {
+    segment_locations: Vec<SegmentLocation>,
+    block_metas: IndexedBlockMetas,
+}
+
+impl SnapshotReadInfo {
+    fn segment_count(&self) -> usize {
+        self.segment_locations.len()
+    }
+
+    fn into_pruning_segments(self) -> Vec<SegmentLocation> {
+        create_segment_location_vector(self.segment_locations, Some(self.snapshot_location))
+    }
+}
+
+fn read_partitions_pruning_mode(push_downs: &Option<PushDownInfo>) -> ReadPartitionsPruningMode {
+    push_downs
+        .as_ref()
+        .map(|push_downs| push_downs.read_partitions_pruning_mode)
+        .unwrap_or_default()
+}
+
+fn enable_prune_cache_for_query(ctx: &Arc<dyn TableContext>) -> Result<bool> {
+    Ok(ctx.get_settings().get_enable_prune_cache()?
+        && !matches!(ctx.get_query_kind(), QueryKind::Explain))
+}
+
+fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -> bool {
+    left.len() == right.len()
+        && left.iter().zip(right).all(|(left, right)| {
+            left.segment_idx == right.segment_idx
+                && left.location == right.location
+                && left.snapshot_loc == right.snapshot_loc
+        })
+}
+
+fn deterministic_prune_cache_key(
+    segments_location: &[SegmentLocation],
+    push_downs: &Option<PushDownInfo>,
+    pruning_mode: ReadPartitionsPruningMode,
+    enable_proxy_bloom_pruning: bool,
+) -> Option<String> {
+    let mut push_downs = push_downs.as_ref()?.clone();
+    if !push_downs.is_deterministic {
+        return None;
+    }
+    push_downs.read_partitions_pruning_mode = pruning_mode;
+    let lightweight_bloom_pruning =
+        pruning_mode == ReadPartitionsPruningMode::Lightweight && enable_proxy_bloom_pruning;
+    Some(format!(
+        "{:x}",
+        Sha256::digest(format!(
+            "{:?}_{:?}_{:?}",
+            segments_location, push_downs, lightweight_bloom_pruning
+        ))
+    ))
+}
+
 impl FuseTable {
+    async fn read_snapshot_info(&self) -> Result<Option<SnapshotReadInfo>> {
+        let snapshot = self.read_table_snapshot().await?;
+        let Some(snapshot) = snapshot else {
+            return Ok(None);
+        };
+
+        let segment_locations = snapshot.segments.clone();
+        let snapshot_location = self
+            .meta_location_generator
+            .gen_snapshot_location(&snapshot.snapshot_id, snapshot.format_version)?;
+
+        Ok(Some(SnapshotReadInfo {
+            snapshot_id: snapshot.snapshot_id,
+            snapshot_location,
+            segment_locations,
+            row_count: snapshot.summary.row_count as usize,
+            compressed_byte_size: snapshot.summary.compressed_byte_size as usize,
+            block_count: snapshot.summary.block_count as usize,
+        }))
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn do_read_partitions(
@@ -118,6 +219,20 @@ impl FuseTable {
         push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        let (statistics, partitions, _) = self
+            .do_read_partitions_with_reusable_pruned_metas(ctx, push_downs, _dry_run, None)
+            .await?;
+        Ok((statistics, partitions))
+    }
+
+    pub async fn do_read_partitions_with_reusable_pruned_metas(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
+        reusable_pruned_metas: Option<ReusablePrunedMetas>,
+    ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
+        let pruning_mode = read_partitions_pruning_mode(&push_downs);
         let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
             // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".
@@ -126,35 +241,21 @@ impl FuseTable {
             });
             return self
                 .do_read_changes_partitions(ctx, push_downs, change_type, &changes_desc.location)
-                .await;
+                .await
+                .map(|(statistics, partitions)| (statistics, partitions, None));
         }
 
-        let snapshot = self.read_table_snapshot().await?;
+        let read_info = self.read_snapshot_info().await?;
 
         info!(
             "Reading partitions for table {}, push downs: {:?}, snapshot: {:?}",
             self.name(),
             push_downs,
-            snapshot.as_ref().map(|sn| sn.snapshot_id)
+            read_info.as_ref().map(|read_info| read_info.snapshot_id)
         );
-        match snapshot {
-            Some(snapshot) => {
-                // To optimize the Hilbert clustering logic, it is necessary to pre-set the selected segments.
-                // Since the recluster logic requires scanning the table twice, fetching the segments directly
-                // can avoid redundant selection logic and ensure that the same data is accessed during both scans.
-                // TODO(zhyass): refactor if necessary.
-                let selected_segment = ctx.selected_segment_locations().list();
-                let segment_locs = if !selected_segment.is_empty() {
-                    selected_segment
-                } else {
-                    snapshot.segments.clone()
-                };
-                let segment_len = segment_locs.len();
-
-                // snapshot.summary.block_count
-                let snapshot_loc = self
-                    .meta_location_generator
-                    .gen_snapshot_location(&snapshot.snapshot_id, snapshot.format_version)?;
+        match read_info {
+            Some(read_info) => {
+                let segment_len = read_info.segment_count();
 
                 let mut nodes_num = 1;
                 let cluster = ctx.get_cluster();
@@ -163,28 +264,34 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
-                    let mut segments = Vec::with_capacity(segment_locs.len());
-                    for (idx, segment_location) in segment_locs.into_iter().enumerate() {
+                if pruning_mode == ReadPartitionsPruningMode::Normal
+                    && (self.is_column_oriented()
+                        || (segment_len > nodes_num && distributed_pruning))
+                {
+                    let snapshot_location = read_info.snapshot_location;
+                    let mut segments = Vec::with_capacity(read_info.segment_locations.len());
+                    for (idx, segment_location) in
+                        read_info.segment_locations.into_iter().enumerate()
+                    {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
                     }
 
                     return Ok((
                         PartStatistics::new_estimated(
-                            Some(snapshot_loc),
-                            snapshot.summary.row_count as usize,
-                            snapshot.summary.compressed_byte_size as usize,
+                            Some(snapshot_location),
+                            read_info.row_count,
+                            read_info.compressed_byte_size,
                             segment_len,
                             segment_len,
                         ),
                         Partitions::create(PartitionsShuffleKind::Mod, segments),
+                        None,
                     ));
                 }
 
-                let snapshot_loc = Some(snapshot_loc);
                 let table_schema = self.schema_with_stream();
-                let summary = snapshot.summary.block_count as usize;
-                let segments_location = create_segment_location_vector(segment_locs, snapshot_loc);
+                let summary = read_info.block_count;
+                let segments_location = read_info.into_pruning_segments();
 
                 self.prune_snapshot_blocks(
                     ctx.clone(),
@@ -192,10 +299,12 @@ impl FuseTable {
                     table_schema,
                     segments_location,
                     summary,
+                    pruning_mode,
+                    reusable_pruned_metas,
                 )
                 .await
             }
-            None => Ok((PartStatistics::default(), Partitions::default())),
+            None => Ok((PartStatistics::default(), Partitions::default(), None)),
         }
     }
 
@@ -208,6 +317,16 @@ impl FuseTable {
     ) -> Result<Option<Pipeline>> {
         let snapshot = plan.statistics.snapshot.clone();
         let table_schema = self.schema_with_stream();
+        let internal_column_names = plan
+            .internal_columns
+            .as_ref()
+            .map(|columns| {
+                columns
+                    .values()
+                    .map(|column| column.column_name().clone())
+                    .collect::<HashSet<_>>()
+            })
+            .unwrap_or_default();
         let dal = self.operator.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
         let mut segment_format = FuseSegmentFormat::Row;
@@ -244,7 +363,8 @@ impl FuseTable {
                     )
                 });
 
-        if ctx.get_settings().get_enable_prune_cache()? {
+        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
+        if enable_prune_cache {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
                 ctx.set_pruned_partitions_stats(plan_id, stat);
                 let sender = part_info_tx.clone();
@@ -290,6 +410,7 @@ impl FuseTable {
                     pruner.clone(),
                     &mut prune_pipeline,
                     ctx.clone(),
+                    plan.scan_id,
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
@@ -302,10 +423,12 @@ impl FuseTable {
                     pruner.clone(),
                     &mut prune_pipeline,
                     ctx.clone(),
+                    plan.scan_id,
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
                     table_schema.clone(),
+                    internal_column_names.clone(),
                 )?;
             }
         }
@@ -344,7 +467,9 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         segments_location: Vec<SegmentLocation>,
         summary: usize,
-    ) -> Result<(PartStatistics, Partitions)> {
+        pruning_mode: ReadPartitionsPruningMode,
+        reusable_pruned_metas: Option<ReusablePrunedMetas>,
+    ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
         let num_segments_to_prune = segments_location.len();
         let start = Instant::now();
         info!(
@@ -357,57 +482,128 @@ impl FuseTable {
 
         type CacheItem = (PartStatistics, Partitions);
 
-        let derterministic_cache_key =
-            push_downs
-                .as_ref()
-                .filter(|p| p.is_deterministic)
-                .map(|push_downs| {
-                    format!(
-                        "{:x}",
-                        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
-                    )
-                });
-
-        if let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key) {
+        let derterministic_cache_key = deterministic_prune_cache_key(
+            &segments_location,
+            &push_downs,
+            pruning_mode,
+            ctx.get_settings().get_enable_proxy_bloom_pruning()?,
+        );
+        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
+        if enable_prune_cache
+            && let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key)
+        {
             info!("Retrieved snapshot block pruning result from cache");
-            return Ok(cached_result);
+            return Ok((cached_result.0, cached_result.1, None));
         }
 
-        let mut pruner =
-            self.build_fuse_pruner(ctx.clone(), push_downs.clone(), table_schema.clone(), dal)?;
+        let mut pruner = self.build_fuse_pruner(
+            ctx.clone(),
+            push_downs.clone(),
+            table_schema.clone(),
+            dal.clone(),
+        )?;
 
-        let block_metas = pruner.read_pruning(segments_location).await?;
-        let pruning_stats = pruner.pruning_stats();
+        let current_segment_locations = segments_location.clone();
+        let reusable_pruned_metas =
+            reusable_pruned_metas.filter(|_| pruning_mode == ReadPartitionsPruningMode::Normal);
+        let (block_metas, pruning_stats, pruning_log) = if let Some(reusable_pruned_metas) =
+            reusable_pruned_metas
+        {
+            let reusable_fuse_pruned_metas = reusable_pruned_metas
+                .as_ref()
+                .downcast_ref::<ReusableFusePrunedMetas>()
+                .ok_or_else(|| {
+                    ErrorCode::Internal("Invalid reusable pruned metas payload for FUSE table")
+                })?;
+            if same_segment_locations(
+                &reusable_fuse_pruned_metas.segment_locations,
+                &current_segment_locations,
+            ) {
+                let block_metas = pruner
+                    .refine_pruned_blocks(reusable_fuse_pruned_metas.block_metas.clone())
+                    .await?;
+                let pruning_stats = pruner.pruning_stats();
+                (
+                    block_metas,
+                    pruning_stats,
+                    "refine lightweight snapshot block pruning result",
+                )
+            } else {
+                info!(
+                    "ignore reusable lightweight snapshot block pruning result because snapshot segments changed"
+                );
+                let block_metas = pruner.read_pruning(segments_location).await?;
+                let pruning_stats = pruner.pruning_stats();
+                (block_metas, pruning_stats, "prune snapshot block end")
+            }
+        } else {
+            let block_metas = pruner.read_pruning(segments_location).await?;
+            let pruning_stats = pruner.pruning_stats();
+            (block_metas, pruning_stats, "prune snapshot block end")
+        };
 
         info!(
-            "prune snapshot block end, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
+            "{}, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
+            pruning_log,
             block_metas.len(),
             num_segments_to_prune,
             start.elapsed(),
             ctx.get_cluster().local_id,
         );
 
-        let block_metas = block_metas
-            .into_iter()
-            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
-            .collect::<Vec<_>>();
+        let result = if pruning_mode == ReadPartitionsPruningMode::Lightweight {
+            let pruned_block_metas = Self::clone_with_optional_block_meta_indexes(&block_metas);
+            (
+                self.read_statistics_with_metas(
+                    table_schema.clone(),
+                    push_downs,
+                    &pruned_block_metas,
+                    summary,
+                    pruning_stats,
+                )?,
+                Partitions::default(),
+                Some(Arc::new(ReusableFusePrunedMetas {
+                    segment_locations: current_segment_locations,
+                    block_metas,
+                }) as ReusablePrunedMetas),
+            )
+        } else {
+            let schema = self.schema_with_stream();
+            let pruned_block_metas = Self::attach_optional_block_meta_indexes(block_metas);
+            let (statistics, partitions) = self.read_partitions_with_metas(
+                schema,
+                push_downs,
+                &pruned_block_metas,
+                summary,
+                pruning_stats,
+            )?;
+            (statistics, partitions, None)
+        };
 
-        let schema = self.schema_with_stream();
-        let result = self.read_partitions_with_metas(
-            ctx.clone(),
-            schema,
-            push_downs,
-            &block_metas,
-            summary,
-            pruning_stats,
-        )?;
-
-        if let Some(cache_key) = derterministic_cache_key {
+        if enable_prune_cache && let Some(cache_key) = derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
-                cache.insert(cache_key, result.clone());
+                let mut cache_statistics = result.0.clone();
+                cache_statistics.pruning_stats = PruningStatistics::default();
+                cache.insert(cache_key, (cache_statistics, result.1.clone()));
             }
         }
         Ok(result)
+    }
+
+    fn attach_optional_block_meta_indexes(block_metas: IndexedBlockMetas) -> PrunedBlockMetas {
+        block_metas
+            .into_iter()
+            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
+            .collect()
+    }
+
+    fn clone_with_optional_block_meta_indexes(block_metas: &IndexedBlockMetas) -> PrunedBlockMetas {
+        block_metas
+            .iter()
+            .map(|(block_meta_index, block_meta)| {
+                (Some(block_meta_index.clone()), block_meta.clone())
+            })
+            .collect()
     }
 
     pub fn prune_segments_with_pipeline(
@@ -415,6 +611,7 @@ impl FuseTable {
         pruner: Arc<FusePruner>,
         prune_pipeline: &mut Pipeline,
         ctx: Arc<dyn TableContext>,
+        scan_id: usize,
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
@@ -441,8 +638,19 @@ impl FuseTable {
             )
         })?;
 
-        prune_pipeline
-            .add_transform(|input, output| ExtractSegmentTransform::create(input, output, true))?;
+        // Under runtime TopN (`enable_top_n`), schedule the most promising
+        // segments first so the shared boundary converges early.
+        let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
+        Self::add_runtime_top_n_segment_reorder::<PrunedCompactSegmentMeta>(
+            prune_pipeline,
+            &runtime_scan_filters,
+            max_threads,
+        )?;
+
+        let pruning_cost = pruner.pruning_ctx.pruning_cost.clone();
+        prune_pipeline.add_transform(|input, output| {
+            ExtractSegmentTransform::create(input, output, true, pruning_cost.clone())
+        })?;
         let sample_probability = table_sample(&pruner.push_down)?;
         if let Some(probability) = sample_probability {
             prune_pipeline.add_transform(|input, output| {
@@ -450,6 +658,12 @@ impl FuseTable {
             })?;
         }
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+        let runtime_filter_prune_context = RuntimeFilterPruneContext::try_create(
+            ctx.clone(),
+            scan_id,
+            pruner.table_schema.clone(),
+        )?;
+        let runtime_filter_prune_context_for_block = runtime_filter_prune_context.clone();
         if pruner.pruning_ctx.bloom_pruner.is_some()
             || pruner.pruning_ctx.inverted_index_pruner.is_some()
             || pruner.pruning_ctx.spatial_index_pruner.is_some()
@@ -457,7 +671,12 @@ impl FuseTable {
         {
             // async pruning with bloom index or inverted index.
             prune_pipeline.add_transform(|input, output| {
-                AsyncBlockPruneTransform::create(input, output, block_pruner.clone())
+                AsyncBlockPruneTransform::create(
+                    input,
+                    output,
+                    block_pruner.clone(),
+                    runtime_filter_prune_context_for_block.clone(),
+                )
             })?;
         } else {
             // sync pruning without a bloom index and inverted index.
@@ -467,11 +686,22 @@ impl FuseTable {
         }
 
         let push_down = pruner.push_down.clone();
+        // The static TopN pruner accumulates every surviving block meta
+        // behind a single-stream barrier before emitting a minimal cover.
+        // The runtime TopN boundary subsumes its value-statistics branch
+        // (skip it to keep the pipeline streaming), but not the
+        // inverted-index based limit prune. Plan-time (eager) pruning always
+        // keeps it: filters are only registered at pipeline build.
         if push_down
             .as_ref()
             .filter(|p| {
-                (!p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
-                    || (p.limit.is_some() && p.filter_only_use_index())
+                let value_top_n = !p.order_by.is_empty()
+                    && p.limit.is_some()
+                    && p.filters.is_none()
+                    && p.secure_filters.is_none();
+                let index_limit =
+                    p.limit.is_some() && p.secure_filters.is_none() && p.filter_only_use_index();
+                (value_top_n && runtime_scan_filters.preferred_filter().is_none()) || index_limit
             })
             .is_some()
         {
@@ -497,7 +727,7 @@ impl FuseTable {
             let pruning_ctx = pruner.pruning_ctx.clone();
             let schema = pruner.table_schema.clone();
             let push_down = push_down.as_ref().unwrap();
-            let filters = push_down.filters.clone();
+            let filters = push_down.effective_filters(&BUILTIN_FUNCTIONS);
             let sort = push_down.order_by.clone();
             let limit = push_down.limit;
             let vector_index = push_down.vector_index.clone().unwrap();
@@ -510,22 +740,17 @@ impl FuseTable {
             })?;
         }
 
-        let top_k = push_down
-            .as_ref()
-            .filter(|_| self.is_native()) // Only native format supports topk push down.
-            .and_then(|p| p.top_k(self.schema().as_ref()))
-            .map(|topk| {
-                DefaultExprBinder::try_new(ctx.clone())?
-                    .get_scalar(&topk.field)
-                    .map(|d| (topk, d))
-            })
-            .transpose()?;
+        // Storage-layer topk push down was only supported by the native format.
+        let top_k: Option<(TopK, Scalar)> = None;
 
         let limit = push_down
             .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit);
-        let enable_prune_cache = ctx.get_settings().get_enable_prune_cache()?;
+        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?
+            && runtime_filter_prune_context.is_none()
+            && runtime_scan_filters.is_empty();
+        let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
             limit,
@@ -541,6 +766,8 @@ impl FuseTable {
                 top_k.clone(),
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
+                runtime_scan_filters.clone(),
+                dry_run,
                 enable_prune_cache,
             )
         })?;
@@ -561,24 +788,49 @@ impl FuseTable {
         Ok(())
     }
 
+    fn add_runtime_top_n_segment_reorder<M: PrunedSegmentMeta + BlockMetaInfo>(
+        prune_pipeline: &mut Pipeline,
+        runtime_scan_filters: &RuntimeScanFilters,
+        max_threads: usize,
+    ) -> Result<()> {
+        let Some((filter, order)) = runtime_scan_filters.preferred_filter() else {
+            return Ok(());
+        };
+
+        let window = (max_threads * 8).clamp(64, 1024);
+        prune_pipeline.resize(1, false)?;
+        prune_pipeline.add_transform(|input, output| {
+            RuntimeTopNSegmentReorder::<M>::create(input, output, filter.clone(), order, window)
+        })?;
+        prune_pipeline.try_resize(max_threads)
+    }
+
     pub fn prune_column_oriented_segments_with_pipeline(
         &self,
         pruner: Arc<FusePruner>,
         prune_pipeline: &mut Pipeline,
         ctx: Arc<dyn TableContext>,
+        scan_id: usize,
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         _derterministic_cache_key: Option<String>,
         table_schema: TableSchemaRef,
+        internal_column_names: HashSet<String>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let push_down = &pruner.push_down;
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+        let runtime_filter_prune_context =
+            RuntimeFilterPruneContext::try_create(ctx.clone(), scan_id, table_schema.clone())?;
 
-        // Only the columns that are used in the push down will be read, cached and passed to the next pipeline.
+        // Only physical columns have `meta_<id>` and `stat_<id>` entries in a
+        // column-oriented segment. Internal columns are materialized later from block metadata;
+        // their physical dependencies have already been added to the pushdown projection.
+        let is_physical_column =
+            |column_id| !databend_common_expression::is_internal_column_id(column_id);
         let projection_column_ids = {
-            let arrow_schema = self.schema().as_ref().into();
-            let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema()));
+            let arrow_schema = table_schema.as_ref().into();
+            let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&table_schema));
             let column_nodes = match push_down.as_ref().and_then(|p| p.projection.as_ref()) {
                 Some(projection) => {
                     match push_down.as_ref().and_then(|p| p.output_columns.as_ref()) {
@@ -593,30 +845,59 @@ impl FuseTable {
             column_nodes
                 .iter()
                 .flat_map(|c| c.leaf_column_ids.clone())
+                .filter(|column_id| is_physical_column(*column_id))
                 .collect::<Vec<_>>()
         };
-        let filter_column_ids = match push_down.as_ref().and_then(|p| p.filters.as_ref()) {
+        let filter_column_ids = match push_down
+            .as_ref()
+            .and_then(|p| p.effective_filters(&BUILTIN_FUNCTIONS))
+        {
             Some(filters) => {
                 let mut column_ids = HashSet::new();
                 let filter = &filters.filter.as_expr(&BUILTIN_FUNCTIONS);
                 let column_refs = filter.column_refs();
                 for (column_name, _) in column_refs {
+                    if internal_column_names.contains(&column_name) {
+                        continue;
+                    }
                     let field = table_schema.field_with_name(&column_name)?;
                     for column_id in field.leaf_column_ids() {
-                        column_ids.insert(column_id);
+                        if is_physical_column(column_id) {
+                            column_ids.insert(column_id);
+                        }
                     }
                 }
                 column_ids
             }
             None => HashSet::new(),
         };
+        let mut block_prune_column_ids = projection_column_ids.clone();
+        for column_id in &filter_column_ids {
+            if !block_prune_column_ids.contains(column_id) {
+                block_prune_column_ids.push(*column_id);
+            }
+        }
+        if let Some(runtime_filter_prune_context) = &runtime_filter_prune_context {
+            for column_id in runtime_filter_prune_context.statistics_column_ids() {
+                if is_physical_column(*column_id) && !block_prune_column_ids.contains(column_id) {
+                    block_prune_column_ids.push(*column_id);
+                }
+            }
+        }
+        let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
+        if let Some((_, order)) = runtime_scan_filters.preferred_filter()
+            && is_physical_column(order.column_id)
+            && !block_prune_column_ids.contains(&order.column_id)
+        {
+            block_prune_column_ids.push(order.column_id);
+        }
 
         let mut segment_column_projection = HashSet::new();
         for column_id in projection_column_ids.iter() {
             segment_column_projection.insert(meta_name(*column_id));
         }
-        for column_id in filter_column_ids {
-            segment_column_projection.insert(stat_name(column_id));
+        for column_id in &block_prune_column_ids {
+            segment_column_projection.insert(stat_name(*column_id));
         }
         segment_column_projection.insert(ROW_COUNT.to_string());
         segment_column_projection.insert(BLOCK_SIZE.to_string());
@@ -647,13 +928,23 @@ impl FuseTable {
                 pruner.pruning_ctx.clone(),
             )
         })?;
+        // Same segment scheduling as the row-oriented path.
+        Self::add_runtime_top_n_segment_reorder::<PrunedColumnOrientedSegmentMeta>(
+            prune_pipeline,
+            &runtime_scan_filters,
+            max_threads,
+        )?;
         // TODO(Sky): deal with sample
+        let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
         prune_pipeline.add_sink(|input| {
             ColumnOrientedBlockPruneSink::create(
                 input,
                 block_pruner.clone(),
                 part_info_tx.clone(),
-                projection_column_ids.clone(),
+                block_prune_column_ids.clone(),
+                runtime_filter_prune_context.clone(),
+                runtime_scan_filters.clone(),
+                dry_run,
             )
         })?;
         // TODO(Sky): populate prune cache , deal with topn prune
@@ -695,34 +986,17 @@ impl FuseTable {
         let spatial_index_columns =
             Self::create_spatial_index_columns(&self.table_info.meta.indexes);
 
-        let pruner =
-            if !self.is_native() || self.cluster_type().is_none_or(|v| v != ClusterType::Linear) {
-                FusePruner::create(
-                    &ctx,
-                    dal,
-                    table_schema.clone(),
-                    &push_downs,
-                    self.bloom_index_cols(),
-                    ngram_args,
-                    spatial_index_columns,
-                    bloom_index_builder,
-                )?
-            } else {
-                let cluster_keys = self.linear_cluster_keys(ctx.clone());
-
-                FusePruner::create_with_pages(
-                    &ctx,
-                    dal,
-                    table_schema,
-                    &push_downs,
-                    self.cluster_key_meta(),
-                    cluster_keys,
-                    self.bloom_index_cols(),
-                    ngram_args,
-                    spatial_index_columns,
-                    bloom_index_builder,
-                )?
-            };
+        let pruner = FusePruner::create(
+            &ctx,
+            dal,
+            table_schema.clone(),
+            &push_downs,
+            self.partition_pruning_info(ctx.clone()),
+            self.bloom_index_cols(),
+            ngram_args,
+            spatial_index_columns,
+            bloom_index_builder,
+        )?;
         Ok(pruner)
     }
 
@@ -795,7 +1069,6 @@ impl FuseTable {
 
     pub fn read_partitions_with_metas(
         &self,
-        ctx: Arc<dyn TableContext>,
         schema: TableSchemaRef,
         push_downs: Option<PushDownInfo>,
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
@@ -804,27 +1077,20 @@ impl FuseTable {
     ) -> Result<(PartStatistics, Partitions)> {
         let arrow_schema = schema.as_ref().into();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
-
         let partitions_scanned = block_metas.len();
 
-        let top_k = push_downs
-            .as_ref()
-            .filter(|_| self.is_native()) // Only native format supports topk push down.
-            .and_then(|p| p.top_k(self.schema().as_ref()))
-            .map(|topk| {
-                DefaultExprBinder::try_new(ctx.clone())?
-                    .get_scalar(&topk.field)
-                    .map(|d| (topk, d))
-            })
-            .transpose()?;
+        // Storage-layer topk push down was only supported by the native format.
+        let top_k: Option<(TopK, Scalar)> = None;
 
         let (mut statistics, parts) =
             Self::to_partitions(Some(&schema), block_metas, &column_nodes, top_k, push_downs);
 
-        // Update planner statistics.
-        statistics.partitions_total = partitions_total;
-        statistics.partitions_scanned = partitions_scanned;
-        statistics.pruning_stats = pruning_stats;
+        Self::fill_partition_statistics(
+            &mut statistics,
+            partitions_total,
+            partitions_scanned,
+            pruning_stats,
+        );
 
         // Update context statistics.
         self.data_metrics
@@ -835,6 +1101,180 @@ impl FuseTable {
         Ok((statistics, parts))
     }
 
+    fn read_statistics_with_metas(
+        &self,
+        schema: TableSchemaRef,
+        push_downs: Option<PushDownInfo>,
+        block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        partitions_total: usize,
+        pruning_stats: PruningStatistics,
+    ) -> Result<PartStatistics> {
+        let arrow_schema = schema.as_ref().into();
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
+        let partitions_scanned = block_metas.len();
+        let mut statistics = Self::statistics_from_metas(block_metas, &column_nodes, &push_downs)?;
+
+        Self::fill_partition_statistics(
+            &mut statistics,
+            partitions_total,
+            partitions_scanned,
+            pruning_stats,
+        );
+
+        Ok(statistics)
+    }
+
+    fn fill_partition_statistics(
+        statistics: &mut PartStatistics,
+        partitions_total: usize,
+        partitions_scanned: usize,
+        pruning_stats: PruningStatistics,
+    ) {
+        statistics.partitions_total = partitions_total;
+        statistics.partitions_scanned = partitions_scanned;
+        statistics.pruning_stats = pruning_stats;
+    }
+
+    fn limit_without_order_or_filters(push_downs: &Option<PushDownInfo>) -> usize {
+        push_downs
+            .as_ref()
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
+            .and_then(|p| p.limit)
+            .unwrap_or(usize::MAX)
+    }
+
+    fn consume_limit(statistics: &mut PartStatistics, remaining: &mut usize, rows: usize) -> bool {
+        if *remaining > rows {
+            *remaining -= rows;
+            true
+        } else {
+            if *remaining != rows {
+                statistics.is_exact = false;
+            }
+            false
+        }
+    }
+
+    fn add_projected_column_read_bytes(
+        statistics: &mut PartStatistics,
+        block_meta: &BlockMeta,
+        columns: &[&ColumnNode],
+    ) {
+        for column in columns {
+            for column_id in &column.leaf_column_ids {
+                // ignore all deleted field
+                if let Some(col_metas) = &block_meta.col_metas.get(column_id) {
+                    let (_, len) = col_metas.offset_length();
+                    statistics.read_bytes += len as usize;
+                }
+            }
+        }
+    }
+
+    fn add_virtual_column_read_bytes(
+        statistics: &mut PartStatistics,
+        block_meta_index: &Option<BlockMetaIndex>,
+        block_meta: &BlockMeta,
+        virtual_column: &Option<VirtualColumnInfo>,
+    ) {
+        let Some(virtual_column) = virtual_column else {
+            return;
+        };
+
+        let virtual_block_meta = block_meta_index
+            .as_ref()
+            .and_then(|block_meta_index| block_meta_index.virtual_block_meta.as_ref());
+
+        if let Some(virtual_block_meta) = virtual_block_meta {
+            // Add bytes of virtual columns.
+            for virtual_column_meta in virtual_block_meta.virtual_column_metas.values() {
+                let (_, len) = virtual_column_meta.offset_length();
+                statistics.read_bytes += len as usize;
+            }
+
+            // Check whether source columns can be ignored. If not, add bytes of source columns.
+            for source_column_id in &virtual_column.source_column_ids {
+                if virtual_block_meta
+                    .ignored_source_column_ids
+                    .contains(source_column_id)
+                {
+                    continue;
+                }
+                if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
+                    let (_, len) = col_metas.offset_length();
+                    statistics.read_bytes += len as usize;
+                }
+            }
+        } else {
+            // If virtual column meta not exist, all source columns are needed.
+            for source_column_id in &virtual_column.source_column_ids {
+                if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
+                    let (_, len) = col_metas.offset_length();
+                    statistics.read_bytes += len as usize;
+                }
+            }
+        }
+    }
+
+    fn statistics_from_metas(
+        block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        column_nodes: &ColumnNodes,
+        push_downs: &Option<PushDownInfo>,
+    ) -> Result<PartStatistics> {
+        let limit = Self::limit_without_order_or_filters(push_downs);
+
+        let mut statistics = PartStatistics::default_exact();
+        if limit == 0 {
+            return Ok(statistics);
+        }
+
+        let mut remaining = limit;
+        match push_downs
+            .as_ref()
+            .and_then(|extras| extras.projection.as_ref())
+        {
+            None => {
+                for (_, block_meta) in block_metas {
+                    let rows = block_meta.row_count as usize;
+                    statistics.read_rows += rows;
+                    statistics.read_bytes += block_meta.block_size as usize;
+
+                    if !Self::consume_limit(&mut statistics, &mut remaining, rows) {
+                        break;
+                    }
+                }
+            }
+            Some(projection) => {
+                let extras = push_downs.as_ref().expect("checked above");
+                let columns = if let Some(output_columns) = &extras.output_columns {
+                    output_columns.project_column_nodes(column_nodes).unwrap()
+                } else {
+                    projection.project_column_nodes(column_nodes).unwrap()
+                };
+
+                for (block_meta_index, block_meta) in block_metas {
+                    let rows = block_meta.row_count as usize;
+                    statistics.read_rows += rows;
+
+                    Self::add_projected_column_read_bytes(&mut statistics, block_meta, &columns);
+                    Self::add_virtual_column_read_bytes(
+                        &mut statistics,
+                        block_meta_index,
+                        block_meta,
+                        &extras.virtual_column,
+                    );
+
+                    if !Self::consume_limit(&mut statistics, &mut remaining, rows) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        statistics.is_exact = statistics.is_exact && Self::is_exact(push_downs);
+        Ok(statistics)
+    }
+
     pub fn to_partitions(
         schema: Option<&TableSchemaRef>,
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
@@ -842,11 +1282,7 @@ impl FuseTable {
         top_k: Option<(TopK, Scalar)>,
         push_downs: Option<PushDownInfo>,
     ) -> (PartStatistics, Partitions) {
-        let limit = push_downs
-            .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
-            .and_then(|p| p.limit)
-            .unwrap_or(usize::MAX);
+        let limit = Self::limit_without_order_or_filters(&push_downs);
 
         let mut block_metas = block_metas.to_vec();
         if let Some((top_k, default)) = &top_k {
@@ -912,7 +1348,7 @@ impl FuseTable {
     fn is_exact(push_downs: &Option<PushDownInfo>) -> bool {
         push_downs
             .as_ref()
-            .is_none_or(|extra| extra.filters.is_none())
+            .is_none_or(|extra| extra.filters.is_none() && extra.secure_filters.is_none())
     }
 
     fn all_columns_partitions(
@@ -940,13 +1376,7 @@ impl FuseTable {
             statistics.read_rows += rows;
             statistics.read_bytes += block_meta.block_size as usize;
 
-            if remaining > rows {
-                remaining -= rows;
-            } else {
-                // the last block we shall take
-                if remaining != rows {
-                    statistics.is_exact = false;
-                }
+            if !Self::consume_limit(&mut statistics, &mut remaining, rows) {
                 break;
             }
         }
@@ -991,61 +1421,15 @@ impl FuseTable {
             let rows = block_meta.row_count as usize;
 
             statistics.read_rows += rows;
-            for column in &columns {
-                for column_id in &column.leaf_column_ids {
-                    // ignore all deleted field
-                    if let Some(col_metas) = &block_meta.col_metas.get(column_id) {
-                        let (_, len) = col_metas.offset_length();
-                        statistics.read_bytes += len as usize;
-                    }
-                }
-            }
+            Self::add_projected_column_read_bytes(&mut statistics, block_meta, &columns);
+            Self::add_virtual_column_read_bytes(
+                &mut statistics,
+                block_meta_index,
+                block_meta,
+                virtual_column,
+            );
 
-            let virtual_block_meta = if let Some(block_meta_index) = block_meta_index {
-                &block_meta_index.virtual_block_meta
-            } else {
-                &None
-            };
-            if let Some(virtual_column) = virtual_column {
-                if let Some(virtual_block_meta) = virtual_block_meta {
-                    // Add bytes of virtual columns
-                    for virtual_column_meta in virtual_block_meta.virtual_column_metas.values() {
-                        let (_, len) = virtual_column_meta.offset_length();
-                        statistics.read_bytes += len as usize;
-                    }
-
-                    // Check whether source columns can be ignored.
-                    // If not, add bytes of source columns.
-                    for source_column_id in &virtual_column.source_column_ids {
-                        if virtual_block_meta
-                            .ignored_source_column_ids
-                            .contains(source_column_id)
-                        {
-                            continue;
-                        }
-                        if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
-                            let (_, len) = col_metas.offset_length();
-                            statistics.read_bytes += len as usize;
-                        }
-                    }
-                } else {
-                    // If virtual column meta not exist, all source columns are needed.
-                    for source_column_id in &virtual_column.source_column_ids {
-                        if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
-                            let (_, len) = col_metas.offset_length();
-                            statistics.read_bytes += len as usize;
-                        }
-                    }
-                }
-            }
-
-            if remaining > rows {
-                remaining -= rows;
-            } else {
-                // the last block we shall take
-                if remaining != rows {
-                    statistics.is_exact = false;
-                }
+            if !Self::consume_limit(&mut statistics, &mut remaining, rows) {
                 break;
             }
         }
@@ -1102,16 +1486,9 @@ impl FuseTable {
             location,
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
-            meta.spatial_index_location.clone(),
-            meta.spatial_index_size.unwrap_or(0),
             rows_count,
             columns_meta,
             Some(columns_stats),
-            if spatial_stats.is_empty() {
-                None
-            } else {
-                Some(spatial_stats)
-            },
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
@@ -1167,20 +1544,44 @@ impl FuseTable {
             location,
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
-            meta.spatial_index_location.clone(),
-            meta.spatial_index_size.unwrap_or(0),
             rows_count,
             columns_meta,
             Some(columns_stat),
-            if spatial_stats.is_empty() {
-                None
-            } else {
-                Some(spatial_stats)
-            },
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
             create_on,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn segment_location(segment_idx: usize, location: &str, snapshot_loc: &str) -> SegmentLocation {
+        SegmentLocation {
+            segment_idx,
+            location: (location.to_string(), 1),
+            snapshot_loc: Some(snapshot_loc.to_string()),
+        }
+    }
+
+    #[test]
+    fn test_same_segment_locations_checks_snapshot_identity() {
+        let original = vec![
+            segment_location(0, "segment-a", "snapshot-a"),
+            segment_location(1, "segment-b", "snapshot-a"),
+        ];
+
+        assert!(same_segment_locations(&original, &original));
+
+        let mut changed_snapshot = original.clone();
+        changed_snapshot[0].snapshot_loc = Some("snapshot-b".to_string());
+        assert!(!same_segment_locations(&original, &changed_snapshot));
+
+        let mut changed_segment = original.clone();
+        changed_segment[1].location = ("segment-c".to_string(), 1);
+        assert!(!same_segment_locations(&original, &changed_segment));
     }
 }

@@ -6,12 +6,12 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DB="db_16_0002"
 
 snapshot_id() {
-    echo "select snapshot_id from fuse_snapshot('$1', '$2') where row_count=$3 limit 1" | $BENDSQL_CLIENT_CONNECT
+    echo "select snapshot_id from fuse_snapshot('$1', '$2') where row_count=$3 limit 1" | bendsql_connect_root
 }
 
 insert_stmt() {
     echo ">>>> $1"
-    echo "$1" | $BENDSQL_CLIENT_OUTPUT_NULL
+    echo "$1" | bendsql_connect_root_null
 }
 
 comment "prepare flashback metadata regression environment"
@@ -26,7 +26,7 @@ stmt "ALTER TABLE ${DB}.t_bloom ADD COLUMN c INT"
 stmt "ALTER TABLE ${DB}.t_bloom SET OPTIONS(bloom_index_columns = 'a, c')"
 insert_stmt "INSERT INTO ${DB}.t_bloom VALUES (2, 2, 2)"
 comment "flashback bloom table to saved snapshot"
-echo "ALTER TABLE ${DB}.t_bloom FLASHBACK TO (SNAPSHOT => '$BLOOM_SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT > /dev/null || exit 1
+echo "ALTER TABLE ${DB}.t_bloom FLASHBACK TO (SNAPSHOT => '$BLOOM_SNAPSHOT_ID')" | bendsql_connect_root > /dev/null || exit 1
 query "SELECT table_option NOT LIKE '%BLOOM_INDEX_COLUMNS=%' FROM system.tables WHERE database = '${DB}' AND name = 't_bloom'"
 insert_stmt "INSERT INTO ${DB}.t_bloom VALUES (3, 3)"
 query "SELECT count(*)=2 FROM ${DB}.t_bloom"
@@ -39,7 +39,7 @@ stmt "ALTER TABLE ${DB}.t_bloom_keep ADD COLUMN c INT"
 stmt "ALTER TABLE ${DB}.t_bloom_keep SET OPTIONS(bloom_index_columns = 'a')"
 insert_stmt "INSERT INTO ${DB}.t_bloom_keep VALUES (2, 2, 2)"
 comment "flashback compatible bloom table to saved snapshot"
-echo "ALTER TABLE ${DB}.t_bloom_keep FLASHBACK TO (SNAPSHOT => '$BLOOM_KEEP_SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT > /dev/null || exit 1
+echo "ALTER TABLE ${DB}.t_bloom_keep FLASHBACK TO (SNAPSHOT => '$BLOOM_KEEP_SNAPSHOT_ID')" | bendsql_connect_root > /dev/null || exit 1
 query "SELECT table_option LIKE '%BLOOM_INDEX_COLUMNS=%' FROM system.tables WHERE database = '${DB}' AND name = 't_bloom_keep'"
 insert_stmt "INSERT INTO ${DB}.t_bloom_keep VALUES (3, 3)"
 query "SELECT count(*)=2 FROM ${DB}.t_bloom_keep"
@@ -52,7 +52,7 @@ stmt "ALTER TABLE ${DB}.t_hll_keep ADD COLUMN c INT"
 stmt "ALTER TABLE ${DB}.t_hll_keep SET OPTIONS(approx_distinct_columns = 'a')"
 insert_stmt "INSERT INTO ${DB}.t_hll_keep VALUES (2, 2, 2)"
 comment "flashback compatible approx distinct table to saved snapshot"
-echo "ALTER TABLE ${DB}.t_hll_keep FLASHBACK TO (SNAPSHOT => '$HLL_KEEP_SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT > /dev/null || exit 1
+echo "ALTER TABLE ${DB}.t_hll_keep FLASHBACK TO (SNAPSHOT => '$HLL_KEEP_SNAPSHOT_ID')" | bendsql_connect_root > /dev/null || exit 1
 query "SELECT table_option LIKE '%APPROX_DISTINCT_COLUMNS=%' FROM system.tables WHERE database = '${DB}' AND name = 't_hll_keep'"
 insert_stmt "INSERT INTO ${DB}.t_hll_keep VALUES (3, 3)"
 query "SELECT count(*)=2 FROM ${DB}.t_hll_keep"
@@ -65,7 +65,7 @@ stmt "ALTER TABLE ${DB}.t_bloom_none ADD COLUMN c INT"
 stmt "ALTER TABLE ${DB}.t_bloom_none SET OPTIONS(bloom_index_columns = '')"
 insert_stmt "INSERT INTO ${DB}.t_bloom_none VALUES (2, 2, 2)"
 comment "flashback bloom none table to saved snapshot"
-echo "ALTER TABLE ${DB}.t_bloom_none FLASHBACK TO (SNAPSHOT => '$BLOOM_NONE_SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT > /dev/null || exit 1
+echo "ALTER TABLE ${DB}.t_bloom_none FLASHBACK TO (SNAPSHOT => '$BLOOM_NONE_SNAPSHOT_ID')" | bendsql_connect_root > /dev/null || exit 1
 query "SELECT table_option LIKE '%BLOOM_INDEX_COLUMNS=%' FROM system.tables WHERE database = '${DB}' AND name = 't_bloom_none'"
 insert_stmt "INSERT INTO ${DB}.t_bloom_none VALUES (3, 3)"
 query "SELECT count(*)=2 FROM ${DB}.t_bloom_none"
@@ -78,7 +78,7 @@ stmt "ALTER TABLE ${DB}.t_hll_none ADD COLUMN c INT"
 stmt "ALTER TABLE ${DB}.t_hll_none SET OPTIONS(approx_distinct_columns = '')"
 insert_stmt "INSERT INTO ${DB}.t_hll_none VALUES (2, 2, 2)"
 comment "flashback approx distinct none table to saved snapshot"
-echo "ALTER TABLE ${DB}.t_hll_none FLASHBACK TO (SNAPSHOT => '$HLL_NONE_SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT > /dev/null || exit 1
+echo "ALTER TABLE ${DB}.t_hll_none FLASHBACK TO (SNAPSHOT => '$HLL_NONE_SNAPSHOT_ID')" | bendsql_connect_root > /dev/null || exit 1
 query "SELECT table_option LIKE '%APPROX_DISTINCT_COLUMNS=%' FROM system.tables WHERE database = '${DB}' AND name = 't_hll_none'"
 insert_stmt "INSERT INTO ${DB}.t_hll_none VALUES (3, 3)"
 query "SELECT count(*)=2 FROM ${DB}.t_hll_none"
@@ -91,7 +91,7 @@ stmt "ALTER TABLE ${DB}.t_hll ADD COLUMN c INT"
 stmt "ALTER TABLE ${DB}.t_hll SET OPTIONS(approx_distinct_columns = 'a, c')"
 insert_stmt "INSERT INTO ${DB}.t_hll VALUES (2, 2, 2)"
 comment "flashback approx distinct table to saved snapshot"
-echo "ALTER TABLE ${DB}.t_hll FLASHBACK TO (SNAPSHOT => '$HLL_SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT > /dev/null || exit 1
+echo "ALTER TABLE ${DB}.t_hll FLASHBACK TO (SNAPSHOT => '$HLL_SNAPSHOT_ID')" | bendsql_connect_root > /dev/null || exit 1
 query "SELECT table_option NOT LIKE '%APPROX_DISTINCT_COLUMNS=%' FROM system.tables WHERE database = '${DB}' AND name = 't_hll'"
 insert_stmt "INSERT INTO ${DB}.t_hll VALUES (3, 3)"
 query "SELECT count(*)=2 FROM ${DB}.t_hll"
@@ -104,7 +104,7 @@ stmt "ALTER TABLE ${DB}.t_ck ADD COLUMN c INT"
 insert_stmt "INSERT INTO ${DB}.t_ck VALUES (2, 2, 2)"
 stmt "ALTER TABLE ${DB}.t_ck CLUSTER BY (c, a)"
 comment "flashback cluster table to saved snapshot"
-echo "ALTER TABLE ${DB}.t_ck FLASHBACK TO (SNAPSHOT => '$CK_SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT > /dev/null || exit 1
+echo "ALTER TABLE ${DB}.t_ck FLASHBACK TO (SNAPSHOT => '$CK_SNAPSHOT_ID')" | bendsql_connect_root > /dev/null || exit 1
 query "SELECT table_option NOT LIKE '%CLUSTER_TYPE=%' FROM system.tables WHERE database = '${DB}' AND name = 't_ck'"
 
 comment "flashback should reject constraints tied to dropped columns"
@@ -117,7 +117,7 @@ insert_stmt "INSERT INTO ${DB}.t_constraint VALUES (2, 2, 2)"
 stmt_fail "INSERT INTO ${DB}.t_constraint VALUES (3, 3, -1)"
 comment "flashback constrained table to saved snapshot should fail"
 echo ">>>> ALTER TABLE ${DB}.t_constraint FLASHBACK TO (SNAPSHOT => '<saved_snapshot>')"
-echo "ALTER TABLE ${DB}.t_constraint FLASHBACK TO (SNAPSHOT => '$CONSTRAINT_SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT > /dev/null 2>&1
+echo "ALTER TABLE ${DB}.t_constraint FLASHBACK TO (SNAPSHOT => '$CONSTRAINT_SNAPSHOT_ID')" | bendsql_connect_root > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     exit 1
 fi

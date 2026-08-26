@@ -1,0 +1,6 @@
+===== row count from at least four splits =====
+true
+===== active cluster nodes: 3 =====
+===== distributed scan plan =====
+distributed_scan=true
+partitions total: 4

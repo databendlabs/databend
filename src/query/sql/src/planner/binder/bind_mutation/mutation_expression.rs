@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
+use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -36,12 +37,12 @@ use crate::ColumnSet;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
+use crate::binder::Any;
 use crate::binder::Binder;
-use crate::binder::Finder;
 use crate::binder::InternalColumnBinding;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
-use crate::binder::split_conjunctions;
+use crate::binder::into_conjunctions;
 use crate::binder::util::TableIdentifier;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
@@ -77,7 +78,7 @@ pub enum MutationExpression {
 }
 
 impl MutationExpression {
-    pub async fn bind(
+    pub async fn bind_input(
         &self,
         binder: &mut Binder,
         bind_context: &mut BindContext,
@@ -101,9 +102,23 @@ impl MutationExpression {
                 let (source_s_expr, mut source_context) =
                     binder.bind_table_reference(bind_context, source)?;
 
-                // Bind target table reference.
-                let (mut target_s_expr, mut target_context) =
-                    binder.bind_table_reference(bind_context, target)?;
+                // Mutation targets must use their physical table schema. In particular, an MV
+                // target cannot use normal MV read binding because that hides internal columns.
+                let target_alias = match target {
+                    TableReference::Table { alias, .. } => alias,
+                    _ => {
+                        return Err(ErrorCode::Internal(
+                            "mutation target must be a physical table",
+                        ));
+                    }
+                };
+                let (mut target_s_expr, mut target_context) = binder.bind_physical_table(
+                    bind_context,
+                    &target_table_identifier.database_name(),
+                    target_table_identifier.table_name_alias(),
+                    target_table.clone(),
+                    target_alias,
+                )?;
 
                 // Get target table index.
                 let target_table_index = binder
@@ -199,6 +214,8 @@ impl MutationExpression {
                     all_source_columns,
                     target_table_index,
                     target_table_row_id_index,
+                    source: None,
+                    predicates: vec![],
                 })
             }
             MutationExpression::Update {
@@ -211,9 +228,22 @@ impl MutationExpression {
                 from,
                 filter,
             } => {
-                // Bind target table reference.
-                let (mut s_expr, mut bind_context) =
-                    binder.bind_table_reference(bind_context, target)?;
+                // Mutation targets must use their physical table schema.
+                let target_alias = match target {
+                    TableReference::Table { alias, .. } => alias,
+                    _ => {
+                        return Err(ErrorCode::Internal(
+                            "mutation target must be a physical table",
+                        ));
+                    }
+                };
+                let (s_expr, mut bind_context) = binder.bind_physical_table(
+                    bind_context,
+                    &target_table_identifier.database_name(),
+                    target_table_identifier.table_name_alias(),
+                    target_table.clone(),
+                    target_alias,
+                )?;
 
                 // Note: We intentionally get target table index before binding source table,
                 // because source table may contain tables with same name as target table,
@@ -245,128 +275,147 @@ impl MutationExpression {
                     None
                 };
 
-                // If the filter is a simple expression, change the mutation strategy to MutationStrategy::Direct.
-                let (mut mutation_strategy, predicates) =
+                // Phase 1 only binds the mutation input and filter. UPDATE assignments are bound
+                // by `bind_mutation` before the strategy and physical input are finalized.
+                let (mutation_strategy, predicates) =
                     binder.process_filter(&mut bind_context, filter)?;
 
-                if from_s_expr.is_some() {
-                    mutation_strategy = MutationStrategy::MatchedOnly;
-                }
-
-                // Build bind result according to mutation strategy.
-                if mutation_strategy == MutationStrategy::Direct {
-                    let table_schema = target_table
-                        .schema_with_stream()
-                        .remove_virtual_computed_fields();
-                    let mutation_source = MutationSource {
-                        schema: table_schema,
-                        columns: bind_context.column_set(),
-                        table_index: target_table_index,
-                        mutation_type: mutation_type.clone(),
-                        secure_predicates: vec![],
-                        user_predicates: vec![],
-                        predicate_column_index: None,
-                        read_partition_columns: Default::default(),
-                    };
-
-                    // Direct mutation inherits row-access predicates from Scan's
-                    // secure_predicates field.
-                    s_expr = Self::replace_scan_with_mutation_source(&s_expr, mutation_source)?;
-
-                    if !predicates.is_empty() {
-                        s_expr = SExpr::create_unary(
-                            Arc::new(Filter { predicates }.into()),
-                            Arc::new(s_expr),
-                        );
-                    }
-
-                    for column_index in bind_context.column_set().iter() {
-                        required_columns.insert(*column_index);
-                    }
-
-                    Ok(MutationExpressionBindResult {
-                        input: s_expr,
-                        mutation_type,
-                        mutation_strategy,
-                        required_columns,
-                        bind_context,
-                        all_source_columns: None,
-                        target_table_index,
-                        target_table_row_id_index: Symbol::DUMMY_COLUMN,
-                    })
-                } else {
-                    let is_lazy_table = {
-                        let metadata = binder.metadata.read();
-                        mutation_type != MutationType::Delete
-                            && metadata
-                                .table(target_table_index)
-                                .table()
-                                .supported_lazy_materialize()
-                    };
-                    s_expr =
-                        Self::update_target_scan(&s_expr, is_lazy_table, update_stream_columns)?;
-
-                    // Add internal column _row_id for target table.
-                    let target_table_row_id_index = binder.add_row_id_column(
-                        &mut bind_context,
-                        target_table_identifier,
-                        target_table_index,
-                        &mut s_expr,
-                        mutation_type.clone(),
-                    )?;
-
-                    // Add target table row_id column to required columns.
-                    required_columns.insert(target_table_row_id_index);
-
-                    if let Some(from_s_expr) = from_s_expr {
-                        let join_plan = Join {
-                            equi_conditions: vec![],
-                            non_equi_conditions: vec![],
-                            join_type: JoinType::Cross,
-                            marker_index: None,
-                            from_correlated_subquery: true,
-                            need_hold_hash_table: false,
-                            is_lateral: false,
-                            single_to_inner: None,
-                            build_side_cache_info: None,
-                        };
-                        s_expr = SExpr::create_binary(
-                            Arc::new(join_plan.into()),
-                            Arc::new(s_expr.clone()),
-                            Arc::new(from_s_expr),
-                        );
-                    }
-
-                    s_expr = SExpr::create_unary(
-                        Arc::new(Filter { predicates }.into()),
-                        Arc::new(s_expr),
-                    );
-
-                    let opt_ctx =
-                        OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());
-                    let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx, None);
-                    let s_expr = rewriter.optimize_sync(&s_expr)?;
-
-                    // The delete operation only requires the row ID to locate the row to be deleted and does not need to extract any other columns.
-                    if !is_lazy_table && mutation_type != MutationType::Delete {
-                        for column_index in bind_context.column_set().iter() {
-                            required_columns.insert(*column_index);
-                        }
-                    }
-
-                    Ok(MutationExpressionBindResult {
-                        input: s_expr,
-                        mutation_type,
-                        mutation_strategy,
-                        required_columns,
-                        bind_context,
-                        all_source_columns: None,
-                        target_table_index,
-                        target_table_row_id_index,
-                    })
-                }
+                Ok(MutationExpressionBindResult {
+                    input: s_expr,
+                    mutation_type,
+                    mutation_strategy,
+                    required_columns,
+                    bind_context,
+                    all_source_columns: None,
+                    target_table_index,
+                    target_table_row_id_index: Symbol::DUMMY_COLUMN,
+                    source: from_s_expr,
+                    predicates,
+                })
             }
         }
+    }
+
+    /// Finalize an UPDATE/DELETE input after all mutation clauses have been bound.
+    ///
+    /// Clause binding may discover internal columns in UPDATE assignments. Delaying strategy
+    /// selection until this point ensures those columns route the mutation through a table scan.
+    pub fn finalize_input(
+        &self,
+        binder: &mut Binder,
+        target_table: Arc<dyn Table>,
+        target_table_identifier: &TableIdentifier,
+        mut result: MutationExpressionBindResult,
+    ) -> Result<MutationExpressionBindResult> {
+        if matches!(self, MutationExpression::Merge { .. }) {
+            return Ok(result);
+        }
+
+        let source = result.source.take();
+        let predicates = std::mem::take(&mut result.predicates);
+
+        if source.is_some()
+            || result
+                .bind_context
+                .bound_internal_columns
+                .keys()
+                .any(|(table_index, _)| *table_index == result.target_table_index)
+        {
+            result.mutation_strategy = MutationStrategy::MatchedOnly;
+        }
+
+        if result.mutation_strategy == MutationStrategy::Direct {
+            let table_schema = target_table
+                .schema_with_stream()
+                .remove_virtual_computed_fields();
+            let mutation_source = MutationSource {
+                schema: table_schema,
+                columns: result.bind_context.column_set(),
+                table_index: result.target_table_index,
+                mutation_type: result.mutation_type.clone(),
+                secure_predicates: vec![],
+                user_predicates: vec![],
+                predicate_column_index: None,
+                read_partition_columns: Default::default(),
+            };
+
+            // Direct mutation inherits row-access predicates from Scan's secure predicates.
+            result.input = Self::replace_scan_with_mutation_source(&result.input, mutation_source)?;
+
+            if !predicates.is_empty() {
+                result.input = SExpr::create_unary(
+                    Arc::new(Filter { predicates }.into()),
+                    Arc::new(result.input),
+                );
+            }
+
+            result
+                .required_columns
+                .extend(result.bind_context.column_set());
+            return Ok(result);
+        }
+
+        let update_stream_columns = target_table.change_tracking_enabled();
+        let is_lazy_table = {
+            let metadata = binder.metadata.read();
+            result.mutation_type != MutationType::Delete
+                && metadata
+                    .table(result.target_table_index)
+                    .table()
+                    .supported_lazy_materialize()
+        };
+        result.input =
+            Self::update_target_scan(&result.input, is_lazy_table, update_stream_columns)?;
+
+        // Add internal column _row_id for target table.
+        result.target_table_row_id_index = binder.add_row_id_column(
+            &mut result.bind_context,
+            target_table_identifier,
+            result.target_table_index,
+            &mut result.input,
+            result.mutation_type.clone(),
+        )?;
+        result
+            .required_columns
+            .insert(result.target_table_row_id_index);
+
+        if let Some(source) = source {
+            let join_plan = Join {
+                equi_conditions: vec![],
+                non_equi_conditions: vec![],
+                join_type: JoinType::Cross,
+                marker_index: None,
+                from_correlated_subquery: true,
+                need_hold_hash_table: false,
+                is_lateral: false,
+                single_to_inner: None,
+                build_side_cache_info: None,
+                spatial_join: None,
+            };
+            result.input = SExpr::create_binary(
+                Arc::new(join_plan.into()),
+                Arc::new(result.input),
+                Arc::new(source),
+            );
+        }
+
+        result.input = SExpr::create_unary(
+            Arc::new(Filter { predicates }.into()),
+            Arc::new(result.input),
+        );
+
+        let opt_ctx = OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());
+        let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx, None);
+        result.input = rewriter.optimize_sync(&result.input)?;
+
+        // DELETE only needs the row ID; a non-lazy UPDATE needs all bound target columns.
+        if !is_lazy_table && result.mutation_type != MutationType::Delete {
+            result
+                .required_columns
+                .extend(result.bind_context.column_set());
+        }
+
+        Ok(result)
     }
 
     pub fn mutation_type(&self) -> MutationType {
@@ -501,6 +550,40 @@ impl MutationExpression {
 }
 
 impl Binder {
+    /// Bind a mutation target as its concrete physical table.
+    ///
+    /// Mutation targets are not ordinary read-side table references: they cannot be table
+    /// functions or subqueries, and View/MV expansion would expose a logical query rather than
+    /// the storage rows that UPDATE/DELETE/MERGE must locate. Binding the already-resolved table
+    /// directly also preserves physical-only columns such as an MV's `_mv_source_row_id` and the
+    /// internal `_row_id` used by the mutation pipeline.
+    fn bind_physical_table(
+        &mut self,
+        bind_context: &BindContext,
+        database: &str,
+        table_alias_name: Option<String>,
+        table: Arc<dyn Table>,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        let table_index = self.metadata.write().add_table(
+            table.get_table_info().catalog().to_string(),
+            database.to_string(),
+            table,
+            None,
+            table_alias_name,
+            false,
+            false,
+            false,
+            None,
+        );
+        let (s_expr, mut target_context) =
+            self.bind_base_table(bind_context, database, table_index, None, &None, true)?;
+        if let Some(alias) = alias {
+            target_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+        }
+        Ok((s_expr, target_context))
+    }
+
     fn add_row_id_column(
         &mut self,
         bind_context: &mut BindContext,
@@ -536,7 +619,7 @@ impl Binder {
 
         let row_id_index = column_binding.index;
 
-        *expr = expr.add_column_index_to_scans(table_index, row_id_index, &None, &None);
+        *expr = expr.add_column_index_to_scans(table_index, row_id_index);
 
         self.metadata
             .write()
@@ -571,7 +654,7 @@ impl Binder {
             } else {
                 MutationStrategy::MatchedOnly
             };
-            let predicates = split_conjunctions(&scalar);
+            let predicates = into_conjunctions(scalar).collect();
             Ok((strategy, predicates))
         } else {
             Ok((MutationStrategy::Direct, vec![]))
@@ -609,9 +692,9 @@ impl Binder {
             ) || scalar.is_aggregate()
         };
 
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
+        let mut any = Any::new(&f);
+        any.visit(scalar)?;
+        Ok(!any.result())
     }
 }
 
@@ -624,6 +707,8 @@ pub struct MutationExpressionBindResult {
     pub target_table_row_id_index: Symbol,
     pub required_columns: ColumnSet,
     pub all_source_columns: Option<HashMap<usize, ScalarExpr>>,
+    pub source: Option<SExpr>,
+    pub predicates: Vec<ScalarExpr>,
 }
 
 pub fn target_probe(s_expr: &SExpr, target_table_index: usize) -> Result<bool> {

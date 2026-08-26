@@ -52,8 +52,10 @@ use crate::builtin::BuiltinUDFs;
 use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
 use crate::catalogs::IcebergCreator;
+use crate::catalogs::PaimonCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::history_tables::GlobalHistoryLog;
+use crate::interpreters::TableHookScheduler;
 use crate::locks::LockManager;
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -132,6 +134,7 @@ impl GlobalServices {
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),
                 (CatalogType::Hive, Arc::new(HiveCreator)),
+                (CatalogType::Paimon, Arc::new(PaimonCreator)),
             ];
 
             CatalogManager::init(config, Arc::new(default_catalog), catalog_creator, version)
@@ -144,6 +147,7 @@ impl GlobalServices {
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
         LockManager::init()?;
+        TableHookScheduler::init(config.query.common.table_hook_async_max_concurrency)?;
         AuthMgr::init(config, version)?;
 
         // Init user manager.
@@ -203,7 +207,7 @@ impl GlobalServices {
 
         Self::init_workload_mgr(config).await?;
 
-        if config.log.history.on {
+        if config.log.history.enabled() {
             GlobalHistoryLog::init(config, version).await?;
         }
         #[cfg(feature = "task-support")]

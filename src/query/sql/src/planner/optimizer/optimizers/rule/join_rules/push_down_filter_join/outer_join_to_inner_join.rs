@@ -158,9 +158,16 @@ pub fn can_filter_null(
     join_type: &JoinType,
     metadata: MetadataRef,
 ) -> Result<bool> {
+    // Single joins are outer joins for correlated scalar subqueries: the unmatched side is
+    // null-supplying, so `IS NULL` predicates must keep their original outer-join semantics.
     if !matches!(
         join_type,
-        JoinType::Left | JoinType::Right | JoinType::Full | JoinType::FullAsof
+        JoinType::Left
+            | JoinType::LeftSingle
+            | JoinType::Right
+            | JoinType::RightSingle
+            | JoinType::Full
+            | JoinType::FullAsof
     ) {
         return Ok(true);
     }
@@ -181,10 +188,18 @@ pub fn can_filter_null(
                         .columns_can_be_replaced
                         .contains(&column_ref.column.index)
                     {
-                        *expr = ScalarExpr::ConstantExpr(ConstantExpr {
+                        let null_expr = ConstantExpr {
                             span: None,
                             value: Scalar::Null,
-                        });
+                        };
+                        *expr = if column_ref.column.data_type.is_nullable_or_null() {
+                            ScalarExpr::TypedConstantExpr(
+                                null_expr,
+                                *column_ref.column.data_type.clone(),
+                            )
+                        } else {
+                            ScalarExpr::ConstantExpr(null_expr)
+                        };
                     }
                     Ok(())
                 }

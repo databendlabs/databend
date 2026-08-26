@@ -1,0 +1,145 @@
+=== materialized_cte_virtual_column_rewrites ===
+description: A materialized CTE consumer should still expose the full base-table JSON path when virtual-column rewrite is enabled.
+sql: 
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message FROM t) 
+        SELECT message['attribute']['user_id'] FROM logs 
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs;
+
+status: ok
+Sequence(Sequence)
+├── MaterializedCTE
+│   ├── cte_name: __materialized_cte_0_logs
+│   ├── ref_count: 0
+│   ├── channel_size: None
+│   └── EvalScalar
+│       ├── scalars: [default.t.v['message'] (#1) AS (#1), default.t.v['message']['attribute']['account_id'] (#2) AS (#2), default.t.v['message']['attribute']['user_id'] (#3) AS (#3)]
+│       └── Scan
+│           ├── table: default.t (#0)
+│           ├── filters: []
+│           ├── order by: []
+│           └── limit: NONE
+└── UnionAll
+    ├── output: [__databend_virtual_column__0 (#12)]
+    ├── left: [default.t.v['message']['attribute']['user_id'] (#7)]
+    ├── right: [default.t.v['message']['attribute']['account_id'] (#10)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── EvalScalar
+    │   ├── scalars: [default.t.v['message']['attribute']['user_id'] (#7) AS (#7)]
+    │   └── MaterializedCTERef
+    │       ├── cte_name: __materialized_cte_0_logs
+    │       ├── output columns: [default.t.v['message'] (#5), default.t.v['message']['attribute']['account_id'] (#6), default.t.v['message']['attribute']['user_id'] (#7)]
+    │       └── column mapping: [default.t.v['message'] (#5) -> default.t.v['message'] (#1), default.t.v['message']['attribute']['account_id'] (#6) -> default.t.v['message']['attribute']['account_id'] (#2), default.t.v['message']['attribute']['user_id'] (#7) -> default.t.v['message']['attribute']['user_id'] (#3)]
+    └── EvalScalar
+        ├── scalars: [default.t.v['message']['attribute']['account_id'] (#10) AS (#10)]
+        └── MaterializedCTERef
+            ├── cte_name: __materialized_cte_0_logs
+            ├── output columns: [default.t.v['message'] (#9), default.t.v['message']['attribute']['account_id'] (#10), default.t.v['message']['attribute']['user_id'] (#11)]
+            └── column mapping: [default.t.v['message'] (#9) -> default.t.v['message'] (#1), default.t.v['message']['attribute']['account_id'] (#10) -> default.t.v['message']['attribute']['account_id'] (#2), default.t.v['message']['attribute']['user_id'] (#11) -> default.t.v['message']['attribute']['user_id'] (#3)]
+
+
+=== materialized_cte_virtual_column_rewrites_chained_ctes ===
+description: A chained materialized CTE should preserve the original base-table JSON path across multiple CTE layers.
+sql: 
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message FROM t), 
+        attrs AS (SELECT message['attribute'] AS attr FROM logs),
+        users AS (SELECT attr['user_id'] AS user_id, attr['name'] AS name FROM attrs)
+        SELECT user_id, name FROM users;
+
+status: ok
+EvalScalar
+├── scalars: [default.t.v['message']['attribute']['user_id'] (#3) AS (#3), default.t.v['message']['attribute']['name'] (#4) AS (#4)]
+└── EvalScalar
+    ├── scalars: [default.t.v['message']['attribute']['user_id'] (#3) AS (#3), default.t.v['message']['attribute']['name'] (#4) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [default.t.v['message']['attribute'] (#2) AS (#2)]
+        └── EvalScalar
+            ├── scalars: [default.t.v['message'] (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== materialized_cte_virtual_column_rewrites_multi_fields ===
+description: Multiple downstream CTE fields reading the same materialized source CTE should push their JSON path requirements back to the source.
+sql: 
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message, v['response'] AS response FROM t),
+        base AS (SELECT message['attribute']['user_id']::Int32 AS user_id, 
+            message['attribute']['trace_id']::Int32 AS trace_id, 
+            message['attribute']['level']::String AS level,
+            response['status_code']::Int64 AS status_code,
+            response['error_message']::String AS error_message FROM logs)
+        SELECT user_id, trace_id, level, status_code, error_message FROM base
+
+status: ok
+EvalScalar
+├── scalars: [user_id (#8) AS (#8), trace_id (#9) AS (#9), level (#10) AS (#10), status_code (#11) AS (#11), error_message (#12) AS (#12)]
+└── EvalScalar
+    ├── scalars: [CAST(default.t.v['message']['attribute']['user_id'] (#3) AS Int32 NULL) AS (#8), CAST(default.t.v['message']['attribute']['trace_id'] (#4) AS Int32 NULL) AS (#9), CAST(default.t.v['message']['attribute']['level'] (#5) AS String NULL) AS (#10), CAST(default.t.v['response']['status_code'] (#6) AS Int64 NULL) AS (#11), CAST(default.t.v['response']['error_message'] (#7) AS String NULL) AS (#12)]
+    └── EvalScalar
+        ├── scalars: [default.t.v['message'] (#1) AS (#1), default.t.v['response'] (#2) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== materialized_cte_static_json_paths_without_table_virtual_columns ===
+description: A materialized CTE should still precompute static JSON paths inside the producer even when the source table has no Fuse virtual columns.
+sql: 
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1)
+    WITH logs AS (SELECT v['message'] AS message FROM t_no_vc)
+        SELECT message['attribute']['user_id'] FROM logs
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs;
+    
+status: ok
+Sequence(Sequence)
+├── MaterializedCTE
+│   ├── cte_name: __materialized_cte_0_logs
+│   ├── ref_count: 0
+│   ├── channel_size: None
+│   └── EvalScalar
+│       ├── scalars: [get_by_keypath(t_no_vc.v (#0), '{"message"}') AS (#1), get_by_keypath(t_no_vc.v (#0), '{"message","attribute","account_id"}') AS (#2), get_by_keypath(t_no_vc.v (#0), '{"message","attribute","user_id"}') AS (#3)]
+│       └── Scan
+│           ├── table: default.t_no_vc (#0)
+│           ├── filters: []
+│           ├── order by: []
+│           └── limit: NONE
+└── UnionAll
+    ├── output: [__databend_virtual_column__0 (#12)]
+    ├── left: [__databend_virtual_column__0 (#7)]
+    ├── right: [__databend_virtual_column__1 (#10)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── EvalScalar
+    │   ├── scalars: [__databend_virtual_column__0 (#7) AS (#7)]
+    │   └── MaterializedCTERef
+    │       ├── cte_name: __materialized_cte_0_logs
+    │       ├── output columns: [message (#5), __databend_virtual_column__1 (#6), __databend_virtual_column__0 (#7)]
+    │       └── column mapping: [message (#5) -> message (#1), __databend_virtual_column__1 (#6) -> __databend_virtual_column__1 (#2), __databend_virtual_column__0 (#7) -> __databend_virtual_column__0 (#3)]
+    └── EvalScalar
+        ├── scalars: [__databend_virtual_column__1 (#10) AS (#10)]
+        └── MaterializedCTERef
+            ├── cte_name: __materialized_cte_0_logs
+            ├── output columns: [message (#9), __databend_virtual_column__1 (#10), __databend_virtual_column__0 (#11)]
+            └── column mapping: [message (#9) -> message (#1), __databend_virtual_column__1 (#10) -> __databend_virtual_column__1 (#2), __databend_virtual_column__0 (#11) -> __databend_virtual_column__0 (#3)]
+
+
+=== materialized_cte_unqualified_column_preserves_ambiguity ===
+description: An unqualified materialized CTE output should not be rewritten before binder can reject an ambiguous column reference.
+sql: 
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1)
+    WITH logs AS (SELECT v['message'] AS message FROM t)
+        SELECT message['attribute']['user_id'] FROM logs, other_table
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs, other_table;
+    
+status: error
+code: 1065
+message: column message reference or alias is ambiguous, please use another alias name
+

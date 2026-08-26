@@ -3,6 +3,10 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 
 spark = (
     SparkSession.builder.appName("CSV to Iceberg REST Catalog")
+    .config(
+        "spark.sql.extensions",
+        "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+    )
     .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog")
     .config("spark.sql.catalog.iceberg.type", "rest")
     .config("spark.sql.catalog.iceberg.uri", "http://127.0.0.1:8181")
@@ -15,7 +19,7 @@ spark = (
     .config("spark.sql.catalog.iceberg.client.region", "us-east-1")
     .config(
         "spark.jars.packages",
-        "org.apache.iceberg:iceberg-aws-bundle:1.6.1,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.1",
+        "org.apache.iceberg:iceberg-aws-bundle:1.10.0,org.apache.iceberg:iceberg-spark-runtime-4.0_2.13:1.10.0",
     )
     # for delete file
     .config("spark.sql.shuffle.partitions", "1")
@@ -24,8 +28,11 @@ spark = (
     .getOrCreate()
 )
 
+spark.sql("CREATE NAMESPACE IF NOT EXISTS iceberg.test")
+
 spark.sql(f"DROP TABLE IF EXISTS iceberg.test.t1;")
 spark.sql(f"DROP TABLE IF EXISTS iceberg.test.t1_orc;")
+spark.sql("DROP TABLE IF EXISTS iceberg.test.t_variant_metadata;")
 
 # Parquet
 spark.sql(f"""
@@ -107,5 +114,36 @@ df = spark.createDataFrame(data, schema)
 df.writeTo("iceberg.test.t_nested").using("iceberg").createOrReplace()
 
 print("Table iceberg.test.t_nested created with sample data")
+
+
+# Create an Iceberg v3 table with a physical variant column. Databend should be
+# able to load and refresh the metadata and read projected non-variant columns.
+spark.sql("""
+CREATE TABLE iceberg.test.t_variant_metadata (
+  id INT,
+  name STRING,
+  payload VARIANT
+)
+USING iceberg
+TBLPROPERTIES (
+  'format-version'='3',
+  'write.parquet.shred-variants.enabled'='false'
+);
+""")
+
+spark.sql("""
+INSERT INTO iceberg.test.t_variant_metadata
+SELECT
+  1,
+  'alice',
+  parse_json('{"device":"ios","event":{"name":"open","count":1}}')
+UNION ALL
+SELECT
+  2,
+  'bob',
+  parse_json('{"device":"android","event":{"name":"click","count":2}}');
+""")
+
+print("Table iceberg.test.t_variant_metadata created with Iceberg v3 variant data")
 
 spark.stop()

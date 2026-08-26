@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
 
@@ -29,13 +27,8 @@ pub trait TableContextTableFactory: Send + Sync {
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
 }
 
-#[async_trait::async_trait]
 pub trait TableContextStage: Send + Sync {
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
-
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
-
-    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection>;
 }
 
 #[async_trait::async_trait]

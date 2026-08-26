@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod format;
+mod lineage;
 mod metadata;
 #[allow(clippy::module_inception)]
 mod planner;
@@ -39,6 +40,7 @@ pub use binder::parse_result_scan_args;
 pub use execution::*;
 pub use expression::*;
 pub use format::*;
+pub use lineage::*;
 pub use metadata::*;
 pub use optimizer::optimize;
 pub use planner::PlanExtras;

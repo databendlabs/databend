@@ -132,6 +132,40 @@ impl Filter for FilterImpl {
     }
 }
 
+impl FilterImplBuilder {
+    fn build_with_binary_fuse32_policy(
+        &mut self,
+        policy: binary_fuse32_filter::BinaryFuse32BuildPolicy,
+    ) -> Result<FilterImpl, ErrorCode> {
+        match self {
+            FilterImplBuilder::Xor(filter) => Ok(FilterImpl::Xor(filter.build()?)),
+            FilterImplBuilder::BinaryFuse32(filter) => {
+                let digests = filter.take_digests();
+                match BinaryFuse32Builder::build_from_digests_with_policy(
+                    digests.as_slice(),
+                    policy,
+                ) {
+                    Ok(filter) => Ok(FilterImpl::BinaryFuse32(filter)),
+                    Err(err) => {
+                        // Databend-specific fallback: xorf binary-fuse construction is allowed
+                        // to fail, but bloom index generation should not fail the block write.
+                        let mut fallback = Xor8Builder::create();
+                        fallback.add_digests(digests.iter());
+                        let filter = fallback.build()?;
+                        log::warn!(
+                            "failed to build binary fuse32 filter; final_filter=xor8 distinct_digests={} error={}",
+                            digests.len(),
+                            err
+                        );
+                        Ok(FilterImpl::Xor(filter))
+                    }
+                }
+            }
+            FilterImplBuilder::Ngram(filter) => Ok(FilterImpl::Ngram(filter.build()?)),
+        }
+    }
+}
+
 impl FilterBuilder for FilterImplBuilder {
     type Filter = FilterImpl;
     type Error = ErrorCode;
@@ -161,12 +195,42 @@ impl FilterBuilder for FilterImplBuilder {
     }
 
     fn build(&mut self) -> Result<Self::Filter, Self::Error> {
-        match self {
-            FilterImplBuilder::Xor(filter) => Ok(FilterImpl::Xor(filter.build()?)),
-            FilterImplBuilder::BinaryFuse32(filter) => {
-                Ok(FilterImpl::BinaryFuse32(filter.build()?))
+        self.build_with_binary_fuse32_policy(
+            binary_fuse32_filter::BinaryFuse32BuildPolicy::default(),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::filters::Filter;
+    use crate::filters::FilterBuilder;
+
+    #[test]
+    fn test_binary_fuse32_filter_impl_falls_back_to_xor8() -> anyhow::Result<()> {
+        let digests = vec![3_u64, 5, 8, 13, 21];
+        let mut builder = FilterImplBuilder::BinaryFuse32(BinaryFuse32Builder::create());
+        builder.add_digests(digests.iter());
+
+        let filter = builder.build_with_binary_fuse32_policy(
+            binary_fuse32_filter::BinaryFuse32BuildPolicy::for_test(true, true),
+        )?;
+
+        match filter {
+            FilterImpl::Xor(filter) => {
+                assert_eq!(filter.len(), Some(digests.len()));
+                for digest in digests {
+                    assert!(
+                        filter.contains_digest(digest),
+                        "digest {} not present",
+                        digest
+                    );
+                }
             }
-            FilterImplBuilder::Ngram(filter) => Ok(FilterImpl::Ngram(filter.build()?)),
+            _ => panic!("expected xor8 fallback"),
         }
+
+        Ok(())
     }
 }

@@ -74,6 +74,7 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
             table,
             branch,
             limit,
+            ..
         } = self.s_expr.plan().clone().try_into()?;
 
         // try add lock table.

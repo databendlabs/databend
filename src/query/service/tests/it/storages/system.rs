@@ -594,7 +594,9 @@ async fn test_show_tables_ignores_broken_attached_table_refresh() -> anyhow::Res
                 })),
                 ..TableMeta::default()
             },
+            source_table_option: None,
             as_dropped: false,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         })

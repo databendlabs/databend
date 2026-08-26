@@ -1,0 +1,507 @@
+Exchange
+├── output columns: [item.i_item_sk (#660)]
+├── exchange type: Merge
+└── Sequence
+    ├── MaterializedCTE: cross_sales
+    │   └── AggregateFinal
+    │       ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317), store.s_store_name (#196), store.s_zip (#216), ad1.ca_street_number (#287), ad1.ca_street_name (#288), ad1.ca_city (#291), ad1.ca_zip (#294), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307), d1.d_year (#113), d2.d_year (#141), d3.d_year (#169)]
+    │       ├── group by: [i_product_name, i_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number, ca_street_name, ca_city, ca_zip, d_year, d_year, d_year]
+    │       ├── aggregate functions: []
+    │       ├── estimated rows: 40561773.90
+    │       └── Exchange
+    │           ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317), store.s_store_name (#196), store.s_zip (#216), ad1.ca_street_number (#287), ad1.ca_street_name (#288), ad1.ca_city (#291), ad1.ca_zip (#294), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307), d1.d_year (#113), d2.d_year (#141), d3.d_year (#169)]
+    │           ├── exchange type: Hash(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+    │           └── AggregatePartial
+    │               ├── group by: [i_product_name, i_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number, ca_street_name, ca_city, ca_zip, d_year, d_year, d_year]
+    │               ├── aggregate functions: []
+    │               ├── estimated rows: 40561773.90
+    │               └── HashJoin
+    │                   ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317), d1.d_year (#113), store.s_store_name (#196), store.s_zip (#216), ad1.ca_street_number (#287), ad1.ca_street_name (#288), ad1.ca_city (#291), ad1.ca_zip (#294), d2.d_year (#141), d3.d_year (#169), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307)]
+    │                   ├── join type: INNER
+    │                   ├── build keys: [customer.c_customer_sk (#220)]
+    │                   ├── probe keys: [store_sales.ss_customer_sk (#3)]
+    │                   ├── keys is null equal: [false]
+    │                   ├── filters: [cd1.cd_marital_status (#240) <> cd2.cd_marital_status (#249)]
+    │                   ├── build join filters:
+    │                   │   └── filter id:19, build key:customer.c_customer_sk (#220), probe targets:[store_sales.ss_customer_sk (#3)@scan0], filter type:bloom,inlist,min_max
+    │                   ├── estimated rows: 40561773.90
+    │                   ├── Exchange(Build)
+    │                   │   ├── output columns: [cd2.cd_marital_status (#249), customer.c_customer_sk (#220), d2.d_year (#141), d3.d_year (#169), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307)]
+    │                   │   ├── exchange type: Broadcast
+    │                   │   └── HashJoin
+    │                   │       ├── output columns: [cd2.cd_marital_status (#249), customer.c_customer_sk (#220), d2.d_year (#141), d3.d_year (#169), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307)]
+    │                   │       ├── join type: INNER
+    │                   │       ├── build keys: [ad2.ca_address_sk (#298)]
+    │                   │       ├── probe keys: [customer.c_current_addr_sk (#224)]
+    │                   │       ├── keys is null equal: [false]
+    │                   │       ├── filters: []
+    │                   │       ├── build join filters(distributed):
+    │                   │       │   └── filter id:18, build key:ad2.ca_address_sk (#298), probe targets:[customer.c_current_addr_sk (#224)@scan8], filter type:bloom,inlist,min_max
+    │                   │       ├── estimated rows: 2071704.00
+    │                   │       ├── Exchange(Build)
+    │                   │       │   ├── output columns: [ad2.ca_address_sk (#298), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307)]
+    │                   │       │   ├── exchange type: Hash(ad2.ca_address_sk (#298))
+    │                   │       │   └── TableScan
+    │                   │       │       ├── table: default.default.customer_address
+    │                   │       │       ├── scan id: 15
+    │                   │       │       ├── output columns: [ca_address_sk (#298), ca_street_number (#300), ca_street_name (#301), ca_city (#304), ca_zip (#307)]
+    │                   │       │       ├── read rows: 0
+    │                   │       │       ├── read size: 0
+    │                   │       │       ├── partitions total: 0
+    │                   │       │       ├── partitions scanned: 0
+    │                   │       │       ├── push downs: [filters: [], limit: NONE]
+    │                   │       │       └── estimated rows: 1000000.00
+    │                   │       └── Exchange(Probe)
+    │                   │           ├── output columns: [cd2.cd_marital_status (#249), customer.c_customer_sk (#220), customer.c_current_addr_sk (#224), d2.d_year (#141), d3.d_year (#169)]
+    │                   │           ├── exchange type: Hash(customer.c_current_addr_sk (#224))
+    │                   │           └── HashJoin
+    │                   │               ├── output columns: [cd2.cd_marital_status (#249), customer.c_customer_sk (#220), customer.c_current_addr_sk (#224), d2.d_year (#141), d3.d_year (#169)]
+    │                   │               ├── join type: INNER
+    │                   │               ├── build keys: [customer.c_current_cdemo_sk (#222)]
+    │                   │               ├── probe keys: [cd2.cd_demo_sk (#247)]
+    │                   │               ├── keys is null equal: [false]
+    │                   │               ├── filters: []
+    │                   │               ├── build join filters(distributed):
+    │                   │               │   └── filter id:17, build key:customer.c_current_cdemo_sk (#222), probe targets:[cd2.cd_demo_sk (#247)@scan10], filter type:bloom,inlist,min_max
+    │                   │               ├── estimated rows: 1843926.36
+    │                   │               ├── Exchange(Build)
+    │                   │               │   ├── output columns: [customer.c_customer_sk (#220), customer.c_current_cdemo_sk (#222), customer.c_current_addr_sk (#224), d2.d_year (#141), d3.d_year (#169)]
+    │                   │               │   ├── exchange type: Hash(customer.c_current_cdemo_sk (#222))
+    │                   │               │   └── HashJoin
+    │                   │               │       ├── output columns: [customer.c_customer_sk (#220), customer.c_current_cdemo_sk (#222), customer.c_current_addr_sk (#224), d2.d_year (#141), d3.d_year (#169)]
+    │                   │               │       ├── join type: INNER
+    │                   │               │       ├── build keys: [hd2.hd_demo_sk (#280)]
+    │                   │               │       ├── probe keys: [customer.c_current_hdemo_sk (#223)]
+    │                   │               │       ├── keys is null equal: [false]
+    │                   │               │       ├── filters: []
+    │                   │               │       ├── build join filters:
+    │                   │               │       │   └── filter id:16, build key:hd2.hd_demo_sk (#280), probe targets:[customer.c_current_hdemo_sk (#223)@scan8], filter type:bloom,inlist,min_max
+    │                   │               │       ├── estimated rows: 1748252.93
+    │                   │               │       ├── Exchange(Build)
+    │                   │               │       │   ├── output columns: [hd2.hd_demo_sk (#280)]
+    │                   │               │       │   ├── exchange type: Broadcast
+    │                   │               │       │   └── HashJoin
+    │                   │               │       │       ├── output columns: [hd2.hd_demo_sk (#280)]
+    │                   │               │       │       ├── join type: INNER
+    │                   │               │       │       ├── build keys: [ib2.ib_income_band_sk (#314)]
+    │                   │               │       │       ├── probe keys: [hd2.hd_income_band_sk (#281)]
+    │                   │               │       │       ├── keys is null equal: [false]
+    │                   │               │       │       ├── filters: []
+    │                   │               │       │       ├── build join filters:
+    │                   │               │       │       │   └── filter id:15, build key:ib2.ib_income_band_sk (#314), probe targets:[hd2.hd_income_band_sk (#281)@scan13], filter type:bloom,inlist,min_max
+    │                   │               │       │       ├── estimated rows: 7200.00
+    │                   │               │       │       ├── Exchange(Build)
+    │                   │               │       │       │   ├── output columns: [ib2.ib_income_band_sk (#314)]
+    │                   │               │       │       │   ├── exchange type: Broadcast
+    │                   │               │       │       │   └── TableScan
+    │                   │               │       │       │       ├── table: default.default.income_band
+    │                   │               │       │       │       ├── scan id: 17
+    │                   │               │       │       │       ├── output columns: [ib_income_band_sk (#314)]
+    │                   │               │       │       │       ├── read rows: 0
+    │                   │               │       │       │       ├── read size: 0
+    │                   │               │       │       │       ├── partitions total: 0
+    │                   │               │       │       │       ├── partitions scanned: 0
+    │                   │               │       │       │       ├── push downs: [filters: [], limit: NONE]
+    │                   │               │       │       │       └── estimated rows: 20.00
+    │                   │               │       │       └── TableScan(Probe)
+    │                   │               │       │           ├── table: default.default.household_demographics
+    │                   │               │       │           ├── scan id: 13
+    │                   │               │       │           ├── output columns: [hd_demo_sk (#280), hd_income_band_sk (#281)]
+    │                   │               │       │           ├── read rows: 0
+    │                   │               │       │           ├── read size: 0
+    │                   │               │       │           ├── partitions total: 0
+    │                   │               │       │           ├── partitions scanned: 0
+    │                   │               │       │           ├── push downs: [filters: [], limit: NONE]
+    │                   │               │       │           ├── apply join filters: [#15]
+    │                   │               │       │           └── estimated rows: 7200.00
+    │                   │               │       └── HashJoin(Probe)
+    │                   │               │           ├── output columns: [customer.c_customer_sk (#220), customer.c_current_cdemo_sk (#222), customer.c_current_hdemo_sk (#223), customer.c_current_addr_sk (#224), d2.d_year (#141), d3.d_year (#169)]
+    │                   │               │           ├── join type: INNER
+    │                   │               │           ├── build keys: [d3.d_date_sk (#163)]
+    │                   │               │           ├── probe keys: [customer.c_first_shipto_date_sk (#225)]
+    │                   │               │           ├── keys is null equal: [false]
+    │                   │               │           ├── filters: []
+    │                   │               │           ├── build join filters:
+    │                   │               │           │   └── filter id:14, build key:d3.d_date_sk (#163), probe targets:[customer.c_first_shipto_date_sk (#225)@scan8], filter type:bloom,inlist,min_max
+    │                   │               │           ├── estimated rows: 1811339.15
+    │                   │               │           ├── Exchange(Build)
+    │                   │               │           │   ├── output columns: [d3.d_date_sk (#163), d3.d_year (#169)]
+    │                   │               │           │   ├── exchange type: Broadcast
+    │                   │               │           │   └── TableScan
+    │                   │               │           │       ├── table: default.default.date_dim
+    │                   │               │           │       ├── scan id: 6
+    │                   │               │           │       ├── output columns: [d_date_sk (#163), d_year (#169)]
+    │                   │               │           │       ├── read rows: 0
+    │                   │               │           │       ├── read size: 0
+    │                   │               │           │       ├── partitions total: 0
+    │                   │               │           │       ├── partitions scanned: 0
+    │                   │               │           │       ├── push downs: [filters: [], limit: NONE]
+    │                   │               │           │       └── estimated rows: 73049.00
+    │                   │               │           └── HashJoin(Probe)
+    │                   │               │               ├── output columns: [customer.c_customer_sk (#220), customer.c_current_cdemo_sk (#222), customer.c_current_hdemo_sk (#223), customer.c_current_addr_sk (#224), customer.c_first_shipto_date_sk (#225), d2.d_year (#141)]
+    │                   │               │               ├── join type: INNER
+    │                   │               │               ├── build keys: [d2.d_date_sk (#135)]
+    │                   │               │               ├── probe keys: [customer.c_first_sales_date_sk (#226)]
+    │                   │               │               ├── keys is null equal: [false]
+    │                   │               │               ├── filters: []
+    │                   │               │               ├── build join filters:
+    │                   │               │               │   └── filter id:13, build key:d2.d_date_sk (#135), probe targets:[customer.c_first_sales_date_sk (#226)@scan8], filter type:bloom,inlist,min_max
+    │                   │               │               ├── estimated rows: 1877113.20
+    │                   │               │               ├── Exchange(Build)
+    │                   │               │               │   ├── output columns: [d2.d_date_sk (#135), d2.d_year (#141)]
+    │                   │               │               │   ├── exchange type: Broadcast
+    │                   │               │               │   └── TableScan
+    │                   │               │               │       ├── table: default.default.date_dim
+    │                   │               │               │       ├── scan id: 5
+    │                   │               │               │       ├── output columns: [d_date_sk (#135), d_year (#141)]
+    │                   │               │               │       ├── read rows: 0
+    │                   │               │               │       ├── read size: 0
+    │                   │               │               │       ├── partitions total: 0
+    │                   │               │               │       ├── partitions scanned: 0
+    │                   │               │               │       ├── push downs: [filters: [], limit: NONE]
+    │                   │               │               │       └── estimated rows: 73049.00
+    │                   │               │               └── TableScan(Probe)
+    │                   │               │                   ├── table: default.default.customer
+    │                   │               │                   ├── scan id: 8
+    │                   │               │                   ├── output columns: [c_customer_sk (#220), c_current_cdemo_sk (#222), c_current_hdemo_sk (#223), c_current_addr_sk (#224), c_first_shipto_date_sk (#225), c_first_sales_date_sk (#226)]
+    │                   │               │                   ├── read rows: 0
+    │                   │               │                   ├── read size: 0
+    │                   │               │                   ├── partitions total: 0
+    │                   │               │                   ├── partitions scanned: 0
+    │                   │               │                   ├── push downs: [filters: [], limit: NONE]
+    │                   │               │                   ├── apply join filters: [#18, #16, #14, #13]
+    │                   │               │                   └── estimated rows: 2000000.00
+    │                   │               └── Exchange(Probe)
+    │                   │                   ├── output columns: [cd2.cd_demo_sk (#247), cd2.cd_marital_status (#249)]
+    │                   │                   ├── exchange type: Hash(cd2.cd_demo_sk (#247))
+    │                   │                   └── TableScan
+    │                   │                       ├── table: default.default.customer_demographics
+    │                   │                       ├── scan id: 10
+    │                   │                       ├── output columns: [cd_demo_sk (#247), cd_marital_status (#249)]
+    │                   │                       ├── read rows: 0
+    │                   │                       ├── read size: 0
+    │                   │                       ├── partitions total: 0
+    │                   │                       ├── partitions scanned: 0
+    │                   │                       ├── push downs: [filters: [], limit: NONE]
+    │                   │                       ├── apply join filters: [#17]
+    │                   │                       └── estimated rows: 1920800.00
+    │                   └── HashJoin(Probe)
+    │                       ├── output columns: [store_sales.ss_customer_sk (#3), item.i_product_name (#338), item.i_item_sk (#317), d1.d_year (#113), store.s_store_name (#196), store.s_zip (#216), cd1.cd_marital_status (#240), ad1.ca_street_number (#287), ad1.ca_street_name (#288), ad1.ca_city (#291), ad1.ca_zip (#294)]
+    │                       ├── join type: INNER
+    │                       ├── build keys: [ad1.ca_address_sk (#285)]
+    │                       ├── probe keys: [store_sales.ss_addr_sk (#6)]
+    │                       ├── keys is null equal: [false]
+    │                       ├── filters: []
+    │                       ├── build join filters:
+    │                       │   └── filter id:12, build key:ad1.ca_address_sk (#285), probe targets:[store_sales.ss_addr_sk (#6)@scan0], filter type:bloom,inlist,min_max
+    │                       ├── estimated rows: 36610848.56
+    │                       ├── Exchange(Build)
+    │                       │   ├── output columns: [ad1.ca_address_sk (#285), ad1.ca_street_number (#287), ad1.ca_street_name (#288), ad1.ca_city (#291), ad1.ca_zip (#294)]
+    │                       │   ├── exchange type: Broadcast
+    │                       │   └── TableScan
+    │                       │       ├── table: default.default.customer_address
+    │                       │       ├── scan id: 14
+    │                       │       ├── output columns: [ca_address_sk (#285), ca_street_number (#287), ca_street_name (#288), ca_city (#291), ca_zip (#294)]
+    │                       │       ├── read rows: 0
+    │                       │       ├── read size: 0
+    │                       │       ├── partitions total: 0
+    │                       │       ├── partitions scanned: 0
+    │                       │       ├── push downs: [filters: [], limit: NONE]
+    │                       │       └── estimated rows: 1000000.00
+    │                       └── HashJoin(Probe)
+    │                           ├── output columns: [store_sales.ss_customer_sk (#3), store_sales.ss_addr_sk (#6), item.i_product_name (#338), item.i_item_sk (#317), d1.d_year (#113), store.s_store_name (#196), store.s_zip (#216), cd1.cd_marital_status (#240)]
+    │                           ├── join type: INNER
+    │                           ├── build keys: [cd1.cd_demo_sk (#238)]
+    │                           ├── probe keys: [store_sales.ss_cdemo_sk (#4)]
+    │                           ├── keys is null equal: [false]
+    │                           ├── filters: []
+    │                           ├── build join filters:
+    │                           │   └── filter id:11, build key:cd1.cd_demo_sk (#238), probe targets:[store_sales.ss_cdemo_sk (#4)@scan0], filter type:bloom,inlist,min_max
+    │                           ├── estimated rows: 34120648.00
+    │                           ├── Exchange(Build)
+    │                           │   ├── output columns: [cd1.cd_demo_sk (#238), cd1.cd_marital_status (#240)]
+    │                           │   ├── exchange type: Broadcast
+    │                           │   └── TableScan
+    │                           │       ├── table: default.default.customer_demographics
+    │                           │       ├── scan id: 9
+    │                           │       ├── output columns: [cd_demo_sk (#238), cd_marital_status (#240)]
+    │                           │       ├── read rows: 0
+    │                           │       ├── read size: 0
+    │                           │       ├── partitions total: 0
+    │                           │       ├── partitions scanned: 0
+    │                           │       ├── push downs: [filters: [], limit: NONE]
+    │                           │       └── estimated rows: 1920800.00
+    │                           └── HashJoin(Probe)
+    │                               ├── output columns: [store_sales.ss_customer_sk (#3), store_sales.ss_cdemo_sk (#4), store_sales.ss_addr_sk (#6), item.i_product_name (#338), item.i_item_sk (#317), d1.d_year (#113), store.s_store_name (#196), store.s_zip (#216)]
+    │                               ├── join type: INNER
+    │                               ├── build keys: [promotion.p_promo_sk (#256)]
+    │                               ├── probe keys: [store_sales.ss_promo_sk (#8)]
+    │                               ├── keys is null equal: [false]
+    │                               ├── filters: []
+    │                               ├── build join filters:
+    │                               │   └── filter id:10, build key:promotion.p_promo_sk (#256), probe targets:[store_sales.ss_promo_sk (#8)@scan0], filter type:bloom,inlist,min_max
+    │                               ├── estimated rows: 32689437.24
+    │                               ├── Exchange(Build)
+    │                               │   ├── output columns: [promotion.p_promo_sk (#256)]
+    │                               │   ├── exchange type: Broadcast
+    │                               │   └── TableScan
+    │                               │       ├── table: default.default.promotion
+    │                               │       ├── scan id: 11
+    │                               │       ├── output columns: [p_promo_sk (#256)]
+    │                               │       ├── read rows: 0
+    │                               │       ├── read size: 0
+    │                               │       ├── partitions total: 0
+    │                               │       ├── partitions scanned: 0
+    │                               │       ├── push downs: [filters: [], limit: NONE]
+    │                               │       └── estimated rows: 1000.00
+    │                               └── HashJoin(Probe)
+    │                                   ├── output columns: [store_sales.ss_customer_sk (#3), store_sales.ss_cdemo_sk (#4), store_sales.ss_addr_sk (#6), store_sales.ss_promo_sk (#8), item.i_product_name (#338), item.i_item_sk (#317), d1.d_year (#113), store.s_store_name (#196), store.s_zip (#216)]
+    │                                   ├── join type: INNER
+    │                                   ├── build keys: [store.s_store_sk (#191)]
+    │                                   ├── probe keys: [store_sales.ss_store_sk (#7)]
+    │                                   ├── keys is null equal: [false]
+    │                                   ├── filters: []
+    │                                   ├── build join filters:
+    │                                   │   └── filter id:9, build key:store.s_store_sk (#191), probe targets:[store_sales.ss_store_sk (#7)@scan0], filter type:bloom,inlist,min_max
+    │                                   ├── estimated rows: 32894124.85
+    │                                   ├── Exchange(Build)
+    │                                   │   ├── output columns: [store.s_store_sk (#191), store.s_store_name (#196), store.s_zip (#216)]
+    │                                   │   ├── exchange type: Broadcast
+    │                                   │   └── TableScan
+    │                                   │       ├── table: default.default.store
+    │                                   │       ├── scan id: 7
+    │                                   │       ├── output columns: [s_store_sk (#191), s_store_name (#196), s_zip (#216)]
+    │                                   │       ├── read rows: 0
+    │                                   │       ├── read size: 0
+    │                                   │       ├── partitions total: 0
+    │                                   │       ├── partitions scanned: 0
+    │                                   │       ├── push downs: [filters: [], limit: NONE]
+    │                                   │       └── estimated rows: 402.00
+    │                                   └── HashJoin(Probe)
+    │                                       ├── output columns: [store_sales.ss_customer_sk (#3), store_sales.ss_cdemo_sk (#4), store_sales.ss_addr_sk (#6), store_sales.ss_store_sk (#7), store_sales.ss_promo_sk (#8), item.i_product_name (#338), item.i_item_sk (#317), d1.d_year (#113)]
+    │                                       ├── join type: INNER
+    │                                       ├── build keys: [hd1.hd_demo_sk (#275)]
+    │                                       ├── probe keys: [store_sales.ss_hdemo_sk (#5)]
+    │                                       ├── keys is null equal: [false]
+    │                                       ├── filters: []
+    │                                       ├── build join filters:
+    │                                       │   └── filter id:8, build key:hd1.hd_demo_sk (#275), probe targets:[store_sales.ss_hdemo_sk (#5)@scan0], filter type:bloom,inlist,min_max
+    │                                       ├── estimated rows: 33928881.81
+    │                                       ├── Exchange(Build)
+    │                                       │   ├── output columns: [hd1.hd_demo_sk (#275)]
+    │                                       │   ├── exchange type: Broadcast
+    │                                       │   └── HashJoin
+    │                                       │       ├── output columns: [hd1.hd_demo_sk (#275)]
+    │                                       │       ├── join type: INNER
+    │                                       │       ├── build keys: [ib1.ib_income_band_sk (#311)]
+    │                                       │       ├── probe keys: [hd1.hd_income_band_sk (#276)]
+    │                                       │       ├── keys is null equal: [false]
+    │                                       │       ├── filters: []
+    │                                       │       ├── build join filters:
+    │                                       │       │   └── filter id:7, build key:ib1.ib_income_band_sk (#311), probe targets:[hd1.hd_income_band_sk (#276)@scan12], filter type:bloom,inlist,min_max
+    │                                       │       ├── estimated rows: 7200.00
+    │                                       │       ├── Exchange(Build)
+    │                                       │       │   ├── output columns: [ib1.ib_income_band_sk (#311)]
+    │                                       │       │   ├── exchange type: Broadcast
+    │                                       │       │   └── TableScan
+    │                                       │       │       ├── table: default.default.income_band
+    │                                       │       │       ├── scan id: 16
+    │                                       │       │       ├── output columns: [ib_income_band_sk (#311)]
+    │                                       │       │       ├── read rows: 0
+    │                                       │       │       ├── read size: 0
+    │                                       │       │       ├── partitions total: 0
+    │                                       │       │       ├── partitions scanned: 0
+    │                                       │       │       ├── push downs: [filters: [], limit: NONE]
+    │                                       │       │       └── estimated rows: 20.00
+    │                                       │       └── TableScan(Probe)
+    │                                       │           ├── table: default.default.household_demographics
+    │                                       │           ├── scan id: 12
+    │                                       │           ├── output columns: [hd_demo_sk (#275), hd_income_band_sk (#276)]
+    │                                       │           ├── read rows: 0
+    │                                       │           ├── read size: 0
+    │                                       │           ├── partitions total: 0
+    │                                       │           ├── partitions scanned: 0
+    │                                       │           ├── push downs: [filters: [], limit: NONE]
+    │                                       │           ├── apply join filters: [#7]
+    │                                       │           └── estimated rows: 7200.00
+    │                                       └── HashJoin(Probe)
+    │                                           ├── output columns: [store_sales.ss_customer_sk (#3), store_sales.ss_cdemo_sk (#4), store_sales.ss_hdemo_sk (#5), store_sales.ss_addr_sk (#6), store_sales.ss_store_sk (#7), store_sales.ss_promo_sk (#8), item.i_product_name (#338), item.i_item_sk (#317), d1.d_year (#113)]
+    │                                           ├── join type: INNER
+    │                                           ├── build keys: [d1.d_date_sk (#107)]
+    │                                           ├── probe keys: [store_sales.ss_sold_date_sk (#0)]
+    │                                           ├── keys is null equal: [false]
+    │                                           ├── filters: []
+    │                                           ├── build join filters:
+    │                                           │   └── filter id:6, build key:d1.d_date_sk (#107), probe targets:[store_sales.ss_sold_date_sk (#0)@scan0], filter type:bloom,inlist,min_max
+    │                                           ├── estimated rows: 35527272.67
+    │                                           ├── Exchange(Build)
+    │                                           │   ├── output columns: [d1.d_date_sk (#107), d1.d_year (#113)]
+    │                                           │   ├── exchange type: Broadcast
+    │                                           │   └── TableScan
+    │                                           │       ├── table: default.default.date_dim
+    │                                           │       ├── scan id: 4
+    │                                           │       ├── output columns: [d_date_sk (#107), d_year (#113)]
+    │                                           │       ├── read rows: 0
+    │                                           │       ├── read size: 0
+    │                                           │       ├── partitions total: 0
+    │                                           │       ├── partitions scanned: 0
+    │                                           │       ├── push downs: [filters: [], limit: NONE]
+    │                                           │       └── estimated rows: 73049.00
+    │                                           └── HashJoin(Probe)
+    │                                               ├── output columns: [store_sales.ss_sold_date_sk (#0), store_sales.ss_customer_sk (#3), store_sales.ss_cdemo_sk (#4), store_sales.ss_hdemo_sk (#5), store_sales.ss_addr_sk (#6), store_sales.ss_store_sk (#7), store_sales.ss_promo_sk (#8), item.i_product_name (#338), item.i_item_sk (#317)]
+    │                                               ├── join type: INNER
+    │                                               ├── build keys: [item.i_item_sk (#317), store_returns.sr_ticket_number (#32)]
+    │                                               ├── probe keys: [store_sales.ss_item_sk (#2), store_sales.ss_ticket_number (#9)]
+    │                                               ├── keys is null equal: [false, false]
+    │                                               ├── filters: []
+    │                                               ├── build join filters:
+    │                                               │   ├── filter id:4, build key:item.i_item_sk (#317), probe targets:[store_sales.ss_item_sk (#2)@scan0], filter type:bloom,inlist,min_max
+    │                                               │   └── filter id:5, build key:store_returns.sr_ticket_number (#32), probe targets:[store_sales.ss_ticket_number (#9)@scan0], filter type:bloom,inlist,min_max
+    │                                               ├── estimated rows: 37200677.85
+    │                                               ├── Exchange(Build)
+    │                                               │   ├── output columns: [store_returns.sr_ticket_number (#32), item.i_product_name (#338), item.i_item_sk (#317)]
+    │                                               │   ├── exchange type: Broadcast
+    │                                               │   └── HashJoin
+    │                                               │       ├── output columns: [store_returns.sr_ticket_number (#32), item.i_product_name (#338), item.i_item_sk (#317)]
+    │                                               │       ├── join type: INNER
+    │                                               │       ├── build keys: [item.i_item_sk (#317)]
+    │                                               │       ├── probe keys: [store_returns.sr_item_sk (#25)]
+    │                                               │       ├── keys is null equal: [false]
+    │                                               │       ├── filters: []
+    │                                               │       ├── build join filters:
+    │                                               │       │   └── filter id:3, build key:item.i_item_sk (#317), probe targets:[store_returns.sr_item_sk (#25)@scan1], filter type:bloom,inlist,min_max
+    │                                               │       ├── estimated rows: 2737509.14
+    │                                               │       ├── Exchange(Build)
+    │                                               │       │   ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317)]
+    │                                               │       │   ├── exchange type: Broadcast
+    │                                               │       │   └── HashJoin
+    │                                               │       │       ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317)]
+    │                                               │       │       ├── join type: INNER
+    │                                               │       │       ├── build keys: [item.i_item_sk (#317)]
+    │                                               │       │       ├── probe keys: [cs_ui.cs_item_sk (#58)]
+    │                                               │       │       ├── keys is null equal: [false]
+    │                                               │       │       ├── filters: []
+    │                                               │       │       ├── build join filters(distributed):
+    │                                               │       │       │   └── filter id:2, build key:item.i_item_sk (#317), probe targets:[cs_ui.cs_item_sk (#58)@scan2, catalog_returns.cr_item_sk (#79)@scan3], filter type:bloom,inlist,min_max
+    │                                               │       │       ├── estimated rows: 18150.03
+    │                                               │       │       ├── Exchange(Build)
+    │                                               │       │       │   ├── output columns: [item.i_item_sk (#317), item.i_product_name (#338)]
+    │                                               │       │       │   ├── exchange type: Hash(item.i_item_sk (#317))
+    │                                               │       │       │   └── TableScan
+    │                                               │       │       │       ├── table: default.default.item
+    │                                               │       │       │       ├── scan id: 18
+    │                                               │       │       │       ├── output columns: [i_item_sk (#317), i_product_name (#338)]
+    │                                               │       │       │       ├── read rows: 0
+    │                                               │       │       │       ├── read size: 0
+    │                                               │       │       │       ├── partitions total: 0
+    │                                               │       │       │       ├── partitions scanned: 0
+    │                                               │       │       │       ├── push downs: [filters: [contains(['blanched', 'medium', 'brown', 'chocolate', 'burlywood', 'drab'], item.i_color (#334)) and item.i_current_price (#322) >= 23 and item.i_current_price (#322) <= 33 and item.i_current_price (#322) >= 24 and item.i_current_price (#322) <= 38], limit: NONE]
+    │                                               │       │       │       └── estimated rows: 18150.03
+    │                                               │       │       └── Exchange(Probe)
+    │                                               │       │           ├── output columns: [catalog_sales.cs_item_sk (#58)]
+    │                                               │       │           ├── exchange type: Hash(cs_ui.cs_item_sk (#58))
+    │                                               │       │           └── Filter
+    │                                               │       │               ├── output columns: [catalog_sales.cs_item_sk (#58)]
+    │                                               │       │               ├── filters: [is_true(sum(cs_ext_list_price) (#104) > 2 * sum(cr_refunded_cash + cr_reversed_charge + cr_store_credit) (#106))]
+    │                                               │       │               ├── estimated rows: 38183.00
+    │                                               │       │               └── AggregateFinal
+    │                                               │       │                   ├── output columns: [sum(cs_ext_list_price) (#104), sum(cr_refunded_cash + cr_reversed_charge + cr_store_credit) (#106), catalog_sales.cs_item_sk (#58)]
+    │                                               │       │                   ├── group by: [cs_item_sk]
+    │                                               │       │                   ├── aggregate functions: [sum(cs_ext_list_price), sum(sum_arg_0)]
+    │                                               │       │                   ├── estimated rows: 190915.00
+    │                                               │       │                   └── Exchange
+    │                                               │       │                       ├── output columns: [sum(cs_ext_list_price) (#104), sum(cr_refunded_cash + cr_reversed_charge + cr_store_credit) (#106), catalog_sales.cs_item_sk (#58)]
+    │                                               │       │                       ├── exchange type: Hash(0)
+    │                                               │       │                       └── AggregatePartial
+    │                                               │       │                           ├── group by: [cs_item_sk]
+    │                                               │       │                           ├── aggregate functions: [sum(cs_ext_list_price), sum(sum_arg_0)]
+    │                                               │       │                           ├── estimated rows: 190915.00
+    │                                               │       │                           └── EvalScalar
+    │                                               │       │                               ├── output columns: [catalog_sales.cs_item_sk (#58), catalog_sales.cs_ext_list_price (#68), sum_arg_0 (#105)]
+    │                                               │       │                               ├── expressions: [catalog_returns.cr_refunded_cash (#100) + catalog_returns.cr_reversed_charge (#101) + catalog_returns.cr_store_credit (#102)]
+    │                                               │       │                               ├── estimated rows: 143856507.94
+    │                                               │       │                               └── HashJoin
+    │                                               │       │                                   ├── output columns: [catalog_sales.cs_item_sk (#58), catalog_sales.cs_ext_list_price (#68), catalog_returns.cr_refunded_cash (#100), catalog_returns.cr_reversed_charge (#101), catalog_returns.cr_store_credit (#102)]
+    │                                               │       │                                   ├── join type: INNER
+    │                                               │       │                                   ├── build keys: [catalog_returns.cr_item_sk (#79), catalog_returns.cr_order_number (#93)]
+    │                                               │       │                                   ├── probe keys: [catalog_sales.cs_item_sk (#58), catalog_sales.cs_order_number (#60)]
+    │                                               │       │                                   ├── keys is null equal: [false, false]
+    │                                               │       │                                   ├── filters: []
+    │                                               │       │                                   ├── build join filters:
+    │                                               │       │                                   │   ├── filter id:0, build key:catalog_returns.cr_item_sk (#79), probe targets:[catalog_sales.cs_item_sk (#58)@scan2], filter type:bloom,inlist,min_max
+    │                                               │       │                                   │   └── filter id:1, build key:catalog_returns.cr_order_number (#93), probe targets:[catalog_sales.cs_order_number (#60)@scan2], filter type:bloom,inlist,min_max
+    │                                               │       │                                   ├── estimated rows: 143856507.94
+    │                                               │       │                                   ├── Exchange(Build)
+    │                                               │       │                                   │   ├── output columns: [catalog_returns.cr_item_sk (#79), catalog_returns.cr_order_number (#93), catalog_returns.cr_refunded_cash (#100), catalog_returns.cr_reversed_charge (#101), catalog_returns.cr_store_credit (#102)]
+    │                                               │       │                                   │   ├── exchange type: Broadcast
+    │                                               │       │                                   │   └── TableScan
+    │                                               │       │                                   │       ├── table: default.default.catalog_returns
+    │                                               │       │                                   │       ├── scan id: 3
+    │                                               │       │                                   │       ├── output columns: [cr_item_sk (#79), cr_order_number (#93), cr_refunded_cash (#100), cr_reversed_charge (#101), cr_store_credit (#102)]
+    │                                               │       │                                   │       ├── read rows: 0
+    │                                               │       │                                   │       ├── read size: 0
+    │                                               │       │                                   │       ├── partitions total: 0
+    │                                               │       │                                   │       ├── partitions scanned: 0
+    │                                               │       │                                   │       ├── push downs: [filters: [], limit: NONE]
+    │                                               │       │                                   │       ├── apply join filters: [#2]
+    │                                               │       │                                   │       └── estimated rows: 14404374.00
+    │                                               │       │                                   └── TableScan(Probe)
+    │                                               │       │                                       ├── table: default.default.catalog_sales
+    │                                               │       │                                       ├── scan id: 2
+    │                                               │       │                                       ├── output columns: [cs_item_sk (#58), cs_order_number (#60), cs_ext_list_price (#68)]
+    │                                               │       │                                       ├── read rows: 0
+    │                                               │       │                                       ├── read size: 0
+    │                                               │       │                                       ├── partitions total: 0
+    │                                               │       │                                       ├── partitions scanned: 0
+    │                                               │       │                                       ├── push downs: [filters: [], limit: NONE]
+    │                                               │       │                                       ├── apply join filters: [#2, #0, #1]
+    │                                               │       │                                       └── estimated rows: 143997065.00
+    │                                               │       └── TableScan(Probe)
+    │                                               │           ├── table: default.default.store_returns
+    │                                               │           ├── scan id: 1
+    │                                               │           ├── output columns: [sr_item_sk (#25), sr_ticket_number (#32)]
+    │                                               │           ├── read rows: 0
+    │                                               │           ├── read size: 0
+    │                                               │           ├── partitions total: 0
+    │                                               │           ├── partitions scanned: 0
+    │                                               │           ├── push downs: [filters: [], limit: NONE]
+    │                                               │           ├── apply join filters: [#3]
+    │                                               │           └── estimated rows: 28795080.00
+    │                                               └── TableScan(Probe)
+    │                                                   ├── table: default.default.store_sales
+    │                                                   ├── scan id: 0
+    │                                                   ├── output columns: [ss_sold_date_sk (#0), ss_item_sk (#2), ss_customer_sk (#3), ss_cdemo_sk (#4), ss_hdemo_sk (#5), ss_addr_sk (#6), ss_store_sk (#7), ss_promo_sk (#8), ss_ticket_number (#9)]
+    │                                                   ├── read rows: 0
+    │                                                   ├── read size: 0
+    │                                                   ├── partitions total: 0
+    │                                                   ├── partitions scanned: 0
+    │                                                   ├── push downs: [filters: [], limit: NONE]
+    │                                                   ├── apply join filters: [#19, #12, #11, #10, #9, #8, #6, #4, #5]
+    │                                                   └── estimated rows: 287997024.00
+    └── HashJoin
+        ├── output columns: [item.i_item_sk (#660)]
+        ├── join type: INNER
+        ├── build keys: [cs2.item_sk (#1003), cs2.store_name (#882), cs2.store_zip (#902)]
+        ├── probe keys: [cs1.item_sk (#660), cs1.store_name (#539), cs1.store_zip (#559)]
+        ├── keys is null equal: [false, false, false]
+        ├── filters: []
+        ├── build join filters(distributed):
+        │   ├── filter id:20, build key:cs2.item_sk (#1003), probe targets:[cs1.item_sk (#660)@scan37], filter type:bloom,inlist,min_max
+        │   ├── filter id:21, build key:cs2.store_name (#882), probe targets:[cs1.store_name (#539)@scan26], filter type:bloom,inlist,min_max
+        │   └── filter id:22, build key:cs2.store_zip (#902), probe targets:[cs1.store_zip (#559)@scan26], filter type:bloom,inlist,min_max
+        ├── estimated rows: 90932904074.89
+        ├── Exchange(Build)
+        │   ├── output columns: [store.s_store_name (#882), store.s_zip (#902), item.i_item_sk (#1003)]
+        │   ├── exchange type: Hash(cs2.item_sk (#1003), cs2.store_name (#882), cs2.store_zip (#902))
+        │   └── MaterializeCTERef
+        │       ├── cte_name: cross_sales
+        │       ├── cte_schema: [s_store_name (#882), s_zip (#902), i_item_sk (#1003)]
+        │       └── estimated rows: 40561773.90
+        └── Exchange(Probe)
+            ├── output columns: [store.s_store_name (#539), store.s_zip (#559), item.i_item_sk (#660)]
+            ├── exchange type: Hash(cs1.item_sk (#660), cs1.store_name (#539), cs1.store_zip (#559))
+            └── MaterializeCTERef
+                ├── cte_name: cross_sales
+                ├── cte_schema: [s_store_name (#539), s_zip (#559), i_item_sk (#660)]
+                └── estimated rows: 40561773.90
+

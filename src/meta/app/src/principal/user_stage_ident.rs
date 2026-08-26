@@ -35,9 +35,6 @@ impl StageIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
-    use super::StageIdent;
     use crate::principal::StageInfo;
     use crate::tenant_key::resource::TenantResource;
 
@@ -47,10 +44,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "StageIdent";
         const HAS_TENANT: bool = true;
         type ValueType = StageInfo;
-    }
-
-    impl kvapi::Value for StageInfo {
-        type KeyType = StageIdent;
     }
 }
 

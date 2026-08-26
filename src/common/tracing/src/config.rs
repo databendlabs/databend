@@ -392,13 +392,14 @@ pub struct HistoryConfig {
     pub level: String,
     pub retention_interval: usize,
     pub tables: Vec<HistoryTableConfig>,
+    pub internal_tables: Vec<HistoryTableConfig>,
     pub storage_params: Option<StorageParams>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct HistoryTableConfig {
     pub table_name: String,
-    pub retention: usize,
+    pub retention: Option<usize>,
     pub invisible: bool,
 }
 
@@ -406,8 +407,8 @@ impl Display for HistoryConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, log_only={}, interval={}, stage_name={}, level={}, retention_interval={}, tables=[{}], storage_params={}",
-            self.on,
+            "enabled={}, log_only={}, interval={}, stage_name={}, level={}, retention_interval={}, tables=[{}], internal_tables=[{}], storage_params={}",
+            self.enabled(),
             self.log_only,
             self.interval,
             self.stage_name,
@@ -415,7 +416,17 @@ impl Display for HistoryConfig {
             self.retention_interval,
             self.tables
                 .iter()
-                .map(|f| format!("{}({} hours)", f.table_name.clone(), f.retention))
+                .map(|f| match f.retention {
+                    Some(retention) => format!("{}({retention} hours)", f.table_name),
+                    None => format!("{}(default)", f.table_name),
+                })
+                .join(", "),
+            self.internal_tables
+                .iter()
+                .map(|f| match f.retention {
+                    Some(retention) => format!("{}({retention} hours)", f.table_name),
+                    None => format!("{}(default)", f.table_name),
+                })
                 .join(", "),
             self.storage_params
                 .as_ref()
@@ -436,6 +447,7 @@ impl Default for HistoryConfig {
             // Trigger the retention task every 24 hours
             retention_interval: 24,
             tables: vec![],
+            internal_tables: vec![],
             storage_params: None,
         }
     }
@@ -445,16 +457,44 @@ impl Default for HistoryTableConfig {
     fn default() -> Self {
         Self {
             table_name: "".to_string(),
-            retention: 168,
+            retention: None,
             invisible: false,
         }
     }
 }
 
 impl HistoryConfig {
+    pub fn enabled(&self) -> bool {
+        self.on || !self.internal_tables.is_empty()
+    }
+
+    pub fn enabled_tables(&self) -> impl Iterator<Item = &HistoryTableConfig> {
+        self.tables
+            .iter()
+            .filter(|_| self.on)
+            .chain(self.internal_tables.iter())
+    }
+
+    pub fn transforms_enabled(&self) -> bool {
+        (self.on && !self.log_only) || !self.internal_tables.is_empty()
+    }
+
+    pub fn transform_tables(&self) -> impl Iterator<Item = &HistoryTableConfig> {
+        self.tables
+            .iter()
+            .filter(|_| self.on && !self.log_only)
+            .chain(self.internal_tables.iter())
+    }
+
+    pub fn is_table_enabled(&self, table_name: &str) -> bool {
+        self.enabled_tables()
+            .any(|table| table.table_name.eq_ignore_ascii_case(table_name))
+    }
+
     pub fn is_invisible(&self, table_name: &str) -> bool {
         self.tables
             .iter()
+            .chain(self.internal_tables.iter())
             .find(|table| table.table_name.eq_ignore_ascii_case(table_name))
             .is_some_and(|table| table.invisible)
     }

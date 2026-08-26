@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
@@ -95,9 +96,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             txn.condition.push(txn_cond_eq_seq(name_ident, 0));
             txn.condition.push(txn_cond_eq_seq(&mask_name_ident, 0));
             txn.if_then.extend(vec![
-                txn_put_pb_with_ttl(name_ident, &policy_id, None)?, // name -> policy_id
-                txn_put_pb_with_ttl(&id_ident, &meta, None)?,       // id -> meta
-                txn_put_pb_with_ttl(&id_to_name_ident, &name_raw, None)?, // id -> name
+                txn_put_pb_with_ttl(name_ident, &policy_id, None), // name -> policy_id
+                txn_put_pb_with_ttl(&id_ident, &meta, None),       // id -> meta
+                txn_put_pb_with_ttl(&id_to_name_ident, &name_raw, None), // id -> name
             ]);
         }
 

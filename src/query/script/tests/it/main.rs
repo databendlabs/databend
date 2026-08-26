@@ -323,6 +323,59 @@ fn test_script() {
             END CASE;
         "#,
     );
+    run_script(
+        file,
+        r#"
+            LET watermark_ts := (
+                SELECT COALESCE(
+                    (SELECT w.last_completed_time
+                     FROM task_run_sync_watermark AS w
+                     WHERE w.id = 1),
+                    7
+                )
+            );
+            RETURN watermark_ts;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET fallback := 7;
+            LET watermark_ts := (
+                SELECT COALESCE(
+                    (SELECT w.last_completed_time
+                     FROM task_run_sync_watermark AS w
+                     WHERE w.id = 1),
+                    :fallback
+                )
+            );
+            RETURN watermark_ts;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET x := (SELECT number FROM numbers(3) AS t WHERE t.number = 1);
+            RETURN x;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET x RESULTSET := SELECT * FROM numbers(3);
+            FOR r IN x DO
+                LET y := (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1);
+                RETURN y;
+            END FOR;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET ok := EXISTS (SELECT * FROM numbers(1) AS t WHERE t.number = 0);
+            RETURN ok;
+        "#,
+    );
 }
 
 #[test]
@@ -383,6 +436,12 @@ fn test_script_error() {
         r#"
             LET x := 1;
             LET y := :x + 1;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET x := (SELECT :missing);
         "#,
     );
     run_script(
@@ -487,6 +546,24 @@ fn mock_client() -> MockClient {
             "SELECT a FROM t1",
             MockSet::named(vec!["a"], vec![vec![Literal::UInt64(1)]]),
         )
+        .response_when(
+            "SELECT (SELECT COALESCE((SELECT w.last_completed_time FROM task_run_sync_watermark AS w WHERE w.id = 1), 7))",
+            MockSet::unnamed(vec![vec![Literal::UInt64(7)]]),
+        )
+        .response_when(
+            "SELECT (SELECT number FROM numbers(3) AS t WHERE t.number = 1)",
+            MockSet::unnamed(vec![vec![Literal::UInt64(1)]]),
+        )
+        .response_when(
+            "SELECT (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1)",
+            MockSet::unnamed(vec![vec![Literal::UInt64(1)]]),
+        )
+        .response_when(
+            "SELECT EXISTS (SELECT * FROM numbers(1) AS t WHERE t.number = 0)",
+            MockSet::unnamed(vec![vec![Literal::Boolean(true)]]),
+        )
+        .response_when("SELECT TRUE", MockSet::unnamed(vec![vec![Literal::Boolean(true)]]))
+        .response_when("SELECT 7", MockSet::unnamed(vec![vec![Literal::UInt64(7)]]))
         .response_when(
             "SELECT * FROM generate_series(1, 1 + 2, 1)",
             MockSet::unnamed(vec![

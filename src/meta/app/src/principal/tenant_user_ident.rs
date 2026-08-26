@@ -36,9 +36,7 @@ impl TenantUserIdent {
 
 mod kvapi_impl {
     use databend_common_exception::ErrorCode;
-    use databend_meta_client::kvapi;
 
-    use crate::principal::TenantUserIdent;
     use crate::principal::UserIdentity;
     use crate::principal::UserInfo;
     use crate::tenant_key::errors::ExistError;
@@ -63,10 +61,6 @@ mod kvapi_impl {
         fn from(err: UnknownError<Resource, UserIdentity>) -> Self {
             ErrorCode::UnknownUser(format!("User {} does not exist.", err.name().display()))
         }
-    }
-
-    impl kvapi::Value for UserInfo {
-        type KeyType = TenantUserIdent;
     }
 }
 

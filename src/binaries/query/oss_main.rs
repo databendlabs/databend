@@ -49,7 +49,7 @@ fn main() {
     // Thread tracker
     ThreadTracker::init();
 
-    match Runtime::with_default_worker_threads() {
+    match Runtime::with_default_worker_threads(Some("main-worker".to_string())) {
         Err(cause) => {
             eprintln!("Databend Query start failure, cause: {:?}", cause);
             std::process::exit(cause.code() as i32);

@@ -33,9 +33,19 @@ impl ClusterDescriptor {
     }
 
     pub fn with_node(self, id: impl Into<String>, addr: impl Into<String>) -> ClusterDescriptor {
+        self.with_node_info(id, addr, "", "")
+    }
+
+    pub fn with_node_info(
+        self,
+        id: impl Into<String>,
+        addr: impl Into<String>,
+        cluster_id: impl Into<String>,
+        warehouse_id: impl Into<String>,
+    ) -> ClusterDescriptor {
         let mut new_nodes = self.cluster_nodes_list.clone();
         let id = id.into();
-        new_nodes.push(Arc::new(NodeInfo::create(
+        let mut node = NodeInfo::create(
             id.clone(),
             "".to_string(),
             "".to_string(),
@@ -43,7 +53,10 @@ impl ClusterDescriptor {
             "".to_string(),
             DATABEND_COMMIT_VERSION.to_string(),
             id,
-        )));
+        );
+        node.cluster_id = cluster_id.into();
+        node.warehouse_id = warehouse_id.into();
+        new_nodes.push(Arc::new(node));
         ClusterDescriptor {
             cluster_nodes_list: new_nodes,
             local_node_id: self.local_node_id,

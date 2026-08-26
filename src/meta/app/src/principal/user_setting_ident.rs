@@ -21,9 +21,6 @@ pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
-    use crate::principal::SettingIdent;
     use crate::principal::UserSetting;
     use crate::tenant_key::resource::TenantResource;
 
@@ -33,10 +30,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "SettingIdent";
         const HAS_TENANT: bool = true;
         type ValueType = UserSetting;
-    }
-
-    impl kvapi::Value for UserSetting {
-        type KeyType = SettingIdent;
     }
 }
 

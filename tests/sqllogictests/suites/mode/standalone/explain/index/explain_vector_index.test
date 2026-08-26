@@ -45,15 +45,18 @@ RowFetch
 ├── output columns: [t._vector_score (#2), t._row_id (#3), t.id (#0)]
 ├── columns to fetch: [id]
 ├── estimated rows: 5.00
-└── Limit
+└── TopN(Final)
     ├── output columns: [t._vector_score (#2), t._row_id (#3)]
+    ├── sort keys: [_vector_score ASC NULLS LAST]
     ├── limit: 5
     ├── offset: 0
     ├── estimated rows: 5.00
-    └── Sort(Single)
+    └── TopN(Partial)
         ├── output columns: [t._vector_score (#2), t._row_id (#3)]
         ├── sort keys: [_vector_score ASC NULLS LAST]
-        ├── estimated rows: 16.00
+        ├── limit: 5
+        ├── offset: 0
+        ├── estimated rows: 5.00
         └── TableScan
             ├── table: default.test_vector_index_db.t
             ├── scan id: 0
@@ -62,7 +65,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 4
             ├── partitions scanned: 3
-            ├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, topn pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 3 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, topn pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 3 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 5]
             └── estimated rows: 16.00
 
@@ -73,15 +76,18 @@ RowFetch
 ├── output columns: [t._vector_score (#2), t._row_id (#3), t.id (#0)]
 ├── columns to fetch: [id]
 ├── estimated rows: 3.00
-└── Limit
+└── TopN(Final)
     ├── output columns: [t._vector_score (#2), t._row_id (#3)]
+    ├── sort keys: [_vector_score DESC NULLS LAST]
     ├── limit: 3
     ├── offset: 0
     ├── estimated rows: 3.00
-    └── Sort(Single)
+    └── TopN(Partial)
         ├── output columns: [t._vector_score (#2), t._row_id (#3)]
         ├── sort keys: [_vector_score DESC NULLS LAST]
-        ├── estimated rows: 16.00
+        ├── limit: 3
+        ├── offset: 0
+        ├── estimated rows: 3.00
         └── TableScan
             ├── table: default.test_vector_index_db.t
             ├── scan id: 0
@@ -90,7 +96,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 4
             ├── partitions scanned: 2
-            ├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, topn pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 2 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, topn pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 2 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 3]
             └── estimated rows: 16.00
 
@@ -101,15 +107,18 @@ RowFetch
 ├── output columns: [t._vector_score (#2), t._row_id (#3), t.id (#0)]
 ├── columns to fetch: [id]
 ├── estimated rows: 3.00
-└── Limit
+└── TopN(Final)
     ├── output columns: [t._vector_score (#2), t._row_id (#3)]
+    ├── sort keys: [_vector_score ASC NULLS LAST]
     ├── limit: 3
     ├── offset: 0
     ├── estimated rows: 3.00
-    └── Sort(Single)
+    └── TopN(Partial)
         ├── output columns: [t._vector_score (#2), t._row_id (#3)]
         ├── sort keys: [_vector_score ASC NULLS LAST]
-        ├── estimated rows: 8.00
+        ├── limit: 3
+        ├── offset: 0
+        ├── estimated rows: 3.00
         └── Filter
             ├── output columns: [t._vector_score (#2), t._row_id (#3)]
             ├── filters: [t._vector_score (#2) > 0.1]
@@ -122,7 +131,7 @@ RowFetch
                 ├── read size: 0
                 ├── partitions total: 4
                 ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 3 cost: <slt:ignore>>]
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 3 cost: <slt:ignore>>]
                 ├── push downs: [filters: [t._vector_score (#2) > 0.1], limit: 3]
                 └── estimated rows: 16.00
 
@@ -150,15 +159,18 @@ RowFetch
 ├── output columns: [t2._vector_score (#3), t2._row_id (#4), t2.id (#0)]
 ├── columns to fetch: [id]
 ├── estimated rows: 1.00
-└── Limit
+└── TopN(Final)
     ├── output columns: [t2._vector_score (#3), t2._row_id (#4)]
+    ├── sort keys: [_vector_score ASC NULLS LAST]
     ├── limit: 1
     ├── offset: 0
     ├── estimated rows: 1.00
-    └── Sort(Single)
+    └── TopN(Partial)
         ├── output columns: [t2._vector_score (#3), t2._row_id (#4)]
         ├── sort keys: [_vector_score ASC NULLS LAST]
-        ├── estimated rows: 8.00
+        ├── limit: 1
+        ├── offset: 0
+        ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.test_vector_index_db.t2
             ├── scan id: 0
@@ -167,7 +179,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 2
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, topn pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, topn pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 1]
             └── estimated rows: 8.00
 
@@ -178,15 +190,18 @@ RowFetch
 ├── output columns: [t2._vector_score (#3), t2._row_id (#4), t2.id (#0)]
 ├── columns to fetch: [id]
 ├── estimated rows: 1.00
-└── Limit
+└── TopN(Final)
     ├── output columns: [t2._vector_score (#3), t2._row_id (#4)]
+    ├── sort keys: [_vector_score ASC NULLS LAST]
     ├── limit: 1
     ├── offset: 0
     ├── estimated rows: 1.00
-    └── Sort(Single)
+    └── TopN(Partial)
         ├── output columns: [t2._vector_score (#3), t2._row_id (#4)]
         ├── sort keys: [_vector_score ASC NULLS LAST]
-        ├── estimated rows: 8.00
+        ├── limit: 1
+        ├── offset: 0
+        ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.test_vector_index_db.t2
             ├── scan id: 0
@@ -195,7 +210,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 2
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, topn pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, topn pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 1]
             └── estimated rows: 8.00
 

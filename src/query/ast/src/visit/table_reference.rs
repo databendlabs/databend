@@ -225,7 +225,7 @@ impl Walk for TemporalClause {
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
         match self {
-            TemporalClause::TimeTravel(point) => point.walk(visitor),
+            TemporalClause::TimeTravel { point, .. } => point.walk(visitor),
             TemporalClause::Changes(changes) => {
                 try_walk!(changes.at_point.walk(visitor));
                 if let Some(end_point) = &changes.end_point {
@@ -243,7 +243,7 @@ impl WalkMut for TemporalClause {
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
         match self {
-            TemporalClause::TimeTravel(point) => point.walk_mut(visitor),
+            TemporalClause::TimeTravel { point, .. } => point.walk_mut(visitor),
             TemporalClause::Changes(changes) => {
                 try_walk!(changes.at_point.walk_mut(visitor));
                 if let Some(end_point) = &mut changes.end_point {

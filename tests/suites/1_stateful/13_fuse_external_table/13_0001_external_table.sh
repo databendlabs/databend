@@ -3,9 +3,9 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "drop table if exists external_table_test;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists external_table_test;" | bendsql_connect_root
 
-echo "drop connection if exists external_table_conn;" | $BENDSQL_CLIENT_CONNECT
+echo "drop connection if exists external_table_conn;" | bendsql_connect_root
 
 stmt "create or replace connection external_table_conn storage_type='s3' access_key_id = 'minioadmin'  endpoint_url = 'http://127.0.0.1:9900' secret_access_key = 'minioadmin';"
 

@@ -80,5 +80,5 @@ fn build_proto() -> Result<()> {
         config.protoc_arg("--experimental_allow_proto3_optional");
     }
 
-    tonic_build::configure().compile_protos_with_config(config, &proto_defs, &[proto_path])
+    tonic_prost_build::configure().compile_with_config(config, &proto_defs, &[proto_path])
 }

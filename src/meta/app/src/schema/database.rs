@@ -23,7 +23,6 @@ use chrono::Utc;
 use databend_meta_client::kvapi;
 use databend_meta_client::types::SeqV;
 
-use super::CreateOption;
 use crate::KeyWithTenant;
 use crate::schema::database_id::DatabaseId;
 use crate::schema::database_name_ident::DatabaseNameIdent;
@@ -183,7 +182,7 @@ impl Display for DbIdList {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabaseReq {
-    pub create_option: CreateOption,
+    pub override_existing: bool,
     pub catalog_name: Option<String>,
     pub name_ident: DatabaseNameIdent,
     pub meta: DatabaseMeta,
@@ -191,29 +190,22 @@ pub struct CreateDatabaseReq {
 
 impl Display for CreateDatabaseReq {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self.create_option {
-            CreateOption::Create => write!(
-                f,
-                "create_db:{}/{}={:?}",
-                self.name_ident.tenant_name(),
-                self.name_ident.database_name(),
-                self.meta
-            ),
-            CreateOption::CreateIfNotExists => write!(
-                f,
-                "create_db_if_not_exists:{}/{}={:?}",
-                self.name_ident.tenant_name(),
-                self.name_ident.database_name(),
-                self.meta
-            ),
-
-            CreateOption::CreateOrReplace => write!(
+        if self.override_existing {
+            write!(
                 f,
                 "create_or_replace_db:{}/{}={:?}",
                 self.name_ident.tenant_name(),
                 self.name_ident.database_name(),
                 self.meta
-            ),
+            )
+        } else {
+            write!(
+                f,
+                "create_db:{}/{}={:?}",
+                self.name_ident.tenant_name(),
+                self.name_ident.database_name(),
+                self.meta
+            )
         }
     }
 }
@@ -221,6 +213,7 @@ impl Display for CreateDatabaseReq {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub db_id: DatabaseId,
+    pub created: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -359,10 +352,6 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for DatabaseIdToName {
         type ValueType = DatabaseNameIdentRaw;
-    }
-
-    impl kvapi::Value for DatabaseNameIdentRaw {
-        type KeyType = DatabaseIdToName;
     }
 }
 

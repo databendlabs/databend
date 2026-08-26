@@ -325,7 +325,7 @@ pub fn cast_scalar_to_variant(
                     ScalarRef::Decimal(v) => v.to_string(),
                     ScalarRef::Boolean(v) => v.to_string(),
                     ScalarRef::Timestamp(v) => timestamp_to_string(v, tz).to_string(),
-                    ScalarRef::Date(v) => date_to_string(v, tz).to_string(),
+                    ScalarRef::Date(v) => date_to_string(v),
                     _ => unreachable!(),
                 };
                 let mut val = vec![];

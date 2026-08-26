@@ -79,6 +79,21 @@ select id, item_2['item']['name'], item_2['item']['level'], item_2['level'] from
 3 C1 3 30
 4 NULL NULL NULL
 
+query IT rowsort
+select id, name from t_variant_metadata;
+----
+1 alice
+2 bob
+
+statement ok
+alter table t_variant_metadata refresh cache;
+
+query IT rowsort
+select id, name from t_variant_metadata;
+----
+1 alice
+2 bob
+
 # test_merge_on_read_deletes: DELETE FROM test_merge_on_read_deletes WHERE letter = 'k' OR number = 3 OR (number > 4 AND number < 7)
 # Tips: `2023-03-30 6 z` is new row
 query ?IT rowsort

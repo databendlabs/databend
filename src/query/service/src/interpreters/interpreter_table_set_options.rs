@@ -24,8 +24,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
@@ -33,6 +35,7 @@ use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
+use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
 use databend_common_storages_fuse::segment_format_from_location;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -41,17 +44,33 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
+use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::WriteDistributionMode;
+use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use log::error;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_maintenance_target;
+use crate::interpreters::common::table_option_validation::analyze_count_min_sketch_error_rate_from_options;
+use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_count_min_sketch_error_rate;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_frequency_columns;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_algorithm;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_kll_relative_error;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_size;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
@@ -61,7 +80,9 @@ use crate::interpreters::common::table_option_validation::is_valid_data_page_byt
 use crate::interpreters::common::table_option_validation::is_valid_data_page_rows;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
+use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
@@ -100,12 +121,20 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_block_per_segment(&self.plan.set_options)?;
         // check row_per_block
         is_valid_row_per_block(&self.plan.set_options)?;
+        is_valid_recluster_depth(&self.plan.set_options)?;
         // check data_retention_period
         is_valid_data_retention_period(&self.plan.set_options)?;
         // check enable_parquet_encoding
         is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
         is_valid_data_page_rows(&self.plan.set_options)?;
         is_valid_data_page_bytes(&self.plan.set_options)?;
+        is_valid_analyze_histogram_algorithm(&self.plan.set_options)?;
+        is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
+        is_valid_analyze_top_n_size(&self.plan.set_options)?;
+        is_valid_analyze_count_min_sketch_error_rate(&self.plan.set_options)?;
+        if let Some(compression) = self.plan.set_options.get(OPT_KEY_TABLE_COMPRESSION) {
+            let _: TableCompression = compression.as_str().try_into()?;
+        }
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
@@ -138,9 +167,26 @@ impl Interpreter for SetOptionsInterpreter {
                 OPT_KEY_CLUSTER_TYPE
             )));
         }
+        if self.plan.set_options.contains_key(OPT_KEY_PARTITION_BY) {
+            error!("{}", &error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "can't change {} for alter table statement",
+                OPT_KEY_PARTITION_BY
+            )));
+        }
+
+        for key in self.plan.set_options.keys() {
+            if is_reserved_opt_key(key) {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "table option '{}' is reserved and cannot be modified",
+                    key
+                )));
+            }
+        }
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&self.plan.set_options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
+        is_valid_option_of_type::<u32>(&self.plan.set_options, FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER)?;
         is_valid_option_of_type::<u64>(
             &self.plan.set_options,
             FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
@@ -157,10 +203,31 @@ impl Interpreter for SetOptionsInterpreter {
                 self.plan.branch.as_deref(),
             )
             .await?;
+        check_maintenance_target(table.as_ref(), &self.plan.target)?;
 
+        if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
+            let mode = mode.parse::<WriteDistributionMode>()?;
+            if mode == WriteDistributionMode::Hash
+                && !table.options().contains_key(OPT_KEY_PARTITION_BY)
+            {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "{OPT_KEY_WRITE_DISTRIBUTION_MODE}='hash' requires PARTITION BY"
+                )));
+            }
+        }
+
+        let engine = Engine::from(table.engine());
         for table_option in self.plan.set_options.iter() {
             let key = table_option.0.to_lowercase();
-            let engine = Engine::from(table.engine());
+            if matches!(
+                &self.plan.target,
+                MaintenanceTarget::MaterializedView { .. }
+            ) && key == OPT_KEY_COMMENT
+            {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "table option {key} is invalid for alter materialized view statement; use COMMENT = ... instead",
+                )));
+            }
             if !is_valid_create_opt(&key, &engine) {
                 error!("{}", &error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
@@ -169,6 +236,9 @@ impl Interpreter for SetOptionsInterpreter {
             }
             options_map.insert(key, Some(table_option.1.clone()));
         }
+
+        // check enable_virtual_column
+        is_valid_fuse_virtual_column_opt(&self.plan.set_options)?;
 
         let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
 
@@ -185,13 +255,11 @@ impl Interpreter for SetOptionsInterpreter {
             }
         }
 
-        // check mutability
-        table.check_mutable()?;
-
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
         is_valid_bloom_index_type(&self.plan.set_options)?;
         is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
+        is_valid_analyze_frequency_columns(&self.plan.set_options, table.schema())?;
 
         if let Some(new_snapshot_location) =
             set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
@@ -271,10 +339,11 @@ async fn set_segment_format(
                         segment_builder.add_block(block.as_ref().clone())?;
                     }
                     let additional_stats_meta = segment.summary.additional_stats_meta;
+                    let cluster_key_info = fuse_table.cluster_key_info();
                     let segment = segment_builder
                         .build(
                             fuse_table.get_block_thresholds(),
-                            fuse_table.cluster_key_id(),
+                            cluster_key_info.as_ref(),
                             additional_stats_meta,
                         )?
                         .serialize()?;
@@ -293,8 +362,7 @@ async fn set_segment_format(
         table.schema().as_ref().clone(),
         table_snapshot.summary.clone(),
         new_segment_locations,
-        fuse_table.cluster_key_meta(),
-        fuse_table.cluster_type(),
+        fuse_table.cluster_key_info(),
         table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;
@@ -340,13 +408,25 @@ async fn analyze_table(
         return Ok(table);
     };
 
+    let mut effective_options = fuse_table.get_table_info().options().clone();
+    effective_options.extend(options.clone());
+    let top_n_size = analyze_top_n_size_from_options(&effective_options)?;
+    let count_min_sketch_error_rate =
+        analyze_count_min_sketch_error_rate_from_options(&effective_options)?;
+    let frequency_columns = effective_options
+        .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
+        .cloned();
     let mut pipeline = Pipeline::create();
     fuse_table.do_analyze(
         ctx.clone(),
         table_snapshot,
         &mut pipeline,
-        HashMap::new(),
+        AnalyzeHistogramInfo::None,
+        top_n_size,
+        frequency_columns,
+        count_min_sketch_error_rate,
         false,
+        true,
     )?;
     pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let executor_settings = ExecutorSettings::try_create(ctx.clone())?;

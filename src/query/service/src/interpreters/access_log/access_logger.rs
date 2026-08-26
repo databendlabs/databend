@@ -221,6 +221,20 @@ impl AccessLogger {
                     self.log(inner)
                 }
             }
+            Plan::CreateMaterializedView(plan) => {
+                let table_plan = &plan.table_plan;
+                let object_name = format!(
+                    "{}.{}.{}",
+                    table_plan.catalog, table_plan.database, table_plan.table
+                );
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Table,
+                    object_name,
+                    operation_type: DDLOperationType::Create,
+                    ..Default::default()
+                });
+                self.log(&plan.query_plan)
+            }
             Plan::SetOptions(plan) => {
                 let object_name = qualified_table_name(
                     &plan.catalog,
@@ -236,6 +250,19 @@ impl AccessLogger {
                     properties: HashMap::from([(
                         "set_options".to_string(),
                         serde_json::to_value(&plan.set_options).unwrap(),
+                    )]),
+                });
+            }
+            Plan::AlterTablePartitionBy(plan) => {
+                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
+                let operation_type = DDLOperationType::Alter;
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Table,
+                    object_name,
+                    operation_type,
+                    properties: HashMap::from([(
+                        "partition_by".to_string(),
+                        serde_json::to_value(&plan.partition_keys).unwrap(),
                     )]),
                 });
             }
@@ -446,6 +473,17 @@ impl AccessLogger {
             }
             Plan::UnsetObjectTags(plan) => {
                 self.log_tag_object_modify(&plan.object);
+            }
+
+            Plan::DropMaterializedView(plan) => {
+                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.view_name);
+                let operation_type = DDLOperationType::Drop;
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Table,
+                    object_name,
+                    operation_type,
+                    ..Default::default()
+                });
             }
 
             _ => {}

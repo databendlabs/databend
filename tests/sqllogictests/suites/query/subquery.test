@@ -43,6 +43,31 @@ SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS 
 1 0 0
 
 statement ok
+CREATE OR REPLACE TABLE scalar_single_filter_lhs (k INT);
+
+statement ok
+CREATE OR REPLACE TABLE scalar_single_filter_rhs (k INT, v INT);
+
+statement ok
+INSERT INTO scalar_single_filter_lhs VALUES (1), (2), (3);
+
+statement ok
+INSERT INTO scalar_single_filter_rhs VALUES (1, 5), (2, NULL);
+
+query I rowsort
+SELECT k
+FROM scalar_single_filter_lhs AS lhs
+WHERE (
+    SELECT v
+    FROM scalar_single_filter_rhs AS rhs
+    WHERE rhs.k = lhs.k
+) IS NULL
+ORDER BY k;
+----
+2
+3
+
+statement ok
 CREATE OR REPLACE TABLE c (c_id INT NULL, bill VARCHAR NULL)
 
 statement ok
@@ -864,6 +889,9 @@ insert into t1 values(1), (2), (3);
 
 query error 1001.*Scalar subquery can't return more than one row
 select (select sum(a) from t1 where t1.a >= t2.a group by t1.a) from t1 as t2;
+
+query error 1001.*Scalar subquery can't return more than one row
+SELECT 1 WHERE (SELECT number FROM numbers(2)) >= 0;
 
 
 

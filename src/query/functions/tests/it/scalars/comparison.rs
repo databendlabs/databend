@@ -27,6 +27,7 @@ fn test_comparison() {
 
     test_eq(file);
     test_noteq(file);
+    test_singleton_domain_equality(file);
     test_lt(file);
     test_lte(file);
     test_gt(file);
@@ -34,6 +35,29 @@ fn test_comparison() {
     test_like(file);
     test_regexp(file);
     test_decimal(file);
+}
+
+fn test_singleton_domain_equality(file: &mut impl Write) {
+    let numeric = [
+        ("lhs", UInt8Type::from_data(vec![7u8, 7])),
+        ("rhs", UInt8Type::from_data(vec![7u8, 7])),
+    ];
+    run_ast(file, "lhs = rhs", &numeric);
+    run_ast(file, "lhs != rhs", &numeric);
+
+    let strings = [
+        ("lhs", StringType::from_data(vec!["databend", "databend"])),
+        ("rhs", StringType::from_data(vec!["databend", "databend"])),
+    ];
+    run_ast(file, "lhs = rhs", &strings);
+    run_ast(file, "lhs != rhs", &strings);
+
+    let nullable = [
+        ("lhs", Int64Type::from_opt_data(vec![Some(7), None])),
+        ("rhs", Int64Type::from_opt_data(vec![Some(7), None])),
+    ];
+    run_ast(file, "lhs = rhs", &nullable);
+    run_ast(file, "lhs != rhs", &nullable);
 }
 
 fn test_eq(file: &mut impl Write) {
@@ -487,6 +511,8 @@ fn test_like(file: &mut impl Write) {
     run_ast(file, "'h\n' like 'h_'", &[]);
     run_ast(file, r#"'%' like '\%'"#, &[]);
     run_ast(file, r#"'v%xx' like '_\%%'"#, &[]);
+    run_ast(file, r#""like"('alpha_beta', 'alpha$_beta', '$')"#, &[]);
+    run_ast(file, r#""like"('alphaXbeta', 'alpha$_beta', '$')"#, &[]);
 
     let columns = [(
         "lhs",
@@ -513,6 +539,31 @@ fn test_like(file: &mut impl Write) {
         "parse_json('{\"k1\":\"abc\",\"k2\":\"def\"}') like '%e%'",
         &[],
     );
+    run_ast(
+        file,
+        r#"parse_json('{"name":"alpha_beta"}') like 'alpha\_beta'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('["alpha_beta_tail"]') like 'alpha\_beta%'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"name":"head_alpha_beta"}') like '%alpha\_beta'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#""like"(parse_json('{"name":"alpha_beta"}'), 'alpha$_beta', '$')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"name":"alphabeta"}') like 'alphabeta'"#,
+        &[],
+    );
 
     let columns = [(
         "lhs",
@@ -520,6 +571,54 @@ fn test_like(file: &mut impl Write) {
     )];
     run_ast(file, "parse_json(lhs) like 'a%'", &columns);
     run_ast(file, "parse_json(lhs) like '%ab%'", &columns);
+
+    run_ast(file, r#""ilike"('Databend', 'data%')"#, &[]);
+    run_ast(file, r#""ilike"('ab', 'aA%', 'A')"#, &[]);
+    run_ast(file, r#""ilike"('a%', 'aA%', 'A')"#, &[]);
+    run_ast(file, r#""ilike_any"('ab', ('z%', 'aA%'), 'A')"#, &[]);
+    let columns = [
+        ("lhs", StringType::from_data(vec!["ab", "a%"])),
+        ("rhs", StringType::from_data(vec!["aA%", "aA%"])),
+    ];
+    run_ast(file, r#""ilike"(lhs, rhs, 'A')"#, &columns);
+
+    let columns = [
+        (
+            "cond",
+            BooleanType::from_data(vec![true, false, true, false, true, false]),
+        ),
+        (
+            "lhs",
+            StringType::from_data_with_validity(
+                vec!["alpha", "", "beta", "zeta", "", "omega"],
+                vec![true, false, true, true, false, true],
+            ),
+        ),
+    ];
+    run_ast(file, "if(cond, lhs like '%', not(lhs like '%'))", &columns);
+    run_ast(
+        file,
+        "not(if(cond, lhs like '%', not(lhs like '%')))",
+        &columns,
+    );
+    run_ast(
+        file,
+        "is_true(if(cond, lhs like '%', not(lhs like '%')))",
+        &columns,
+    );
+    run_ast(
+        file,
+        // The SQL binder lowers COALESCE(nullable, fallback) to this guarded form.
+        "if(is_not_null(if(cond, lhs like '%', not(lhs like '%'))), \
+         assume_not_null(if(cond, lhs like '%', not(lhs like '%'))), false)",
+        &columns,
+    );
+    run_ast(
+        file,
+        "if(cond, if(is_not_null(lhs like '%'), assume_not_null(lhs like '%'), false), \
+         is_true(not(lhs like '%')))",
+        &columns,
+    );
 }
 
 fn test_regexp(file: &mut impl Write) {

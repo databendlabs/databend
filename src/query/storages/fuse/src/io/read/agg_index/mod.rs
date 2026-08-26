@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod agg_index_reader;
-mod agg_index_reader_native;
 mod agg_index_reader_parquet;
 
 pub use agg_index_reader::AggIndexReader;

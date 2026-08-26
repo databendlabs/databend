@@ -24,6 +24,7 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -41,6 +42,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -73,6 +75,7 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -92,8 +95,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -197,7 +198,18 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+        if !req.override_existing
+            && self
+                .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
+                .await?
+        {
+            return Ok(CreateDatabaseReply {
+                db_id: DatabaseId::new(0),
+                created: false,
+            });
+        }
+
         Err(ErrorCode::Unimplemented("Cannot create system database"))
     }
 
@@ -230,6 +242,37 @@ impl Catalog for ImmutableCatalog {
         let ti = table.get_table_info();
         let seq_table_meta = SeqV::new(ti.ident.seq, ti.meta.clone());
         Ok(Some(seq_table_meta))
+    }
+
+    async fn get_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _mv_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        Err(ErrorCode::Unimplemented(
+            "Immutable catalog does not support materialized-view definitions",
+        ))
+    }
+
+    async fn get_active_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+        _mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        Err(ErrorCode::Unimplemented(
+            "Immutable catalog does not support active materialized-view definitions",
+        ))
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        Err(ErrorCode::Unimplemented(
+            "Immutable catalog does not support materialized-view source generations",
+        ))
     }
 
     async fn mget_table_names_by_ids(
@@ -595,11 +638,6 @@ impl Catalog for ImmutableCatalog {
     /// Dictionary
     #[async_backtrace::framed]
     async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
         unimplemented!()
     }
 

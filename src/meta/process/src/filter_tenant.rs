@@ -31,7 +31,7 @@ use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::TableIdList;
 use databend_common_proto_conv::FromToProto;
-use databend_meta::raft_store::key_spaces::RaftStoreEntry;
+use databend_meta::store_compat::sled_compat::key_spaces::RaftStoreEntry;
 use databend_meta::types::SeqV;
 use serde::de::DeserializeOwned;
 
@@ -1177,6 +1177,8 @@ const TENANT_SCOPED_PREFIXES: &[&str] = &[
     "__fd_file_formats",
     "__fd_index",
     "__fd_mask_policy_apply_table_id",
+    "__fd_materialized_view_by_source",
+    "__fd_materialized_view_definition",
     "__fd_network_policies",
     "__fd_object_owners",
     "__fd_object_tag_ref",
@@ -1218,7 +1220,7 @@ mod tests {
     use databend_common_meta_app::schema::IndexNameIdentRaw;
     use databend_common_meta_app::schema::TableMeta;
     use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
-    use databend_meta::raft_store::key_spaces::RaftStoreEntry;
+    use databend_meta::store_compat::sled_compat::key_spaces::RaftStoreEntry;
     use databend_meta::types::SeqV;
 
     use super::*;
@@ -1240,7 +1242,7 @@ mod tests {
 
     fn encode_pb<T>(value: &T) -> Vec<u8>
     where T: FromToProto {
-        kv_pb_api::encode_pb(value).unwrap()
+        kv_pb_api::encode_pb(value)
     }
 
     fn filter(input: Vec<String>, tenant: &str) -> anyhow::Result<(TenantFilterReport, String)> {

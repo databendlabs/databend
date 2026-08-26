@@ -193,7 +193,7 @@ impl Binder {
         for argument in arguments {
             let box (arg, mut arg_type) = type_checker.resolve(argument)?;
             if let ScalarExpr::SubqueryExpr(subquery) = &arg {
-                if subquery.typ == SubqueryType::Scalar && !arg.data_type()?.is_nullable() {
+                if subquery.typ == SubqueryType::Scalar && !arg.data_type().is_nullable() {
                     arg_type = arg_type.wrap_nullable();
                 }
             }
@@ -294,10 +294,7 @@ impl Binder {
         }
         let mut return_types = Vec::with_capacity(return_type.len());
         for arg_type in return_type {
-            return_types.push(DataType::from(&resolve_type_name(
-                &arg_type.data_type,
-                true,
-            )?));
+            return_types.push(resolve_type_name(&arg_type.data_type, true)?);
         }
 
         Ok(ProcedureMeta {

@@ -75,7 +75,7 @@ impl AsyncSystemTable for VirtualColumnsTable {
                     branch_name,
                     table,
                 } = table_source;
-                if !table.support_virtual_columns() {
+                if !table.storage_format_as_parquet() {
                     continue;
                 }
                 let table_info = table.get_table_info();

@@ -25,12 +25,12 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::UnionAll;
 use crate::plans::VisitorMut;
+use crate::plans::walk_expr_mut;
 
 // For a union query, it's not allowed to add `filter` after union
 // Such as: `(select * from t1 union all select * from t2) where a > 1`, it's invalid.
@@ -87,17 +87,23 @@ impl Rule for RulePushDownFilterUnion {
             .zip([&mut union_left_child, &mut union_right_child].iter_mut())
         {
             // Create a filter which matches union's right child.
-            let index_pairs: HashMap<Symbol, Symbol> = union
+            let replacements: HashMap<Symbol, UnionOutputReplacement> = union
                 .output_indexes
                 .iter()
                 .zip(union_side.iter())
-                .map(|(index, side)| (*index, side.0))
+                .map(|(index, side)| {
+                    let replacement = match &side.1 {
+                        Some(expr) => UnionOutputReplacement::Scalar(Box::new(expr.clone())),
+                        None => UnionOutputReplacement::Column(side.0),
+                    };
+                    (*index, replacement)
+                })
                 .collect();
 
             let new_predicates = filter
                 .predicates
                 .iter()
-                .map(|predicate| replace_column_binding(&index_pairs, predicate.clone()))
+                .map(|predicate| replace_union_output(&replacements, predicate.clone()))
                 .collect::<Result<Vec<_>>>()?;
 
             let filter = Filter {
@@ -124,33 +130,48 @@ impl Rule for RulePushDownFilterUnion {
     }
 }
 
-fn replace_column_binding(
-    index_pairs: &HashMap<Symbol, Symbol>,
+enum UnionOutputReplacement {
+    Column(Symbol),
+    Scalar(Box<ScalarExpr>),
+}
+
+fn replace_union_output(
+    replacements: &HashMap<Symbol, UnionOutputReplacement>,
     mut scalar: ScalarExpr,
 ) -> Result<ScalarExpr> {
     struct ReplaceColumnVisitor<'a> {
-        index_pairs: &'a HashMap<Symbol, Symbol>,
+        replacements: &'a HashMap<Symbol, UnionOutputReplacement>,
     }
 
-    impl<'a> VisitorMut<'a> for ReplaceColumnVisitor<'a> {
-        fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
-            let index = column.column.index;
-            if self.index_pairs.contains_key(&index) {
-                let new_column = ColumnBindingBuilder::new(
-                    column.column.column_name.clone(),
-                    *self.index_pairs.get(&index).unwrap(),
-                    column.column.data_type.clone(),
-                    Visibility::Visible,
-                )
-                .virtual_expr(column.column.virtual_expr.clone())
-                .build();
-                column.column = new_column;
+    impl VisitorMut<'_> for ReplaceColumnVisitor<'_> {
+        fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+            if let ScalarExpr::BoundColumnRef(column) = expr {
+                let index = column.column.index;
+                if let Some(replacement) = self.replacements.get(&index) {
+                    match replacement {
+                        UnionOutputReplacement::Column(new_index) => {
+                            let new_column = ColumnBindingBuilder::new(
+                                column.column.column_name.clone(),
+                                *new_index,
+                                column.column.data_type.clone(),
+                                Visibility::Visible,
+                            )
+                            .virtual_expr(column.column.virtual_expr.clone())
+                            .build();
+                            column.column = new_column;
+                        }
+                        UnionOutputReplacement::Scalar(new_scalar) => {
+                            *expr = new_scalar.as_ref().clone();
+                        }
+                    }
+                    return Ok(());
+                }
             }
-            Ok(())
+            walk_expr_mut(self, expr)
         }
     }
 
-    let mut visitor = ReplaceColumnVisitor { index_pairs };
+    let mut visitor = ReplaceColumnVisitor { replacements };
     visitor.visit(&mut scalar)?;
 
     Ok(scalar)

@@ -21,7 +21,7 @@ stmt "insert into test_vacuum_drop_aggregating_index.agg values (2,2,5)"
 
 stmt "REFRESH AGGREGATING INDEX index;"
 
-SNAPSHOT_LOCATION=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_drop_aggregating_index','agg') limit 1" | $BENDSQL_CLIENT_CONNECT)
+SNAPSHOT_LOCATION=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_drop_aggregating_index','agg') limit 1" | bendsql_connect_root)
 PREFIX=$(echo "$SNAPSHOT_LOCATION" | cut -d'/' -f1-2)
 
 echo "before vacuum, should be 1 index dir"
@@ -51,10 +51,10 @@ stmt "insert into test_vacuum_drop_aggregating_index.agg_1 values (2,2,5)"
 stmt "REFRESH AGGREGATING INDEX index_1;"
 stmt "REFRESH AGGREGATING INDEX index_2;"
 
-SNAPSHOT_LOCATION_1=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_drop_aggregating_index','agg_1') limit 1" | $BENDSQL_CLIENT_CONNECT)
+SNAPSHOT_LOCATION_1=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_drop_aggregating_index','agg_1') limit 1" | bendsql_connect_root)
 PREFIX_1=$(echo "$SNAPSHOT_LOCATION_1" | cut -d'/' -f1-2)
 
-echo "before vacuum, should be 2 index dir"
+echo "before vacuum, should be 4 index files"
 
 find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_1"/_i_a/ -type f | wc -l
 
@@ -69,14 +69,14 @@ stmt "insert into test_vacuum_drop_aggregating_index.agg_2 values (2,2,5)"
 
 stmt "REFRESH AGGREGATING INDEX index_3;"
 
-SNAPSHOT_LOCATION_2=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_drop_aggregating_index','agg_2') limit 1" | $BENDSQL_CLIENT_CONNECT)
+SNAPSHOT_LOCATION_2=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_drop_aggregating_index','agg_2') limit 1" | bendsql_connect_root)
 PREFIX_2=$(echo "$SNAPSHOT_LOCATION_2" | cut -d'/' -f1-2)
 
 stmt "drop aggregating index index_1"
 stmt "drop aggregating index index_2"
 stmt "drop aggregating index index_3"
 
-echo "before vacuum, should be 1 index dir"
+echo "before vacuum, should be 2 index files"
 
 find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_2"/_i_a/ -type f | wc -l
 
@@ -105,7 +105,7 @@ stmt "insert into test_vacuum_drop_aggregating_index.agg values (2,2,5)"
 
 stmt "REFRESH AGGREGATING INDEX index;"
 
-SNAPSHOT_LOCATION=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_drop_aggregating_index','agg') limit 1" | $BENDSQL_CLIENT_CONNECT)
+SNAPSHOT_LOCATION=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_drop_aggregating_index','agg') limit 1" | bendsql_connect_root)
 PREFIX=$(echo "$SNAPSHOT_LOCATION" | cut -d'/' -f1-2)
 
 echo "before vacuum, should be 1 index dir"

@@ -75,6 +75,8 @@ pub enum FileFormatParams {
     Orc(OrcFileFormatParams),
     Avro(AvroFileFormatParams),
     Lance(LanceFileFormatParams),
+    Arrow(ArrowFileFormatParams),
+    ArrowStream(ArrowFileFormatParams),
 }
 
 impl FileFormatParams {
@@ -89,6 +91,8 @@ impl FileFormatParams {
             FileFormatParams::Orc(_) => StageFileFormatType::Orc,
             FileFormatParams::Avro(_) => StageFileFormatType::Avro,
             FileFormatParams::Lance(_) => StageFileFormatType::Lance,
+            FileFormatParams::Arrow(_) => StageFileFormatType::Arrow,
+            FileFormatParams::ArrowStream(_) => StageFileFormatType::ArrowStream,
         }
     }
 
@@ -103,6 +107,8 @@ impl FileFormatParams {
             FileFormatParams::Orc(_) => ".orc",
             FileFormatParams::Avro(_) => ".avro",
             FileFormatParams::Lance(_) => ".lance",
+            FileFormatParams::Arrow(_) => ".arrow",
+            FileFormatParams::ArrowStream(_) => ".arrow_stream",
         }
     }
 
@@ -113,6 +119,8 @@ impl FileFormatParams {
                 | FileFormatParams::Text(_)
                 | FileFormatParams::NdJson(_)
                 | FileFormatParams::Parquet(_)
+                | FileFormatParams::Arrow(_)
+                | FileFormatParams::ArrowStream(_)
         )
     }
 
@@ -138,6 +146,12 @@ impl FileFormatParams {
             StageFileFormatType::Lance => {
                 Ok(FileFormatParams::Lance(LanceFileFormatParams::default()))
             }
+            StageFileFormatType::Arrow => {
+                Ok(FileFormatParams::Arrow(ArrowFileFormatParams::default()))
+            }
+            StageFileFormatType::ArrowStream => Ok(FileFormatParams::ArrowStream(
+                ArrowFileFormatParams::default(),
+            )),
             _ => Err(ErrorCode::IllegalFileFormat(format!(
                 "Unsupported file format type: {:?}",
                 format_type
@@ -156,6 +170,9 @@ impl FileFormatParams {
             FileFormatParams::Orc(_) => StageFileCompression::None,
             FileFormatParams::Avro(_) => StageFileCompression::None,
             FileFormatParams::Lance(_) => StageFileCompression::None,
+            FileFormatParams::Arrow(_) | FileFormatParams::ArrowStream(_) => {
+                StageFileCompression::None
+            }
         }
     }
 
@@ -189,6 +206,9 @@ impl FileFormatParams {
             FileFormatParams::NdJson(v) => {
                 v.null_field_as == NullAs::FieldDefault
                     || v.missing_field_as == NullAs::FieldDefault
+            }
+            FileFormatParams::Arrow(v) | FileFormatParams::ArrowStream(v) => {
+                v.missing_field_as == NullAs::FieldDefault
             }
             _ => true,
         }
@@ -253,6 +273,18 @@ impl FileFormatParams {
                 )?)
             }
             StageFileFormatType::Lance => FileFormatParams::Lance(LanceFileFormatParams::default()),
+            StageFileFormatType::Arrow => {
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                FileFormatParams::Arrow(ArrowFileFormatParams::try_create(
+                    missing_field_as.as_deref(),
+                )?)
+            }
+            StageFileFormatType::ArrowStream => {
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                FileFormatParams::ArrowStream(ArrowFileFormatParams::try_create(
+                    missing_field_as.as_deref(),
+                )?)
+            }
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
                 let compression = reader.take_compression_default_none()?;
@@ -360,11 +392,6 @@ impl FileFormatParams {
                     empty_field_as,
                     output_header,
                 })
-            }
-            _ => {
-                return Err(ErrorCode::IllegalFileFormat(format!(
-                    "Unsupported file format {typ:?}"
-                )));
             }
         };
         if old {
@@ -1027,6 +1054,18 @@ impl OrcFileFormatParams {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LanceFileFormatParams {}
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArrowFileFormatParams {
+    pub missing_field_as: NullAs,
+}
+
+impl ArrowFileFormatParams {
+    pub fn try_create(missing_field_as: Option<&str>) -> Result<Self> {
+        let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
+        Ok(Self { missing_field_as })
+    }
+}
+
 impl Display for FileFormatParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -1117,6 +1156,20 @@ impl Display for FileFormatParams {
             }
             FileFormatParams::Lance(_) => {
                 write!(f, "TYPE = LANCE")
+            }
+            FileFormatParams::Arrow(params) => {
+                write!(
+                    f,
+                    "TYPE = ARROW MISSING_FIELD_AS = {}",
+                    params.missing_field_as
+                )
+            }
+            FileFormatParams::ArrowStream(params) => {
+                write!(
+                    f,
+                    "TYPE = ARROW_STREAM MISSING_FIELD_AS = {}",
+                    params.missing_field_as
+                )
             }
         }
     }

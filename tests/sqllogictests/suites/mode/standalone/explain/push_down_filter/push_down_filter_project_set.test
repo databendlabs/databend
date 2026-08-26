@@ -14,14 +14,14 @@ explain select name, json_path_query(details, '$.features.*') as all_features, j
 EvalScalar
 ├── output columns: [products.name (#0), all_features (#3), first_feature (#4)]
 ├── expressions: [get(1)(json_path_query(products.details (#1), '$.features.*') (#2)), json_path_query_first(products.details (#1), '$.features.*')]
-├── estimated rows: 0.36
+├── estimated rows: 0.60
 └── Filter
     ├── output columns: [products.name (#0), products.details (#1), json_path_query(products.details (#1), '$.features.*') (#2)]
     ├── filters: [is_true(get(1)(json_path_query(products.details (#1), '$.features.*') (#2)) = '"512GB"')]
-    ├── estimated rows: 0.36
+    ├── estimated rows: 0.60
     └── ProjectSet
         ├── output columns: [products.name (#0), products.details (#1), json_path_query(products.details (#1), '$.features.*') (#2)]
-        ├── estimated rows: 1.80
+        ├── estimated rows: 3.00
         ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
         └── TableScan
             ├── table: default.default.products
@@ -31,11 +31,11 @@ EvalScalar
             ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [products.name (#0) = 'Laptop' and json_path_query_first(products.details (#1), '$.features.*') = '"16GB"'], limit: NONE]
-            └── estimated rows: 0.60
+            └── estimated rows: 1.00
 
-query TTT
+query T??
 select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB' and all_features = '512GB';
 ----
 Laptop "512GB" "16GB"
@@ -46,10 +46,10 @@ explain select name, json_path_query(details, '$.features.*') as all_features, j
 EvalScalar
 ├── output columns: [products.name (#0), all_features (#3), first_feature (#4)]
 ├── expressions: [get(1)(json_path_query(products.details (#1), '$.features.*') (#2)), json_path_query_first(products.details (#1), '$.features.*')]
-├── estimated rows: 1.80
+├── estimated rows: 3.00
 └── ProjectSet
     ├── output columns: [products.name (#0), products.details (#1), json_path_query(products.details (#1), '$.features.*') (#2)]
-    ├── estimated rows: 1.80
+    ├── estimated rows: 3.00
     ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
     └── TableScan
         ├── table: default.default.products
@@ -59,11 +59,11 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [products.name (#0) = 'Laptop' and json_path_query_first(products.details (#1), '$.features.*') = '"16GB"'], limit: NONE]
-        └── estimated rows: 0.60
+        └── estimated rows: 1.00
 
-query TTT
+query T??
 select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB';
 ----
 Laptop "16GB" "16GB"

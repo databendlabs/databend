@@ -128,6 +128,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_location_interpreter_execute_v2");
 
         if check_deduplicate_label(self.ctx.clone()).await? {
+            self.ctx.attach_query_lineage(None);
             return Ok(PipelineBuildResult::create());
         }
 
@@ -137,6 +138,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
 
         // We are going to consuming streams, which are all of the default catalog
         let catalog = self.ctx.get_default_catalog()?;
+        let tenant = self.ctx.get_tenant();
 
         // Add a commit sink to the pipeline does not work, since the pipeline emits result set,
         // `inject_result` should work, but is cumbersome for this case
@@ -144,7 +146,9 @@ impl Interpreter for CopyIntoLocationInterpreter {
             move |info: &ExecutionInfo| match &info.res {
                 Ok(_) => GlobalIORuntime::instance().block_on(async move {
                     info!("Updating the stream meta for COPY INTO LOCATION statement",);
-                    catalog.update_stream_metas(update_stream_reqs).await?;
+                    catalog
+                        .update_stream_metas(&tenant, update_stream_reqs)
+                        .await?;
                     Ok(())
                 }),
                 Err(e) => Err(e.clone()),

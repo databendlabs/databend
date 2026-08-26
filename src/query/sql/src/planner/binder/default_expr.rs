@@ -44,6 +44,7 @@ use crate::MetadataRef;
 use crate::binder::AsyncFunctionDesc;
 use crate::binder::wrap_cast;
 use crate::planner::binder::BindContext;
+use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::AsyncFunctionArgument;
@@ -123,7 +124,8 @@ impl DefaultExprBinder {
     ) -> Result<(String, bool, bool)> {
         let data_field: DataField = field.into();
         let (scalar_expr, data_type) = self.bind(ast)?;
-        let (evaluable, is_nextval) = scalar_expr.default_value_evaluable();
+        let evaluable = scalar_expr.is_compile_time_evaluable();
+        let is_nextval = scalar_expr.contains_nextval();
         // The nextval can not work with other expressions.
         if !evaluable || (is_nextval && !matches!(scalar_expr, ScalarExpr::AsyncFunctionCall(_))) {
             return Err(ErrorCode::SemanticError(format!(
@@ -150,15 +152,15 @@ impl DefaultExprBinder {
         } else {
             scalar_expr
         };
-        let expr = scalar_expr.as_expr()?;
         let (expr, is_deterministic) = if is_nextval {
-            (expr, false)
-        } else if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            (scalar_expr.as_expr()?, false)
+        } else if scalar_expr.is_deterministic() {
+            let expr = scalar_expr.as_expr()?;
             let (fold_to_constant, _) =
                 ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
             (fold_to_constant, true)
         } else {
-            (expr, false)
+            (scalar_expr.as_expr()?, false)
         };
         Ok((expr.sql_display(), is_deterministic, is_nextval))
     }
@@ -174,17 +176,16 @@ impl DefaultExprBinder {
         ast: &AExpr,
         skip_sequence_check: bool,
     ) -> Result<(ScalarExpr, DataType)> {
-        let mut type_checker = TypeChecker::try_create(
+        let adapter = FullTypeCheckAdapter::new(self.ctx.clone())?
+            .with_forbid_udf(true)
+            .with_skip_sequence_check(skip_sequence_check);
+        let mut type_checker = TypeChecker::try_create_with_adapter(
             &mut self.bind_context,
-            self.ctx.clone(),
+            adapter,
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            true,
         )?;
-        if skip_sequence_check {
-            type_checker.set_skip_sequence_check(true);
-        }
         let (scalar_expr, data_type) = *type_checker.resolve(ast)?;
         Ok((scalar_expr, data_type))
     }

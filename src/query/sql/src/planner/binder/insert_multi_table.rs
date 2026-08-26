@@ -24,11 +24,13 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ScalarBinder;
 use crate::binder::util::TableIdentifier;
+use crate::normalize_identifier;
 use crate::plans::Else;
 use crate::plans::InsertMultiTable;
 use crate::plans::InsertMultiTableTarget;
@@ -98,7 +100,7 @@ impl Binder {
                 &[],
             );
             let (condition, _) = scalar_binder.bind(&when_clause.condition)?;
-            if !matches!(condition.data_type()?.remove_nullable(), DataType::Boolean) {
+            if !matches!(condition.data_type().remove_nullable(), DataType::Boolean) {
                 return Err(ErrorCode::IllegalDataType(
                     "The condition in WHEN clause must be a boolean expression".to_string(),
                 ));
@@ -196,6 +198,11 @@ impl Binder {
                     branch_name.as_deref(),
                 )
                 .await?;
+            if is_materialized_view_engine(target_table.engine()) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "Cannot modify materialized view `{database_name}`.`{table_name}`"
+                )));
+            }
             target_tables.insert(target_table.get_id(), InsertMultiTableTarget {
                 table_id: target_table.get_id(),
                 catalog: catalog_name.clone(),
@@ -221,18 +228,38 @@ impl Binder {
                 ));
             }
 
-            let mut casted_schema = if target_columns.is_empty() {
-                target_table.schema()
+            let target_schema = target_table.schema();
+            let dest_entity_name = branch_name.as_ref().map_or_else(
+                || format!("{database_name}.{table_name}"),
+                |branch| format!("{database_name}.{table_name}/{branch}"),
+            );
+            let mut target_column_ids = if target_columns.is_empty() {
+                target_schema
+                    .fields()
+                    .iter()
+                    .filter(|field| field.computed_expr().is_none())
+                    .map(|field| field.column_id())
+                    .collect::<Vec<_>>()
             } else {
-                let dest_entity_name = branch_name.as_ref().map_or_else(
-                    || format!("{database_name}.{table_name}"),
-                    |branch| format!("{database_name}.{table_name}/{branch}"),
-                );
-                self.schema_project(
-                    &target_table.schema(),
-                    target_columns.as_ref(),
-                    &dest_entity_name,
-                )?
+                target_columns
+                    .iter()
+                    .map(|ident| {
+                        let field_name =
+                            &normalize_identifier(ident, &self.name_resolution_ctx).name;
+                        let (_, field) = Self::try_resolve_field_in_schema(
+                            &target_schema,
+                            field_name,
+                            &dest_entity_name,
+                        )?;
+                        Ok(field.column_id())
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            };
+
+            let mut casted_schema = if target_columns.is_empty() {
+                target_schema
+            } else {
+                self.schema_project(&target_schema, target_columns.as_ref(), &dest_entity_name)?
             };
 
             let default_indices = source_columns
@@ -249,12 +276,17 @@ impl Binder {
 
             if !default_indices.is_empty() {
                 let mut casted_schema_fields = vec![];
+                let mut kept_target_column_ids = vec![];
                 for (i, field) in casted_schema.fields().iter().enumerate() {
                     if default_indices.contains(&i) {
                         continue;
                     }
                     casted_schema_fields.push(field.clone());
+                    if let Some(column_id) = target_column_ids.get(i) {
+                        kept_target_column_ids.push(*column_id);
+                    }
                 }
+                target_column_ids = kept_target_column_ids;
                 casted_schema = Arc::new(TableSchema {
                     fields: casted_schema_fields,
                     metadata: casted_schema.metadata.clone(),
@@ -293,6 +325,7 @@ impl Binder {
                 table: table_name,
                 branch: branch_name,
                 source_scalar_exprs,
+                target_column_ids,
                 casted_schema: Arc::new(casted_schema.into()),
             });
         }

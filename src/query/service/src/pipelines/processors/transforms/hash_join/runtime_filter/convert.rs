@@ -18,20 +18,17 @@ use std::sync::Arc;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterBloom;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterSpatial;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::sbbf::Sbbf;
 use databend_common_catalog::sbbf::SbbfAtomic;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
-use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
-use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::type_check;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDomain;
 use databend_common_expression::types::NumberScalar;
@@ -40,7 +37,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use super::builder::should_enable_runtime_filter;
 use super::packet::JoinRuntimeFilterPacket;
 use super::packet::SerializableDomain;
-use super::spatial::rtree_bounds_from_bytes;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 
@@ -74,28 +70,6 @@ pub async fn build_runtime_filter_infos(
         for (probe_key, scan_id) in &desc.probe_targets {
             let entry = filters.entry(*scan_id).or_default();
 
-            let spatial = if let Some(ref spatial_packet) = packet.spatial {
-                let spatial_valid = spatial_packet.valid;
-                let spatial_srid = spatial_packet.srid;
-                let spatial_rtrees = &spatial_packet.rtrees;
-                if spatial_valid && !spatial_rtrees.is_empty() && spatial_srid.is_some() {
-                    let rtree_bounds = rtree_bounds_from_bytes(spatial_rtrees)?;
-                    let probe_column = resolve_probe_column_ref(probe_key);
-                    let column_name = probe_column.id.to_string();
-                    let spatial = RuntimeFilterSpatial {
-                        column_name,
-                        srid: spatial_srid.unwrap(),
-                        rtrees: Arc::new(spatial_rtrees.clone()),
-                        rtree_bounds,
-                    };
-                    Some(spatial)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
             let (inlist, inlist_value_count) = if let Some(ref inlist) = packet.inlist {
                 let (expr, value_count) = build_inlist_filter(inlist.clone(), probe_key)?;
                 (Some(expr), value_count)
@@ -104,7 +78,7 @@ pub async fn build_runtime_filter_infos(
             };
             let bloom = if bloom_enabled {
                 if let Some(ref bloom) = packet.bloom {
-                    Some(build_bloom_filter(bloom.clone(), probe_key, max_threads, desc.id).await?)
+                    Some(build_bloom_filter(bloom.clone(), max_threads, desc.id).await?)
                 } else {
                     None
                 }
@@ -121,14 +95,12 @@ pub async fn build_runtime_filter_infos(
             } else {
                 None
             };
-            let enabled =
-                bloom.is_some() || inlist.is_some() || min_max.is_some() || spatial.is_some();
+            let enabled = bloom.is_some() || inlist.is_some() || min_max.is_some();
 
             let runtime_entry = RuntimeFilterEntry {
                 id: desc.id,
                 probe_expr: probe_key.clone(),
                 bloom,
-                spatial,
                 inlist,
                 inlist_value_count,
                 min_max,
@@ -156,42 +128,31 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<(Expr
             0,
         ));
     }
-    let probe_key = resolve_probe_column_ref(probe_key);
-
-    let probe_data_type = probe_key.data_type.clone();
-    let raw_probe_key = RawExpr::ColumnRef {
-        span: probe_key.span,
-        id: probe_key.id.to_string(),
-        data_type: probe_key.data_type.clone(),
-        display_name: probe_key.display_name.clone(),
-    };
-
-    let eq_exprs: Vec<RawExpr<String>> = inlist
+    let probe_data_type = probe_key.data_type().clone();
+    let eq_exprs = inlist
         .iter()
-        .map(|scalar_ref| RawExpr::FunctionCall {
-            span: None,
-            name: "eq".to_string(),
-            params: vec![],
-            args: vec![raw_probe_key.clone(), RawExpr::Constant {
+        .map(|scalar_ref| {
+            let value = Expr::Constant(Constant {
                 span: None,
                 scalar: scalar_ref.to_owned(),
-                data_type: Some(probe_data_type.clone()),
-            }],
+                data_type: probe_data_type.clone(),
+            });
+            check_function(
+                probe_key.span(),
+                "eq",
+                &[],
+                &[probe_key.clone(), value],
+                &BUILTIN_FUNCTIONS,
+            )
         })
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
 
-    let or_filters_expr = if eq_exprs.len() == 1 {
+    let expr = if eq_exprs.len() == 1 {
         eq_exprs[0].clone()
     } else {
-        RawExpr::FunctionCall {
-            span: None,
-            name: "or_filters".to_string(),
-            params: vec![],
-            args: eq_exprs,
-        }
+        check_function(None, "or_filters", &[], &eq_exprs, &BUILTIN_FUNCTIONS)?
     };
 
-    let expr = type_check::check(&or_filters_expr, &BUILTIN_FUNCTIONS)?;
     Ok((expr, inlist_value_count))
 }
 
@@ -280,12 +241,9 @@ fn build_min_max_filter(
 
 async fn build_bloom_filter(
     bloom: Vec<u64>,
-    probe_key: &Expr<String>,
     max_threads: usize,
     filter_id: usize,
 ) -> Result<RuntimeFilterBloom> {
-    let probe_column = resolve_probe_column_ref(probe_key);
-    let column_name = probe_column.id.to_string();
     let total_items = bloom.len();
 
     if total_items < 3_000_000 {
@@ -293,7 +251,6 @@ async fn build_bloom_filter(
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
         filter.insert_hash_batch(&bloom);
         return Ok(RuntimeFilterBloom {
-            column_name,
             filter: Arc::new(filter),
         });
     }
@@ -310,21 +267,8 @@ async fn build_bloom_filter(
     );
 
     Ok(RuntimeFilterBloom {
-        column_name,
         filter: Arc::new(filter),
     })
-}
-
-fn resolve_probe_column_ref(probe_key: &Expr<String>) -> &ColumnRef<String> {
-    match probe_key {
-        Expr::ColumnRef(col) => col,
-        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
-        Expr::Cast(cast) => match cast.expr.as_ref() {
-            Expr::ColumnRef(col) => col,
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    }
 }
 
 #[cfg(test)]
@@ -335,24 +279,29 @@ mod tests {
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Constant;
     use databend_common_expression::ConstantFolder;
+    use databend_common_expression::DataBlock;
     use databend_common_expression::Domain;
+    use databend_common_expression::Evaluator;
     use databend_common_expression::Expr;
+    use databend_common_expression::FromData;
     use databend_common_expression::FunctionContext;
     use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_expression::types::AccessType;
+    use databend_common_expression::types::BooleanType;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
     use databend_common_functions::BUILTIN_FUNCTIONS;
-    use geo_index::rtree::RTreeBuilder;
-    use geo_index::rtree::sort::HilbertSort;
 
     use super::build_inlist_filter;
+    use super::build_min_max_filter;
     use super::build_runtime_filter_infos;
-    use crate::physical_plans::SpatialRuntimeFilterMode;
     use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SerializableDomain;
-    use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SpatialPacket;
 
     #[tokio::test(flavor = "current_thread")]
     async fn test_build_runtime_filter_infos_selectivity_threshold_only_disables_bloom() {
@@ -382,7 +331,6 @@ mod tests {
             enable_bloom_runtime_filter: true,
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter: true,
-            spatial_mode: None,
         };
 
         let mut packets = HashMap::new();
@@ -394,7 +342,6 @@ mod tests {
                 max: Scalar::Number(10i32.into()),
             }),
             bloom: Some(vec![11, 22]),
-            spatial: None,
         });
 
         let runtime_filter_infos = build_runtime_filter_infos(
@@ -412,72 +359,6 @@ mod tests {
         assert_eq!(entry.inlist_value_count, 2);
         assert!(entry.min_max.is_some());
         assert!(entry.enabled);
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn test_build_runtime_filter_infos_spatial() {
-        let data_type = DataType::Number(NumberDataType::Int32);
-        let build_key = Expr::ColumnRef(ColumnRef {
-            span: None,
-            id: 0,
-            data_type: data_type.clone(),
-            display_name: "build_key".to_string(),
-        });
-        let probe_key = Expr::ColumnRef(ColumnRef {
-            span: None,
-            id: "probe_key".to_string(),
-            data_type: data_type.clone(),
-            display_name: "probe_key".to_string(),
-        });
-        let desc = RuntimeFilterDesc {
-            id: 0,
-            build_key,
-            probe_targets: vec![(probe_key, 42)],
-            build_table_rows: Some(10),
-            enable_bloom_runtime_filter: true,
-            enable_inlist_runtime_filter: true,
-            enable_min_max_runtime_filter: true,
-            spatial_mode: Some(SpatialRuntimeFilterMode::Intersects),
-        };
-
-        let mut builder = RTreeBuilder::<f64>::new(1);
-        builder.add(0.0, 0.0, 1.0, 1.0);
-        let rtrees = builder.finish::<HilbertSort>().into_inner();
-
-        let mut packets = HashMap::new();
-        packets.insert(0, RuntimeFilterPacket {
-            id: 0,
-            inlist: None,
-            min_max: None,
-            bloom: None,
-            spatial: Some(SpatialPacket {
-                valid: true,
-                srid: Some(4326),
-                mode: SpatialRuntimeFilterMode::Intersects,
-                rtrees,
-            }),
-        });
-
-        let runtime_filter_infos = build_runtime_filter_infos(
-            JoinRuntimeFilterPacket::complete(packets, 1),
-            HashMap::from([(0, &desc)]),
-            1,
-            1,
-        )
-        .await
-        .unwrap();
-
-        let entry = &runtime_filter_infos.get(&42).unwrap().filters[0];
-        assert!(entry.bloom.is_none());
-        assert!(entry.inlist.is_none());
-        assert!(entry.min_max.is_none());
-        assert!(entry.enabled);
-
-        let spatial = entry.spatial.as_ref().unwrap();
-        assert_eq!(spatial.column_name, "probe_key");
-        assert_eq!(spatial.srid, 4326);
-        assert_eq!(spatial.rtree_bounds, Some([0.0, 0.0, 1.0, 1.0]));
-        assert!(!spatial.rtrees.is_empty());
     }
 
     #[test]
@@ -549,6 +430,58 @@ mod tests {
             _ => {
                 panic!("Expected constant false, got: {:?}", folded_expr_false);
             }
+        }
+    }
+
+    #[test]
+    fn test_runtime_filters_evaluate_full_probe_expression() {
+        let int32_type = DataType::Number(NumberDataType::Int32);
+        let probe_column = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "a".to_string(),
+            data_type: int32_type.clone(),
+            display_name: "a".to_string(),
+        });
+        let ten = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int32(10)),
+            data_type: int32_type.clone(),
+        });
+        let probe_expr =
+            check_function(None, "plus", &[], &[probe_column, ten], &BUILTIN_FUNCTIONS).unwrap();
+
+        let mut inlist_builder = ColumnBuilder::with_capacity(probe_expr.data_type(), 1);
+        inlist_builder.push(Scalar::Number(11i64.into()).as_ref());
+        let (inlist, _) = build_inlist_filter(inlist_builder.build(), &probe_expr).unwrap();
+
+        let build_key = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: probe_expr.data_type().clone(),
+            display_name: "build_key".to_string(),
+        });
+        let min_max = build_min_max_filter(
+            SerializableDomain {
+                min: Scalar::Number(11i64.into()),
+                max: Scalar::Number(11i64.into()),
+            },
+            &probe_expr,
+            &build_key,
+        )
+        .unwrap();
+
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2])]);
+        let func_ctx = FunctionContext::default();
+        for filter in [inlist, min_max] {
+            let filter = filter
+                .project_column_ref(|name| if name == "a" { Ok(0) } else { unreachable!() })
+                .unwrap();
+            let result = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+                .run(&filter)
+                .unwrap()
+                .convert_to_full_column(filter.data_type(), block.num_rows());
+            let bitmap = BooleanType::try_downcast_column(&result).unwrap();
+            assert_eq!(bitmap.iter().collect::<Vec<_>>(), vec![true, false]);
         }
     }
 

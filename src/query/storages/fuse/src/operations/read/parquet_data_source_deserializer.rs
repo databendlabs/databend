@@ -41,7 +41,6 @@ use databend_common_pipeline::core::ProcessorPtr;
 use roaring::RoaringTreemap;
 
 use super::parquet_data_source::ParquetDataSource;
-use super::read_data_source::ReadDataSource;
 use super::read_state::ReadState;
 use super::util::add_data_block_meta;
 use crate::fuse_part::FuseBlockPartInfo;
@@ -171,14 +170,10 @@ impl Processor for DeserializeDataTransform {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(source_meta) = data_block.take_meta() {
                 if let Some(source_meta) =
-                    DataSourceWithMeta::<ReadDataSource>::downcast_from(source_meta)
+                    DataSourceWithMeta::<ParquetDataSource>::downcast_from(source_meta)
                 {
                     self.parts = source_meta.meta;
-                    self.chunks = source_meta
-                        .data
-                        .into_iter()
-                        .map(ReadDataSource::into_parquet)
-                        .collect::<Result<Vec<_>>>()?;
+                    self.chunks = source_meta.data;
                     return Ok(Event::Sync);
                 }
             }

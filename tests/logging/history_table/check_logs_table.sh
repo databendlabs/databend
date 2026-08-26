@@ -38,6 +38,16 @@ check_query_log() {
   fi
 }
 
+check_log_history_integrity() {
+  local known_query_ids="'$QUERY_ID', '$CREATE_QUERY_ID', '$CREATE_VIEW_QUERY_ID', '$INSERT_QUERY_ID', '$SELECT_QUERY_ID'"
+
+  local duplicate_query="SELECT count(*) FROM (SELECT query_id, target, message FROM system_history.log_history WHERE query_id IN ($known_query_ids) AND target IN ('databend::log::query', 'databend::log::profile', 'databend::log::access') GROUP BY query_id, target, message HAVING count(*) > 1)"
+  check_query_log "integrity-duplicates" null "$duplicate_query" "0"
+
+  local missing_query="SELECT count(*) FROM (SELECT '$QUERY_ID' AS query_id, 'databend::log::query' AS target, 2 AS expected_count UNION ALL SELECT '$CREATE_QUERY_ID', 'databend::log::query', 2 UNION ALL SELECT '$CREATE_VIEW_QUERY_ID', 'databend::log::query', 2 UNION ALL SELECT '$INSERT_QUERY_ID', 'databend::log::query', 2 UNION ALL SELECT '$SELECT_QUERY_ID', 'databend::log::query', 2 UNION ALL SELECT '$QUERY_ID', 'databend::log::profile', 1 UNION ALL SELECT '$SELECT_QUERY_ID', 'databend::log::profile', 1 UNION ALL SELECT '$CREATE_QUERY_ID', 'databend::log::access', 1 UNION ALL SELECT '$INSERT_QUERY_ID', 'databend::log::access', 1 UNION ALL SELECT '$SELECT_QUERY_ID', 'databend::log::access', 1) AS expected LEFT JOIN (SELECT query_id, target, count(*) AS actual_count FROM system_history.log_history WHERE query_id IN ($known_query_ids) AND target IN ('databend::log::query', 'databend::log::profile', 'databend::log::access') GROUP BY query_id, target) AS actual ON expected.query_id = actual.query_id AND expected.target = actual.target WHERE coalesce(actual.actual_count, 0) != expected.expected_count"
+  check_query_log "integrity-missing" null "$missing_query" "0"
+}
+
 
 # Basic log table tests
 check_query_log "basic-1" "$QUERY_ID" "SELECT count(*) FROM system_history.log_history WHERE target = 'databend::log::profile' and" "1"
@@ -60,6 +70,14 @@ check_query_log "basic-9" "$SELECT_QUERY_ID" "SELECT base_objects_accessed[0]['o
 check_query_log "basic-10" "$CREATE_VIEW_QUERY_ID" "select query_text from system_history.query_history where" "CREATE VIEW v AS SELECT a FROM t"
 
 check_query_log "basic-11" null "SELECT count(*) FROM system_history.login_history WHERE session_id = '$SELECT_SESSION_ID' " "1"
+
+check_query_log "resource-1" "$SELECT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE resource_usage IS NOT NULL AND resource_usage['read_count']::UInt64 > 0 AND resource_usage['read_bytes']::UInt64 > 0 AND resource_usage['read_duration_ms'] IS NOT NULL AND resource_usage['cpu_time_ms'] IS NOT NULL AND resource_usage['wait_time_ms'] IS NOT NULL AND" "1"
+
+check_query_log "resource-2" "$INSERT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE resource_usage IS NOT NULL AND resource_usage['write_count']::UInt64 > 0 AND resource_usage['write_bytes']::UInt64 > 0 AND resource_usage['write_duration_ms'] IS NOT NULL AND resource_usage['cpu_time_ms'] IS NOT NULL AND resource_usage['wait_time_ms'] IS NOT NULL AND" "1"
+
+check_query_log "resource-3" null "SELECT count(*) FROM (SELECT parse_json(message) AS m FROM system_history.log_history WHERE target = 'databend::log::query' AND query_id = '$SELECT_QUERY_ID') WHERE m['log_type'] = 1 AND m['resource_usage'] IS NOT NULL AND m['resource_usage']['list_count'] IS NOT NULL AND m['resource_usage']['cpu_time_ms'] IS NOT NULL AND m['resource_usage']['wait_time_ms'] IS NOT NULL" "1"
+
+check_log_history_integrity
 
 # Timezone tests - regression test for https://github.com/databendlabs/databend/pull/18059
 check_query_log "timezone-1" "$SELECT_QUERY_ID" "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, timestamp, now()) FROM system_history.log_history WHERE target = 'databend::log::profile' and" "0"

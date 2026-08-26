@@ -9,6 +9,12 @@ SHOW CATALOGS;
 ----
 default
 
+# A matching catalog would require a valid external catalog backend, so keep
+# this empty result as rewrite escaping coverage.
+query T
+SHOW CATALOGS LIKE 'a''b%'
+----
+
 statement error 1001
 CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(TYPE='REST' ADDRESS='http://127.0.0.1:1000' WAREHOUSE='default' );
 

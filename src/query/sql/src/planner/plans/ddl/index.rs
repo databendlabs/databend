@@ -65,6 +65,8 @@ pub struct CreateTableIndexPlan {
     pub index_type: TableIndexType,
     pub create_option: CreateOption,
     pub catalog: String,
+    pub database: String,
+    pub table: String,
     pub index_name: String,
     pub column_ids: Vec<ColumnId>,
     pub table_id: MetaId,
@@ -78,6 +80,8 @@ pub struct DropTableIndexPlan {
     pub index_type: TableIndexType,
     pub if_exists: bool,
     pub catalog: String,
+    pub database: String,
+    pub table: String,
     pub index_name: String,
     pub table_id: MetaId,
 }

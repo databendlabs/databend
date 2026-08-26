@@ -43,6 +43,7 @@ pub struct PhysicalPlanBuilder {
     pub mutation_build_info: Option<MutationBuildInfo>,
     pub cte_required_columns: HashMap<String, ColumnSet>,
     pub is_cte_required_columns_collected: bool,
+    pub build_depth: usize,
 }
 
 impl PhysicalPlanBuilder {
@@ -56,6 +57,7 @@ impl PhysicalPlanBuilder {
             mutation_build_info: None,
             cte_required_columns: HashMap::new(),
             is_cte_required_columns_collected: false,
+            build_depth: 0,
         }
     }
 
@@ -69,15 +71,39 @@ impl PhysicalPlanBuilder {
     }
 
     pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
+        let is_root_build = self.build_depth == 0;
+        if is_root_build {
+            self.ctx.clear_pruned_partitions_stats();
+        }
+
         if !self.is_cte_required_columns_collected {
             self.collect_cte_required_columns(s_expr, required.clone())?;
             self.is_cte_required_columns_collected = true;
         }
 
-        let mut plan = self.build_physical_plan(s_expr, required).await?;
-        plan.adjust_plan_id(&mut 0);
+        self.build_depth += 1;
+        let build_result = self.build_physical_plan(s_expr, required).await;
+        self.build_depth -= 1;
+
+        let mut plan = build_result?;
+        if is_root_build {
+            plan.adjust_plan_id(&mut 0);
+            self.publish_synchronous_pruning_stats(&plan);
+        }
 
         Ok(plan)
+    }
+
+    fn publish_synchronous_pruning_stats(&self, plan: &PhysicalPlan) {
+        let mut sources = Vec::new();
+        plan.get_all_data_source(&mut sources);
+
+        for (plan_id, source) in sources {
+            if source.statistics.pruning_stats != Default::default() {
+                self.ctx
+                    .set_pruned_partitions_stats(plan_id, source.statistics);
+            }
+        }
     }
 
     #[async_recursion::async_recursion(#[recursive::recursive])]
@@ -107,7 +133,12 @@ impl PhysicalPlanBuilder {
             RelOperator::Window(window) => {
                 self.build_window(s_expr, window, required, stat_info).await
             }
+            RelOperator::WindowGroup(window_group) => {
+                self.build_window_group(s_expr, window_group, required, stat_info)
+                    .await
+            }
             RelOperator::Sort(sort) => self.build_sort(s_expr, sort, required, stat_info).await,
+            RelOperator::TopN(top_n) => self.build_top_n(s_expr, top_n, required, stat_info).await,
             RelOperator::Limit(limit) => self.build_limit(s_expr, limit, required, stat_info).await,
             RelOperator::Exchange(exchange) => {
                 self.build_exchange(s_expr, exchange, required).await
@@ -182,47 +213,65 @@ impl PhysicalPlanBuilder {
                 let req = &mut child_required[0];
                 for item in &eval_scalar.items {
                     if parent_required.contains(&item.index) {
-                        for col in item.scalar.used_columns() {
-                            req.insert(col);
-                        }
+                        item.scalar.collect_used_columns(req);
                     }
                 }
             }
             RelOperator::Filter(filter) => {
                 let req = &mut child_required[0];
                 for predicate in &filter.predicates {
-                    req.extend(predicate.used_columns());
+                    predicate.collect_used_columns(req);
                 }
             }
             RelOperator::Aggregate(agg) => {
                 let req = &mut child_required[0];
                 for item in &agg.group_items {
                     req.insert(item.index);
-                    for col in item.scalar.used_columns() {
-                        req.insert(col);
-                    }
+                    item.scalar.collect_used_columns(req);
                 }
                 for item in &agg.aggregate_functions {
                     if parent_required.contains(&item.index) {
-                        for col in item.scalar.used_columns() {
-                            req.insert(col);
-                        }
+                        item.scalar.collect_used_columns(req);
                     }
                 }
             }
             RelOperator::Window(window) => {
                 let req = &mut child_required[0];
                 for item in &window.arguments {
-                    req.extend(item.scalar.used_columns());
+                    item.scalar.collect_used_columns(req);
                     req.insert(item.index);
                 }
                 for item in &window.partition_by {
-                    req.extend(item.scalar.used_columns());
+                    item.scalar.collect_used_columns(req);
                     req.insert(item.index);
                 }
                 for item in &window.order_by {
-                    req.extend(item.order_by_item.scalar.used_columns());
+                    item.order_by_item.scalar.collect_used_columns(req);
                     req.insert(item.order_by_item.index);
+                }
+            }
+            RelOperator::WindowGroup(window_group) => {
+                let req = &mut child_required[0];
+                for window in &window_group.windows {
+                    req.remove(&window.index);
+                }
+                for item in &window_group.scalar_items {
+                    item.scalar.collect_used_columns(req);
+                    req.insert(item.index);
+                }
+                for window in &window_group.windows {
+                    for item in &window.arguments {
+                        item.scalar.collect_used_columns(req);
+                        req.insert(item.index);
+                    }
+                    for item in &window.partition_by {
+                        item.scalar.collect_used_columns(req);
+                        req.insert(item.index);
+                    }
+                    for item in &window.order_by {
+                        item.order_by_item.scalar.collect_used_columns(req);
+                        req.insert(item.order_by_item.index);
+                    }
                 }
             }
             RelOperator::Sort(sort) => {
@@ -231,40 +280,32 @@ impl PhysicalPlanBuilder {
                     req.insert(item.index);
                 }
             }
+            RelOperator::TopN(top_n) => {
+                let req = &mut child_required[0];
+                for item in &top_n.items {
+                    req.insert(item.index);
+                }
+            }
             RelOperator::Join(join) => {
-                let mut others_required = join
-                    .non_equi_conditions
-                    .iter()
-                    .fold(parent_required.clone(), |acc, v| {
-                        acc.union(&v.used_columns()).cloned().collect()
-                    });
+                let mut others_required = parent_required.clone();
+                for condition in &join.non_equi_conditions {
+                    condition.collect_used_columns(&mut others_required);
+                }
                 if let Some(cache_info) = &join.build_side_cache_info {
                     for column in &cache_info.columns {
                         others_required.insert(*column);
                     }
                 }
 
-                let left_required: ColumnSet = join
-                    .equi_conditions
-                    .iter()
-                    .fold(parent_required.clone(), |acc, v| {
-                        acc.union(&v.left.used_columns()).cloned().collect()
-                    })
-                    .union(&others_required)
-                    .cloned()
-                    .collect();
-                let right_required: ColumnSet = join
-                    .equi_conditions
-                    .iter()
-                    .fold(parent_required.clone(), |acc, v| {
-                        acc.union(&v.right.used_columns()).cloned().collect()
-                    })
-                    .union(&others_required)
-                    .cloned()
-                    .collect();
+                let mut left_required = others_required.clone();
+                let mut right_required = others_required;
+                for condition in &join.equi_conditions {
+                    condition.left.collect_used_columns(&mut left_required);
+                    condition.right.collect_used_columns(&mut right_required);
+                }
 
-                child_required[0] = left_required.union(&others_required).cloned().collect();
-                child_required[1] = right_required.union(&others_required).cloned().collect();
+                child_required[0] = left_required;
+                child_required[1] = right_required;
             }
             RelOperator::UnionAll(union_all) => {
                 let (left_required, right_required) = if !union_all.cte_scan_names.is_empty() {
@@ -307,24 +348,20 @@ impl PhysicalPlanBuilder {
             RelOperator::Exchange(databend_common_sql::plans::Exchange::NodeToNodeHash(exprs)) => {
                 let req = &mut child_required[0];
                 for expr in exprs {
-                    req.extend(expr.used_columns());
+                    expr.collect_used_columns(req);
                 }
             }
             RelOperator::ProjectSet(project_set) => {
                 let req = &mut child_required[0];
                 for item in &project_set.srfs {
-                    for col in item.scalar.used_columns() {
-                        req.insert(col);
-                    }
+                    item.scalar.collect_used_columns(req);
                 }
             }
             RelOperator::Udf(udf) => {
                 let req = &mut child_required[0];
                 for item in &udf.items {
                     if parent_required.contains(&item.index) {
-                        for col in item.scalar.used_columns() {
-                            req.insert(col);
-                        }
+                        item.scalar.collect_used_columns(req);
                     }
                 }
             }
@@ -332,9 +369,7 @@ impl PhysicalPlanBuilder {
                 let req = &mut child_required[0];
                 for item in &async_func.items {
                     if parent_required.contains(&item.index) {
-                        for col in item.scalar.used_columns() {
-                            req.insert(col);
-                        }
+                        item.scalar.collect_used_columns(req);
                     }
                 }
             }

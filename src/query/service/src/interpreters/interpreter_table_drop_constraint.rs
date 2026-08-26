@@ -80,7 +80,7 @@ impl Interpreter for DropTableConstraintInterpreter {
         new_table_meta.drop_constraint(&self.plan.constraint_name)?;
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-        update_table_meta(fuse_table, &new_table_meta, catalog).await?;
+        update_table_meta(fuse_table, &new_table_meta, catalog, self.ctx.get_tenant()).await?;
         Ok(PipelineBuildResult::create())
     }
 }

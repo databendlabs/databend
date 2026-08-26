@@ -193,7 +193,10 @@ where
             ));
         }
 
-        if s_expr.plan.is_join() {
+        if let RelOperator::MaterializedCTERef(_) = op {
+            // MaterializedCTERef definitions are represented by their producer MaterializedCTE
+            // in the surrounding Sequence.
+        } else if s_expr.plan.is_join() {
             tree.children
                 .push(self.humanize_s_expr(s_expr.build_side_child())?);
             tree.children
@@ -257,7 +260,7 @@ where
                     "{{ min: {}, max: {}, ndv: {}, null count: {} }}",
                     hist.min,
                     hist.max,
-                    hist.ndv.expected,
+                    hist.ndv.expected.unwrap_or(hist.ndv.upper),
                     hist.null_count.expected()
                 );
                 FormatTreeNode::new(format!("{}: {}", column, hist))
@@ -305,15 +308,13 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
             )
         }
         ScalarExpr::FunctionCall(func) => {
-            format!(
-                "{}({})",
-                &func.func_name,
-                func.arguments
-                    .iter()
-                    .map(format_scalar)
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            )
+            let params = func.params.iter().map(|param| param.to_string()).join(", ");
+            let arguments = func.arguments.iter().map(format_scalar).join(", ");
+            if params.is_empty() {
+                format!("{}({})", &func.func_name, arguments)
+            } else {
+                format!("{}({})({})", &func.func_name, params, arguments)
+            }
         }
         ScalarExpr::CastExpr(cast) => {
             format!(

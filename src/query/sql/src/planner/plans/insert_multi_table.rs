@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -59,6 +60,8 @@ pub struct Into {
     pub source_scalar_exprs: Option<Vec<ScalarExpr>>,
     //  cast to ( target_col_name [ , ... ] )'s schema (if exists) or target table's schema
     pub casted_schema: DataSchemaRef,
+    // Projected target column ids corresponding to `casted_schema`.
+    pub target_column_ids: Vec<ColumnId>,
 }
 
 #[derive(Clone, Debug)]

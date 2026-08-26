@@ -49,7 +49,7 @@ impl AdminService {
         })
     }
 
-    fn build_router(&self) -> impl Endpoint + use<> {
+    pub fn build_router(&self) -> impl Endpoint + use<> {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
@@ -70,6 +70,47 @@ impl AdminService {
             .at(
                 "/v1/tables/stats",
                 get(super::v1::tenant_table_stats::get_tables_stats_handler),
+            )
+            .at(
+                "/v1/databases/:database/tables/:table/clustering_information",
+                get(super::v1::clustering_information::clustering_information_local_handler),
+            )
+            .at(
+                "/v1/databases/:database/tables/:table/stats",
+                get(super::v1::table_statistics::get_table_stats_local_handler),
+            )
+            .at(
+                "/v1/stream_status",
+                get(super::v1::stream_status::stream_status_local_handler),
+            )
+            .at(
+                "/v1/stream_backlog",
+                get(super::v1::stream_backlog::stream_backlog_local_handler),
+            )
+            .at(
+                "/v1/settings",
+                get(super::v1::settings::list_settings_local),
+            )
+            .at(
+                "/v1/settings/:key",
+                post(super::v1::settings::set_settings_local)
+                    .delete(super::v1::settings::unset_settings_local),
+            )
+            .at(
+                "/v1/user_functions",
+                get(super::v1::user_functions::user_functions_local),
+            )
+            .at(
+                "/v1/procedures",
+                get(super::v1::procedures::list_procedures_local),
+            )
+            .at(
+                "/v1/procedures/:procedure_id",
+                get(super::v1::procedures::get_procedure_by_id_local),
+            )
+            .at(
+                "/v1/procedures/:name",
+                get(super::v1::procedures::get_procedure_by_name_local),
             )
             .at(
                 "/v1/cluster/list",
@@ -99,6 +140,10 @@ impl AdminService {
                     get(super::v1::stream_status::stream_status_handler),
                 )
                 .at(
+                    "/v1/tenants/:tenant/stream_backlog",
+                    get(super::v1::stream_backlog::stream_backlog_handler),
+                )
+                .at(
                     "/v1/tenants/:tenant/settings",
                     get(super::v1::settings::list_settings),
                 )
@@ -122,6 +167,10 @@ impl AdminService {
                 .at(
                     "/v1/tenants/:tenant/procedures/:name",
                     get(super::v1::procedures::get_procedure_by_name),
+                )
+                .at(
+                    "/v1/tenants/:tenant/databases/:database/tables/:table/clustering_information",
+                    get(super::v1::clustering_information::clustering_information_handler),
                 )
                 .at(
                     "/v1/tenants/:tenant/databases/:database/tables/:table/stats",

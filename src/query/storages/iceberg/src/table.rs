@@ -41,8 +41,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
-use databend_common_expression::FieldIndex;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -69,6 +67,7 @@ use iceberg::io::FileIOBuilder;
 use crate::IcebergMutableCatalog;
 use crate::append::IcebergCommitSink;
 use crate::append::IcebergDataFileWriter;
+use crate::credential::with_refreshing_credentials;
 use crate::partition::convert_file_scan_task;
 use crate::predicate::PredicateBuilder;
 use crate::statistics;
@@ -97,13 +96,15 @@ impl IcebergTable {
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         let (table, statistics) = Self::parse_engine_options(&info.meta.engine_options)?;
         let catalog = IcebergMutableCatalog::try_create(info.catalog_info.clone())?;
+        let catalog = catalog.iceberg_catalog();
+        let table = with_refreshing_credentials(catalog.clone(), table)?;
 
         Ok(Box::new(Self {
             info,
             table,
             snapshot_id: None,
             statistics,
-            catalog: catalog.iceberg_catalog(),
+            catalog,
         }))
     }
 
@@ -129,25 +130,23 @@ impl IcebergTable {
         table_name: &str,
     ) -> Result<iceberg::table::Table> {
         let db_ident = iceberg::NamespaceIdent::new(database.to_string());
+        let table_ident = iceberg::TableIdent::new(db_ident, table_name.to_string());
         // here we don't call table_exists to avoid extra network call
-        let table = ctl
-            .load_table(&iceberg::TableIdent::new(db_ident, table_name.to_string()))
-            .await
-            .map_err(|err| {
-                let err_str = format!("{err:?}");
-                if err_str.contains("does not exist")
-                    || err_str.contains("NoSuchTableError")
-                    || err_str.contains("TableNotFound")
-                    || err_str.contains("not found")
-                {
-                    ErrorCode::UnknownTable(format!(
-                        "Iceberg table '{database}.{table_name}' not found: {err_str}"
-                    ))
-                } else {
-                    ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err_str}"))
-                }
-            })?;
-        Ok(table)
+        let table = ctl.load_table(&table_ident).await.map_err(|err| {
+            let err_str = format!("{err:?}");
+            if err_str.contains("does not exist")
+                || err_str.contains("NoSuchTableError")
+                || err_str.contains("TableNotFound")
+                || err_str.contains("not found")
+            {
+                ErrorCode::UnknownTable(format!(
+                    "Iceberg table '{database}.{table_name}' not found: {err_str}"
+                ))
+            } else {
+                ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err_str}"))
+            }
+        })?;
+        with_refreshing_credentials(ctl, table)
     }
 
     pub fn get_schema(table: &iceberg::table::Table) -> Result<TableSchema> {
@@ -490,64 +489,34 @@ impl IcebergTable {
                 .map(|v| v.name.clone())
                 .collect()),
             Projection::InnerColumns(path_indices) => {
-                let fields = schema.fields();
-                let mut names = Vec::with_capacity(path_indices.len());
+                // Iceberg scan.select() only accepts direct children of the table schema.
+                // Keep nested projection pruning in Databend's read path and only push down
+                // the required top-level columns to the Iceberg scan planner.
+                let mut top_level_indices = Vec::with_capacity(path_indices.len());
                 for path in path_indices.values() {
-                    names.push(Self::inner_column_path_to_name(fields, path)?);
+                    let index = *path.first().ok_or_else(|| {
+                        ErrorCode::BadArguments("Inner column path should not be empty".to_string())
+                    })?;
+                    top_level_indices.push(index);
                 }
-                Ok(names)
+                top_level_indices.sort_unstable();
+                top_level_indices.dedup();
+                top_level_indices
+                    .into_iter()
+                    .map(|index| {
+                        schema
+                            .fields()
+                            .get(index)
+                            .map(|field| field.name().clone())
+                            .ok_or_else(|| {
+                                ErrorCode::BadArguments(format!(
+                                    "Inner column projection root {index} is out of range"
+                                ))
+                            })
+                    })
+                    .collect()
             }
         }
-    }
-
-    fn inner_column_path_to_name(fields: &[TableField], path: &[FieldIndex]) -> Result<String> {
-        if path.is_empty() {
-            return Err(ErrorCode::BadArguments(
-                "Inner column path should not be empty".to_string(),
-            ));
-        }
-
-        let field = fields.get(path[0]).ok_or_else(|| {
-            ErrorCode::BadArguments(format!("Inner column path {:?} is out of range", path))
-        })?;
-        let mut name_parts = Vec::with_capacity(path.len());
-        name_parts.push(field.name().clone());
-
-        let mut current_type = field.data_type().remove_nullable();
-        for index in path.iter().skip(1) {
-            match &current_type {
-                TableDataType::Tuple {
-                    fields_name,
-                    fields_type,
-                } => {
-                    let inner_name = fields_name.get(*index).ok_or_else(|| {
-                        ErrorCode::BadArguments(format!(
-                            "Inner column path {:?} is out of range for {}",
-                            path,
-                            name_parts.join(".")
-                        ))
-                    })?;
-                    name_parts.push(inner_name.clone());
-                    let inner_type = fields_type.get(*index).ok_or_else(|| {
-                        ErrorCode::BadArguments(format!(
-                            "Inner column path {:?} is out of range for {}",
-                            path,
-                            name_parts.join(".")
-                        ))
-                    })?;
-                    current_type = inner_type.remove_nullable();
-                }
-                _ => {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Inner column path {:?} is invalid for non-tuple field {}",
-                        path,
-                        name_parts.join(".")
-                    )));
-                }
-            }
-        }
-
-        Ok(name_parts.join("."))
     }
 
     fn convert_orc_schema(schema: &Schema) -> Schema {
@@ -591,7 +560,8 @@ impl IcebergTable {
                         .map(|(i, field)| (i, visit_field(field)))
                         .unzip();
                     arrow_schema::DataType::Union(
-                        arrow_schema::UnionFields::new(ids, fields),
+                        arrow_schema::UnionFields::try_new(ids, fields)
+                            .expect("existing union fields should remain valid"),
                         *mode,
                     )
                 }
@@ -736,7 +706,7 @@ impl Table for IcebergTable {
         navigation: &TimeNavigation,
     ) -> Result<Arc<dyn Table>> {
         let snapshot_id = match navigation {
-            TimeNavigation::TimeTravel(np) => match np {
+            TimeNavigation::TimeTravel { point: np, .. } => match np {
                 NavigationPoint::SnapshotID(sid) => {
                     let sid = sid.parse::<i64>()?;
                     if self.table.metadata().snapshot_by_id(sid).is_some() {

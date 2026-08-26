@@ -119,6 +119,7 @@ fn convert_field_type(field: &DataField) -> Result<ColumnType> {
         DataType::Decimal(_) => Ok(ColumnType::MYSQL_TYPE_DECIMAL),
         DataType::Interval => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
         DataType::Vector(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+        DataType::AggregateState(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
         _ => Err(ErrorCode::Unimplemented(format!(
             "Unsupported column type:{:?}",
             field.data_type()
@@ -162,6 +163,7 @@ fn compute_length(data_type: &DataType) -> u32 {
         DataType::Nullable(inner) => compute_length(inner),
         DataType::Generic(_) => 1024,
         DataType::TimestampTz => 1024,
+        DataType::AggregateState(state) => compute_length(state.physical_type()),
     }
 }
 

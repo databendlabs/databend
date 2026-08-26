@@ -36,6 +36,7 @@ educe = { workspace = true }
 either = { workspace = true }
 enum-as-inner = { workspace = true }
 ethnum = { workspace = true }
+fastrace = { workspace = true }
 futures = { workspace = true }
 geo = { workspace = true }
 geozero = { workspace = true }
@@ -59,6 +60,7 @@ rust_decimal = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+smallvec = { workspace = true }
 strength_reduce = { workspace = true }
 terminal_size = { workspace = true }
 tonic = { workspace = true }

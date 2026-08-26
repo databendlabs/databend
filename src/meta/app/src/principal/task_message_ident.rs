@@ -21,10 +21,8 @@ pub type TaskMessageIdentRaw = TIdent<Resource>;
 pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
-    use databend_meta_client::kvapi;
 
     use crate::principal::task::TaskMessage;
-    use crate::principal::task_message_ident::TaskMessageIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -33,9 +31,5 @@ mod kvapi_impl {
         const TYPE: &'static str = "TaskMessageIdent";
         const HAS_TENANT: bool = true;
         type ValueType = TaskMessage;
-    }
-
-    impl kvapi::Value for TaskMessage {
-        type KeyType = TaskMessageIdent;
     }
 }

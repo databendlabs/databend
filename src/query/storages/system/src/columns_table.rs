@@ -292,8 +292,15 @@ pub(crate) async fn dump_tables(
     push_downs: Option<PushDownInfo>,
     catalog: &Arc<dyn Catalog>,
 ) -> Result<Vec<(String, Vec<DumpedTable>)>> {
-    // For performance considerations, we do not require the most up-to-date table information here
-    let catalog = disable_catalog_refresh(catalog.clone())?;
+    // An ATTACH table's current schema only exists in its source storage. Use the original catalog
+    // when freshness is requested; otherwise avoid remote storage access and use the schema kept
+    // in the meta server.
+    let refresh = ctx.get_settings().get_enable_table_schema_refresh()?;
+    let catalog = if refresh {
+        catalog.clone()
+    } else {
+        disable_catalog_refresh(catalog.clone())?
+    };
 
     // Extract filters from push_downs
     let func_ctx = ctx.get_function_context()?;

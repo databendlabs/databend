@@ -25,8 +25,10 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::Scalar;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -46,7 +48,9 @@ use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
+use crate::statistics::partition_values;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::same_partition;
 use crate::statistics::sort_by_cluster_stats;
 
 #[derive(Clone)]
@@ -56,7 +60,8 @@ pub struct BlockCompactMutator {
 
     pub thresholds: BlockThresholds,
     pub compact_params: CompactOptions,
-    pub cluster_key_id: Option<u32>,
+    pub cluster_key_info: Option<ClusterKeyInfo>,
+    pub partition_key_count: usize,
 }
 
 impl BlockCompactMutator {
@@ -65,14 +70,15 @@ impl BlockCompactMutator {
         thresholds: BlockThresholds,
         compact_params: CompactOptions,
         operator: Operator,
-        cluster_key_id: Option<u32>,
+        cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Self {
         Self {
             ctx,
             operator,
             thresholds,
             compact_params,
-            cluster_key_id,
+            cluster_key_info,
+            partition_key_count: 0,
         }
     }
 
@@ -111,6 +117,11 @@ impl BlockCompactMutator {
             Arc::new(self.compact_params.base_snapshot.schema.clone()),
         );
         let mut checker = SegmentCompactChecker::new(self.thresholds);
+        checker.cluster_key_id = self
+            .cluster_key_info
+            .as_ref()
+            .map(ClusterKeyInfo::cluster_key_id);
+        checker.partition_key_count = self.partition_key_count;
 
         let mut segment_idx = 0;
         let mut is_end = false;
@@ -132,12 +143,13 @@ impl BlockCompactMutator {
                 })
                 .collect::<Result<Vec<_>>>()?;
 
-            if let Some(default_cluster_key) = self.cluster_key_id {
+            if let Some(cluster_key_info) = self.cluster_key_info.as_ref() {
+                let default_cluster_key = cluster_key_info.cluster_key_id();
                 // sort descending.
                 segment_infos.sort_by(|a, b| {
                     sort_by_cluster_stats(
-                        &b.1.summary.cluster_stats,
-                        &a.1.summary.cluster_stats,
+                        b.1.summary.cluster_stats.as_ref(),
+                        a.1.summary.cluster_stats.as_ref(),
                         default_cluster_key,
                     )
                 });
@@ -212,7 +224,8 @@ impl BlockCompactMutator {
                 BlockCompactMutator::build_compact_tasks(
                     self.ctx.clone(),
                     self.operator.clone(),
-                    self.cluster_key_id,
+                    self.cluster_key_info.clone(),
+                    self.partition_key_count,
                     self.thresholds,
                     lazy_parts,
                 )
@@ -236,7 +249,8 @@ impl BlockCompactMutator {
     pub async fn build_compact_tasks(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
-        cluster_key_id: Option<u32>,
+        cluster_key_info: Option<ClusterKeyInfo>,
+        partition_key_count: usize,
         thresholds: BlockThresholds,
         lazy_parts: Vec<CompactLazyPartInfo>,
     ) -> Result<Vec<PartInfoPtr>> {
@@ -261,6 +275,7 @@ impl BlockCompactMutator {
             let semaphore = semaphore.clone();
             let dal = dal.clone();
 
+            let cluster_key_info = cluster_key_info.clone();
             let batch = lazy_parts
                 .by_ref()
                 .take(current_batch_size)
@@ -268,8 +283,12 @@ impl BlockCompactMutator {
             works.push(async move {
                 let mut res = vec![];
                 for lazy_part in batch {
-                    let mut builder =
-                        CompactTaskBuilder::new(dal.clone(), cluster_key_id, thresholds);
+                    let mut builder = CompactTaskBuilder::new(
+                        dal.clone(),
+                        cluster_key_info.clone(),
+                        partition_key_count,
+                        thresholds,
+                    );
                     let parts = builder
                         .build_tasks(
                             lazy_part.segment_indices,
@@ -320,6 +339,8 @@ pub enum CompactLimitState {
 
 pub struct SegmentCompactChecker {
     thresholds: BlockThresholds,
+    cluster_key_id: Option<u32>,
+    partition_key_count: usize,
     segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
     total_block_count: u64,
 
@@ -333,6 +354,8 @@ impl SegmentCompactChecker {
             segments: vec![],
             total_block_count: 0,
             thresholds,
+            cluster_key_id: None,
+            partition_key_count: 0,
             compacted_segment_cnt: 0,
             compacted_imperfect_block_cnt: 0,
         }
@@ -377,14 +400,26 @@ impl SegmentCompactChecker {
     ) -> Vec<Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>> {
         let block_per_segment = self.thresholds.block_per_segment as u64;
 
+        let mut output = Vec::new();
+        if let Some((_, previous)) = self.segments.last()
+            && !same_partition(
+                previous.summary.partition_stats.as_ref(),
+                segment.summary.partition_stats.as_ref(),
+                self.partition_key_count,
+            )
+        {
+            output.push(std::mem::take(&mut self.segments));
+            self.total_block_count = 0;
+        }
+
         self.total_block_count += segment.summary.block_count;
         self.segments.push((idx, segment));
 
         if self.total_block_count < block_per_segment {
-            return vec![];
+            return output;
         }
 
-        let output = if self.total_block_count >= 2 * block_per_segment {
+        let mut threshold_output = if self.total_block_count >= 2 * block_per_segment {
             let trivial = vec![self.segments.pop().unwrap()];
             if self.segments.is_empty() {
                 vec![trivial]
@@ -396,6 +431,7 @@ impl SegmentCompactChecker {
         };
 
         self.total_block_count = 0;
+        output.append(&mut threshold_output);
         output
     }
 
@@ -448,7 +484,8 @@ impl SegmentCompactChecker {
 
 struct CompactTaskBuilder {
     dal: Operator,
-    cluster_key_id: Option<u32>,
+    cluster_key_info: Option<ClusterKeyInfo>,
+    partition_key_count: usize,
     thresholds: BlockThresholds,
 
     blocks: Vec<BlockMetaWithHLL>,
@@ -457,11 +494,23 @@ struct CompactTaskBuilder {
     total_compressed: usize,
 }
 
+enum TailMergeSource {
+    None,
+    UnchangedBlock,
+    CompactTask,
+}
+
 impl CompactTaskBuilder {
-    fn new(dal: Operator, cluster_key_id: Option<u32>, thresholds: BlockThresholds) -> Self {
+    fn new(
+        dal: Operator,
+        cluster_key_info: Option<ClusterKeyInfo>,
+        partition_key_count: usize,
+        thresholds: BlockThresholds,
+    ) -> Self {
         Self {
             dal,
-            cluster_key_id,
+            cluster_key_info,
+            partition_key_count,
             thresholds,
             blocks: vec![],
             total_rows: 0,
@@ -526,16 +575,45 @@ impl CompactTaskBuilder {
         &self,
         tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>)>,
         unchanged_blocks: &mut Vec<(BlockIndex, BlockMetaWithHLL)>,
-        block_idx: BlockIndex,
+        block_idx: &mut BlockIndex,
         blocks: Vec<BlockMetaWithHLL>,
-    ) -> bool {
+    ) -> TailMergeSource {
+        let index = *block_idx;
+        *block_idx += 1;
+
         if blocks.len() == 1 {
-            unchanged_blocks.push((block_idx, blocks[0].clone()));
-            true
+            unchanged_blocks.push((index, blocks[0].clone()));
+            TailMergeSource::UnchangedBlock
         } else {
             let blocks = blocks.into_iter().map(|v| v.0).collect();
-            tasks.push_back((block_idx, blocks));
-            false
+            tasks.push_back((index, blocks));
+            TailMergeSource::CompactTask
+        }
+    }
+
+    fn can_start_compact(&self, block_meta: &BlockMeta) -> bool {
+        let Some(cluster_key_info) = self.cluster_key_info.as_ref() else {
+            return true;
+        };
+        match block_meta.cluster_stats.as_ref() {
+            Some(stats) if stats.cluster_key_id == cluster_key_info.cluster_key_id() => {
+                stats.level == 0
+            }
+            _ => true,
+        }
+    }
+
+    fn flush_pending(
+        &mut self,
+        tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>)>,
+        unchanged_blocks: &mut Vec<(BlockIndex, BlockMetaWithHLL)>,
+        block_idx: &mut BlockIndex,
+    ) -> TailMergeSource {
+        if self.is_empty() {
+            TailMergeSource::None
+        } else {
+            let blocks = self.take_blocks();
+            self.build_task(tasks, unchanged_blocks, block_idx, blocks)
         }
     }
 
@@ -549,8 +627,8 @@ impl CompactTaskBuilder {
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PartInfoPtr>> {
         let mut block_idx = 0;
-        // Used to identify whether the latest block is unchanged or needs to be compacted.
-        let mut latest_flag = true;
+        // Tracks the last output that can be merged back with the final tail.
+        let mut tail_merge_source = TailMergeSource::None;
         let mut unchanged_blocks = Vec::new();
         let mut removed_segment_summary = Statistics::default();
 
@@ -583,7 +661,11 @@ impl CompactTaskBuilder {
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .flat_map(|(blocks, summary, hlls)| {
-                merge_statistics_mut(&mut removed_segment_summary, &summary, self.cluster_key_id);
+                merge_statistics_mut(
+                    &mut removed_segment_summary,
+                    &summary,
+                    self.cluster_key_info.as_ref(),
+                );
 
                 blocks.into_iter().enumerate().map(move |(idx, v)| {
                     let column_hlls = hlls.as_ref().and_then(|v| v.block_hlls.get(idx)).cloned();
@@ -592,36 +674,71 @@ impl CompactTaskBuilder {
             })
             .collect::<Vec<_>>();
 
-        if let Some(default_cluster_key) = self.cluster_key_id {
+        if let Some(cluster_key_info) = self.cluster_key_info.as_ref() {
+            let default_cluster_key = cluster_key_info.cluster_key_id();
             // sort ascending.
             blocks.sort_by(|a, b| {
-                sort_by_cluster_stats(&a.0.cluster_stats, &b.0.cluster_stats, default_cluster_key)
+                sort_by_cluster_stats(
+                    a.0.cluster_stats.as_ref(),
+                    b.0.cluster_stats.as_ref(),
+                    default_cluster_key,
+                )
             });
         }
 
         let mut tasks = VecDeque::new();
+        let mut previous_partition: Option<Vec<Scalar>> = None;
+        let mut seen_block = false;
         for (block_meta, hlls) in blocks.iter() {
+            let current_partition = partition_values(
+                block_meta.partition_stats.as_ref(),
+                self.partition_key_count,
+            );
+            if seen_block
+                && self.partition_key_count != 0
+                && (current_partition.is_none()
+                    || previous_partition.as_deref() != current_partition)
+            {
+                self.flush_pending(&mut tasks, &mut unchanged_blocks, &mut block_idx);
+                // The tail-merging optimization is local to one partition.
+                tail_merge_source = TailMergeSource::None;
+            }
+            previous_partition = current_partition.map(<[Scalar]>::to_vec);
+            seen_block = true;
+
+            if self.is_empty() {
+                if !self.can_start_compact(block_meta) {
+                    // Reclustered blocks can be carried by an existing compact group,
+                    // but they should not start one by themselves.
+                    let blocks = vec![(block_meta.clone(), hlls.clone())];
+                    tail_merge_source =
+                        self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
+                    continue;
+                }
+            }
+
             let (unchanged, need_take) = self.add(block_meta, hlls);
             if need_take {
-                let blocks = self.take_blocks();
-                latest_flag = self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                block_idx += 1;
+                tail_merge_source =
+                    self.flush_pending(&mut tasks, &mut unchanged_blocks, &mut block_idx);
             }
             if unchanged {
                 let blocks = vec![(block_meta.clone(), hlls.clone())];
-                latest_flag = self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                block_idx += 1;
+                tail_merge_source =
+                    self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
             }
         }
 
         if !self.is_empty() {
             let tail = self.take_blocks();
-            let mut blocks = if latest_flag {
-                unchanged_blocks.pop().map_or(vec![], |(_, v)| vec![v])
-            } else {
-                tasks
-                    .pop_back()
-                    .map_or(vec![], |(_, v)| v.into_iter().map(|v| (v, None)).collect())
+            let mut blocks = match tail_merge_source {
+                TailMergeSource::None => Vec::new(),
+                TailMergeSource::UnchangedBlock => unchanged_blocks
+                    .pop()
+                    .map_or_else(Vec::new, |(_, v)| vec![v]),
+                TailMergeSource::CompactTask => tasks.pop_back().map_or_else(Vec::new, |(_, v)| {
+                    v.into_iter().map(|v| (v, None)).collect()
+                }),
             };
 
             let (total_rows, total_size, total_compressed) =
@@ -636,11 +753,13 @@ impl CompactTaskBuilder {
                     });
             if self.check_for_compact(total_rows, total_size, total_compressed) {
                 blocks.extend(tail);
-                self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
             } else {
                 // blocks >= 2N
-                self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                self.build_task(&mut tasks, &mut unchanged_blocks, block_idx + 1, tail);
+                if !blocks.is_empty() {
+                    self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
+                }
+                self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, tail);
             }
         }
 

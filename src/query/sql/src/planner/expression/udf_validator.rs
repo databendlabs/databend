@@ -18,18 +18,54 @@ use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
+use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::is_builtin_function;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
+use unicase::Ascii;
 
 use crate::plans::UDFLanguage;
 
+#[derive(Clone, Debug)]
+pub struct UdfValidationConfig {
+    pub enable_udf_js_script: bool,
+    pub enable_udf_python_script: bool,
+    pub enable_udf_wasm_script: bool,
+    pub enable_udf_sandbox: bool,
+    pub enable_udf_server: bool,
+    pub udf_server_allow_insecure: bool,
+    pub udf_server_allow_list: Vec<String>,
+}
+
+impl UdfValidationConfig {
+    pub fn from_inner_config(config: &InnerConfig) -> Self {
+        let common = &config.query.common;
+        Self {
+            enable_udf_js_script: common.enable_udf_js_script,
+            enable_udf_python_script: common.enable_udf_python_script,
+            enable_udf_wasm_script: common.enable_udf_wasm_script,
+            enable_udf_sandbox: common.enable_udf_sandbox,
+            enable_udf_server: common.enable_udf_server,
+            udf_server_allow_insecure: common.udf_server_allow_insecure,
+            udf_server_allow_list: common.udf_server_allow_list.clone(),
+        }
+    }
+}
+
+impl Default for UdfValidationConfig {
+    fn default() -> Self {
+        Self::from_inner_config(&InnerConfig::default())
+    }
+}
+
 #[derive(Default, Visitor)]
-#[visitor(ColumnRef(enter), FunctionCall(enter), Lambda(enter))]
+#[visitor(ColumnRef(enter), FunctionCall(enter))]
 pub struct UDFValidator {
     pub name: String,
     pub parameters: Vec<String>,
@@ -45,6 +81,19 @@ impl UDFValidator {
     }
 
     fn enter_function_call(&mut self, func: &FunctionCall) {
+        let lambda = match &func.lambda {
+            Some(LambdaArgument::Lambda(lambda)) => Some(lambda),
+            Some(LambdaArgument::Ambiguous(lambda))
+                if GENERAL_LAMBDA_FUNCTIONS.contains(&Ascii::new(func.name.name.as_str())) =>
+            {
+                Some(lambda)
+            }
+            Some(LambdaArgument::Ambiguous(_)) | None => None,
+        };
+        if let Some(lambda) = lambda {
+            self.enter_lambda(lambda);
+        }
+
         let name = &func.name.name;
         if !is_builtin_function(name) && self.name.eq_ignore_ascii_case(name) {
             self.has_recursive = true;
@@ -95,26 +144,22 @@ impl UDFValidator {
     }
 
     pub fn is_udf_script_allowed(lang: &UDFLanguage) -> Result<()> {
+        Self::is_udf_script_allowed_with_config(
+            lang,
+            &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+        )
+    }
+
+    pub fn is_udf_script_allowed_with_config(
+        lang: &UDFLanguage,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
         match lang {
-            UDFLanguage::JavaScript
-                if GlobalConfig::instance().query.common.enable_udf_js_script =>
-            {
+            UDFLanguage::JavaScript if config.enable_udf_js_script => Ok(()),
+            UDFLanguage::Python if config.enable_udf_python_script || config.enable_udf_sandbox => {
                 Ok(())
             }
-            UDFLanguage::Python
-                if GlobalConfig::instance()
-                    .query
-                    .common
-                    .enable_udf_python_script
-                    || GlobalConfig::instance().query.common.enable_udf_sandbox =>
-            {
-                Ok(())
-            }
-            UDFLanguage::WebAssembly
-                if GlobalConfig::instance().query.common.enable_udf_wasm_script =>
-            {
-                Ok(())
-            }
+            UDFLanguage::WebAssembly if config.enable_udf_wasm_script => Ok(()),
             other => Err(ErrorCode::Unimplemented(format!(
                 "UDF {} script is not enabled in config",
                 other
@@ -123,7 +168,17 @@ impl UDFValidator {
     }
 
     pub fn is_udf_cloud_script_allowed(lang: &UDFLanguage) -> Result<()> {
-        if !GlobalConfig::instance().query.common.enable_udf_sandbox {
+        Self::is_udf_cloud_script_allowed_with_config(
+            lang,
+            &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+        )
+    }
+
+    pub fn is_udf_cloud_script_allowed_with_config(
+        lang: &UDFLanguage,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
+        if !config.enable_udf_sandbox {
             return Err(ErrorCode::Unimplemented(
                 "SandboxUDF is not enabled, you can enable it by setting 'enable_udf_sandbox = true' in query node config",
             ));
@@ -138,7 +193,17 @@ impl UDFValidator {
     }
 
     pub fn is_udf_server_allowed(address: &str) -> Result<()> {
-        if !GlobalConfig::instance().query.common.enable_udf_server {
+        Self::is_udf_server_allowed_with_config(
+            address,
+            &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+        )
+    }
+
+    pub fn is_udf_server_allowed_with_config(
+        address: &str,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
+        if !config.enable_udf_server {
             return Err(ErrorCode::Unimplemented(
                 "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
             ));
@@ -149,18 +214,13 @@ impl UDFValidator {
                 format!("udf server address '{address}' is invalid, please check the address",)
             })?;
 
-        let udf_server_allow_insecure = GlobalConfig::instance()
-            .query
-            .common
-            .udf_server_allow_insecure;
-        if !udf_server_allow_insecure && url_addr.scheme() != "https" {
+        if !config.udf_server_allow_insecure && url_addr.scheme() != "https" {
             return Err(ErrorCode::Unimplemented(
                 "Insecure UDF server is not allowed, you can enable it by setting 'udf_server_allow_insecure = true' in query node config",
             ));
         }
 
-        let udf_server_allow_list = &GlobalConfig::instance().query.common.udf_server_allow_list;
-        if udf_server_allow_list.iter().all(|allow_url| {
+        if config.udf_server_allow_list.iter().all(|allow_url| {
             if let Ok(allow_url) = url::Url::parse(allow_url) {
                 allow_url.host_str() != url_addr.host_str()
             } else {
@@ -172,5 +232,38 @@ impl UDFValidator {
             )));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_expr;
+    use databend_common_ast::parser::tokenize_sql;
+
+    use super::*;
+
+    fn parse(sql: &str) -> Expr {
+        let tokens = tokenize_sql(sql).unwrap();
+        parse_expr(&tokens, Dialect::PostgreSQL).unwrap()
+    }
+
+    #[test]
+    fn ambiguous_json_arrow_does_not_declare_udf_parameter() {
+        let expr = parse("concat('', doc -> 'key')");
+        let error = UDFValidator::default()
+            .verify_definition_expr(&expr)
+            .unwrap_err();
+        assert!(error.message().contains("doc"));
+    }
+
+    #[test]
+    fn ambiguous_arrow_in_lambda_function_keeps_lambda_scope() {
+        let expr = parse("array_filter(list, x -> x > 2)");
+        let mut validator = UDFValidator {
+            parameters: vec!["list".to_string()],
+            ..Default::default()
+        };
+        validator.verify_definition_expr(&expr).unwrap();
     }
 }

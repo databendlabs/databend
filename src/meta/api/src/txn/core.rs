@@ -15,7 +15,6 @@
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::types::InvalidArgument;
-use databend_meta_client::types::MetaError;
 use databend_meta_client::types::TxnOpResponse;
 use databend_meta_client::types::TxnRequest;
 use display_more::DisplaySliceExt;
@@ -29,10 +28,13 @@ use super::reply::unpack_txn_reply;
 /// Send a transaction to the KV API and return success status and responses.
 ///
 /// This is the core transaction sending function used throughout the meta API.
-pub async fn send_txn(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+pub async fn send_txn<KV>(
+    kv_api: &KV,
     txn_req: TxnRequest,
-) -> Result<(bool, Vec<TxnOpResponse>), MetaError> {
+) -> Result<(bool, Vec<TxnOpResponse>), KV::Error>
+where
+    KV: kvapi::KVApi + ?Sized,
+{
     debug!("send txn: {}", txn_req);
     let tx_reply = kv_api.transaction(txn_req).await?;
     let (succ, responses) = unpack_txn_reply(tx_reply);
@@ -58,7 +60,7 @@ where
     K::ValueType: FromToProto + 'static,
 {
     txn.condition.push(txn_cond_eq_seq(key, seq));
-    txn.if_then.push(txn_put_pb_with_ttl(key, value, None)?);
+    txn.if_then.push(txn_put_pb_with_ttl(key, value, None));
 
     Ok(())
 }

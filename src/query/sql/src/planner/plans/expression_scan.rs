@@ -45,7 +45,7 @@ impl ExpressionScan {
         let mut columns = ColumnSet::new();
         for row in self.values.iter() {
             for value in row {
-                columns.extend(value.used_columns());
+                value.collect_used_columns(&mut columns);
             }
         }
         Ok(columns)
@@ -96,6 +96,8 @@ impl Operator for ExpressionScan {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }

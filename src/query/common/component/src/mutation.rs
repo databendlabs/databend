@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 
-use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::MutationStatus;
 
 #[derive(Default)]
 pub struct MutationState {
     mutation_status: Arc<RwLock<MutationStatus>>,
-    multi_table_insert_status: Arc<Mutex<MultiTableInsertStatus>>,
+    multi_table_insert_rows: Arc<Mutex<HashMap<u64, u64>>>,
 }
 
 impl MutationState {
@@ -37,17 +37,12 @@ impl MutationState {
         self.mutation_status.clone()
     }
 
-    pub fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
-        let mut status = self.multi_table_insert_status.lock().unwrap();
-        match status.insert_rows.get_mut(&table_id) {
-            Some(v) => *v += num_rows,
-            None => {
-                status.insert_rows.insert(table_id, num_rows);
-            }
-        }
+    pub fn set_multi_table_insert_rows(&self, insert_rows: HashMap<u64, u64>) {
+        let mut current_insert_rows = self.multi_table_insert_rows.lock().unwrap();
+        *current_insert_rows = insert_rows;
     }
 
-    pub fn multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
-        self.multi_table_insert_status.clone()
+    pub fn multi_table_insert_rows(&self) -> Arc<Mutex<HashMap<u64, u64>>> {
+        self.multi_table_insert_rows.clone()
     }
 }

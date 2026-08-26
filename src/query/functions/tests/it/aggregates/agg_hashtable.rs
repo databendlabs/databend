@@ -1,17 +1,3 @@
-// Copyright 2022 Datafuse Labs.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::cloned_ref_to_slice_refs)]
-
 use std::alloc::Layout;
 use std::sync::Arc;
 
@@ -39,6 +23,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::get_states_layout;
 use databend_common_expression::types::ArgType;
@@ -100,7 +85,7 @@ fn test_agg_hashtable() {
         ];
 
         let params = aggrs.iter().map(|_| vec![columns[1].clone()]).collect_vec();
-        let params = params.iter().map(|v| v.into()).collect_vec();
+        let params: Vec<ProjectedBlock> = params.iter().map(|v| v.into()).collect_vec();
 
         let config = HashTableConfig::default();
         let mut hashtable = AggregateHashTable::new(
@@ -142,7 +127,6 @@ fn test_agg_hashtable() {
         let _ = hashtable.combine(hashtable2, &mut flush_state);
 
         let mut merge_state = PayloadFlushState::default();
-
         let mut blocks = Vec::new();
         loop {
             match hashtable.merge_result(&mut merge_state) {
@@ -164,7 +148,6 @@ fn test_agg_hashtable() {
         assert_eq!(block.num_rows(), m);
 
         let validities = vec![true, true, true, true];
-
         let rows = n as i64;
         let urows = rows as u64;
 
@@ -200,7 +183,7 @@ fn test_layout() {
     type S = DecimalSumState<false, i128>;
     type M = DecimalSumState<false, i256>;
 
-    let states_layout = get_states_layout(&[aggrs.clone()]).unwrap();
+    let states_layout = get_states_layout(std::slice::from_ref(&aggrs)).unwrap();
 
     assert_eq!(
         states_layout.layout,

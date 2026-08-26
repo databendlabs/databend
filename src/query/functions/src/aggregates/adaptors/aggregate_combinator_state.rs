@@ -22,6 +22,8 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AggregateFunctionParam;
+use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 
@@ -39,6 +41,7 @@ use super::StateAddr;
 pub struct AggregateStateCombinator {
     name: String,
     nested: AggregateFunctionRef,
+    return_type: DataType,
 }
 
 impl AggregateStateCombinator {
@@ -56,9 +59,28 @@ impl AggregateStateCombinator {
             .join(", ");
 
         let name = format!("StateCombinator({nested_name}, {arg_name})");
-        let nested =
-            AggregateFunctionFactory::instance().get(nested_name, params, arguments, sort_descs)?;
-        Ok(Arc::new(AggregateStateCombinator { name, nested }))
+        let state_params = params
+            .iter()
+            .cloned()
+            .map(AggregateFunctionParam::try_from)
+            .collect::<Result<Vec<_>>>()?;
+        let nested = AggregateFunctionFactory::instance().get(
+            nested_name,
+            params.clone(),
+            arguments.clone(),
+            sort_descs,
+        )?;
+        let return_type = DataType::AggregateState(Box::new(AggregateStateDataType {
+            function_name: nested_name.to_string(),
+            params: state_params,
+            argument_types: arguments,
+            state_type: Box::new(nested.serialize_data_type()),
+        }));
+        Ok(Arc::new(AggregateStateCombinator {
+            name,
+            nested,
+            return_type,
+        }))
     }
 
     pub fn combinator_desc() -> CombinatorDescription {
@@ -72,7 +94,7 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(self.nested.serialize_data_type())
+        Ok(self.return_type.clone())
     }
 
     fn init_state(&self, place: AggrState) {

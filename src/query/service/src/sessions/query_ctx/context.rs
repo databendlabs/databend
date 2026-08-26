@@ -44,10 +44,6 @@ impl TableContext for QueryContext {
         &self.written_segment_locs
     }
 
-    fn selected_segment_locations(&self) -> &SegmentLocationsState {
-        &self.shared.selected_segment_locs
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -83,6 +79,16 @@ impl TableContextAuthorization for QueryContext {
     ) -> Result<()> {
         self.get_current_session()
             .validate_privilege(object, privilege, check_current_role_only)
+            .await
+    }
+
+    async fn has_ownership(
+        &self,
+        object: &OwnershipObject,
+        check_current_role_only: bool,
+    ) -> Result<bool> {
+        self.get_current_session()
+            .has_ownership(object, check_current_role_only)
             .await
     }
 
@@ -234,6 +240,10 @@ impl TableContextQueryState for QueryContext {
 
     fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         self.shared.get_error()
+    }
+
+    fn get_nodes_memory_usage(&self) -> usize {
+        self.shared.get_nodes_memory_usage()
     }
 
     fn push_warning(&self, warn: String) {

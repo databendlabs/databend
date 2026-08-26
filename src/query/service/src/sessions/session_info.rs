@@ -59,6 +59,14 @@ impl Session {
                 .as_ref()
                 .map(|qry_ctx| qry_ctx.get_status_info()),
             current_query_id: self.get_current_query_id(),
+            query_hash: shared_query_context
+                .as_ref()
+                .map(|qry_ctx| qry_ctx.get_query_text_hash())
+                .unwrap_or_default(),
+            query_parameterized_hash: shared_query_context
+                .as_ref()
+                .map(|qry_ctx| qry_ctx.get_query_parameterized_hash())
+                .unwrap_or_default(),
         }
     }
 

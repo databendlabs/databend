@@ -24,7 +24,6 @@ use crate::output_format::CSVOutputFormat;
 use crate::output_format::JSONOutputFormat;
 use crate::output_format::NDJSONOutputFormatBase;
 use crate::output_format::OutputFormat;
-use crate::output_format::ParquetOutputFormat;
 use crate::output_format::TEXTOutputFormat;
 
 pub trait FileFormatTypeExt {
@@ -89,7 +88,6 @@ pub fn get_output_format(
                 )),
             }
         }
-        FileFormatParams::Parquet(_) => Box::new(ParquetOutputFormat::create(schema)),
         FileFormatParams::Json(_) => Box::new(JSONOutputFormat::create(schema, settings)),
         others => {
             return Err(ErrorCode::InvalidArgument(format!(
@@ -106,10 +104,13 @@ impl FileFormatTypeExt for StageFileFormatType {
         match self {
             StageFileFormatType::Text => "text/tab-separated-values; charset=UTF-8",
             StageFileFormatType::Csv => "text/csv; charset=UTF-8",
-            StageFileFormatType::Parquet => "application/octet-stream",
+            StageFileFormatType::Parquet | StageFileFormatType::Orc => "application/octet-stream",
             StageFileFormatType::NdJson => "application/x-ndjson; charset=UTF-8",
             StageFileFormatType::Json => "application/json; charset=UTF-8",
             StageFileFormatType::Lance => "application/octet-stream",
+            StageFileFormatType::Arrow | StageFileFormatType::ArrowStream => {
+                "application/vnd.apache.arrow.stream"
+            }
             _ => "text/plain; charset=UTF-8",
         }
         .to_string()

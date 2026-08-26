@@ -18,9 +18,9 @@ use std::collections::HashSet;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::conversion::common_super_type_with_conversion;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -84,6 +84,10 @@ impl<'a> InferFilterOptimizer<'a> {
                     if right != func.arguments[1] {
                         func.arguments[1] = right;
                     }
+                    *func.return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                        &func.arguments[0],
+                        &func.arguments[1],
+                    ]);
                 }
             }
         }
@@ -112,7 +116,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         {
                             let (is_adjusted, constant) = adjust_scalar(
                                 constant.value.clone(),
-                                func.arguments[0].data_type()?,
+                                func.arguments[0].data_type().as_ref(),
                             );
                             if is_adjusted {
                                 self.add_expr_predicate(&func.arguments[0], Predicate {
@@ -128,7 +132,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         {
                             let (is_adjusted, constant) = adjust_scalar(
                                 constant.value.clone(),
-                                func.arguments[1].data_type()?,
+                                func.arguments[1].data_type().as_ref(),
                             );
                             if is_adjusted {
                                 self.add_expr_predicate(&func.arguments[1], Predicate {
@@ -185,13 +189,11 @@ impl<'a> InferFilterOptimizer<'a> {
     }
 
     pub fn add_equal_expr(&mut self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
-        let Ok(left_ty) = left.data_type() else {
-            return false;
-        };
-        let Ok(right_ty) = right.data_type() else {
-            return false;
-        };
-        if !Self::check_equal_expr_type(&left_ty, &right_ty) {
+        let left_ty = left.data_type();
+        let right_ty = right.data_type();
+        if !common_super_type_with_conversion(left_ty.as_ref(), right_ty.as_ref())
+            .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
+        {
             return false;
         }
         match self.expr_index.get(left) {
@@ -205,146 +207,6 @@ impl<'a> InferFilterOptimizer<'a> {
         };
 
         true
-    }
-
-    // Equality inference needs a conversion target that preserves equivalence,
-    // not just a type combination that Databend can evaluate with `eq`.
-    fn check_equal_expr_type(left_ty: &DataType, right_ty: &DataType) -> bool {
-        let left = left_ty.remove_nullable();
-        let right = right_ty.remove_nullable();
-        let Some(common_ty) = Self::safe_common_type(left.clone(), right.clone()) else {
-            return false;
-        };
-
-        Self::is_injective_cast(&left, &common_ty) && Self::is_injective_cast(&right, &common_ty)
-    }
-
-    fn safe_common_type(left: DataType, right: DataType) -> Option<DataType> {
-        match (&left, &right) {
-            (DataType::Null, ty) | (ty, DataType::Null) => Some(ty.clone()),
-            (DataType::Nullable(left_ty), DataType::Nullable(right_ty)) => {
-                Some(DataType::Nullable(Box::new(Self::safe_common_type(
-                    *left_ty.clone(),
-                    *right_ty.clone(),
-                )?)))
-            }
-            (DataType::Nullable(left_ty), right_ty) => Some(DataType::Nullable(Box::new(
-                Self::safe_common_type(*left_ty.clone(), right_ty.clone())?,
-            ))),
-            (left_ty, DataType::Nullable(right_ty)) => Some(DataType::Nullable(Box::new(
-                Self::safe_common_type(left_ty.clone(), *right_ty.clone())?,
-            ))),
-            (DataType::EmptyArray, ty @ DataType::Array(_))
-            | (ty @ DataType::Array(_), DataType::EmptyArray) => Some(ty.clone()),
-            (DataType::Array(left_ty), DataType::Array(right_ty)) => Some(DataType::Array(
-                Box::new(Self::safe_common_type(*left_ty.clone(), *right_ty.clone())?),
-            )),
-            (DataType::Map(left_ty), DataType::Map(right_ty)) if left_ty == right_ty => {
-                Some(left.clone())
-            }
-            (DataType::Tuple(left_tys), DataType::Tuple(right_tys))
-                if left_tys.len() == right_tys.len() =>
-            {
-                Some(DataType::Tuple(
-                    left_tys
-                        .iter()
-                        .cloned()
-                        .zip(right_tys.iter().cloned())
-                        .map(|(left_ty, right_ty)| Self::safe_common_type(left_ty, right_ty))
-                        .collect::<Option<Vec<_>>>()?,
-                ))
-            }
-            (DataType::Number(left_num), DataType::Number(right_num))
-                if left_num.is_integer() && right_num.is_integer() =>
-            {
-                Some(DataType::Decimal(Self::merge_decimal_size(
-                    left_num.get_decimal_properties()?,
-                    right_num.get_decimal_properties()?,
-                )?))
-            }
-            (DataType::Number(left_num), DataType::Number(right_num))
-                if left_num.is_float() && right_num.is_float() =>
-            {
-                if left_num.bit_width() >= right_num.bit_width() {
-                    Some(left.clone())
-                } else {
-                    Some(right.clone())
-                }
-            }
-            (DataType::Number(num_ty), DataType::Decimal(decimal))
-            | (DataType::Decimal(decimal), DataType::Number(num_ty))
-                if num_ty.is_integer() =>
-            {
-                let num_decimal = num_ty.get_decimal_properties()?;
-                Some(DataType::Decimal(Self::merge_decimal_size(
-                    *decimal,
-                    num_decimal,
-                )?))
-            }
-            (DataType::Decimal(left_decimal), DataType::Decimal(right_decimal)) => Some(
-                DataType::Decimal(Self::merge_decimal_size(*left_decimal, *right_decimal)?),
-            ),
-            (DataType::Date, DataType::Timestamp) | (DataType::Timestamp, DataType::Date) => {
-                Some(DataType::Timestamp)
-            }
-            _ if left == right && Self::is_safe_same_type(&left) => Some(left),
-            _ => None,
-        }
-    }
-
-    fn is_safe_same_type(data_type: &DataType) -> bool {
-        matches!(
-            data_type,
-            DataType::Boolean
-                | DataType::String
-                | DataType::Number(_)
-                | DataType::Decimal(_)
-                | DataType::Timestamp
-                | DataType::TimestampTz
-                | DataType::Date
-                | DataType::Bitmap
-                | DataType::Variant
-                | DataType::Interval
-        )
-    }
-
-    fn merge_decimal_size(left: DecimalSize, right: DecimalSize) -> Option<DecimalSize> {
-        let scale = left.scale().max(right.scale());
-        let precision = left.leading_digits().max(right.leading_digits()) + scale;
-        DecimalSize::new(precision, scale).ok()
-    }
-
-    fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
-        if src == dest {
-            return true;
-        }
-
-        match (src, dest) {
-            (DataType::Nullable(src), DataType::Nullable(dest)) => {
-                Self::is_injective_cast(src, dest)
-            }
-            (DataType::Nullable(src), dest) => Self::is_injective_cast(src, dest),
-            (src, DataType::Nullable(dest)) => Self::is_injective_cast(src, dest),
-            (DataType::Null, _) => true,
-            (DataType::EmptyArray, DataType::Array(_)) => true,
-            (DataType::Number(src), DataType::Number(dest)) => {
-                (src.is_integer() && dest.is_integer()) || src.can_lossless_cast_to(*dest)
-            }
-            (DataType::Number(src), DataType::Decimal(_)) if src.is_integer() => true,
-            (DataType::Decimal(src), DataType::Decimal(dest)) => {
-                src.scale() <= dest.scale() && src.leading_digits() <= dest.leading_digits()
-            }
-            (DataType::Date, DataType::Timestamp) => true,
-            (DataType::Array(src), DataType::Array(dest)) => Self::is_injective_cast(src, dest),
-            (DataType::Tuple(src_tys), DataType::Tuple(dest_tys)) => {
-                src_tys.len() == dest_tys.len()
-                    && src_tys
-                        .iter()
-                        .zip(dest_tys)
-                        .all(|(src, dest)| Self::is_injective_cast(src, dest))
-            }
-            _ => false,
-        }
     }
 
     fn add_expr_predicate(&mut self, expr: &ScalarExpr, new_predicate: Predicate) -> Result<()> {
@@ -390,16 +252,16 @@ impl<'a> InferFilterOptimizer<'a> {
         mut right: Predicate,
     ) -> Result<(MergeResult, Predicate)> {
         // Handle data type compatibility
-        let left_data_type = ScalarExpr::ConstantExpr(left.constant.clone()).data_type()?;
-        let right_data_type = ScalarExpr::ConstantExpr(right.constant.clone()).data_type()?;
+        let left_data_type = left.constant.value.as_ref().infer_data_type();
+        let right_data_type = right.constant.value.as_ref().infer_data_type();
         if left_data_type != right_data_type {
             let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
             let common_data_type = common_super_type(left_data_type, right_data_type, cast_rules);
             if let Some(data_type) = common_data_type {
                 let (left_is_adjusted, left_constant) =
-                    adjust_scalar(left.constant.value.clone(), data_type.clone());
+                    adjust_scalar(left.constant.value.clone(), &data_type);
                 let (right_is_adjusted, right_constant) =
-                    adjust_scalar(right.constant.value.clone(), data_type.clone());
+                    adjust_scalar(right.constant.value.clone(), &data_type);
                 if left_is_adjusted && right_is_adjusted {
                     left.constant = left_constant;
                     right.constant = right_constant;
@@ -827,6 +689,7 @@ impl<'a> InferFilterOptimizer<'a> {
             let parent_index = Self::find(&mut parents, *index);
             let parent_predicates = &self.expr_predicates[parent_index];
             for predicate in parent_predicates.iter() {
+                let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [expr]);
                 result.push(ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
                     func_name: String::from(predicate.op.to_func_name()),
@@ -835,6 +698,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         expr.clone(),
                         ScalarExpr::ConstantExpr(predicate.constant.clone()),
                     ],
+                    return_type: Box::new(return_type),
                 }));
             }
         }
@@ -849,6 +713,11 @@ impl<'a> InferFilterOptimizer<'a> {
                     let equal_indexes_len = equal_indexes.len();
                     for i in 0..equal_indexes_len {
                         for j in i + 1..equal_indexes_len {
+                            let return_type =
+                                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                                    &self.exprs[equal_indexes[i]],
+                                    &self.exprs[equal_indexes[j]],
+                                ]);
                             result.push(ScalarExpr::FunctionCall(FunctionCall {
                                 span: None,
                                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
@@ -857,6 +726,7 @@ impl<'a> InferFilterOptimizer<'a> {
                                     self.exprs[equal_indexes[i]].clone(),
                                     self.exprs[equal_indexes[j]].clone(),
                                 ],
+                                return_type: Box::new(return_type),
                             }));
                         }
                     }
@@ -920,6 +790,13 @@ impl<'a> InferFilterOptimizer<'a> {
                     }
                 }
             }
+
+            fn visit_function_call(&mut self, function: &mut FunctionCall) -> Result<()> {
+                for argument in &mut function.arguments {
+                    self.visit(argument)?;
+                }
+                function.refresh_return_type()
+            }
         }
 
         let mut replace = ReplaceScalarExpr {
@@ -933,8 +810,7 @@ impl<'a> InferFilterOptimizer<'a> {
         for predicate in predicates {
             replace.reset();
             let mut new_predicate = predicate.clone();
-            replace.visit(&mut new_predicate).unwrap();
-            if !replace.can_replace {
+            if replace.visit(&mut new_predicate).is_err() || !replace.can_replace {
                 result_predicates.push(predicate);
                 continue;
             }
@@ -963,7 +839,7 @@ impl<'a> InferFilterOptimizer<'a> {
                 continue;
             }
 
-            if new_predicate != predicate && new_predicate.data_type().is_ok() {
+            if new_predicate != predicate {
                 result_predicates.push(new_predicate);
             }
 
@@ -1001,7 +877,7 @@ impl<'a> JoinProperty<'a> {
     }
 }
 
-pub fn adjust_scalar(scalar: Scalar, data_type: DataType) -> (bool, ConstantExpr) {
+pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExpr) {
     match data_type {
         DataType::Number(NumberDataType::UInt8)
         | DataType::Nullable(box DataType::Number(NumberDataType::UInt8)) => {

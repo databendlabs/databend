@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
@@ -28,10 +27,13 @@ use databend_common_meta_app::app_error::CreateTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
 use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
+use databend_common_meta_app::app_error::InvalidMaterializedView;
+use databend_common_meta_app::app_error::MaterializedViewAlreadyExists;
 use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
+use databend_common_meta_app::app_error::TableEngineMismatch;
 use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
@@ -43,6 +45,11 @@ use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::AutoIncrementKey;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::invalidates_mv_source_bindings;
+use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -65,8 +72,14 @@ use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableReq;
+use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::MVSourceBinding;
+use databend_common_meta_app::schema::MVSourceBindingVersion;
+use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SourceTableMV;
+use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
@@ -87,15 +100,19 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
-use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::value_id::ValueId;
+use databend_common_meta_app::KeyUnknownBuilder;
+use databend_common_meta_app::KeyWithTenant;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::kvapi::StructKey;
+use databend_meta_client::types::protobuf as pb;
+use databend_meta_client::types::txn_op::Request;
+use databend_meta_client::types::txn_op_response::Response;
 use databend_meta_client::types::ConditionResult::Eq;
 use databend_meta_client::types::MatchSeqExt;
 use databend_meta_client::types::MetaError;
@@ -105,9 +122,6 @@ use databend_meta_client::types::TxnGetRequest;
 use databend_meta_client::types::TxnGetResponse;
 use databend_meta_client::types::TxnOp;
 use databend_meta_client::types::TxnRequest;
-use databend_meta_client::types::protobuf as pb;
-use databend_meta_client::types::txn_op::Request;
-use databend_meta_client::types::txn_op_response::Response;
 use fastrace::func_name;
 use log::debug;
 use log::error;
@@ -116,26 +130,23 @@ use seq_marked::SeqValue;
 
 use super::database_api::DatabaseApi;
 use super::database_util::get_db_or_err;
-use super::garbage_collection_api::ORPHAN_POSTFIX;
 use super::garbage_collection_api::get_history_tables_for_gc;
+use super::garbage_collection_api::ORPHAN_POSTFIX;
 use super::schema_api::build_upsert_table_deduplicated_label;
 use super::schema_api::construct_drop_table_txn_operations;
 use super::schema_api::get_db_by_id_or_err;
 use super::schema_api::get_history_table_metas;
 use super::schema_api::handle_undrop_table;
-use crate::DEFAULT_MGET_SIZE;
+use super::schema_api::VersionedTable;
 use crate::assert_table_exist;
 use crate::deserialize_struct;
 use crate::error_util::table_has_to_not_exist;
 use crate::fetch_id;
-use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_fetch_util::deserialize_struct_get_response;
 use crate::kv_fetch_util::mget_pb_values;
-use crate::kv_fetch_util::mget_u64_values;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
-use crate::list_u64_value;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
@@ -146,6 +157,7 @@ use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 use crate::txn_put_pb;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
+use crate::DEFAULT_MGET_SIZE;
 
 /// Assert that `table_id` is the latest entry in `tb_id_list`.
 ///
@@ -201,6 +213,12 @@ fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError>
             AppError::CreateAsDropTableWithoutDropTime(CreateAsDropTableWithoutDropTime::new(name)),
         ));
     }
+    let is_mv = is_materialized_view_engine(&req.table_meta.engine);
+    if is_mv != req.materialized_view.is_some() || (is_mv && req.as_dropped) {
+        return Err(KVAppError::AppError(
+            InvalidMaterializedView::new("invalid materialized view create request").into(),
+        ));
+    }
     Ok(())
 }
 
@@ -223,24 +241,15 @@ where
         // Make an error if table exists.
         fn make_exists_err(req: &CreateTableReq) -> AppError {
             let name = &req.name_ident.table_name;
-            let name_ident = &req.name_ident;
+            let context = format!("create_table: {}", req.name_ident);
 
             match req.table_meta.engine.as_str() {
-                "STREAM" => {
-                    let exist_err =
-                        StreamAlreadyExists::new(name, format!("create_table: {}", name_ident));
-                    AppError::from(exist_err)
+                "STREAM" => StreamAlreadyExists::new(name, context).into(),
+                "VIEW" => ViewAlreadyExists::new(name, context).into(),
+                MATERIALIZED_VIEW_ENGINE => {
+                    MaterializedViewAlreadyExists::new(name, context).into()
                 }
-                "VIEW" => {
-                    let exist_err =
-                        ViewAlreadyExists::new(name, format!("create_table: {}", name_ident));
-                    AppError::from(exist_err)
-                }
-                _ => {
-                    let exist_err =
-                        TableAlreadyExists::new(name, format!("create_table: {}", name_ident));
-                    AppError::from(exist_err)
-                }
+                _ => TableAlreadyExists::new(name, context).into(),
             }
         }
 
@@ -357,6 +366,24 @@ where
                             });
                         }
                         CreateOption::CreateOrReplace => {
+                            // CREATE OR REPLACE must not replace an existing table with a
+                            // different engine.
+                            let existing_table_meta = self
+                                .get_pb(&TableId::new(*id.data))
+                                .await?
+                                .ok_or_else(|| {
+                                KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                                    *id.data,
+                                    "create or replace failed to find existing table meta",
+                                )))
+                            })?;
+                            TableEngineMismatch::ensure(
+                                req.table_name(),
+                                &existing_table_meta.engine,
+                                &req.table_meta.engine,
+                            )
+                            .map_err(|e| KVAppError::AppError(e.into()))?;
+
                             if req.as_dropped {
                                 // If the table is being created as a dropped table, we do not
                                 // need to combine with drop_table_txn operations, just return
@@ -365,12 +392,16 @@ where
 
                                 SeqV::new(id.seq, *id.data)
                             } else {
+                                let existing = VersionedTable {
+                                    id: TableId::new(*id.data),
+                                    meta: existing_table_meta,
+                                };
                                 let (seq, id) = construct_drop_table_txn_operations(
                                     self,
                                     req.name_ident.table_name.clone(),
                                     &req.name_ident.tenant,
                                     req.catalog_name.clone(),
-                                    *id.data,
+                                    existing,
                                     *seq_db_id.data,
                                     true,
                                     false,
@@ -434,7 +465,6 @@ where
                 // append new table_id into list
                 tb_id_list.append(table_id);
                 let dbid_tbname_seq = seq_table_id.seq;
-
                 txn.condition.extend(vec![
                     // db has not to change, i.e., no new table is created.
                     // Renaming db is OK and does not affect the seq of db_meta.
@@ -448,13 +478,116 @@ where
                 txn.if_then.extend(vec![
                     // Changing a table in a db has to update the seq of db_meta,
                     // to block the batch-delete-tables when deleting a db.
-                    txn_put_pb(&key_dbid, &db_meta.data)?, /* (db_id) -> db_meta */
-                    txn_put_pb(key_table_id, &req.table_meta)?, /* (tenant, db_id, tb_id) -> tb_meta */
-                    txn_put_pb(&save_key_table_id_list, &tb_id_list)?, /* _fd_table_id_list/db_id/table_name -> tb_id_list */
+                    txn_put_pb(&key_dbid, &db_meta.data), /* (db_id) -> db_meta */
+                    txn_put_pb(key_table_id, &req.table_meta), /* (tenant, db_id, tb_id) -> tb_meta */
+                    txn_put_pb(&save_key_table_id_list, &tb_id_list), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
                     // This record does not need to assert `table_id_to_name_key == 0`,
                     // Because this is a reverse index for db_id/table_name -> table_id, and it is unique.
-                    txn_put_pb(&key_table_id_to_name, &key_dbid_tbname)?, /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
+                    txn_put_pb(&key_table_id_to_name, &key_dbid_tbname), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                 ]);
+
+                if let Some(source_update) = &req.source_table_option {
+                    let source_id = TableId::new(source_update.table_id);
+                    let source_meta = self.get_pb(&source_id).await?.ok_or_else(|| {
+                        KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                            source_update.table_id,
+                            "create_table source option update",
+                        )))
+                    })?;
+                    if source_update.seq.match_seq(&source_meta).is_err() {
+                        return Err(KVAppError::AppError(AppError::from(
+                            TableVersionMismatched::new(
+                                source_update.table_id,
+                                source_update.seq,
+                                source_meta.seq,
+                                "create_table source option update",
+                            ),
+                        )));
+                    }
+
+                    let source_seq = source_meta.seq;
+                    let mut updated_source_meta = source_meta.data;
+                    for (key, value) in &source_update.options {
+                        match value {
+                            Some(value) => {
+                                updated_source_meta
+                                    .options
+                                    .insert(key.clone(), value.clone());
+                            }
+                            None => {
+                                updated_source_meta.options.remove(key);
+                            }
+                        }
+                    }
+                    txn.condition.push(txn_cond_seq(&source_id, Eq, source_seq));
+                    txn.if_then
+                        .push(txn_put_pb(&source_id, &updated_source_meta));
+                }
+
+                if let Some(ref mv) = req.materialized_view {
+                    let def_ident = MVDefinitionIdent::new(req.tenant(), table_id);
+                    txn.if_then.push(txn_put_pb(&def_ident, &mv.definition));
+
+                    let source_table_id = req.table_meta.materialized_view_source_table_id()?;
+                    let source_table_ident = TableId::new(source_table_id);
+                    let source_table_meta =
+                        self.get_pb(&source_table_ident).await?.ok_or_else(|| {
+                            KVAppError::AppError(
+                                InvalidMaterializedView::new(format!(
+                                    "source table id {} does not exist",
+                                    source_table_id
+                                ))
+                                .into(),
+                            )
+                        })?;
+                    if source_table_meta.drop_on.is_some() {
+                        return Err(KVAppError::AppError(
+                            InvalidMaterializedView::new(format!(
+                                "source table id {} is dropped",
+                                source_table_id
+                            ))
+                            .into(),
+                        ));
+                    }
+                    let version_ident =
+                        MVSourceBindingVersionIdent::new(req.tenant(), source_table_id);
+                    let (version_seq, version) = self.get_pb_seq_and_value(&version_ident).await?;
+                    let current_source_generation = version
+                        .as_ref()
+                        .map(|version| version.current_source_generation)
+                        .unwrap_or(0);
+                    if current_source_generation != mv.expected_source_generation {
+                        return Err(KVAppError::AppError(
+                            InvalidMaterializedView::new(format!(
+                                "source table binding generation changed from {} to {} while creating materialized view",
+                                mv.expected_source_generation, current_source_generation
+                            ))
+                            .into(),
+                        ));
+                    }
+                    txn.condition
+                        .push(txn_cond_eq_seq(&version_ident, version_seq));
+                    if version.is_none() {
+                        // A missing version record is semantic generation 0.
+                        // Initialize it in the same transaction that publishes
+                        // the first MV, so a failed CREATE leaves no record.
+                        // Its resulting KV seq is deliberately not the MV
+                        // generation; that seq is only a transaction CAS token.
+                        txn.if_then.push(txn_put_pb(
+                            &version_ident,
+                            &MVSourceBindingVersion::default(),
+                        ));
+                    }
+                    txn.if_then.push(txn_put_pb(
+                        &SourceTableMVIdent::new_generic(
+                            req.tenant(),
+                            SourceTableMV::new(source_table_id, table_id),
+                        ),
+                        &MVSourceBinding {
+                            bound_source_generation: mv.expected_source_generation,
+                        },
+                    ));
+                }
 
                 if req.as_dropped {
                     // To create the table in a "dropped" state,
@@ -468,7 +601,7 @@ where
                     // Otherwise, make newly created table visible by putting the tuple:
                     // (tenant, db_id, tb_name) -> tb_id
                     txn.if_then
-                        .push(txn_put_pb(&key_dbid_tbname, &TableId::new(table_id))?)
+                        .push(txn_put_pb(&key_dbid_tbname, &TableId::new(table_id)))
                 }
 
                 for table_field in req.table_meta.schema.fields() {
@@ -483,7 +616,7 @@ where
                     let storage_value =
                         ValueId::<AutoIncrementStorageValue>::new(auto_increment_expr.start);
                     txn.if_then
-                        .extend(vec![txn_put_pb(&storage_ident, &storage_value)?]);
+                        .extend(vec![txn_put_pb(&storage_ident, &storage_value)]);
                 }
 
                 let (succ, responses) = send_txn(self, txn).await?;
@@ -537,12 +670,23 @@ where
 
             let mut txn = TxnRequest::default();
 
+            let tbid = TableId::new(table_id);
+            let table_meta = self.get_pb(&tbid).await?.ok_or_else(|| {
+                KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                    table_id,
+                    "drop_table_by_id failed to find valid tb_meta",
+                )))
+            })?;
+            let existing = VersionedTable {
+                id: tbid,
+                meta: table_meta,
+            };
             let opt = construct_drop_table_txn_operations(
                 self,
                 req.table_name.clone(),
                 &req.tenant,
                 None,
-                table_id,
+                existing,
                 req.db_id,
                 req.if_exists,
                 true,
@@ -611,7 +755,8 @@ where
                 table_name: tenant_dbname_tbname.table_name.clone(),
             };
 
-            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
+            let (tb_id_seq, table_id) = self.get_pb_seq_and_value(&dbid_tbname).await?;
+            let table_id = table_id.map(|x| x.table_id).unwrap_or(0);
             if req.if_exists {
                 if tb_id_seq == 0 {
                     // TODO: table does not exist, can not return table id.
@@ -660,7 +805,7 @@ where
                 db_id: *new_seq_db_id.data,
                 table_name: req.new_table_name.clone(),
             };
-            let (new_tb_id_seq, _new_tb_id) = get_u64_value(self, &newdbid_newtbname).await?;
+            let (new_tb_id_seq, _new_tb_id) = self.get_pb_seq_and_value(&newdbid_newtbname).await?;
             table_has_to_not_exist(new_tb_id_seq, &tenant_newdbname_newtbname, "rename_table")?;
 
             let new_dbid_tbname_idlist = TableIdHistoryIdent {
@@ -709,19 +854,19 @@ where
                     ],
                     vec![
                         txn_del(&dbid_tbname), // (db_id, tb_name) -> tb_id
-                        txn_put_pb(&newdbid_newtbname, &TableId::new(table_id))?, /* (db_id, new_tb_name) -> tb_id */
+                        txn_put_pb(&newdbid_newtbname, &TableId::new(table_id)), /* (db_id, new_tb_name) -> tb_id */
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        txn_put_pb(&seq_db_id.data, &*db_meta)?, // (db_id) -> db_meta
-                        txn_put_pb(&dbid_tbname_idlist, &tb_id_list)?, /* _fd_table_id_list/db_id/old_table_name -> tb_id_list */
-                        txn_put_pb(&new_dbid_tbname_idlist, &new_tb_id_list)?, /* _fd_table_id_list/db_id/new_table_name -> tb_id_list */
-                        txn_put_pb(&table_id_to_name_key, &db_id_table_name)?, /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
+                        txn_put_pb(&seq_db_id.data, &*db_meta), // (db_id) -> db_meta
+                        txn_put_pb(&dbid_tbname_idlist, &tb_id_list), /* _fd_table_id_list/db_id/old_table_name -> tb_id_list */
+                        txn_put_pb(&new_dbid_tbname_idlist, &new_tb_id_list), /* _fd_table_id_list/db_id/new_table_name -> tb_id_list */
+                        txn_put_pb(&table_id_to_name_key, &db_id_table_name), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                     ],
                 );
 
                 if *seq_db_id.data != *new_seq_db_id.data {
                     txn.if_then
-                        .push(txn_put_pb(&new_seq_db_id.data, &*new_db_meta)?); // (db_id) -> db_meta
+                        .push(txn_put_pb(&new_seq_db_id.data, &*new_db_meta)); // (db_id) -> db_meta
                 }
 
                 let (succ, _responses) = send_txn(self, txn).await?;
@@ -761,7 +906,9 @@ where
                 table_name: req.origin_table.table_name.clone(),
             };
 
-            let (tb_id_seq_left, table_id_left) = get_u64_value(self, &dbid_tbname_left).await?;
+            let (tb_id_seq_left, table_id_left) =
+                self.get_pb_seq_and_value(&dbid_tbname_left).await?;
+            let table_id_left = table_id_left.map(|x| x.table_id).unwrap_or(0);
             if req.if_exists && tb_id_seq_left == 0 {
                 return Ok(SwapTableReply {});
             }
@@ -776,7 +923,9 @@ where
                 table_name: req.target_table_name.clone(),
             };
 
-            let (tb_id_seq_right, table_id_right) = get_u64_value(self, &dbid_tbname_right).await?;
+            let (tb_id_seq_right, table_id_right) =
+                self.get_pb_seq_and_value(&dbid_tbname_right).await?;
+            let table_id_right = table_id_right.map(|x| x.table_id).unwrap_or(0);
             if req.if_exists && tb_id_seq_right == 0 {
                 return Ok(SwapTableReply {});
             }
@@ -870,16 +1019,16 @@ where
                     ],
                     vec![
                         // Swap table name->table_id mappings
-                        txn_put_pb(&dbid_tbname_left, &TableId::new(table_id_right))?, /* origin_table_name -> target_table_id */
-                        txn_put_pb(&dbid_tbname_right, &TableId::new(table_id_left))?, /* target_table_name -> origin_table_id */
+                        txn_put_pb(&dbid_tbname_left, &TableId::new(table_id_right)), /* origin_table_name -> target_table_id */
+                        txn_put_pb(&dbid_tbname_right, &TableId::new(table_id_left)), /* target_table_name -> origin_table_id */
                         // Update database metadata sequences
-                        txn_put_pb(&seq_db_id_left.data, &*db_meta_left)?,
+                        txn_put_pb(&seq_db_id_left.data, &*db_meta_left),
                         // Update table history lists
-                        txn_put_pb(&dbid_tbname_idlist_left, &tb_id_list_left)?,
-                        txn_put_pb(&dbid_tbname_idlist_right, &tb_id_list_right)?,
+                        txn_put_pb(&dbid_tbname_idlist_left, &tb_id_list_left),
+                        txn_put_pb(&dbid_tbname_idlist_right, &tb_id_list_right),
                         // Update table_id->name mappings
-                        txn_put_pb(&table_id_to_name_key_left, &db_id_table_name_right)?, /* origin_table_id -> target_table_name */
-                        txn_put_pb(&table_id_to_name_key_right, &db_id_table_name_left)?, /* target_table_id -> origin_table_name */
+                        txn_put_pb(&table_id_to_name_key_left, &db_id_table_name_right), /* origin_table_id -> target_table_name */
+                        txn_put_pb(&table_id_to_name_key_right, &db_id_table_name_left), /* target_table_id -> origin_table_name */
                     ],
                 );
 
@@ -1005,7 +1154,8 @@ where
                 table_name: tenant_dbname_tbname.table_name.clone(),
             };
 
-            let (dbid_tbname_seq, _table_id) = get_u64_value(self, &dbid_tbname).await?;
+            let (dbid_tbname_seq, visible_table_id) =
+                self.get_pb_seq_and_value(&dbid_tbname).await?;
 
             // get table id list from _fd_table_id_list/db_id/table_name
 
@@ -1089,7 +1239,34 @@ where
 
             {
                 // reset drop on time
-                let mut tb_meta = tb_meta.unwrap();
+                let mut txn_req = TxnRequest::default();
+                let mut tb_meta = tb_meta.ok_or_else(|| {
+                    KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                        table_id,
+                        "commit_table_meta",
+                    )))
+                })?;
+
+                if let Some(visible_table_id) = visible_table_id {
+                    let previous = self.get_pb(&visible_table_id).await?.ok_or_else(|| {
+                        KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                            visible_table_id.table_id,
+                            "commit_table_meta previous table",
+                        )))
+                    })?;
+
+                    TableEngineMismatch::ensure(
+                        req.name_ident.table_name.as_str(),
+                        &previous.engine,
+                        &tb_meta.engine,
+                    )
+                    .map_err(|e| KVAppError::AppError(e.into()))?;
+
+                    txn_req
+                        .condition
+                        .push(txn_cond_seq(&visible_table_id, Eq, previous.seq));
+                }
+
                 // undrop a table with no drop_on time
                 if tb_meta.drop_on.is_none() {
                     return Err(KVAppError::AppError(AppError::UndropTableWithNoDropTime(
@@ -1098,29 +1275,27 @@ where
                 }
                 tb_meta.drop_on = None;
 
-                let txn_req = TxnRequest::new(
-                    vec![
-                        // db has not to change, i.e., no new table is created.
-                        // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
-                        // still this table id
-                        txn_cond_seq(&dbid_tbname, Eq, dbid_tbname_seq),
-                        // table is not changed
-                        txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                        txn_cond_seq(&orphan_dbid_tbname_idlist, Eq, orphan_tb_id_list.seq),
-                        txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list.seq),
-                    ],
-                    vec![
-                        // Changing a table in a db has to update the seq of db_meta,
-                        // to block the batch-delete-tables when deleting a db.
-                        txn_put_pb(&DatabaseId { db_id }, &db_meta)?, // (db_id) -> db_meta
-                        txn_put_pb(&dbid_tbname, &TableId::new(table_id))?, /* (tenant, db_id, tb_name) -> tb_id */
-                        // txn_put_pb(&dbid_tbname_idlist, &tb_id_list)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
-                        txn_put_pb(&tbid, &tb_meta)?, // (tenant, db_id, tb_id) -> tb_meta
-                        txn_del(&orphan_dbid_tbname_idlist), // del orphan table idlist
-                        txn_put_pb(&dbid_tbname_idlist, &tb_id_list.data)?, /* _fd_table_id_list/db_id/table_name -> tb_id_list */
-                    ],
-                );
+                txn_req.condition.extend([
+                    // db has not to change, i.e., no new table is created.
+                    // Renaming db is OK and does not affect the seq of db_meta.
+                    txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
+                    // still this table id
+                    txn_cond_seq(&dbid_tbname, Eq, dbid_tbname_seq),
+                    // table is not changed
+                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                    txn_cond_seq(&orphan_dbid_tbname_idlist, Eq, orphan_tb_id_list.seq),
+                    txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list.seq),
+                ]);
+                txn_req.if_then.extend([
+                    // Changing a table in a db has to update the seq of db_meta,
+                    // to block the batch-delete-tables when deleting a db.
+                    txn_put_pb(&DatabaseId { db_id }, &db_meta), // (db_id) -> db_meta
+                    txn_put_pb(&dbid_tbname, &TableId::new(table_id)), /* (tenant, db_id, tb_name) -> tb_id */
+                    // txn_put_pb(&dbid_tbname_idlist, &tb_id_list), // _fd_table_id_list/db_id/table_name -> tb_id_list
+                    txn_put_pb(&tbid, &tb_meta), // (tenant, db_id, tb_id) -> tb_meta
+                    txn_del(&orphan_dbid_tbname_idlist), // del orphan table idlist
+                    txn_put_pb(&dbid_tbname_idlist, &tb_id_list.data), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
+                ]);
 
                 let txn_response = txn_sender.send_txn(self, txn_req).await?;
                 let succ = match txn_response {
@@ -1149,17 +1324,20 @@ where
         }
     }
 
+    /// `tenant` locates MV source binding generation records for invalidating schema updates.
     async fn update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let kv_txn_sender = IdempotentKVTxnSender::new();
-        self.update_multi_table_meta_with_sender(req, &kv_txn_sender)
+        self.update_multi_table_meta_with_sender(tenant, req, &kv_txn_sender)
             .await
     }
 
     async fn update_multi_table_meta_with_sender(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
         txn_sender: &IdempotentKVTxnSender,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
@@ -1208,12 +1386,26 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
-        for ((req, _), (tb_meta_seq, _)) in update_table_metas.iter_mut().zip(tb_meta_vec.iter()) {
+        // If a request repeats a table ID, use the final update to decide whether its MV bindings
+        // are invalidated, matching the transaction's final put for that table.
+        let mut invalidates_mv_source_bindings_by_table_id = HashMap::new();
+        for ((req, _), (tb_meta_seq, old_table_meta)) in
+            update_table_metas.iter_mut().zip(tb_meta_vec.iter())
+        {
             let tbid = TableId {
                 table_id: req.table_id,
             };
 
             let new_table_meta = req.new_table_meta.clone();
+            let old_table_meta = old_table_meta.as_ref().ok_or_else(|| {
+                KVAppError::AppError(AppError::UnknownTableId(
+                    tbid.unknown_error("update_multi_table_meta"),
+                ))
+            })?;
+            invalidates_mv_source_bindings_by_table_id.insert(
+                req.table_id,
+                invalidates_mv_source_bindings(old_table_meta, &new_table_meta),
+            );
 
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
@@ -1243,12 +1435,53 @@ where
                 txn.condition.push(txn_cond_seq(&lvt_ident, Eq, seq));
             }
 
-            txn.if_then.push(txn_put_pb(&tbid, &new_table_meta)?);
+            txn.if_then.push(txn_put_pb(&tbid, &new_table_meta));
             txn.else_then.push(TxnOp {
                 request: Some(Request::Get(TxnGetRequest::new(tbid.to_string_key()))),
             });
 
             new_table_meta_map.insert(req.table_id, new_table_meta);
+        }
+
+        let invalidating_mv_source_table_ids = invalidates_mv_source_bindings_by_table_id
+            .into_iter()
+            .filter_map(|(table_id, invalidates)| invalidates.then_some(table_id))
+            .collect::<Vec<_>>();
+
+        if !invalidating_mv_source_table_ids.is_empty() {
+            let generation_idents = invalidating_mv_source_table_ids
+                .iter()
+                .map(|table_id| MVSourceBindingVersionIdent::new(tenant, *table_id))
+                .collect::<Vec<_>>();
+
+            let generations = self.get_pb_values_vec(generation_idents.clone()).await?;
+
+            // The exact source TableMeta sequence condition serializes concurrent invalidating
+            // updates, so the generation value does not need a second CAS condition.
+            for ((table_id, generation_ident), generation) in invalidating_mv_source_table_ids
+                .into_iter()
+                .zip(generation_idents)
+                .zip(generations)
+            {
+                let next_generation = generation
+                    .map(|generation| generation.data.current_source_generation)
+                    .unwrap_or(0)
+                    .checked_add(1)
+                    .ok_or_else(|| {
+                        KVAppError::AppError(
+                            InvalidMaterializedView::new(format!(
+                                "source table {} binding generation overflow",
+                                table_id
+                            ))
+                            .into(),
+                        )
+                    })?;
+
+                txn.if_then
+                    .push(txn_put_pb(&generation_ident, &MVSourceBindingVersion {
+                        current_source_generation: next_generation,
+                    }));
+            }
         }
 
         // `remove_table_copied_files` and `upsert_table_copied_file_info`
@@ -1284,7 +1517,7 @@ where
                     txn.condition.push(txn_cond_eq_seq(&key, 0));
                 }
                 txn.if_then
-                    .push(txn_put_pb_with_ttl(&key, &file_info, req.ttl)?)
+                    .push(txn_put_pb_with_ttl(&key, &file_info, req.ttl))
             }
         }
 
@@ -1328,7 +1561,7 @@ where
 
             txn.condition
                 .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
-            txn.if_then.push(txn_put_pb(&stream_id, &new_stream_meta)?);
+            txn.if_then.push(txn_put_pb(&stream_id, &new_stream_meta));
         }
 
         for deduplicated_label in deduplicated_labels {
@@ -1524,13 +1757,13 @@ where
             .collect();
 
         // Batch get table ids
-        let table_ids = mget_u64_values(self, &dbid_tbnames).await?;
+        let table_ids = self.get_pb_values_vec(dbid_tbnames.clone()).await?;
 
         // Collect valid table ids with their names
         let mut valid_tables: Vec<(String, u64)> = Vec::with_capacity(table_names.len());
         for (dbid_tbname, table_id_opt) in dbid_tbnames.into_iter().zip(table_ids.into_iter()) {
             if let Some(table_id) = table_id_opt {
-                valid_tables.push((dbid_tbname.table_name, table_id));
+                valid_tables.push((dbid_tbname.table_name, table_id.data.table_id));
             }
         }
 
@@ -1595,15 +1828,15 @@ where
         let table_id = {
             // Get table by tenant, db_id, table_name to assert presence.
 
-            let (tb_id_seq, table_id) = get_u64_value(self, name_ident).await?;
+            let (tb_id_seq, table_id) = self.get_pb_seq_and_value(name_ident).await?;
             if tb_id_seq == 0 {
                 return Ok(None);
             }
 
-            table_id
+            table_id.unwrap_or_default()
         };
 
-        let tbid = TableId { table_id };
+        let tbid = table_id;
 
         let seq_meta = self.get_pb(&tbid).await?;
 
@@ -1628,20 +1861,21 @@ where
             table_name: "".to_string(),
         };
 
-        let (names, ids) = list_u64_value(self, &dbid_tbname).await?;
-
-        let ids = ids
-            .into_iter()
-            .map(|id| TableId { table_id: id })
+        let names_and_ids = self
+            .list_pb_vec(ListOptions::unlimited(&DirName::new(dbid_tbname)))
+            .await?;
+        let ids = names_and_ids
+            .iter()
+            .map(|(_, seq_id)| seq_id.data.clone())
             .collect::<Vec<_>>();
 
         let seq_metas = self.get_pb_values_vec(ids.clone()).await?;
 
-        let res = names
+        let res = names_and_ids
             .into_iter()
             .zip(ids)
             .zip(seq_metas)
-            .filter_map(|((n, id), seq_meta)| seq_meta.map(|x| (n.table_name, id, x)))
+            .filter_map(|(((n, _), id), seq_meta)| seq_meta.map(|x| (n.table_name, id, x)))
             .collect::<Vec<_>>();
         Ok(res)
     }
@@ -1744,13 +1978,12 @@ where
         )
         .await?;
         let dbid_tbname = DBIdTableName::new(*seq_db_id.data, name_ident.table_name.clone());
-        let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-        if tb_id_seq == 0 {
+        let Some(seq_table_id) = self.get_pb(&dbid_tbname).await? else {
             return Err(KVAppError::AppError(AppError::UnknownTable(
                 UnknownTable::new(&name_ident.table_name, "resolve_table_id"),
             )));
-        }
-        Ok(table_id)
+        };
+        Ok(seq_table_id.data.table_id)
     }
 
     #[logcall::logcall]

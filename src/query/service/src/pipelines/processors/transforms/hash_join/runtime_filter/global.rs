@@ -44,6 +44,5 @@ pub async fn get_global_runtime_filter_packet(
         settings.get_inlist_runtime_filter_threshold()? as usize,
         settings.get_bloom_runtime_filter_threshold()? as usize,
         settings.get_min_max_runtime_filter_threshold()? as usize,
-        settings.get_spatial_runtime_filter_threshold()? as usize,
     )
 }

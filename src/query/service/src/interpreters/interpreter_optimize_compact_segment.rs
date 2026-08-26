@@ -68,14 +68,22 @@ impl Interpreter for OptimizeCompactSegmentInterpreter {
                 self.plan.branch.as_deref(),
             )
             .await?;
-        // check mutability
-        table.check_mutable()?;
+        table.check_mutable_or_materialized_view()?;
 
+        let mut build_res = PipelineBuildResult::create();
         table
-            .compact_segments(self.ctx.clone(), self.plan.num_segment_limit)
+            .compact_segments(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                self.plan.num_segment_limit,
+            )
             .await?;
 
-        drop(lock_guard);
-        Ok(PipelineBuildResult::create())
+        if build_res.main_pipeline.is_empty() {
+            drop(lock_guard);
+        } else {
+            build_res.main_pipeline.add_lock_guard(lock_guard);
+        }
+        Ok(build_res)
     }
 }

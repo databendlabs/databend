@@ -77,6 +77,8 @@ pub trait TableContextPartitionStats: Send + Sync {
         unimplemented!()
     }
 
+    fn clear_pruned_partitions_stats(&self) {}
+
     fn merge_pruned_partitions_stats(&self, _other: &HashMap<u32, PartStatistics>) {
         unimplemented!()
     }

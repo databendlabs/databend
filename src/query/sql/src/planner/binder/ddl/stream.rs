@@ -17,6 +17,8 @@ use databend_common_ast::ast::DescribeStreamStmt;
 use databend_common_ast::ast::DropStreamStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowStreamsStmt;
+use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -163,7 +165,10 @@ impl Binder {
                 .with_column("has_data");
         } else {
             select_builder
-                .with_column(format!("name AS `Streams_in_{database}`"))
+                .with_column(format!(
+                    "name AS {}",
+                    QuotedIdent(format!("Streams_in_{database}"), '`')
+                ))
                 .with_column("table_name As table_on")
                 .with_column("mode");
         }
@@ -173,15 +178,16 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
         if let Some(catalog) = catalog {
             let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
-            select_builder.with_filter(format!("catalog = '{catalog}'"));
+            select_builder.with_filter(format!("catalog = {}", QuotedString(catalog, '\'')));
         }
         if let Some(limit) = limit {
             match limit {
                 ShowLimit::Like { pattern } => {
-                    select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                    select_builder
+                        .with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
                 }
                 ShowLimit::Where { selection } => {
                     select_builder.with_filter(format!("({selection})"));
@@ -230,9 +236,9 @@ impl Binder {
             .with_column("mode")
             .with_column("invalid_reason")
             .with_column("has_data");
-        select_builder.with_filter(format!("catalog = '{catalog}'"));
-        select_builder.with_filter(format!("database = '{database}'"));
-        select_builder.with_filter(format!("name = '{stream}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&catalog, '\'')));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
+        select_builder.with_filter(format!("name = {}", QuotedString(&stream, '\'')));
         let query = select_builder.build();
         self.bind_rewrite_to_query(
             bind_context,

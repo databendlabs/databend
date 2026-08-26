@@ -21,6 +21,21 @@ use databend_common_exception::Result;
 use log::info;
 use opendal::Operator;
 
+/// Deduplicate a list of file locations in place.
+/// Returns (number_of_duplicates_removed, up_to_5_sample_duplicate_paths).
+pub fn dedup_file_locations(locations: &mut Vec<String>) -> (usize, Vec<String>) {
+    let len_before = locations.len();
+    locations.sort_unstable();
+    let dup_samples: Vec<String> = locations
+        .windows(2)
+        .filter(|w| w[0] == w[1])
+        .map(|w| w[0].clone())
+        .take(5)
+        .collect();
+    locations.dedup();
+    (len_before - locations.len(), dup_samples)
+}
+
 // File related operations.
 pub struct Files {
     ctx: Arc<dyn TableContext>,
@@ -40,16 +55,57 @@ impl Files {
         &self,
         file_locations: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Result<()> {
-        let locations = Vec::from_iter(file_locations.into_iter().map(|v| v.as_ref().to_string()));
+        let mut locations: Vec<String> = file_locations
+            .into_iter()
+            .map(|v| v.as_ref().trim_start_matches('/').to_string())
+            .filter(|v| !v.is_empty())
+            .collect();
 
         if locations.is_empty() {
             return Ok(());
         }
 
-        // adjusts batch_size according to the `max_threads` settings,
-        // limits its min/max value to 1 and 1000.
+        // Deduplicate: opendal's Deleter uses a HashSet internally but tracks size by
+        // insertion count. Duplicates cause cur_size to diverge from the buffer, making
+        // Deleter::close() loop forever.
+        let (duplicates, dup_samples) = dedup_file_locations(&mut locations);
+        if duplicates > 0 {
+            info!(
+                "remove_file_in_batch: deduplicated {} entries ({} -> {}), duplicate samples: {:?}",
+                duplicates,
+                duplicates + locations.len(),
+                locations.len(),
+                dup_samples
+            );
+        }
+
+        // Number of object keys deleted per outer chunk. Kept independent of `max_threads`:
+        // a single batch-delete request (e.g. S3 DeleteObjects) costs one request regardless
+        // of key count, so a larger chunk means fewer requests, which is strictly better for
+        // both throughput and request-rate limits. Runtime-tunable via `storage_delete_batch_size`.
+        //
+        // The chunk size is capped by the backend's batch-delete capability
+        // (`delete_max_size`, e.g. S3 1000, Azure 256, GCS 100). Chunking above that limit
+        // would let opendal's `Deleter` flush backend-sized sub-batches *serially* inside a
+        // single `delete_files` future, bypassing `execute_futures_in_parallel` and losing
+        // the `permit` concurrency those backends still need. Capping at the backend limit
+        // keeps one request per chunk and preserves cross-chunk parallelism.
+        //
+        // Backends that advertise no batch-delete capability (`delete_max_size` unset, e.g.
+        // the `fs` service) delete one key per request; opendal's `Deleter` treats the missing
+        // capability as `max_size = 1`. Mirror that with `unwrap_or(1)` so such backends are
+        // chunked into single-key tasks that run at `permit` concurrency, rather than collapsing
+        // into one future that deletes serially.
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let batch_size = (locations.len() / threads_nums).clamp(1, 1000);
+        let backend_delete_limit = self
+            .operator
+            .info()
+            .full_capability()
+            .delete_max_size
+            .unwrap_or(1)
+            .max(1);
+        let batch_size = (self.ctx.get_settings().get_storage_delete_batch_size()? as usize)
+            .clamp(1, backend_delete_limit);
 
         info!(
             "remove file in batch, batch_size: {}, number of chunks {}",
@@ -90,12 +146,6 @@ impl Files {
     #[async_backtrace::framed]
     async fn delete_files(op: Operator, locations: Vec<String>) -> Result<()> {
         let start = Instant::now();
-        // temporary fix for https://github.com/datafuselabs/databend/issues/13804
-        let locations = locations
-            .into_iter()
-            .map(|loc| loc.trim_start_matches('/').to_owned())
-            .filter(|loc| !loc.is_empty())
-            .collect::<Vec<_>>();
         info!("deleting files {:?}", &locations);
         let num_of_files = locations.len();
 

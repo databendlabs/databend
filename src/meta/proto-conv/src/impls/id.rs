@@ -32,11 +32,11 @@ impl FromToProto for mt::id_generator::IdGeneratorValue {
         Ok(Self)
     }
 
-    fn to_pb(&self) -> Result<pb::EmptyProto, Incompatible> {
-        Ok(pb::EmptyProto {
+    fn to_pb(&self) -> pb::EmptyProto {
+        pb::EmptyProto {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-        })
+        }
     }
 }
 
@@ -55,8 +55,8 @@ where R: TenantResource + Sync + Send
         Ok(p)
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(*self)
+    fn to_pb(&self) -> Self::PB {
+        *self
     }
 }
 
@@ -73,8 +73,8 @@ impl FromToProto for mt::schema::DatabaseId {
         Ok(Self::new(*p))
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(mt::value_id::ValueId::new(self.db_id))
+    fn to_pb(&self) -> Self::PB {
+        mt::value_id::ValueId::new(self.db_id)
     }
 }
 
@@ -91,8 +91,8 @@ impl FromToProto for mt::schema::TableId {
         Ok(Self::new(*p))
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(mt::value_id::ValueId::new(self.table_id))
+    fn to_pb(&self) -> Self::PB {
+        mt::value_id::ValueId::new(self.table_id)
     }
 }
 
@@ -111,8 +111,8 @@ where T: Sync + Send
         Ok(p)
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(*self)
+    fn to_pb(&self) -> Self::PB {
+        *self
     }
 }
 
@@ -126,9 +126,8 @@ mod tests {
 
     fn assert_json_u64_round_trip<T>(value: T, id: u64)
     where T: FromToProto + Debug + PartialEq {
-        let pb = value.to_pb().unwrap();
-        let mut buf = Vec::new();
-        pb.encode(&mut buf).unwrap();
+        let pb = value.to_pb();
+        let buf = pb.encode_to_vec();
 
         assert_eq!(buf, id.to_string().as_bytes());
 

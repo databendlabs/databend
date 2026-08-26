@@ -41,7 +41,7 @@ fn test_decode_v136_add_task() -> anyhow::Result<()> {
     let want = || mt::Task {
         task_id: 11,
         task_name: "task_c".to_string(),
-        query_text: "SELECT * FROM t1".to_string(),
+        task_sql: mt::TaskSql::Sql("SELECT * FROM t1".to_string()),
         when_condition: Some("c1 > 1".to_string()),
         after: vec!["task_a".to_string(), "task_b".to_string()],
         comment: Some("comment".to_string()),
@@ -78,7 +78,7 @@ fn test_decode_v136_task_message() -> anyhow::Result<()> {
     let want_task = || mt::Task {
         task_id: 11,
         task_name: "task_c".to_string(),
-        query_text: "SELECT * FROM t1".to_string(),
+        task_sql: mt::TaskSql::Sql("SELECT * FROM t1".to_string()),
         when_condition: Some("c1 > 1".to_string()),
         after: vec!["task_a".to_string(), "task_b".to_string()],
         comment: Some("comment".to_string()),
@@ -185,7 +185,7 @@ fn test_decode_v136_task_message() -> anyhow::Result<()> {
             vec![26, 6, 116, 97, 115, 107, 95, 99, 160, 6, 136, 1, 168, 6, 24];
         let want_delete = || {
             let task = want_task();
-            mt::TaskMessage::DeleteTask(task.task_name, None)
+            mt::TaskMessage::DeleteTask(task.task_name, None, None)
         };
 
         common::test_pb_from_to(func_name!(), want_delete())?;

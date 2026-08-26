@@ -5,7 +5,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a.b (c integer not null 1, b float(10))
-  | ------                               ^ unexpected `1`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `AUTOINCREMENT`, `IDENTITY`, `COMMENT`, `STATS_TRUNCATE_LEN`, or `,`
+  | ------                               ^ unexpected `1`, expecting `)`
   | |                                     
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -27,7 +27,7 @@ error:
   --> SQL:1:24
   |
 1 | create table a (c float(10))
-  | ------                 ^ unexpected `(`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `AUTOINCREMENT`, `IDENTITY`, `COMMENT`, `STATS_TRUNCATE_LEN`, or `,`
+  | ------                 ^ unexpected `(`, expecting `)`
   | |                       
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -94,8 +94,10 @@ error:
   --> SQL:1:55
   |
 1 | create table a (c1 decimal(38), c2 int) partition by ();
-  | ------                                                ^ unexpected `)`, expecting <Ident>, <LiteralString>, or `IDENTIFIER`
-  | |                                                      
+  | ------                                                ^
+  | |                                                     |
+  | |                                                     unexpected `)`, expecting <Ident>, <LiteralString>, `IDENTIFIER`, <LiteralCodeString>, <LiteralInteger>, <LiteralFloat>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, `FALSE`, or `NULL`
+  | |                                                     while parsing expression
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -106,7 +108,7 @@ error:
   --> SQL:1:138
   |
 1 | CREATE TABLE t(c1 int, c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"=33554432);
-  | ------                                                                                                                                   ^^^^^^^^ unexpected `33554432`, expecting `)` or <LiteralString>
+  | ------                                                                                                                                   ^^^^^^^^ unexpected `33554432`, expecting <LiteralString>
   | |                                                                                                                                         
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -182,7 +184,7 @@ error:
   --> SQL:1:21
   |
 1 | truncate table a.b.c.d
-  |                     ^ unexpected `.`, expecting `/`, `FORMAT`, or `;`
+  |                     ^ unexpected `.`, expecting end of input
 
 
 ---------- Input ----------
@@ -217,7 +219,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `CATALOG`, `SPATIAL`, `MASKING`, `DATABASE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `WORKER`, `WORKLOAD`, `SCHEMA`, `DICTIONARY`, `VIEW`, `INVERTED`, `NGRAM`, `VECTOR`, `STAGE`, `TAG`, `FILE`, `PIPE`, `NOTIFICATION`, `CONNECTION`, `ROW`, `USER`, `ROLE`, `FUNCTION`, `NETWORK`, `PROCEDURE`, `STREAM`, or `SEQUENCE`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `CATALOG`, `SPATIAL`, `MASKING`, `DATABASE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `MATERIALIZED`, `WORKER`, `WORKLOAD`, `SCHEMA`, `DICTIONARY`, `VIEW`, `INVERTED`, `NGRAM`, `VECTOR`, `STAGE`, `TAG`, `FILE`, `PIPE`, `NOTIFICATION`, `CONNECTION`, `ROW`, `USER`, `ROLE`, `FUNCTION`, `NETWORK`, `PROCEDURE`, `STREAM`, or `SEQUENCE`
 
 
 ---------- Input ----------
@@ -227,7 +229,7 @@ error:
   --> SQL:1:15
   |
 1 | insert into t format
-  | ------        ^^^^^^ unexpected `format`. it's reserved keyword, you may avoid using it, expecting `FROM`, `ORDER`, `LIMIT`, `OFFSET`, `IGNORE_RESULT`, `WITH`, `VALUES`, `EXCEPT`, `SELECT`, `INTERSECT`, `(`, `UNION`, `.`, or `/`
+  | ------        ^^^^^^ unexpected `format`. it's reserved keyword, you may avoid using it, expecting `FROM`, `ORDER`, `LIMIT`, `OFFSET`, `IGNORE_RESULT`, `WITH`, `VALUES`, `EXCEPT`, `SELECT`, `INTERSECT`, `(`, or `UNION`
   | |              
   | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (VALUES <values> | <query>)`
 
@@ -249,7 +251,7 @@ error:
   --> SQL:1:23
   |
 1 | alter database system x rename to db
-  |                       ^ unexpected `x`, expecting `SET`, `UNSET`, `RENAME`, `REFRESH`, or `.`
+  |                       ^ unexpected `x`, expecting `SET`, `UNSET`, `RENAME`, or `REFRESH`
 
 
 ---------- Input ----------
@@ -259,7 +261,7 @@ error:
   --> SQL:1:33
   |
 1 | create user 'test-e' identified bi 'password';
-  |                                 ^^ unexpected `bi`, expecting `BY`, `WITH`, `FORMAT`, or `;`
+  |                                 ^^ unexpected `bi`, expecting end of input
 
 
 ---------- Input ----------
@@ -269,7 +271,7 @@ error:
   --> SQL:1:22
   |
 1 | create user 'test-e'@'localhost' identified by 'password';
-  | ------               ^^^^^^^^^^^ unexpected `'localhost'`, expecting `'%'` or `IDENTIFIED`
+  | ------               ^^^^^^^^^^^ unexpected `'localhost'`, expecting `'%'`
   | |                     
   | while parsing `CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`
 
@@ -281,7 +283,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expecting `USER`, `STREAM`, `STAGE`, `SPATIAL`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `TAG`, `ROLE`, `TABLE`, `WORKER`, `SCHEMA`, `VECTOR`, `CATALOG`, `NETWORK`, `WORKLOAD`, `DATABASE`, `INVERTED`, `FUNCTION`, `PROCEDURE`, `TASK`, `NOTIFICATION`, `NGRAM`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, `CONNECTION`, or `ROW`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `STREAM`, `STAGE`, `SPATIAL`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `MATERIALIZED`, `TAG`, `ROLE`, `TABLE`, `WORKER`, `SCHEMA`, `VECTOR`, `CATALOG`, `NETWORK`, `WORKLOAD`, `DATABASE`, `INVERTED`, `FUNCTION`, `PROCEDURE`, `TASK`, `NOTIFICATION`, `NGRAM`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, `CONNECTION`, or `ROW`
 
 
 ---------- Input ----------
@@ -291,7 +293,7 @@ error:
   --> SQL:1:21
   |
 1 | alter user 'test-e' identifies by 'new-password';
-  |                     ^^^^^^^^^^ unexpected `identifies`, expecting `IDENTIFIED`, `SET`, `WITH`, `UNSET`, `FORMAT`, `@`, or `;`
+  |                     ^^^^^^^^^^ unexpected `identifies`, expecting end of input
 
 
 ---------- Input ----------
@@ -301,7 +303,7 @@ error:
   --> SQL:1:19
   |
 1 | create role 'test'@'%';
-  |                   ^ unexpected `@`, expecting `COMMENT`, `FORMAT`, or `;`
+  |                   ^ unexpected `@`, expecting end of input
 
 
 ---------- Input ----------
@@ -311,7 +313,7 @@ error:
   --> SQL:1:17
   |
 1 | drop role 'test'@'%';
-  |                 ^ unexpected `@`, expecting `FORMAT` or `;`
+  |                 ^ unexpected `@`, expecting end of input
 
 
 ---------- Input ----------
@@ -391,7 +393,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`. it's reserved keyword, you may avoid using it, expecting `GRANTS`, `CREATE`, `BRANCHES`, `VIRTUAL`, `NETWORK`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `TAGS`, `DROP`, `TASKS`, `TABLE`, `ROLES`, `ONLINE`, `INDEXES`, `WORKERS`, `COLUMNS`, `WORKLOAD`, `PASSWORD`, `SEQUENCES`, `PROCEDURES`, `PROCESSLIST`, `STAGES`, `TABLES`, `DICTIONARIES`, `METRICS`, `ENGINES`, `SETTINGS`, `VARIABLES`, `WAREHOUSES`, `STATISTICS`, `USER`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `PUBLIC`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`. it's reserved keyword, you may avoid using it, expecting `GRANTS`, `CREATE`, `BRANCHES`, `VIRTUAL`, `NETWORK`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `MATERIALIZED`, `TABLE_FUNCTIONS`, `TAGS`, `DROP`, `TASKS`, `TABLE`, `ROLES`, `ONLINE`, `INDEXES`, `WORKERS`, `COLUMNS`, `WORKLOAD`, `PASSWORD`, `SEQUENCES`, `PROCEDURES`, `PROCESSLIST`, `STAGES`, `TABLES`, `DICTIONARIES`, `METRICS`, `ENGINES`, `SETTINGS`, `VARIABLES`, `WAREHOUSES`, `STATISTICS`, `USER`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `PUBLIC`, or `FILE`
 
 
 ---------- Input ----------
@@ -401,7 +403,7 @@ error:
   --> SQL:1:31
   |
 1 | GRANT ROLE 'test' TO ROLE test-user;
-  |                               ^ unexpected `-`, expecting `FORMAT` or `;`
+  |                               ^ unexpected `-`, expecting end of input
 
 
 ---------- Input ----------
@@ -424,8 +426,10 @@ error:
   --> SQL:1:27
   |
 1 | GRANT SELECT, CREATE ON *.c TO 'test-grant';
-  | -----                     ^ unexpected `c`, expecting `TO` or `*`
-  | |                          
+  | ----- ------            - ^ unexpected `c`, expecting `*`
+  | |     |                 |  
+  | |     |                 while parsing * | *.*
+  | |     while parsing <privileges> ON <privileges_level>
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
 
 
@@ -462,7 +466,7 @@ error:
   --> SQL:1:28
   |
 1 | REVOKE SELECT, CREATE ON * TO 'test-grant';
-  | ------                     ^^ unexpected `TO`. it's reserved keyword, you may avoid using it, expecting `FROM` or `.`
+  | ------                     ^^ unexpected `TO`. it's reserved keyword, you may avoid using it, expecting `FROM`
   | |                           
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -474,7 +478,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CONECTION= ();
-  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
+  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting end of input
 
 
 ---------- Input ----------
@@ -484,7 +488,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CONNECTION = ();
-  |                                 ^^^^^^^^^^ unexpected `CONNECTION`. it's reserved keyword, you may avoid using it, expecting `ON_ERROR`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
+  |                                 ^^^^^^^^^^ unexpected `CONNECTION`. it's reserved keyword, you may avoid using it, expecting end of input
 
 
 ---------- Input ----------
@@ -494,7 +498,13 @@ error:
   --> SQL:1:49
   |
 1 | COPY INTO @stage/path FROM mytable PARTITION BY concat('p=', id);
-  |                                                 ^^^^^^ unexpected `concat`, expecting `(`
+  | ----                                            ^^^^^^ unexpected `concat`, expecting `(`
+  | |                                                
+  | while parsing `COPY
+                INTO { @<stage_name>[/<path>]  | '<uri>' }
+                FROM { [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ copyOptions ]`
 
 
 ---------- Input ----------
@@ -516,7 +526,7 @@ error:
   --> SQL:1:19
   |
 1 | CALL system$test(a
-  | ----              ^ unexpected end of input, expecting `)` or `,`
+  | ----              ^ unexpected end of input, expecting `)`
   | |                 
   | while parsing `CALL <procedure_name>(<parameter>, ...)`
 
@@ -538,7 +548,7 @@ error:
   --> SQL:1:9
   |
 1 | PRESIGN INVALID @my_stage/path/to/file
-  | ------- ^^^^^^^ unexpected `INVALID`, expecting `DOWNLOAD`, <LiteralString>, `UPLOAD`, or `LiteralAtString`
+  | ------- ^^^^^^^ unexpected `INVALID`, expecting <LiteralString> or `LiteralAtString`
   | |        
   | while parsing `PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`
 
@@ -572,7 +582,9 @@ error:
   --> SQL:1:12
   |
 1 | SELECT c a as FROM t
-  |            ^^ an alias without `AS` keyword has already been defined before this one, please remove one of them
+  | ------     ^^ an alias without `AS` keyword has already been defined before this one, please remove one of them
+  | |           
+  | while parsing `SELECT ...`
 
 
 ---------- Input ----------
@@ -582,7 +594,9 @@ error:
   --> SQL:1:12
   |
 1 | SELECT c a as b FROM t
-  |            ^^ an alias without `AS` keyword has already been defined before this one, please remove one of them
+  | ------     ^^ an alias without `AS` keyword has already been defined before this one, please remove one of them
+  | |           
+  | while parsing `SELECT ...`
 
 
 ---------- Input ----------
@@ -618,7 +632,7 @@ error:
   --> SQL:1:35
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS a, b
-  |                                   ^^^^ unexpected `SETS`, expecting `SELECT`, `INTERSECT`, `WITH`, `EXCEPT`, `VALUES`, `OFFSET`, `IGNORE_RESULT`, `,`, `HAVING`, `WINDOW`, `QUALIFY`, `(`, `UNION`, `FROM`, `ORDER`, `LIMIT`, `FORMAT`, or `;`
+  |                                   ^^^^ unexpected `SETS`, expecting end of input
 
 
 ---------- Input ----------
@@ -628,7 +642,7 @@ error:
   --> SQL:1:41
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS ()
-  | ------                                  ^ expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...
+  | ------                                  ^ unexpected `)`, expecting `(`, <Ident>, <LiteralString>, `IDENTIFIER`, <LiteralCodeString>, <LiteralInteger>, <LiteralFloat>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, `FALSE`, or `NULL`
   | |                                        
   | while parsing `SELECT ...`
 
@@ -736,7 +750,9 @@ error:
   --> SQL:1:25
   |
 1 | create sequence s start x'10'
-  |                         ^^^^^ unexpected `x'10'`, expecting `WITH`, `=`, <LiteralInteger>, or <MySQLLiteralHex>
+  | ------                  ^^^^^ unexpected `x'10'`, expecting <LiteralInteger> or <MySQLLiteralHex>
+  | |                        
+  | while parsing `CREATE [OR REPLACE] SEQUENCE [IF NOT EXISTS] <sequence_name> [START = <initial_value>] [INCREMENT = <sequence_interval>] [COMMENT = '<string_literal>']`
 
 
 ---------- Input ----------
@@ -758,7 +774,7 @@ error:
   --> SQL:1:6
   |
 1 | with as t2(tt) as (select a from t) select t2.tt from t2
-  |      ^^ unexpected `as`. it's reserved keyword, you may avoid using it, expecting <LiteralString>, <Ident>, `IDENTIFIER`, or `RECURSIVE`
+  |      ^^ unexpected `as`. it's reserved keyword, you may avoid using it, expecting <LiteralString>, <Ident>, or `IDENTIFIER`
 
 
 ---------- Input ----------
@@ -775,7 +791,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -788,7 +804,7 @@ error:
   --> SQL:1:57
   |
 1 | select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')
-  | ------                                                  ^^^^^^^ unexpected `bad_arg`, expecting `PATTERN`, `FILE_FORMAT`, `CASE_SENSITIVE`, `)`, `,`, `FILES`, or `CONNECTION`
+  | ------                                                  ^^^^^^^ unexpected `bad_arg`, expecting `)`
   | |                                                        
   | while parsing `SELECT ...`
 
@@ -807,7 +823,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -827,7 +843,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -847,7 +863,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -867,7 +883,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -887,7 +903,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -907,7 +923,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -927,7 +943,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -950,7 +966,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -1081,7 +1097,7 @@ error:
   --> SQL:1:85
   |
 1 | CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';
-  | ------                 -                                                            ^^^^^^^ unexpected `HANDLER`, expecting `HEADERS`, `ADDRESS`, `PACKAGES`, `AS`, or `IMPORTS`
+  | ------                 -                                                            ^^^^^^^ unexpected `HANDLER`, expecting `ADDRESS` or `AS`
   | |                      |                                                             
   | |                      while parsing (<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
@@ -1094,8 +1110,9 @@ error:
   --> SQL:1:40
   |
 1 | CREATE FUNCTION my_agg (INT) STATE { s STRIN } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
-  | ------                 -               ^^^^^ unexpected `STRIN`, expecting `STRING`, `SIGNED`, `INTERVAL`, `TINYINT`, `VARIANT`, `SMALLINT`, `TINYBLOB`, `VARBINARY`, `INT8`, `JSON`, `INT16`, `INT32`, `INT64`, `UINT8`, `BIGINT`, `UINT16`, `UINT32`, `UINT64`, `BINARY`, `INTEGER`, `DATETIME`, `NUMERIC`, `TIMESTAMP`, `UNSIGNED`, `STAGE_LOCATION`, `TIMESTAMP_TZ`, `REAL`, `DATE`, `CHAR`, `TEXT`, `ARRAY`, `TUPLE`, `VECTOR`, `BOOLEAN`, `DECIMAL`, `VARCHAR`, `LONGBLOB`, `NULLABLE`, `CHARACTER`, `GEOGRAPHY`, `MEDIUMBLOB`, `BITMAP`, `}`, `BOOL`, `INT`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `MAP`, `BLOB`, or `GEOMETRY`
-  | |                      |                
+  | ------                 -             - ^^^^^ unexpected `STRIN`, expecting `STRING`, `SIGNED`, `INTERVAL`, `TINYINT`, `VARIANT`, `SMALLINT`, `TINYBLOB`, `VARBINARY`, `INT8`, `JSON`, `INT16`, `INT32`, `INT64`, `UINT8`, `BIGINT`, `UINT16`, `UINT32`, `UINT64`, `BINARY`, `INTEGER`, `DATETIME`, `NUMERIC`, `TIMESTAMP`, `UNSIGNED`, `STAGE_LOCATION`, `TIMESTAMP_TZ`, `REAL`, `DATE`, `CHAR`, `TEXT`, `ARRAY`, `TUPLE`, `VECTOR`, `BOOLEAN`, `DECIMAL`, `VARCHAR`, `LONGBLOB`, `NULLABLE`, `CHARACTER`, `GEOGRAPHY`, `MEDIUMBLOB`, `BITMAP`, `BOOL`, `INT`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `MAP`, `BLOB`, or `GEOMETRY`
+  | |                      |             |  
+  | |                      |             while parsing `<state name> <type>`
   | |                      while parsing (<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
 
@@ -1107,7 +1124,7 @@ error:
   --> SQL:1:12
   |
 1 | drop table :a
-  | ----       ^ unexpected `:`, expecting <Ident>, <LiteralString>, `IDENTIFIER`, or `IF`
+  | ----       ^ unexpected `:`, expecting <Ident>, <LiteralString>, or `IDENTIFIER`
   | |           
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
@@ -1119,7 +1136,7 @@ error:
   --> SQL:1:23
   |
 1 | drop table IDENTIFIER(a)
-  | ----                  ^ unexpected `a`, expecting `IdentVariable` or `:`
+  | ----                  ^ unexpected `a`, expecting `IdentVariable`
   | |                      
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
@@ -1143,7 +1160,10 @@ error:
   --> SQL:1:16
   |
 1 | SHOW GRANTS ON task t1;
-  |                ^^^^ unexpected `task`. it's reserved keyword, you may avoid using it, expecting `MASKING`, `STAGE`, `TABLE`, `SEQUENCE`, `WAREHOUSE`, `DATABASE`, `UDF`, `CONNECTION`, `PROCEDURE`, or `ROW`
+  | ----        -- ^^^^ unexpected `task`. it's reserved keyword, you may avoid using it, expecting `MASKING`, `STAGE`, `TABLE`, `SEQUENCE`, `WAREHOUSE`, `DATABASE`, `UDF`, `CONNECTION`, `PROCEDURE`, or `ROW`
+  | |           |   
+  | |           while parsing ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> | CONNECTION <connection_name> | SEQUENCE <seq_name> | MASKING POLICY <policy_name> | ROW ACCESS POLICY <policy_name> }
+  | while parsing `SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`
 
 
 ---------- Input ----------
@@ -1299,14 +1319,14 @@ error:
   --> SQL:1:51
   |
 1 | copy into t1 from (select a from @data/not_exists where a = 1)
-  | ----                                              ^^^^^ unexpected `where`. it's reserved keyword, you may avoid using it, expecting `IDENTIFIER`, <LiteralString>, <Ident>, `)`, or `AS`
+  | ----                                              ^^^^^ unexpected `where`. it's reserved keyword, you may avoid using it, expecting `)`
   | |                                                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -1319,6 +1339,6 @@ error:
   --> SQL:1:35
   |
 1 | /*SELECT * FROM t; /* old query */more code here*/ select 1;
-  |                                   ^^^^ expecting SQL statement
+  |                                   ^^^^ unexpected `more`, expecting `REMOVE`, `MERGE`, `REPORT`, `REVOKE`, `ABORT`, <LParen>, `COMMENT`, `CREATE`, `RENAME`, `RESUME`, `REPLACE`, `REFRESH`, `PRESIGN`, <HintPrefix>, `USE`, `SET`, `SHOW`, `COPY`, `DESC`, `UNSET`, `BEGIN`, `GRANT`, `ALTER`, `SELECT`, `VALUES`, `SYSTEM`, `DELETE`, `UPDATE`, `EXISTS`, `UNDROP`, `EXPLAIN`, `EXECUTE`, `SUSPEND`, `INSPECT`, `SETTINGS`, `TRUNCATE`, `OPTIMIZE`, `FROM`, `DROP`, `INSERT`, `COMMIT`, `ROLLBACK`, `DESCRIBE`, `WITH`, `CATALOG`, `KILL`, `VACUUM`, `ANALYZE`, `ATTACH`, `LIST`, or `CALL`
 
 

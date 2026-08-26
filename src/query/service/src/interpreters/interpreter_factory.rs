@@ -16,11 +16,13 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::plans::Mutation;
 use log::error;
+use log::warn;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
@@ -157,6 +159,18 @@ impl InterpreterFactory {
         let mut access_logger = AccessLogger::create(ctx.clone());
         access_logger.log(plan);
         access_logger.output();
+
+        if lineage_enabled() {
+            match plan.query_lineage() {
+                Ok(lineage) => ctx.attach_query_lineage(lineage),
+                Err(err) => {
+                    warn!("Failed to extract query lineage: {:?}", err);
+                    ctx.attach_query_lineage(None);
+                }
+            }
+        } else {
+            ctx.attach_query_lineage(None);
+        }
         Self::get_warehouses_interpreter(ctx, plan, Self::get_inner)
     }
 
@@ -427,6 +441,12 @@ impl InterpreterFactory {
             Plan::AlterTableClusterKey(alter_table_cluster_key) => Ok(Arc::new(
                 AlterTableClusterKeyInterpreter::try_create(ctx, *alter_table_cluster_key.clone())?,
             )),
+            Plan::AlterTablePartitionBy(alter_table_partition_by) => {
+                Ok(Arc::new(AlterTablePartitionByInterpreter::try_create(
+                    ctx,
+                    *alter_table_partition_by.clone(),
+                )?))
+            }
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
@@ -521,6 +541,23 @@ impl InterpreterFactory {
                 ctx,
                 *describe_view.clone(),
             )?)),
+            Plan::RefreshLineage(refresh_lineage) => Ok(Arc::new(
+                RefreshLineageInterpreter::try_create(ctx, *refresh_lineage.clone())?,
+            )),
+
+            // Materialized Views
+            Plan::CreateMaterializedView(create_view) => Ok(Arc::new(
+                CreateMaterializedViewInterpreter::try_create(ctx, *create_view.clone())?,
+            )),
+            Plan::DropMaterializedView(drop_view) => Ok(Arc::new(
+                DropMaterializedViewInterpreter::try_create(ctx, *drop_view.clone())?,
+            )),
+            Plan::RefreshMaterializedView(refresh_view) => Ok(Arc::new(
+                RefreshMaterializedViewInterpreter::try_create(ctx, *refresh_view.clone())?,
+            )),
+            Plan::ShowCreateMaterializedView(plan) => Ok(Arc::new(
+                ShowCreateMaterializedViewInterpreter::try_create(ctx, *plan.clone())?,
+            )),
 
             // Streams
             Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(
@@ -941,4 +978,8 @@ impl InterpreterFactory {
             ))),
         }
     }
+}
+
+fn lineage_enabled() -> bool {
+    GlobalConfig::instance().lineage.enabled()
 }

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -56,7 +57,7 @@ impl Operator for ProjectSet {
         &self,
         rel_expr: &RelExpr,
     ) -> databend_common_exception::Result<Arc<RelationalProperty>> {
-        let child_prop = rel_expr.derive_relational_prop_child(0)?.as_ref().clone();
+        let child_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
         let mut output_columns = child_prop.output_columns.clone();
@@ -66,20 +67,19 @@ impl Operator for ProjectSet {
 
         // Derive used columns
         let mut used_columns = child_prop.used_columns.clone();
+        let mut srf_used_columns = ColumnSet::new();
         for srf in &self.srfs {
-            used_columns.extend(srf.scalar.used_columns());
+            srf.scalar.collect_used_columns(&mut srf_used_columns);
         }
+        used_columns.extend(srf_used_columns.iter().copied());
 
         // Derive outer columns
         let mut outer_columns = child_prop.outer_columns.clone();
-        for srf in &self.srfs {
-            outer_columns.extend(
-                srf.scalar
-                    .used_columns()
-                    .difference(&child_prop.output_columns)
-                    .cloned(),
-            );
-        }
+        outer_columns.extend(
+            srf_used_columns
+                .difference(&child_prop.output_columns)
+                .copied(),
+        );
 
         Ok(Arc::new(RelationalProperty {
             output_columns,

@@ -56,6 +56,7 @@ impl From<Statistics> for crate::meta::Statistics {
             virtual_col_stats: None,
             spatial_stats: None,
             cluster_stats: None,
+            partition_stats: None,
             virtual_block_count: None,
             additional_stats_meta: None,
         }

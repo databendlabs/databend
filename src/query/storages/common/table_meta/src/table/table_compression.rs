@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::ErrorCode;
-use databend_common_native;
 use parquet::basic::Compression as ParquetCompression;
 use parquet::basic::GzipLevel;
 use parquet::basic::ZstdLevel;
@@ -48,18 +47,6 @@ impl TryFrom<&str> for TableCompression {
     }
 }
 
-/// Convert to native Compression.
-impl From<TableCompression> for databend_common_native::CommonCompression {
-    fn from(value: TableCompression) -> Self {
-        match value {
-            TableCompression::None => databend_common_native::CommonCompression::None,
-            TableCompression::LZ4 => databend_common_native::CommonCompression::Lz4,
-            TableCompression::Snappy => databend_common_native::CommonCompression::Snappy,
-            TableCompression::Zstd => databend_common_native::CommonCompression::Zstd,
-        }
-    }
-}
-
 /// Convert to meta Compression.
 impl From<TableCompression> for meta::Compression {
     fn from(value: TableCompression) -> Self {
@@ -81,6 +68,24 @@ impl From<TableCompression> for ParquetCompression {
             TableCompression::LZ4 => ParquetCompression::LZ4_RAW,
             TableCompression::Snappy => ParquetCompression::SNAPPY,
             TableCompression::Zstd => ParquetCompression::ZSTD(ZstdLevel::default()),
+        }
+    }
+}
+
+impl TryFrom<ParquetCompression> for meta::Compression {
+    type Error = ErrorCode;
+
+    fn try_from(value: ParquetCompression) -> Result<Self, Self::Error> {
+        match value {
+            ParquetCompression::UNCOMPRESSED => Ok(meta::Compression::None),
+            ParquetCompression::SNAPPY => Ok(meta::Compression::Snappy),
+            ParquetCompression::GZIP(_) => Ok(meta::Compression::Gzip),
+            ParquetCompression::LZ4 => Ok(meta::Compression::Lz4),
+            ParquetCompression::ZSTD(_) => Ok(meta::Compression::Zstd),
+            ParquetCompression::LZ4_RAW => Ok(meta::Compression::Lz4Raw),
+            compression => Err(ErrorCode::UnknownCompressionType(format!(
+                "unsupported parquet compression: {compression:?}"
+            ))),
         }
     }
 }

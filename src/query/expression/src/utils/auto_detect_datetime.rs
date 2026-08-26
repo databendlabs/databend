@@ -34,9 +34,13 @@ use crate::types::timestamp_tz::string_to_timestamp_tz;
 // AUTO datetime format detection
 // ---------------------------------------------------------------------------
 
-const AUTO_DATE_FORMATS: &[&str] = &["%d-%b-%Y", "%m/%d/%Y"];
+const AUTO_DATE_FORMATS: &[&str] = &["%Y-%m-%d", "%d-%b-%Y", "%m/%d/%Y"];
 
 const AUTO_TS_FORMATS: &[&str] = &[
+    // YYYY-MM-DD, including single-digit month/day when auto-detect is enabled.
+    "%Y-%m-%d %H:%M:%S%.f",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d",
     // DD-MON-YYYY
     "%d-%b-%Y %H:%M:%S%.f",
     "%d-%b-%Y %H:%M:%S",
@@ -237,6 +241,40 @@ pub fn parse_timestamp_tz_with_auto(
                 }
             }
             Err(e)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use jiff::tz::TimeZone;
+
+    use super::parse_date_with_auto;
+    use super::parse_timestamp_with_auto;
+
+    #[test]
+    fn test_parse_non_padded_iso_date_with_auto_detect() {
+        let tz = TimeZone::UTC;
+        let expected = parse_date_with_auto("2027-01-01", &tz, false).unwrap();
+
+        for val in ["2027-1-1", "2027-01-1", "2027-1-01"] {
+            assert_eq!(parse_date_with_auto(val, &tz, true).unwrap(), expected);
+            assert!(parse_date_with_auto(val, &tz, false).is_err());
+        }
+    }
+
+    #[test]
+    fn test_parse_non_padded_iso_timestamp_with_auto_detect() {
+        let tz = TimeZone::UTC;
+        let expected = parse_timestamp_with_auto("2027-01-01 02:03:04", &tz, false).unwrap();
+
+        for val in [
+            "2027-1-1 02:03:04",
+            "2027-01-1 02:03:04",
+            "2027-1-01 02:03:04",
+        ] {
+            assert_eq!(parse_timestamp_with_auto(val, &tz, true).unwrap(), expected);
+            assert!(parse_timestamp_with_auto(val, &tz, false).is_err());
         }
     }
 }

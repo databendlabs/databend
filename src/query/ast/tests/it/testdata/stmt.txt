@@ -916,6 +916,7 @@ Replace(
                                         ],
                                         params: [],
                                         order_by: [],
+                                        filter: None,
                                         window: None,
                                         lambda: None,
                                     },
@@ -1183,6 +1184,7 @@ Explain {
                                             ],
                                             params: [],
                                             order_by: [],
+                                            filter: None,
                                             window: None,
                                             lambda: None,
                                         },
@@ -1969,6 +1971,7 @@ CreateIndex(
                                     ],
                                     params: [],
                                     order_by: [],
+                                    filter: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -2168,6 +2171,7 @@ CreateIndex(
                                     ],
                                     params: [],
                                     order_by: [],
+                                    filter: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -2455,7 +2459,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -2512,7 +2516,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -2584,23 +2588,45 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: Some(
+        partition_by: Some(
             [
-                Identifier {
+                ColumnRef {
                     span: Some(
                         54..56,
                     ),
-                    name: "c1",
-                    quote: None,
-                    ident_type: None,
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    54..56,
+                                ),
+                                name: "c1",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
                 },
-                Identifier {
+                ColumnRef {
                     span: Some(
                         58..60,
                     ),
-                    name: "c2",
-                    quote: None,
-                    ident_type: None,
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    58..60,
+                                ),
+                                name: "c2",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
                 },
             ],
         ),
@@ -2665,7 +2691,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -2719,7 +2745,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -2788,7 +2814,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -2799,7 +2825,7 @@ CreateTable(
 ---------- Input ----------
 create table cluster_tbl (a int, b int) cluster by (a, b)
 ---------- Output ---------
-CREATE TABLE cluster_tbl (a Int32, b Int32) CLUSTER BY LINEAR(a, b)
+CREATE TABLE cluster_tbl (a Int32, b Int32) CLUSTER BY (a, b)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2901,7 +2927,7 @@ CreateTable(
             },
         ),
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -2992,7 +3018,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -3083,7 +3109,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: Some(
             Query {
@@ -3341,7 +3367,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -3450,7 +3476,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -3533,7 +3559,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -3677,6 +3703,7 @@ CreateTable(
                                         ],
                                         params: [],
                                         order_by: [],
+                                        filter: None,
                                         window: None,
                                         lambda: None,
                                     },
@@ -3697,7 +3724,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -3837,7 +3864,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -3951,7 +3978,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -4065,7 +4092,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -4128,7 +4155,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -4175,7 +4202,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -4252,7 +4279,7 @@ CreateTable(
         ),
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -5304,6 +5331,7 @@ Query(
                                 args: [],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -5624,7 +5652,7 @@ CreateTable(
             "compression": "zstd",
             "storage_format": "native",
         },
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -5855,7 +5883,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -7316,6 +7344,85 @@ AnalyzeTable(
             branch: None,
         },
         no_scan: true,
+        histogram_options: None,
+    },
+)
+
+
+---------- Input ----------
+analyze table test_db.test with histogram;
+---------- Output ---------
+ANALYZE TABLE test_db.test WITH HISTOGRAM
+---------- AST ------------
+AnalyzeTable(
+    AnalyzeTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    14..21,
+                ),
+                name: "test_db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                22..26,
+            ),
+            name: "test",
+            quote: None,
+            ident_type: None,
+        },
+        no_scan: false,
+        histogram_options: Some(
+            AnalyzeHistogramOptions {
+                algorithm: None,
+                error_rate: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+analyze table test_db.test with histogram algorithm = 'kll_full', error_rate = 0.01;
+---------- Output ---------
+ANALYZE TABLE test_db.test WITH HISTOGRAM ALGORITHM = 'kll_full', ERROR_RATE = 0.01
+---------- AST ------------
+AnalyzeTable(
+    AnalyzeTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    14..21,
+                ),
+                name: "test_db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                22..26,
+            ),
+            name: "test",
+            quote: None,
+            ident_type: None,
+        },
+        no_scan: false,
+        histogram_options: Some(
+            AnalyzeHistogramOptions {
+                algorithm: Some(
+                    "kll_full",
+                ),
+                error_rate: Some(
+                    0.01,
+                ),
+            },
+        ),
     },
 )
 
@@ -7480,7 +7587,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -7570,7 +7677,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -7639,7 +7746,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -7704,7 +7811,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -7735,7 +7842,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: Some(
             Query {
@@ -7877,7 +7984,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -7946,7 +8053,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -8813,6 +8920,7 @@ Query(
                                     ),
                                 ),
                             ],
+                            filter: None,
                             window: None,
                         },
                         alias: None,
@@ -14073,6 +14181,7 @@ Query(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -14117,6 +14226,7 @@ Query(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -14198,6 +14308,7 @@ Query(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -16032,6 +16143,7 @@ Query(
                                         ],
                                         params: [],
                                         order_by: [],
+                                        filter: None,
                                         window: None,
                                         lambda: None,
                                     },
@@ -16156,6 +16268,7 @@ Query(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -16844,7 +16957,7 @@ OptimizeTable(
 ---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
-ALTER TABLE t CLUSTER BY LINEAR(c1)
+ALTER TABLE t CLUSTER BY (c1)
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -16898,6 +17011,90 @@ AlterTable(
                     },
                 ],
             },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t PARTITION BY (date_trunc(day, c1), c2);
+---------- Output ---------
+ALTER TABLE t PARTITION BY (DATE_TRUNC(DAY, c1), c2)
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: AlterTablePartitionBy {
+            partition_by: [
+                DateTrunc {
+                    span: Some(
+                        28..47,
+                    ),
+                    unit: Day,
+                    date: ColumnRef {
+                        span: Some(
+                            44..46,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        44..46,
+                                    ),
+                                    name: "c1",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                },
+                ColumnRef {
+                    span: Some(
+                        49..51,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    49..51,
+                                ),
+                                name: "c2",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+            ],
         },
     },
 )
@@ -20452,6 +20649,114 @@ RefreshVirtualColumn(
 
 
 ---------- Input ----------
+REFRESH LINEAGE FOR ALL VIEWS;
+---------- Output ---------
+REFRESH LINEAGE FOR ALL VIEWS
+---------- AST ------------
+RefreshLineage(
+    RefreshLineageStmt {
+        dry_run: false,
+    },
+)
+
+
+---------- Input ----------
+refresh lineage for all views dry run;
+---------- Output ---------
+REFRESH LINEAGE FOR ALL VIEWS DRY RUN
+---------- AST ------------
+RefreshLineage(
+    RefreshLineageStmt {
+        dry_run: true,
+    },
+)
+
+
+---------- Input ----------
+SELECT lineage FROM lineage;
+---------- Output ---------
+SELECT lineage FROM lineage
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..27,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..27,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..14,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            7..14,
+                                        ),
+                                        name: "lineage",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            20..27,
+                        ),
+                        table: TableRef {
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    20..27,
+                                ),
+                                name: "lineage",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            branch: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';
 ---------- Output ---------
 CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'Comment types type speedily \' \\\\ \'\' Fun!'
@@ -20501,7 +20806,7 @@ CreateTable(
         table_options: {
             "comment": "Comment types type speedily ' \\\\ '' Fun!",
         },
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Normal,
@@ -20698,7 +21003,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
-        iceberg_table_partition: None,
+        partition_by: None,
         table_properties: None,
         as_query: None,
         table_type: Temporary,
@@ -21900,6 +22205,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22127,6 +22433,7 @@ CopyIntoTable(
                                             ],
                                             params: [],
                                             order_by: [],
+                                            filter: None,
                                             window: None,
                                             lambda: None,
                                         },
@@ -22243,6 +22550,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -22316,6 +22624,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -22388,6 +22697,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22469,6 +22779,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22550,6 +22861,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22635,6 +22947,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22720,6 +23033,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22820,6 +23134,7 @@ CopyIntoLocation(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -22827,6 +23142,7 @@ CopyIntoLocation(
                     ],
                     params: [],
                     order_by: [],
+                    filter: None,
                     window: None,
                     lambda: None,
                 },
@@ -23162,6 +23478,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -23222,6 +23539,77 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
+            size_limit: 0,
+            split_size: 0,
+            validation_mode: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+    FROM @my_stage
+    FILE_FORMAT = (type = NDJSON)
+    SCHEMA_EVOLUTION = (
+        sample_files = 64,
+        sample_records_per_file = AUTO,
+        sample_total_records = 10000
+    );
+---------- Output ---------
+COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (type = NDJSON)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false SCHEMA_EVOLUTION = (sample_files = 64, sample_total_records = 10000)
+---------- AST ------------
+CopyIntoTable(
+    CopyIntoTableStmt {
+        with: None,
+        src: Location(
+            Stage(
+                "my_stage",
+            ),
+        ),
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                10..17,
+            ),
+            name: "mytable",
+            quote: None,
+            ident_type: None,
+        },
+        dst_columns: None,
+        hints: None,
+        file_format: FileFormatOptions {
+            options: {
+                "type": Keyword(
+                    "NDJSON",
+                ),
+            },
+        },
+        files: None,
+        pattern: None,
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            max_files: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            column_match_mode: None,
+            schema_evolution: Some(
+                CopySchemaEvolutionOptions {
+                    sample_files: Some(
+                        64,
+                    ),
+                    sample_records_per_file: None,
+                    sample_total_records: Some(
+                        10000,
+                    ),
+                },
+            ),
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -23298,6 +23686,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -23593,6 +23982,128 @@ CopyIntoLocation(
 
 ---------- Input ----------
 COPY INTO mytable
+    FROM @external_stage/path/to/file.arrow
+    FILE_FORMAT = (
+        type = ARROW
+        missing_field_as = FIELD_DEFAULT
+    )
+---------- Output ---------
+COPY INTO mytable FROM '@external_stage/path/to/file.arrow' FILE_FORMAT = (missing_field_as = FIELD_DEFAULT, type = ARROW)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+---------- AST ------------
+CopyIntoTable(
+    CopyIntoTableStmt {
+        with: None,
+        src: Location(
+            Stage(
+                "external_stage/path/to/file.arrow",
+            ),
+        ),
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                10..17,
+            ),
+            name: "mytable",
+            quote: None,
+            ident_type: None,
+        },
+        dst_columns: None,
+        hints: None,
+        file_format: FileFormatOptions {
+            options: {
+                "missing_field_as": Keyword(
+                    "FIELD_DEFAULT",
+                ),
+                "type": Keyword(
+                    "ARROW",
+                ),
+            },
+        },
+        files: None,
+        pattern: None,
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            max_files: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            column_match_mode: None,
+            schema_evolution: None,
+            size_limit: 0,
+            split_size: 0,
+            validation_mode: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+    FROM @external_stage/path/to/file.arrow_stream
+    FILE_FORMAT = (
+        type = ARROW_STREAM
+        missing_field_as = FIELD_DEFAULT
+    )
+---------- Output ---------
+COPY INTO mytable FROM '@external_stage/path/to/file.arrow_stream' FILE_FORMAT = (missing_field_as = FIELD_DEFAULT, type = ARROW_STREAM)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+---------- AST ------------
+CopyIntoTable(
+    CopyIntoTableStmt {
+        with: None,
+        src: Location(
+            Stage(
+                "external_stage/path/to/file.arrow_stream",
+            ),
+        ),
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                10..17,
+            ),
+            name: "mytable",
+            quote: None,
+            ident_type: None,
+        },
+        dst_columns: None,
+        hints: None,
+        file_format: FileFormatOptions {
+            options: {
+                "missing_field_as": Keyword(
+                    "FIELD_DEFAULT",
+                ),
+                "type": Keyword(
+                    "ARROW_STREAM",
+                ),
+            },
+        },
+        files: None,
+        pattern: None,
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            max_files: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            column_match_mode: None,
+            schema_evolution: None,
+            size_limit: 0,
+            split_size: 0,
+            validation_mode: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
     FROM 's3://mybucket/data.csv'
     CONNECTION = (
         AWS_KEY_ID = 'access_key'
@@ -23670,6 +24181,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -23742,6 +24254,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -23814,6 +24327,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -23886,6 +24400,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -23967,6 +24482,7 @@ CopyIntoTable(
             disable_variant_check: true,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -24042,6 +24558,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -25305,6 +25822,7 @@ Query(
                                     ],
                                     params: [],
                                     order_by: [],
+                                    filter: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -25872,6 +26390,7 @@ SetStmt {
                                                 ],
                                                 params: [],
                                                 order_by: [],
+                                                filter: None,
                                                 window: None,
                                                 lambda: None,
                                             },
@@ -28001,6 +28520,7 @@ CreateDatamaskPolicy(
                                 args: [],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -28519,7 +29039,7 @@ CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
 AS
     SELECT c, d FROM t
 ---------- Output ---------
-CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
+CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -28729,7 +29249,7 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -28871,6 +29391,7 @@ CreateDynamicTable(
                                     ],
                                     params: [],
                                     order_by: [],
+                                    filter: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -28974,7 +29495,7 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM db.t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -29114,6 +29635,7 @@ CreateDynamicTable(
                                     ],
                                     params: [],
                                     order_by: [],
+                                    filter: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -29559,6 +30081,7 @@ CreateTask(
                         ],
                         params: [],
                         order_by: [],
+                        filter: None,
                         window: None,
                         lambda: None,
                     },
@@ -30472,6 +30995,7 @@ AlterTask(
                         ],
                         params: [],
                         order_by: [],
+                        filter: None,
                         window: None,
                         lambda: None,
                     },
@@ -30897,6 +31421,7 @@ CreatePipe(
                 disable_variant_check: false,
                 return_failed_only: false,
                 column_match_mode: None,
+                schema_evolution: None,
                 size_limit: 0,
                 split_size: 0,
                 validation_mode: "",
@@ -30963,6 +31488,7 @@ CreatePipe(
                 disable_variant_check: false,
                 return_failed_only: false,
                 column_match_mode: None,
+                schema_evolution: None,
                 size_limit: 0,
                 split_size: 0,
                 validation_mode: "",
@@ -31634,6 +32160,7 @@ Query(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -31761,6 +32288,7 @@ Query(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -31888,6 +32416,7 @@ Query(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -32017,6 +32546,7 @@ Query(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -32146,6 +32676,7 @@ Query(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -32275,6 +32806,7 @@ Query(
                                 ],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -32463,6 +32995,7 @@ Query(
                                 args: [],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -32918,6 +33451,7 @@ CreateUDF(
                         ],
                         params: [],
                         order_by: [],
+                        filter: None,
                         window: None,
                         lambda: None,
                     },
@@ -33003,6 +33537,7 @@ CreateUDF(
                         ],
                         params: [],
                         order_by: [],
+                        filter: None,
                         window: None,
                         lambda: None,
                     },
@@ -33087,6 +33622,7 @@ CreateUDF(
                         ],
                         params: [],
                         order_by: [],
+                        filter: None,
                         window: None,
                         lambda: None,
                     },
@@ -34227,6 +34763,7 @@ Query(
                                                     args: [],
                                                     params: [],
                                                     order_by: [],
+                                                    filter: None,
                                                     window: Some(
                                                         WindowDesc {
                                                             ignore_nulls: None,
@@ -35206,6 +35743,7 @@ CreateRowAccessPolicy(
                                 args: [],
                                 params: [],
                                 order_by: [],
+                                filter: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -35303,6 +35841,7 @@ CreateRowAccessPolicy(
                             args: [],
                             params: [],
                             order_by: [],
+                            filter: None,
                             window: None,
                             lambda: None,
                         },
@@ -35412,6 +35951,7 @@ CreateRowAccessPolicy(
                                                     args: [],
                                                     params: [],
                                                     order_by: [],
+                                                    filter: None,
                                                     window: None,
                                                     lambda: None,
                                                 },

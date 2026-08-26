@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
@@ -26,8 +27,11 @@ use async_channel::Receiver;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
+use databend_common_base::runtime::IoStats;
+use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
@@ -45,30 +49,30 @@ use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
 use databend_common_component::MutationState;
 use databend_common_component::ResultCacheState;
-use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
+use databend_common_sql::QueryLineage;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::PlanNodeMemoryUsage;
+use crate::pipelines::processors::transforms::MaterializedCtePayload;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
@@ -117,6 +121,8 @@ pub struct QueryContextShared {
     running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     running_query_text_hash: Arc<RwLock<Option<String>>>,
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
+    query_lineage: Arc<RwLock<Option<QueryLineage>>>,
+    pending_lineage_logs: Arc<RwLock<Vec<String>>>,
     aborting: Arc<AtomicBool>,
     pub(super) abort_notify: Arc<WatchNotify>,
     pub(super) tables_refs: Arc<Mutex<HashMap<TableCacheKey, Arc<dyn Table>>>>,
@@ -161,10 +167,9 @@ pub struct QueryContextShared {
     pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
     pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
 
-    // Used by hilbert clustering when do recluster.
-    pub(super) selected_segment_locs: SegmentLocationsState,
-
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
+
+    pub(super) io_stats: Arc<IoStats>,
 
     pub(super) broadcast_registry: BroadcastRegistry,
 
@@ -173,7 +178,8 @@ pub struct QueryContextShared {
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
-    pub(super) materialized_cte_receivers: Arc<Mutex<HashMap<String, Vec<Receiver<DataBlock>>>>>,
+    pub(super) materialized_cte_receivers:
+        Arc<Mutex<HashMap<String, Vec<Receiver<MaterializedCtePayload>>>>>,
     // Temp tables created for recursive CTE cleanup.
     // This must be shared across QueryContext instances created from the same query,
     // otherwise cleanup hooks running on the parent context cannot see registrations
@@ -184,6 +190,10 @@ pub struct QueryContextShared {
     /// Cached full visibility checker (ignore_ownership=false, Object::All).
     /// Shared across all QueryContext instances within this query.
     pub(super) visibility_checker_cache: tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
+
+    /// Limits concurrent RowFetch reads and decodes across all pipelines and
+    /// QueryContext instances belonging to this query on the local node.
+    row_fetch_io_semaphore: OnceLock<Arc<Semaphore>>,
 }
 
 impl QueryContextShared {
@@ -211,6 +221,8 @@ impl QueryContextShared {
             running_query_kind: Arc::new(RwLock::new(None)),
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
+            query_lineage: Arc::new(RwLock::new(None)),
+            pending_lineage_logs: Arc::new(RwLock::new(Vec::new())),
             aborting: Arc::new(AtomicBool::new(false)),
             abort_notify: Arc::new(WatchNotify::new()),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
@@ -245,8 +257,8 @@ impl QueryContextShared {
             warehouse_cache: Arc::new(RwLock::new(None)),
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
-            selected_segment_locs: Default::default(),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
+            io_stats: Default::default(),
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
@@ -255,7 +267,14 @@ impl QueryContextShared {
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
             visibility_checker_cache: Default::default(),
+            row_fetch_io_semaphore: Default::default(),
         }))
+    }
+
+    pub(super) fn get_row_fetch_io_semaphore(&self, max_threads: usize) -> Arc<Semaphore> {
+        self.row_fetch_io_semaphore
+            .get_or_init(|| Arc::new(Semaphore::new(max_threads.max(1))))
+            .clone()
     }
 
     pub fn get_version(&self) -> &BuildInfoRef {
@@ -378,6 +397,14 @@ impl QueryContextShared {
         let metrics: Vec<Arc<StorageMetrics>> =
             tables.iter().filter_map(|v| v.get_data_metrics()).collect();
         StorageMetrics::merge(&metrics)
+    }
+
+    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
+        self.io_stats.merge_snapshot(stats);
+    }
+
+    pub fn get_io_stats(&self) -> IoStatsSnapshot {
+        self.io_stats.snapshot()
     }
 
     pub fn get_tenant(&self) -> Tenant {
@@ -511,6 +538,8 @@ impl QueryContextShared {
                                     &source.table,
                                     source.branch.as_deref(),
                                     max_batch_size,
+                                    self.get_settings()
+                                        .get_enable_stream_batch_snapshot_forward_scan()?,
                                     self.get_settings().get_s3_storage_class()?,
                                 )
                                 .await?;
@@ -599,7 +628,7 @@ impl QueryContextShared {
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(
-                query,
+                mask_connection_info(&query),
                 self.get_settings()
                     .get_short_sql_max_length()
                     .unwrap_or(1000),
@@ -658,6 +687,22 @@ impl QueryContextShared {
             .unwrap_or(QueryKind::Unknown)
     }
 
+    pub fn attach_query_lineage(&self, lineage: Option<QueryLineage>) {
+        *self.query_lineage.write() = lineage;
+    }
+
+    pub fn get_query_lineage(&self) -> Option<QueryLineage> {
+        self.query_lineage.read().clone()
+    }
+
+    pub(crate) fn attach_pending_lineage_logs(&self, logs: Vec<String>) {
+        *self.pending_lineage_logs.write() = logs;
+    }
+
+    pub(crate) fn take_pending_lineage_logs(&self) -> Vec<String> {
+        std::mem::take(&mut *self.pending_lineage_logs.write())
+    }
+
     pub fn get_connection_id(&self) -> String {
         self.session.get_id()
     }
@@ -704,12 +749,6 @@ impl QueryContextShared {
         status.clone()
     }
 
-    pub async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
-        let user_mgr = UserApiProvider::instance();
-        let tenant = self.get_tenant();
-        user_mgr.get_connection(&tenant, name).await
-    }
-
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {
         &self.query_cache_metrics
     }
@@ -724,6 +763,13 @@ impl QueryContextShared {
         match self.executor.read().upgrade() {
             None => String::new(),
             Some(executor) => executor.format_graph_nodes(),
+        }
+    }
+
+    pub fn get_top_memory_plan_nodes(&self, limit: usize) -> Vec<PlanNodeMemoryUsage> {
+        match self.executor.read().upgrade() {
+            None => Vec::new(),
+            Some(executor) => executor.top_memory_plan_nodes(limit),
         }
     }
 
@@ -832,6 +878,10 @@ impl QueryContextShared {
             .entry(plan_id)
             .and_modify(|s| s.merge(&stats))
             .or_insert(stats);
+    }
+
+    pub fn clear_pruned_partitions_stats(&self) {
+        self.pruned_partitions_stats.write().clear();
     }
 
     pub fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {

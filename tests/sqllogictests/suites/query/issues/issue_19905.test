@@ -1,0 +1,44 @@
+# GitHub issue: https://github.com/databendlabs/databend/issues/19905
+
+query B
+SELECT '%++' NOT LIKE '*%++' ESCAPE '*'
+----
+0
+
+statement ok
+DROP FUNCTION IF EXISTS ddb_string_split_compat
+
+statement ok
+DROP TABLE IF EXISTS issue19905_documents
+
+statement ok
+CREATE FUNCTION ddb_string_split_compat AS (s, delim) -> CASE
+    WHEN s IS NULL THEN NULL
+    WHEN delim IS NULL THEN [s]
+    WHEN delim = '' THEN REGEXP_SPLIT_TO_ARRAY(s, '')
+    ELSE SPLIT(s, delim)
+END
+
+statement ok
+CREATE TABLE issue19905_documents(id INT, s VARCHAR)
+
+statement ok
+INSERT INTO issue19905_documents VALUES (1, 'baabbaa'), (2, 'aabbaab'), (3, 'ababababa')
+
+query IT
+SELECT id, ss FROM (
+    SELECT id, UNNEST(ddb_string_split_compat(s, 'bb')) AS ss
+    FROM issue19905_documents WHERE 1
+) AS q ORDER BY id, ss
+----
+1	aa
+1	baa
+2	aa
+2	aab
+3	ababababa
+
+statement ok
+DROP TABLE issue19905_documents
+
+statement ok
+DROP FUNCTION ddb_string_split_compat

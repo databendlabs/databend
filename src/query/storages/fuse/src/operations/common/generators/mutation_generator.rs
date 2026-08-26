@@ -18,13 +18,13 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
-use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 
 use crate::operations::common::ConflictResolveContext;
@@ -39,6 +39,7 @@ pub struct MutationGenerator {
     conflict_resolve_ctx: ConflictResolveContext,
 
     pub(crate) mutation_kind: MutationKind,
+    logical_change_delta: (u64, u64),
 }
 
 impl MutationGenerator {
@@ -47,6 +48,7 @@ impl MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: ConflictResolveContext::None,
             mutation_kind,
+            logical_change_delta: (0, 0),
         }
     }
 }
@@ -60,11 +62,22 @@ impl SnapshotGenerator for MutationGenerator {
         self.conflict_resolve_ctx = ctx;
     }
 
+    fn set_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) {
+        self.logical_change_delta = (updated_rows, deleted_rows);
+    }
+
+    fn logical_change_delta(&self, _previous: &Option<Arc<TableSnapshot>>) -> (u64, u64) {
+        self.logical_change_delta
+    }
+
+    fn skip_auto_vacuum(&self) -> bool {
+        matches!(self.mutation_kind, MutationKind::Recluster)
+    }
+
     fn do_generate_new_snapshot(
         &self,
         table_info: &TableInfo,
-        cluster_key_meta: Option<ClusterKey>,
-        cluster_type: Option<ClusterType>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
@@ -90,7 +103,7 @@ impl SnapshotGenerator for MutationGenerator {
                     let mut new_summary = merge_statistics(
                         previous.summary(),
                         &ctx.merged_statistics,
-                        cluster_key_meta.as_ref().map(|v| v.0),
+                        cluster_key_info.as_ref(),
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
 
@@ -107,8 +120,7 @@ impl SnapshotGenerator for MutationGenerator {
                         table_info.schema().as_ref().clone(),
                         new_summary,
                         new_segments,
-                        cluster_key_meta,
-                        cluster_type,
+                        cluster_key_info,
                         table_statistics_location,
                         table_meta_timestamps,
                     )?;
@@ -116,7 +128,8 @@ impl SnapshotGenerator for MutationGenerator {
                     if matches!(
                         self.mutation_kind,
                         MutationKind::Compact | MutationKind::Recluster
-                    ) {
+                    ) && !is_materialized_view_engine(&table_info.meta.engine)
+                    {
                         // for compaction, a basic but very important verification:
                         // the number of rows should be the same
                         assert_eq!(

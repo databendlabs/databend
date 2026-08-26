@@ -16,8 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
-use databend_common_exception::ErrorCode;
-use databend_common_expression::types::DataType;
+use databend_common_expression::TableDataType as DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_management::udf::UdfMgr;
 use databend_common_management::*;
@@ -50,10 +49,7 @@ async fn test_add_udf() -> anyhow::Result<()> {
             meta: _,
             data: value,
         }) => {
-            assert_eq!(
-                value,
-                serialize_struct(&udf, ErrorCode::IllegalUDFFormat, || "")?
-            );
+            assert_eq!(value, serialize_struct(&udf));
         }
         catch => panic!("GetKVActionReply{:?}", catch),
     }
@@ -74,10 +70,7 @@ async fn test_add_udf() -> anyhow::Result<()> {
             meta: _,
             data: value,
         }) => {
-            assert_eq!(
-                value,
-                serialize_struct(&udf, ErrorCode::IllegalUDFFormat, || "")?
-            );
+            assert_eq!(value, serialize_struct(&udf));
         }
         catch => panic!("GetKVActionReply{:?}", catch),
     }
@@ -99,10 +92,7 @@ async fn test_add_udf() -> anyhow::Result<()> {
             meta: _,
             data: value,
         }) => {
-            assert_eq!(
-                value,
-                serialize_struct(&udf, ErrorCode::IllegalUDFFormat, || "")?
-            );
+            assert_eq!(value, serialize_struct(&udf));
         }
         catch => panic!("GetKVActionReply{:?}", catch),
     }

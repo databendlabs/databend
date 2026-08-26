@@ -29,8 +29,6 @@ pub enum Feature {
     Vacuum,
     #[serde(alias = "test", alias = "TEST")]
     Test,
-    #[serde(alias = "virtual_column", alias = "VIRTUAL_COLUMN")]
-    VirtualColumn,
     #[serde(alias = "data_mask", alias = "DATA_MASK")]
     DataMask,
     #[serde(alias = "computed_column", alias = "COMPUTED_COLUMN")]
@@ -45,8 +43,6 @@ pub enum Feature {
     AttacheTable,
     #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
     AmendTable,
-    #[serde(alias = "hilbert_clustering", alias = "HILBERT_CLUSTERING")]
-    HilbertClustering,
     #[serde(alias = "system_management", alias = "SYSTEM_MANAGEMENT")]
     SystemManagement,
     #[serde(alias = "workload_group", alias = "WORKLOAD_GROUP")]
@@ -61,6 +57,8 @@ pub enum Feature {
     MaxCpuQuota(usize),
     #[serde(alias = "row_access_policy", alias = "ROW_ACCESS_POLICY")]
     RowAccessPolicy,
+    #[serde(alias = "materialized_view", alias = "MATERIALIZED_VIEW")]
+    MaterializedView,
     #[serde(other)]
     Unknown,
 }
@@ -77,7 +75,6 @@ impl fmt::Display for Feature {
             Feature::LicenseInfo => write!(f, "license_info"),
             Feature::Vacuum => write!(f, "vacuum"),
             Feature::Test => write!(f, "test"),
-            Feature::VirtualColumn => write!(f, "virtual_column"),
             Feature::DataMask => write!(f, "data_mask"),
             Feature::ComputedColumn => write!(f, "computed_column"),
             Feature::StorageEncryption => write!(f, "storage_encryption"),
@@ -86,11 +83,11 @@ impl fmt::Display for Feature {
             Feature::AttacheTable => write!(f, "attach_table"),
             Feature::AmendTable => write!(f, "amend_table"),
             Feature::SystemManagement => write!(f, "system_management"),
-            Feature::HilbertClustering => write!(f, "hilbert_clustering"),
             Feature::WorkloadGroup => write!(f, "workload_group"),
             Feature::SystemHistory => write!(f, "system_history"),
             Feature::PrivateTask => write!(f, "private_task"),
             Feature::RowAccessPolicy => write!(f, "row_access_policy"),
+            Feature::MaterializedView => write!(f, "materialized_view"),
             Feature::Unknown => write!(f, "unknown"),
             Feature::MaxCpuQuota(v) => write!(f, "max_cpu_quota({})", v),
             Feature::MaxNodeQuota(v) => write!(f, "max_node_quota({})", v),
@@ -202,10 +199,6 @@ mod tests {
             serde_json::from_str::<Feature>("\"Test\"").unwrap()
         );
         assert_eq!(
-            Feature::VirtualColumn,
-            serde_json::from_str::<Feature>("\"VIRTUAL_COLUMN\"").unwrap()
-        );
-        assert_eq!(
             Feature::DataMask,
             serde_json::from_str::<Feature>("\"DataMask\"").unwrap()
         );
@@ -236,11 +229,6 @@ mod tests {
         );
 
         assert_eq!(
-            Feature::HilbertClustering,
-            serde_json::from_str::<Feature>("\"hilbert_clustering\"").unwrap()
-        );
-
-        assert_eq!(
             Feature::WorkloadGroup,
             serde_json::from_str::<Feature>("\"workload_group\"").unwrap()
         );
@@ -266,6 +254,11 @@ mod tests {
         );
 
         assert_eq!(
+            Feature::MaterializedView,
+            serde_json::from_str::<Feature>("\"materialized_view\"").unwrap()
+        );
+
+        assert_eq!(
             Feature::Unknown,
             serde_json::from_str::<Feature>("\"ssss\"").unwrap()
         );
@@ -281,7 +274,6 @@ mod tests {
                 Feature::LicenseInfo,
                 Feature::Vacuum,
                 Feature::Test,
-                Feature::VirtualColumn,
                 Feature::DataMask,
                 Feature::ComputedColumn,
                 Feature::StorageEncryption,
@@ -289,7 +281,6 @@ mod tests {
                 Feature::TableRef,
                 Feature::AttacheTable,
                 Feature::AmendTable,
-                Feature::HilbertClustering,
                 Feature::WorkloadGroup,
                 Feature::SystemHistory,
                 Feature::PrivateTask,
@@ -298,7 +289,7 @@ mod tests {
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,hilbert_clustering,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,virtual_column,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,workload_group] }",
             license_info.to_string()
         );
     }
@@ -310,7 +301,6 @@ mod tests {
             Feature::LicenseInfo,
             Feature::Vacuum,
             Feature::Test,
-            Feature::VirtualColumn,
             Feature::DataMask,
             Feature::ComputedColumn,
             Feature::StorageEncryption,
@@ -318,7 +308,6 @@ mod tests {
             Feature::TableRef,
             Feature::AttacheTable,
             Feature::AmendTable,
-            Feature::HilbertClustering,
             Feature::WorkloadGroup,
             Feature::SystemHistory,
             Feature::PrivateTask,

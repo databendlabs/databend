@@ -26,10 +26,9 @@ AggregateFinal
             │       ├── scan id: 1
             │       ├── output columns: [i (#1)]
             │       ├── read rows: 5000
-            │       ├── read size: 20.15 KiB
+            │       ├── read size: 19.57 KiB
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
-            │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
             │       ├── push downs: [filters: [], limit: NONE]
             │       └── estimated rows: 5000.00
             └── TableScan(Probe)
@@ -37,7 +36,7 @@ AggregateFinal
                 ├── scan id: 0
                 ├── output columns: [i (#0)]
                 ├── read rows: 5000
-                ├── read size: 20.15 KiB
+                ├── read size: 19.57 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]

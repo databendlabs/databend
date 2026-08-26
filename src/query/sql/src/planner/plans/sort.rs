@@ -26,6 +26,7 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
+use crate::optimizer::ir::cap_stat_info_by_rows;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
@@ -49,20 +50,6 @@ impl Sort {
         self.items.iter().map(|item| item.index).collect()
     }
 
-    pub fn sort_items_exclude_partition(&self) -> Vec<SortItem> {
-        self.items
-            .iter()
-            .filter(|item| match &self.window_partition {
-                Some(window) => !window
-                    .partition_by
-                    .iter()
-                    .any(|partition| partition.index == item.index),
-                None => true,
-            })
-            .cloned()
-            .collect()
-    }
-
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) {
         for item in &mut self.items {
             if item.index == old {
@@ -81,6 +68,25 @@ impl Sort {
         if self.window_partition.is_some() {
             unimplemented!()
         };
+    }
+
+    pub fn replace_columns<F>(&mut self, mut replace: F) -> Result<()>
+    where F: FnMut(Symbol) -> Result<Symbol> {
+        for item in &mut self.items {
+            item.index = replace(item.index)?;
+        }
+
+        if let Some(projection) = &mut self.pre_projection {
+            for index in projection {
+                *index = replace(*index)?;
+            }
+        }
+
+        if self.window_partition.is_some() {
+            unimplemented!()
+        };
+
+        Ok(())
     }
 }
 
@@ -202,6 +208,13 @@ impl Operator for Sort {
     }
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(0)
+        let input = rel_expr.derive_cardinality_child(0)?;
+        let Some(limit) = self.limit else {
+            return Ok(input);
+        };
+        Ok(Arc::new(cap_stat_info_by_rows(
+            input.as_ref().clone(),
+            limit,
+        )))
     }
 }

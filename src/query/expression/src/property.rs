@@ -17,6 +17,7 @@ use databend_common_column::types::timestamp_tz;
 use enum_as_inner::EnumAsInner;
 
 use crate::ColumnBuilder;
+use crate::FunctionContext;
 use crate::Scalar;
 use crate::types::AccessType;
 use crate::types::AnyType;
@@ -48,6 +49,11 @@ use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
 use crate::with_number_type;
 
+/// Returns the argument for which a function is monotonically increasing under the given
+/// argument domains and function context (e.g. the session time zone). `None` means
+/// monotonicity cannot be proven for that range.
+pub type MonotonicityCheck = fn(&FunctionContext, &[Domain]) -> Option<usize>;
+
 #[derive(Debug, Clone)]
 pub struct FunctionProperty {
     pub non_deterministic: bool,
@@ -58,6 +64,9 @@ pub struct FunctionProperty {
     pub monotonicity: bool,
     // will be monotonicity if arg is one of `monotonicity_by_type`
     pub monotonicity_by_type: Vec<DataType>,
+    // Range-sensitive monotonicity for functions with constant or constrained arguments.
+    // This is consumed by index pruning and does not change scalar evaluation semantics.
+    pub monotonicity_check: Option<MonotonicityCheck>,
 }
 
 impl FunctionProperty {
@@ -76,6 +85,11 @@ impl FunctionProperty {
         self
     }
 
+    pub fn monotonicity_check(mut self, check: MonotonicityCheck) -> Self {
+        self.monotonicity_check = Some(check);
+        self
+    }
+
     pub fn kind(mut self, kind: FunctionKind) -> Self {
         self.kind = kind;
         self
@@ -88,6 +102,7 @@ impl Default for FunctionProperty {
             non_deterministic: false,
             monotonicity: false,
             monotonicity_by_type: vec![],
+            monotonicity_check: None,
             kind: FunctionKind::Scalar,
         }
     }
@@ -174,6 +189,29 @@ impl Domain {
             Err(format!(
                 "domain does not match data type: domain {self:?}, data type {data_type:?}"
             ))
+        }
+    }
+
+    pub fn finite_cardinality_upper(&self) -> Option<u128> {
+        match self {
+            Domain::Boolean(domain) => {
+                Some((domain.has_false as u8 + domain.has_true as u8).into())
+            }
+            Domain::Number(domain) => domain.finite_cardinality_upper(),
+            Domain::Nullable(NullableDomain { value: None, .. }) => Some(0),
+            Domain::Nullable(NullableDomain {
+                value: Some(box Domain::Boolean(domain)),
+                ..
+            }) => Some((domain.has_false as u8 + domain.has_true as u8).into()),
+            Domain::Nullable(NullableDomain {
+                value: Some(box Domain::Number(domain)),
+                ..
+            }) => domain.finite_cardinality_upper(),
+            Domain::Nullable(NullableDomain {
+                value: Some(box Domain::Nullable(_)),
+                ..
+            }) => unreachable!(),
+            _ => None,
         }
     }
 
@@ -297,6 +335,7 @@ impl Domain {
             | DataType::Geography
             | DataType::Vector(_)
             | DataType::Opaque(_) => Domain::Undefined,
+            DataType::AggregateState(state) => Domain::full(state.physical_type()),
             DataType::Generic(_) | DataType::StageLocation => unreachable!(),
         }
     }
@@ -488,6 +527,9 @@ impl Domain {
             Domain::Timestamp(SimpleDomain { min, max }) if min == max => {
                 Some(Scalar::Timestamp(*min))
             }
+            Domain::TimestampTz(SimpleDomain { min, max }) if min == max => {
+                Some(Scalar::TimestampTz(*min))
+            }
             Domain::Date(SimpleDomain { min, max }) if min == max => Some(Scalar::Date(*min)),
             Domain::Interval(SimpleDomain { min, max }) if min == max => {
                 Some(Scalar::Interval(*min))
@@ -639,6 +681,8 @@ impl<T: Ord> SimpleDomainCmp for SimpleDomain<T> {
     fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType> {
         if self.min > other.max || self.max < other.min {
             FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else if self.min == self.max && other.min == other.max && self.min == other.min {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
         } else {
             FunctionDomain::Full
         }
@@ -647,6 +691,8 @@ impl<T: Ord> SimpleDomainCmp for SimpleDomain<T> {
     fn domain_noteq(&self, other: &Self) -> FunctionDomain<BooleanType> {
         if self.min > other.max || self.max < other.min {
             FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else if self.min == self.max && other.min == other.max && self.min == other.min {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
         } else {
             FunctionDomain::Full
         }
@@ -763,4 +809,64 @@ pub fn unify_string(
             max: rhs.max.clone().unwrap_or_else(|| max.clone()),
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_domain_equality_for_singletons() {
+        let singleton = SimpleDomain { min: 7, max: 7 };
+
+        assert_eq!(
+            singleton.domain_eq(&singleton),
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        );
+        assert_eq!(
+            singleton.domain_noteq(&singleton),
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        );
+    }
+
+    #[test]
+    fn test_domain_equality_keeps_existing_range_results() {
+        let lhs = SimpleDomain { min: 1, max: 3 };
+        let overlapping = SimpleDomain { min: 2, max: 4 };
+        let disjoint = SimpleDomain { min: 5, max: 7 };
+
+        assert_eq!(lhs.domain_eq(&overlapping), FunctionDomain::Full);
+        assert_eq!(lhs.domain_noteq(&overlapping), FunctionDomain::Full);
+        assert_eq!(
+            lhs.domain_eq(&disjoint),
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        );
+        assert_eq!(
+            lhs.domain_noteq(&disjoint),
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        );
+    }
+
+    #[test]
+    fn test_string_domain_equality_for_singletons_and_unbounded_ranges() {
+        let singleton = StringDomain {
+            min: "databend".to_string(),
+            max: Some("databend".to_string()),
+        };
+        let unbounded = StringDomain {
+            min: "".to_string(),
+            max: None,
+        };
+
+        assert_eq!(
+            singleton.domain_eq(&singleton),
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        );
+        assert_eq!(
+            singleton.domain_noteq(&singleton),
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        );
+        assert_eq!(unbounded.domain_eq(&unbounded), FunctionDomain::Full);
+        assert_eq!(unbounded.domain_noteq(&unbounded), FunctionDomain::Full);
+    }
 }

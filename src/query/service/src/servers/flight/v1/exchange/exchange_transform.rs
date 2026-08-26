@@ -144,7 +144,11 @@ impl ExchangeTransform {
         let exchange_id = &params.exchange_id;
         let exchange_manager = DataExchangeManager::instance();
 
-        let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+        let channel_set = exchange_manager.get_or_create_exchange_channel_set(
+            query_id,
+            exchange_id,
+            local_threads,
+        )?;
 
         assert_eq!(channel_set.channels.len(), local_threads);
 
@@ -205,7 +209,11 @@ impl ExchangeTransform {
         let exchange_id = &params.exchange_id;
         let exchange_manager = DataExchangeManager::instance();
 
-        let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+        let channel_set = exchange_manager.get_or_create_exchange_channel_set(
+            query_id,
+            exchange_id,
+            local_threads,
+        )?;
         assert_eq!(channel_set.channels.len(), local_threads);
 
         let local_outbound = create_local_channels(&channel_set);

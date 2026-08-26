@@ -27,9 +27,26 @@ select * from t at(snapshot => (select snapshot_id from fuse_snapshot('db_12_000
 ----
 1
 
+statement ok
+set variable first_snap = (select snapshot_id from fuse_snapshot('db_12_0005', 't') order by timestamp limit 1)
+
+query I
+select * from t at(snapshot => $first_snap)
+----
+1
+
 # scalar subquery: latest snapshot
 query I
 select * from t at(snapshot => (select snapshot_id from fuse_snapshot('db_12_0005', 't') order by timestamp desc limit 1)) order by c1
+----
+1
+2
+
+statement ok
+set variable latest_ts = (select timestamp from fuse_snapshot('db_12_0005', 't') order by timestamp desc limit 1)
+
+query I
+select * from t at(timestamp => $latest_ts) order by c1
 ----
 1
 2
@@ -54,6 +71,9 @@ select * from t at(snapshot => (select 123))
 # error: unresolvable expression
 statement error
 select * from t at(snapshot => c1)
+
+statement ok
+unset variable (first_snap, latest_ts)
 
 statement ok
 DROP TABLE t ALL

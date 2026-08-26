@@ -75,12 +75,9 @@ impl Binder {
         };
 
         let mut filters = vec![
-            format!("database = {}", QuotedString(database.as_str(), '\'')),
-            format!("`table` = {}", QuotedString(table.as_str(), '\'')),
-            format!(
-                "branch = {}",
-                QuotedString(branch_filter_name.as_str(), '\'')
-            ),
+            format!("database = {}", QuotedString(&database, '\'')),
+            format!("`table` = {}", QuotedString(&table, '\'')),
+            format!("branch = {}", QuotedString(&branch_filter_name, '\'')),
         ];
         match limit {
             None => {}

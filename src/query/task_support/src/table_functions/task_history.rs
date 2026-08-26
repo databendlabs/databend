@@ -32,8 +32,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::date_helper::DateConverter;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::date::date_from_days;
+use databend_common_expression::types::timestamp::timestamp_from_micros;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -253,26 +254,16 @@ pub(crate) struct TableHistoryArgsParsed {
 }
 
 fn parse_date_or_timestamp(v: &Scalar) -> Option<String> {
-    if v.as_timestamp().is_some() {
-        Some(
-            v.as_timestamp()
-                .map(|s| s.to_timestamp(&TimeZone::UTC).to_string())
-                .unwrap(),
-        )
-    } else if v.as_date().is_some() {
-        Some(
-            v.as_date()
-                .map(|s| {
-                    s.to_date(&TimeZone::UTC)
-                        .at(0, 0, 0, 0)
-                        .in_tz("UTC")
-                        .unwrap()
-                        .to_string()
-                })
-                .unwrap(),
-        )
-    } else {
-        None
+    match v {
+        Scalar::Timestamp(ts) => Some(timestamp_from_micros(*ts, &TimeZone::UTC).to_string()),
+        Scalar::Date(date) => Some(
+            date_from_days(*date)
+                .at(0, 0, 0, 0)
+                .in_tz("UTC")
+                .unwrap() // FIXME: maybe overflow
+                .to_string(),
+        ),
+        _ => None,
     }
 }
 
@@ -287,7 +278,8 @@ impl TableHistoryArgsParsed {
         let mut error_only = None;
         let mut root_task_id = None;
         for (k, v) in &args {
-            match k.to_lowercase().as_str() {
+            let key = k.to_lowercase();
+            match key.as_str() {
                 "task_name" => task_name = v.as_string().cloned(),
                 "scheduled_time_range_start" | "scheduled_time_range_end" => {
                     if v.as_timestamp().is_none() && v.as_date().is_none() {
@@ -296,7 +288,7 @@ impl TableHistoryArgsParsed {
                             k,
                         )));
                     }
-                    if k == "scheduled_time_range_start" {
+                    if key == "scheduled_time_range_start" {
                         scheduled_time_range_start = parse_date_or_timestamp(v);
                     } else {
                         scheduled_time_range_end = parse_date_or_timestamp(v);

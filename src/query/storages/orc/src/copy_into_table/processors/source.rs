@@ -69,6 +69,8 @@ impl ORCSourceForCopy {
         let file = SingleFilePartition::from_part(&part)?.clone();
         let path = file.path.clone();
         let size = file.size;
+        let content_key = file.content_key.clone();
+        let last_modified = file.last_modified;
 
         let file = OrcChunkReader {
             operator: self.op.clone(),
@@ -89,6 +91,8 @@ impl ORCSourceForCopy {
             size,
             schema: Some(schema),
             rows: 0,
+            content_key,
+            last_modified,
         });
         Ok(true)
     }
@@ -139,12 +143,16 @@ impl AsyncSource for ORCSourceForCopy {
                             size: file.size,
                             schema: file.schema.clone(),
                             rows: (rows as u64) + file.rows,
+                            content_key: file.content_key.clone(),
+                            last_modified: file.last_modified,
                         });
                         let meta = Box::new(StripeInMemory {
                             path: file.path.clone(),
                             stripe,
                             schema: file.schema,
                             start_row: file.rows,
+                            content_key: file.content_key,
+                            last_modified: file.last_modified,
                         });
                         return Ok(Some(DataBlock::empty_with_meta(meta)));
                     }

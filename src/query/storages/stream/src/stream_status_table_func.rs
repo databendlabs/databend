@@ -23,7 +23,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -40,11 +39,13 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::table_functions::string_literal;
 use databend_common_storages_fuse::table_functions::string_value;
 
 use crate::stream_table::StreamStatus;
 use crate::stream_table::StreamTable;
+use crate::stream_table::extract_fully_qualified_stream_name;
 
 const STREAM_STATUS: &str = "stream_status";
 
@@ -154,7 +155,7 @@ impl StreamStatusDataSource {
         stream_name: String,
     ) -> Result<ProcessorPtr> {
         let (cat_name, db_name, stream_name) =
-            Self::extract_fully_qualified_stream_name(ctx.as_ref(), stream_name.as_str())?;
+            extract_fully_qualified_stream_name(ctx.as_ref(), stream_name.as_str())?;
         AsyncSourcer::create(ctx.get_scan_progress(), output, StreamStatusDataSource {
             ctx,
             finish: false,
@@ -162,47 +163,6 @@ impl StreamStatusDataSource {
             db_name,
             stream_name,
         })
-    }
-
-    fn extract_fully_qualified_stream_name(
-        ctx: &dyn TableContext,
-        target: &str,
-    ) -> Result<(String, String, String)> {
-        let current_cat_name;
-        let current_db_name;
-        let stream_name_vec: Vec<&str> = target.split('.').collect();
-        let (cat, db, stream) = {
-            match stream_name_vec.len() {
-                1 => {
-                    current_cat_name = ctx.get_current_catalog();
-                    current_db_name = ctx.get_current_database();
-                    (
-                        current_cat_name,
-                        current_db_name,
-                        stream_name_vec[0].to_owned(),
-                    )
-                }
-                2 => {
-                    current_cat_name = ctx.get_current_catalog();
-                    (
-                        current_cat_name,
-                        stream_name_vec[0].to_owned(),
-                        stream_name_vec[1].to_owned(),
-                    )
-                }
-                3 => (
-                    stream_name_vec[0].to_owned(),
-                    stream_name_vec[1].to_owned(),
-                    stream_name_vec[2].to_owned(),
-                ),
-                _ => {
-                    return Err(ErrorCode::BadArguments(
-                        "Invalid stream name. Use the format '[catalog.][database.]stream'",
-                    ));
-                }
-            }
-        };
-        Ok((cat, db, stream))
     }
 }
 
@@ -224,13 +184,15 @@ impl AsyncSource for StreamStatusDataSource {
             .await?
             .get_table(&tenant_id, &self.db_name, &self.stream_name)
             .await?;
-
         let tbl = StreamTable::try_from_table(tbl.as_ref())?;
 
-        let has_data = matches!(
-            tbl.check_stream_status(self.ctx.clone()).await?,
-            StreamStatus::MayHaveData
-        );
+        let base_table = tbl.source_table(self.ctx.clone()).await?;
+        let fuse_table = FuseTable::try_from_table(base_table.as_ref())?;
+        let stream_status = tbl.check_stream_status(
+            base_table.get_table_info().ident.seq,
+            fuse_table.snapshot_loc().as_deref(),
+        )?;
+        let has_data = matches!(stream_status, StreamStatus::MayHaveData);
 
         Ok(Some(DataBlock::new_from_columns(vec![
             BooleanType::from_data(vec![has_data]),

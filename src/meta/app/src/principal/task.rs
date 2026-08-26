@@ -38,6 +38,7 @@ pub enum State {
     Succeeded = 2,
     Failed = 3,
     Cancelled = 4,
+    Skipped = 5,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,10 +57,33 @@ pub struct WarehouseOptions {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum TaskSql {
+    Sql(String),
+    Script(Vec<String>),
+}
+
+impl TaskSql {
+    pub fn query_text(&self) -> String {
+        match self {
+            TaskSql::Sql(sql) => sql.clone(),
+            TaskSql::Script(sqls) => {
+                let mut text = String::from("BEGIN\n");
+                for sql in sqls {
+                    text.push_str(sql);
+                    text.push_str(";\n");
+                }
+                text.push_str("END;");
+                text
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Task {
     pub task_id: u64,
     pub task_name: String,
-    pub query_text: String,
+    pub task_sql: TaskSql,
     pub when_condition: Option<String>,
     pub after: Vec<String>,
     pub comment: Option<String>,
@@ -110,7 +134,7 @@ pub enum TaskMessage {
     //  Schedule Task will try to spawn a thread in Query to continue running according to the time set in schedule
     ScheduleTask(Task),
     // Delete the task information and try to cancel the scheduled task in the query.
-    DeleteTask(String, Option<WarehouseOptions>),
+    DeleteTask(String, Option<WarehouseOptions>, Option<u64>),
     //  After Task will bind Task to the tasks in Task.afters.
     // When Execute Task is executed, after all the after tasks of Task are completed,
     // the execution will continue.
@@ -123,7 +147,7 @@ impl TaskMessage {
             TaskMessage::ExecuteTask(task)
             | TaskMessage::ScheduleTask(task)
             | TaskMessage::AfterTask(task) => task.task_name.as_str(),
-            TaskMessage::DeleteTask(task_name, _) => task_name.as_str(),
+            TaskMessage::DeleteTask(task_name, _, _) => task_name.as_str(),
         }
     }
 
@@ -131,7 +155,7 @@ impl TaskMessage {
         match self {
             TaskMessage::ExecuteTask(_) => TaskMessageType::Execute,
             TaskMessage::ScheduleTask(_) => TaskMessageType::Schedule,
-            TaskMessage::DeleteTask(_, _) => TaskMessageType::Delete,
+            TaskMessage::DeleteTask(_, _, _) => TaskMessageType::Delete,
             TaskMessage::AfterTask(_) => TaskMessageType::After,
         }
     }
@@ -168,7 +192,7 @@ impl TaskMessage {
             TaskMessage::ExecuteTask(task)
             | TaskMessage::ScheduleTask(task)
             | TaskMessage::AfterTask(task) => task.warehouse_options.as_ref(),
-            TaskMessage::DeleteTask(_, warehouse_options) => warehouse_options.as_ref(),
+            TaskMessage::DeleteTask(_, warehouse_options, _) => warehouse_options.as_ref(),
         }
     }
 }

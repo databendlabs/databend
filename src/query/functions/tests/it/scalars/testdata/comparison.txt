@@ -598,6 +598,142 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : lhs = rhs
+raw expr       : eq(lhs::UInt8, rhs::UInt8)
+checked expr   : eq<UInt8, UInt8>(lhs, rhs)
+optimized expr : true
+evaluation:
++--------+---------+---------+---------+
+|        | lhs     | rhs     | Output  |
++--------+---------+---------+---------+
+| Type   | UInt8   | UInt8   | Boolean |
+| Domain | {7..=7} | {7..=7} | {TRUE}  |
+| Row 0  | 7       | 7       | true    |
+| Row 1  | 7       | 7       | true    |
++--------+---------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| lhs    | Column(UInt8([7, 7])) |
+| rhs    | Column(UInt8([7, 7])) |
+| Output | Boolean([0b______11]) |
++--------+-----------------------+
+
+
+ast            : lhs != rhs
+raw expr       : noteq(lhs::UInt8, rhs::UInt8)
+checked expr   : noteq<UInt8, UInt8>(lhs, rhs)
+optimized expr : false
+evaluation:
++--------+---------+---------+---------+
+|        | lhs     | rhs     | Output  |
++--------+---------+---------+---------+
+| Type   | UInt8   | UInt8   | Boolean |
+| Domain | {7..=7} | {7..=7} | {FALSE} |
+| Row 0  | 7       | 7       | false   |
+| Row 1  | 7       | 7       | false   |
++--------+---------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| lhs    | Column(UInt8([7, 7])) |
+| rhs    | Column(UInt8([7, 7])) |
+| Output | Boolean([0b______00]) |
++--------+-----------------------+
+
+
+ast            : lhs = rhs
+raw expr       : eq(lhs::String, rhs::String)
+checked expr   : eq<String, String>(lhs, rhs)
+optimized expr : true
+evaluation:
++--------+---------------------------+---------------------------+---------+
+|        | lhs                       | rhs                       | Output  |
++--------+---------------------------+---------------------------+---------+
+| Type   | String                    | String                    | Boolean |
+| Domain | {"databend"..="databend"} | {"databend"..="databend"} | {TRUE}  |
+| Row 0  | 'databend'                | 'databend'                | true    |
+| Row 1  | 'databend'                | 'databend'                | true    |
++--------+---------------------------+---------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------+
+| Column | Data                                     |
++--------+------------------------------------------+
+| lhs    | Column(StringColumn[databend, databend]) |
+| rhs    | Column(StringColumn[databend, databend]) |
+| Output | Boolean([0b______11])                    |
++--------+------------------------------------------+
+
+
+ast            : lhs != rhs
+raw expr       : noteq(lhs::String, rhs::String)
+checked expr   : noteq<String, String>(lhs, rhs)
+optimized expr : false
+evaluation:
++--------+---------------------------+---------------------------+---------+
+|        | lhs                       | rhs                       | Output  |
++--------+---------------------------+---------------------------+---------+
+| Type   | String                    | String                    | Boolean |
+| Domain | {"databend"..="databend"} | {"databend"..="databend"} | {FALSE} |
+| Row 0  | 'databend'                | 'databend'                | false   |
+| Row 1  | 'databend'                | 'databend'                | false   |
++--------+---------------------------+---------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------+
+| Column | Data                                     |
++--------+------------------------------------------+
+| lhs    | Column(StringColumn[databend, databend]) |
+| rhs    | Column(StringColumn[databend, databend]) |
+| Output | Boolean([0b______00])                    |
++--------+------------------------------------------+
+
+
+ast            : lhs = rhs
+raw expr       : eq(lhs::Int64 NULL, rhs::Int64 NULL)
+checked expr   : eq<Int64 NULL, Int64 NULL>(lhs, rhs)
+evaluation:
++--------+------------------+------------------+-----------------+
+|        | lhs              | rhs              | Output          |
++--------+------------------+------------------+-----------------+
+| Type   | Int64 NULL       | Int64 NULL       | Boolean NULL    |
+| Domain | {7..=7} ∪ {NULL} | {7..=7} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | 7                | 7                | true            |
+| Row 1  | NULL             | NULL             | NULL            |
++--------+------------------+------------------+-----------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| lhs    | Column(NullableColumn { column: Int64([7, 0]), validity: [0b______01] }) |
+| rhs    | Column(NullableColumn { column: Int64([7, 0]), validity: [0b______01] }) |
+| Output | NullableColumn { column: Boolean([0b______11]), validity: [0b______01] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : lhs != rhs
+raw expr       : noteq(lhs::Int64 NULL, rhs::Int64 NULL)
+checked expr   : noteq<Int64 NULL, Int64 NULL>(lhs, rhs)
+evaluation:
++--------+------------------+------------------+------------------+
+|        | lhs              | rhs              | Output           |
++--------+------------------+------------------+------------------+
+| Type   | Int64 NULL       | Int64 NULL       | Boolean NULL     |
+| Domain | {7..=7} ∪ {NULL} | {7..=7} ∪ {NULL} | {FALSE} ∪ {NULL} |
+| Row 0  | 7                | 7                | false            |
+| Row 1  | NULL             | NULL             | NULL             |
++--------+------------------+------------------+------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| lhs    | Column(NullableColumn { column: Int64([7, 0]), validity: [0b______01] }) |
+| rhs    | Column(NullableColumn { column: Int64([7, 0]), validity: [0b______01] }) |
+| Output | NullableColumn { column: Boolean([0b______00]), validity: [0b______01] } |
++--------+--------------------------------------------------------------------------+
+
+
 ast            : '1'<'2'
 raw expr       : lt('1', '2')
 checked expr   : lt<String, String>("1", "2")
@@ -1605,20 +1741,39 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : "like"('alpha_beta', 'alpha$_beta', '$')
+raw expr       : like('alpha_beta', 'alpha$_beta', '$')
+checked expr   : like<String, String, String>("alpha_beta", "alpha$_beta", "$")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : "like"('alphaXbeta', 'alpha$_beta', '$')
+raw expr       : like('alphaXbeta', 'alpha$_beta', '$')
+checked expr   : like<String, String, String>("alphaXbeta", "alpha$_beta", "$")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
 ast            : lhs like 'a%'
 raw expr       : like(lhs::String, 'a%')
 checked expr   : like<String, String>(lhs, "a%")
+optimized expr : true
 evaluation:
-+--------+-----------------+---------------+
-|        | lhs             | Output        |
-+--------+-----------------+---------------+
-| Type   | String          | Boolean       |
-| Domain | {"abc"..="abf"} | {FALSE, TRUE} |
-| Row 0  | 'abc'           | true          |
-| Row 1  | 'abd'           | true          |
-| Row 2  | 'abe'           | true          |
-| Row 3  | 'abf'           | true          |
-+--------+-----------------+---------------+
++--------+-----------------+---------+
+|        | lhs             | Output  |
++--------+-----------------+---------+
+| Type   | String          | Boolean |
+| Domain | {"abc"..="abf"} | {TRUE}  |
+| Row 0  | 'abc'           | true    |
+| Row 1  | 'abd'           | true    |
+| Row 2  | 'abe'           | true    |
+| Row 3  | 'abf'           | true    |
++--------+-----------------+---------+
 evaluation (internal):
 +--------+------------------------------------------+
 | Column | Data                                     |
@@ -1655,17 +1810,18 @@ evaluation (internal):
 ast            : lhs like 'ab%'
 raw expr       : like(lhs::String, 'ab%')
 checked expr   : like<String, String>(lhs, "ab%")
+optimized expr : true
 evaluation:
-+--------+-----------------+---------------+
-|        | lhs             | Output        |
-+--------+-----------------+---------------+
-| Type   | String          | Boolean       |
-| Domain | {"abc"..="abf"} | {FALSE, TRUE} |
-| Row 0  | 'abc'           | true          |
-| Row 1  | 'abd'           | true          |
-| Row 2  | 'abe'           | true          |
-| Row 3  | 'abf'           | true          |
-+--------+-----------------+---------------+
++--------+-----------------+---------+
+|        | lhs             | Output  |
++--------+-----------------+---------+
+| Type   | String          | Boolean |
+| Domain | {"abc"..="abf"} | {TRUE}  |
+| Row 0  | 'abc'           | true    |
+| Row 1  | 'abd'           | true    |
+| Row 2  | 'abe'           | true    |
+| Row 3  | 'abf'           | true    |
++--------+-----------------+---------+
 evaluation (internal):
 +--------+------------------------------------------+
 | Column | Data                                     |
@@ -1750,6 +1906,51 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : parse_json('{"name":"alpha_beta"}') like 'alpha\_beta'
+raw expr       : like(parse_json('{"name":"alpha_beta"}'), 'alpha\\_beta')
+checked expr   : like<Variant, String>(CAST<String>("{\"name\":\"alpha_beta\"}" AS Variant), "alpha\\_beta")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('["alpha_beta_tail"]') like 'alpha\_beta%'
+raw expr       : like(parse_json('["alpha_beta_tail"]'), 'alpha\\_beta%')
+checked expr   : like<Variant, String>(CAST<String>("[\"alpha_beta_tail\"]" AS Variant), "alpha\\_beta%")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"name":"head_alpha_beta"}') like '%alpha\_beta'
+raw expr       : like(parse_json('{"name":"head_alpha_beta"}'), '%alpha\\_beta')
+checked expr   : like<Variant, String>(CAST<String>("{\"name\":\"head_alpha_beta\"}" AS Variant), "%alpha\\_beta")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : "like"(parse_json('{"name":"alpha_beta"}'), 'alpha$_beta', '$')
+raw expr       : like(parse_json('{"name":"alpha_beta"}'), 'alpha$_beta', '$')
+checked expr   : like<Variant, String, String>(CAST<String>("{\"name\":\"alpha_beta\"}" AS Variant), "alpha$_beta", "$")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"name":"alphabeta"}') like 'alphabeta'
+raw expr       : like(parse_json('{"name":"alphabeta"}'), 'alphabeta')
+checked expr   : like<Variant, String>(CAST<String>("{\"name\":\"alphabeta\"}" AS Variant), "alphabeta")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
 ast            : parse_json(lhs) like 'a%'
 raw expr       : like(parse_json(lhs::String), 'a%')
 checked expr   : like<Variant, String>(CAST<String>(lhs AS Variant), "a%")
@@ -1792,6 +1993,200 @@ evaluation (internal):
 | lhs    | Column(StringColumn["abc", {"abd":12}, ["abe","abf"]]) |
 | Output | Boolean([0b_____111])                                  |
 +--------+--------------------------------------------------------+
+
+
+ast            : "ilike"('Databend', 'data%')
+raw expr       : ilike('Databend', 'data%')
+checked expr   : ilike<String, String>("Databend", "data%")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : "ilike"('ab', 'aA%', 'A')
+raw expr       : ilike('ab', 'aA%', 'A')
+checked expr   : ilike<String, String, String>("ab", "aA%", "A")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : "ilike"('a%', 'aA%', 'A')
+raw expr       : ilike('a%', 'aA%', 'A')
+checked expr   : ilike<String, String, String>("a%", "aA%", "A")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : "ilike_any"('ab', ('z%', 'aA%'), 'A')
+raw expr       : ilike_any('ab', tuple('z%', 'aA%'), 'A')
+checked expr   : ilike_any<String, Tuple(String, String), String>("ab", tuple<String, String>("z%", "aA%"), "A")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : "ilike"(lhs, rhs, 'A')
+raw expr       : ilike(lhs::String, rhs::String, 'A')
+checked expr   : ilike<String, String, String>(lhs, rhs, "A")
+optimized expr : ilike<String, String, String>(lhs, "aA%", "A")
+evaluation:
++--------+---------------+-----------------+---------------+
+|        | lhs           | rhs             | Output        |
++--------+---------------+-----------------+---------------+
+| Type   | String        | String          | Boolean       |
+| Domain | {"a%"..="ab"} | {"aA%"..="aA%"} | {FALSE, TRUE} |
+| Row 0  | 'ab'          | 'aA%'           | false         |
+| Row 1  | 'a%'          | 'aA%'           | true          |
++--------+---------------+-----------------+---------------+
+evaluation (internal):
++--------+--------------------------------+
+| Column | Data                           |
++--------+--------------------------------+
+| lhs    | Column(StringColumn[ab, a%])   |
+| rhs    | Column(StringColumn[aA%, aA%]) |
+| Output | Boolean([0b______10])          |
++--------+--------------------------------+
+
+
+ast            : if(cond, lhs like '%', not(lhs like '%'))
+raw expr       : if(cond::Boolean, like(lhs::String NULL, '%'), not(like(lhs::String NULL, '%')))
+checked expr   : if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL)), not<Boolean NULL>(like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL))))
+optimized expr : if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), like<String NULL, String NULL>(lhs, "%"), not<Boolean NULL>(like<String NULL, String NULL>(lhs, "%")))
+evaluation:
++--------+---------------+-----------------------------+------------------------+
+|        | cond          | lhs                         | Output                 |
++--------+---------------+-----------------------------+------------------------+
+| Type   | Boolean       | String NULL                 | Boolean NULL           |
+| Domain | {FALSE, TRUE} | {"alpha"..="zeta"} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
+| Row 0  | true          | 'alpha'                     | true                   |
+| Row 1  | false         | NULL                        | NULL                   |
+| Row 2  | true          | 'beta'                      | true                   |
+| Row 3  | false         | 'zeta'                      | false                  |
+| Row 4  | true          | NULL                        | NULL                   |
+| Row 5  | false         | 'omega'                     | false                  |
++--------+---------------+-----------------------------+------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                  |
++--------+-------------------------------------------------------------------------------------------------------+
+| cond   | Column(Boolean([0b__010101]))                                                                         |
+| lhs    | Column(NullableColumn { column: StringColumn[alpha, , beta, zeta, , omega], validity: [0b__101101] }) |
+| Output | NullableColumn { column: Boolean([0b__000101]), validity: [0b__101101] }                              |
++--------+-------------------------------------------------------------------------------------------------------+
+
+
+ast            : not(if(cond, lhs like '%', not(lhs like '%')))
+raw expr       : not(if(cond::Boolean, like(lhs::String NULL, '%'), not(like(lhs::String NULL, '%'))))
+checked expr   : not<Boolean NULL>(if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL)), not<Boolean NULL>(like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL)))))
+optimized expr : not<Boolean NULL>(if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), like<String NULL, String NULL>(lhs, "%"), not<Boolean NULL>(like<String NULL, String NULL>(lhs, "%"))))
+evaluation:
++--------+---------------+-----------------------------+------------------------+
+|        | cond          | lhs                         | Output                 |
++--------+---------------+-----------------------------+------------------------+
+| Type   | Boolean       | String NULL                 | Boolean NULL           |
+| Domain | {FALSE, TRUE} | {"alpha"..="zeta"} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
+| Row 0  | true          | 'alpha'                     | false                  |
+| Row 1  | false         | NULL                        | NULL                   |
+| Row 2  | true          | 'beta'                      | false                  |
+| Row 3  | false         | 'zeta'                      | true                   |
+| Row 4  | true          | NULL                        | NULL                   |
+| Row 5  | false         | 'omega'                     | true                   |
++--------+---------------+-----------------------------+------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                  |
++--------+-------------------------------------------------------------------------------------------------------+
+| cond   | Column(Boolean([0b__010101]))                                                                         |
+| lhs    | Column(NullableColumn { column: StringColumn[alpha, , beta, zeta, , omega], validity: [0b__101101] }) |
+| Output | NullableColumn { column: Boolean([0b__111010]), validity: [0b__101101] }                              |
++--------+-------------------------------------------------------------------------------------------------------+
+
+
+ast            : is_true(if(cond, lhs like '%', not(lhs like '%')))
+raw expr       : is_true(if(cond::Boolean, like(lhs::String NULL, '%'), not(like(lhs::String NULL, '%'))))
+checked expr   : is_true<Boolean NULL>(if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL)), not<Boolean NULL>(like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL)))))
+optimized expr : is_true<Boolean NULL>(if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), like<String NULL, String NULL>(lhs, "%"), not<Boolean NULL>(like<String NULL, String NULL>(lhs, "%"))))
+evaluation:
++--------+---------------+-----------------------------+---------------+
+|        | cond          | lhs                         | Output        |
++--------+---------------+-----------------------------+---------------+
+| Type   | Boolean       | String NULL                 | Boolean       |
+| Domain | {FALSE, TRUE} | {"alpha"..="zeta"} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | true          | 'alpha'                     | true          |
+| Row 1  | false         | NULL                        | false         |
+| Row 2  | true          | 'beta'                      | true          |
+| Row 3  | false         | 'zeta'                      | false         |
+| Row 4  | true          | NULL                        | false         |
+| Row 5  | false         | 'omega'                     | false         |
++--------+---------------+-----------------------------+---------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                  |
++--------+-------------------------------------------------------------------------------------------------------+
+| cond   | Column(Boolean([0b__010101]))                                                                         |
+| lhs    | Column(NullableColumn { column: StringColumn[alpha, , beta, zeta, , omega], validity: [0b__101101] }) |
+| Output | Boolean([0b__000101])                                                                                 |
++--------+-------------------------------------------------------------------------------------------------------+
+
+
+ast            : if(is_not_null(if(cond, lhs like '%', not(lhs like '%'))), assume_not_null(if(cond, lhs like '%', not(lhs like '%'))), false)
+raw expr       : if(is_not_null(if(cond::Boolean, like(lhs::String NULL, '%'), not(like(lhs::String NULL, '%')))), assume_not_null(if(cond::Boolean, like(lhs::String NULL, '%'), not(like(lhs::String NULL, '%')))), false)
+checked expr   : if<T0=Boolean><Boolean NULL, T0, T0>(CAST<Boolean>(is_not_null<T0=Boolean><T0 NULL>(if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL)), not<Boolean NULL>(like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL))))) AS Boolean NULL), assume_not_null<T0=Boolean><T0 NULL>(if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL)), not<Boolean NULL>(like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL))))), false)
+optimized expr : if<T0=Boolean><Boolean NULL, T0, T0>(CAST<Boolean>(is_not_null<T0=Boolean><T0 NULL>(if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), like<String NULL, String NULL>(lhs, "%"), not<Boolean NULL>(like<String NULL, String NULL>(lhs, "%")))) AS Boolean NULL), assume_not_null<T0=Boolean><T0 NULL>(if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), like<String NULL, String NULL>(lhs, "%"), not<Boolean NULL>(like<String NULL, String NULL>(lhs, "%")))), false)
+evaluation:
++--------+---------------+-----------------------------+---------------+
+|        | cond          | lhs                         | Output        |
++--------+---------------+-----------------------------+---------------+
+| Type   | Boolean       | String NULL                 | Boolean       |
+| Domain | {FALSE, TRUE} | {"alpha"..="zeta"} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | true          | 'alpha'                     | true          |
+| Row 1  | false         | NULL                        | false         |
+| Row 2  | true          | 'beta'                      | true          |
+| Row 3  | false         | 'zeta'                      | false         |
+| Row 4  | true          | NULL                        | false         |
+| Row 5  | false         | 'omega'                     | false         |
++--------+---------------+-----------------------------+---------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                  |
++--------+-------------------------------------------------------------------------------------------------------+
+| cond   | Column(Boolean([0b__010101]))                                                                         |
+| lhs    | Column(NullableColumn { column: StringColumn[alpha, , beta, zeta, , omega], validity: [0b__101101] }) |
+| Output | Boolean([0b__000101])                                                                                 |
++--------+-------------------------------------------------------------------------------------------------------+
+
+
+ast            : if(cond, if(is_not_null(lhs like '%'), assume_not_null(lhs like '%'), false), is_true(not(lhs like '%')))
+raw expr       : if(cond::Boolean, if(is_not_null(like(lhs::String NULL, '%')), assume_not_null(like(lhs::String NULL, '%')), false), is_true(not(like(lhs::String NULL, '%'))))
+checked expr   : if<T0=Boolean><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), if<T0=Boolean><Boolean NULL, T0, T0>(CAST<Boolean>(is_not_null<T0=Boolean><T0 NULL>(like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL))) AS Boolean NULL), assume_not_null<T0=Boolean><T0 NULL>(like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL))), false), is_true<Boolean NULL>(not<Boolean NULL>(like<String NULL, String NULL>(lhs, CAST<String>("%" AS String NULL)))))
+optimized expr : if<T0=Boolean><Boolean NULL, T0, T0>(CAST<Boolean>(cond AS Boolean NULL), if<T0=Boolean><Boolean NULL, T0, T0>(CAST<Boolean>(is_not_null<T0=Boolean><T0 NULL>(like<String NULL, String NULL>(lhs, "%")) AS Boolean NULL), true, false), false)
+evaluation:
++--------+---------------+-----------------------------+---------------+
+|        | cond          | lhs                         | Output        |
++--------+---------------+-----------------------------+---------------+
+| Type   | Boolean       | String NULL                 | Boolean       |
+| Domain | {FALSE, TRUE} | {"alpha"..="zeta"} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | true          | 'alpha'                     | true          |
+| Row 1  | false         | NULL                        | false         |
+| Row 2  | true          | 'beta'                      | true          |
+| Row 3  | false         | 'zeta'                      | false         |
+| Row 4  | true          | NULL                        | false         |
+| Row 5  | false         | 'omega'                     | false         |
++--------+---------------+-----------------------------+---------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                  |
++--------+-------------------------------------------------------------------------------------------------------+
+| cond   | Column(Boolean([0b__010101]))                                                                         |
+| lhs    | Column(NullableColumn { column: StringColumn[alpha, , beta, zeta, , omega], validity: [0b__101101] }) |
+| Output | Boolean([0b__000101])                                                                                 |
++--------+-------------------------------------------------------------------------------------------------------+
 
 
 ast            : lhs regexp rhs

@@ -1,0 +1,13 @@
+=== in_list_at_join_threshold_converts_to_subquery ===
+description: An IN list at inlist_to_join_threshold should preserve the old constant-scan subquery conversion.
+sql: number IN (1, 2, 3, 4)
+status: ok
+scalar: SUBQUERY
+type: Boolean NULL
+
+=== not_in_list_at_join_threshold_wraps_subquery_conversion ===
+description: NOT IN at inlist_to_join_threshold should wrap the converted subquery with NOT.
+sql: number NOT IN (1, 2, 3, 4)
+status: ok
+scalar: not(SUBQUERY)
+type: Boolean NULL

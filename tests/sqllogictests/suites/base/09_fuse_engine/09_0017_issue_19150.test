@@ -62,6 +62,12 @@ insert into t5 values(5);
 1
 
 statement ok
+alter table t5 recluster;
+
+statement ok
+alter table t5 recluster;
+
+statement ok
 alter table t5 recluster final;
 
 query TTI

@@ -45,6 +45,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -84,6 +85,8 @@ use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -103,8 +106,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -112,10 +113,13 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
@@ -232,6 +236,13 @@ impl Catalog for DatabaseCatalog {
             .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
+            if !req.override_existing {
+                return Ok(CreateDatabaseReply {
+                    db_id: DatabaseId::new(0),
+                    created: false,
+                });
+            }
+
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
                 req.name_ident.database_name()
@@ -295,6 +306,47 @@ impl Catalog for DatabaseCatalog {
         } else {
             self.mutable_catalog.get_table_meta_by_id(table_id).await
         }
+    }
+
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.mutable_catalog
+            .get_mv_definition(tenant, mv_table_id)
+            .await
+    }
+
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.mutable_catalog
+            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
+            .await
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        self.mutable_catalog
+            .get_mv_current_source_generation(tenant, source_table_id)
+            .await
+    }
+
+    async fn get_mv_source_binding_snapshot(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<MVSourceBindingSnapshot> {
+        self.mutable_catalog
+            .get_mv_source_binding_snapshot(tenant, source_table_id)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -670,10 +722,11 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn retryable_update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         reqs: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         self.mutable_catalog
-            .retryable_update_multi_table_meta(reqs)
+            .retryable_update_multi_table_meta(tenant, reqs)
             .await
     }
 
@@ -922,8 +975,22 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
-        self.mutable_catalog.update_dictionary(req).await
+    async fn get_dictionary_id(
+        &self,
+        dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryId>>> {
+        self.mutable_catalog.get_dictionary_id(dict_ident).await
+    }
+
+    #[async_backtrace::framed]
+    async fn update_dictionary_by_id(
+        &self,
+        id_ident: DictionaryIdIdent,
+        dictionary_meta: DictionaryMeta,
+    ) -> Result<Change<DictionaryMeta>> {
+        self.mutable_catalog
+            .update_dictionary_by_id(id_ident, dictionary_meta)
+            .await
     }
 
     #[async_backtrace::framed]

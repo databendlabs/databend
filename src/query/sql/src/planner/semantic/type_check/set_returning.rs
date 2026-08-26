@@ -13,25 +13,72 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
+use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprArgs;
+use super::CoreExprId;
 use super::TypeChecker;
 use crate::binder::ExprContext;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a> {
-    /// Resolve set returning function.
-    pub(super) fn resolve_set_returning_function(
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn try_lower_set_returning_function(
         &mut self,
         span: Span,
         func_name: &str,
-        args: &[&Expr],
+        func: &'a ASTFunctionCall,
+    ) -> Result<Option<CoreExprId>> {
+        if !BUILTIN_FUNCTIONS
+            .get_property(func_name)
+            .map(|property| property.kind == FunctionKind::SRF)
+            .unwrap_or(false)
+        {
+            return Ok(None);
+        }
+
+        let functions: &'static databend_common_expression::FunctionRegistry = &BUILTIN_FUNCTIONS;
+        let func_name = if let Some((name, _)) = functions.funcs.get_key_value(func_name) {
+            Some(name.as_str())
+        } else if let Some((name, _)) = functions.factories.get_key_value(func_name) {
+            Some(name.as_str())
+        } else if let Some((alias, _)) = functions.aliases.get_key_value(func_name) {
+            Some(alias.as_str())
+        } else {
+            None
+        };
+        let Some(func_name) = func_name else {
+            return Ok(None);
+        };
+
+        let args = self.lower_expr_args(&func.args)?;
+        Ok(Some(self.alloc(CoreExpr::SetReturningFunction {
+            span,
+            func_name,
+            args,
+        })))
+    }
+}
+
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
+{
+    pub(super) fn resolve_set_returning_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        func_name: &str,
+        args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match self.bind_context.expr_context {
             ExprContext::InSetReturningFunction => {
@@ -71,40 +118,39 @@ impl<'a> TypeChecker<'a> {
         let original_context = self
             .bind_context
             .replace_expr_context(ExprContext::InSetReturningFunction);
-
-        let mut arguments = Vec::with_capacity(args.len());
-        for arg in args.iter() {
-            let box (scalar, _) = self.resolve(arg)?;
-            arguments.push(scalar);
-        }
-
-        // Restore the original context
+        let arguments_result = self.resolve_expr_args(arena, args);
         self.bind_context.expr_context = original_context;
-
+        let (arguments, argument_types) = arguments_result?;
+        let srf_return_type = type_check::infer_function_return_type(
+            span,
+            func_name,
+            &[],
+            argument_types.into_iter(),
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let srf_tuple_types = srf_return_type.as_tuple().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "The return type of srf should be tuple, but got {}",
+                srf_return_type
+            ))
+        })?;
         let srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
             span,
             func_name: func_name.to_string(),
             params: vec![],
             arguments,
+            return_type: Box::new(srf_return_type.clone()),
         });
-        let srf_expr = srf_scalar.as_expr()?;
-        let srf_tuple_types = srf_expr.data_type().as_tuple().ok_or_else(|| {
-            ErrorCode::Internal(format!(
-                "The return type of srf should be tuple, but got {}",
-                srf_expr.data_type()
-            ))
-        })?;
 
-        // If tuple has more than one field, return the tuple column,
-        // otherwise, extract the tuple field to top level column.
         let (return_scalar, return_type) = if srf_tuple_types.len() > 1 {
-            (srf_scalar, srf_expr.data_type().clone())
+            (srf_scalar, srf_return_type)
         } else {
             let child_scalar = ScalarExpr::FunctionCall(FunctionCall {
                 span,
                 func_name: "get".to_string(),
                 params: vec![Scalar::Number(NumberScalar::Int64(1))],
                 arguments: vec![srf_scalar],
+                return_type: Box::new(srf_tuple_types[0].clone()),
             });
             (child_scalar, srf_tuple_types[0].clone())
         };
