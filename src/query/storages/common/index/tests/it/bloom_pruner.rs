@@ -685,11 +685,12 @@ fn eval_index_expr(
 
     let func_ctx = FunctionContext::default();
     let (fold_expr, _) = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS);
-    let expr = if fold_expr != expr {
-        writeln!(file, "fold_expr: {fold_expr}").unwrap();
-        fold_expr.into_owned()
-    } else {
-        expr
+    let expr = match fold_expr {
+        Cow::Borrowed(_) => expr,
+        Cow::Owned(fold_expr) => {
+            writeln!(file, "fold_expr: {fold_expr}").unwrap();
+            fold_expr
+        }
     };
 
     let bloom_fields = bloom_columns.values().cloned().collect::<Vec<_>>();
