@@ -6,7 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DB="test_table_branch_refs"
 
 run_sql() {
-    echo "$1" | $BENDSQL_CLIENT_CONNECT > /dev/null || exit 1
+    echo "$1" | bendsql_connect_root > /dev/null || exit 1
 }
 
 run_ref_sql() {
@@ -14,7 +14,7 @@ run_ref_sql() {
 }
 
 query_sql() {
-    echo "$1" | $BENDSQL_CLIENT_CONNECT || exit 1
+    echo "$1" | bendsql_connect_root || exit 1
 }
 
 query_ref_sql() {
@@ -23,7 +23,7 @@ query_ref_sql() {
 
 scalar_sql() {
     local result
-    result=$(echo "$1" | $BENDSQL_CLIENT_CONNECT) || return 1
+    result=$(echo "$1" | bendsql_connect_root) || return 1
     [ -n "$result" ] || return 1
     echo "$result"
 }

@@ -306,13 +306,13 @@ impl Binder {
         let table_index = self.metadata.write().add_table(
             CATALOG_DEFAULT.to_string(),
             "system".to_string(),
+            table.name().to_string(),
             table.as_table(),
             None,
             table_alias_name,
             false,
             false,
             false,
-            None,
         );
         let (s_expr, mut bind_context) =
             self.bind_base_table(bind_context, "system", table_index, None, sample, true)?;
@@ -367,13 +367,13 @@ impl Binder {
             let table_index = self.metadata.write().add_table(
                 CATALOG_DEFAULT.to_string(),
                 "system".to_string(),
+                table.name().to_string(),
                 table.clone(),
                 None,
                 table_alias_name,
                 false,
                 false,
                 false,
-                None,
             );
 
             let (s_expr, mut bind_context) =

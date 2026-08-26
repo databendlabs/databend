@@ -115,6 +115,8 @@ impl MutationExpression {
                 let (mut target_s_expr, mut target_context) = binder.bind_physical_table(
                     bind_context,
                     &target_table_identifier.database_name(),
+                    target_table_identifier.table_name(),
+                    target_table_identifier.branch_name(),
                     target_table_identifier.table_name_alias(),
                     target_table.clone(),
                     target_alias,
@@ -240,6 +242,8 @@ impl MutationExpression {
                 let (s_expr, mut bind_context) = binder.bind_physical_table(
                     bind_context,
                     &target_table_identifier.database_name(),
+                    target_table_identifier.table_name(),
+                    target_table_identifier.branch_name(),
                     target_table_identifier.table_name_alias(),
                     target_table.clone(),
                     target_alias,
@@ -561,6 +565,8 @@ impl Binder {
         &mut self,
         bind_context: &BindContext,
         database: &str,
+        table_name: String,
+        branch_name: Option<String>,
         table_alias_name: Option<String>,
         table: Arc<dyn Table>,
         alias: &Option<TableAlias>,
@@ -568,13 +574,13 @@ impl Binder {
         let table_index = self.metadata.write().add_table(
             table.get_table_info().catalog().to_string(),
             database.to_string(),
+            table_name,
             table,
-            None,
+            branch_name,
             table_alias_name,
             false,
             false,
             false,
-            None,
         );
         let (s_expr, mut target_context) =
             self.bind_base_table(bind_context, database, table_index, None, &None, true)?;

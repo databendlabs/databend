@@ -263,13 +263,13 @@ impl Binder {
                     let table_index = metadata.add_table(
                         catalog,
                         database.clone(),
+                        table_name.clone(),
                         table_meta.clone(),
                         branch_name,
                         table_name_alias,
                         !bind_context.binding_views.is_empty(),
                         bind_context.planning_agg_index,
                         false,
-                        cte_suffix_name,
                     );
                     if let Some(stream_lineage_source) = stream_lineage_source {
                         metadata.set_stream_lineage_source(table_index, stream_lineage_source);
@@ -358,13 +358,13 @@ impl Binder {
                     self.metadata.write().add_table(
                         catalog.clone(),
                         database.clone(),
+                        table_name.clone(),
                         table_meta.clone(),
                         branch_name.clone(),
                         table_name_alias.clone(),
                         false,
                         false,
                         false,
-                        cte_suffix_name,
                     );
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query)?;
@@ -410,19 +410,18 @@ impl Binder {
                 table_meta,
                 alias,
                 sample,
-                cte_suffix_name,
             ),
             _ => {
                 let table_index = self.metadata.write().add_table(
                     catalog,
                     database.clone(),
+                    table_name.clone(),
                     table_meta,
                     branch_name,
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
                     bind_context.planning_agg_index,
                     false,
-                    cte_suffix_name,
                 );
 
                 let (s_expr, mut bind_context) = self.bind_base_table(

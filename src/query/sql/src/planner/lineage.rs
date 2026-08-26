@@ -1296,6 +1296,30 @@ mod tests {
     }
 
     #[test]
+    fn test_metadata_keeps_logical_table_name_separate_from_branch() {
+        let metadata = MetadataRef::new(RwLock::new(Metadata::default()));
+        let table_index = metadata.write().add_table(
+            "default".to_string(),
+            "db".to_string(),
+            "t".to_string(),
+            fake_table_with_catalog_type(10, "t/dev", &["a"], "FUSE", CatalogType::Default),
+            Some("dev".to_string()),
+            None,
+            false,
+            false,
+            false,
+        );
+
+        let metadata = metadata.read();
+        let table = metadata.table(table_index);
+        assert_eq!(table.name(), "t");
+        assert_eq!(table.branch().as_deref(), Some("dev"));
+        assert_eq!(table.qualified_name(), "default.db.t/dev");
+        assert_eq!(metadata.get_table_index(Some("db"), "t"), Some(table_index));
+        assert_eq!(metadata.get_table_index(Some("db"), "t/dev"), None);
+    }
+
+    #[test]
     fn test_query_output_lineage_excludes_filter_columns() -> Result<()> {
         // Simulates:
         // INSERT INTO dst SELECT a + b AS x FROM src WHERE c
@@ -1783,13 +1807,13 @@ mod tests {
         metadata.write().add_table(
             catalog_name(catalog_type),
             "default".to_string(),
+            table_name.to_string(),
             fake_table_with_catalog_type(table_id, table_name, columns, engine, catalog_type),
             None,
             None,
             false,
             false,
             false,
-            None,
         )
     }
 
@@ -1803,13 +1827,13 @@ mod tests {
         let table_index = metadata.add_table(
             "default".to_string(),
             "default".to_string(),
+            table_name.to_string(),
             fake_stream_table(table_id, table_name, lineage_source.clone()),
             None,
             None,
             false,
             false,
             false,
-            None,
         );
         metadata.set_stream_lineage_source(table_index, LineageSourceRelation {
             catalog: lineage_source.catalog,
@@ -1858,6 +1882,7 @@ mod tests {
         metadata.write().add_table(
             "default".to_string(),
             "system".to_string(),
+            "stage".to_string(),
             Arc::new(FakeTable {
                 table_info,
                 stream_source_table_info: None,
@@ -1875,7 +1900,6 @@ mod tests {
             false,
             false,
             true,
-            None,
         )
     }
 
@@ -1926,6 +1950,7 @@ mod tests {
             catalog_info: Arc::new(CatalogInfo::default()),
             database_name: "default".to_string(),
             table_name: "dst".to_string(),
+            branch: None,
             from_stage_attachment,
             required_values_schema: data_schema.clone(),
             values_consts: vec![],

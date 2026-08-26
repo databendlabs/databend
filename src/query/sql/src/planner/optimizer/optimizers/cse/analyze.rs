@@ -214,17 +214,16 @@ mod tests {
     }
 
     fn add_table(metadata: &mut Metadata, table: Arc<dyn Table>) -> usize {
-        let table_name = table.name().to_string();
         metadata.add_table(
             "default".to_string(),
             "default".to_string(),
+            table.name().to_string(),
             table,
             None,
             None,
             false,
             false,
             false,
-            None,
         )
     }
 

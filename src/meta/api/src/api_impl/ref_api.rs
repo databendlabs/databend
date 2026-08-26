@@ -30,11 +30,9 @@ use databend_common_meta_app::data_mask::MaskPolicyTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::AutoIncrementKey;
-use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
-use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::BranchIdToName;
@@ -65,6 +63,8 @@ use databend_common_meta_app::schema::TagIdObjectRefIdent;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UndropTableBranchByIdReq;
 use databend_common_meta_app::schema::UndropTableBranchReq;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::value_id::ValueId;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
@@ -473,9 +473,14 @@ where
                 )));
             };
             let mut table_meta = seq_table_meta.data;
-            // Keep the branch table meta for history/vacuum flows, but mark it dropped once the
-            // visible branch name is removed.
-            let drop_on = Utc::now();
+            // Expiration is the branch's automatic deletion time. Dropping an already expired
+            // branch must not restart its retention window from now.
+            let now = Utc::now();
+            let drop_on = seq_branch
+                .data
+                .expire_at
+                .filter(|expire_at| *expire_at <= now)
+                .unwrap_or(now);
             table_meta.drop_on = Some(drop_on);
 
             // Write dropped-branch entry so vacuum/undrop can discover this branch.
@@ -1074,8 +1079,8 @@ mod tests {
     use chrono::DateTime;
     use chrono::Utc;
     use databend_common_meta_app::app_error::AppError;
-    use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
     use databend_common_meta_app::schema::LeastVisibleTime;
+    use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
     use databend_meta_client::types::MatchSeq;
 
     use super::CreateTableTagReq;

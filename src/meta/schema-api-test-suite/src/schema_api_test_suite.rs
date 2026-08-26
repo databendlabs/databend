@@ -25,17 +25,12 @@ use chrono::Duration;
 use chrono::Utc;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_meta_api::deserialize_struct;
-use databend_common_meta_api::kv_app_error::KVAppError;
-use databend_common_meta_api::kv_pb_api::KVPbApi;
-use databend_common_meta_api::kv_pb_api::UpsertPB;
-use databend_common_meta_api::serialize_struct;
-use databend_common_meta_api::util::IdempotentKVTxnSender;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_api::CatalogApi;
+use databend_common_meta_api::DEFAULT_MGET_SIZE;
 use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::DatamaskApi;
 use databend_common_meta_api::DictionaryApi;
@@ -49,7 +44,13 @@ use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_api::TableApi;
 use databend_common_meta_api::TagApi;
-use databend_common_meta_api::DEFAULT_MGET_SIZE;
+use databend_common_meta_api::deserialize_struct;
+use databend_common_meta_api::kv_app_error::KVAppError;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_api::serialize_struct;
+use databend_common_meta_api::util::IdempotentKVTxnSender;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TableEngineMismatch;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
@@ -57,21 +58,11 @@ use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
-use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
-use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_meta_app::schema::index_id_ident::IndexId;
-use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
-use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
-use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
-use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -132,9 +123,11 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
+use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -172,11 +165,18 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
-use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::index_id_ident::IndexId;
+use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
+use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
+use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
-use databend_common_meta_app::KeyWithTenant;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::StructKey;
@@ -188,12 +188,12 @@ use log::debug;
 use log::info;
 
 use crate::db_table_harness::DbTableHarness;
+use crate::support::DroponInfo;
 use crate::support::assert_meta_eq_without_updated;
 use crate::support::calc_and_compare_drop_on_db_result;
 use crate::support::calc_and_compare_drop_on_table_result;
 use crate::support::delete_test_data;
 use crate::support::upsert_test_data;
-use crate::support::DroponInfo;
 use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
 
@@ -1798,10 +1798,11 @@ impl SchemaApiTestSuite {
             KVAppError::AppError(AppError::TableVersionMismatched(_))
         ));
         assert_eq!(fourth_source.get_table().await?, fourth_before);
-        assert!(mt
-            .get_table(GetTableReq::new(&tenant, db_name, "stale_stream"))
-            .await
-            .is_err());
+        assert!(
+            mt.get_table(GetTableReq::new(&tenant, db_name, "stale_stream"))
+                .await
+                .is_err()
+        );
 
         Ok(())
     }
@@ -2169,10 +2170,11 @@ impl SchemaApiTestSuite {
             db_name: db_name.clone(),
         })
         .await?;
-        assert!(mt
-            .get_mv_definition(&tenant, current_mv.table_id)
-            .await?
-            .is_none());
+        assert!(
+            mt.get_mv_definition(&tenant, current_mv.table_id)
+                .await?
+                .is_none()
+        );
         assert!(mt.get_pb(&current_relationship_ident).await?.is_none());
 
         // Replacing with another source removes the old definition and moves the source index.
@@ -2188,10 +2190,11 @@ impl SchemaApiTestSuite {
                 .await?;
 
             assert!(mt.get_mv_definition(&tenant, mv_id).await?.is_none());
-            assert!(mt
-                .get_pb(&source_mv_ident(source_table_id, mv_id))
-                .await?
-                .is_none());
+            assert!(
+                mt.get_pb(&source_mv_ident(source_table_id, mv_id))
+                    .await?
+                    .is_none()
+            );
 
             let mvs = mt
                 .list_mvs_by_source_table_id(&tenant, replacement_source_table_id)
@@ -4533,10 +4536,12 @@ impl SchemaApiTestSuite {
         };
         mt.set_table_column_mask_policy(set_req).await?;
         table_info = util.get_table().await?;
-        assert!(table_info
-            .meta
-            .column_mask_policy_columns_ids
-            .contains_key(&number_column_id));
+        assert!(
+            table_info
+                .meta
+                .column_mask_policy_columns_ids
+                .contains_key(&number_column_id)
+        );
 
         // Drop the table (this deletes the table-policy reference), then drop the policy.
         util.drop_table_by_id().await?;
@@ -8670,12 +8675,13 @@ impl SchemaApiTestSuite {
         .await?;
         assert!(mt.get_pb(&branch_key).await?.is_some());
         assert!(mt.get_pb(&dropped_key).await?.is_none());
-        assert!(mt
-            .get_pb(&TableId {
+        assert!(
+            mt.get_pb(&TableId {
                 table_id: branch_id
             })
             .await?
-            .is_some());
+            .is_some()
+        );
 
         Ok(())
     }
@@ -8718,12 +8724,13 @@ impl SchemaApiTestSuite {
             .await?;
         assert!(removed > 0, "dropped branch gc should clean up metadata");
         assert!(mt.get_pb(&dropped_key).await?.is_none());
-        assert!(mt
-            .get_pb(&TableId {
+        assert!(
+            mt.get_pb(&TableId {
                 table_id: branch_id
             })
             .await?
-            .is_none());
+            .is_none()
+        );
 
         Ok(())
     }
@@ -8772,18 +8779,20 @@ impl SchemaApiTestSuite {
         let recreated_branch = mt.get_pb(&branch_key).await?.unwrap();
         assert_eq!(new_branch_id, recreated_branch.data.branch_id);
         assert!(mt.get_pb(&dropped_key).await?.is_none());
-        assert!(mt
-            .get_pb(&TableId {
+        assert!(
+            mt.get_pb(&TableId {
                 table_id: old_branch_id
             })
             .await?
-            .is_none());
-        assert!(mt
-            .get_pb(&TableId {
+            .is_none()
+        );
+        assert!(
+            mt.get_pb(&TableId {
                 table_id: new_branch_id
             })
             .await?
-            .is_some());
+            .is_some()
+        );
 
         Ok(())
     }
@@ -8852,6 +8861,13 @@ impl SchemaApiTestSuite {
             branch_id: expired_branch_id,
         })
         .await?;
+        let dropped_key =
+            DroppedBranchIdent::new(base_table_id, expired_branch_name, expired_branch_id);
+        assert_eq!(
+            expired_expire_at,
+            mt.get_pb(&dropped_key).await?.unwrap().data.drop_on
+        );
+
         let err = mt
             .undrop_table_branch(UndropTableBranchReq {
                 tenant: tenant.clone(),
@@ -8879,6 +8895,36 @@ impl SchemaApiTestSuite {
             .await?
             .unwrap();
         assert_eq!(Some(renewed_expire_at), renewed_branch.data.expire_at);
+
+        // Expiration remains the retention origin after DROP.
+        let branch_name = "branch_expired_beyond_retention";
+        let expire_at = Utc::now() - Duration::hours(4);
+        let branch_id = self
+            .create_active_branch(mt, tenant, base_table, branch_name, Some(expire_at))
+            .await?;
+        mt.drop_table_branch(DropTableBranchReq {
+            tenant: tenant.clone(),
+            table_id: base_table_id,
+            branch_name: branch_name.to_string(),
+            branch_id,
+        })
+        .await?;
+        mt.fetch_set_vacuum_timestamp(tenant, expire_at + Duration::seconds(1))
+            .await?;
+
+        let err = mt
+            .undrop_table_branch_by_id(UndropTableBranchByIdReq {
+                tenant: tenant.clone(),
+                table_id: base_table_id,
+                branch_id,
+                new_expire_at: Some(Utc::now() + Duration::hours(4)),
+            })
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::UndropTableRetentionGuard(_))
+        ));
 
         Ok(())
     }

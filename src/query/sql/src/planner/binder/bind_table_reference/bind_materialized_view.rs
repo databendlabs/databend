@@ -410,7 +410,6 @@ impl Binder {
         checkpoint_location: Option<String>,
         alias: &Option<TableAlias>,
         sample: &Option<SampleConfig>,
-        cte_suffix_name: Option<String>,
     ) -> Result<Option<MaterializedViewHybridBindResult>> {
         let internal_source_name = format!(
             "_mv_read_changes_{}_{}",
@@ -544,13 +543,13 @@ impl Binder {
         let table_index = self.metadata.write().add_table(
             catalog_name.to_string(),
             database.to_string(),
+            table_name.to_string(),
             table_meta,
             None,
             table_name_alias,
             !bind_context.binding_views.is_empty(),
             bind_context.planning_agg_index,
             false,
-            cte_suffix_name,
         );
         let (storage_expr, storage_context) =
             self.bind_base_table(bind_context, database, table_index, None, sample, false)?;
@@ -607,7 +606,6 @@ impl Binder {
         table_meta: Arc<dyn Table>,
         alias: &Option<TableAlias>,
         sample: &Option<SampleConfig>,
-        cte_suffix_name: Option<String>,
         source_override: Option<(Arc<dyn Table>, String)>,
         record_cache_dependency: bool,
     ) -> Result<(SExpr, BindContext, MaterializedViewReadMode)> {
@@ -803,7 +801,6 @@ impl Binder {
                 checkpoint_location,
                 alias,
                 sample,
-                cte_suffix_name.clone(),
             )? {
                 Some(MaterializedViewHybridBindResult::Hybrid(s_expr, context)) => {
                     info!(
@@ -842,13 +839,13 @@ impl Binder {
         let table_index = self.metadata.write().add_table(
             catalog_name.to_string(),
             database.to_string(),
+            table_name.to_string(),
             table_meta,
             None,
             table_name_alias,
             !bind_context.binding_views.is_empty(),
             bind_context.planning_agg_index,
             false,
-            cte_suffix_name,
         );
 
         let (s_expr, physical_context) =
@@ -885,7 +882,6 @@ impl Binder {
         table_meta: Arc<dyn Table>,
         alias: &Option<TableAlias>,
         sample: &Option<SampleConfig>,
-        cte_suffix_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let (s_expr, context, _) = self.bind_materialized_view_with_mode(
             bind_context,
@@ -896,7 +892,6 @@ impl Binder {
             table_meta,
             alias,
             sample,
-            cte_suffix_name,
             None,
             true,
         )?;

@@ -241,13 +241,6 @@ impl Binder {
                         }))
                     }
                     loc => {
-                        // TODO(zhyass): Support INSERT INTO table branch FROM stage.
-                        // Planned to be implemented in the next PR.
-                        if branch_name.is_some() {
-                            return Err(ErrorCode::Unimplemented(
-                                "Insert into branch from stage is not supported yet",
-                            ));
-                        }
                         let (mut stage_info, path) = StageResolver::from_table_context(
                             self.ctx.clone(),
                             databend_common_users::UserApiProvider::instance(),

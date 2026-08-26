@@ -7356,24 +7356,27 @@ ANALYZE TABLE test_db.test WITH HISTOGRAM
 ---------- AST ------------
 AnalyzeTable(
     AnalyzeTableStmt {
-        catalog: None,
-        database: Some(
-            Identifier {
+        table_ref: TableRef {
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        14..21,
+                    ),
+                    name: "test_db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
                 span: Some(
-                    14..21,
+                    22..26,
                 ),
-                name: "test_db",
+                name: "test",
                 quote: None,
                 ident_type: None,
             },
-        ),
-        table: Identifier {
-            span: Some(
-                22..26,
-            ),
-            name: "test",
-            quote: None,
-            ident_type: None,
+            branch: None,
         },
         no_scan: false,
         histogram_options: Some(
@@ -7393,24 +7396,27 @@ ANALYZE TABLE test_db.test WITH HISTOGRAM ALGORITHM = 'kll_full', ERROR_RATE = 0
 ---------- AST ------------
 AnalyzeTable(
     AnalyzeTableStmt {
-        catalog: None,
-        database: Some(
-            Identifier {
+        table_ref: TableRef {
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        14..21,
+                    ),
+                    name: "test_db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
                 span: Some(
-                    14..21,
+                    22..26,
                 ),
-                name: "test_db",
+                name: "test",
                 quote: None,
                 ident_type: None,
             },
-        ),
-        table: Identifier {
-            span: Some(
-                22..26,
-            ),
-            name: "test",
-            quote: None,
-            ident_type: None,
+            branch: None,
         },
         no_scan: false,
         histogram_options: Some(
@@ -23568,15 +23574,18 @@ CopyIntoTable(
                 "my_stage",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -23998,15 +24007,18 @@ CopyIntoTable(
                 "external_stage/path/to/file.arrow",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -24059,15 +24071,18 @@ CopyIntoTable(
                 "external_stage/path/to/file.arrow_stream",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,

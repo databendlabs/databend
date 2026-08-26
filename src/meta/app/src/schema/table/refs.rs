@@ -25,11 +25,11 @@ use databend_meta_client::types::SeqV;
 use super::TableId;
 use super::TableLvtCheck;
 use super::TableMeta;
+use crate::KeyExistsBuilder;
+use crate::KeyUnknownBuilder;
 use crate::app_error::ReferenceAlreadyExists;
 use crate::app_error::UnknownReference;
 use crate::tenant::Tenant;
-use crate::KeyExistsBuilder;
-use crate::KeyUnknownBuilder;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableTag {

@@ -261,7 +261,6 @@ impl Binder {
                     mv_table,
                     &None,
                     &None,
-                    None,
                     Some((source_table.clone(), source_entry.database().to_string())),
                     false,
                 )?;

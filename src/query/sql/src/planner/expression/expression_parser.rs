@@ -142,16 +142,17 @@ fn normalize_key_expr(expr: Expr<usize>) -> Result<Expr<usize>> {
 pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
+    let table_name = table_meta.name().to_string();
     let table_index = metadata.write().add_table(
         CATALOG_DEFAULT.to_owned(),
         "default".to_string(),
+        table_name,
         table_meta,
         None,
         None,
         false,
         false,
         false,
-        None,
     );
 
     {

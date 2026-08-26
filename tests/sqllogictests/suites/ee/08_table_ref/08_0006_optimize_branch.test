@@ -71,9 +71,6 @@ SELECT count() FROM t1
 #######################################
 
 statement ok
-set hilbert_clustering_min_bytes = 35;
-
-statement ok
 CREATE OR REPLACE TABLE t_hilbert(a INT, b INT) CLUSTER BY HILBERT(a, b) row_per_block=2 block_per_segment=2 block_size_threshold = 18
 
 statement ok
