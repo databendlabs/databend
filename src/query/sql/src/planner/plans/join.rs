@@ -1606,6 +1606,7 @@ mod tests {
     fn stat_info(cardinality: f64, column: Symbol, stat: ColumnStat) -> Arc<StatInfo> {
         Arc::new(StatInfo {
             cardinality,
+            max_cardinality: cardinality,
             statistics: Statistics {
                 precise_cardinality: Some(cardinality as u64),
                 column_stats: HashMap::from([(column, stat)]),
