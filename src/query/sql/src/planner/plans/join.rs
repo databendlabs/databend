@@ -1451,9 +1451,17 @@ fn broadcast_build_allowed(
 fn is_safe_broadcast_build(stat_info: &StatInfo, max_build_rows: u64) -> bool {
     let cardinality = stat_info.cardinality;
     let risk_cardinality = stat_info.max_cardinality;
+
+    // This guard is intentionally limited to finite source-derived bounds.
+    // Unknown bounds retain the pre-existing distribution choice; treating
+    // every unknown subtree as unsafe changes broad classes of unrelated plans
+    // without evidence that their build side is actually underestimated.
+    if !risk_cardinality.is_finite() {
+        return true;
+    }
+
     let max_cardinality = risk_cardinality.max(cardinality);
     cardinality.is_finite()
-        && risk_cardinality.is_finite()
         && cardinality >= 0.0
         && risk_cardinality >= 0.0
         && (max_build_rows == 0 || max_cardinality <= max_build_rows as f64)
@@ -1680,8 +1688,12 @@ mod tests {
             &estimated_stat(0.0, 1.0),
             DEFAULT_MAX_BUILD_ROWS,
         ));
-        assert!(!is_safe_broadcast_build(
+        assert!(is_safe_broadcast_build(
             &StatInfo::default(),
+            DEFAULT_MAX_BUILD_ROWS,
+        ));
+        assert!(is_safe_broadcast_build(
+            &estimated_stat(1_000.0, f64::INFINITY),
             DEFAULT_MAX_BUILD_ROWS,
         ));
     }

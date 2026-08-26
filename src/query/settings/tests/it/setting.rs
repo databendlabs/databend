@@ -144,14 +144,17 @@ async fn test_set_settings() {
         }
 
         {
+            assert_eq!(settings.get_max_broadcast_join_build_rows().unwrap(), 0);
+            settings
+                .set_setting(
+                    "max_broadcast_join_build_rows".to_string(),
+                    "100000000".to_string(),
+                )
+                .unwrap();
             assert_eq!(
                 settings.get_max_broadcast_join_build_rows().unwrap(),
                 100_000_000
             );
-            settings
-                .set_setting("max_broadcast_join_build_rows".to_string(), "0".to_string())
-                .unwrap();
-            assert_eq!(settings.get_max_broadcast_join_build_rows().unwrap(), 0);
         }
 
         {

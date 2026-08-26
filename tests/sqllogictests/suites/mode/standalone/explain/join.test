@@ -1140,6 +1140,15 @@ HashJoin
     ├── apply join filters: [#0]
     └── estimated rows: 4.00
 
+query I
+SELECT count(*) FROM t1 JOIN t3 ON t1.a = CAST(t3.b AS STRING);
+----
+2
+
+# The Number-to-String cast is injective, but the reverse comparison conversion
+# is value-dependent. Without proof that source-column NDV can be reused across
+# the complete comparison, cardinality estimation conservatively keeps the
+# Cartesian upper bound. The result assertion above guards execution semantics.
 query T
 EXPLAIN SELECT * FROM t1 JOIN t3 ON t1.a = CAST(t3.b AS STRING);
 ----
@@ -1152,7 +1161,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:t3.b (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
-├── estimated rows: 1.50
+├── estimated rows: 12.00
 ├── TableScan(Build)
 │   ├── table: default.default.t3
 │   ├── scan id: 1

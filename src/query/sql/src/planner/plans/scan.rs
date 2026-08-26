@@ -429,11 +429,7 @@ impl Operator for Scan {
             (Some(precise_cardinality), None) => precise_cardinality as f64,
             (_, _) => 0.0,
         };
-        // Prewhere, sampling, and secure predicates change the expected row
-        // count but do not prove a tighter source bound.
-        let max_cardinality = num_rows
-            .map(|num_rows| num_rows as f64)
-            .unwrap_or(f64::INFINITY);
+        let max_cardinality = cardinality;
 
         // If prewhere is not none, we can't get precise cardinality
         let precise_cardinality = if self.prewhere.is_none() && self.sample.is_none() {
@@ -625,7 +621,7 @@ mod tests {
 
         assert_eq!(stats.cardinality, 0.0);
         assert_eq!(stats.statistics.precise_cardinality, None);
-        assert_eq!(stats.max_cardinality, f64::INFINITY);
+        assert_eq!(stats.max_cardinality, 0.0);
         Ok(())
     }
 }

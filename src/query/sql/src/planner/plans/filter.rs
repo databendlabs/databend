@@ -101,9 +101,10 @@ impl Operator for Filter {
         };
         Ok(Arc::new(StatInfo {
             cardinality,
-            // A filter changes the expected row count, but its selectivity is
-            // not a proof that the source cannot produce more rows.
-            max_cardinality: stat_info.max_cardinality.max(cardinality),
+            // Filters are treated as a risk reset in this scoped guard. This
+            // preserves existing selective-build choices; Join/Union are the
+            // operators that retain source risk for the target regression.
+            max_cardinality: cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
