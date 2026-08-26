@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod bounds;
 mod datum;
 mod histogram;
 mod histogram_builder;
@@ -19,6 +20,7 @@ mod kll_sketch;
 mod stat_estimate;
 mod typed_histogram;
 
+pub use bounds::*;
 pub use datum::*;
 pub use histogram::*;
 pub use histogram_builder::*;
