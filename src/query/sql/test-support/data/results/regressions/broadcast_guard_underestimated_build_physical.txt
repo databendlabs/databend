@@ -20,14 +20,14 @@ AggregateFinal
             ├── build join filters(distributed):
             │   ├── filter id:1, build key:l.k (#1), probe targets:[p.k (#0)@scan0], filter type:bloom,inlist,min_max
             │   └── filter id:2, build key:t.k (#4), probe targets:[p.k (#0)@scan0], filter type:bloom,inlist,min_max
-            ├── estimated rows: 199600.04
+            ├── estimated rows: 4.00
             ├── Exchange(Build)
             │   ├── output columns: [l.k (#1), k (#4)]
             │   ├── exchange type: Hash(l.k (#1), t.k (#4))
             │   └── EvalScalar
             │       ├── output columns: [l.k (#1), k (#4)]
             │       ├── expressions: [t.k (#2)]
-            │       ├── estimated rows: 99800.10
+            │       ├── estimated rows: 2.00
             │       └── HashJoin
             │           ├── output columns: [l.k (#1), t.k (#2)]
             │           ├── join type: INNER
@@ -37,7 +37,7 @@ AggregateFinal
             │           ├── filters: []
             │           ├── build join filters:
             │           │   └── filter id:0, build key:t.k (#2), probe targets:[l.k (#1)@scan1], filter type:bloom,inlist,min_max
-            │           ├── estimated rows: 99800.10
+            │           ├── estimated rows: 2.00
             │           ├── Exchange(Build)
             │           │   ├── output columns: [t.k (#2)]
             │           │   ├── exchange type: Broadcast
@@ -50,7 +50,7 @@ AggregateFinal
             │           │       ├── partitions total: 0
             │           │       ├── partitions scanned: 0
             │           │       ├── push downs: [filters: [], limit: NONE]
-            │           │       └── estimated rows: 50000.00
+            │           │       └── estimated rows: 1.00
             │           └── TableScan(Probe)
             │               ├── table: default.default.guard_large
             │               ├── scan id: 1
