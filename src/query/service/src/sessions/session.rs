@@ -375,13 +375,22 @@ impl Session {
             .await
     }
 
+    /// Whether ownership checks are short-circuited to `true` for this session,
+    /// making the owner of record irrelevant.
+    ///
+    /// Callers that batch or cache ownership answers must consult this instead of
+    /// re-deriving the rule, otherwise they would cache answers this session never uses.
+    pub fn bypasses_ownership_checks(&self) -> bool {
+        matches!(self.get_type(), SessionType::Local)
+    }
+
     #[async_backtrace::framed]
     pub async fn has_ownership(
         &self,
         object: &OwnershipObject,
         check_current_role_only: bool,
     ) -> Result<bool> {
-        if matches!(self.get_type(), SessionType::Local) {
+        if self.bypasses_ownership_checks() {
             return Ok(true);
         }
         self.privilege_mgr()

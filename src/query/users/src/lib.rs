@@ -48,6 +48,7 @@ pub use user::CertifiedInfo;
 pub use user_api::UserApiProvider;
 pub use visibility_checker::DbTableVisibilityResult;
 pub use visibility_checker::GrantObjectVisibilityChecker;
+pub use visibility_checker::MGET_OWNERSHIP_BATCH_SIZE;
 pub use visibility_checker::Object;
 pub use visibility_checker::TableVisibilityTarget;
 pub use visibility_checker::check_table_visibility_with_roles;
