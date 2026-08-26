@@ -1,0 +1,8 @@
+EvalScalar
+├── scalars: [value (#0) AS (#0)]
+└── Filter
+    ├── filters: [eq(value (#0), value (#0))]
+    └── ConstantTableScan
+        ├── columns: [value (#0)]
+        └── num_rows: [2]
+
