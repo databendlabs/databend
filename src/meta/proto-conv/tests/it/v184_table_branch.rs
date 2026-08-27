@@ -62,7 +62,7 @@ fn test_decode_v184_dropped_branch() -> anyhow::Result<()> {
     common::test_load_old(
         func_name!(),
         table_dropped_branch_v184.as_slice(),
-        176,
+        184,
         want(),
     )
 }
@@ -81,7 +81,7 @@ fn test_decode_v184_table_id_branch_name() -> anyhow::Result<()> {
     common::test_load_old(
         func_name!(),
         table_id_branch_name_v184.as_slice(),
-        176,
+        184,
         want(),
     )
 }

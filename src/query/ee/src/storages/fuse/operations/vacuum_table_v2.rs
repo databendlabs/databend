@@ -84,6 +84,26 @@ struct BranchGcState {
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
 
+/// Decide whether a branch's entire storage prefix and metadata can be removed.
+///
+/// An explicit DROP updates the branch table metadata and follows the configured retention
+/// boundary, like a dropped table. Natural expiration only hides the branch name and does not bump
+/// the table sequence, so additionally wait for the assumed maximum writer lifetime.
+fn branch_is_beyond_gc_boundary(
+    now: DateTime<Utc>,
+    retention_time: DateTime<Utc>,
+    drop_on: Option<DateTime<Utc>>,
+    expire_at: Option<DateTime<Utc>>,
+) -> bool {
+    if let Some(drop_on) = drop_on {
+        return drop_on < retention_time;
+    }
+
+    let expired_branch_gc_boundary =
+        std::cmp::min(retention_time, now - ASSUMPTION_MAX_TXN_DURATION);
+    expire_at.is_some_and(|expire_at| expire_at < expired_branch_gc_boundary)
+}
+
 /// Phase B result for a single branch.
 enum BranchPhaseResult {
     /// Has gc root with snapshots to clean.
@@ -191,10 +211,7 @@ pub async fn do_vacuum2(
         let storage_prefix = format!("{}/", branch_table.meta_location_generator().prefix());
         storage_prefixes.insert(storage_prefix, branch_id);
 
-        // For expired branches, `expire_at` acts as the automatic delete effective time.
-        let effective_drop_time =
-            drop_on.or_else(|| expire_at.filter(|expire_at| *expire_at <= now));
-        if effective_drop_time.is_some_and(|drop_time| drop_time < retention_time) {
+        if branch_is_beyond_gc_boundary(now, retention_time, drop_on, expire_at) {
             beyond_retention_branches.push((branch_table, branch_name));
             continue;
         }
@@ -884,7 +901,7 @@ async fn final_gc_branch(
     branch_name: &str,
 ) -> Result<Vec<String>> {
     // Final GC deletes both the branch KV metadata and the whole branch storage directory once
-    // no protected table-local data remains.
+    // its applicable GC boundary has elapsed and no protected table-local data remains.
     let table_info = fuse_table.get_table_info();
     let branch_dir = format!(
         "{}/",
@@ -910,8 +927,8 @@ async fn final_gc_branch(
         })
         .await
     {
-        // Only beyond-retention branches reach final GC, and undrop is retention-gated in
-        // meta API, so logging here is sufficient while the next vacuum run can retry cleanup.
+        // The branch already passed its applicable GC boundary. Logging is sufficient because the
+        // prefix sweep is idempotent and the next vacuum run can retry metadata cleanup.
         warn!(
             "gc non-retainable branch kvs failed, ignored, table: {}, branch: {}, err: {}",
             table_info.desc, branch_name, err
@@ -1423,6 +1440,75 @@ mod tests {
     use databend_common_meta_app::schema::TableIndexType;
 
     use super::*;
+
+    #[test]
+    fn test_branch_gc_boundary_distinguishes_drop_from_expiration() {
+        let now = DateTime::<Utc>::from_timestamp(1_000_000, 0).unwrap();
+        let zero_retention = now;
+        let recent = now - Duration::seconds(1);
+        let old = now - ASSUMPTION_MAX_TXN_DURATION - Duration::seconds(1);
+
+        // Explicit DROP follows the configured retention boundary without writer grace.
+        assert!(branch_is_beyond_gc_boundary(
+            now,
+            zero_retention,
+            Some(recent),
+            None,
+        ));
+
+        // Natural expiration additionally waits for the maximum writer lifetime.
+        assert!(!branch_is_beyond_gc_boundary(
+            now,
+            zero_retention,
+            None,
+            Some(recent),
+        ));
+        assert!(branch_is_beyond_gc_boundary(
+            now,
+            zero_retention,
+            None,
+            Some(old),
+        ));
+
+        // A future expiration is still active.
+        assert!(!branch_is_beyond_gc_boundary(
+            now,
+            zero_retention,
+            None,
+            Some(now + Duration::seconds(1)),
+        ));
+    }
+
+    #[test]
+    fn test_branch_gc_boundary_honors_configured_retention() {
+        let now = DateTime::<Utc>::from_timestamp(1_000_000, 0).unwrap();
+        let retention_time = now - Duration::days(7);
+
+        assert!(!branch_is_beyond_gc_boundary(
+            now,
+            retention_time,
+            Some(retention_time),
+            None,
+        ));
+        assert!(branch_is_beyond_gc_boundary(
+            now,
+            retention_time,
+            Some(retention_time - Duration::seconds(1)),
+            None,
+        ));
+        assert!(!branch_is_beyond_gc_boundary(
+            now,
+            retention_time,
+            None,
+            Some(retention_time),
+        ));
+        assert!(branch_is_beyond_gc_boundary(
+            now,
+            retention_time,
+            None,
+            Some(retention_time - Duration::seconds(1)),
+        ));
+    }
 
     #[test]
     fn test_collect_block_index_locations_keeps_per_block_order() {

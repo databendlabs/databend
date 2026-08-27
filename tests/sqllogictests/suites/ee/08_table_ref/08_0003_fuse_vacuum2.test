@@ -149,6 +149,60 @@ drop stage stage_branch_chain;
 
 ## -------------------------------------------------------
 ## Case 2:
+## A naturally expired branch is no longer queryable, but
+## vacuum2 keeps its branch-local files during writer grace.
+## -------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE STAGE stage_branch_expired url = 'fs:///tmp/test_vacuum2_table_ref/branch_expired/';
+
+statement ok
+remove @stage_branch_expired;
+
+statement ok
+CREATE TABLE t_branch_expired(c INT) 'fs:///tmp/test_vacuum2_table_ref/branch_expired/';
+
+statement ok
+INSERT INTO t_branch_expired VALUES (1)
+
+statement ok
+ALTER TABLE t_branch_expired CREATE BRANCH temp_b1 RETAIN 1 SECONDS
+
+statement ok
+INSERT INTO t_branch_expired/temp_b1 VALUES (10)
+
+query I
+select count() from list_stage(location=> '@stage_branch_expired') where name like '%\/_b\/%';
+----
+2
+
+statement ok
+SELECT SLEEP(2)
+
+statement error
+SELECT COUNT(*) FROM t_branch_expired/temp_b1
+
+statement ok
+select * from fuse_vacuum2('test_vacuum2_table_ref', 't_branch_expired') ignore_result;
+
+query I
+SELECT COUNT(*) FROM t_branch_expired
+----
+1
+
+query I
+select count() from list_stage(location=> '@stage_branch_expired') where name like '%\/_b\/%';
+----
+2
+
+statement ok
+remove @stage_branch_expired;
+
+statement ok
+drop stage stage_branch_expired;
+
+## -------------------------------------------------------
+## Case 3:
 ## Active tag protects old base-table files even after the base
 ## table has moved to a newer snapshot.
 ## -------------------------------------------------------
@@ -215,7 +269,7 @@ statement ok
 drop stage stage_tag_keep;
 
 ## -------------------------------------------------------
-## Case 3:
+## Case 4:
 ## Expired tag no longer protects its historical files after vacuum2.
 ## -------------------------------------------------------
 

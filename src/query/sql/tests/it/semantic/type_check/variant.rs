@@ -157,13 +157,13 @@ fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindCo
     let table_index = metadata.write().add_table(
         "default".to_string(),
         "default".to_string(),
+        "t2".to_string(),
         table.into(),
         None,
         None,
         false,
         false,
         false,
-        None,
     );
 
     let mut bind_context = BindContext::new();
