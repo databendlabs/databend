@@ -45,8 +45,6 @@ pub use property::Statistics;
 pub use stats::ColumnStat;
 pub use stats::ColumnStatSet;
 pub use stats::CountMinSketchSet;
-pub(crate) use stats::JoinConditionColumns;
-pub(crate) use stats::JoinStats;
 pub(crate) use stats::JoinStatsEstimator;
 pub use stats::MAX_SELECTIVITY;
 pub use stats::SelectivityEstimator;

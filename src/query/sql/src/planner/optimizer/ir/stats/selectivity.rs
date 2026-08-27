@@ -529,7 +529,7 @@ fn constant_filter_truthiness(scalar: &Scalar) -> Option<bool> {
 // they must not become a second deterministic solver for predicate truth or
 // filter cardinality.
 #[derive(Clone)]
-struct SelectivityVisitor<'a> {
+pub(crate) struct SelectivityVisitor<'a> {
     cardinality: StatCardinality,
     selectivity: Selectivity,
     constraint_context: ConstraintContext,
@@ -650,6 +650,28 @@ fn constrained_column_cardinality(
 }
 
 impl SelectivityVisitor<'_> {
+    #[allow(dead_code)]
+    pub(crate) fn estimate(
+        predicate: &ScalarExpr,
+        cardinality: StatCardinality,
+        column_stats: &ColumnStatSet,
+        top_n: &TopNSet,
+        count_min_sketch: &CountMinSketchSet,
+    ) -> Result<Selectivity> {
+        let expr = predicate.as_expr()?;
+        let mut visitor = SelectivityVisitor {
+            cardinality,
+            selectivity: Selectivity::Unknown,
+            constraint_context: ConstraintContext::And,
+            column_stats,
+            top_n,
+            count_min_sketch,
+            constraints: ValueConstraintState::default(),
+        };
+        visitor.visit_expr(&expr)?;
+        Ok(visitor.selectivity)
+    }
+
     fn materialize_column_stats(
         &self,
         expr: &Expr<ColumnBinding>,

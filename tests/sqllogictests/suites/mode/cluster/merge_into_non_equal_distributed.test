@@ -114,7 +114,7 @@ CommitSink
             ├── probe keys: []
             ├── keys is null equal: []
             ├── filters: [t1.a (#1) > t.a (#0)]
-            ├── estimated rows: 15.00
+            ├── estimated rows: 1.09
             ├── TableScan(Build)
             │   ├── table: default.default.t2
             │   ├── scan id: 0
@@ -155,7 +155,7 @@ CommitSink
             ├── probe keys: []
             ├── keys is null equal: []
             ├── filters: [t1.a (#1) < t2.a (#0)]
-            ├── estimated rows: 15.00
+            ├── estimated rows: 1.09
             ├── TableScan(Build)
             │   ├── table: default.default.t2
             │   ├── scan id: 0

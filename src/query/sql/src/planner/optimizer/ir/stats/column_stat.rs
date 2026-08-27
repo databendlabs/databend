@@ -406,6 +406,41 @@ impl ColumnStat {
         Self::refine_ndv_estimate(ndv, histogram.ndv(), histogram.accuracy);
     }
 
+    fn scale_typed_histogram_to<T>(
+        histogram: &mut Option<TypedHistogram<T>>,
+        ndv: &mut NdvEstimate,
+        num_values: f64,
+    ) -> bool {
+        let Some(histogram) = histogram else {
+            return false;
+        };
+        let current_num_values = histogram.num_values();
+        if current_num_values <= 0.0 {
+            return false;
+        }
+        histogram.scale_counts(num_values / current_num_values);
+        Self::refine_ndv_estimate(ndv, histogram.ndv(), histogram.accuracy);
+        true
+    }
+
+    pub(crate) fn scale_histogram_to(&mut self, num_values: f64) -> bool {
+        match self {
+            ColumnStat::Int { ndv, histogram, .. } => {
+                Self::scale_typed_histogram_to(histogram, ndv, num_values)
+            }
+            ColumnStat::UInt { ndv, histogram, .. } => {
+                Self::scale_typed_histogram_to(histogram, ndv, num_values)
+            }
+            ColumnStat::Float { ndv, histogram, .. } => {
+                Self::scale_typed_histogram_to(histogram, ndv, num_values)
+            }
+            ColumnStat::Bytes { ndv, histogram, .. } => {
+                Self::scale_typed_histogram_to(histogram, ndv, num_values)
+            }
+            ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => false,
+        }
+    }
+
     pub(crate) fn replace_histogram_from(
         &mut self,
         source: &ColumnStat,
