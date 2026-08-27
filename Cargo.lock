@@ -4585,7 +4585,6 @@ name = "databend-common-meta-schema-api-test-suite"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "chrono",
  "databend-common-base",
  "databend-common-exception",
@@ -4595,7 +4594,6 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-meta-client 260205.13.2",
  "fastrace",
- "futures-util",
  "log",
  "maplit",
 ]
@@ -4635,6 +4633,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-stream",
+ "tonic 0.13.1",
  "tonic 0.14.5",
 ]
 
@@ -6281,6 +6280,7 @@ dependencies = [
  "hyper-util",
  "tokio",
  "tonic 0.13.1",
+ "tower 0.5.2",
 ]
 
 [[package]]

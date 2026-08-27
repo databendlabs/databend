@@ -5382,6 +5382,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: None,
         options: [],
     },
@@ -5416,6 +5417,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: Some(
             Default,
         ),
@@ -5443,6 +5445,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: Some(
             Default,
         ),
@@ -5470,6 +5473,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: None,
         options: [
             SQLProperty {
@@ -5504,6 +5508,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: Some(
             Default,
         ),
@@ -5636,6 +5641,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: None,
         options: [],
     },
@@ -21513,6 +21519,165 @@ Grant(
 
 
 ---------- Input ----------
+CREATE SHARE share1 CONNECTION = share_conn COMMENT = 'shared data';
+---------- Output ---------
+CREATE SHARE share1 CONNECTION = share_conn COMMENT = 'shared data'
+---------- AST ------------
+CreateShare(
+    CreateShareStmt {
+        create_option: Create,
+        name: Identifier {
+            span: Some(
+                13..19,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+        connection: Some(
+            Identifier {
+                span: Some(
+                    33..43,
+                ),
+                name: "share_conn",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        comment: Some(
+            "shared data",
+        ),
+    },
+)
+
+
+---------- Input ----------
+DROP SHARE IF EXISTS share1;
+---------- Output ---------
+DROP SHARE IF EXISTS share1
+---------- AST ------------
+DropShare(
+    DropShareStmt {
+        if_exists: true,
+        name: Identifier {
+            span: Some(
+                21..27,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE share1 SET CONNECTION = replacement_conn COMMENT = 'rotated';
+---------- Output ---------
+ALTER SHARE share1 SET CONNECTION = replacement_conn COMMENT = 'rotated'
+---------- AST ------------
+AlterShare(
+    AlterShareStmt {
+        if_exists: false,
+        name: Identifier {
+            span: Some(
+                12..18,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+        action: Set {
+            accounts: None,
+            connection: Some(
+                Identifier {
+                    span: Some(
+                        36..52,
+                    ),
+                    name: "replacement_conn",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            comment: Some(
+                "rotated",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+GRANT USAGE ON DATABASE db1 TO SHARE share1;
+---------- Output ---------
+GRANT USAGE ON DATABASE db1 TO SHARE share1
+---------- AST ------------
+GrantShare(
+    GrantShareStmt {
+        privilege: Usage,
+        object: Database(
+            Identifier {
+                span: Some(
+                    24..27,
+                ),
+                name: "db1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                37..43,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON TABLE db1.t1 TO SHARE share1;
+---------- Output ---------
+GRANT SELECT ON TABLE db1.t1 TO SHARE share1
+---------- AST ------------
+GrantShare(
+    GrantShareStmt {
+        privilege: Select,
+        object: Table(
+            Some(
+                Identifier {
+                    span: Some(
+                        22..25,
+                    ),
+                    name: "db1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            Identifier {
+                span: Some(
+                    26..28,
+                ),
+                name: "t1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                38..44,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 GRANT CREATE MASKING POLICY ON *.* TO USER a;
 ---------- Output ---------
 GRANT CREATE MASKING POLICY ON  *.* TO USER 'a'@'%'
@@ -21877,6 +22042,76 @@ Revoke(
         principal: Role(
             "role1",
         ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE USAGE ON DATABASE db1 FROM SHARE share1;
+---------- Output ---------
+REVOKE USAGE ON DATABASE db1 FROM SHARE share1
+---------- AST ------------
+RevokeShare(
+    RevokeShareStmt {
+        privilege: Usage,
+        object: Database(
+            Identifier {
+                span: Some(
+                    25..28,
+                ),
+                name: "db1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                40..46,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1;
+---------- Output ---------
+REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1
+---------- AST ------------
+RevokeShare(
+    RevokeShareStmt {
+        privilege: Select,
+        object: Table(
+            Some(
+                Identifier {
+                    span: Some(
+                        23..26,
+                    ),
+                    name: "db1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            Identifier {
+                span: Some(
+                    27..29,
+                ),
+                name: "t1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                41..47,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
     },
 )
 
