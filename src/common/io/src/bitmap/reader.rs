@@ -210,13 +210,14 @@ impl BitmapReader<'_> {
         reader.seek_relative(last_container * OFFSET_BYTES as i64)?;
         let last_offset = reader.read_u32::<LittleEndian>()?;
 
-        let size = 4
-            + last_offset as usize
-            + if last_cardinality <= ARRAY_LIMIT {
-                2 * last_cardinality
-            } else {
-                BITMAP_BYTES
-            };
+        let size = 4 + last_offset as usize + payload_size(last_cardinality);
+
+        if size < reader.position() as usize {
+            return Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                "data is truncated or invalid",
+            ));
+        }
 
         if buf.len() < size {
             Err(Error::new(
@@ -285,11 +286,7 @@ impl BitmapReader<'_> {
         let data = &self.bitmap_buf()[offset..];
 
         // Validate container data length
-        let required_len = if cardinality <= ARRAY_LIMIT {
-            cardinality * 2
-        } else {
-            BITMAP_BYTES
-        };
+        let required_len = payload_size(cardinality);
         if data.len() < required_len {
             return Err(Error::other("container data too short"));
         }
@@ -297,8 +294,7 @@ impl BitmapReader<'_> {
         Ok(ContainerReader {
             key: desc.prefix,
             cardinality,
-            is_array: cardinality <= ARRAY_LIMIT,
-            data,
+            data: &data[..required_len],
         })
     }
 
@@ -330,10 +326,17 @@ impl Description {
     }
 }
 
+fn payload_size(cardinality: usize) -> usize {
+    if cardinality <= ARRAY_LIMIT {
+        cardinality * 2
+    } else {
+        BITMAP_BYTES
+    }
+}
+
 pub struct ContainerReader<'a> {
     key: u16,
     cardinality: usize,
-    is_array: bool,
     data: &'a [u8],
 }
 
@@ -342,8 +345,12 @@ impl<'a> ContainerReader<'a> {
         self.key
     }
 
+    pub fn is_array(&self) -> bool {
+        self.cardinality <= ARRAY_LIMIT
+    }
+
     pub fn contains(&self, low16: u16) -> bool {
-        if self.is_array {
+        if self.is_array() {
             self.contains_array(low16)
         } else {
             self.contains_bitmap(low16)
@@ -351,7 +358,7 @@ impl<'a> ContainerReader<'a> {
     }
 
     pub fn min(&self) -> Option<u16> {
-        if self.is_array {
+        if self.is_array() {
             self.array_first()
         } else {
             self.bitmap_first()
@@ -359,7 +366,7 @@ impl<'a> ContainerReader<'a> {
     }
 
     pub fn max(&self) -> Option<u16> {
-        if self.is_array {
+        if self.is_array() {
             self.array_last()
         } else {
             self.bitmap_last()
@@ -383,11 +390,11 @@ impl<'a> ContainerReader<'a> {
             return false;
         }
         // Type dispatch
-        if self.is_array && other.is_array {
+        if self.is_array() && other.is_array() {
             self.array_has_any_array(other)
-        } else if !self.is_array && !other.is_array {
+        } else if !self.is_array() && !other.is_array() {
             self.bitmap_has_any_bitmap(other)
-        } else if self.is_array {
+        } else if self.is_array() {
             self.array_has_any_bitmap(other)
         } else {
             other.array_has_any_bitmap(self)
@@ -404,7 +411,7 @@ impl<'a> ContainerReader<'a> {
             return true;
         }
         // Fast path: type check (array capacity < bitmap)
-        if self.is_array && !other.is_array {
+        if self.is_array() && !other.is_array() {
             return false;
         }
         // Fast path: range non-covering
@@ -419,9 +426,9 @@ impl<'a> ContainerReader<'a> {
             return false;
         }
         // Type dispatch
-        if self.is_array && other.is_array {
+        if self.is_array() && other.is_array() {
             self.array_has_all_array(other)
-        } else if !self.is_array && !other.is_array {
+        } else if !self.is_array() && !other.is_array() {
             self.bitmap_has_all_bitmap(other)
         } else {
             // self is bitmap, other is array
