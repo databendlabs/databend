@@ -517,6 +517,23 @@ async fn test_srf_rejects_window_argument_before_project_set_binding() -> Result
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_unpivot_generated_columns_bind_in_same_query_block() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql(
+        "CREATE TABLE repro(game_id UINT64, level UINT32, game_cnt DECIMAL(18, 2), rtp DECIMAL(18, 2))",
+    )
+    .await?;
+
+    for sql in [
+        "SELECT game_id, level, metric, value FROM repro UNPIVOT(value FOR metric IN (game_cnt, rtp))",
+        "SELECT game_id, metric, value FROM repro UNPIVOT(value FOR metric IN (game_cnt, rtp)) WHERE metric = 'rtp'",
+    ] {
+        ctx.bind_sql(sql).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_lambda_udf_resolves_own_parameters() -> Result<()> {
     let ctx = LiteTableContext::create().await?;
     ctx.register_setup_sql("CREATE FUNCTION f1 AS (p) -> (p)")

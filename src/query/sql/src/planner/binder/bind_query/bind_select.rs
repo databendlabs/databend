@@ -807,7 +807,7 @@ impl SelectRewriter {
             span: Self::table_ref_span(&stmt.from[0]),
             lateral: false,
             subquery: Box::new(inner_query),
-            alias: Some(Self::table_ref_alias(&stmt.from[0])),
+            alias: Some(Self::table_ref_alias(&stmt.from[0], "__pivot_subquery")),
             pivot: None,
             unpivot: None,
         };
@@ -909,7 +909,7 @@ impl SelectRewriter {
         }
     }
 
-    fn table_ref_alias(table_ref: &TableReference) -> TableAlias {
+    fn table_ref_alias(table_ref: &TableReference, default_alias: &str) -> TableAlias {
         match table_ref {
             TableReference::Table { table, alias, .. } => {
                 alias.clone().unwrap_or_else(|| TableAlias {
@@ -919,12 +919,12 @@ impl SelectRewriter {
                 })
             }
             TableReference::Subquery { alias, .. } => alias.clone().unwrap_or_else(|| TableAlias {
-                name: Identifier::from_name(Self::table_ref_span(table_ref), "__pivot_subquery"),
+                name: Identifier::from_name(Self::table_ref_span(table_ref), default_alias),
                 columns: vec![],
                 keep_database_name: false,
             }),
             _ => TableAlias {
-                name: Identifier::from_name(Self::table_ref_span(table_ref), "__pivot_subquery"),
+                name: Identifier::from_name(Self::table_ref_span(table_ref), default_alias),
                 columns: vec![],
                 keep_database_name: false,
             },
@@ -982,37 +982,80 @@ impl SelectRewriter {
         let Some(unpivot) = stmt.from[0].unpivot() else {
             return Ok(());
         };
-        let mut new_select_list = stmt.select_list.clone();
         let columns = unpivot
             .column_names
             .iter()
             .map(|name| name.ident.to_owned())
             .collect::<Vec<_>>();
-        if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(columns.clone());
+        let mut star_target = SelectTarget::StarColumns {
+            qualified: vec![Indirection::Star(None)],
+            column_filter: None,
         };
-        new_select_list.push(Self::target_func_from_name_args(
+        star_target.exclude(columns.clone());
+        let mut inner_select_list = vec![star_target];
+        inner_select_list.push(Self::target_func_from_name_args(
             Identifier::from_name(stmt.span, "unnest"),
             vec![Self::expr_literal_array_from_unpivot_names(
                 &unpivot.column_names,
             )],
             Some(unpivot.unpivot_column.clone()),
         ));
-        new_select_list.push(Self::target_func_from_name_args(
+        inner_select_list.push(Self::target_func_from_name_args(
             Identifier::from_name(stmt.span, "unnest"),
             vec![Self::expr_column_ref_array_from_vec_ident(columns)],
             Some(unpivot.value_column.clone()),
         ));
 
-        if let Some(ref mut new_stmt) = self.new_stmt {
-            new_stmt.select_list = new_select_list;
-        } else {
-            self.new_stmt = Some(SelectStmt {
-                select_list: new_select_list,
-                ..stmt.clone()
-            });
+        let mut inner_from = stmt.from[0].clone();
+        Self::strip_unpivot(&mut inner_from);
+        let inner_stmt = SelectStmt {
+            span: stmt.span,
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: inner_select_list,
+            from: vec![inner_from],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
         };
+        let inner_query = Query {
+            span: stmt.span,
+            with: None,
+            body: SetExpr::Select(Box::new(inner_stmt)),
+            order_by: vec![],
+            limit: vec![],
+            offset: None,
+            ignore_result: false,
+        };
+        let subquery_ref = TableReference::Subquery {
+            span: Self::table_ref_span(&stmt.from[0]),
+            lateral: false,
+            subquery: Box::new(inner_query),
+            alias: Some(Self::table_ref_alias(&stmt.from[0], "__unpivot_subquery")),
+            pivot: None,
+            unpivot: None,
+        };
+
+        self.new_stmt = Some(SelectStmt {
+            from: vec![subquery_ref],
+            ..stmt.clone()
+        });
         Ok(())
+    }
+
+    fn strip_unpivot(table_ref: &mut TableReference) {
+        match table_ref {
+            TableReference::Table { unpivot, .. } => {
+                *unpivot = None;
+            }
+            TableReference::Subquery { unpivot, .. } => {
+                *unpivot = None;
+            }
+            _ => {}
+        }
     }
 }
 
