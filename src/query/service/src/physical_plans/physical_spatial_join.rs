@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -309,7 +310,7 @@ fn remote_expr_for_schema(
     let expr = scalar
         .type_check(schema.as_ref())?
         .project_column_ref(|index| schema.index_of(&index.to_string()))?;
-    let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+    let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
     Ok(expr.as_remote_expr())
 }
 

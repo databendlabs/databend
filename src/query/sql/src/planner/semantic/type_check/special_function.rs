@@ -545,7 +545,7 @@ where A: TypeCheckAdapter
                 )
                 .set_span(span));
             }
-            check_number(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
+            check_number(span, &self.func_ctx, expr, &BUILTIN_FUNCTIONS)?
         } else {
             -1
         };
