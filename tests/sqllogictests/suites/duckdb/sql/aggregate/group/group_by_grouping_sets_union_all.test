@@ -1,7 +1,87 @@
 statement ok
 set grouping_sets_to_union = 1;
 
+statement ok
+set enable_cascading_grouping_sets = 0;
+
 include ./group_by_grouping_sets.test
+
+statement ok
+set enable_cascading_grouping_sets = 1;
+
+include ./group_by_grouping_sets.test
+
+statement ok
+use default;
+
+statement ok
+create or replace table cascading_grouping_sets (a UInt64, b UInt64, v Nullable(UInt64));
+
+statement ok
+insert into cascading_grouping_sets values (1, 1, 10), (1, 2, NULL), (2, 1, 5);
+
+# Cover the ordinary Union rewrite separately from the hierarchical alternative.
+statement ok
+set optimizer_skip_list = 'HierarchicalGroupingSetsToUnion,PushDownPrewhere';
+
+query IIIII
+select sum(v) as total,
+       a,
+       b,
+       grouping(a) + grouping(b) as lochierarchy,
+       rank() over (
+           partition by grouping(a) + grouping(b),
+                        case when grouping(b) = 0 then a end
+           order by sum(v) desc
+       ) as rank_within_parent
+from cascading_grouping_sets
+group by rollup(a, b)
+order by lochierarchy desc, a nulls last, b nulls last;
+----
+15 NULL NULL 2 1
+10 1 NULL 1 1
+5 2 NULL 1 2
+10 1 1 0 1
+NULL 1 2 0 2
+5 2 1 0 1
+
+statement ok
+set optimizer_skip_list = 'PushDownPrewhere';
+
+query IIIIIII rowsort
+select a, b, sum(v), sum0(v), count(v), min(v), max(v)
+from cascading_grouping_sets
+group by rollup(a, b)
+order by a nulls last, b nulls last;
+----
+1 1 10 10 1 10 10
+1 2 NULL 0 0 NULL NULL
+1 NULL 10 10 1 10 10
+2 1 5 5 1 5 5
+2 NULL 5 5 1 5 5
+NULL NULL 15 15 2 5 10
+
+statement ok
+truncate table cascading_grouping_sets;
+
+# GROUP BY () must still emit one row for empty input in cascade mode.
+query IIIIIII
+select a, b, sum(v), sum0(v), count(v), min(v), max(v)
+from cascading_grouping_sets
+group by rollup(a, b);
+----
+NULL NULL NULL 0 0 NULL NULL
+
+statement ok
+set enable_cascading_grouping_sets = 0;
+
+# The shared-base mode uses the same non-Serial empty-grouping producer.
+query IIIIIII
+select a, b, sum(v), sum0(v), count(v), min(v), max(v)
+from cascading_grouping_sets
+group by rollup(a, b);
+----
+NULL NULL NULL 0 0 NULL NULL
 
 statement ok
 unset grouping_sets_to_union;
