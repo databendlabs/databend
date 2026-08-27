@@ -8642,7 +8642,7 @@ impl SchemaApiTestSuite {
             .await?
             .unwrap()
             .data;
-        self.upsert_branch_copied_files(mt, &tenant, branch_id, branch_meta, &["file-a", "file-b"])
+        self.upsert_branch_copied_files(mt, tenant, branch_id, branch_meta, &["file-a", "file-b"])
             .await?;
 
         mt.drop_table_branch(DropTableBranchReq {

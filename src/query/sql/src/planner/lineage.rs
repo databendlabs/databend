@@ -1778,13 +1778,13 @@ mod tests {
         metadata.write().add_table(
             catalog_name(catalog_type),
             "default".to_string(),
+            table_name.to_string(),
             fake_table_with_catalog_type(table_id, table_name, columns, engine, catalog_type),
             None,
             None,
             false,
             false,
             false,
-            None,
         )
     }
 
@@ -1798,13 +1798,13 @@ mod tests {
         let table_index = metadata.add_table(
             "default".to_string(),
             "default".to_string(),
+            table_name.to_string(),
             fake_stream_table(table_id, table_name, lineage_source.clone()),
             None,
             None,
             false,
             false,
             false,
-            None,
         );
         metadata.set_stream_lineage_source(table_index, LineageSourceRelation {
             catalog: lineage_source.catalog,
@@ -1853,6 +1853,7 @@ mod tests {
         metadata.write().add_table(
             "default".to_string(),
             "system".to_string(),
+            "stage".to_string(),
             Arc::new(FakeTable {
                 table_info,
                 stream_source_table_info: None,
@@ -1870,7 +1871,6 @@ mod tests {
             false,
             false,
             true,
-            None,
         )
     }
 
