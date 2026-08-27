@@ -24,8 +24,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::sorts::TransformRankLimitSort;
@@ -82,7 +83,7 @@ impl IPhysicalPlan for AggregatePartial {
         let input_schema = self.input.output_schema()?;
 
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
-        let factory = AggregateFunctionFactory::instance();
+        let registry = &*AGGR_REGISTRY;
 
         for desc in &self.agg_funcs {
             let name = desc.output_column.to_string();
@@ -95,16 +96,17 @@ impl IPhysicalPlan for AggregatePartial {
                 continue;
             }
 
-            let func = factory
-                .get(
-                    &desc.sig.name,
-                    desc.sig.params.clone(),
-                    desc.sig.args.clone(),
-                    desc.sig.sort_descs.clone(),
-                )
+            let func = registry
+                .resolve(RawAggregateCall {
+                    name: &desc.sig.name,
+                    params: &desc.sig.params,
+                    args_type: &desc.sig.args,
+                    distinct: false,
+                    order_by: &desc.sig.order_by,
+                })
                 .unwrap();
 
-            fields.push(DataField::new(&name, func.serialize_data_type()))
+            fields.push(DataField::new(&name, func.state_data_type()))
         }
 
         for (idx, field) in self.group_by.iter().zip(

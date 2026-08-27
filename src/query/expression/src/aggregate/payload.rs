@@ -22,13 +22,14 @@ use log::info;
 use strength_reduce::StrengthReducedU64;
 
 use super::AggrState;
-use super::AggregateFunctionRef;
 use super::BATCH_SIZE;
 use super::MAX_PAGE_SIZE;
 use super::PayloadFlushState;
 use super::RowID;
 use super::StateAddr;
 use super::StatesLayout;
+use super::aggregate_function::AggregateCallRef;
+use super::aggregate_function::MergeResultInput;
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
@@ -52,7 +53,7 @@ use crate::types::DataType;
 pub struct Payload {
     pub(super) arena: Arc<Bump>,
     pub(super) group_types: Vec<DataType>,
-    pub(super) aggrs: Vec<AggregateFunctionRef>,
+    pub(super) aggrs: Vec<AggregateCallRef>,
     pub(super) row_layout: RowLayout,
 
     pub(super) pages: Vec<Page>,
@@ -192,7 +193,7 @@ impl Payload {
     pub fn new(
         arena: Arc<Bump>,
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         states_layout: Option<StatesLayout>,
     ) -> Self {
         let mut tuple_size = 0;
@@ -270,13 +271,14 @@ impl Payload {
                 .iter()
                 .zip(states_layout.states_loc.iter().cloned())
             {
-                let return_type = aggr.return_type()?;
+                let return_type = aggr.signature().return_type.clone();
                 let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
-                aggr.batch_merge_result(
-                    &flush_state.state_places.as_slice()[0..row_count],
-                    loc,
-                    &mut builder,
-                )?;
+                for place in &flush_state.state_places.as_slice()[0..row_count] {
+                    aggr.merge_result(MergeResultInput {
+                        state: AggrState::new(*place, &loc),
+                        builder: &mut builder,
+                    })?;
+                }
                 flush_state.aggregate_results.push(builder.build().into());
             }
         }
@@ -668,7 +670,7 @@ impl Drop for Payload {
                 .zip(states_layout.states_loc.iter())
                 .enumerate()
             {
-                if !aggr.need_manual_drop_state() {
+                if !aggr.state().need_manual_drop() {
                     continue;
                 }
 

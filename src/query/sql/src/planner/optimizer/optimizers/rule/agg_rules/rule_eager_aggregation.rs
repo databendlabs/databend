@@ -15,13 +15,15 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::type_check::infer_function_return_type;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::number::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 
 use crate::ColumnSet;
 use crate::MetadataRef;
@@ -270,12 +272,11 @@ impl<'a> EagerInput<'a> {
             return Ok(vec![]);
         }
 
-        let function_factory = AggregateFunctionFactory::instance();
         let eager_candidates = EagerCandidates::collect(
             &self.final_agg,
             &join_columns,
             &eval_scalar_used_columns,
-            function_factory,
+            &AGGR_REGISTRY,
         );
 
         if eager_candidates.by_side[Side::Left].len()
@@ -573,7 +574,7 @@ impl EagerCandidates {
         agg_final: &Aggregate,
         join_columns: &Pair<ColumnSet>,
         eval_scalar_used_columns: &ColumnSet,
-        function_factory: &AggregateFunctionFactory,
+        function_registry: &AggregateRegistry,
     ) -> Self {
         let mut candidates = Self {
             by_side: Pair::new_with(|_| vec![]),
@@ -584,7 +585,9 @@ impl EagerCandidates {
             let ScalarExpr::AggregateFunction(aggregate_function) = &func.scalar else {
                 continue;
             };
-            if !function_factory.is_decomposable(&aggregate_function.func_name)
+            if !function_registry
+                .descriptor(&aggregate_function.func_name)
+                .is_some_and(|descriptor| descriptor.features().is_decomposable)
                 || !eval_scalar_used_columns.contains(&func.index)
             {
                 continue;
@@ -1281,14 +1284,17 @@ impl EagerAnalysis {
             index: new_index,
         };
         aggregate_function.return_type = Box::new(
-            AggregateFunctionFactory::instance()
-                .get(
-                    &aggregate_function.func_name,
-                    aggregate_function.params.clone(),
-                    vec![multiplied_type.clone()],
-                    vec![],
-                )?
-                .return_type()?,
+            AGGR_REGISTRY
+                .resolve(RawAggregateCall {
+                    name: &aggregate_function.func_name,
+                    params: &aggregate_function.params.clone(),
+                    args_type: std::slice::from_ref(&multiplied_type),
+                    distinct: false,
+                    order_by: &[],
+                })?
+                .signature()
+                .return_type
+                .clone(),
         );
         if let ScalarExpr::BoundColumnRef(column) = &mut aggregate_function.args[0] {
             column.column.index = new_index;

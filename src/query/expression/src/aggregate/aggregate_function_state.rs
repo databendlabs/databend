@@ -19,7 +19,7 @@ use databend_common_base::hints::assume;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
-use super::AggregateFunctionRef;
+use super::aggregate_function_v1::AggregateFunctionRef;
 use crate::ColumnBuilder;
 use crate::types::DataType;
 use crate::types::binary::BinaryColumnBuilder;
@@ -39,6 +39,12 @@ impl StateAddr {
     pub fn get<'a, T>(&self) -> &'a mut T
     where T: Send + 'static {
         unsafe { &mut *self.0.cast::<T>() }
+    }
+
+    #[inline]
+    pub fn get_ref<'a, T>(&self) -> &'a T
+    where T: Send + 'static {
+        unsafe { &*self.0.cast::<T>() }
     }
 
     #[inline]
@@ -247,6 +253,13 @@ impl<'a> AggrState<'a> {
         assume(self.loc.len() == 1);
         debug_assert!(self.loc[0].is_custom());
         self.addr.next(self.loc[0].offset()).get::<T>()
+    }
+
+    pub fn get_ref<'b, T>(&self) -> &'b T
+    where T: Send + 'static {
+        assume(self.loc.len() == 1);
+        debug_assert!(self.loc[0].is_custom());
+        self.addr.next(self.loc[0].offset()).get_ref::<T>()
     }
 
     pub fn write<T, F>(&self, f: F)

@@ -3,7 +3,7 @@ use databend_common_expression::types::NumberScalar;
 use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_type_check_aggregate_rewrites() -> Result<()> {
+async fn test_type_check_aggregate_resolution() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "count_star_removes_count_args",
@@ -12,14 +12,14 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "count(*)",
         },
         SqlTestCase {
-            name: "count_distinct_rewrites_to_count_distinct",
-            description: "count(distinct x) should select the count_distinct aggregate implementation.",
+            name: "count_distinct_resolves_named_target",
+            description: "A semantic count DISTINCT request should resolve to the visibly named count_distinct implementation.",
             setup_sqls: &[],
             sql: "count(distinct number)",
         },
         SqlTestCase {
-            name: "sum_distinct_uses_distinct_aggregate_name",
-            description: "A non-count DISTINCT aggregate should append the _distinct suffix during type checking.",
+            name: "sum_distinct_resolves_named_target",
+            description: "A semantic sum DISTINCT request should use the resolved sum_distinct implementation name.",
             setup_sqls: &[],
             sql: "sum(distinct number)",
         },
@@ -120,6 +120,12 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "sum_if(number, flag) FILTER (WHERE flag)",
         },
         SqlTestCase {
+            name: "aggregate_without_if_route_filter_reports_unsupported",
+            description: "FILTER should be rejected when the aggregate does not advertise support for the _if route.",
+            setup_sqls: &[],
+            sql: "sum0(number) FILTER (WHERE flag)",
+        },
+        SqlTestCase {
             name: "distinct_aggregate_order_by_reports_unsupported",
             description: "Parser accepts DISTINCT aggregate ORDER BY, but execution semantics are not wired yet.",
             setup_sqls: &[],
@@ -170,6 +176,33 @@ async fn test_aggregate_window_error_restores_type_checker_state() -> Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_aggregate_distinct_uses_resolved_target_name() -> Result<()> {
+    init_testing_globals();
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let adapter = TestTypeCheckAdapter::new(settings);
+    let mut bind_context = test_bind_context(ExprContext::Unknown);
+
+    let (scalar, _) = resolve_type_check_sql("sum(DISTINCT number)", adapter, &mut bind_context)?;
+    let ScalarExpr::AggregateFunction(agg) = scalar else {
+        panic!("expected aggregate function");
+    };
+    assert_eq!(agg.func_name, "sum_distinct");
+    assert!(!agg.distinct);
+
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let adapter = TestTypeCheckAdapter::new(settings);
+    let mut bind_context = test_bind_context(ExprContext::Unknown);
+    let (scalar, _) = resolve_type_check_sql("min(DISTINCT number)", adapter, &mut bind_context)?;
+    let ScalarExpr::AggregateFunction(agg) = scalar else {
+        panic!("expected aggregate function");
+    };
+    assert_eq!(agg.func_name, "min");
+    assert!(!agg.distinct);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_aggregate_filter_uses_if_combinator() -> Result<()> {
     init_testing_globals();
     let settings = Settings::create(Tenant::new_literal("default"));
@@ -210,7 +243,7 @@ async fn test_aggregate_filter_uses_if_combinator() -> Result<()> {
         panic!("expected aggregate function");
     };
     assert_eq!(agg.func_name, "histogram_if");
-    assert_eq!(agg.args.len(), 3);
+    assert_eq!(agg.args.len(), 2);
     assert_eq!(agg.params, vec![Scalar::Number(NumberScalar::UInt64(2))]);
 
     Ok(())

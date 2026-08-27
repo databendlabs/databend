@@ -42,7 +42,7 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::assert_params;
-use crate::aggregates::assert_unary_arguments;
+use super::assert_unary_arguments;
 
 struct AggregateSumZeroState {
     sum: u64,

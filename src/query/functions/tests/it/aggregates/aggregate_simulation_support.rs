@@ -19,7 +19,6 @@ use comfy_table::Table;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
-use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -31,13 +30,14 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StatesLayout;
 use databend_common_expression::Value;
-use databend_common_expression::get_states_layout;
+use databend_common_expression::aggregate::aggregate_function as v2;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
+pub use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use itertools::Itertools;
 
 use super::super::scalars::parser;
@@ -47,7 +47,7 @@ pub(super) trait AggregationSimulator = Fn(
         Vec<Scalar>,
         &[BlockEntry],
         usize,
-        Vec<AggregateFunctionSortDesc>,
+        Vec<AggregateBoundOrderByItem>,
     ) -> databend_common_exception::Result<(Column, DataType)>
     + Copy;
 
@@ -57,7 +57,7 @@ pub(super) fn write_aggregate_expr_case(
     text: &str,
     entries: &[(&str, BlockEntry)],
     simulator: impl AggregationSimulator,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) {
     let raw_expr = parser::parse_raw_expr(
         text,
@@ -233,14 +233,18 @@ pub(super) fn simulate_two_groups_group_by(
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) -> databend_common_exception::Result<(Column, DataType)> {
-    let factory = AggregateFunctionFactory::instance();
     let arguments: Vec<DataType> = entries.iter().map(|c| c.data_type()).collect();
-
-    let func = factory.get(name, params.clone(), arguments, sort_descs.clone())?;
-    let data_type = func.return_type()?;
-    let states_layout = get_states_layout(std::slice::from_ref(&func))?;
+    let func = AGGR_REGISTRY.resolve(RawAggregateCall {
+        name,
+        params: &params,
+        args_type: &arguments,
+        distinct: false,
+        order_by: &sort_descs,
+    })?;
+    let data_type = func.signature().return_type.clone();
+    let states_layout = v2::get_states_layout(std::slice::from_ref(&func))?;
     let loc = states_layout.states_loc[0].clone();
 
     let arena = Bump::new();
@@ -257,53 +261,94 @@ pub(super) fn simulate_two_groups_group_by(
         .map(|i| if i % 2 == 0 { addr1 } else { addr2 })
         .collect::<Vec<_>>();
 
-    func.accumulate_keys(&places, &loc, entries.into(), rows)?;
+    if entries.is_empty() {
+        func.accumulate_row_count_keys(v2::AccumulateRowCountKeysInput {
+            states: v2::AggregateStateSet::new(&places, &loc),
+        })?;
+    } else {
+        func.accumulate_keys(v2::AccumulateKeysInput {
+            states: v2::AggregateStateSet::new(&places, &loc),
+            columns: entries.into(),
+        })?;
+    }
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(state1, false, &mut builder)?;
-    func.merge_result(state2, false, &mut builder)?;
+    func.merge_result(v2::MergeResultInput {
+        state: state1,
+        builder: &mut builder,
+    })?;
+    func.merge_result(v2::MergeResultInput {
+        state: state2,
+        builder: &mut builder,
+    })?;
 
-    let res = (builder.build(), data_type);
-    Ok(res)
+    Ok((builder.build(), data_type))
 }
 
-pub(super) fn eval_legacy_aggregate_for_test(
+pub(super) fn eval_aggregate_for_test(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
     each_row: bool,
     with_serialize: bool,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
+    sort_descs: Vec<AggregateBoundOrderByItem>,
 ) -> Result<(Column, DataType)> {
-    let factory = AggregateFunctionFactory::instance();
-    let arguments = entries.iter().map(BlockEntry::data_type).collect();
-
-    let func = factory.get(name, params, arguments, sort_descs)?;
-    let data_type = func.return_type()?;
+    let arguments = entries
+        .iter()
+        .map(BlockEntry::data_type)
+        .collect::<Vec<_>>();
+    let func = AGGR_REGISTRY.resolve(RawAggregateCall {
+        name,
+        params: &params,
+        args_type: &arguments,
+        distinct: false,
+        order_by: &sort_descs,
+    })?;
+    let data_type = func.signature().return_type.clone();
 
     let eval = EvalAggr::new(func.clone());
     let state = AggrState::new(eval.addr, &eval.state_layout.states_loc[0]);
 
     if each_row {
         for row in 0..rows {
-            func.accumulate_row(state, entries.into(), row)?;
+            func.accumulate_row(v2::AccumulateRowInput {
+                state,
+                columns: entries.into(),
+                row,
+            })?;
         }
+    } else if entries.is_empty() {
+        func.accumulate_row_count(v2::AccumulateRowCountInput { state, rows })?;
     } else {
-        func.accumulate(state, entries.into(), None, rows)?;
+        func.accumulate(v2::AccumulateInput {
+            state,
+            columns: entries.into(),
+            validity: None,
+        })?;
     }
 
     if with_serialize {
-        let data_type = func.serialize_data_type();
+        let data_type = func.state_data_type();
         let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
         let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
-        func.batch_serialize(&[eval.addr], state.loc, builders)?;
+        func.serialize(v2::SerializeInput {
+            states: v2::AggregateStateSet::new(std::slice::from_ref(&eval.addr), state.loc),
+            builders,
+        })?;
         func.init_state(state);
         let column = builder.build();
-        func.batch_merge(&[eval.addr], state.loc, &column.into(), None)?;
+        func.merge_serialized(v2::MergeSerializedInput {
+            states: v2::AggregateStateSet::new(std::slice::from_ref(&eval.addr), state.loc),
+            state: &column.into(),
+            filter: None,
+        })?;
     }
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(state, false, &mut builder)?;
+    func.merge_result(v2::MergeResultInput {
+        state,
+        builder: &mut builder,
+    })?;
     Ok((builder.build(), data_type))
 }
 
@@ -311,13 +356,13 @@ struct EvalAggr {
     addr: StateAddr,
     state_layout: StatesLayout,
     _arena: Bump,
-    func: AggregateFunctionRef,
+    func: v2::AggregateCallRef,
 }
 
 impl EvalAggr {
-    fn new(func: AggregateFunctionRef) -> Self {
+    fn new(func: v2::AggregateCallRef) -> Self {
         let funcs = [func];
-        let state_layout = get_states_layout(&funcs).unwrap();
+        let state_layout = v2::get_states_layout(&funcs).unwrap();
         let [func] = funcs;
 
         let _arena = Bump::new();
@@ -338,7 +383,7 @@ impl EvalAggr {
 impl Drop for EvalAggr {
     fn drop(&mut self) {
         drop_guard(move || {
-            if self.func.need_manual_drop_state() {
+            if self.func.state().need_manual_drop() {
                 unsafe {
                     self.func
                         .drop_state(AggrState::new(self.addr, &self.state_layout.states_loc[0]));

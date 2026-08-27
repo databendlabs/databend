@@ -32,6 +32,7 @@ geo = { workspace = true }
 geozero = { workspace = true }
 glob = { workspace = true }
 hex = { workspace = true }
+inventory = { workspace = true }
 itertools = { workspace = true }
 jaq-core = { workspace = true }
 jaq-json = { workspace = true }

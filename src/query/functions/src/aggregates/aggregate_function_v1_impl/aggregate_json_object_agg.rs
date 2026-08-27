@@ -46,12 +46,12 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::assert_binary_arguments;
 use super::assert_params;
 use super::borsh_partial_deserialize;
-use crate::aggregates::AggregateFunctionFeatures;
 
 pub(super) trait BinaryScalarStateFunc<V: ValueType>:
     Clone + BorshSerialize + BorshDeserialize + Send + 'static

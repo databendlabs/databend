@@ -17,8 +17,9 @@ use std::borrow::Cow;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 
 use super::SExpr;
 use super::SExprVisitor;
@@ -274,19 +275,18 @@ impl ScalarTypeValidator<'_> {
             .iter()
             .map(|argument| argument.data_type().into_owned())
             .collect::<Vec<_>>();
-        let sort_descs = aggregate
-            .sort_descs
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<Vec<_>>>()?;
-        let inferred = AggregateFunctionFactory::instance()
-            .get(
-                &aggregate.func_name,
-                aggregate.params.clone(),
-                argument_types,
-                sort_descs,
-            )?
-            .return_type()?;
+        let order_by = aggregate.bound_order_by()?;
+        let inferred = AGGR_REGISTRY
+            .resolve(RawAggregateCall {
+                name: &aggregate.func_name,
+                params: &aggregate.params.clone(),
+                args_type: &argument_types,
+                distinct: false,
+                order_by: &order_by,
+            })?
+            .signature()
+            .return_type
+            .clone();
         if inferred != *aggregate.return_type {
             return Err(ErrorCode::Internal(format!(
                 "SExpr aggregate return type mismatch for {}: stored {:?}, inferred {inferred:?}",

@@ -1,12 +1,17 @@
 use std::io::Write;
 
+use databend_common_exception::Result;
 use databend_common_expression::FromData;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt64Type;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
+use super::aggregate_function_v2_support::assert_v2_direct_matches_serialized;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -91,7 +96,7 @@ fn run_count_distinct_cases(file: &mut impl Write, simulator: impl AggregationSi
 fn test_count_distinct() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("count_distinct.txt").unwrap();
-    run_count_distinct_cases(file, eval_legacy_aggregate);
+    run_count_distinct_cases(file, eval_aggregate);
 }
 
 #[test]
@@ -99,4 +104,15 @@ fn test_count_distinct_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("count_distinct_group_by.txt").unwrap();
     run_count_distinct_cases(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_v2_count_distinct_suffix_names_are_case_insensitive() -> Result<()> {
+    let values = NullableColumn::new_column(
+        UInt64Type::from_data(vec![10, 20, 10, 40, 20]),
+        Bitmap::from([true, false, true, true, true]),
+    );
+    let entries = [values.into()];
+
+    assert_v2_direct_matches_serialized("COUNT_DISTINCT", &entries, 5)
 }

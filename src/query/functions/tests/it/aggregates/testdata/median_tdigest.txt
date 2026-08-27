@@ -8,7 +8,15 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------+
 
 
-error: median_tdigest just support numeric type, but got 'Null'
+ast: median_tdigest(NULL)
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Int64([4, 3, 2, 1])) |
+| Output | Null { len: 1 }             |
++--------+-----------------------------+
+
 
 ast: median_tdigest(x_null)
 evaluation (internal):

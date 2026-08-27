@@ -1,11 +1,12 @@
 use std::io::Write;
 
 use databend_common_expression::FromData;
-use databend_common_expression::SymbolOrOffset;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
+use databend_common_expression::Symbol;
+use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
+use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -32,9 +33,9 @@ fn run_list_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulato
 
     write_aggregate_expr_case(file, "listagg(s)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "listagg(s)", columns, simulator, vec![
-        AggregateFunctionSortDesc {
-            index: SymbolOrOffset::Offset(0),
-            is_reuse_index: true,
+        AggregateBoundOrderByItem {
+            index: Symbol::new(0),
+            source: AggregateBoundOrderBySource::Argument { index: 0 },
             data_type: columns[0].1.data_type(),
             nulls_first: false,
             asc: false,
@@ -49,7 +50,7 @@ fn run_list_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulato
 fn test_list_agg() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("list_agg.txt").unwrap();
-    run_list_agg_cases(file, eval_legacy_aggregate);
+    run_list_agg_cases(file, eval_aggregate);
 }
 
 #[test]

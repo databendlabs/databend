@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate_function;
+pub mod aggregate_function;
 mod aggregate_function_state;
+pub mod aggregate_function_v1;
 mod aggregate_hashtable;
 mod aggregate_meta;
 mod group_hash;
@@ -30,7 +31,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-pub use aggregate_function::*;
+pub use aggregate_function::AggregateCall;
 pub use aggregate_function_state::*;
 pub use aggregate_hashtable::*;
 pub use aggregate_meta::*;

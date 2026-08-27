@@ -5,7 +5,7 @@ use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -55,7 +55,7 @@ fn run_median_cases(file: &mut impl Write, simulator: impl AggregationSimulator)
 fn test_median() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("median.txt").unwrap();
-    run_median_cases(file, eval_legacy_aggregate);
+    run_median_cases(file, eval_aggregate);
 }
 
 #[test]

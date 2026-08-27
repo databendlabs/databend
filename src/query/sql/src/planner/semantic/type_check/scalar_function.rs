@@ -160,7 +160,11 @@ where A: TypeCheckAdapter
         let all_funcs = BUILTIN_FUNCTIONS
             .all_function_names()
             .into_iter()
-            .chain(self.adapter.aggregate_function_factory().registered_names())
+            .chain(
+                self.adapter
+                    .aggregate_function_registry()
+                    .registered_names(),
+            )
             .chain(
                 GENERAL_WINDOW_FUNCTIONS
                     .iter()

@@ -6,7 +6,7 @@ use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::UInt64Type;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -57,7 +57,7 @@ fn run_covar_pop_cases(file: &mut impl Write, simulator: impl AggregationSimulat
 fn test_covar_pop() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("covar_pop.txt").unwrap();
-    run_covar_pop_cases(file, eval_legacy_aggregate);
+    run_covar_pop_cases(file, eval_aggregate);
 }
 
 #[test]

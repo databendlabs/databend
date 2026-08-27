@@ -38,7 +38,15 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------+
 
 
-error: stddev_pop does not support type 'Null'
+ast: stddev_pop(NULL)
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Int64([4, 3, 2, 1])) |
+| Output | Null { len: 1 }             |
++--------+-----------------------------+
+
 
 ast: stddev_pop(x_null)
 evaluation (internal):
@@ -80,7 +88,15 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------+
 
 
-error: stddev_samp does not support type 'Null'
+ast: stddev_samp(NULL)
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Int64([4, 3, 2, 1])) |
+| Output | Null { len: 1 }             |
++--------+-----------------------------+
+
 
 ast: stddev_samp(dec)
 evaluation (internal):

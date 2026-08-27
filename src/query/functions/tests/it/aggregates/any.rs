@@ -4,7 +4,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::types::*;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_case_support::eval_aggregate;
 use super::aggregate_simulation_support::AggregationSimulator;
 use super::aggregate_simulation_support::simulate_two_groups_group_by;
 use super::aggregate_simulation_support::write_aggregate_expr_case;
@@ -68,8 +68,8 @@ fn run_any_distinct_cases(file: &mut impl Write, simulator: impl AggregationSimu
 fn test_any() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("any.txt").unwrap();
-    run_any_cases(file, eval_legacy_aggregate);
-    run_any_distinct_cases(file, eval_legacy_aggregate);
+    run_any_cases(file, eval_aggregate);
+    run_any_distinct_cases(file, eval_aggregate);
 }
 
 #[test]

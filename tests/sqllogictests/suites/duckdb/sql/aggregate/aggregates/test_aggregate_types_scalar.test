@@ -14,13 +14,13 @@ SELECT SUM(1), SUM(NULL), SUM(33.3)
 ----
 1 NULL 33.3
 
-statement error 1010
+statement error 1027
 SELECT SUM(True)
 
-statement error 1010
+statement error 1027
 SELECT SUM('hello')
 
-statement error 1010
+statement error 1027
 SELECT SUM('1992-02-02'::DATE)
 
 statement error 1028
@@ -56,13 +56,13 @@ SELECT AVG(1), AVG(NULL), AVG(33.3)
 ----
 1.0 NULL 33.3000000
 
-statement error 1010
+statement error 1027
 SELECT AVG(True)
 
-statement error 1010
+statement error 1027
 SELECT AVG('hello')
 
-statement error 1010
+statement error 1027
 SELECT AVG('1992-02-02'::DATE)
 
 statement error 1028

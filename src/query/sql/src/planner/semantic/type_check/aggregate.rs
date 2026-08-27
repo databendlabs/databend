@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal;
@@ -29,6 +30,7 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use smallvec::SmallVec;
 use unicase::Ascii;
 
@@ -65,7 +67,7 @@ impl<'a> CoreExprArena<'a> {
         func_name: &str,
         func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
-        if func.has_explicit_lambda() || !self.aggregate_function_factory.contains(func_name) {
+        if func.has_explicit_lambda() || !self.aggregate_function_registry.contains(func_name) {
             return Ok(None);
         }
 
@@ -105,12 +107,13 @@ impl<'a> CoreExprArena<'a> {
                         .set_span(span),
                 );
             }
-            // FILTER appends `_if`, but the factory only resolves one combinator
-            // suffix over a base aggregate. On a combinator call like `sum_if`
-            // this would yield `sum_if_if`, so reject it instead.
-            if !self.aggregate_function_factory.contains_base(&func_name) {
+            let supports_filter = self
+                .aggregate_function_registry
+                .descriptor(&func_name)
+                .is_some_and(|descriptor| descriptor.features().supports_filter);
+            if !supports_filter {
                 return Err(ErrorCode::SemanticError(format!(
-                    "FILTER clause is not supported for aggregate combinator `{func_name}`"
+                    "FILTER clause is not supported for aggregate function `{func_name}`"
                 ))
                 .set_span(span));
             }
@@ -349,7 +352,6 @@ where A: TypeCheckAdapter
 
                 Ok(AggregateFunctionScalarSortDesc {
                     expr: scalar_expr,
-                    is_reuse_index: false,
                     nulls_first: order_by.nulls_first.unwrap_or(false),
                     asc: order_by.asc.unwrap_or(true),
                 })
@@ -418,44 +420,38 @@ where A: TypeCheckAdapter
                 &BUILTIN_FUNCTIONS,
             )?;
 
+            arguments.remove(1);
+            arg_types.remove(1);
             vec![Scalar::Number(NumberScalar::UInt64(max_num_buckets))]
         } else {
             params
         };
 
-        // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
-        let (func_name, distinct) = if func_name.eq_ignore_ascii_case("count") && distinct {
-            ("count_distinct", false)
-        } else {
-            (func_name, distinct)
-        };
-
-        let func_name = if distinct {
-            format!("{func_name}_distinct")
-        } else {
-            func_name.to_string()
-        };
-
-        let agg_func = self
-            .adapter
-            .aggregate_function_factory()
-            .get(&func_name, params.clone(), arg_types, vec![])
+        let agg_func = AGGR_REGISTRY
+            .resolve(RawAggregateCall {
+                name: func_name,
+                params: &params.clone(),
+                args_type: &arg_types,
+                distinct,
+                order_by: &[],
+            })
             .map_err(|e| e.set_span(span))?;
+        let signature = agg_func.signature();
 
         let args = if remove_count_args { vec![] } else { arguments };
 
         let new_agg_func = AggregateFunction {
             span,
             display_name,
-            func_name,
-            distinct: false,
+            func_name: signature.name.clone(),
+            distinct: signature.distinct,
             params,
             args,
-            return_type: Box::new(agg_func.return_type()?),
+            return_type: Box::new(signature.return_type.clone()),
             sort_descs,
         };
 
-        let data_type = agg_func.return_type()?;
+        let data_type = signature.return_type.clone();
 
         Ok((new_agg_func, data_type))
     }
